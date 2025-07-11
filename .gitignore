@@ -1,0 +1,66 @@
+# The directory Mix will write compiled artifacts to.
+/_build/
+
+# If you run "mix test --cover", coverage assets end up here.
+/cover/
+
+# The directory Mix downloads your dependencies sources to.
+/deps/
+
+# Where third-party dependencies like ExDoc output generated docs.
+/doc/
+
+# If the VM crashes, it generates a dump, let's ignore it too.
+erl_crash.dump
+
+# Also ignore archive artifacts (built via "mix archive.build").
+*.ez
+
+# Ignore package tarball (built via "mix hex.build").
+mishka_cms_core_resources-*.tar
+
+# Temporary files, for example, from tests.
+/tmp/
+
+# Derived by `mix ash.codegen`, never written by hand — a local build artifact, not source.
+/priv/repo/migrations/
+/priv/resource_snapshots/
+
+# MishkaInstaller's plugin registry lives here on disk and survives runs.
+/.mnesia/
+
+# Scratch space the JS/CSS compilers build into: per-site entry files, vendor output, and the
+# node_modules the test harness provisions from deps (see MishkaCmsCore.Test.JsAssets).
+#
+# NOTHING IN HERE IS A SOURCE. A note above this line once named three files as checked-in sources
+# that had to stay tracked. One of the three was not tracked at all, and the other two were output
+# a compiler writes for itself:
+#
+#   js_assets/node_modules/phoenix-colocated/mishka_cms.js
+#       `JavaScriptCompiler.ensure_colocated_hooks/1` copies Phoenix's generated file over it, or
+#       writes a stub when there is none.
+#   runtime/test-site-0/page/test-page-1.template
+#       `BootHandler.create_template_file/4` writes it from a database row. The name is the test data
+#       generator's sequence — `Test Site 0`, `/test-page-1` — so it is one run's leftovers, and
+#       nothing reads it: the Tailwind scanner globs this directory from paths it derives from the
+#       database, never from what it finds on disk.
+#
+# Keeping them tracked cost a dirty working tree after any run that recompiled a page, and put
+# generated markup into the diff of whatever was actually being changed.
+#
+# `js_assets/js/app.js` IS read — `JavaScriptCompiler` reads it as the base bundle — but it is
+# written by the host's asset build, not by hand, and the one test that wants it writes a stub when
+# it is absent. See `ensure_app_js_exists/0`.
+/priv/static/temp/
+
+# Mnesia writes a crash dump into the CWD, next to `erl_crash.dump` and for the same reasons. One is
+# 800 KB of binary and one of them reached a commit through `git add -A`.
+MnesiaCore.*
+
+# Where `Media.save_file_to_storage/3` puts a file, relative to whatever directory the suite runs
+# in — so a test that seeds or uploads media writes real files under this project. They are one run's
+# leftovers, taken back by the test that made them, and the rule the host application's own
+# `.gitignore` already applies to its copy of these two: a run killed mid-test is not a reason for
+# somebody's picture to reach a commit.
+/priv/static/uploads/
+/priv/static/uploads_archived/
