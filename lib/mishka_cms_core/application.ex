@@ -1,0 +1,51 @@
+defmodule MishkaCmsCore.Application do
+  # See https://hexdocs.pm/elixir/Application.html
+  # for more information on OTP Applications
+  @moduledoc false
+
+  use Application
+
+  # THE REGISTRY EVERY PLUGIN BELOW REGISTERS IN, WHEN THE LIBRARY DID NOT START IT ITSELF.
+  # `MishkaInstaller.Application` picks its own supervision tree in a COMPILE-TIME branch on
+  # `MishkaInstaller.__information__().env`, and that reads an exported `MIX_ENV` BEFORE the
+  # `:project_env` our config sets. So whether the Mnesia registry exists comes down to whether
+  # `MIX_ENV` happened to be exported in the shell that built `deps/` — one `MIX_ENV=test mix
+  # deps.update` flips it, and nothing in this repo changes.
+  #
+  # It is not merely late when it is missing. Every plugin's `handle_continue` sits in
+  # `:mnesia.wait_for_tables/2` for six seconds, so whoever brings Mnesia up afterwards stops it
+  # first and kills all of them at once — eleven deaths is past any supervisor's restart intensity,
+  # and the extension's whole plugin tree goes down with them, silently, before the first test runs.
+  #
+  # Started here, ahead of the first plugin, because `:mishka_cms_core` is a dependency of every
+  # extension and of the host: its application starts before theirs in every environment. Whatever
+  # the library did start is left to it.
+  @installer_children [
+    MishkaInstaller.Installer.CompileHandler,
+    MishkaInstaller.Event.EventHandler,
+    MishkaInstaller.MnesiaRepo
+  ]
+
+  @doc """
+  Every mishka_installer plugin the core ships, and exactly the plugins `start/2` supervises. A plugin
+  left out of it never registers, so the event it listens on never reaches it.
+  """
+  @spec plugins() :: [module()]
+  def plugins, do: []
+
+  @doc """
+  The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
+  order — none of them when the library's compiled-in branch supervises them itself.
+  """
+  @spec installer_children() :: [module()]
+  def installer_children,
+    do: @installer_children -- MishkaInstaller.Application.supervised_children()
+
+  @impl true
+  def start(_type, _args) do
+    children = installer_children() ++ plugins()
+
+    opts = [strategy: :one_for_one, name: MishkaCmsCore.Supervisor]
+    Supervisor.start_link(children, opts)
+  end
+end

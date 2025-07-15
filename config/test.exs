@@ -13,8 +13,40 @@ config :mishka_cms_core, MishkaCmsCore.Repo,
 
 config :mishka_cms_core, ecto_repos: [MishkaCmsCore.Repo]
 
+# Jobs are asserted on, not run, so nothing drains a queue behind a test's back.
+config :mishka_cms_core, Oban,
+  repo: MishkaCmsCore.Repo,
+  testing: :manual,
+  queues: false,
+  plugins: false
+
+# Boot-time settings seeding announces itself over PubSub; tests neither need nor assert it.
+config :mishka_cms_core, seed_announce: false
+
 # Hashing is the single slowest thing in a suite that creates a user per test.
 config :bcrypt_elixir, log_rounds: 1
 
 config :logger, level: :warning
 config :phoenix, :plug_init_mode, :runtime
+
+# mishka_installer decides whether to start its own supervision tree (Mnesia registry, event and
+# compile handlers) from `MishkaInstaller.__information__().env`, so that ITS suite runs without
+# them — but a dependency is built in the host's env, so a test run inherits that and every
+# `Hook.call` returns its input untouched: no dashboard widgets, no settings:register, no filter
+# seams. `:project_env` is the library's own override, and it is kept because it works whenever it
+# is consulted.
+#
+# IT IS NOT ENOUGH ON ITS OWN. `__information__/0` reads `System.get_env("MIX_ENV")` BEFORE this
+# key, and the choice is a compile-time branch in the dependency — so an exported `MIX_ENV` at the
+# moment `deps/` was built silently wins, and a routine `mix deps.get` is all it takes.
+# `MishkaCmsCore.Application` therefore supervises whatever the library left out, ahead of the first
+# plugin and in every environment; see `MishkaCmsCore.Application.installer_children/0`.
+config :mishka_installer, project_env: :dev
+
+config :mishka_installer, MishkaInstaller.MnesiaRepo,
+  mnesia_dir: Path.expand(".mnesia/test"),
+  essential: [MishkaInstaller.Event.Event, MishkaInstaller.Installer.Installer]
+
+# A message the locale has no translation for reads as its text behind a `"[<locale>] "` marker, so a
+# test sees a word go through `MishkaCmsCore.Gettext` in the reader's locale without a `.po` for it.
+config :mishka_cms_core, :gettext_marks_untranslated, true
