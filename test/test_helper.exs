@@ -16,7 +16,8 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     # The runtime workers this library owns go through Oban, so it has to exist. `testing: :manual`
     # means nothing drains a queue behind a test's back — jobs are asserted on, not run.
     {Oban, Application.fetch_env!(:mishka_cms_core, Oban)},
-    {Phoenix.PubSub, name: MishkaCmsCore.PubSub}
+    {Phoenix.PubSub, name: MishkaCmsCore.PubSub},
+    MishkaCmsCore.TestEndpoint
   ]
 
   {:ok, _} =

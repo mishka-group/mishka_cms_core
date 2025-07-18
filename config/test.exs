@@ -13,6 +13,16 @@ config :mishka_cms_core, MishkaCmsCore.Repo,
 
 config :mishka_cms_core, ecto_repos: [MishkaCmsCore.Repo]
 
+config :mishka_cms_core, MishkaCmsCore.TestEndpoint,
+  http: [ip: {127, 0, 0, 1}, port: 4106],
+  secret_key_base: String.duplicate("mishka-cms_core-standalone-test-secret", 2),
+  pubsub_server: MishkaCmsCore.PubSub,
+  server: false,
+  # Without this Phoenix tries `MishkaCmsCore.ErrorView` and the real exception is replaced by
+  # "no 500 html template defined", which hides whatever actually went wrong.
+  render_errors: [formats: [json: MishkaCmsCore.TestErrorJSON], layout: false],
+  live_view: [signing_salt: "mishka-cms-core-test-salt"]
+
 # Jobs are asserted on, not run, so nothing drains a queue behind a test's back.
 config :mishka_cms_core, Oban,
   repo: MishkaCmsCore.Repo,
