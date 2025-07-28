@@ -17,6 +17,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     # means nothing drains a queue behind a test's back — jobs are asserted on, not run.
     {Oban, Application.fetch_env!(:mishka_cms_core, Oban)},
     {Phoenix.PubSub, name: MishkaCmsCore.PubSub},
+    MishkaCmsCore.Runtime.States.SiteState,
     MishkaCmsCore.TestEndpoint
   ]
 

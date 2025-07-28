@@ -13,6 +13,15 @@ config :mishka_cms_core, MishkaCmsCore.Repo,
 
 config :mishka_cms_core, ecto_repos: [MishkaCmsCore.Repo]
 
+# The CMS's own resources reach into accounts and runtime — a post belongs to a site and is written
+# by a user — so the schema this extension tests against has to include those domains, not just its
+# own. Listing them here is what makes `mix ash.codegen` emit their tables into this extension's
+# migrations.
+config :mishka_cms_core,
+  ash_domains: [
+    MishkaCmsCore.Runtime
+  ]
+
 config :mishka_cms_core, MishkaCmsCore.TestEndpoint,
   http: [ip: {127, 0, 0, 1}, port: 4106],
   secret_key_base: String.duplicate("mishka-cms_core-standalone-test-secret", 2),
@@ -22,6 +31,8 @@ config :mishka_cms_core, MishkaCmsCore.TestEndpoint,
   # "no 500 html template defined", which hides whatever actually went wrong.
   render_errors: [formats: [json: MishkaCmsCore.TestErrorJSON], layout: false],
   live_view: [signing_salt: "mishka-cms-core-test-salt"]
+
+config :ash, policies: [show_policy_breakdowns?: true], disable_async?: true
 
 # Jobs are asserted on, not run, so nothing drains a queue behind a test's back.
 config :mishka_cms_core, Oban,

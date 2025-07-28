@@ -3,7 +3,9 @@ import Config
 config :mishka_cms_core,
   ecto_repos: [MishkaCmsCore.Repo],
   generators: [timestamp_type: :utc_datetime],
-  ash_domains: []
+  ash_domains: [
+    MishkaCmsCore.Runtime
+  ]
 
 config :ash_json_api,
   show_public_calculations_when_loaded?: false,

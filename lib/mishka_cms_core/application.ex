@@ -45,6 +45,8 @@ defmodule MishkaCmsCore.Application do
   def start(_type, _args) do
     children = installer_children() ++ plugins()
 
+    MishkaCmsCore.PluginRegistrations.attach()
+
     opts = [strategy: :one_for_one, name: MishkaCmsCore.Supervisor]
     Supervisor.start_link(children, opts)
   end
