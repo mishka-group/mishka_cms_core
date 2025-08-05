@@ -91,6 +91,8 @@ defmodule MishkaCmsCore.Runtime do
   end
 
   resources do
+    resource MishkaCmsCore.Runtime.Setting
+
     resource MishkaCmsCore.Runtime.Site
   end
 end

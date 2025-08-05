@@ -18,6 +18,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     {Oban, Application.fetch_env!(:mishka_cms_core, Oban)},
     {Phoenix.PubSub, name: MishkaCmsCore.PubSub},
     MishkaCmsCore.Runtime.States.SiteState,
+    MishkaCmsCore.Runtime.States.SettingsState,
     MishkaCmsCore.TestEndpoint
   ]
 

@@ -40,6 +40,34 @@ defmodule MishkaCmsCore.DataCase do
   end
 
   @doc """
+  Drops settings keys from the RAM cache when the test ends.
+
+      setup do
+        forget_settings(~w(cms.offline), [nil, site.id])
+        :ok
+      end
+
+  The cache is process-global rather than sandboxed, so a value a test writes is still in it when
+  the next suite runs — and `cms.offline` is not an inert one: left on, it takes the front end down
+  and closes registration for everything that follows. A write reaches the cache through the
+  `"setting:updated"` broadcast, so this is needed whether the test went through
+  `MishkaCmsCore.Settings` or straight at the `Setting` resource.
+
+  The keys are dropped rather than re-read: `on_exit` runs in its own process, which does not hold
+  the sandbox's connection, so there is no database to re-read them from.
+  """
+  @spec forget_settings([String.t()], [String.t() | nil]) :: :ok
+  def forget_settings(keys, scopes \\ [nil]) do
+    ExUnit.Callbacks.on_exit(fn ->
+      for key <- keys, scope <- scopes do
+        MishkaCmsCore.Runtime.States.SettingsState.delete(scope, key)
+      end
+
+      :ok
+    end)
+  end
+
+  @doc """
   Turns changeset errors into a map of field to messages.
 
       assert %{password: ["password is too short"]} = errors_on(changeset)
