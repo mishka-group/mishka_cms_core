@@ -19,7 +19,8 @@ config :mishka_cms_core, ecto_repos: [MishkaCmsCore.Repo]
 # migrations.
 config :mishka_cms_core,
   ash_domains: [
-    MishkaCmsCore.Runtime
+    MishkaCmsCore.Runtime,
+    MishkaCmsCore.Mail
   ]
 
 config :mishka_cms_core, MishkaCmsCore.TestEndpoint,
@@ -49,6 +50,15 @@ config :bcrypt_elixir, log_rounds: 1
 
 config :logger, level: :warning
 config :phoenix, :plug_init_mode, :runtime
+
+# Swoosh boots an HTTP client for real delivery and refuses to start without one. Tests neither send
+# nor need it — the test adapter captures what would have been sent.
+config :swoosh, api_client: false
+
+config :mishka_cms_core, MishkaCmsCore.Mailer, adapter: Swoosh.Adapters.Test
+
+# Email goes to the test adapter unless a test picks another provider — see `MishkaCmsCore.Mail`.
+config :mishka_cms_core, mail_dev_mailbox: true, mail_default_provider: "dev_mailbox"
 
 # mishka_installer decides whether to start its own supervision tree (Mnesia registry, event and
 # compile handlers) from `MishkaInstaller.__information__().env`, so that ITS suite runs without

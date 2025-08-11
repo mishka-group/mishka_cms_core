@@ -632,7 +632,65 @@ defmodule MishkaCmsCore.Settings do
             "Codes separated by commas. Every site publishes these, whether it lists them or not. Leave empty to require none."
           )
       )
-    ]
+    ] ++ email_definitions()
+  end
+
+  # THE EMAIL TAB. Which provider a scope sends through and that provider's own fields come from
+  # `MishkaCmsCore.Mail.settings/0` — the registered provider plugins — and the sender is the
+  # scope's own, like the provider: a site never sends as another one.
+  defp email_definitions do
+    [provider | provider_fields] = MishkaCmsCore.Mail.settings()
+
+    [
+      provider,
+      define("mailer.from", :string,
+        default: "",
+        category: "email",
+        group: gettext_noop("Sender"),
+        scope: :both,
+        resolve: :own,
+        label: gettext_noop("Outgoing email \"from\" address"),
+        description:
+          gettext_noop(
+            "Every email this site sends comes from this address, on a domain its provider has verified. Empty sends from noreply@ the site's own domain."
+          ),
+        attention_on_default: true
+      ),
+      define("mailer.from_name", :string,
+        default: "",
+        category: "email",
+        group: gettext_noop("Sender"),
+        scope: :both,
+        resolve: :own,
+        label: gettext_noop("Sender name"),
+        description:
+          gettext_noop("The name shown beside the address. Empty means the site's title.")
+      ),
+      define("mailer.reply_to", :string,
+        default: "",
+        category: "email",
+        group: gettext_noop("Sender"),
+        scope: :both,
+        resolve: :own,
+        label: gettext_noop("Reply-to address"),
+        description:
+          gettext_noop("Where a reply goes when it should not go to the from address. Optional.")
+      )
+    ] ++
+      provider_fields ++
+      [
+        define("mailer.history_days", :integer,
+          default: 30,
+          min: 1,
+          max: 365,
+          category: "email",
+          group: gettext_noop("History"),
+          scope: :master,
+          label: gettext_noop("Keep the email history for (days)"),
+          description:
+            gettext_noop("A site's older entries are deleted when it next sends an email.")
+        )
+      ]
   end
 
   defp provider_definitions do

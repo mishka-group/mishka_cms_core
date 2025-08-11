@@ -4,7 +4,8 @@ config :mishka_cms_core,
   ecto_repos: [MishkaCmsCore.Repo],
   generators: [timestamp_type: :utc_datetime],
   ash_domains: [
-    MishkaCmsCore.Runtime
+    MishkaCmsCore.Runtime,
+    MishkaCmsCore.Mail
   ]
 
 config :ash_json_api,

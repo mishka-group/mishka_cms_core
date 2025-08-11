@@ -5,6 +5,13 @@ defmodule MishkaCmsCore.Application do
 
   use Application
 
+  # `mail:providers` plugins — the email providers a site can pick on the Email tab. An extension
+  # adds one the same way (see `MishkaCmsCore.Mail.Provider`).
+  @mail_providers [
+    MishkaCmsCore.Mail.Providers.Resend,
+    MishkaCmsCore.Mail.Providers.DevMailbox
+  ]
+
   # THE REGISTRY EVERY PLUGIN BELOW REGISTERS IN, WHEN THE LIBRARY DID NOT START IT ITSELF.
   # `MishkaInstaller.Application` picks its own supervision tree in a COMPILE-TIME branch on
   # `MishkaInstaller.__information__().env`, and that reads an exported `MIX_ENV` BEFORE the
@@ -31,7 +38,7 @@ defmodule MishkaCmsCore.Application do
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: []
+  def plugins, do: @mail_providers
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
