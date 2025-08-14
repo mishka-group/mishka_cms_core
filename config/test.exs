@@ -33,6 +33,11 @@ config :mishka_cms_core, MishkaCmsCore.TestEndpoint,
   render_errors: [formats: [json: MishkaCmsCore.TestErrorJSON], layout: false],
   live_view: [signing_salt: "mishka-cms-core-test-salt"]
 
+# `ApiTenantLookupPlug` resolves the tenant from the Host header in a real request and from
+# `conn.host` under this flag, because a test builds its conn rather than receiving one over a socket.
+# Without it every request is answered 400 `missing_host`.
+config :mishka_cms_core, env_test?: true
+
 config :ash, policies: [show_policy_breakdowns?: true], disable_async?: true
 
 # Jobs are asserted on, not run, so nothing drains a queue behind a test's back.
