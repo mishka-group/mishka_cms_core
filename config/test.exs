@@ -20,6 +20,7 @@ config :mishka_cms_core, ecto_repos: [MishkaCmsCore.Repo]
 config :mishka_cms_core,
   ash_domains: [
     MishkaCmsCore.Runtime,
+    MishkaCmsCore.Accounts,
     MishkaCmsCore.Mail
   ]
 
@@ -32,6 +33,10 @@ config :mishka_cms_core, MishkaCmsCore.TestEndpoint,
   # "no 500 html template defined", which hides whatever actually went wrong.
   render_errors: [formats: [json: MishkaCmsCore.TestErrorJSON], layout: false],
   live_view: [signing_salt: "mishka-cms-core-test-salt"]
+
+# A fixed JWT key is fine: it signs tokens that live and die inside one test run.
+config :mishka_cms_core,
+  token_signing_secret: String.duplicate("mishka-cms_core-test-jwt-secret", 2)
 
 # `ApiTenantLookupPlug` resolves the tenant from the Host header in a real request and from
 # `conn.host` under this flag, because a test builds its conn rather than receiving one over a socket.

@@ -5,6 +5,7 @@ config :mishka_cms_core,
   generators: [timestamp_type: :utc_datetime],
   ash_domains: [
     MishkaCmsCore.Runtime,
+    MishkaCmsCore.Accounts,
     MishkaCmsCore.Mail
   ]
 

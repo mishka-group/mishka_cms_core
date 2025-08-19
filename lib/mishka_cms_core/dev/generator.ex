@@ -40,4 +40,19 @@ defmodule MishkaCmsCore.Dev.Generator do
       overrides: opts
     )
   end
+
+  def user(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Accounts.User,
+      :register_with_password,
+      authorize?: false,
+      defaults: [
+        email: sequence(:email, &"user#{&1}@example.com"),
+        password: "Password123!",
+        password_confirmation: "Password123!"
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
 end

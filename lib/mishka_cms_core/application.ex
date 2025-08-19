@@ -50,7 +50,9 @@ defmodule MishkaCmsCore.Application do
 
   @impl true
   def start(_type, _args) do
-    children = installer_children() ++ plugins()
+    children =
+      installer_children() ++
+        [{AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]}] ++ plugins()
 
     MishkaCmsCore.PluginRegistrations.attach()
 

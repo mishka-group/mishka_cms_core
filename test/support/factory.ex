@@ -19,4 +19,15 @@ defmodule MishkaCmsCore.Test.Factory do
     |> site()
     |> generate()
   end
+
+  # User factory
+  def create_user!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # User can be global (nil) or site-specific
+    tenant = site_id
+
+    overrides
+    |> user(tenant)
+    |> generate()
+  end
 end

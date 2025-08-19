@@ -1063,6 +1063,8 @@ defmodule MishkaCmsCore.Runtime.Site do
     # a post still names its site to an admin without the site section.
     policy always() do
       access_type :strict
+      authorize_if accessing_from(MishkaCmsCore.Accounts.User, :site)
+
       authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
                     permissions: ["admin:dashboard:runtime:site", "admin:api:runtime:site"]}
 
@@ -1076,6 +1078,7 @@ defmodule MishkaCmsCore.Runtime.Site do
     # `belongs_to :site` on its own records asks for. An account's own site loads with it, as the
     # policy above lets it. Anybody else reads none. System calls pass `authorize?: false`.
     policy action_type(:read) do
+      authorize_if accessing_from(MishkaCmsCore.Accounts.User, :site)
       authorize_if actor_attribute_equals(:site_id, nil)
       authorize_if expr(id == ^actor(:site_id))
     end
@@ -1154,6 +1157,15 @@ defmodule MishkaCmsCore.Runtime.Site do
 
     create_timestamp :inserted_at, public?: true
     update_timestamp :updated_at, public?: true
+  end
+
+  relationships do
+    has_many :users, MishkaCmsCore.Accounts.User do
+      # How any resource reaches an account — see `MishkaCmsCore.Accounts.User`'s `:related`.
+      read_action :related
+      sortable? false
+      public? true
+    end
   end
 
   identities do
