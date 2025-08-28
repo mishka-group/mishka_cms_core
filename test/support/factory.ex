@@ -14,6 +14,8 @@ defmodule MishkaCmsCore.Test.Factory do
   import MishkaCmsCore.Dev.Generator, except: [generate: 1, generate: 2]
   import Ash.Generator, only: [generate: 1]
 
+  require Ash.Query
+
   def create_site!(overrides \\ []) do
     overrides
     |> site()
@@ -29,5 +31,48 @@ defmodule MishkaCmsCore.Test.Factory do
     overrides
     |> user(tenant)
     |> generate()
+  end
+
+  # Permission factory
+  def create_permission!(overrides \\ []) do
+    overrides
+    |> permission()
+    |> generate()
+  end
+
+  @doc """
+  A user holding `permission_names`, returned with `:permissions` loaded so it can be used directly
+  as an Ash `actor:` without a further load.
+
+  Authorization in this CMS turns on two independent things — WHICH permissions a user holds and
+  WHICH site they belong to — so most policy tests need the same three actors: a master
+  (`site_id: nil`) with roles, a tenant with the same roles, and a tenant with none. Permissions are
+  looked up before being created so several actors can share one named permission in a test.
+
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+      tenant = create_user_with_permissions!(["admin:dashboard:*"], site_id: site.id)
+      nobody = create_user!(site_id: site.id)
+  """
+  def create_user_with_permissions!(permission_names, overrides \\ []) do
+    user = create_user!(overrides)
+    permission_ids = Enum.map(permission_names, &find_or_create_permission!(&1).id)
+
+    user
+    |> Ash.Changeset.for_update(:assign_permissions, %{permission_ids: permission_ids},
+      authorize?: false,
+      tenant: user.site_id
+    )
+    |> Ash.update!()
+    |> Ash.load!([:permissions], authorize?: false, tenant: user.site_id)
+  end
+
+  defp find_or_create_permission!(name) do
+    MishkaCmsCore.Accounts.Permission
+    |> Ash.Query.filter(name == ^name)
+    |> Ash.read_one(authorize?: false)
+    |> case do
+      {:ok, nil} -> create_permission!(name: name)
+      {:ok, permission} -> permission
+    end
   end
 end

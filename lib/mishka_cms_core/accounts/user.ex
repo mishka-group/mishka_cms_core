@@ -103,7 +103,7 @@ defmodule MishkaCmsCore.Accounts.User do
   json_api do
     type "user"
 
-    default_fields [:id, :email, :confirmed_at, :site_id, :site]
+    default_fields [:id, :email, :confirmed_at, :permission_values, :site_id, :site]
   end
 
   actions do
@@ -127,6 +127,11 @@ defmodule MishkaCmsCore.Accounts.User do
       argument :subject, :string, allow_nil?: false
       get? true
       prepare AshAuthentication.Preparations.FilterBySubject
+
+      prepare fn query, _context ->
+        query
+        |> Ash.Query.load([:permissions, :permission_values])
+      end
     end
 
     update :change_password do
@@ -224,7 +229,7 @@ defmodule MishkaCmsCore.Accounts.User do
         MishkaCmsCore.Accounts.User
         |> Ash.Query.new()
         |> Ash.Query.filter(id == ^context.actor.id)
-        |> Ash.Query.load([:site])
+        |> Ash.Query.load([:permissions, :permission_values, :site])
         |> Ash.read_one(authorize?: false)
       end
     end
@@ -461,6 +466,47 @@ defmodule MishkaCmsCore.Accounts.User do
         {:ok, %{success: true, message: gettext("Logged out successfully")}}
       end
     end
+
+    update :assign_permissions do
+      description "Replaces user's permissions with the provided list of permission IDs"
+      accept []
+      require_atomic? false
+
+      argument :permission_ids, {:array, :uuid} do
+        allow_nil? false
+        description "List of permission IDs to assign to the user"
+      end
+
+      change manage_relationship(:permission_ids, :permissions,
+               type: :append_and_remove,
+               on_no_match: :create,
+               on_match: :ignore
+             )
+    end
+
+    update :add_permission do
+      description "Adds a single permission to the user's existing permissions"
+      accept []
+      require_atomic? false
+
+      argument :permission_id, :uuid do
+        allow_nil? false
+      end
+
+      change manage_relationship(:permission_id, :permissions, type: :append, on_no_match: :error)
+    end
+
+    update :remove_permission do
+      description "Removes a single permission from the user's permissions"
+      accept []
+      require_atomic? false
+
+      argument :permission_id, :uuid do
+        allow_nil? false
+      end
+
+      change manage_relationship(:permission_id, :permissions, type: :remove)
+    end
   end
 
   # Authorization policies for user operations
@@ -551,6 +597,36 @@ defmodule MishkaCmsCore.Accounts.User do
       description "The site this user belongs to (nil for global users with cross-site access)"
       public? true
       filter expr(is_nil(type(^actor(:site_id), :uuid)) or id == ^actor(:site_id))
+    end
+
+    has_many :permissions_join_assoc, MishkaCmsCore.Accounts.UserPermission do
+      description "This user's permission grants, the rows behind `permissions`"
+      destination_attribute :user_id
+      filter expr(is_nil(type(^actor(:site_id), :uuid)) or user.site_id == ^actor(:site_id))
+    end
+
+    many_to_many :permissions, MishkaCmsCore.Accounts.Permission do
+      description "Permissions granted to this user for access control"
+      through MishkaCmsCore.Accounts.UserPermission
+      join_relationship :permissions_join_assoc
+      source_attribute_on_join_resource :user_id
+      destination_attribute_on_join_resource :permission_id
+      public? true
+    end
+  end
+
+  calculations do
+    calculate :permission_values, {:array, :string} do
+      description "Returns list of permission names assigned to the user"
+      public? true
+
+      calculation fn records, _context ->
+        Enum.map(records, fn record ->
+          record.permissions |> List.wrap() |> Enum.map(& &1.name)
+        end)
+      end
+
+      load permissions: [:name]
     end
   end
 

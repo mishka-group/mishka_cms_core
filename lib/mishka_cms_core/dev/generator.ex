@@ -55,4 +55,17 @@ defmodule MishkaCmsCore.Dev.Generator do
       tenant: tenant
     )
   end
+
+  def permission(opts \\ []) do
+    changeset_generator(
+      MishkaCmsCore.Accounts.Permission,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"permission:#{&1}"),
+        description: sequence(:description, &"Test permission #{&1}")
+      ],
+      overrides: opts
+    )
+  end
 end

@@ -343,4 +343,46 @@ defmodule MishkaCmsCore.MailTest do
       assert %{status: :failed} = delivery!(delivery.id, site.id)
     end
   end
+
+  describe "the history" do
+    test "a site's admin reads its own site's emails, a master every site's", %{site: site} do
+      other = create_site!(name: "other", host: "other.test", active: true)
+      Mail.deliver(email(site.id), site_id: site.id, purpose: "welcome")
+      Mail.deliver(email(other.id), site_id: other.id, purpose: "welcome")
+
+      admin = create_user_with_permissions!(["admin:dashboard:setting"], site_id: site.id)
+      master = create_user_with_permissions!(["admin:dashboard:setting"])
+      nobody = create_user!(site_id: site.id)
+
+      theirs = Ash.read!(Delivery, action: :history, actor: admin, tenant: site.id)
+      assert Enum.any?(theirs, &(&1.purpose == "welcome"))
+      assert Enum.all?(theirs, &(&1.site_id == site.id))
+
+      every = Ash.read!(Delivery, action: :history, actor: master)
+      assert Enum.any?(every, &(&1.site_id == other.id))
+      assert Enum.any?(every, &(&1.site_id == site.id))
+
+      assert {:error, _forbidden} =
+               Ash.read(Delivery, action: :history, actor: nobody, tenant: site.id)
+    end
+
+    test "a site's next email deletes what is older than mailer.history_days", %{site: site} do
+      {:ok, old} = Mail.deliver(email(site.id), site_id: site.id, purpose: "welcome")
+
+      @repo.query!(
+        "UPDATE cms_mail_deliveries SET inserted_at = now() - interval '40 days' WHERE id = $1",
+        [Ecto.UUID.dump!(old.id)]
+      )
+
+      Application.put_env(:mishka_cms_core, :env_test?, false)
+      on_exit(fn -> Application.put_env(:mishka_cms_core, :env_test?, true) end)
+
+      {:ok, new} = Mail.deliver(email(site.id), site_id: site.id, purpose: "welcome")
+      [job] = all_enqueued(worker: DeliverWorker)
+      assert :ok = perform_job(DeliverWorker, job.args)
+
+      assert [%{id: id}] = Ash.read!(Delivery, authorize?: false, tenant: site.id)
+      assert id == new.id
+    end
+  end
 end

@@ -109,6 +109,19 @@ defmodule MishkaCmsCore.Accounts do
     log_errors? true
 
     routes do
+      base_route "/v1/tenant/admin/permissions", MishkaCmsCore.Accounts.Permission do
+        index :tenant_read
+        get :tenant_get
+      end
+
+      base_route "/v1/master/admin/permissions", MishkaCmsCore.Accounts.Permission do
+        index :master_read
+        get :master_get
+        post :create
+        patch :update, read_action: :master_get
+        delete :destroy
+      end
+
       base_route "/v1/auth/user", MishkaCmsCore.Accounts.User do
         post :sign_in_with_password do
           route "/sign-in"
@@ -150,5 +163,7 @@ defmodule MishkaCmsCore.Accounts do
   resources do
     resource MishkaCmsCore.Accounts.Token
     resource MishkaCmsCore.Accounts.User
+    resource MishkaCmsCore.Accounts.Permission
+    resource MishkaCmsCore.Accounts.UserPermission
   end
 end

@@ -38,6 +38,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       active: site.active
     })
 
+    admin_permission = create_permission!(name: "admin:api:*")
+
     master_user =
       MishkaCmsCore.Accounts.User
       |> Ash.Changeset.for_create(:create, %{
@@ -45,6 +47,12 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
         hashed_password: Bcrypt.hash_pwd_salt(@password)
       })
       |> Ash.create!(authorize?: false, tenant: nil)
+      |> Ash.Changeset.for_update(
+        :assign_permissions,
+        %{permission_ids: [admin_permission.id]},
+        authorize?: false
+      )
+      |> Ash.update!()
 
     # Clean up after ALL tests are done
     on_exit(fn ->
@@ -57,12 +65,14 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
     %{
       site: site,
       master_site: master_site,
+      admin_permission: admin_permission,
       master_user: master_user
     }
   end
 
   describe "POST /auth/sign-in" do
     test "successfully signs in master user (no tenant)", %{
+      admin_permission: admin_permission,
       master_user: master_user
     } do
       user_id = master_user.id
@@ -70,7 +80,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       response =
         make_api_request(
-          "#{@api_user_path}/sign-in?fields[user]=id,email,confirmed_at,site,site_id",
+          "#{@api_user_path}/sign-in?fields[user]=id,email,confirmed_at,site,site_id,permission_values",
           %{
             "type" => "user",
             "attributes" => %{
@@ -81,11 +91,14 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
           headers: [{"x-no-tenant", "true"}]
         )
 
+      permission_name = [admin_permission.name]
+
       assert %{
                "data" => %{
                  "attributes" => %{
                    "confirmed_at" => nil,
                    "email" => ^user_email,
+                   "permission_values" => ^permission_name,
                    "site" => nil
                  }
                },
@@ -137,7 +150,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       response =
         make_api_request(
-          "#{@api_user_path}/sign-in?fields[user]=id,email,confirmed_at,site_id,site",
+          "#{@api_user_path}/sign-in?fields[user]=id,email,confirmed_at,site_id,site,permission_values",
           %{
             "type" => "user",
             "attributes" => %{
@@ -156,6 +169,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                  "attributes" => %{
                    "confirmed_at" => nil,
                    "email" => ^user_email,
+                   "permission_values" => [],
                    "site" => %{"id" => site_id}
                  },
                  "id" => ^user_id
@@ -498,6 +512,36 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert %{"jsonapi" => jsonapi} = result
       assert jsonapi["version"] == "1.0"
     end
+
+    test "master user with permissions can access protected endpoints", %{
+      master_user: master_user,
+      admin_permission: admin_permission
+    } do
+      # First sign in to get token
+      response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert response.status == 201
+      result = Jason.decode!(response.resp_body)
+      assert %{"meta" => %{"token" => token}} = result
+
+      assert {:ok, _claims, _resource} =
+               AshAuthentication.Jwt.verify(token, MishkaCmsCore.Accounts.User)
+
+      # Verify the token contains the correct permissions
+      assert %{"data" => %{"attributes" => %{"permission_values" => permissions}}} = result
+      assert admin_permission.name in permissions
+    end
   end
 
   describe "POST /auth/reset-request" do
@@ -533,6 +577,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
   describe "GET /auth/me" do
     test "successfully returns current master user data", %{
       master_user: master_user,
+      admin_permission: admin_permission
     } do
       # First sign in to get token
       sign_in_response =
@@ -554,7 +599,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       # Now test the me endpoint
       response =
         make_api_request(
-          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site",
+          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site,permission_values",
           nil,
           method: "GET",
           headers: [
@@ -568,6 +613,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       user_id = master_user.id
       user_email = to_string(master_user.email)
+      permission_values = [admin_permission.name]
 
       assert %{
                "data" => %{
@@ -577,7 +623,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                    "email" => ^user_email,
                    "confirmed_at" => nil,
                    "site" => nil,
-                   "site_id" => nil
+                   "site_id" => nil,
+                   "permission_values" => ^permission_values
                  }
                }
              } = result
@@ -614,7 +661,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       # Test the me endpoint
       response =
         make_api_request(
-          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site",
+          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site,permission_values",
           nil,
           method: "GET",
           headers: [
@@ -639,7 +686,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                    "email" => ^user_email,
                    "confirmed_at" => nil,
                    "site_id" => ^site_id,
-                    "site" => %{"id" => ^site_id}
+                   "site" => %{"id" => ^site_id},
+                   "permission_values" => []
                  }
                }
              } = result
@@ -648,7 +696,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
     test "returns 403 forbidden when no authentication token provided" do
       response =
         make_api_request(
-          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site",
+          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site,permission_values",
           nil,
           method: "GET",
           headers: [{"x-no-tenant", "true"}]
@@ -671,7 +719,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
     test "returns 403 when token is invalid" do
       response =
         make_api_request(
-          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site",
+          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site,permission_values",
           nil,
           method: "GET",
           headers: [
@@ -728,7 +776,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       # Try to access me endpoint with different site host
       response =
         make_api_request(
-          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site",
+          "#{@api_user_path}/me?fields[user]=id,email,confirmed_at,site_id,site,permission_values",
           nil,
           method: "GET",
           headers: [
@@ -778,7 +826,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                    "email" => ^email,
                    "confirmed_at" => nil,
                    "site_id" => site_id,
-                    "site" => %{"id" => returned_site_id}
+                   "site" => %{"id" => returned_site_id},
+                   "permission_values" => []
                  }
                },
                "meta" => %{"token" => token}
