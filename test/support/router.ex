@@ -3,7 +3,8 @@ defmodule MishkaCmsCore.TestRouter do
   The routes this library's tests drive, mirroring the two scopes the CMS puts it in.
 
   `/api/json` is the CMS's `:api` pipeline — the tenant lookup that resolves a request's site from
-  its host, CORS, then the bearer token and the actor it names. Dropping any of them changes
+  its host, CORS, then the bearer token and the actor it names, and the admin surface (the
+  API's, so an area is held by its `admin:api:` name). Dropping any of them changes
   what the API does, since tenancy and authorization are enforced through them.
 
   See `MishkaCmsCore.TestJsonApiRouter` for which domains the API mounts.
@@ -22,6 +23,7 @@ defmodule MishkaCmsCore.TestRouter do
     plug :load_from_bearer
     plug :confirm_bearer_tenant
     plug :set_actor, :user
+    plug MishkaCmsCore.Runtime.Plugs.AdminSurfacePlug, surface: :api
   end
 
   pipeline :browser do
