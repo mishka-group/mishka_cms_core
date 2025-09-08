@@ -5,6 +5,12 @@ defmodule MishkaCmsCore.Application do
 
   use Application
 
+  # `settings:register` plugins — every sidebar entry's position/visibility switches under the
+  # Sidebar tab.
+  @settings_plugins [
+    MishkaCmsCore.Sidebar.MenuSettings
+  ]
+
   # `mail:providers` plugins — the email providers a site can pick on the Email tab. An extension
   # adds one the same way (see `MishkaCmsCore.Mail.Provider`).
   @mail_providers [
@@ -38,7 +44,7 @@ defmodule MishkaCmsCore.Application do
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: @mail_providers
+  def plugins, do: @settings_plugins ++ @mail_providers
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
