@@ -6,6 +6,7 @@ config :mishka_cms_core,
   ash_domains: [
     MishkaCmsCore.Runtime,
     MishkaCmsCore.Accounts,
+    MishkaCmsCore.Notify,
     MishkaCmsCore.Mail
   ]
 

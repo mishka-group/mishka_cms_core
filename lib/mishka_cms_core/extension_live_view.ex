@@ -97,6 +97,9 @@ defmodule MishkaCmsCore.ExtensionLiveView do
       # add per page and nothing to forget — an undeclared page is refused, not waved through.
       on_mount(MishkaCmsCore.Sidebar.PageGuard)
 
+      # Makes the topbar bell live: per-user unseen count + real-time updates (overrides Nav's count)
+      on_mount(MishkaCmsCore.Notify.LiveHooks)
+
       # HTML helpers
       import Phoenix.HTML
 

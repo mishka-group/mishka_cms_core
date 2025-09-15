@@ -7,7 +7,9 @@ defmodule MishkaCmsCoreWeb.Routes do
 
   @impl true
   def routes(:admin) do
-    []
+    [
+      {:live, "/notifications", MishkaCmsCoreWeb.Live.Admin.Dashboard.Notification.Index, :index}
+    ]
   end
 
   def routes(:admin_standalone) do

@@ -631,6 +631,59 @@ defmodule MishkaCmsCore.Settings do
           gettext_noop(
             "Codes separated by commas. Every site publishes these, whether it lists them or not. Leave empty to require none."
           )
+      ),
+      define("notify.cms_core.user.permissions_changed", :boolean,
+        default: true,
+        category: "notifications",
+        group: gettext_noop("Events"),
+        scope: :both,
+        label: gettext_noop("Notify admins when a user's permissions change"),
+        description: gettext_noop("Sends an email to all administrators on any grant or revoke.")
+      ),
+      # Per-user opt-out (Settings → Preferences) — key mirrors `Notify.user_setting_key/1`.
+      define("notify.pref.cms_core.user.permissions_changed", :boolean,
+        default: true,
+        category: "preferences",
+        group: gettext_noop("Notifications"),
+        scope: :user,
+        label: gettext_noop("User permission changes"),
+        description:
+          gettext_noop("Tell me when an administrator grants or revokes someone's permissions.")
+      ),
+      define("notify.cms_core.page_comment.mentioned", :boolean,
+        default: true,
+        category: "notifications",
+        group: gettext_noop("Events"),
+        scope: :both,
+        label: gettext_noop("Notify people named in a review note"),
+        description:
+          gettext_noop("Writing @someone in the visual editor's Review panel tells them.")
+      ),
+      define("notify.pref.cms_core.page_comment.mentioned", :boolean,
+        default: true,
+        category: "preferences",
+        group: gettext_noop("Notifications"),
+        scope: :user,
+        label: gettext_noop("Being named in a review note"),
+        description:
+          gettext_noop("Tell me when somebody writes my name in a note in the visual editor.")
+      ),
+      define("notify.retention_read_days", :integer,
+        default: 30,
+        category: "notifications",
+        group: gettext_noop("Retention"),
+        scope: :global,
+        label: gettext_noop("Delete read notifications after (days)"),
+        description:
+          gettext_noop("A notification someone has already read is pruned this many days later.")
+      ),
+      define("notify.retention_max_days", :integer,
+        default: 180,
+        category: "notifications",
+        group: gettext_noop("Retention"),
+        scope: :global,
+        label: gettext_noop("Delete all notifications after (days)"),
+        description: gettext_noop("Every notification is pruned at this age, read or not.")
       )
     ] ++ email_definitions()
   end

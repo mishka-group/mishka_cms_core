@@ -2,7 +2,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
   @moduledoc """
   `on_mount` hook that records, for the admin chrome in `MishkaCmsCore.Layouts`: the current request
   path as `@current_path` (so the sidebar highlights the active item — updates on live navigation
-  too) and `@current_user` with its `:permissions` loaded. Attached to every admin page via
+  too), `@notification_count` (failed/retrying runtime jobs, shown as the topbar bell badge), and
+  `@current_user` with its `:permissions` loaded. Attached to every admin page via
   `MishkaCmsCore.ExtensionLiveView`.
 
   It also puts the page in the language its admin reads the dashboard in —
@@ -17,6 +18,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   """
   import Phoenix.LiveView, only: [attach_hook: 4]
   import Phoenix.Component, only: [assign: 2, assign: 3]
+  import Ecto.Query
 
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -39,6 +41,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
       # every admin page rather than page by page, because the alternative is that adding a code
       # field to a form silently gives you a plain textarea and no clue why.
       |> assign(
+        notification_count: notification_count(),
         admin_css: true,
         admin_fonts: true,
         code_editor: true,
@@ -72,5 +75,10 @@ defmodule MishkaCmsCore.Layouts.Nav do
     if Ash.Resource.loaded?(user, :permissions),
       do: user,
       else: Ash.load!(user, [permissions: [:name]], actor: user)
+  end
+
+  defp notification_count do
+    query = from(j in Oban.Job, where: j.state in ["retryable", "discarded"], select: count())
+    Oban.Repo.one(Oban.config(), query) || 0
   end
 end
