@@ -4,6 +4,8 @@ defmodule MishkaCmsCore.Accounts.Helper do
   and email domain configuration for multi-tenant environments.
   """
 
+  use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
+
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.States.SiteState
 
@@ -18,6 +20,81 @@ defmodule MishkaCmsCore.Accounts.Helper do
   @spec master_user?(map() | nil) :: boolean()
   def master_user?(%{site_id: nil}), do: true
   def master_user?(_user), do: false
+
+  @doc """
+  The ids among `user_ids` that belong to a master, as a `MapSet`, in one read.
+
+  Reads with no tenant and selects only `:id`, so it answers for a site user's screen too, where a
+  master's account does not load. `nil` ids are ignored, and a list with nothing left in it reads
+  nothing.
+  """
+  @spec master_ids([Ash.UUID.t() | nil]) :: {:ok, MapSet.t()} | {:error, term()}
+  def master_ids(user_ids) do
+    case user_ids |> Enum.reject(&is_nil/1) |> Enum.uniq() do
+      [] ->
+        {:ok, MapSet.new()}
+
+      ids ->
+        with {:ok, users} <-
+               MishkaCmsCore.Accounts.User
+               |> Ash.Query.filter(id in ^ids and is_nil(site_id))
+               |> Ash.Query.select([:id])
+               |> Ash.read(authorize?: false) do
+          {:ok, MapSet.new(users, & &1.id)}
+        end
+    end
+  end
+
+  @doc """
+  What a screen calls whoever did something.
+
+    * `user` is the account as the reader's own read returned it: a user, `nil`,
+      `%Ash.NotLoaded{}` or `%Ash.ForbiddenField{}`.
+    * `master?` says whether the account's id is a master's (see `master_ids/1`).
+    * `no_account` is what to call a record with no readable account: `:guest`, `:system` or
+      `:unknown` (see `label/1`), or the words themselves.
+    * `master_name` replaces `label(:master)`, such as a master's blogger name on a comment.
+
+  Returns the email when `user` carries a readable one, else `master_name` or `label(:master)` for
+  a master, else `no_account`. Never returns any part of an unreadable email.
+  """
+  @spec who(term(), boolean(), :guest | :system | :unknown | String.t(), String.t() | nil) ::
+          String.t()
+  def who(user, master?, no_account, master_name \\ nil)
+  def who(%{email: %Ash.CiString{} = email}, _master?, _no_account, _name), do: to_string(email)
+
+  def who(%{email: email}, _master?, _no_account, _name) when is_binary(email) and email != "",
+    do: email
+
+  def who(_user, true, _no_account, name) when is_binary(name) and name != "", do: name
+  def who(_user, true, _no_account, _name), do: label(:master)
+  def who(_user, _master?, no_account, _name) when is_atom(no_account), do: label(no_account)
+  def who(_user, _master?, no_account, _name), do: no_account
+
+  @doc """
+  The word a screen shows for an account it does not name, in the `mishka_gervaz` Gettext domain:
+  `:master` "Master", `:guest` "Guest" (written signed out), `:system` "System" (no user did it) and
+  `:unknown` "Unknown" (an account the reader's read did not return).
+  """
+  @spec label(:master | :guest | :system | :unknown) :: String.t()
+  def label(:master), do: dpgettext("mishka_gervaz", "account", "Master")
+  def label(:guest), do: dgettext("mishka_gervaz", "Guest")
+  def label(:system), do: dgettext("mishka_gervaz", "System")
+  def label(:unknown), do: dgettext("mishka_gervaz", "Unknown")
+
+  @doc """
+  `user` when `reader` may see its email, else `nil`.
+
+  A master (`site_id` nil) reads everyone's; a site user reads its own site's. Pass the result to
+  `who/4` on a screen that draws an account it did not read as the reader.
+  """
+  @spec visible_to(term(), map() | nil) :: map() | nil
+  def visible_to(%{} = user, %{site_id: nil}), do: user
+
+  def visible_to(%{site_id: site_id} = user, %{site_id: site_id}) when is_binary(site_id),
+    do: user
+
+  def visible_to(_user, _reader), do: nil
 
   @doc """
   The ids of the permissions the account `user_id` holds now, as a `MapSet` of strings, read with no
@@ -88,6 +165,15 @@ defmodule MishkaCmsCore.Accounts.Helper do
   end
 
   @doc """
+  A master admin: a user whose `site_id` is nil and who is an admin of `surface` (`admin?/2`),
+  either surface by default. A permission never makes a master.
+  """
+  @spec master_admin?(map() | nil, admin_surface()) :: boolean()
+  def master_admin?(user, surface \\ :any)
+  def master_admin?(%{site_id: nil} = user, surface), do: admin?(user, surface)
+  def master_admin?(_user, _surface), do: false
+
+  @doc """
   An admin of `site_id`: a user of that site who is an admin of `surface` (`admin?/2`), for that
   site only. `surface` defaults to `:dashboard`; pass `:api` for a request to the admin API, or
   `:any` for either.
@@ -113,6 +199,13 @@ defmodule MishkaCmsCore.Accounts.Helper do
       AccessPermissions.match?(user, %{shared: %{admin_surface: :api}},
         permissions: ["admin:api:*"]
       )
+
+  @doc """
+  Who may see every site's jobs — Oban Web and the Sites screen's job panel: a master
+  (`master_user?/1`) who is a full dashboard admin (`full_admin?/2`). A site's full admin never is.
+  """
+  @spec oban_admin?(map() | nil) :: boolean()
+  def oban_admin?(user), do: master_user?(user) and full_admin?(user, :dashboard)
 
   @doc "Whether a sign-in email may go to `user_or_email`: every site takes email until it can be offline."
   @spec may_email?(map() | String.t(), map() | keyword()) :: boolean()

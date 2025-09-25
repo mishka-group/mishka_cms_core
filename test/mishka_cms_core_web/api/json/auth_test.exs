@@ -844,6 +844,91 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert claims["sub"] == "user?id=#{user_id}"
     end
 
+    test "fails to register master user without authentication", %{} do
+      email = "unauthorized.master@example.com"
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/register",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => email,
+              "password" => @password,
+              "password_confirmation" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert response.status == 400
+      result = Jason.decode!(response.resp_body)
+
+      assert %{
+               "errors" => [
+                 %{
+                   "code" => "invalid_argument",
+                   "status" => "400",
+                   "title" => "InvalidArgument"
+                 }
+               ]
+             } = result
+    end
+
+    # SIGNING UP NEVER MAKES A MASTER, not even for a master: a new master is added from the admin
+    # dashboard's Users table.
+    test "a master's token cannot register a master", %{master_user: master_user} do
+      # First, get a token for the existing master user
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => master_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Now register a new master user with the token
+      new_master_email = "new.master@example.com"
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/register",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => new_master_email,
+              "password" => @password,
+              "password_confirmation" => @password
+            }
+          },
+          headers: [
+            {"x-no-tenant", "true"},
+            {"authorization", "Bearer #{master_token}"}
+          ]
+        )
+
+      assert response.status == 400
+      body = Jason.decode!(response.resp_body)
+
+      assert Enum.any?(
+               body["errors"],
+               &(&1["detail"] == "Master accounts are added by a master from the admin dashboard.")
+             )
+
+      assert [] ==
+               MishkaCmsCore.Accounts.User
+               |> Ash.Query.filter(email == ^new_master_email)
+               |> Ash.read!(authorize?: false)
+    end
+
     test "fails to register user with mismatched passwords", %{site: site} do
       response =
         make_api_request(
@@ -1136,6 +1221,79 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert signin_response.status == 201
       result = Jason.decode!(signin_response.resp_body)
       assert %{"meta" => %{"token" => _token}} = result
+    end
+
+    test "fails to register master user with invalid master token", %{} do
+      response =
+        make_api_request(
+          "#{@api_user_path}/register",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => "invalid.token.master@example.com",
+              "password" => @password,
+              "password_confirmation" => @password
+            }
+          },
+          headers: [
+            {"x-no-tenant", "true"},
+            {"authorization", "Bearer invalid_token_here"}
+          ]
+        )
+
+      assert response.status == 400
+      result = Jason.decode!(response.resp_body)
+      assert %{"errors" => _errors} = result
+    end
+
+    test "fails to register master user with tenant user token", %{site: site} do
+      # Create and sign in a tenant user
+      tenant_user =
+        create_user!(
+          email: "tenant.trying.master@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(tenant_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => tenant_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to register a master user with tenant token
+      response =
+        make_api_request(
+          "#{@api_user_path}/register",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => "tenant.cannot.create.master@example.com",
+              "password" => @password,
+              "password_confirmation" => @password
+            }
+          },
+          headers: [
+            {"x-no-tenant", "true"},
+            {"authorization", "Bearer #{tenant_token}"}
+          ]
+        )
+
+      assert response.status == 400
+      result = Jason.decode!(response.resp_body)
+      assert %{"errors" => _errors} = result
     end
   end
 
@@ -2257,5 +2415,115 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert result["success"] == true
       assert result["message"] == "Logged out successfully"
     end
+  end
+
+  # THE MASTER ACCOUNTS ANSWER ON THE MASTER SITE'S ADDRESS ALONE. Any other site's address ignores
+  # `x-no-tenant` and `?no_tenant=true`: a master's email and password are simply wrong there, a
+  # master's token names nobody, and nobody there can spend a master's sign-in attempts.
+  describe "the master accounts on another site's address" do
+    test "a master's right password is refused exactly as a wrong one and an unknown email are",
+         %{
+           site: site,
+           master_user: master
+         } do
+      answers =
+        for {email, password} <- [
+              {master.email, @password},
+              {master.email, "WrongPassword123!"},
+              {"nobody.here@example.com", @password}
+            ],
+            switch <- [[headers: [{"x-no-tenant", "true"}]], [query: "?no_tenant=true"], []] do
+          site.host |> sign_in(email, password, switch) |> refusal()
+        end
+
+      assert [{403, [%{"code" => "forbidden"}]}] = Enum.uniq(answers)
+    end
+
+    test "a master's token names nobody there", %{site: site, master_user: master} do
+      token = sign_in_master(master)
+
+      as_master = me(site.host, [{"authorization", "Bearer " <> token}, {"x-no-tenant", "true"}])
+      as_nobody = me(site.host, [{"x-no-tenant", "true"}])
+
+      assert as_master.status == 403
+      assert refusal(as_master) == refusal(as_nobody)
+
+      assert me(master_host(), [{"authorization", "Bearer " <> token}, {"x-no-tenant", "true"}]).status ==
+               200
+    end
+
+    test "a site's user holding a token issued with no site is nobody on the master site's address",
+         %{site: site} do
+      moved =
+        MishkaCmsCore.Accounts.User
+        |> Ash.Changeset.for_create(
+          :register_with_password,
+          %{email: "moved@example.com", password: @password, password_confirmation: @password},
+          authorize?: false
+        )
+        |> Ash.Changeset.force_change_attribute(:site_id, site.id)
+        |> Ash.create!()
+
+      response =
+        me(master_host(), [
+          {"authorization", "Bearer " <> moved.__metadata__.token},
+          {"x-no-tenant", "true"}
+        ])
+
+      assert response.status == 403
+    end
+
+    test "a master's email registers there as any new address does", %{
+      site: site,
+      master_user: master
+    } do
+      emails = [to_string(master.email), "nobody.yet@example.com"]
+
+      for email <- emails do
+        response =
+          make_api_request(
+            "#{@api_user_path}/register",
+            %{
+              "type" => "user",
+              "attributes" => %{
+                "email" => email,
+                "password" => @password,
+                "password_confirmation" => @password
+              }
+            },
+            host: site.host
+          )
+
+        assert response.status == 201, "#{email}: #{response.resp_body}"
+      end
+
+      registered =
+        MishkaCmsCore.Accounts.User
+        |> Ash.Query.filter(site_id == ^site.id)
+        |> Ash.read!(authorize?: false)
+        |> Enum.map(&to_string(&1.email))
+
+      assert Enum.sort(registered) == Enum.sort(emails)
+    end
+  end
+
+  defp master_host, do: "localhost"
+
+  defp sign_in(host, email, password, switch) do
+    make_api_request(
+      "#{@api_user_path}/sign-in#{switch[:query]}",
+      %{"type" => "user", "attributes" => %{"email" => to_string(email), "password" => password}},
+      headers: switch[:headers] || [],
+      host: host
+    )
+  end
+
+  defp me(host, headers),
+    do: make_api_request("#{@api_user_path}/me", nil, method: "GET", headers: headers, host: host)
+
+  # What a refusal tells its caller: the status and the errors, less the id each error is given.
+  defp refusal(response) do
+    errors = response.resp_body |> Jason.decode!() |> Map.get("errors", [])
+    {response.status, Enum.map(errors, &Map.delete(&1, "id"))}
   end
 end

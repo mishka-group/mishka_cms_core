@@ -120,6 +120,10 @@ defmodule MishkaCmsCore.Accounts.User do
       # before/reject seam (e.g. ban-list / captcha / domain allow-list before account creation)
       change MishkaCmsCore.Runtime.Resources.Changes.PluginBeforeHook
       accept [:email, :hashed_password]
+
+      # With no tenant this makes a master, which only a master may do. Asked when the action runs,
+      # so of the actor, tenant and authorization it runs with.
+      validate MishkaCmsCore.Accounts.Validations.MasterUserCreation, before_action?: true
     end
 
     read :get_by_subject do
@@ -267,8 +271,11 @@ defmodule MishkaCmsCore.Accounts.User do
         end
       end
 
+      validate MishkaCmsCore.Accounts.Validations.MasterUserCreation, before_action?: true
+
       validate MishkaCmsCore.Accounts.Validations.ValidEmail
 
+      change {MishkaCmsCore.Accounts.Changes.EnforceMasterEmailSeparation, []}
       # Hashes the provided password
       change AshAuthentication.Strategy.Password.HashPasswordChange
 
