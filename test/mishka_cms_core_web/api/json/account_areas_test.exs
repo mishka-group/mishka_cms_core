@@ -14,6 +14,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AccountAreasTest do
 
   @password "Password123!"
   @sign_in "/api/json/v1/auth/user/sign-in"
+  @admin "/api/json/v1/auth/admin"
   @catalogue "/api/json/v1/tenant/admin/permissions"
 
   setup do
@@ -65,6 +66,24 @@ defmodule MishkaCmsCoreWeb.Api.Json.AccountAreasTest do
         headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "false"}],
         host: site.host
       )
+
+  defp ids(response),
+    do: response.resp_body |> Jason.decode!() |> Map.fetch!("data") |> Enum.map(& &1["id"])
+
+  describe "GET /v1/auth/admin/users" do
+    test "lists the site's accounts to the API's user area", ctx do
+      response = call("GET", "#{@admin}/users", token!(["admin:api:user"], ctx.site), ctx.site)
+
+      assert response.status == 200
+      assert ctx.member.id in ids(response)
+    end
+
+    test "refuses a bearer holding only the dashboard's user area", ctx do
+      token = token!(["admin:dashboard:user"], ctx.site)
+
+      assert call("GET", "#{@admin}/users", token, ctx.site).status == 403
+    end
+  end
 
   describe "PATCH and DELETE /v1/master/admin/permissions/:id" do
     @master_catalogue "/api/json/v1/master/admin/permissions"

@@ -27,12 +27,17 @@ defmodule MishkaCmsCore.Accounts.User do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [
+      Ash.Notifier.PubSub,
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
     ],
-    extensions: [AshAuthentication, AshJsonApi.Resource]
+    extensions: [AshAuthentication, AshJsonApi.Resource, MishkaGervaz.Resource]
 
+  import Phoenix.Component, only: [sigil_H: 2]
+  import MishkaGervaz.UIAdapters.Tailwind, only: [cell_stacked: 1]
   require Ash.Query
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
+
+  @admin_fields [:email]
 
   authentication do
     add_ons do
@@ -104,6 +109,313 @@ defmodule MishkaCmsCore.Accounts.User do
     type "user"
 
     default_fields [:id, :email, :confirmed_at, :permission_values, :site_id, :site]
+  end
+
+  mishka_gervaz do
+    table do
+      identity do
+        name :users
+        route "/admin/dashboard/account/users"
+        stream_name :users
+      end
+
+      source do
+        actions do
+          destroy {:table_destroy, :destroy}
+        end
+
+        preload do
+          always [:site, :permission_values]
+        end
+      end
+
+      columns do
+        column :user_info do
+          static true
+          requires [:id, :email]
+          label fn -> dgettext("mishka_gervaz", "User") end
+          position :first
+
+          ui do
+            width "minmax(230px,1.8fr)"
+          end
+
+          render fn record ->
+            id = to_string(record.id)
+            assigns = %{email: to_string(record.email), id: id}
+
+            ~H"""
+            <.cell_stacked
+              variant={:title}
+              icon="hero-user"
+              primary={@email}
+              secondary={dgettext("mishka_gervaz", "ID: %{id}", id: @id)}
+              copy={
+                %{
+                  id: "user-id-copy-#{@id}",
+                  value: @id,
+                  label: dgettext("mishka_gervaz", "Copy user ID")
+                }
+              }
+            />
+            """
+          end
+        end
+
+        column :user_confirmed do
+          source :confirmed_at
+          label fn -> dgettext("mishka_gervaz", "Confirmed") end
+          format fn confirmed_at -> if confirmed_at, do: "confirmed", else: "pending" end
+
+          ui do
+            type :badge
+            width "minmax(140px,0.7fr)"
+
+            extra %{
+              variant: :pill,
+              colors: %{
+                "confirmed" => "bg-[#e6f6ee] text-[#177a53]",
+                "pending" => "bg-[#fdf3f1] text-[#c0473d]"
+              },
+              labels: %{
+                "confirmed" => dgettext_noop("mishka_gervaz", "Confirmed"),
+                "pending" => dgettext_noop("mishka_gervaz", "Pending")
+              },
+              dots: %{"confirmed" => "bg-[#1f9d6b]", "pending" => "bg-[#e5484d]"},
+              default_color: "bg-[#f4f3ef] text-[#8a877f]"
+            }
+          end
+        end
+
+        column :site_info do
+          static true
+          requires [:site_id, :site]
+          label fn -> dgettext("mishka_gervaz", "Site") end
+
+          ui do
+            width "minmax(150px,0.9fr)"
+          end
+
+          render fn record, state ->
+            site_name =
+              case record.site do
+                %{name: name} -> name
+                _unloaded -> nil
+              end
+
+            display =
+              if is_nil(record.site_id),
+                do: dgettext("mishka_gervaz", "Global"),
+                else: site_name || dgettext("mishka_gervaz", "Unknown")
+
+            assigns = %{site: (state.master_user? && display) || nil}
+
+            ~H"""
+            <.cell_stacked variant={:meta} icon="hero-server-stack" primary={@site} />
+            """
+          end
+        end
+
+        column :permission_values do
+          label fn -> dgettext("mishka_gervaz", "Permissions") end
+          sortable false
+
+          ui do
+            type :tags
+            width "minmax(180px,1.5fr)"
+
+            extra %{
+              max_items: 3,
+              badge_class:
+                "inline-flex items-center rounded-[7px] bg-[#f4f3ef] px-2 py-[3px] " <>
+                  "text-[10.5px] font-semibold text-[#6d6a63]",
+              empty: "—"
+            }
+          end
+        end
+      end
+
+      filters do
+        filter :search, :text, fields: [:email]
+
+        filter :site_id, :relation do
+          mode :search_multi
+          display_field :name
+          search_field :name
+          min_chars 1
+          page_size 15
+          restricted true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Site") end
+            placeholder fn -> dgettext("mishka_gervaz", "Search sites...") end
+          end
+        end
+      end
+
+      row_actions do
+        action :show do
+          type :event
+          event "show_user_modal"
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "View") end
+            icon "hero-eye"
+          end
+        end
+
+        action :edit do
+          type :event
+          event "edit_user_modal"
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Edit") end
+            icon "hero-pencil-square"
+          end
+        end
+
+        action :confirm_account do
+          type :update
+          action :confirm_by_admin
+          visible fn record, _state -> is_nil(record.confirmed_at) end
+
+          confirm fn _record ->
+            dgettext(
+              "mishka_gervaz",
+              "Confirm this account's email address without the confirmation email?"
+            )
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Confirm account") end
+            icon "hero-check-badge"
+          end
+        end
+
+        action :delete do
+          type :destroy
+
+          confirm fn _record ->
+            dgettext(
+              "mishka_gervaz",
+              "Are you sure you want to delete this user? This action cannot be undone."
+            )
+          end
+        end
+      end
+
+      bulk_actions do
+        action :delete,
+          type: :destroy,
+          confirm:
+            dgettext_noop(
+              "mishka_gervaz",
+              "Delete the selected users? This action cannot be undone."
+            )
+      end
+
+      row do
+        selectable true
+      end
+
+      realtime do
+        prefix "user"
+
+        visible fn record, user ->
+          is_nil(user.site_id) or record.site_id == user.site_id
+        end
+      end
+
+      url_sync do
+        mode :bidirectional
+        params [:filters, :sort, :page, :search, :page_size]
+        prefix "users"
+        max_filter_length 500
+      end
+
+      empty_state message: dgettext_noop("mishka_gervaz", "No users found"), icon: "hero-users"
+    end
+
+    form do
+      identity do
+        name :user_form
+      end
+
+      source do
+        actions do
+          create {:master_create, :tenant_create}
+          update {:master_form_update, :tenant_update}
+        end
+      end
+
+      fields do
+        field :site_id, :relation do
+          restricted true
+          show_on :create
+          display_field :name
+          search_field :name
+          mode :search
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Site") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "Leave empty for global (master) user")
+            end
+          end
+        end
+
+        field :email do
+          required true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Email") end
+            placeholder fn -> dgettext("mishka_gervaz", "user@example.com") end
+            autocomplete "new-email"
+          end
+        end
+
+        field :password, :password do
+          virtual true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Password") end
+            placeholder fn -> dgettext("mishka_gervaz", "Minimum 8 characters") end
+            autocomplete "new-password"
+          end
+        end
+
+        field :password_confirmation, :password do
+          virtual true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Confirm Password") end
+            placeholder fn -> dgettext("mishka_gervaz", "Confirm password") end
+            autocomplete "new-password"
+          end
+        end
+      end
+
+      groups do
+        group :basic_info do
+          fields [:site_id, :email]
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Basic Information") end
+            columns 2
+          end
+        end
+
+        group :security do
+          fields [:password, :password_confirmation]
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Security") end
+            columns 2
+          end
+        end
+      end
+    end
   end
 
   actions do
@@ -320,6 +632,444 @@ defmodule MishkaCmsCore.Accounts.User do
       end
     end
 
+    read :users do
+      description "Read users based on tenant context"
+      pagination offset?: true, default_limit: 100
+
+      prepare fn query, context ->
+        query = Ash.Query.load(query, :site)
+
+        case context.actor do
+          nil ->
+            query
+
+          %{site_id: nil} ->
+            query
+
+          %{site_id: site_id} ->
+            Ash.Query.filter(query, site_id == ^site_id)
+        end
+      end
+    end
+
+    read :tenant_read do
+      prepare MishkaCmsCore.Runtime.Resources.Preparations.PluginQueryHook
+      pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      prepare fn query, context ->
+        tenant = context.tenant
+
+        query
+        |> Ash.Query.filter(site_id == ^tenant)
+        |> Ash.Query.load([:site, :permissions, :permission_values])
+      end
+
+      description "Lists users for tenant (filtered to their site)"
+    end
+
+    read :tenant_get do
+      get? true
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      prepare fn query, context ->
+        tenant = context.tenant
+
+        query
+        |> Ash.Query.filter(site_id == ^tenant)
+        |> Ash.Query.load([:site, :permissions, :permission_values])
+      end
+
+      description "Gets a single user for tenant (filtered to their site)"
+    end
+
+    read :master_read do
+      pagination offset?: true, default_limit: 20, max_page_size: 100, countable: true
+      multitenancy :bypass
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      prepare fn query, _context ->
+        Ash.Query.load(query, [:site, :permissions, :permission_values])
+      end
+
+      description "Lists all users (master users only)"
+    end
+
+    read :master_get do
+      get? true
+      multitenancy :bypass
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      prepare fn query, _context ->
+        Ash.Query.load(query, [:site, :permissions, :permission_values])
+      end
+
+      description "Gets a single user by ID (master users only)"
+    end
+
+    create :tenant_create do
+      accept @admin_fields
+
+      argument :password, :string do
+        allow_nil? false
+        sensitive? true
+        constraints min_length: 8
+      end
+
+      argument :password_confirmation, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      validate confirm(:password, :password_confirmation)
+      validate MishkaCmsCore.Accounts.Validations.ValidEmail
+
+      change fn changeset, context ->
+        Ash.Changeset.change_attribute(changeset, :site_id, context.tenant)
+      end
+
+      change set_context(%{strategy_name: :password})
+      change AshAuthentication.Strategy.Password.HashPasswordChange
+
+      description "Creates a new user for the tenant's site"
+    end
+
+    create :master_create do
+      accept @admin_fields ++ [:site_id]
+
+      argument :password, :string do
+        allow_nil? false
+        sensitive? true
+        constraints min_length: 8
+      end
+
+      argument :password_confirmation, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      validate confirm(:password, :password_confirmation)
+      validate MishkaCmsCore.Accounts.Validations.ValidEmail
+
+      change set_context(%{strategy_name: :password})
+      change AshAuthentication.Strategy.Password.HashPasswordChange
+
+      description "Creates a new user (master users only, can specify site_id)"
+    end
+
+    update :tenant_update do
+      accept @admin_fields
+      require_atomic? false
+
+      argument :password, :string do
+        allow_nil? true
+        sensitive? true
+        constraints min_length: 8
+      end
+
+      argument :password_confirmation, :string do
+        allow_nil? true
+        sensitive? true
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      validate MishkaCmsCore.Accounts.Validations.ValidEmail
+
+      # Validate password confirmation if password is provided
+      validate fn changeset, _context ->
+        password = Ash.Changeset.get_argument(changeset, :password)
+        password_confirmation = Ash.Changeset.get_argument(changeset, :password_confirmation)
+
+        cond do
+          is_nil(password) or password == "" ->
+            :ok
+
+          password != password_confirmation ->
+            {:error,
+             field: :password_confirmation,
+             message: dgettext_noop("errors", "does not match password")}
+
+          true ->
+            :ok
+        end
+      end
+
+      # Ensure tenant can only update users in their site
+      validate fn changeset, context ->
+        user = changeset.data
+        tenant = context.tenant
+
+        if user.site_id == tenant do
+          :ok
+        else
+          {:error,
+           field: :id, message: dgettext_noop("errors", "Cannot update users from other sites.")}
+        end
+      end
+
+      # Hash password if provided
+      change fn changeset, _context ->
+        password = Ash.Changeset.get_argument(changeset, :password)
+
+        if password && password != "" do
+          hashed = Bcrypt.hash_pwd_salt(password)
+          Ash.Changeset.force_change_attribute(changeset, :hashed_password, hashed)
+        else
+          changeset
+        end
+      end
+
+      description "Updates a user in the tenant's site (including password reset)"
+    end
+
+    action :master_update, :struct do
+      description "Updates any user (master users only, including password reset) - requires nil tenant context"
+      constraints instance_of: __MODULE__
+
+      argument :id, :uuid, allow_nil?: false
+      argument :email, :ci_string, allow_nil?: true
+      argument :site_id, :uuid, allow_nil?: true
+
+      argument :password, :string do
+        allow_nil? true
+        sensitive? true
+        constraints min_length: 8
+      end
+
+      argument :password_confirmation, :string do
+        allow_nil? true
+        sensitive? true
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      run fn input, _context ->
+        user_id = input.arguments.id
+        email = input.arguments[:email]
+        password = input.arguments[:password]
+        password_confirmation = input.arguments[:password_confirmation]
+
+        # Validate password confirmation if password is provided
+        cond do
+          password && password != "" && password != password_confirmation ->
+            {:error,
+             Ash.Error.Changes.InvalidArgument.exception(
+               field: :password_confirmation,
+               message: dgettext_noop("errors", "does not match password")
+             )}
+
+          true ->
+            # Fetch user with multitenancy bypass
+            case Ash.get(__MODULE__, user_id, action: :master_get, authorize?: false) do
+              {:ok, user} ->
+                attrs =
+                  %{}
+                  |> then(fn a -> if email, do: Map.put(a, :email, email), else: a end)
+
+                user
+                |> Ash.Changeset.for_update(:update, attrs, authorize?: false)
+                |> then(fn cs ->
+                  # Allow changing site_id (moving user between sites)
+                  case Map.fetch(input.arguments, :site_id) do
+                    {:ok, site_id} -> Ash.Changeset.force_change_attribute(cs, :site_id, site_id)
+                    :error -> cs
+                  end
+                end)
+                |> then(fn cs ->
+                  # Hash and set password if provided
+                  if password && password != "" do
+                    hashed = Bcrypt.hash_pwd_salt(password)
+                    Ash.Changeset.force_change_attribute(cs, :hashed_password, hashed)
+                  else
+                    cs
+                  end
+                end)
+                |> Ash.update()
+
+              {:error, _} = error ->
+                error
+            end
+        end
+      end
+    end
+
+    destroy :tenant_destroy do
+      require_atomic? false
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      # Ensure tenant can only delete users in their site and not themselves
+      validate fn changeset, context ->
+        user = changeset.data
+        tenant = context.tenant
+        actor = context.actor
+
+        cond do
+          user.site_id != tenant ->
+            {:error,
+             field: :id, message: dgettext_noop("errors", "Cannot delete users from other sites.")}
+
+          actor && user.id == actor.id ->
+            {:error, field: :id, message: dgettext_noop("errors", "Cannot delete yourself.")}
+
+          true ->
+            :ok
+        end
+      end
+
+      # Clear permissions before delete (to avoid FK constraint)
+      change fn changeset, _context ->
+        Ash.Changeset.manage_relationship(changeset, :permissions, [], type: :append_and_remove)
+      end
+
+      description "Deletes a user from the tenant's site (cannot delete self)"
+    end
+
+    action :master_destroy, :struct do
+      description "Deletes any user (master users only, cannot delete self) - requires nil tenant context"
+      constraints instance_of: __MODULE__
+
+      argument :id, :uuid, allow_nil?: false
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      run fn input, context ->
+        user_id = input.arguments.id
+        actor = context.actor
+
+        # Master user cannot delete themselves
+        if actor && user_id == actor.id do
+          {:error,
+           Ash.Error.Changes.InvalidArgument.exception(
+             field: :id,
+             message: dgettext_noop("errors", "Cannot delete yourself.")
+           )}
+        else
+          # Fetch user with multitenancy bypass
+          case Ash.get(__MODULE__, user_id, action: :master_get, authorize?: false) do
+            {:ok, user} ->
+              # Clear permissions first (to avoid FK constraint)
+              user
+              |> Ash.Changeset.for_update(:update, %{}, authorize?: false)
+              |> Ash.Changeset.manage_relationship(:permissions, [], type: :append_and_remove)
+              |> Ash.update!()
+
+              # Then delete
+              case Ash.destroy(user, authorize?: false) do
+                :ok -> {:ok, user}
+                {:error, _} = error -> error
+              end
+
+            {:error, _} = error ->
+              error
+          end
+        end
+      end
+    end
+
+    # Need a simple update action for master_update to use
+    update :update do
+      accept @admin_fields
+      require_atomic? false
+
+      # `master_update` sets the site after building this changeset, so this is asked when it runs.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                moves: true, label: dgettext_noop("errors", "account")},
+               before_action?: true
+    end
+
+    update :master_form_update do
+      accept @admin_fields ++ [:site_id]
+      require_atomic? false
+      multitenancy :bypass
+
+      argument :password, :string do
+        allow_nil? true
+        sensitive? true
+        constraints min_length: 8
+      end
+
+      argument :password_confirmation, :string do
+        allow_nil? true
+        sensitive? true
+      end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      # An account other records name moves only where they can still name it.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                moves: true, label: dgettext_noop("errors", "account")}
+
+      validate MishkaCmsCore.Accounts.Validations.ValidEmail
+
+      validate fn changeset, _context ->
+        password = Ash.Changeset.get_argument(changeset, :password)
+        password_confirmation = Ash.Changeset.get_argument(changeset, :password_confirmation)
+
+        cond do
+          is_nil(password) or password == "" ->
+            :ok
+
+          password != password_confirmation ->
+            {:error,
+             field: :password_confirmation,
+             message: dgettext_noop("errors", "does not match password")}
+
+          true ->
+            :ok
+        end
+      end
+
+      change fn changeset, _context ->
+        password = Ash.Changeset.get_argument(changeset, :password)
+
+        if password && password != "" do
+          hashed = Bcrypt.hash_pwd_salt(password)
+          Ash.Changeset.force_change_attribute(changeset, :hashed_password, hashed)
+        else
+          changeset
+        end
+      end
+
+      description "Updates a user via MishkaGervaz form (master users only)"
+    end
+
+    # Simple destroy for internal use by master_destroy generic action
+    destroy :destroy do
+      primary? true
+      require_atomic? false
+    end
+
+    destroy :table_destroy do
+      require_atomic? false
+
+      validate fn changeset, context ->
+        user = changeset.data
+        actor = context.actor
+
+        if actor && user.id == actor.id do
+          {:error, field: :id, message: dgettext_noop("errors", "Cannot delete yourself.")}
+        else
+          :ok
+        end
+      end
+
+      change fn changeset, _context ->
+        Ash.Changeset.manage_relationship(changeset, :permissions, [], type: :append_and_remove)
+      end
+
+      description "Deletes a user via MishkaGervaz table (handles permission cleanup)"
+    end
+
     action :reset_password_api, :struct do
       description "API endpoint for resetting password with token validation"
       constraints instance_of: MishkaCmsCore.Accounts.User
@@ -420,6 +1170,33 @@ defmodule MishkaCmsCore.Accounts.User do
 
       # Generates an authentication token for the user
       change AshAuthentication.GenerateTokenChange
+    end
+
+    # For someone whose confirmation mail never came: the admin vouches for the address. Tells
+    # plugins `"auth:account:confirmed"` with `%{user_id:, site_id:, by:}`, `by` the admin's id.
+    update :confirm_by_admin do
+      description "Confirms an account without its confirmation mail."
+      accept []
+      require_atomic? false
+
+      validate absent(:confirmed_at),
+        message: dgettext_noop("errors", "is already confirmed")
+
+      change set_attribute(:confirmed_at, &DateTime.utc_now/0)
+
+      change after_action(fn _changeset, user, context ->
+               MishkaInstaller.Event.Hook.call(
+                 "auth:account:confirmed",
+                 %{
+                   user_id: user.id,
+                   site_id: user.site_id,
+                   by: context.actor && context.actor.id
+                 },
+                 return: false
+               )
+
+               {:ok, user}
+             end)
     end
 
     read :sign_in_with_magic_link do
@@ -527,6 +1304,62 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if always()
     end
 
+    # A MASTER'S ACTIONS ARE A MASTER'S WITH THE USER AREA: a user whose `site_id` is nil, holding
+    # `admin:<surface>:user`. Asked here of the actor the action RUNS with; `TenantContext` on each
+    # of these asks it of the actor the input was BUILT with, which need not be the same one. BEFORE
+    # the bypasses below: a failing `policy` forbids, and no later bypass gets to wave it through.
+    policy action([
+             :master_read,
+             :master_get,
+             :master_create,
+             :master_update,
+             :master_destroy,
+             :master_form_update,
+             :table_destroy
+           ]) do
+      description "Only a master holding the user area: a user with no site"
+
+      forbid_unless actor_attribute_equals(:site_id, nil)
+
+      authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                    permissions: ["admin:dashboard:user", "admin:api:user"]}
+    end
+    policy action(:tenant_update) do
+      description "A site's holder of the user area edits only its own site's accounts"
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+
+    # Confirming vouches for an account's email address, so it takes the user area, within the
+    # actor's own site. It gives the actor no way in as the account, so no ceiling is asked.
+    policy action(:confirm_by_admin) do
+      description "A holder of the user area confirms its own site's accounts"
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+
+    # HOLDERS OF THE USER AREA. A master holding it reaches every account. A site's holder reaches
+    # the accounts of its own site and no other — with or without a tenant, because `global? true`
+    # leaves a call that names no tenant unscoped. One bypass that always applies, so a read it does
+    # not let through comes back empty rather than as an error, as it always has.
+    bypass always() do
+      description "A master with the user area reaches every account; a site's holder its own site's accounts"
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+
     bypass action(:sign_in_with_password) do
       authorize_if always()
     end
@@ -562,6 +1395,39 @@ defmodule MishkaCmsCore.Accounts.User do
       description "Anyone can attempt logout - no authentication required"
       authorize_if always()
     end
+
+    policy action(:users) do
+      access_type :strict
+
+      authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                    permissions: ["admin:dashboard:user", "admin:api:user"]}
+    end
+
+    # The list's own prepare scopes it by the actor the query was BUILT with. Scoped here too, by
+    # the actor it RUNS with: a master admin lists every account, a site's admin its own site's.
+    policy action(:users) do
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+  end
+
+  # Real-time updates via PubSub
+  # Using [nil, :site_id] pattern to publish to both global and site-specific topics:
+  # - nil site_id → "user:created" only (master users)
+  # - uuid site_id → "user:created" AND "user:{uuid}:created" (both master and tenant)
+  pub_sub do
+    module Application.compile_env!(:mishka_cms_core, :endpoint)
+    prefix "user"
+
+    publish :tenant_create, [[nil, :site_id], "created"]
+    publish :master_create, [[nil, :site_id], "created"]
+    publish :tenant_update, [[nil, :site_id], "updated"]
+    publish :update, [[nil, :site_id], "updated"]
+    publish :master_form_update, [[nil, :site_id], "updated"]
+    publish :confirm_by_admin, [[nil, :site_id], "updated"]
+    publish :tenant_destroy, [[nil, :site_id], "destroyed"]
+    publish :destroy, [[nil, :site_id], "destroyed"]
+    publish :table_destroy, [[nil, :site_id], "destroyed"]
   end
 
   changes do

@@ -113,6 +113,23 @@ defmodule MishkaCmsCore.Accounts.MasterUserCreationTest do
       end
     end
 
+    test "adds a master from the dashboard's Users table" do
+      actor = admin(["admin:dashboard:*"], nil)
+
+      assert {:ok, %{site_id: nil}} =
+               User
+               |> Ash.Changeset.for_create(
+                 :master_create,
+                 %{
+                   email: "added-master@example.com",
+                   password: @password,
+                   password_confirmation: @password
+                 },
+                 actor: actor
+               )
+               |> Ash.create()
+    end
+
     test "still makes users of a site" do
       site = create_site!()
       actor = admin(["admin:dashboard:*"], nil)

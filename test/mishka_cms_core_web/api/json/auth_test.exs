@@ -8,6 +8,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
   @password "Password123!"
   @api_user_path "/api/json/v1/auth/user"
+  @api_admin_path "/api/json/v1/auth/admin"
 
   setup do
     MishkaCmsCore.Runtime.States.SiteState.clear()
@@ -1294,6 +1295,1041 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => _errors} = result
+    end
+  end
+
+  describe "GET /auth/users" do
+    test "successfully returns users list for master admin", %{
+      master_user: master_user,
+      site: site
+    } do
+      # Create some tenant users for testing
+      tenant_user1 =
+        create_user!(
+          email: "tenant1@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      tenant_user2 =
+        create_user!(
+          email: "tenant2@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get users list
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users?fields[user]=id,email,site_id,permission_values",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      assert %{
+               "data" => users,
+               "jsonapi" => %{"version" => "1.0"}
+             } = result
+
+      # Should return all users (master + tenant users)
+      assert length(users) >= 3
+
+      # Verify the response includes the created users
+      user_emails = Enum.map(users, fn user -> user["attributes"]["email"] end)
+      assert to_string(master_user.email) in user_emails
+      assert to_string(tenant_user1.email) in user_emails
+      assert to_string(tenant_user2.email) in user_emails
+    end
+
+    test "returns 403 forbidden for non-admin user", %{site: site} do
+      # Create regular user without admin permissions
+      regular_user =
+        create_user!(
+          email: "regular@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as regular user
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(regular_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to get users list
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 403
+      result = Jason.decode!(response.resp_body)
+
+      assert %{
+               "errors" => [
+                 %{
+                   "code" => "forbidden",
+                   "status" => "403",
+                   "title" => "Forbidden"
+                 }
+               ]
+             } = result
+    end
+
+    test "returns 403 forbidden when no authentication provided" do
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users",
+          nil,
+          method: "GET",
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert response.status == 403
+      result = Jason.decode!(response.resp_body)
+
+      assert %{
+               "errors" => [
+                 %{
+                   "code" => "forbidden",
+                   "status" => "403"
+                 }
+               ]
+             } = result
+    end
+
+    test "supports pagination with offset and limit", %{master_user: master_user} do
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      initial_response =
+        make_api_request(
+          "#{@api_admin_path}/users",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert initial_response.status == 200
+
+      for i <- 1..5 do
+        MishkaCmsCore.Accounts.User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "paginated#{i}@example.com",
+          hashed_password: Bcrypt.hash_pwd_salt(@password)
+        })
+        |> Ash.create!(authorize?: false, tenant: nil)
+      end
+
+      # Get first page with limit=2
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users?page[limit]=2&page[offset]=0",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+      # Should get exactly 2 users
+      assert length(users) == 2
+
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users?page[limit]=2&page[offset]=2",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+      # Should get exactly 2 users
+      assert length(users) == 2
+
+      # Get third page to verify we have the right total
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users?page[limit]=2&page[offset]=4",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+      # This page should have the remaining users
+      assert length(users) >= 1
+    end
+
+    test "admin with tenant context only sees users from their site", %{
+      site: site,
+      admin_permission: admin_permission
+    } do
+      # Create another site
+      other_site = create_site!(name: "other", host: "other.example.com", active: true)
+
+      MishkaCmsCore.Runtime.States.SiteState.save(%{
+        id: other_site.id,
+        name: other_site.name,
+        host: other_site.host,
+        priority: other_site.priority,
+        active: other_site.active
+      })
+
+      # Create admin user for the first site
+      site_admin =
+        create_user!(
+          email: "site.admin@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Create users in both sites
+      site_user =
+        create_user!(
+          email: "site.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      other_site_user =
+        create_user!(
+          email: "other.site.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: other_site.id
+        )
+
+      # Sign in as site admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(site_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get users list
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users?fields[user]=id,email,site_id",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+
+      # Should only see users from the same site
+      user_emails = Enum.map(users, fn user -> user["attributes"]["email"] end)
+      # Continue from where it was cut off
+      assert to_string(site_admin.email) in user_emails
+      assert to_string(site_user.email) in user_emails
+      refute to_string(other_site_user.email) in user_emails
+
+      # All users should have the same site_id
+      site_ids = Enum.map(users, fn user -> user["attributes"]["site_id"] end) |> Enum.uniq()
+      assert site_ids == [site.id]
+
+      # Clean up
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SiteState.delete(other_site.id)
+      end)
+    end
+
+    test "includes site relationship when requested", %{
+      master_user: master_user,
+      site: site
+    } do
+      tenant_user =
+        create_user!(
+          email: "tenant.with.site@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get users with site relationship
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users?fields[user]=id,email,site_id,site",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+
+      # Find the tenant user in the response
+      tenant_user_data =
+        Enum.find(users, fn user ->
+          user["attributes"]["email"] == to_string(tenant_user.email)
+        end)
+
+      assert tenant_user_data
+      assert tenant_user_data["attributes"]["site_id"] == site.id
+      assert tenant_user_data["attributes"]["site"]["id"] == site.id
+
+      # Master user should have nil site
+      master_user_data =
+        Enum.find(users, fn user ->
+          user["attributes"]["email"] == to_string(master_user.email)
+        end)
+
+      assert master_user_data
+      assert master_user_data["attributes"]["site_id"] == nil
+      assert master_user_data["attributes"]["site"] == nil
+    end
+
+    test "returns proper JSON:API structure with meta information", %{master_user: master_user} do
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get users list
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Verify JSON:API structure
+      assert %{
+               "data" => data,
+               "jsonapi" => %{"version" => "1.0"}
+             } = result
+
+      assert is_list(data)
+
+      # Each user should have proper structure
+      if length(data) > 0 do
+        [first_user | _] = data
+
+        assert %{
+                 "type" => "user",
+                 "id" => _,
+                 "attributes" => _
+               } = first_user
+      end
+    end
+
+    test "returns empty list when no users exist for tenant", %{
+      admin_permission: admin_permission
+    } do
+      # Create a new site with no users
+      empty_site = create_site!(name: "empty", host: "empty.example.com", active: true)
+
+      MishkaCmsCore.Runtime.States.SiteState.save(%{
+        id: empty_site.id,
+        name: empty_site.name,
+        host: empty_site.host,
+        priority: empty_site.priority,
+        active: empty_site.active
+      })
+
+      # Create an admin for this empty site
+      empty_site_admin =
+        create_user!(
+          email: "empty.site.admin@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: empty_site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: empty_site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as the empty site admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(empty_site_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: empty_site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get users list
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: empty_site.host
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+
+      # Should only contain the admin user itself
+      assert length(users) == 1
+      assert List.first(users)["attributes"]["email"] == to_string(empty_site_admin.email)
+
+      # Clean up
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SiteState.delete(empty_site.id)
+      end)
+    end
+
+    test "respects default limit of 100 users", %{master_user: master_user} do
+      # Sign in as master admin first
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Request without explicit limit
+      response =
+        make_api_request(
+          "#{@api_admin_path}/users",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert %{"data" => users} = result
+
+      # Should not exceed default limit of 100
+      assert length(users) <= 100
+    end
+  end
+
+  describe "GET /auth/:id" do
+    test "successfully returns user details for admin", %{
+      master_user: master_user,
+      site: site
+    } do
+      # Create a test user to fetch
+      test_user =
+        create_user!(
+          email: "test.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get user by ID
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{test_user.id}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      user_id = test_user.id
+      user_email = to_string(test_user.email)
+      site_id = site.id
+
+      assert %{
+               "data" => %{
+                 "id" => ^user_id,
+                 "type" => "user",
+                 "attributes" => %{
+                   "email" => ^user_email,
+                   "confirmed_at" => nil,
+                   "site_id" => ^site_id,
+                   "permission_values" => []
+                 }
+               },
+               "jsonapi" => %{"version" => "1.0"}
+             } = result
+    end
+
+    test "admin can fetch their own details", %{
+      master_user: master_user,
+      admin_permission: admin_permission
+    } do
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Get own user details
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{master_user.id}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      user_id = master_user.id
+      user_email = to_string(master_user.email)
+      admin_permission_name = admin_permission.name
+
+      assert %{
+               "data" => %{
+                 "id" => ^user_id,
+                 "type" => "user",
+                 "attributes" => %{
+                   "email" => ^user_email,
+                   "permission_values" => [^admin_permission_name]
+                 }
+               }
+             } = result
+    end
+
+    test "returns 404 for non-admin user (hides existence)", %{site: site} do
+      # Create regular user without admin permissions
+      regular_user =
+        create_user!(
+          email: "regular.read@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create another user to try to read
+      other_user =
+        create_user!(
+          email: "other.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as regular user
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(regular_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to get another user's details - returns 404 to hide existence
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{other_user.id}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 404
+      result = Jason.decode!(response.resp_body)
+      assert %{"errors" => _errors} = result
+    end
+
+    test "returns 404 when no authentication provided (hides existence)", %{site: site} do
+      # Create a user to try to fetch
+      test_user =
+        create_user!(
+          email: "test.noauth@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{test_user.id}",
+          nil,
+          method: "GET",
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      # Returns 404 instead of 403 to hide resource existence
+      assert response.status == 404
+      result = Jason.decode!(response.resp_body)
+      assert %{"errors" => _errors} = result
+    end
+
+    test "returns 404 for non-existent user ID", %{master_user: master_user} do
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to get non-existent user
+      fake_uuid = Ecto.UUID.generate()
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{fake_uuid}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 404
+      result = Jason.decode!(response.resp_body)
+      assert %{"errors" => errors} = result
+      assert is_list(errors)
+    end
+
+    test "returns 400 for invalid UUID format", %{master_user: master_user} do
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/not-a-uuid",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 400
+      result = Jason.decode!(response.resp_body)
+      assert %{"errors" => _errors} = result
+    end
+
+    test "includes requested fields via sparse fieldsets", %{
+      master_user: master_user,
+      site: site
+    } do
+      test_user =
+        create_user!(
+          email: "sparse.fields@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Request specific fields only
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{test_user.id}?fields[user]=id,email",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Should only have requested fields
+      assert Map.keys(result["data"]["attributes"]) == ["email"]
+      assert result["data"]["id"] == test_user.id
+      assert result["data"]["attributes"]["email"] == to_string(test_user.email)
+    end
+
+    test "site admin can fetch users from their site", %{
+      site: site,
+      admin_permission: admin_permission
+    } do
+      # Create admin for site
+      site_admin =
+        create_user!(
+          email: "site.admin.read@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Create user in same site
+      same_site_user =
+        create_user!(
+          email: "same.site@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Sign in as site admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(site_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Can fetch user from same site
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{same_site_user.id}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+      assert result["data"]["id"] == same_site_user.id
+    end
+
+    test "site admin cannot fetch users from different site", %{
+      site: site,
+      admin_permission: admin_permission
+    } do
+      # Create another site
+      other_site = create_site!(name: "other", host: "other.example.com", active: true)
+
+      MishkaCmsCore.Runtime.States.SiteState.save(%{
+        id: other_site.id,
+        name: other_site.name,
+        host: other_site.host,
+        priority: other_site.priority,
+        active: other_site.active
+      })
+
+      # Create admin for first site
+      site_admin =
+        create_user!(
+          email: "site.admin@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Create user in different site
+      other_site_user =
+        create_user!(
+          email: "other.site.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: other_site.id
+        )
+
+      # Sign in as site admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(site_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => token}} = Jason.decode!(sign_in_response.resp_body)
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/#{other_site_user.id}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 404
+
+      # Clean up
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SiteState.delete(other_site.id)
+      end)
     end
   end
 
