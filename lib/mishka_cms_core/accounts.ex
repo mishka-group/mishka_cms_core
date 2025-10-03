@@ -113,6 +113,9 @@ defmodule MishkaCmsCore.Accounts do
     routes do
       base_route "/v1/auth/admin", MishkaCmsCore.Accounts.User do
         index :users, route: "/users"
+        patch :assign_permissions, route: "/:id/permissions"
+        patch :add_permission, route: "/:id/permissions/add"
+        patch :remove_permission, route: "/:id/permissions/remove"
       end
 
       base_route "/v1/tenant/admin/permissions", MishkaCmsCore.Accounts.Permission do

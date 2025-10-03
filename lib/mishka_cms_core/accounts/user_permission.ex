@@ -58,6 +58,14 @@ defmodule MishkaCmsCore.Accounts.UserPermission do
   end
 
   # Authorization policies for permission assignment.
+  #
+  # A row is WRITTEN through the account's own actions — `assign_permissions`, `add_permission`,
+  # `remove_permission`, the tenant and master actions — which carry the grant ceiling
+  # (`MishkaCmsCore.Accounts.Validations.GrantWithinActorScope`) and the rule that a site's admin
+  # never edits its own permissions. A row written directly carries neither, so only a master holding
+  # the permission area writes or removes one, and writes one only for a permission it holds
+  # (`MishkaCmsCore.Accounts.Checks.WithinCeiling`).
+  #
   # A row is READ within the actor's site: a master may reach any grant, a site's admin only the
   # grants of its own site's users. The join has no multitenancy of its own, so nothing else holds a
   # site's admin to its site here, tenant or not.
@@ -69,6 +77,7 @@ defmodule MishkaCmsCore.Accounts.UserPermission do
     policy action_type([:create, :destroy]) do
       authorize_if accessing_from(MishkaCmsCore.Accounts.User, :permissions_join_assoc)
       forbid_unless actor_attribute_equals(:site_id, nil)
+      forbid_unless MishkaCmsCore.Accounts.Checks.WithinCeiling
       authorize_if always()
     end
 

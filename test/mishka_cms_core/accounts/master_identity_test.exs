@@ -36,6 +36,12 @@ defmodule MishkaCmsCore.Accounts.MasterIdentityTest do
 
   defp ids(users), do: users |> Enum.map(& &1.id) |> MapSet.new()
 
+  defp star_permission do
+    Permission
+    |> Ash.Query.filter(name == "*")
+    |> Ash.read_one!(authorize?: false)
+  end
+
   describe "a site user holding * reads" do
     test "no other site's users and no masters when it names no tenant", ctx do
       assert {:ok, users} = Ash.read(User, actor: ctx.star_a)
@@ -416,6 +422,20 @@ defmodule MishkaCmsCore.Accounts.MasterIdentityTest do
                |> Ash.run_action()
 
       assert to_string(updated.email) == "only-email@example.com"
+      assert updated.site_id == ctx.site_b.id
+    end
+
+    test "permissions alone leave the email and the site", ctx do
+      assert {:ok, updated} =
+               User
+               |> Ash.ActionInput.for_action(
+                 :master_update,
+                 %{id: ctx.user_b.id, permission_ids: [star_permission().id]},
+                 actor: ctx.master
+               )
+               |> Ash.run_action()
+
+      assert updated.email == ctx.user_b.email
       assert updated.site_id == ctx.site_b.id
     end
   end

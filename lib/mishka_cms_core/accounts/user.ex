@@ -39,6 +39,16 @@ defmodule MishkaCmsCore.Accounts.User do
 
   @admin_fields [:email]
 
+  # The account actions that take `permission_ids`: changing what an account holds through them takes
+  # the permission area as well as the user area.
+  @granting_actions [
+    :tenant_create,
+    :master_create,
+    :tenant_update,
+    :master_update,
+    :master_form_update
+  ]
+
   authentication do
     add_ons do
       # A changed password revokes every token, after the write commits: see
@@ -346,6 +356,10 @@ defmodule MishkaCmsCore.Accounts.User do
           create {:master_create, :tenant_create}
           update {:master_form_update, :tenant_update}
         end
+
+        preload do
+          always [:permissions]
+        end
       end
 
       fields do
@@ -394,6 +408,34 @@ defmodule MishkaCmsCore.Accounts.User do
             autocomplete "new-password"
           end
         end
+
+        field :permission_ids, :relation do
+          virtual true
+          resource MishkaCmsCore.Accounts.Permission
+          display_field :name
+          search_field :name
+          mode :search_multi
+
+          derive_value fn record ->
+            permissions = Map.get(record, :permissions) || []
+
+            case permissions do
+              %Ash.NotLoaded{} -> []
+              perms when is_list(perms) -> Enum.map(perms, &to_string(&1.id))
+              _ -> []
+            end
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Permissions") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "Select permissions to assign to this user")
+            end
+
+            span 2
+          end
+        end
       end
 
       groups do
@@ -412,6 +454,15 @@ defmodule MishkaCmsCore.Accounts.User do
           ui do
             label fn -> dgettext("mishka_gervaz", "Security") end
             columns 2
+          end
+        end
+
+        group :access do
+          fields [:permission_ids]
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Access Control") end
+            columns 1
           end
         end
       end
@@ -725,7 +776,12 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :permission_ids, {:array, :uuid}, allow_nil?: true, default: []
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
 
       validate confirm(:password, :password_confirmation)
       validate MishkaCmsCore.Accounts.Validations.ValidEmail
@@ -736,6 +792,11 @@ defmodule MishkaCmsCore.Accounts.User do
 
       change set_context(%{strategy_name: :password})
       change AshAuthentication.Strategy.Password.HashPasswordChange
+
+      change manage_relationship(:permission_ids, :permissions,
+               type: :append_and_remove,
+               on_no_match: :error
+             )
 
       description "Creates a new user for the tenant's site"
     end
@@ -754,13 +815,23 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :permission_ids, {:array, :uuid}, allow_nil?: true, default: []
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
 
       validate confirm(:password, :password_confirmation)
       validate MishkaCmsCore.Accounts.Validations.ValidEmail
 
       change set_context(%{strategy_name: :password})
       change AshAuthentication.Strategy.Password.HashPasswordChange
+
+      change manage_relationship(:permission_ids, :permissions,
+               type: :append_and_remove,
+               on_no_match: :error
+             )
 
       description "Creates a new user (master users only, can specify site_id)"
     end
@@ -780,7 +851,12 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :permission_ids, {:array, :uuid}, allow_nil?: true
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
 
       validate MishkaCmsCore.Accounts.Validations.ValidEmail
 
@@ -828,6 +904,20 @@ defmodule MishkaCmsCore.Accounts.User do
         end
       end
 
+      # Manage permissions if provided
+      change fn changeset, _context ->
+        permission_ids = Ash.Changeset.get_argument(changeset, :permission_ids)
+
+        if permission_ids do
+          Ash.Changeset.manage_relationship(changeset, :permissions, permission_ids,
+            type: :append_and_remove,
+            on_no_match: :error
+          )
+        else
+          changeset
+        end
+      end
+
       description "Updates a user in the tenant's site (including password reset)"
     end
 
@@ -838,6 +928,7 @@ defmodule MishkaCmsCore.Accounts.User do
       argument :id, :uuid, allow_nil?: false
       argument :email, :ci_string, allow_nil?: true
       argument :site_id, :uuid, allow_nil?: true
+      argument :permission_ids, {:array, :uuid}, allow_nil?: true
 
       argument :password, :string do
         allow_nil? true
@@ -852,11 +943,15 @@ defmodule MishkaCmsCore.Accounts.User do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
+
       run fn input, _context ->
         user_id = input.arguments.id
         email = input.arguments[:email]
         password = input.arguments[:password]
         password_confirmation = input.arguments[:password_confirmation]
+        permission_ids = input.arguments[:permission_ids]
 
         # Validate password confirmation if password is provided
         cond do
@@ -889,6 +984,17 @@ defmodule MishkaCmsCore.Accounts.User do
                   if password && password != "" do
                     hashed = Bcrypt.hash_pwd_salt(password)
                     Ash.Changeset.force_change_attribute(cs, :hashed_password, hashed)
+                  else
+                    cs
+                  end
+                end)
+                |> then(fn cs ->
+                  # Manage permissions if provided
+                  if permission_ids do
+                    Ash.Changeset.manage_relationship(cs, :permissions, permission_ids,
+                      type: :append_and_remove,
+                      on_no_match: :error
+                    )
                   else
                     cs
                   end
@@ -1003,7 +1109,12 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :permission_ids, {:array, :uuid}, allow_nil?: true
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
 
       # An account other records name moves only where they can still name it.
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
@@ -1035,6 +1146,19 @@ defmodule MishkaCmsCore.Accounts.User do
         if password && password != "" do
           hashed = Bcrypt.hash_pwd_salt(password)
           Ash.Changeset.force_change_attribute(changeset, :hashed_password, hashed)
+        else
+          changeset
+        end
+      end
+
+      change fn changeset, _context ->
+        permission_ids = Ash.Changeset.get_argument(changeset, :permission_ids)
+
+        if permission_ids do
+          Ash.Changeset.manage_relationship(changeset, :permissions, permission_ids,
+            type: :append_and_remove,
+            on_no_match: :error
+          )
         else
           changeset
         end
@@ -1252,6 +1376,9 @@ defmodule MishkaCmsCore.Accounts.User do
     end
 
     update :assign_permissions do
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
+
       description "Replaces user's permissions with the provided list of permission IDs"
       accept []
       require_atomic? false
@@ -1269,6 +1396,9 @@ defmodule MishkaCmsCore.Accounts.User do
     end
 
     update :add_permission do
+      validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
+        before_action?: true
+
       description "Adds a single permission to the user's existing permissions"
       accept []
       require_atomic? false
@@ -1308,6 +1438,10 @@ defmodule MishkaCmsCore.Accounts.User do
     # `admin:<surface>:user`. Asked here of the actor the action RUNS with; `TenantContext` on each
     # of these asks it of the actor the input was BUILT with, which need not be the same one. BEFORE
     # the bypasses below: a failing `policy` forbids, and no later bypass gets to wave it through.
+    #
+    # AN ACCOUNT HOLDING MORE THAN ITS ACTOR keeps its email, password and site, and is not deleted,
+    # here and in the two gates below that let an account be written: whoever set them on an account
+    # holding `*` could sign in as it (`MishkaCmsCore.Accounts.Checks.WithinCeiling`).
     policy action([
              :master_read,
              :master_get,
@@ -1320,15 +1454,45 @@ defmodule MishkaCmsCore.Accounts.User do
       description "Only a master holding the user area: a user with no site"
 
       forbid_unless actor_attribute_equals(:site_id, nil)
+      forbid_unless MishkaCmsCore.Accounts.Checks.WithinCeiling
 
       authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions,
                     permissions: ["admin:dashboard:user", "admin:api:user"]}
     end
+
+    # Granting permissions is the one admin action that can escalate the grantor, so it is scoped
+    # BEFORE the bypasses below. Only a holder of the permission area changes permissions, removing
+    # included. A MASTER (site_id nil) may assign to any user; a site's holder only to users of its
+    # own site.
+    policy action([:assign_permissions, :add_permission, :remove_permission]) do
+      description "Holders of the permission area: a master anywhere, a site's holder its own site"
+
+      # A site's holder promotes colleagues, never itself — otherwise the ceiling that
+      # `GrantWithinActorScope` puts on WHAT may be granted is trivially raised: grant a colleague
+      # your own level, have them grant you more. A master is held to its ceiling alone.
+      forbid_if expr(id == ^actor(:id) and not is_nil(^actor(:site_id)))
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:permission", "admin:api:permission"]}
+
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+
+    # `:tenant_update` hands out permissions too, so it carries the same two rules: a site's holder
+    # never changes its own permissions, and changes only accounts of its own site.
     policy action(:tenant_update) do
-      description "A site's holder of the user area edits only its own site's accounts"
+      description "A site's holder of the user area edits only its own site's accounts, and never its own permissions"
+
+      forbid_if expr(
+                  id == ^actor(:id) and not is_nil(^actor(:site_id)) and
+                    not is_nil(^arg(:permission_ids))
+                )
 
       forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
                      permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      forbid_unless MishkaCmsCore.Accounts.Checks.WithinCeiling
 
       authorize_if actor_attribute_equals(:site_id, nil)
       authorize_if expr(site_id == ^actor(:site_id))
@@ -1346,6 +1510,22 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if expr(site_id == ^actor(:site_id))
     end
 
+    # AN ACCOUNT ACTION THAT CHANGES WHAT THE ACCOUNT HOLDS is a grant, so it takes the permission
+    # area as well as the user area the action itself asks for. Sending an account's permissions
+    # back unchanged, as the account form does, is no grant. The user area is asked here too: for
+    # `:tenant_create` only the bypass below asks it, and a policy that passes on its own authorizes.
+    policy [action(@granting_actions), MishkaCmsCore.Accounts.Checks.ChangesPermissions] do
+      description "Changing an account's permissions takes the permission area"
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:permission", "admin:api:permission"]}
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      authorize_if always()
+    end
+
     # HOLDERS OF THE USER AREA. A master holding it reaches every account. A site's holder reaches
     # the accounts of its own site and no other — with or without a tenant, because `global? true`
     # leaves a call that names no tenant unscoped. One bypass that always applies, so a read it does
@@ -1355,6 +1535,8 @@ defmodule MishkaCmsCore.Accounts.User do
 
       forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
                      permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      forbid_unless MishkaCmsCore.Accounts.Checks.WithinCeiling
 
       authorize_if actor_attribute_equals(:site_id, nil)
       authorize_if expr(site_id == ^actor(:site_id))

@@ -5,6 +5,12 @@ defmodule MishkaCmsCore.Application do
 
   use Application
 
+  # Notification producer plugins — each reacts to an existing `<app>:<resource>:after_<action>`
+  # event and hands off to `MishkaCmsCore.Notify.deliver/3`.
+  @notify_producers [
+    MishkaCmsCore.Notify.Producers.PermissionsChanged
+  ]
+
   # `settings:register` plugins — every sidebar entry's position/visibility switches under the
   # Sidebar tab.
   @settings_plugins [
@@ -44,7 +50,7 @@ defmodule MishkaCmsCore.Application do
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: @settings_plugins ++ @mail_providers
+  def plugins, do: @notify_producers ++ @settings_plugins ++ @mail_providers
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

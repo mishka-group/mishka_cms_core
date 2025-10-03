@@ -421,6 +421,21 @@ defmodule MishkaCmsCore.Accounts.Permission do
       authorize_if always()
     end
 
+    # A RENAME OR A DELETE CHANGES WHAT EVERY HOLDER OF THE ROW HOLDS, so a master renames or deletes
+    # only names it holds: otherwise one holding only the permission area would rename its own row
+    # to `*`. A new row is held by nobody, and a description is no name.
+    policy action_type([:update, :destroy]) do
+      description "A master renames or deletes only names within what it holds"
+
+      error_message dgettext_noop(
+                      "errors",
+                      "You can rename or delete only a permission you hold yourself."
+                    )
+
+      forbid_unless MishkaCmsCore.Accounts.Checks.WithinCeiling
+      authorize_if always()
+    end
+
     policy always() do
       access_type :strict
 

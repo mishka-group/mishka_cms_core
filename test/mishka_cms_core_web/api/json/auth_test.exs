@@ -3188,6 +3188,1464 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
     end
   end
 
+  describe "PATCH /auth/admin/:user_id/permissions" do
+    test "admin can assign permissions to a user", %{
+      site: site,
+      admin_permission: admin_permission,
+      master_user: master_user
+    } do
+      # Create a regular user to assign permissions to
+      target_user =
+        create_user!(
+          email: "target.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create another permission to assign
+      read_permission = create_permission!(name: "admin:api:runtime:page")
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Assign permissions to the target user - use attributes, not meta
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_ids" => [admin_permission.id, read_permission.id]
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Verify the user now has the permissions
+      assert %{
+               "data" => %{
+                 "id" => user_id,
+                 "type" => "user",
+                 "attributes" => attributes
+               }
+             } = result
+
+      assert user_id == target_user.id
+
+      # Verify permissions were assigned
+      permission_values = attributes["permission_values"] || []
+      assert admin_permission.name in permission_values
+      assert read_permission.name in permission_values
+    end
+
+    test "non-admin user cannot assign permissions", %{site: site} do
+      # Create a regular user (no admin permissions)
+      regular_user =
+        create_user!(
+          email: "regular.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create target user
+      target_user =
+        create_user!(
+          email: "target.user2@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create a permission to try to assign
+      some_permission = create_permission!(name: "some:permission")
+
+      # Sign in as regular user
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(regular_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => regular_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to assign permissions - should fail with 404 (not 403)
+      # Non-admin users can't even see the admin endpoint
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_ids" => [some_permission.id]
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{regular_token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      # Expecting 404 because non-admin can't access the resource at all
+      assert response.status == 404
+      result = Jason.decode!(response.resp_body)
+
+      assert %{"errors" => errors} = result
+      assert is_list(errors)
+      assert length(errors) > 0
+    end
+
+    test "requires authentication to assign permissions", %{site: site} do
+      target_user =
+        create_user!(
+          email: "target.user3@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      some_permission = create_permission!(name: "test:permission")
+
+      # Try without authentication
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions",
+          %{
+            "type" => "user",
+            # Add id field
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_ids" => [some_permission.id]
+            }
+          },
+          method: "PATCH",
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+
+    test "can clear all permissions by passing empty array", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a permission
+      test_permission = create_permission!(name: "test:clear:permission")
+
+      # Create user with permissions
+      target_user =
+        create_user!(
+          email: "clear.permissions@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [test_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Clear permissions
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions",
+          %{
+            "type" => "user",
+            # Add id field
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_ids" => []
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            # Changed to true to match master user context
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Verify permissions were cleared
+      assert result["data"]["attributes"]["permission_values"] == []
+    end
+
+    test "returns 404 for non-existent user", %{master_user: master_user} do
+      fake_uuid = Ecto.UUID.generate()
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to assign permissions to non-existent user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{fake_uuid}/permissions",
+          %{
+            "type" => "user",
+            # Add id field
+            "id" => fake_uuid,
+            "attributes" => %{
+              "permission_ids" => []
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 404
+    end
+
+    test "master admin can assign permissions to tenant user", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a tenant user
+      tenant_user =
+        create_user!(
+          email: "tenant.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create a permission to assign
+      admin_permission = create_permission!(name: "admin:api:runtime:layout")
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Assign permissions to tenant user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{tenant_user.id}/permissions",
+          %{
+            "type" => "user",
+            "id" => tenant_user.id,
+            "attributes" => %{
+              "permission_ids" => [admin_permission.id]
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      permission_values = result["data"]["attributes"]["permission_values"] || []
+      assert admin_permission.name in permission_values
+    end
+
+    test "tenant admin cannot assign permissions to master user", %{
+      site: site,
+      admin_permission: admin_permission
+    } do
+      # Create a tenant admin
+      tenant_admin =
+        create_user!(
+          email: "tenant.admin@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Create a master user (no site)
+      another_master_user =
+        MishkaCmsCore.Accounts.User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "another.master@example.com",
+          hashed_password: Bcrypt.hash_pwd_salt(@password)
+        })
+        |> Ash.create!(authorize?: false, tenant: nil)
+
+      # Sign in as tenant admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(tenant_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => tenant_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to assign permissions to master user - should fail
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{another_master_user.id}/permissions",
+          %{
+            "type" => "user",
+            "id" => another_master_user.id,
+            "attributes" => %{
+              "permission_ids" => [admin_permission.id]
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{tenant_token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      # Should fail - tenant admin can't modify master users
+      assert response.status == 404
+    end
+  end
+
+  describe "PATCH /auth/admin/:id/permissions/add" do
+    test "admin can add a permission to a user", %{
+      site: site,
+      admin_permission: _admin_permission,
+      master_user: master_user
+    } do
+      # Create a regular user to add permission to
+      target_user =
+        create_user!(
+          email: "add.permission.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create a permission to add
+      read_permission = create_permission!(name: "admin:api:user")
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Add permission to the target user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => read_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Verify the user now has the permission
+      assert %{
+               "data" => %{
+                 "id" => user_id,
+                 "type" => "user",
+                 "attributes" => attributes
+               }
+             } = result
+
+      assert user_id == target_user.id
+
+      # Verify permission was added
+      permission_values = attributes["permission_values"] || []
+      assert read_permission.name in permission_values
+    end
+
+    test "can add multiple permissions incrementally", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a user
+      target_user =
+        create_user!(
+          email: "incremental.permissions@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create permissions to add
+      perm1 = create_permission!(name: "admin:api:runtime:page")
+      perm2 = create_permission!(name: "admin:api:runtime:layout")
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Add first permission
+      response1 =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => perm1.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response1.status == 200
+      result1 = Jason.decode!(response1.resp_body)
+
+      # Verify first permission was added
+      permission_values1 = result1["data"]["attributes"]["permission_values"] || []
+      assert perm1.name in permission_values1
+      assert length(permission_values1) == 1
+
+      # Add second permission
+      response2 =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => perm2.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response2.status == 200
+      result2 = Jason.decode!(response2.resp_body)
+
+      # Verify both permissions are present
+      permission_values2 = result2["data"]["attributes"]["permission_values"] || []
+      assert perm1.name in permission_values2
+      assert perm2.name in permission_values2
+      assert length(permission_values2) == 2
+    end
+
+    test "non-admin user cannot add permissions", %{site: site} do
+      # Create a regular user (no admin permissions)
+      regular_user =
+        create_user!(
+          email: "regular.add@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create target user
+      target_user =
+        create_user!(
+          email: "target.add@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create a permission to try to add
+      some_permission = create_permission!(name: "test:add:permission")
+
+      # Sign in as regular user
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(regular_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => regular_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to add permission - should fail with 404
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{regular_token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+
+    test "requires authentication to add permissions", %{site: site} do
+      target_user =
+        create_user!(
+          email: "target.add.auth@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      some_permission = create_permission!(name: "test:auth:permission")
+
+      # Try without authentication
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+
+    test "returns 404 for non-existent user", %{master_user: master_user} do
+      fake_uuid = Ecto.UUID.generate()
+      some_permission = create_permission!(name: "test:404:permission")
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to add permission to non-existent user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{fake_uuid}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => fake_uuid,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 404
+    end
+
+    test "fails when permission doesn't exist", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a user
+      target_user =
+        create_user!(
+          email: "add.invalid.perm@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      fake_permission_id = Ecto.UUID.generate()
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to add non-existent permission
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => fake_permission_id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      # Should fail because permission doesn't exist (on_no_match: :error)
+      assert response.status == 404
+    end
+
+    test "master admin can add permission to tenant user", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a tenant user
+      tenant_user =
+        create_user!(
+          email: "tenant.add.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create a permission to add
+      admin_permission = create_permission!(name: "admin:api:runtime:media")
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Add permission to tenant user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{tenant_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => tenant_user.id,
+            "attributes" => %{
+              "permission_id" => admin_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      permission_values = result["data"]["attributes"]["permission_values"] || []
+      assert admin_permission.name in permission_values
+    end
+
+    test "tenant admin cannot add permission to master user", %{
+      site: site,
+      admin_permission: admin_permission
+    } do
+      # Create a tenant admin
+      tenant_admin =
+        create_user!(
+          email: "tenant.admin.add@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Create a master user
+      another_master_user =
+        MishkaCmsCore.Accounts.User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "master.add.target@example.com",
+          hashed_password: Bcrypt.hash_pwd_salt(@password)
+        })
+        |> Ash.create!(authorize?: false, tenant: nil)
+
+      # Create permission to try to add
+      some_permission = create_permission!(name: "test:permission")
+
+      # Sign in as tenant admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(tenant_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => tenant_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to add permission to master user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{another_master_user.id}/permissions/add",
+          %{
+            "type" => "user",
+            "id" => another_master_user.id,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{tenant_token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+  end
+
+  describe "PATCH /auth/admin/:id/permissions/remove" do
+    test "admin can remove a permission from a user", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a permission to remove
+      test_permission = create_permission!(name: "admin:remove:test")
+
+      # Create a user with the permission
+      target_user =
+        create_user!(
+          email: "remove.permission.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [test_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Remove permission from the target user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => test_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Verify the permission was removed
+      assert %{
+               "data" => %{
+                 "id" => user_id,
+                 "type" => "user",
+                 "attributes" => attributes
+               }
+             } = result
+
+      assert user_id == target_user.id
+
+      # Verify permission was removed
+      permission_values = attributes["permission_values"] || []
+      refute test_permission.name in permission_values
+      assert permission_values == []
+    end
+
+    test "can remove permissions individually while keeping others", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create multiple permissions
+      perm1 = create_permission!(name: "admin:keep:permission")
+      perm2 = create_permission!(name: "admin:remove:permission")
+      perm3 = create_permission!(name: "admin:also:keep")
+
+      # Create a user with multiple permissions
+      target_user =
+        create_user!(
+          email: "selective.remove@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [perm1.id, perm2.id, perm3.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Remove only perm2
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => perm2.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      # Verify only perm2 was removed, others remain
+      permission_values = result["data"]["attributes"]["permission_values"] || []
+      assert perm1.name in permission_values
+      assert perm3.name in permission_values
+      refute perm2.name in permission_values
+      assert length(permission_values) == 2
+    end
+
+    test "removing permission user doesn't have fails", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a permission
+      perm1 = create_permission!(name: "admin:existing:permission")
+      perm2 = create_permission!(name: "admin:not:assigned")
+
+      # Create a user with only perm1
+      target_user =
+        create_user!(
+          email: "remove.unassigned@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [perm1.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to remove permission that user doesn't have (perm2)
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => perm2.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      # Should fail with 404 because the permission relationship doesn't exist
+      assert response.status == 404
+
+      # Verify user still has only perm1 by fetching the user
+      get_response =
+        make_api_request(
+          "#{@api_user_path}/#{target_user.id}",
+          nil,
+          method: "GET",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      if get_response.status == 200 do
+        get_result = Jason.decode!(get_response.resp_body)
+        permission_values = get_result["data"]["attributes"]["permission_values"] || []
+        assert perm1.name in permission_values
+        assert length(permission_values) == 1
+      end
+    end
+
+    test "non-admin user cannot remove permissions", %{site: site} do
+      # Create a regular user (no admin permissions)
+      regular_user =
+        create_user!(
+          email: "regular.remove@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Create target user with a permission
+      some_permission = create_permission!(name: "test:remove:permission")
+
+      target_user =
+        create_user!(
+          email: "target.remove@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [some_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as regular user
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(regular_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => regular_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to remove permission - should fail with 404
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{regular_token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+
+    test "requires authentication to remove permissions", %{site: site} do
+      some_permission = create_permission!(name: "test:auth:remove")
+
+      target_user =
+        create_user!(
+          email: "target.remove.auth@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      # Try without authentication
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+
+    test "returns 404 for non-existent user", %{master_user: master_user} do
+      fake_uuid = Ecto.UUID.generate()
+      some_permission = create_permission!(name: "test:404:remove")
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to remove permission from non-existent user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{fake_uuid}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => fake_uuid,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 404
+    end
+
+    test "fails when trying to remove with non-existent permission ID", %{
+      site: site,
+      master_user: master_user
+    } do
+      # Create a user
+      target_user =
+        create_user!(
+          email: "remove.fake.perm@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      fake_permission_id = Ecto.UUID.generate()
+
+      # Sign in as admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to remove non-existent permission
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{target_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => target_user.id,
+            "attributes" => %{
+              "permission_id" => fake_permission_id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      # Should fail because permission doesn't exist (404 Not Found)
+      assert response.status == 404
+    end
+
+    test "master admin can remove permission from tenant user", %{
+      site: site,
+      master_user: master_user,
+      admin_permission: admin_permission
+    } do
+      # Create a tenant user with admin permission
+      tenant_user =
+        create_user!(
+          email: "tenant.remove.user@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as master admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(master_user.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => admin_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Remove permission from tenant user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{tenant_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => tenant_user.id,
+            "attributes" => %{
+              "permission_id" => admin_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{admin_token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 200
+      result = Jason.decode!(response.resp_body)
+
+      permission_values = result["data"]["attributes"]["permission_values"] || []
+      refute admin_permission.name in permission_values
+    end
+
+    test "tenant admin cannot remove permission from master user", %{
+      site: site,
+      admin_permission: admin_permission
+    } do
+      # Create another admin permission
+      some_permission = create_permission!(name: "some:permission")
+
+      # Create a master user with permission
+      another_master_user =
+        MishkaCmsCore.Accounts.User
+        |> Ash.Changeset.for_create(:create, %{
+          email: "master.with.perm@example.com",
+          hashed_password: Bcrypt.hash_pwd_salt(@password)
+        })
+        |> Ash.create!(authorize?: false, tenant: nil)
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [some_permission.id]},
+          authorize?: false
+        )
+        |> Ash.update!()
+
+      # Create a tenant admin
+      tenant_admin =
+        create_user!(
+          email: "tenant.admin.remove@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+        |> Ash.Changeset.for_update(
+          :assign_permissions,
+          %{permission_ids: [admin_permission.id]},
+          authorize?: false,
+          tenant: site.id
+        )
+        |> Ash.update!()
+
+      # Sign in as tenant admin
+      sign_in_response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => to_string(tenant_admin.email),
+              "password" => @password
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert sign_in_response.status == 201
+      %{"meta" => %{"token" => tenant_token}} = Jason.decode!(sign_in_response.resp_body)
+
+      # Try to remove permission from master user
+      response =
+        make_api_request(
+          "#{@api_admin_path}/#{another_master_user.id}/permissions/remove",
+          %{
+            "type" => "user",
+            "id" => another_master_user.id,
+            "attributes" => %{
+              "permission_id" => some_permission.id
+            }
+          },
+          method: "PATCH",
+          headers: [
+            {"authorization", "Bearer #{tenant_token}"},
+            {"x-no-tenant", "false"}
+          ],
+          host: site.host
+        )
+
+      assert response.status == 404
+    end
+  end
+
   describe "POST /auth/user/logout" do
     test "master user can logout successfully", %{master_user: master_user} do
       # Sign in as master user first

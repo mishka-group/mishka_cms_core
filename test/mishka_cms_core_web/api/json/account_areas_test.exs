@@ -85,6 +85,57 @@ defmodule MishkaCmsCoreWeb.Api.Json.AccountAreasTest do
     end
   end
 
+  describe "PATCH /v1/auth/admin/:id/permissions" do
+    defp grant(token, member, site, permission) do
+      call("PATCH", "#{@admin}/#{member.id}/permissions", token, site, %{
+        "type" => "user",
+        "id" => member.id,
+        "attributes" => %{"permission_ids" => [permission.id]}
+      })
+    end
+
+    test "grants with the API's user and permission areas", ctx do
+      media = create_permission!(name: "admin:api:runtime:media")
+
+      token =
+        token!(["admin:api:user", "admin:api:permission", "admin:api:runtime:media"], ctx.site)
+
+      assert grant(token, ctx.member, ctx.site, media).status == 200
+    end
+
+    test "refuses the same grant from the dashboard's names", ctx do
+      media = create_permission!(name: "admin:api:runtime:media")
+
+      token =
+        token!(
+          ["admin:dashboard:user", "admin:dashboard:permission", "admin:api:runtime:media"],
+          ctx.site
+        )
+
+      assert grant(token, ctx.member, ctx.site, media).status in [403, 404]
+    end
+
+    test "refuses a grant past the bearer's own ceiling, and says which", ctx do
+      media = create_permission!(name: "admin:api:runtime:media")
+      token = token!(["admin:api:user", "admin:api:permission"], ctx.site)
+      response = grant(token, ctx.member, ctx.site, media)
+
+      assert response.status == 400
+
+      assert [%{"meta" => %{"over" => "admin:api:runtime:media"}, "detail" => detail}] =
+               Jason.decode!(response.resp_body)["errors"]
+
+      assert detail =~ "do not hold yourself"
+    end
+
+    test "refuses the API's user area alone", ctx do
+      media = create_permission!(name: "admin:api:runtime:media")
+      token = token!(["admin:api:user", "admin:api:runtime:media"], ctx.site)
+
+      assert grant(token, ctx.member, ctx.site, media).status == 403
+    end
+  end
+
   describe "PATCH and DELETE /v1/master/admin/permissions/:id" do
     @master_catalogue "/api/json/v1/master/admin/permissions"
 
@@ -126,6 +177,15 @@ defmodule MishkaCmsCoreWeb.Api.Json.AccountAreasTest do
         nil -> create_permission!(name: name)
         row -> row
       end
+    end
+
+    test "a master of the API's permission area renames and deletes no row it does not hold" do
+      star = row!("*")
+      token = master_token!(["admin:api:permission"])
+
+      assert master_call("PATCH", star.id, token, %{"name" => "retired:star"}).status == 403
+      assert master_call("DELETE", star.id, token).status == 403
+      assert Ash.get!(MishkaCmsCore.Accounts.Permission, star.id, authorize?: false).name == "*"
     end
 
     test "a master of the API's permission area renames a row it holds; a dashboard one does not" do
