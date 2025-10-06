@@ -792,4 +792,42 @@ defmodule MishkaCmsCore.Accounts.AccountAreasTest do
       assert names_of(ctx.member) == []
     end
   end
+
+  describe "what an account holds, reached through a relationship" do
+    setup %{site: site, member: member} do
+      recipient = create_user!(site_id: site.id)
+
+      notification =
+        MishkaCmsCore.Notify.Notification
+        |> Ash.Changeset.for_create(
+          :deliver,
+          %{type: "test:caused", title: "Caused", user_id: recipient.id, actor_id: member.id},
+          tenant: site.id,
+          authorize?: false
+        )
+        |> Ash.create!()
+
+      assign(holder(["*"], nil), member, ["admin:dashboard:runtime:media"])
+      {:ok, notification: notification}
+    end
+
+    defp caused_by(notification, actor, site) do
+      Ash.load!(notification, [actor: [:permissions, :permission_values]],
+        actor: actor,
+        tenant: site.id
+      ).actor
+    end
+
+    test "shows the user area its email and permissions, and the permission area neither", ctx do
+      seen = caused_by(ctx.notification, holder(["admin:dashboard:user"], ctx.site.id), ctx.site)
+      assert to_string(seen.email) == to_string(ctx.member.email)
+      assert seen.permission_values == ["admin:dashboard:runtime:media"]
+
+      seen =
+        caused_by(ctx.notification, holder(["admin:dashboard:permission"], ctx.site.id), ctx.site)
+
+      assert %Ash.ForbiddenField{} = seen.email
+      assert %Ash.ForbiddenField{} = seen.permission_values
+    end
+  end
 end

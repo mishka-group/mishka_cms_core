@@ -49,6 +49,10 @@ defmodule MishkaCmsCore.Accounts.User do
     :master_form_update
   ]
 
+  # What an account holds rather than what it is: withheld when the account is reached through
+  # another resource by someone who is not an admin.
+  @account_relationships [:site, :permissions, :permissions_join_assoc]
+
   authentication do
     add_ons do
       # A changed password revokes every token, after the write commits: see
@@ -112,6 +116,39 @@ defmodule MishkaCmsCore.Accounts.User do
   postgres do
     table "users"
     repo Application.compile_env!(:mishka_cms_core, :repo)
+  end
+
+  # WHICH FIELDS of an account reached through another resource a caller may read.
+  # Every relationship into User reads through `:related` (see that action): a comment's author, a
+  # post's blogger, an issue's reporter. Public pages and JSON:API includes and filters are built
+  # from exactly those relationships. The record and its id stay reachable, so a page can still say
+  # who wrote something; the account's own fields answer only its owner and admins. Ash replaces a
+  # withheld field with `%Ash.ForbiddenField{}`, JSON:API leaves it out, and a caller's filter on it
+  # — `?filter[author][email]=` — sees nothing, because Ash authorizes the field a filter names
+  # through the relationship's read action.
+  #
+  # Every other read keeps the whole account: signing in, registering, resetting a password, `/me`,
+  # the actor read back from a token and `Ash.load/3` on it all read the account for its own holder,
+  # and the row policies already limit them to that holder, AshAuthentication and admins.
+  field_policies do
+    field_policy [:email, :confirmed_at, :site_id, :permission_values],
+                 action(:related) do
+      description "An account reached through another resource shows its own fields to its owner and admins"
+
+      authorize_if expr(id == ^actor(:id))
+
+      # A holder of the user area on the request's surface, of the account's own site, or a master;
+      # a site's holder sees no other site's accounts and no master's.
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+
+    field_policy :* do
+      authorize_if always()
+    end
   end
 
   # JSON API configuration for REST endpoints
@@ -476,6 +513,21 @@ defmodule MishkaCmsCore.Accounts.User do
       description "Retrieves the current authenticated user's record"
       get? true
       filter expr(id == ^actor(:id))
+    end
+
+    # AN ACCOUNT AS ANOTHER RESOURCE REACHES IT: a comment's author, a post's blogger, a
+    # notification's actor. Every relationship into User names this as its `read_action`, so a load,
+    # an include and a filter through one all meet the same rules — the row answers whoever came
+    # through the relationship (`ExtensionInteraction`, below), the account's own fields answer its
+    # owner and admins (the field policies above), and what it holds answers admins only
+    # (`withhold_account_relationships/2`). A relationship that reads through `:read` instead
+    # reaches nothing unless an admin is asking.
+    #
+    # Such a relationship is also `sortable? false`: Ash checks no field policy on a sort through a
+    # relationship, so `sort=author.email` would put the rows in the order of the addresses.
+    read :related do
+      description "An account reached through another resource: its id for everyone, the rest for its owner and admins"
+      prepare fn query, context -> withhold_account_relationships(query, context) end
     end
 
     create :create do
@@ -1542,6 +1594,13 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if expr(site_id == ^actor(:site_id))
     end
 
+    # An account reached through another resource's relationship — see `:related`. Only through
+    # that action: a relationship reading the account through any other gets nothing past this, so
+    # one that forgets its `read_action` reaches no account rather than a whole one.
+    bypass action(:related) do
+      authorize_if MishkaCmsCore.Accounts.Checks.ExtensionInteraction
+    end
+
     bypass action(:sign_in_with_password) do
       authorize_if always()
     end
@@ -1691,4 +1750,36 @@ defmodule MishkaCmsCore.Accounts.User do
       nils_distinct? false
     end
   end
+
+  # An account reached through another resource — a comment's author, a post's blogger, a team
+  # member — arrives with no site and no permissions unless an admin is asking, and a site's admin
+  # gets them for its own site's accounts only (the filters on those relationships). The field
+  # policies cover the account's own fields; they do not reach relationships, and JSON:API renders
+  # `fields[user]=site,permissions` for any included user.
+  #
+  # The loads cannot be taken out here — Ash puts the caller's loads back after preparing — so the
+  # read is marked instead, and the resources the account holds refuse loads under the mark (see
+  # `MishkaCmsCore.Accounts.Checks.AccountWithheld`). `"auth:account:withheld"` receives the marked
+  # query, and whatever `Ash.Query` it returns is the one that runs.
+  defp withhold_account_relationships(query, %{authorize?: authorize?} = context)
+       when authorize? != false do
+    withheld = Enum.filter(@account_relationships, &Keyword.has_key?(query.load, &1))
+
+    if withheld == [] or
+         MishkaCmsCore.Accounts.Checks.AccessPermissions.match?(context.actor, query,
+           permissions: ["admin:dashboard:user", "admin:api:user"]
+         ) do
+      query
+    else
+      marked = MishkaCmsCore.Accounts.Checks.AccountWithheld.mark(query)
+      meta = %{actor: context.actor, site_id: query.tenant, withheld: withheld}
+
+      case MishkaInstaller.Event.Hook.call("auth:account:withheld", marked, meta: meta) do
+        %Ash.Query{} = adjusted -> adjusted
+        _ -> marked
+      end
+    end
+  end
+
+  defp withhold_account_relationships(query, _context), do: query
 end
