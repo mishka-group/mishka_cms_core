@@ -23,7 +23,8 @@ defmodule MishkaCmsCore.Accounts.UserPermission do
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [
-      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets
     ]
 
   # Database configuration for join table

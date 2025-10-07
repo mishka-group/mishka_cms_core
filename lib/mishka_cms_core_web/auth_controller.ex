@@ -44,6 +44,9 @@ defmodule MishkaCmsCoreWeb.AuthController do
 
   - **Secure Storage**: Uses AshAuthentication session management
   - **Session Cleanup**: Proper session termination on sign-out
+  - **Live Sockets Named**: The session carries a `live_socket_id`, so every LiveView the browser
+    goes on to open can be cut the moment this account's authentication or authorization changes —
+    see `MishkaCmsCore.Accounts.LiveSockets`
   - **Return Path Never Stored**: The destination travels as a `MishkaCmsCoreWeb.ReturnTo` token, so
     the session holds nothing to clean up and a sign-out always goes home
   - **XSS Prevention**: Secure session handling prevents cross-site attacks
@@ -126,6 +129,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # Extensions compile before the host's router exists, so `~p` is unavailable here.
   import MishkaCmsCore.Helpers, only: [path: 2]
 
+  alias MishkaCmsCore.Accounts.LiveSockets
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
 
@@ -213,6 +217,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
           |> then(fn data ->
             data.conn
             |> store_in_session(user)
+            |> put_session(:live_socket_id, LiveSockets.live_socket_id(user))
             |> assign(:current_user, user)
             |> put_flash(:info, data.message)
             |> redirect(to: data.return_to)
@@ -335,6 +340,8 @@ defmodule MishkaCmsCoreWeb.AuthController do
           |> then(fn data ->
             data.conn
             |> clear_session(@host_app)
+            |> delete_session(:live_socket_id)
+            |> disconnect_live_sockets(data.user_id)
             |> put_flash(:info, data.message)
             |> redirect(to: data.return_to)
           end)
@@ -342,5 +349,19 @@ defmodule MishkaCmsCoreWeb.AuthController do
         {result, %{}}
       end
     )
+  end
+
+  # EVERY TAB, NOT THE ONE THAT ASKED. Clearing the session ends this request's authentication, and
+  # the cookie is the browser's, so the other tabs lose it too — but a LiveView already connected
+  # keeps running on the process it mounted, with the user it read then, until something ends it.
+  # This is that something; see `MishkaCmsCore.Accounts.LiveSockets`.
+  #
+  # `sign_out/2` answers whoever asks for it, signed in or not, and the telemetry above says
+  # "anonymous" for the second kind — nobody's sockets to cut.
+  defp disconnect_live_sockets(conn, "anonymous"), do: conn
+
+  defp disconnect_live_sockets(conn, user_id) do
+    LiveSockets.disconnect(user_id)
+    conn
   end
 end

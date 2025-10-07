@@ -31,7 +31,8 @@ defmodule MishkaCmsCore.Accounts.Permission do
     extensions: [AshJsonApi.Resource, MishkaGervaz.Resource, GuardedStruct.AshResource],
     notifiers: [
       Ash.Notifier.PubSub,
-      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets
     ],
     authorizers: [Ash.Policy.Authorizer]
 
@@ -458,6 +459,13 @@ defmodule MishkaCmsCore.Accounts.Permission do
     publish :create, ["created"]
     publish :update, [[nil, :_pkey], "updated"]
     publish :destroy, [[nil, :_pkey], "destroyed"]
+  end
+
+  changes do
+    # WHO HOLDS THIS, READ WHILE THE ANSWER STILL EXISTS — see the change's own docs. Added to every
+    # update and every destroy so an action written later is covered; the read itself happens only
+    # for the writes that can change what a holder may reach, which is a destroy and a rename.
+    change MishkaCmsCore.Accounts.Changes.RememberPermissionHolders, on: [:update, :destroy]
   end
 
   attributes do

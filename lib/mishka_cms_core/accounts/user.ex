@@ -28,7 +28,8 @@ defmodule MishkaCmsCore.Accounts.User do
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [
       Ash.Notifier.PubSub,
-      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets
     ],
     extensions: [AshAuthentication, AshJsonApi.Resource, MishkaGervaz.Resource]
 
@@ -1416,11 +1417,23 @@ defmodule MishkaCmsCore.Accounts.User do
       run fn input, _context ->
         token = input.arguments.token
 
+        # WHOSE LIVE SOCKETS GO WITH THE TOKEN, asked before the revocation below makes the answer
+        # unreadable. The account is the one the TOKEN names and nobody else: the policy above lets
+        # anyone call this with any string, and the router's `:api` pipeline puts an actor on every
+        # request from its own bearer token — so a caller handing over somebody else's token would
+        # otherwise revoke that account's token while cutting its own sockets.
+        signed_out = token_holder(token)
+
         try do
           MishkaCmsCore.Accounts.Token
           |> AshAuthentication.TokenResource.revoke(token)
         rescue
           _ -> :ok
+        end
+
+        case signed_out do
+          {:ok, user_id} -> MishkaCmsCore.Accounts.LiveSockets.disconnect(user_id)
+          :error -> :ok
         end
 
         {:ok, %{success: true, message: gettext("Logged out successfully")}}
@@ -1782,4 +1795,26 @@ defmodule MishkaCmsCore.Accounts.User do
   end
 
   defp withhold_account_relationships(query, _context), do: query
+
+  # The account a `:logout` is ending, or `:error` when the token proves none.
+  # `AshAuthentication.Jwt.verify/3` is the whole test — signature, expiry, and a `jti` still present
+  # and unrevoked in the token resource — so a token somebody once had, or one this application never
+  # signed, cannot cut an account's sockets.
+  #
+  # THE TENANT COMES OUT OF THE TOKEN, NOT OUT OF THE REQUEST. A tenant user's token carries the site
+  # it was issued for as a claim, and verification only checks that claim against the tenant it is
+  # given — so reading it back first makes the check an identity and costs nothing, while the
+  # signature is what makes the value trustworthy. Taking it from the request instead meant that
+  # `POST /logout` without a tenant — which `MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug` allows
+  # deliberately, for `x-no-tenant` on the master site's address — revoked the token and left its
+  # live sockets running.
+  defp token_holder(token) do
+    with {:ok, claims} <- AshAuthentication.Jwt.peek(token),
+         {:ok, %{"sub" => "user?id=" <> user_id}, _resource} <-
+           AshAuthentication.Jwt.verify(token, __MODULE__, tenant: claims["tenant"]) do
+      {:ok, user_id}
+    else
+      _no_live_token -> :error
+    end
+  end
 end
