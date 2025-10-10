@@ -4999,6 +4999,19 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert Enum.sort(registered) == Enum.sort(emails)
     end
+
+    test "nobody there spends a master's sign-in attempts", %{site: site} do
+      master = master!("counted.master@example.com")
+      lift_sign_in_limit!(per_account: 2)
+
+      for _try <- 1..3 do
+        refute site.host
+               |> sign_in(master.email, "WrongPassword123!", headers: [{"x-no-tenant", "true"}])
+               |> Map.fetch!(:status) == 201
+      end
+
+      assert is_binary(sign_in_master(master))
+    end
   end
 
   defp master_host, do: "localhost"
@@ -5019,5 +5032,33 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
   defp refusal(response) do
     errors = response.resp_body |> Jason.decode!() |> Map.get("errors", [])
     {response.status, Enum.map(errors, &Map.delete(&1, "id"))}
+  end
+
+  defp master!(email) do
+    MishkaCmsCore.Accounts.User
+    |> Ash.Changeset.for_create(:create, %{
+      email: email,
+      hashed_password: Bcrypt.hash_pwd_salt(@password)
+    })
+    |> Ash.create!(authorize?: false, tenant: nil)
+  end
+
+  # The suite signs in from one address with no limit; this puts the per-account one back, low.
+  defp lift_sign_in_limit!(per_account: limit) do
+    alias MishkaCmsCore.Runtime.States.SettingsState
+
+    previous = Application.fetch_env(:mishka_cms_core, MishkaCmsCore.Accounts.AuthRateLimit)
+    Application.delete_env(:mishka_cms_core, MishkaCmsCore.Accounts.AuthRateLimit)
+    snapshot = SettingsState.snapshot()
+
+    on_exit(fn ->
+      with {:ok, env} <- previous,
+           do: Application.put_env(:mishka_cms_core, MishkaCmsCore.Accounts.AuthRateLimit, env)
+
+      SettingsState.restore(snapshot)
+    end)
+
+    SettingsState.put(nil, "security.sign_in_per_account", %{"value" => limit})
+    SettingsState.put(nil, "security.sign_in_per_ip", %{"value" => 1_000_000})
   end
 end

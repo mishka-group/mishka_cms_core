@@ -56,6 +56,11 @@ config :mishka_cms_core, Oban,
 # Boot-time settings seeding announces itself over PubSub; tests neither need nor assert it.
 config :mishka_cms_core, seed_announce: false
 
+# EVERY TEST SIGNS IN FROM 127.0.0.1, so the limits the CMS ships with would throttle the suite long
+# before they throttled anybody guessing a password. The tests of the limiter lift this and set
+# their own through the settings.
+config :mishka_cms_core, MishkaCmsCore.Accounts.AuthRateLimit, limit: 1_000_000
+
 # Hashing is the single slowest thing in a suite that creates a user per test.
 config :bcrypt_elixir, log_rounds: 1
 

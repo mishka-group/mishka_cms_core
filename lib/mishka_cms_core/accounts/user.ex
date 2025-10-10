@@ -31,7 +31,7 @@ defmodule MishkaCmsCore.Accounts.User do
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
       MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets
     ],
-    extensions: [AshAuthentication, AshJsonApi.Resource, MishkaGervaz.Resource]
+    extensions: [AshAuthentication, AshJsonApi.Resource, MishkaGervaz.Resource, AshRateLimiter]
 
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [cell_stacked: 1]
@@ -507,6 +507,14 @@ defmodule MishkaCmsCore.Accounts.User do
     end
   end
 
+  # Signing in with a password, asking for a reset and asking for a sign-in link are each limited
+  # per address and per account, and changing the password per account, before any password is
+  # checked or mail is sent. The numbers in those actions are the defaults; the `security.*`
+  # settings change them — see `MishkaCmsCore.Accounts.AuthRateLimit`.
+  rate_limit do
+    backend MishkaCmsCore.Accounts.AuthRateLimit
+  end
+
   actions do
     defaults [:read]
 
@@ -572,6 +580,14 @@ defmodule MishkaCmsCore.Accounts.User do
 
       validate confirm(:password, :password_confirmation)
 
+      # Counted before the current password is checked, right or wrong, so a stolen session cannot
+      # guess it; both run as before_action hooks, in this order, and a refusal stops the check.
+      change AshRateLimiter.BuiltinChanges.rate_limit(
+               limit: 10,
+               per: :timer.minutes(15),
+               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_user/2
+             )
+
       validate {AshAuthentication.Strategy.Password.PasswordValidation,
                 strategy_name: :password, password_argument: :current_password},
                before_action?: true
@@ -593,6 +609,18 @@ defmodule MishkaCmsCore.Accounts.User do
         allow_nil? false
         sensitive? true
       end
+
+      prepare AshRateLimiter.BuiltinPreparations.rate_limit(
+                limit: 30,
+                per: :timer.minutes(5),
+                key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2
+              )
+
+      prepare AshRateLimiter.BuiltinPreparations.rate_limit(
+                limit: 10,
+                per: :timer.minutes(15),
+                key: &MishkaCmsCore.Accounts.AuthRateLimit.by_account/2
+              )
 
       prepare fn query, _context ->
         query = Ash.Query.set_context(query, %{private: %{ash_authentication?: true}})
@@ -691,6 +719,18 @@ defmodule MishkaCmsCore.Accounts.User do
 
       validate MishkaCmsCore.Accounts.Validations.ValidEmail
 
+      # The address's limit, then the captcha — see `CaptchaCheck` — as hooks that run once every
+      # field below is valid, so a typo spends no token, and before the transaction and the hooks
+      # that look the email up and hash the password, so a refused form costs none of them. The
+      # installer and the seeds register with `authorize?: false` and are held to neither.
+      change AshRateLimiter.BuiltinChanges.rate_limit(
+               limit: 10,
+               per: :timer.hours(1),
+               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
+               on: :before_transaction
+             ),
+             where: [MishkaCmsCore.Accounts.Validations.FromVisitor]
+
       change {MishkaCmsCore.Accounts.Changes.EnforceMasterEmailSeparation, []}
       # Hashes the provided password
       change AshAuthentication.Strategy.Password.HashPasswordChange
@@ -713,6 +753,18 @@ defmodule MishkaCmsCore.Accounts.User do
       argument :email, :ci_string do
         allow_nil? false
       end
+
+      prepare AshRateLimiter.BuiltinPreparations.rate_limit(
+                limit: 10,
+                per: :timer.hours(1),
+                key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2
+              )
+
+      prepare AshRateLimiter.BuiltinPreparations.rate_limit(
+                limit: 3,
+                per: :timer.hours(1),
+                key: &MishkaCmsCore.Accounts.AuthRateLimit.by_account/2
+              )
 
       # creates a reset token and invokes the relevant senders
       run {AshAuthentication.Strategy.Password.RequestPasswordReset, action: :get_by_email}
@@ -1401,6 +1453,18 @@ defmodule MishkaCmsCore.Accounts.User do
       argument :email, :ci_string do
         allow_nil? false
       end
+
+      prepare AshRateLimiter.BuiltinPreparations.rate_limit(
+                limit: 10,
+                per: :timer.hours(1),
+                key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2
+              )
+
+      prepare AshRateLimiter.BuiltinPreparations.rate_limit(
+                limit: 3,
+                per: :timer.hours(1),
+                key: &MishkaCmsCore.Accounts.AuthRateLimit.by_account/2
+              )
 
       run AshAuthentication.Strategy.MagicLink.Request
     end

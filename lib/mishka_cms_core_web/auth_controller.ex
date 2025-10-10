@@ -78,6 +78,9 @@ defmodule MishkaCmsCoreWeb.AuthController do
   - **Secure Redirects**: Only a path this application signed is redirected to, so a `return_to`
     anyone writes into the URL cannot open-redirect
   - **Error Information**: Limited error details prevent user enumeration
+  - **Rate Limiting**: Signing in and the reset and sign-in link requests are limited per address and
+    per account; a refused one is answered `429` with a page saying how long to wait — see
+    `MishkaCmsCore.Accounts.AuthRateLimit`
 
   ## Integration with AshAuthentication
 
@@ -129,7 +132,8 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # Extensions compile before the host's router exists, so `~p` is unavailable here.
   import MishkaCmsCore.Helpers, only: [path: 2]
 
-  alias MishkaCmsCore.Accounts.LiveSockets
+  alias MishkaCmsCore.Accounts.{AuthRateLimit, LiveSockets}
+  alias MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
 
@@ -228,7 +232,76 @@ defmodule MishkaCmsCoreWeb.AuthController do
     )
   end
 
-  def failure(conn, activity, reason), do: failed(conn, activity, reason)
+  # A sign-in or a request refused for its rate is answered with how long to wait, not as a wrong
+  # password — see `MishkaCmsCore.Accounts.AuthRateLimit`.
+  def failure(conn, activity, reason) do
+    case AuthRateLimit.limited(reason) do
+      nil -> failed(conn, activity, reason)
+      limited -> rate_limited(conn, limited)
+    end
+  end
+
+  # `auth:request:rate_limited` hears it first, and a plugin that halts the conn answers instead.
+  defp rate_limited(conn, limited) do
+    conn =
+      Hook.call("auth:request:rate_limited", conn,
+        meta: Map.put(limited, :site, conn.assigns[:current_site])
+      )
+
+    if conn.halted,
+      do: conn,
+      else:
+        conn
+        |> AuthRateLimitPlug.put_refusal_headers(limited.retry_after)
+        |> put_resp_content_type("text/html")
+        |> send_resp(429, rate_limited_page(conn, limited))
+        |> halt()
+  end
+
+  # THE NONCE COMES OFF THE CONN, as the maintenance page's does: this is a whole document written
+  # here, and nothing else marks its `<style>` as ours.
+  defp rate_limited_page(conn, limited) do
+    %{title: title, text: text} = AuthRateLimit.describe(limited)
+    title = Plug.HTML.html_escape(title)
+    text = Plug.HTML.html_escape(text)
+    nonce = conn.assigns[:csp_nonce]
+
+    """
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>#{title}</title>
+        <style#{if is_binary(nonce), do: ~s( nonce="#{nonce}"), else: ""}>
+          body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            text-align: center;
+            padding: 50px;
+            background-color: #f5f5f5;
+            color: #333;
+          }
+          .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+          }
+          h1 { color: #c0473d; margin-bottom: 20px; }
+          p { color: #666; line-height: 1.6; }
+          a { color: #2980b9; }
+        </style>
+      </head>
+      <body>
+        <div class="container" id="auth-rate-limited">
+          <h1>#{title}</h1>
+          <p>#{text}</p>
+          <p><a href="#{path(conn, "/auth")}">#{gettext("Back to sign in")}</a></p>
+        </div>
+      </body>
+    </html>
+    """
+  end
 
   defp failed(conn, activity, reason) do
     :telemetry.span(

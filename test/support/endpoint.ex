@@ -28,6 +28,9 @@ defmodule MishkaCmsCore.TestEndpoint do
   socket "/live", Phoenix.LiveView.Socket,
     websocket: [connect_info: [:peer_data, :x_headers, session: @session_options]]
 
+  # As the CMS's: `conn.remote_ip` is the client the proxies forwarded.
+  plug RemoteIp, MishkaCmsCore.Accounts.AuthRateLimit.remote_ip_options()
+
   plug Plug.Parsers,
     parsers: [:urlencoded, :multipart, {:json, length: 10_000_000}],
     pass: ["*/*"],

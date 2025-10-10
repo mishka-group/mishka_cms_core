@@ -684,6 +684,116 @@ defmodule MishkaCmsCore.Settings do
         scope: :global,
         label: gettext_noop("Delete all notifications after (days)"),
         description: gettext_noop("Every notification is pruned at this age, read or not.")
+      ),
+      # The most tries `MishkaCmsCore.Accounts.AuthRateLimit` lets through in each window, read on
+      # every try. The defaults are the numbers `MishkaCmsCore.Accounts.User` writes in its actions.
+      define("security.sign_in_per_account", :integer,
+        default: 10,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Sign-in attempts per account (per 15 minutes)"),
+        description:
+          gettext_noop(
+            "How many times one account may try its password, right or wrong, before it waits for the 15 minutes to pass. Each site counts its own accounts; masters are counted together."
+          )
+      ),
+      define("security.sign_in_per_ip", :integer,
+        default: 30,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Sign-in attempts per IP address (per 5 minutes)"),
+        description:
+          gettext_noop(
+            "How many sign-ins one address may try, whatever accounts it names, before it waits for the 5 minutes to pass. Each site counts its own visitors; masters are counted together."
+          )
+      ),
+      define("security.reset_request_per_account", :integer,
+        default: 3,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Password reset requests per account (per hour)"),
+        description:
+          gettext_noop(
+            "How many reset emails one account may be sent in an hour. Each site counts its own accounts; masters are counted together."
+          )
+      ),
+      define("security.reset_request_per_ip", :integer,
+        default: 10,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Password reset requests per IP address (per hour)"),
+        description:
+          gettext_noop(
+            "How many password resets one address may ask for in an hour, whatever the accounts. Each site counts its own visitors; masters are counted together."
+          )
+      ),
+      define("security.magic_link_per_account", :integer,
+        default: 3,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Sign-in link requests per account (per hour)"),
+        description:
+          gettext_noop(
+            "How many sign-in link emails one account may be sent in an hour. Each site counts its own accounts; masters are counted together."
+          )
+      ),
+      define("security.magic_link_per_ip", :integer,
+        default: 10,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Sign-in link requests per IP address (per hour)"),
+        description:
+          gettext_noop(
+            "How many sign-in links one address may ask for in an hour, whatever the accounts. Each site counts its own visitors; masters are counted together."
+          )
+      ),
+      define("security.register_per_ip", :integer,
+        default: 10,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("New accounts per IP address (per hour)"),
+        description:
+          gettext_noop(
+            "How many accounts one address may register in an hour. Each site counts its own visitors; masters are counted together."
+          )
+      ),
+      define("security.change_password_per_account", :integer,
+        default: 10,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Password change attempts per account (per 15 minutes)"),
+        description:
+          gettext_noop(
+            "How many times one signed-in account may try its current password to change it, right or wrong, before it waits for the 15 minutes to pass. Each site counts its own accounts; masters are counted together."
+          )
+      ),
+      define("security.totp_per_account", :integer,
+        default: 5,
+        min: 1,
+        category: "security",
+        group: gettext_noop("Sign-in limits"),
+        scope: :master,
+        label: gettext_noop("Authenticator codes per account (per 5 minutes)"),
+        description:
+          gettext_noop(
+            "How many codes from an authenticator app one account may try, right or wrong — signing in, setting one up or turning it off — before it waits for the 5 minutes to pass. Each site counts its own accounts; masters are counted together."
+          )
       )
     ] ++ email_definitions()
   end
