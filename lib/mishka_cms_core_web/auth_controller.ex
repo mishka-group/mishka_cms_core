@@ -132,7 +132,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # Extensions compile before the host's router exists, so `~p` is unavailable here.
   import MishkaCmsCore.Helpers, only: [path: 2]
 
-  alias MishkaCmsCore.Accounts.{AuthRateLimit, LiveSockets}
+  alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, LiveSockets}
   alias MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
@@ -313,7 +313,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
           |> then(&Hook.call("AuthController.Failure.BeforeFailure", &1))
           |> Map.get(:conn)
 
-        {failure_type, message} = credentials_failure(conn, activity, reason)
+        {failure_type, message} = failure_message(conn, activity, reason)
 
         reason_module =
           case reason do
@@ -344,6 +344,24 @@ defmodule MishkaCmsCoreWeb.AuthController do
         {result, %{}}
       end
     )
+  end
+
+  # A WAY IN THE SITE HAS CLOSED, said as itself rather than as a wrong password — the refusal comes
+  # only after the password or the token was right. See `MishkaCmsCore.Accounts.AuthGate`.
+  defp failure_message(conn, activity, reason) do
+    with nil <- AuthGate.refusal(reason) do
+      credentials_failure(conn, activity, reason)
+    else
+      %{action: action} -> closed_failure(conn, activity, reason, action)
+    end
+  end
+
+  defp closed_failure(conn, activity, reason, action) do
+    %{title: title, text: text} = AuthGate.describe(action)
+
+    %{conn: conn, activity: activity, reason: reason, message: "#{title}. #{text}"}
+    |> then(&Hook.call("AuthController.Failure.Closed", &1))
+    |> then(&{:auth_closed, &1.message})
   end
 
   defp credentials_failure(conn, activity, reason) do

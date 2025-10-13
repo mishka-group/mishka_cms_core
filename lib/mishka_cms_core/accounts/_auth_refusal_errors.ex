@@ -43,3 +43,22 @@ end
 defimpl AshPhoenix.FormData.Error, for: AshRateLimiter.LimitExceeded do
   def to_form_error(_error), do: []
 end
+
+defimpl AshJsonApi.ToJsonApiError, for: MishkaCmsCore.Accounts.AuthGate.Closed do
+  def to_json_api_error(%{action: action}) do
+    %{title: title, text: text} = MishkaCmsCore.Accounts.AuthGate.describe(action)
+
+    %AshJsonApi.Error{
+      status_code: 403,
+      code: "auth_closed",
+      title: title,
+      detail: text,
+      meta: %{action: action},
+      log_level: :debug
+    }
+  end
+end
+
+defimpl AshPhoenix.FormData.Error, for: MishkaCmsCore.Accounts.AuthGate.Closed do
+  def to_form_error(_error), do: []
+end

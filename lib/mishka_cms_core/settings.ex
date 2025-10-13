@@ -795,7 +795,7 @@ defmodule MishkaCmsCore.Settings do
             "How many codes from an authenticator app one account may try, right or wrong — signing in, setting one up or turning it off — before it waits for the 5 minutes to pass. Each site counts its own accounts; masters are counted together."
           )
       )
-    ] ++ email_definitions()
+    ] ++ email_definitions() ++ MishkaCmsCore.Accounts.AuthGate.definitions()
   end
 
   # THE EMAIL TAB. Which provider a scope sends through and that provider's own fields come from

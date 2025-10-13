@@ -161,6 +161,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
   import Plug.Conn
   require Logger
 
+  alias MishkaCmsCore.Accounts.AuthGate
   alias MishkaCmsCore.Runtime.Plugs.ApiCorsPlug
 
   @default_opts [
@@ -435,6 +436,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
   unscoped request — a user with a site holding a token issued with no site, or an actor that
   carries no `site_id` at all — is nobody: `:current_user` becomes `nil`, and a plugin on
   `api:request:token_refused` hears it with `%{site: site, user_id: id}`.
+
+  A user the site's closed sign-in signs out (`MishkaCmsCore.Accounts.AuthGate.signs_out?/2`) is
+  signed out everywhere and is nobody too.
   """
   @spec confirm_bearer_tenant(Plug.Conn.t(), term()) :: Plug.Conn.t()
   def confirm_bearer_tenant(conn, _opts) do
@@ -453,6 +457,14 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
             meta: %{site: conn.assigns[:current_site], user_id: Map.get(user, :id)}
           )
         )
+
+      {site_id, %{} = user} ->
+        if AuthGate.signs_out?(site_id, user) do
+          AuthGate.sign_out(user, site_id)
+          assign(conn, :current_user, nil)
+        else
+          conn
+        end
 
       _scoped ->
         conn

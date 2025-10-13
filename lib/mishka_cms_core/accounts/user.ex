@@ -637,6 +637,9 @@ defmodule MishkaCmsCore.Accounts.User do
       # validates the provided email and password and generates a token
       prepare AshAuthentication.Strategy.Password.SignInPreparation
 
+      # Refused here, after the password, when sign-in is closed — see `AuthGate`.
+      prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in])
+
       metadata :token, :string do
         description "A JWT that can be used to authenticate the user."
         allow_nil? false
@@ -662,6 +665,10 @@ defmodule MishkaCmsCore.Accounts.User do
 
       # validates the provided sign in token and generates a token
       prepare AshAuthentication.Strategy.Password.SignInWithTokenPreparation
+
+      # The step every browser sign-in ends with — password, registration, reset — so a closed
+      # sign-in is closed whichever way led here. See `AuthGate`.
+      prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in])
 
       metadata :token, :string do
         description "A JWT that can be used to authenticate the user."
@@ -1340,7 +1347,9 @@ defmodule MishkaCmsCore.Accounts.User do
                Ash.get(MishkaCmsCore.Accounts.User, user_id,
                  tenant: tenant,
                  authorize?: false
-               ) do
+               ),
+             # The reset below runs without its policies, so the gate is asked here — see `AuthGate`.
+             :ok <- MishkaCmsCore.Accounts.AuthGate.check([:reset], tenant, %{user: user}) do
           user
           |> Ash.Changeset.for_update(
             :reset_password_with_token,
@@ -1439,6 +1448,9 @@ defmodule MishkaCmsCore.Accounts.User do
       # The shape `AshAuthentication` builds for a magic link that does not register: the token names
       # the account, and the account has to be there already.
       prepare AshAuthentication.Strategy.MagicLink.SignInPreparation
+
+      # A sign-in, so closed with sign-in as well as with sign-in links — see `AuthGate`.
+      prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in, :magic_link])
 
       metadata :token, :string do
         allow_nil? false
@@ -1554,8 +1566,39 @@ defmodule MishkaCmsCore.Accounts.User do
 
   # Authorization policies for user operations
   policies do
-    # Registration is open to every caller.
-    bypass action(:register_with_password) do
+    # BEFORE the AshAuthentication bypass, which authorizes every action that library runs — a
+    # `policy` that fails forbids immediately, and a bypass that follows never gets the chance to
+    # wave it through. Registration is the one part of the auth surface a site that is offline does
+    # not want; signing in is how its admin gets back to turn it on.
+    policy action(:register_with_password) do
+      description "A site that is offline takes no new accounts"
+
+      # Without this a refusal reaches the sign-up form as a bare "forbidden" — Ash withholds the
+      # reason by default, and "forbidden" on a page that was working yesterday reads as a fault.
+      error_message dgettext_noop(
+                      "errors",
+                      "This site is offline and is not taking new accounts. Sign in if you have one."
+                    )
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.RegistrationOpen, []}
+      authorize_if always()
+    end
+
+    # THE WAYS IN A SITE CAN CLOSE (`MishkaCmsCore.Accounts.AuthGate`), here for the same reason:
+    # before the bypass. The error is the gate's own, so the sign-up and reset forms, the JSON:API
+    # and the browser routes say which way is closed. Signing in is asked after the password, in its
+    # read actions.
+    policy action(:register_with_password) do
+      description "A site that closed registration takes no new accounts but the addresses it allows"
+      error_message &MishkaCmsCore.Accounts.AuthGate.refused(&1, &2, :register)
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AuthGateOpen, action: :register}
+      authorize_if always()
+    end
+
+    policy action(:reset_password_with_token) do
+      description "A site that closed password reset resets only the accounts it allows"
+      error_message &MishkaCmsCore.Accounts.AuthGate.refused(&1, &2, :reset)
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AuthGateOpen, action: :reset}
       authorize_if always()
     end
 

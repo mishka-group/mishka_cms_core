@@ -109,6 +109,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   import Plug.Conn
 
+  alias MishkaCmsCore.Accounts.AuthGate
   alias MishkaCmsCore.Runtime.Languages
 
   # Where `AshAuthentication` keeps the signed-in user's token in the session.
@@ -249,6 +250,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   a user with a site, or one that carries no `site_id` at all — is signed out of it: `:current_user` becomes `nil`, the token leaves the session, the request is
   scoped to the site, and a plugin on `web:request:session_refused` hears it with
   `%{site: site, user_id: id}`. An unscoped request whose token did not verify is scoped to the site.
+
+  A user the site's closed sign-in signs out (`MishkaCmsCore.Accounts.AuthGate.signs_out?/2`) is
+  signed out everywhere, their session cleared, and sent to the front page with the reason.
   """
   @spec confirm_tenant(Plug.Conn.t(), term()) :: Plug.Conn.t()
   def confirm_tenant(%Plug.Conn{assigns: %{current_site: %{id: site_id} = site}} = conn, _opts) do
@@ -261,6 +265,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
       {nil, user} ->
         refuse_session(conn, site, user)
+
+      {site_id, %{} = user} ->
+        if AuthGate.signs_out?(site_id, user), do: sign_out(conn, site_id, user), else: conn
 
       _scoped ->
         conn
@@ -561,6 +568,18 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   # the requests it makes to sign in.
   defp master_sign_in?(%Plug.Conn{path_info: path} = conn, site) do
     get_session(conn, :master_mode) == true and sign_in_path?(path, site)
+  end
+
+  defp sign_out(conn, site_id, user) do
+    AuthGate.sign_out(user, site_id)
+    %{title: title, text: text} = AuthGate.describe(:sign_in)
+
+    conn
+    |> assign(:current_user, nil)
+    |> clear_session()
+    |> Phoenix.Controller.put_flash(:error, "#{title}. #{text}")
+    |> Phoenix.Controller.redirect(to: MishkaCmsCore.Helpers.path(conn, "/"))
+    |> halt()
   end
 
   defp refuse_session(conn, site, user) do

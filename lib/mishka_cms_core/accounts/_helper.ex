@@ -279,8 +279,20 @@ defmodule MishkaCmsCore.Accounts.Helper do
     site_id = context[:tenant]
     purpose = Keyword.fetch!(email, :purpose)
 
-    deliver_auth_email(user_or_email, site_id, purpose, email)
+    case MishkaCmsCore.Accounts.AuthGate.check(gated_by(purpose), site_id, who(user_or_email)) do
+      :ok -> deliver_auth_email(user_or_email, site_id, purpose, email)
+      {:error, _closed} -> :ok
+    end
   end
+
+  # A reset or a sign-in link asked for while that way in is closed goes only to an account the
+  # gate still lets through — the page answers the same either way. See `AuthGate`.
+  defp gated_by("password_reset"), do: [:reset]
+  defp gated_by("magic_link"), do: [:sign_in, :magic_link]
+  defp gated_by(_purpose), do: []
+
+  defp who(%{email: _} = user), do: %{user: user}
+  defp who(email), do: %{email: to_string(email)}
 
   defp deliver_auth_email(user_or_email, site_id, purpose, email) do
     site_id
