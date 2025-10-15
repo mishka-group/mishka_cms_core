@@ -207,9 +207,38 @@ defmodule MishkaCmsCore.Accounts.Helper do
   @spec oban_admin?(map() | nil) :: boolean()
   def oban_admin?(user), do: master_user?(user) and full_admin?(user, :dashboard)
 
-  @doc "Whether a sign-in email may go to `user_or_email`: every site takes email until it can be offline."
+  @doc """
+  Whether a sign-in email — a magic link, a password reset, a confirmation — may go to
+  `user_or_email` for the tenant in `context`.
+
+  A site that is up sends to anyone; an offline site to its own admins and the masters only, of
+  either surface, since a link can be followed on the screens or its token used over the API; an
+  inactive site to nobody. Without a tenant, as when a master signs in, it may. An email held back is
+  announced on `auth:email:held` with `%{to: user_or_email, tenant: tenant}`.
+  """
   @spec may_email?(map() | String.t(), map() | keyword()) :: boolean()
-  def may_email?(_user_or_email, _context), do: true
+  def may_email?(user_or_email, context) do
+    case context[:tenant] do
+      nil -> true
+      tenant -> allowed_or_held(tenant, user_or_email)
+    end
+  end
+
+  defp allowed_or_held(tenant, user_or_email) do
+    allowed? =
+      MishkaCmsCore.Runtime.SiteAvailability.allowed?(tenant, known_user(user_or_email), :any)
+
+    if not allowed? do
+      MishkaInstaller.Event.Hook.call("auth:email:held", %{to: user_or_email, tenant: tenant},
+        return: false
+      )
+    end
+
+    allowed?
+  end
+
+  defp known_user(%{id: _id} = user), do: user
+  defp known_user(_email), do: nil
 
   @doc """
   Determines the appropriate email sender domain based on user/email

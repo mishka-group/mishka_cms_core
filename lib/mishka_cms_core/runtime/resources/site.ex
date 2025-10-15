@@ -228,6 +228,9 @@ defmodule MishkaCmsCore.Runtime.Site do
       columns do
         default_sort [{:inserted_at, :desc}]
 
+        # A site taken offline for maintenance carries a pill under its ID saying by which switch:
+        # `MishkaCmsCore.Settings.offline_by/1`, two ETS reads a row. The width fits that pill on
+        # the starred master row too.
         column :site_info do
           static true
           requires [:id, :name, :master]
@@ -250,7 +253,8 @@ defmodule MishkaCmsCore.Runtime.Site do
               name: record.name,
               master: record.master,
               id: id,
-              short: short
+              short: short,
+              by: MishkaCmsCore.Settings.offline_by(record)
             }
 
             ~H"""
@@ -277,6 +281,18 @@ defmodule MishkaCmsCore.Runtime.Site do
                     value={@id}
                     label={dgettext("mishka_gervaz", "Copy site ID")}
                   />
+                </div>
+                <div :if={@by != []} class="mt-[6px] flex">
+                  <span
+                    id={"site-offline-#{@id}"}
+                    class="inline-flex items-center gap-[6px] rounded-[20px] bg-[#fbf1df] px-[9px] py-[3px] text-[11px] font-bold text-[#a5691a]"
+                  >
+                    <span class="size-[6px] rounded-full bg-[#cf8a24]"></span>
+                    {if(:global in @by,
+                      do: dgettext("mishka_gervaz", "Offline · Global"),
+                      else: dgettext("mishka_gervaz", "Offline · Own switch")
+                    )}
+                  </span>
                 </div>
               </div>
             </div>

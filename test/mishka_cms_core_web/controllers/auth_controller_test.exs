@@ -14,8 +14,10 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
   use MishkaCmsCore.ConnCase, async: false
 
   import MishkaCmsCore.Test.Factory
+  import Swoosh.TestAssertions
 
   alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.Accounts.User.Senders.{SendMagicLinkEmail, SendPasswordResetEmail}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCoreWeb.ReturnTo
 
@@ -58,6 +60,16 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
     )
     |> Ash.Changeset.set_tenant(site_id)
     |> Ash.create!()
+  end
+
+  defp user_with(permissions, site_id) do
+    permissions
+    |> create_user_with_permissions!(
+      site_id: site_id,
+      password: @password,
+      password_confirmation: @password
+    )
+    |> Ash.load!([:permissions], authorize?: false, tenant: site_id)
   end
 
   # The `sign_in_with_token` address a sign-in page hands a visitor to once their password is
@@ -262,6 +274,99 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
 
       assert redirected_to(signed_out) == "/"
       refute Plug.Conn.get_session(signed_out, "user_token")
+    end
+  end
+
+  # AN OFFLINE SITE SIGNS IN ONLY WHO MAY SEE IT: its own admins, and masters. Everyone else is
+  # turned back at the one place every sign-in ends, before a session is written, and is told why.
+  # The emails that would lead to a sign-in are not sent to them either.
+  describe "signing in while the site is offline" do
+    setup %{site: site} do
+      {:ok, _} = MishkaCmsCore.Settings.put("cms.offline", true, site_id: site.id)
+
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SettingsState.delete(site.id, "cms.offline")
+      end)
+
+      :ok
+    end
+
+    test "the site's admin is signed in", %{conn: conn, site: site} do
+      conn = get(conn, handoff(user_with(["*"], site.id)))
+
+      assert redirected_to(conn) == "/"
+      assert get_session(conn, :live_socket_id)
+    end
+
+    test "the site's admin of one dashboard area is signed in", %{conn: conn, site: site} do
+      conn = get(conn, handoff(user_with(["admin:dashboard:runtime:media"], site.id)))
+
+      assert redirected_to(conn) == "/"
+      assert get_session(conn, :live_socket_id)
+    end
+
+    test "the site's API-only admin is turned back: the screens are not its surface", %{
+      conn: conn,
+      site: site
+    } do
+      conn = get(conn, handoff(user_with(["admin:api:*"], site.id)))
+
+      assert redirected_to(conn) == "/auth"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "offline"
+      refute get_session(conn, :live_socket_id)
+    end
+
+    test "anyone else is turned back to sign-in, told why, with no session", %{
+      conn: conn,
+      site: site
+    } do
+      conn = get(conn, handoff(user_with(["probe:role"], site.id)))
+
+      assert redirected_to(conn) == "/auth"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "offline"
+      refute get_session(conn, :live_socket_id)
+    end
+
+    test "a sign-in email goes to the site's admin, and to nobody else", %{site: site} do
+      admin = user_with(["*"], site.id)
+      member = user_with(["probe:role"], site.id)
+
+      SendMagicLinkEmail.send(admin, "token", tenant: site.id)
+      assert_email_sent(to: to_string(admin.email))
+
+      SendMagicLinkEmail.send(member, "token", tenant: site.id)
+      SendPasswordResetEmail.send(member, "token", tenant: site.id)
+
+      SendMagicLinkEmail.send("new-#{System.unique_integer([:positive])}@example.com", "token",
+        tenant: site.id
+      )
+
+      refute_email_sent()
+    end
+
+    test "a plugin on AuthController.Success.Refused may word what the visitor is told", %{
+      conn: conn,
+      site: site
+    } do
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.AuthSuccessRefused,
+        "AuthController.Success.Refused"
+      )
+
+      conn = get(conn, handoff(user_with(["probe:role"], site.id)))
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "A plugin says: come back later"
+      refute get_session(conn, :live_socket_id)
+    end
+
+    test "an email held back is announced on auth:email:held", %{site: site} do
+      Process.register(self(), :__plugin_hook_probe__)
+      register_plugin(MishkaCmsCore.Test.Plugins.AuthEmailHeld, "auth:email:held")
+      site_id = site.id
+
+      SendMagicLinkEmail.send(user_with(["probe:role"], site.id), "token", tenant: site.id)
+
+      assert_receive {:email_held, ^site_id}
     end
   end
 

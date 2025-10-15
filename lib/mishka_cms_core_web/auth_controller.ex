@@ -134,6 +134,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
 
   alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, LiveSockets}
   alias MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug
+  alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
 
@@ -163,7 +164,37 @@ defmodule MishkaCmsCoreWeb.AuthController do
   end
 
   def success(conn, activity, user, token) do
-    signed_in(conn, activity, user, token)
+    cond do
+      refused?(conn, user) -> refuse(conn, user)
+      true -> signed_in(conn, activity, user, token)
+    end
+  end
+
+  # AN OFFLINE SITE SIGNS IN ONLY THOSE WHO MAY SEE IT. Every way in ends here — password, magic
+  # link, password reset, OAuth, `?master_user=true` — so this is the one place that has to ask. An
+  # inactive site never gets this far: `SiteLookupPlug` answers its address before any route.
+  defp refused?(%{assigns: %{current_site: %{id: site_id}}}, user),
+    do: not SiteAvailability.allowed?(site_id, user)
+
+  defp refused?(_no_site, _user), do: false
+
+  # `AuthController.Success.Refused` may word the message, or answer with a redirect of its own.
+  defp refuse(conn, user) do
+    %{
+      conn: conn,
+      user: user,
+      message: gettext("This site is offline. Only its administrators can sign in.")
+    }
+    |> then(&Hook.call("AuthController.Success.Refused", &1))
+    |> then(fn
+      %{conn: %Plug.Conn{halted: true} = conn} ->
+        conn
+
+      data ->
+        data.conn
+        |> put_flash(:error, data.message)
+        |> redirect(to: path(data.conn, "/auth"))
+    end)
   end
 
   defp signed_in(conn, activity, user, _token) do

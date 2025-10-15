@@ -144,6 +144,7 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   def handle_call({:restore, entries}, _from, state) do
     :ets.delete_all_objects(@table)
     :ets.insert(@table, entries)
+    MishkaCmsCore.Runtime.SiteAvailability.changed(nil)
     {:reply, :ok, state}
   end
 
@@ -191,10 +192,20 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
     written(site_id, key)
   end
 
+  # A SITE'S OFFLINE SWITCH AND ITS SIGN-IN GATE TELL ITS OPEN PAGES, once this node's cache holds the
+  # new value, so a page that checks again reads it. `nil` is the global switch, which holds every
+  # site.
+  defp written(site_id, "cms.offline"),
+    do: MishkaCmsCore.Runtime.SiteAvailability.changed(site_id)
+
+  defp written(site_id, "auth." <> _gate),
+    do: MishkaCmsCore.Runtime.SiteAvailability.changed(site_id)
+
   defp written(_site_id, _key), do: :ok
 
   defp load_all do
     load_rows()
+    MishkaCmsCore.Runtime.SiteAvailability.changed(nil)
   end
 
   defp load_rows do

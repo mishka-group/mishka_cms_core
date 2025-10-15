@@ -284,7 +284,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   other. `nil` for `site` recognises only the addresses without a language.
 
   Every rule that treats the sign-in pages apart asks this: the master accounts' unscoped sign-in
-  here, `MishkaCms.Plugs.MaintenanceGate` keeping them
+  here, `MishkaCms.Plugs.MaintenanceGate` and `MishkaCmsCore.Runtime.SiteAvailability` keeping them
   open on an offline site, and `MishkaCmsWeb.RuntimeLive` loading the app's own client on them.
 
       SiteLookupPlug.sign_in_path?(["en", "auth", "register"], site) #=> true

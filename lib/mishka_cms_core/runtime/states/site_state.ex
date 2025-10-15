@@ -192,6 +192,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
         return: false
       )
 
+      MishkaCmsCore.Runtime.SiteAvailability.changed(id)
+
       :ok
     end
   end
@@ -633,6 +635,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     MishkaInstaller.Event.Hook.call("runtime:state:site:changed", %{op: :delete, key: id},
       return: false
     )
+
+    MishkaCmsCore.Runtime.SiteAvailability.changed(id)
 
     :ok
   end

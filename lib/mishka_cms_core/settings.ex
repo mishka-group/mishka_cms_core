@@ -137,6 +137,46 @@ defmodule MishkaCmsCore.Settings do
   end
 
   @doc """
+  Whether a site is serving a holding page instead of itself.
+
+  Takes a site struct, a site id, or `nil` for "no site resolved". Two ETS reads, no query.
+
+      Settings.offline?(conn.assigns[:current_site])
+
+  `cms.offline` is the one setting that does not resolve the usual way. Everywhere else a site's
+  value replaces the global one; here the two are OR-ed, so a master switching every site off cannot
+  be undone by a site switching itself on. A site's own value only ever adds to it.
+
+  | global | site  | result  |
+  |--------|-------|---------|
+  | off    | off   | online  |
+  | off    | on    | offline |
+  | on     | off   | offline |
+  | on     | unset | offline |
+  """
+  @spec offline?(map() | String.t() | nil) :: boolean()
+  def offline?(site) do
+    get("cms.offline", false) == true or get("cms.offline", false, site_id(site)) == true
+  end
+
+  @doc """
+  Which switches hold a site offline: `:global` for the one every site answers to, `:site` for the
+  site's own. `[]` when it is online; `nil` asks about the global switch alone.
+
+      Settings.offline_by(site)   # => [:global, :site]
+
+  Two ETS reads, no query. `offline?/1` is `offline_by/1 != []`.
+  """
+  @spec offline_by(map() | String.t() | nil) :: [:global | :site]
+  def offline_by(site) do
+    held = [global: get("cms.offline", false) == true, site: own_offline?(site_id(site))]
+    for {switch, true} <- held, do: switch
+  end
+
+  defp own_offline?(nil), do: false
+  defp own_offline?(site_id), do: get_own("cms.offline", false, site_id) == true
+
+  @doc """
   A site's own value for a setting, or `default` when the site holds none. Unlike `get/3` it never
   falls back to the global value — it is what the site itself set. `nil` for the site is the
   installation's own value: the global one.
@@ -210,6 +250,10 @@ defmodule MishkaCmsCore.Settings do
   end
 
   defp endpoint, do: Application.fetch_env!(:mishka_cms_core, :endpoint)
+
+  defp site_id(%{id: id}), do: id
+  defp site_id(id) when is_binary(id), do: id
+  defp site_id(_none), do: nil
 
   @doc """
   Creates or updates a setting (durable), refreshes the RAM cache from the committed row, and notifies
@@ -630,6 +674,28 @@ defmodule MishkaCmsCore.Settings do
         description:
           gettext_noop(
             "Codes separated by commas. Every site publishes these, whether it lists them or not. Leave empty to require none."
+          )
+      ),
+      define("cms.offline", :boolean,
+        default: false,
+        category: "general",
+        scope: :both,
+        resolve: :any,
+        label: gettext_noop("Take this site offline (maintenance mode)"),
+        global_label: gettext_noop("Take every site offline (maintenance mode)"),
+        description:
+          gettext_noop(
+            "Show a holding page to visitors while you make changes. Set on Global it covers every site and no site can turn itself back on; set on a site it covers that site alone. Signing in stays open so an admin can still get in; registering does not."
+          )
+      ),
+      define("cms.maintenance_message", :text,
+        default: gettext_noop("We are currently undergoing maintenance. Please check back soon."),
+        category: "general",
+        scope: :both,
+        label: gettext_noop("Maintenance message"),
+        description:
+          gettext_noop(
+            "The text visitors read on the built-in holding page while the site is offline. A site whose Error Page has an Offline entry shows that page instead."
           )
       ),
       define("notify.cms_core.user.permissions_changed", :boolean,

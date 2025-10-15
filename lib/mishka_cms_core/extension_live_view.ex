@@ -97,6 +97,9 @@ defmodule MishkaCmsCore.ExtensionLiveView do
       # add per page and nothing to forget — an undeclared page is refused, not waved through.
       on_mount(MishkaCmsCore.Sidebar.PageGuard)
 
+      # Closes the page the moment its site goes inactive, or offline for someone who may not see it.
+      on_mount(MishkaCmsCore.Runtime.SiteAvailability)
+
       # Makes the topbar bell live: per-user unseen count + real-time updates (overrides Nav's count)
       on_mount(MishkaCmsCore.Notify.LiveHooks)
 
