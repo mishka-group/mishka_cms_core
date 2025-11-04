@@ -1182,6 +1182,10 @@ defmodule MishkaCmsCore.Runtime.Site do
       sortable? false
       public? true
     end
+
+    has_many :layouts, MishkaCmsCore.Runtime.Layout do
+      public? true
+    end
   end
 
   identities do

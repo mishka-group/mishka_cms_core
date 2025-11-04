@@ -28,9 +28,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeAudit do
 
   require Logger
 
+  alias MishkaCmsCore.Runtime.Layout
   alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
 
-  @sources []
+  @sources [
+    {Layout, [:helpers]}
+  ]
 
   @doc """
   The resources that store Elixir, and which of their fields hold it.

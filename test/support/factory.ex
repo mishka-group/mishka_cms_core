@@ -22,6 +22,16 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  # Layout factory
+  def create_layout!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    tenant = site_id
+
+    overrides
+    |> layout(tenant)
+    |> generate()
+  end
+
   # User factory
   def create_user!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

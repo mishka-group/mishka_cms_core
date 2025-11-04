@@ -43,6 +43,44 @@ defmodule MishkaCmsCore.Runtime do
         index :tenant_read
         get :tenant_get
       end
+
+      base_route "/v1/tenant/admin/runtime/layout", MishkaCmsCore.Runtime.Layout do
+        index :for_tenant_with_globals
+        get :get_for_tenant_with_globals
+        index :archived, route: "/archived"
+        get :get_archived, route: "/archived/:id"
+        post :create
+        patch :update
+        patch :unarchive, route: "/:id/unarchive", read_action: :get_archived
+        delete :destroy, route: "/:id/archive"
+        delete :permanent_destroy, route: "/:id/permanent"
+
+        get :get_with_versions, route: "/:id/with-versions"
+        index :list_versions, route: "/:layout_id/versions"
+        patch :restore_version_api, route: "/:id/version/:version_id/restore"
+        get :preview_version, route: "/:layout_id/version/:version_id/preview"
+      end
+
+      base_route "/v1/master/admin/runtime/layout", MishkaCmsCore.Runtime.Layout do
+        index :master_read
+        get :master_get
+        index :master_archived, route: "/archived"
+        get :master_get_archived, route: "/archived/:id"
+        post :master_create
+        patch :master_update, route: "/:id", read_action: :master_get
+        patch :master_unarchive, route: "/:id/unarchive", read_action: :master_get_archived
+        delete :master_destroy, route: "/:id/archive", read_action: :master_get
+        delete :master_permanent_destroy, route: "/:id/permanent", read_action: :master_get
+
+        get :master_get_with_versions, route: "/:id/with-versions"
+        index :master_list_versions, route: "/:layout_id/versions"
+
+        patch :master_restore_version,
+          route: "/:id/version/:version_id/restore",
+          read_action: :master_get
+
+        get :master_preview_version, route: "/:layout_id/version/:version_id/preview"
+      end
     end
   end
 
@@ -94,5 +132,21 @@ defmodule MishkaCmsCore.Runtime do
     resource MishkaCmsCore.Runtime.Setting
 
     resource MishkaCmsCore.Runtime.Site
+
+    resource MishkaCmsCore.Runtime.Layout do
+      define :get_layout, action: :read, get_by: :id
+
+      define :get_layout_by_path,
+        action: :by_path,
+        args: [:path],
+        get?: true,
+        not_found_error?: false
+
+      define :get_layout_by_token,
+        action: :by_token,
+        args: [:preview_token],
+        get?: true,
+        not_found_error?: false
+    end
   end
 end

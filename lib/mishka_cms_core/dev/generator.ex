@@ -41,6 +41,39 @@ defmodule MishkaCmsCore.Dev.Generator do
     )
   end
 
+  def layout(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.Layout,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Layout #{&1}"),
+        path: sequence(:path, &"/test-path-#{&1}"),
+        description: nil,
+        template: "<html><head><title>Test</title></head><body><%= @content %></body></html>",
+        format: :heex,
+        priority: 0,
+        extra: %{},
+        content: %{},
+        example: nil,
+        resource_links: [],
+        seo_tags: [],
+        helpers: [],
+        active: true,
+        precompile: false,
+        permissions: [],
+        site_id: nil
+      ],
+      # A SEED IS NOT AN AUTHOR. These four resources carry `helpers` (and a page carries `events`
+      # and `infos` too), and `Validations.CodeChange` refuses those from a write with no actor. A
+      # seed and a test fixture have no actor at all, so they announce what they are the same way the
+      # kit installer does.
+      context: %{page_code: :package},
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def user(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaCmsCore.Accounts.User,
