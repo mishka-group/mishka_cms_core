@@ -1183,6 +1183,10 @@ defmodule MishkaCmsCore.Runtime.Site do
       public? true
     end
 
+    has_many :components, MishkaCmsCore.Runtime.Component do
+      public? true
+    end
+
     has_many :layouts, MishkaCmsCore.Runtime.Layout do
       public? true
     end

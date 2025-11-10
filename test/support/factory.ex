@@ -22,6 +22,15 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  # Component factory
+  def create_component!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+
+    overrides
+    |> component(site_id)
+    |> generate()
+  end
+
   # Layout factory
   def create_layout!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

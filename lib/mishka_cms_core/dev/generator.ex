@@ -41,6 +41,56 @@ defmodule MishkaCmsCore.Dev.Generator do
     )
   end
 
+  def component(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.Component,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Component #{&1}"),
+        # A TEMPLATE THAT READS AN ASSIGN THIS FACTORY NEVER DECLARES CANNOT RENDER. `attrs` below
+        # is `[]`, so `@content` was a `KeyError` in every fixture component that was actually
+        # drawn — caught by the canvas's `contain/3` and logged as "raised while rendering", which
+        # made a rescued fixture defect look like a component failure and put noise in every run
+        # that happened to draw one.
+        template: "<div>Test template</div>",
+        format: :heex,
+        priority: 0,
+        extra: %{},
+        body: nil,
+        attrs: [],
+        slots: [],
+        helpers: [],
+        permissions: [],
+        active: true,
+        # EVERY BOOLEAN THIS RESOURCE HAS, PINNED. An attribute a generator says nothing about is
+        # INVENTED by `Ash.Generator` from its type, and for a boolean that is a coin flip on every
+        # fixture — so `precompile` and `required` have been random in every component this factory
+        # ever built, and a fixture that happened to come out `precompile: true` compiles at boot.
+        # Nothing asserted on either, so it stayed invisible until `stateful` arrived and a test
+        # asked what a plain component's shape was.
+        #
+        # The page, layout and error-page factories beside this one all pin `precompile: false`. This
+        # one was simply missed.
+        precompile: false,
+        required: false,
+        stateful: false,
+        description: nil,
+        type: nil,
+        examples: [],
+        dependencies: [],
+        site_id: nil
+      ],
+      # A SEED IS NOT AN AUTHOR. These four resources carry `helpers` (and a page carries `events`
+      # and `infos` too), and `Validations.CodeChange` refuses those from a write with no actor. A
+      # seed and a test fixture have no actor at all, so they announce what they are the same way the
+      # kit installer does.
+      context: %{page_code: :package},
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def layout(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaCmsCore.Runtime.Layout,
