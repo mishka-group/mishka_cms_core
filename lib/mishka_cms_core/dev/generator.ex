@@ -124,6 +124,46 @@ defmodule MishkaCmsCore.Dev.Generator do
     )
   end
 
+  def error_page(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.ErrorPage,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Error Page #{&1}"),
+        path: sequence(:path, &"/error-path-#{&1}"),
+        root_layout_template:
+          "<html><head><title>Error</title></head><body><%= @inner_content %></body></html>",
+        format: :heex,
+        priority: 0,
+        extra: %{},
+        error_pages: [
+          %{
+            status: 404,
+            template: "<h1>Page Not Found</h1><p>The page you requested could not be found.</p>",
+            layout: %{template: "<div class='error-404'><%= @inner_content %></div>"}
+          },
+          %{
+            status: 500,
+            template: "<h1>Internal Server Error</h1><p>Something went wrong on our end.</p>",
+            layout: %{template: "<div class='error-500'><%= @inner_content %></div>"}
+          }
+        ],
+        helpers: [],
+        active: true,
+        precompile: false,
+        site_id: nil
+      ],
+      # A SEED IS NOT AN AUTHOR. These four resources carry `helpers` (and a page carries `events`
+      # and `infos` too), and `Validations.CodeChange` refuses those from a write with no actor. A
+      # seed and a test fixture have no actor at all, so they announce what they are the same way the
+      # kit installer does.
+      context: %{page_code: :package},
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def user(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaCmsCore.Accounts.User,

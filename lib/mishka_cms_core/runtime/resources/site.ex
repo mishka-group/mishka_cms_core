@@ -1187,6 +1187,10 @@ defmodule MishkaCmsCore.Runtime.Site do
       public? true
     end
 
+    has_many :error_pages, MishkaCmsCore.Runtime.ErrorPage do
+      public? true
+    end
+
     has_many :layouts, MishkaCmsCore.Runtime.Layout do
       public? true
     end

@@ -29,12 +29,14 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeAudit do
   require Logger
 
   alias MishkaCmsCore.Runtime.Component
+  alias MishkaCmsCore.Runtime.ErrorPage
   alias MishkaCmsCore.Runtime.Layout
   alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
 
   @sources [
     {Layout, [:helpers]},
-    {Component, [:helpers]}
+    {Component, [:helpers]},
+    {ErrorPage, [:helpers]}
   ]
 
   @doc """
