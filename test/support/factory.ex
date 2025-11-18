@@ -54,6 +54,18 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  # Page factory
+  def create_page!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # Page MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> page(tenant)
+    |> generate()
+  end
+
   # User factory
   def create_user!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

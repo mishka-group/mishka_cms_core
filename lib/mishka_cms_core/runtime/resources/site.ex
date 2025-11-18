@@ -1194,6 +1194,10 @@ defmodule MishkaCmsCore.Runtime.Site do
     has_many :layouts, MishkaCmsCore.Runtime.Layout do
       public? true
     end
+
+    has_many :pages, MishkaCmsCore.Runtime.Page do
+      public? true
+    end
   end
 
   identities do

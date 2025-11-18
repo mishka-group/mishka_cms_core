@@ -1850,6 +1850,8 @@ defmodule MishkaCmsCore.Runtime.Layout do
       access_type :strict
       authorize_if accessing_from(MishkaCmsCore.Accounts.User, :site)
 
+      authorize_if accessing_from(MishkaCmsCore.Runtime.Page, :pages)
+
       authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions, under: :surface}
     end
 
@@ -2098,6 +2100,10 @@ defmodule MishkaCmsCore.Runtime.Layout do
       allow_nil? true
       public? true
       description "The site this layout belongs to (nil for global layouts)"
+    end
+
+    has_many :pages, MishkaCmsCore.Runtime.Page do
+      public? true
     end
 
     has_many :sorted_versions, MishkaCmsCore.Runtime.Layout.Version do

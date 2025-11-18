@@ -164,6 +164,58 @@ defmodule MishkaCmsCore.Dev.Generator do
     )
   end
 
+  def page(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.Page,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Page #{&1}"),
+        title: sequence(:title, &"Test Page #{&1}"),
+        path: sequence(:path, &"/test-page-#{&1}"),
+        section: "default",
+        template: "<div class='page'><h1><%= @title %></h1><%= @content %></div>",
+        description: sequence(:description, &"Test page description #{&1}"),
+        format: :heex,
+        priority: 0,
+        extra: %{},
+        content: %{title: "Test Title", body: "Test content"},
+        seo_tags: [],
+        schema: [],
+        events: [],
+        infos: [],
+        resource_links: [],
+        helpers: [],
+        # EVERY ARRAY THIS RESOURCE HAS, PINNED — `uploads` was the one that was not. An attribute a
+        # generator says nothing about is INVENTED by `Ash.Generator` from its type, so a fixture
+        # page carried a random upload declaration, and `PageUpload.allow/2` refused it the moment
+        # anything mounted that page through `RuntimeLive`:
+        #
+        #     invalid accept filter provided to allow_upload … Got: "\x{DAE66}"
+        #
+        # Random, so it failed on some runs and not others, and it named a page nobody had touched.
+        # The same omission that made `precompile` a coin flip on the component factory.
+        uploads: [],
+        active: true,
+        precompile: false,
+        permissions: [],
+        layout_id: nil,
+        # A new page is the English master of a group of its own — see
+        # `MishkaCmsCore.Runtime.PageEditions`.
+        language: "en",
+        language_group_id: nil,
+        site_id: nil
+      ],
+      # A SEED IS NOT AN AUTHOR. These four resources carry `helpers` (and a page carries `events`
+      # and `infos` too), and `Validations.CodeChange` refuses those from a write with no actor. A
+      # seed and a test fixture have no actor at all, so they announce what they are the same way the
+      # kit installer does.
+      context: %{page_code: :package},
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def user(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaCmsCore.Accounts.User,
