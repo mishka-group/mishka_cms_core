@@ -164,6 +164,26 @@ defmodule MishkaCmsCore.Dev.Generator do
     )
   end
 
+  def js_hook(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.JsHook,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Hook #{&1}"),
+        description: nil,
+        content: "console.log('Test hook loaded');",
+        format: :js,
+        priority: 0,
+        active: true,
+        permissions: [],
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   def page(opts \\ [], tenant \\ nil) do
     changeset_generator(
       MishkaCmsCore.Runtime.Page,

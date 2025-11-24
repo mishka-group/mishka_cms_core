@@ -54,6 +54,16 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  # JsHook factory
+  def create_js_hook!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    tenant = site_id
+
+    overrides
+    |> js_hook(tenant)
+    |> generate()
+  end
+
   # Page factory
   def create_page!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

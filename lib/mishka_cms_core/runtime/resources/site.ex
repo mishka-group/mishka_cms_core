@@ -1191,6 +1191,10 @@ defmodule MishkaCmsCore.Runtime.Site do
       public? true
     end
 
+    has_many :js_hooks, MishkaCmsCore.Runtime.JsHook do
+      public? true
+    end
+
     has_many :layouts, MishkaCmsCore.Runtime.Layout do
       public? true
     end
