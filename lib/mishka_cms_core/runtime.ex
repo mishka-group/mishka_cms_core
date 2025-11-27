@@ -162,6 +162,30 @@ defmodule MishkaCmsCore.Runtime do
         get :master_preview_version, route: "/:js_hook_id/version/:version_id/preview"
       end
 
+      base_route "/v1/tenant/admin/runtime/stylesheet", MishkaCmsCore.Runtime.Stylesheet do
+        index :for_tenant_with_globals
+        get :get_for_tenant_with_globals
+        index :archived, route: "/archived"
+        get :get_archived, route: "/archived/:id"
+        post :create
+        patch :update
+        patch :unarchive, route: "/:id/unarchive", read_action: :get_archived
+        delete :destroy, route: "/:id/archive"
+        delete :permanent_destroy, route: "/:id/permanent"
+      end
+
+      base_route "/v1/master/admin/runtime/stylesheet", MishkaCmsCore.Runtime.Stylesheet do
+        index :master_read
+        get :master_get
+        index :master_archived, route: "/archived"
+        get :master_get_archived, route: "/archived/:id"
+        post :master_create
+        patch :master_update, route: "/:id", read_action: :master_get
+        patch :master_unarchive, route: "/:id/unarchive", read_action: :master_get_archived
+        delete :master_destroy, route: "/:id/archive", read_action: :master_get
+        delete :master_permanent_destroy, route: "/:id/permanent", read_action: :master_get
+      end
+
       base_route "/v1/tenant/admin/runtime/layout", MishkaCmsCore.Runtime.Layout do
         index :for_tenant_with_globals
         get :get_for_tenant_with_globals
@@ -316,6 +340,9 @@ defmodule MishkaCmsCore.Runtime do
     end
 
     resource MishkaCmsCore.Runtime.JsHook do
+    end
+
+    resource MishkaCmsCore.Runtime.Stylesheet do
     end
 
     resource MishkaCmsCore.Runtime.ErrorPage do

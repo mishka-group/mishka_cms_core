@@ -75,6 +75,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCss do
 
   alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Stylesheet
 
   require Ash.Query
 
@@ -643,7 +644,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCss do
   end
 
   defp create(%{site_id: nil} = actor, site_id, owner, rules) do
-    MishkaCmsCore.Runtime.Stylesheet
+    Stylesheet
     |> Ash.Changeset.for_create(
       :master_create,
       Map.put(attrs(owner, rules), :site_id, site_id),
@@ -656,7 +657,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCss do
   end
 
   defp create(actor, site_id, owner, rules) do
-    MishkaCmsCore.Runtime.Stylesheet
+    Stylesheet
     |> Ash.Changeset.for_create(:create, attrs(owner, rules),
       actor: actor,
       tenant: site_id,
@@ -718,7 +719,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCss do
   defp row(actor, site_id, owner) do
     name = row_name(owner)
 
-    MishkaCmsCore.Runtime.Stylesheet
+    Stylesheet
     |> Ash.Query.filter(name == ^name)
     |> scoped(site_id)
     |> read(actor, site_id)
