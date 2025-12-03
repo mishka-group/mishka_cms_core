@@ -263,4 +263,48 @@ defmodule MishkaCmsCore.Dev.Generator do
       overrides: opts
     )
   end
+
+  def media_category(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.MediaCategory,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Media Category #{&1}"),
+        description: sequence(:description, &"Test media category description #{&1}"),
+        site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
+  # `relative_path` is still taken as an option, but handed on as the private `stored_path`: the
+  # create does not accept the path as input, only from the code that stored the file.
+  def media(opts \\ [], tenant \\ nil) do
+    {stored_path, opts} =
+      Keyword.pop_lazy(opts, :relative_path, fn ->
+        sequence(:path, &"/uploads/media-#{&1}.jpg")
+      end)
+
+    changeset_generator(
+      MishkaCmsCore.Runtime.Media,
+      :create,
+      authorize?: false,
+      defaults: [
+        name: sequence(:name, &"Test Media #{&1}"),
+        type: StreamData.member_of([:images, :videos, :documents]),
+        size: StreamData.integer(1..10_000_000),
+        format: StreamData.member_of(["jpg", "png", "gif", "mp4", "pdf", "doc"]),
+        featured: false,
+        dimensions: %{},
+        description: sequence(:description, &"Test media description #{&1}"),
+        site_id: nil,
+        media_category_id: nil
+      ],
+      overrides: opts,
+      private_arguments: %{stored_path: stored_path},
+      tenant: tenant
+    )
+  end
 end

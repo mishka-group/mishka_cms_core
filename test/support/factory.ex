@@ -129,4 +129,28 @@ defmodule MishkaCmsCore.Test.Factory do
       {:ok, permission} -> permission
     end
   end
+
+  # MediaCategory factory
+  def create_media_category!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # MediaCategory MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> media_category(tenant)
+    |> generate()
+  end
+
+  # Media factory
+  def create_media!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    # Media MUST have a site_id (not global)
+    site_id = site_id || create_site!().id
+    tenant = site_id
+
+    overrides
+    |> media(tenant)
+    |> generate()
+  end
 end
