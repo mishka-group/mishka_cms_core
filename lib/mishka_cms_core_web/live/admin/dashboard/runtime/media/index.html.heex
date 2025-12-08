@@ -1,0 +1,408 @@
+<div>
+  <.header>
+    {gettext("Media Library")}
+    <:subtitle>{gettext("Upload and organize images, videos, and documents.")}</:subtitle>
+  </.header>
+
+  <%!-- Media Form Section (always visible, switches between create/edit). The Edit row action calls
+        `JS.focus` on this `id`; `tabindex="-1"` makes it programmatically focusable (not tab-reachable),
+        `focus:outline-none` drops the focus ring, and `scroll-mt` keeps it clear of the sticky top bar.
+        The scroll it triggers is smooth because the scrolling `<main>` carries `scroll-smooth`. --%>
+  <div
+    :if={@media_writer?}
+    id="media-upload-card"
+    tabindex="-1"
+    class="mb-6 scroll-mt-[80px] rounded-[16px] border border-[#ecebe6] bg-white p-[18px] shadow-[0_1px_2px_rgba(30,28,24,0.04)] focus:outline-none"
+  >
+    <.live_component
+      module={MishkaGervaz.Form.Web.Live}
+      id={MishkaGervaz.Resource.Info.Form.component_id(MishkaCmsCore.Runtime.Media)}
+      resource={MishkaCmsCore.Runtime.Media}
+      current_user={@current_user}
+    />
+  </div>
+
+  <div class="grid grid-cols-[250px_minmax(0,1fr)] items-start gap-[22px] max-[980px]:grid-cols-1!">
+    <%!-- Categories Sidebar --%>
+    <aside class="sticky top-0 z-[25]">
+      <div class="rounded-[16px] border border-[#ecebe6] bg-white p-[14px] shadow-[0_1px_2px_rgba(30,28,24,0.04)] max-[980px]:rounded-[14px]! max-[980px]:p-[10px]!">
+        <div class="mb-3 flex items-center justify-between px-1 max-[980px]:mb-2!">
+          <span class="font-['Space_Grotesk'] text-[13px] font-bold text-[#1b1a18]">
+            {gettext("Categories")}
+          </span>
+          <div class="flex gap-1.5">
+            <button
+              :if={@media_writer? and @category_archive_status == :active}
+              id="media-add-category"
+              type="button"
+              class="grid size-[26px] place-items-center rounded-lg border border-[#ecebe6] bg-[#faf9f6] text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+              phx-click="toggle_category_form"
+              title={gettext("Add Category")}
+            >
+              <.icon name="hero-plus" class="size-[14px]" />
+            </button>
+            <button
+              type="button"
+              class={[
+                "grid size-[26px] place-items-center rounded-lg border border-[#ecebe6] text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]",
+                (@category_archive_status == :archived &&
+                   "border-[#f0e2c4]! bg-[#fbf1df] text-[#a5691a]") ||
+                  "bg-[#faf9f6]"
+              ]}
+              phx-click="toggle_category_archive_view"
+              title={
+                if @category_archive_status == :archived,
+                  do: gettext("View Active"),
+                  else: gettext("View Archived")
+              }
+            >
+              <.icon name="hero-archive-box" class="size-[14px]" />
+            </button>
+          </div>
+        </div>
+
+        <%!-- Active Categories View --%>
+        <div :if={@category_archive_status == :active}>
+          <div
+            :if={@categories_loading.loading && !@has_categories_data}
+            class="flex flex-col items-center justify-center py-6"
+          >
+            <span class="inline-block size-8 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
+            <p class="mt-2 text-[12px] text-[#8a877f]">{gettext("Loading categories...")}</p>
+          </div>
+
+          <div :if={@categories_loading.failed} class="text-[12px] text-[#b91c1c]">
+            {gettext("Failed to load categories")}
+          </div>
+
+          <div :if={@has_categories_data} class="relative">
+            <span
+              id={"category-selection-#{@selected_category_id || "none"}"}
+              class="hidden"
+              phx-mounted={apply_category_selection(@selected_category_id)}
+            />
+
+            <div
+              :if={@categories_loading.loading}
+              class="absolute inset-0 z-10 flex items-center justify-center bg-white/70"
+            >
+              <span class="inline-block size-5 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
+            </div>
+
+            <div
+              data-role="md-catlist"
+              class="flex flex-col gap-0.5 max-[980px]:flex-row! max-[980px]:gap-2! max-[980px]:overflow-x-auto! max-[980px]:pb-1!"
+            >
+              <ul class="flex flex-col gap-0.5 p-0 max-[980px]:flex-row! max-[980px]:gap-2!">
+                <li
+                  data-category-id="__all__"
+                  class="category-chip flex cursor-pointer items-center gap-2.5 rounded-[10px] border border-transparent px-[11px] py-[9px] transition-colors hover:bg-[#f7f6f3] max-[980px]:flex-none! max-[980px]:border-[#eceae4] max-[980px]:bg-[#faf9f6] max-[980px]:px-3! max-[980px]:py-[7px]!"
+                >
+                  <.link
+                    patch={path(@socket, "/admin/dashboard/runtime/medias")}
+                    phx-click={select_category_js("__all__")}
+                    class="flex min-w-0 flex-1 items-center gap-2.5"
+                  >
+                    <span class="size-2 flex-none rounded-[3px] bg-[#8a877f]" />
+                    <span class="flex-1 truncate text-[12.5px] font-semibold text-[#3a382f]">
+                      {gettext("All Media")}
+                    </span>
+                  </.link>
+                </li>
+              </ul>
+
+              <ul
+                id="categories-list"
+                phx-update="stream"
+                class="flex flex-col gap-0.5 p-0 max-[980px]:flex-row! max-[980px]:gap-2!"
+              >
+                <li
+                  :for={{dom_id, category} <- @streams.categories}
+                  id={dom_id}
+                  data-category-id={category.id}
+                  class="category-chip flex items-center gap-2.5 rounded-[10px] border border-transparent px-[11px] py-[8px] transition-colors hover:bg-[#f7f6f3] max-[980px]:flex-none! max-[980px]:border-[#eceae4] max-[980px]:bg-[#faf9f6] max-[980px]:px-3! max-[980px]:py-[7px]!"
+                >
+                  <% dot =
+                    cond do
+                      String.contains?(String.downcase(category.name || ""), "video") ->
+                        "bg-[#7a5bd0]"
+
+                      String.contains?(String.downcase(category.name || ""), [
+                        "image",
+                        "photo",
+                        "pic"
+                      ]) ->
+                        "bg-[#3a6cb5]"
+
+                      String.contains?(String.downcase(category.name || ""), [
+                        "doc",
+                        "file",
+                        "text"
+                      ]) ->
+                        "bg-[#177a53]"
+
+                      true ->
+                        Enum.at(
+                          ~w(bg-[#4f4bcc] bg-[#c2410c] bg-[#0d9488] bg-[#b45309] bg-[#7a5bd0] bg-[#be185d]),
+                          rem(:erlang.phash2(category.id), 6)
+                        )
+                    end %>
+                  <% cat_path =
+                    if @is_master do
+                      "/admin/dashboard/runtime/medias?filter_media_category_id=#{category.id}&filter_site_id=#{category.site_id}"
+                    else
+                      "/admin/dashboard/runtime/medias?filter_media_category_id=#{category.id}"
+                    end %>
+                  <.link
+                    patch={path(@socket, cat_path)}
+                    phx-click={select_category_js(category.id)}
+                    class="flex min-w-0 flex-1 items-center gap-2.5"
+                  >
+                    <span class={["size-2 flex-none rounded-[3px]", dot]} />
+                    <span class="min-w-0 flex-1">
+                      <span
+                        id={"category-name-#{category.id}"}
+                        class="block truncate text-[12.5px] font-semibold text-[#3a382f]"
+                      >
+                        {category.name}
+                      </span>
+                      <%!-- Only a master's rail loads `:site`, so only a master's rail can draw it —
+                            and the load, not the flag, is what the guard has to ask about: a row
+                            that arrived unloaded carries a truthy `%Ash.NotLoaded{}`. --%>
+                      <span
+                        :if={present?(category.site)}
+                        id={"category-site-#{category.id}"}
+                        class="block truncate text-[10.5px] font-medium text-[#a8a5a0] max-[980px]:hidden!"
+                      >
+                        {category.site.name}
+                      </span>
+                    </span>
+                  </.link>
+                  <span
+                    :if={@media_writer?}
+                    class="flex flex-none items-center gap-[3px] max-[980px]:ms-[3px] max-[980px]:border-s max-[980px]:border-[#e6e4de] max-[980px]:ps-[5px]"
+                  >
+                    <button
+                      type="button"
+                      class="grid size-[24px] place-items-center rounded-[7px] text-[#8a877f] transition-colors hover:bg-[#eae8f7] hover:text-[#4f4bcc]"
+                      phx-click="edit_category"
+                      phx-value-id={category.id}
+                      title={gettext("Edit")}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.9"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-[13px]"
+                      >
+                        <path d="M11 4H5a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2h13a2 2 0 0 0 2-2v-6" />
+                        <path d="M18.5 2.5a2.1 2.1 0 0 1 3 3L12 15l-4 1 1-4z" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="grid size-[24px] place-items-center rounded-[7px] text-[#c08078] transition-colors hover:bg-[#fbe9e7] hover:text-[#c0473d]"
+                      phx-click="delete_category"
+                      phx-value-id={category.id}
+                      data-confirm={gettext("Are you sure you want to archive this category?")}
+                      title={gettext("Archive")}
+                    >
+                      <svg
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.9"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="size-[13px]"
+                      >
+                        <path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13" />
+                      </svg>
+                    </button>
+                  </span>
+                  <span
+                    id={"category-count-#{category.id}"}
+                    class="inline-flex flex-none items-center rounded-full bg-[#f4f3ef] px-2 py-[2px] font-['Space_Grotesk'] text-[10.5px] font-bold text-[#8a877f]"
+                  >
+                    {category.media_count}
+                  </span>
+                </li>
+              </ul>
+            </div>
+
+            <div :if={@categories_has_more} class="mt-1.5">
+              <button
+                type="button"
+                class="flex w-full items-center justify-center gap-2 rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] px-2 py-[7px] text-[11.5px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+                phx-click="load_more_categories"
+                disabled={@categories_loading.loading}
+              >
+                <%= if @categories_loading.loading do %>
+                  <span class="inline-block size-4 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
+                  {gettext("Loading...")}
+                <% else %>
+                  {gettext("Load more categories")}
+                <% end %>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <%!-- Archived Categories View --%>
+        <div :if={@category_archive_status == :archived}>
+          <div class="mb-3 flex items-center gap-2 rounded-[10px] border border-[#f0e2c4] bg-[#fbf1df] p-2.5 text-[#a5691a]">
+            <.icon name="hero-archive-box" class="size-4 flex-none" />
+            <span class="text-[12px] font-medium">
+              {gettext("Viewing archived categories")}
+            </span>
+          </div>
+
+          <div
+            :if={@archived_categories_loading.loading && !@has_archived_categories_data}
+            class="flex flex-col items-center justify-center py-6"
+          >
+            <span class="inline-block size-8 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
+            <p class="mt-2 text-[12px] text-[#8a877f]">
+              {gettext("Loading archived categories...")}
+            </p>
+          </div>
+
+          <div :if={@archived_categories_loading.failed} class="text-[12px] text-[#b91c1c]">
+            {gettext("Failed to load archived categories")}
+          </div>
+
+          <div :if={@has_archived_categories_data} class="relative">
+            <div
+              :if={@archived_categories_loading.loading}
+              class="absolute inset-0 z-10 flex items-center justify-center bg-white/70"
+            >
+              <span class="inline-block size-5 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
+            </div>
+
+            <ul
+              id="archived-categories-list"
+              phx-update="stream"
+              class="flex flex-col gap-0.5 p-0"
+            >
+              <li
+                id="archived-categories-empty"
+                class="hidden py-4 text-center text-[12px] text-[#a8a5a0] only:block"
+              >
+                {gettext("No archived categories")}
+              </li>
+              <li
+                :for={{dom_id, category} <- @streams.archived_categories}
+                id={dom_id}
+                class="group relative"
+              >
+                <div class="flex items-center gap-2.5 rounded-[10px] px-[11px] py-[7px] transition-colors hover:bg-[#f7f6f3]">
+                  <span class="size-2 flex-none self-start rounded-[3px] bg-[#d6d3cc] mt-[3px]" />
+                  <div class="min-w-0 flex-1">
+                    <span class="block truncate text-[12.5px] font-medium text-[#8a877f]">
+                      {category.name}
+                    </span>
+                    <span
+                      :if={present?(category.site)}
+                      id={"archived-category-site-#{category.id}"}
+                      class="block truncate text-[10.5px] text-[#a8a5a0]"
+                    >
+                      {category.site.name}
+                    </span>
+                  </div>
+                  <div :if={@media_writer?} class="flex flex-none items-center gap-0.5">
+                    <button
+                      type="button"
+                      class="grid size-[24px] place-items-center rounded-md text-[#177a53] transition-colors hover:bg-[#e6f4ec]"
+                      phx-click="restore_category"
+                      phx-value-id={category.id}
+                      title={gettext("Restore")}
+                    >
+                      <.icon name="hero-arrow-uturn-left" class="size-[13px]" />
+                    </button>
+                    <button
+                      type="button"
+                      class="grid size-[24px] place-items-center rounded-md text-[#c08078] transition-colors hover:bg-[#fbe9e7] hover:text-[#c0473d]"
+                      phx-click="permanent_delete_category"
+                      phx-value-id={category.id}
+                      data-confirm={
+                        gettext(
+                          "Are you sure? This will permanently delete this category and cannot be undone."
+                        )
+                      }
+                      title={gettext("Permanently Delete")}
+                    >
+                      <.icon name="hero-trash" class="size-[13px]" />
+                    </button>
+                  </div>
+                </div>
+              </li>
+            </ul>
+
+            <div :if={@archived_categories_has_more} class="mt-1.5">
+              <button
+                type="button"
+                class="flex w-full items-center justify-center gap-2 rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] px-2 py-[7px] text-[11.5px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+                phx-click="load_more_archived_categories"
+                disabled={@archived_categories_loading.loading}
+              >
+                <%= if @archived_categories_loading.loading do %>
+                  <span class="inline-block size-4 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
+                  {gettext("Loading...")}
+                <% else %>
+                  {gettext("Load more")}
+                <% end %>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <%!-- Main Content - MishkaGervaz Media Gallery --%>
+    <main class="min-w-0">
+      <.live_component
+        module={MishkaGervaz.Table.Web.Live}
+        id="media-table"
+        resource={MishkaCmsCore.Runtime.Media}
+        current_user={@current_user}
+        url_state={@url_state}
+      />
+    </main>
+  </div>
+
+  <%!-- Category Form Modal (MishkaGervaz) --%>
+  <.modal id="media-category-form-modal">
+    <.live_component
+      module={MishkaGervaz.Form.Web.Live}
+      id={MishkaGervaz.Resource.Info.Form.component_id(MishkaCmsCore.Runtime.MediaCategory)}
+      resource={MishkaCmsCore.Runtime.MediaCategory}
+      current_user={@current_user}
+    />
+  </.modal>
+
+  <%!-- Image Preview Overlay --%>
+  <div
+    :if={@preview_media}
+    class="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+    phx-click="close_preview"
+  >
+    <div class="relative max-w-4xl max-h-full">
+      <button
+        type="button"
+        class="absolute -top-10 end-0 text-white transition-colors hover:text-[#c3c0b8]"
+        phx-click="close_preview"
+      >
+        <.icon name="hero-x-mark" class="size-8" />
+      </button>
+      <img
+        src={@preview_media.data_url}
+        alt={@preview_media.name}
+        class="max-w-full max-h-[85vh] object-contain rounded-lg"
+      />
+      <p dir="auto" class="text-white text-center mt-2">{@preview_media.name}</p>
+    </div>
+  </div>
+</div>
