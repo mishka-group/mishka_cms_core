@@ -119,6 +119,31 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
     |> Ash.create!(authorize?: false)
   end
 
+  @refused "This is the original English version. Its Persian translation is still live, so it " <>
+             "can't be deleted yet. Archive or delete that translation first, then this one."
+
+  # The refusal as the API returns it: the detail of its one invalid-attribute error.
+  defp refusal(response) do
+    %{"errors" => errors} = Jason.decode!(response.resp_body)
+
+    Enum.find_value(errors, fn
+      %{"code" => "invalid_attribute", "detail" => detail} -> detail
+      _other -> nil
+    end)
+  end
+
+  defp translate_via_ash(page, language) do
+    create_page_via_ash(
+      %{
+        name: "#{page.name} #{language}",
+        path: "/#{language}#{page.path}",
+        language: language,
+        language_group_id: page.id
+      },
+      page.site_id
+    )
+  end
+
   describe "MASTER ADMIN - CREATE" do
     test "master can create page for site1", %{site: site, master_user: master_user} do
       token = sign_in_master(master_user)
@@ -386,6 +411,30 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
 
       assert response.status == 200
     end
+
+    test "master cannot archive a page while a translation of it exists", %{
+      site: site,
+      master_user: master_user
+    } do
+      page = create_page_via_ash(%{name: "Translated Master"}, site.id)
+      translate_via_ash(page, "fa")
+      token = sign_in_master(master_user)
+
+      response =
+        make_api_request(
+          "#{@master_path}/#{page.id}/archive",
+          %{},
+          method: :delete,
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"}
+          ]
+        )
+
+      assert response.status == 400
+      assert refusal(response) == @refused
+      assert Ash.get!(Page, page.id, action: :master_get, authorize?: false).archived_at == nil
+    end
   end
 
   describe "MASTER ADMIN - ARCHIVED" do
@@ -466,6 +515,45 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
 
       assert response.status == 200
     end
+
+    test "master cannot unarchive a translation while its master is archived", %{
+      site: site,
+      master_user: master_user
+    } do
+      page = create_page_via_ash(%{name: "Archived Group"}, site.id)
+      fa = translate_via_ash(page, "fa")
+
+      Enum.each([fa, page], fn row ->
+        row
+        |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id)
+        |> Ash.destroy!(authorize?: false)
+      end)
+
+      token = sign_in_master(master_user)
+
+      response =
+        make_api_request(
+          "#{@master_path}/#{fa.id}/unarchive",
+          %{
+            "type" => "page",
+            "attributes" => %{}
+          },
+          method: :patch,
+          headers: [
+            {"authorization", "Bearer #{token}"},
+            {"x-no-tenant", "true"},
+            {"content-type", "application/vnd.api+json"}
+          ]
+        )
+
+      assert response.status == 400
+
+      assert refusal(response) ==
+               "This is the Persian translation. Its original English version is archived, so " <>
+                 "it can't be restored yet. Restore the original first, then this one."
+
+      assert Ash.get!(Page, fa.id, action: :master_get_archived, authorize?: false).archived_at
+    end
   end
 
   describe "MASTER ADMIN - PERMANENT DELETE" do
@@ -482,6 +570,27 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
         )
 
       assert response.status == 200
+    end
+
+    test "master cannot permanently delete a page while a translation of it exists", %{
+      site: site,
+      master_user: master_user
+    } do
+      page = create_page_via_ash(%{name: "Translated For Good"}, site.id)
+      translate_via_ash(page, "fa")
+      token = sign_in_master(master_user)
+
+      response =
+        make_api_request(
+          "#{@master_path}/#{page.id}/permanent",
+          %{},
+          method: :delete,
+          headers: [{"authorization", "Bearer #{token}"}, {"x-no-tenant", "true"}]
+        )
+
+      assert response.status == 400
+      assert refusal(response) == @refused
+      assert {:ok, _still_there} = Ash.get(Page, page.id, action: :master_get, authorize?: false)
     end
   end
 
@@ -750,6 +859,27 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
         )
 
       assert response.status == 200
+    end
+
+    test "tenant cannot archive a page while a translation of it exists", %{
+      site: site,
+      tenant_admin: tenant_admin
+    } do
+      page = create_page_via_ash(%{name: "Tenant Translated Master"}, site.id)
+      translate_via_ash(page, "fa")
+      token = sign_in_tenant(tenant_admin)
+
+      response =
+        make_api_request(
+          "#{@tenant_path}/#{page.id}/archive",
+          %{},
+          method: :delete,
+          headers: [{"authorization", "Bearer #{token}"}]
+        )
+
+      assert response.status == 400
+      assert refusal(response) == @refused
+      assert Ash.get!(Page, page.id, action: :master_get, authorize?: false).archived_at == nil
     end
 
     test "tenant cannot archive page from another site", %{

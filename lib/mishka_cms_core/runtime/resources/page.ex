@@ -41,6 +41,7 @@ defmodule MishkaCmsCore.Runtime.Page do
   require Ash.Query
   alias MishkaCmsCore.Runtime.Resources.Changes
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
+  alias MishkaCmsCore.{LanguageAccent, LanguageEditions}
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
   @format_badge %{
@@ -233,10 +234,12 @@ defmodule MishkaCmsCore.Runtime.Page do
       end
 
       source do
+        # The sibling editions belong here rather than in the `on_load` hook: the hook only runs for the
+        # list read, and a single-row re-read would come back without them and lose the row's chips.
         preload do
           always [:site]
-          master [:layout]
-          tenant [tenant_layout: :layout]
+          master [:layout, master_language_variants: :language_variants]
+          tenant [:language_variants, tenant_layout: :layout]
         end
       end
 
@@ -299,6 +302,58 @@ defmodule MishkaCmsCore.Runtime.Page do
               <div :if={@section} class="mt-[2px] truncate text-[11px] font-medium text-[#a8a5a0]">
                 {@section}
               </div>
+            </div>
+            """
+          end
+        end
+
+        # One row per page, not one per translation — see `MishkaCmsCore.LanguageEditions`. The row
+        # names its own language and a chip for each other one, which opens that edition. A master's
+        # editions arrive under `language_variants` too: the preload above names it as the alias.
+        column :languages do
+          static true
+          requires [:id, :language, :language_group_id, :archived_at, :language_variants]
+          label fn -> dgettext("mishka_gervaz", "Languages") end
+
+          ui do
+            width "minmax(110px,0.9fr)"
+          end
+
+          render fn record ->
+            assigns = %{
+              language: record.language,
+              accent: LanguageAccent.of(record),
+              editions: LanguageEditions.editions(record, &%{accent: LanguageAccent.of(&1)})
+            }
+
+            ~H"""
+            <div class="flex flex-wrap items-center gap-[5px]">
+              <span class={[
+                "inline-flex flex-none items-center gap-1 rounded-[20px] border px-2 py-[3px] text-[9.5px] font-bold",
+                @accent.chip
+              ]}>
+                <span class={["size-1 rounded-full", @accent.fill]}></span>
+                {String.upcase(@language || "")}
+              </span>
+              <button
+                :for={edition <- @editions}
+                type="button"
+                id={"page-edition-#{edition.id}"}
+                phx-click="show_edition"
+                phx-value-id={edition.id}
+                title={
+                  dgettext("mishka_gervaz", "Open the %{language} edition",
+                    language: String.upcase(edition.language)
+                  )
+                }
+                class={[
+                  "inline-flex flex-none items-center gap-1 rounded-[20px] border px-2 py-[3px] text-[9.5px] font-bold transition-opacity hover:opacity-70",
+                  edition.accent.chip
+                ]}
+              >
+                <span class={["size-1 rounded-full", edition.accent.fill]}></span>
+                {String.upcase(edition.language)}
+              </button>
             </div>
             """
           end
@@ -492,6 +547,24 @@ defmodule MishkaCmsCore.Runtime.Page do
           end
         end
 
+        # The page in another language, as a page of its own — see
+        # `MishkaCmsCore.Runtime.PageEditions`.
+        action :add_translation do
+          type :event
+          event "add_translation"
+
+          visible fn record, state ->
+            state.archive_status == :active and
+              RuntimeHelpers.master_or_tenant_owned?(record, state) and
+              RuntimeHelpers.writes?(state, "page")
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Add translation") end
+            icon "hero-language"
+          end
+        end
+
         action :delete do
           type :destroy
           confirm fn _record -> dgettext("mishka_gervaz", "Archive this page?") end
@@ -591,6 +664,10 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       empty_state message: dgettext_noop("mishka_gervaz", "No pages found"), icon: "hero-document"
 
+      events do
+        bulk_action MishkaCmsCore.LanguageEditions.BulkActionHandler
+      end
+
       hooks do
         switch_to_active_on_empty_archive true
         clear_selection_after_bulk true
@@ -624,6 +701,26 @@ defmodule MishkaCmsCore.Runtime.Page do
             :info,
             dgettext("mishka_gervaz", "Restored as inactive — activate it to go live.")
           )
+        end
+
+        # A delete refused because the page's translations are live answers with an alert that
+        # offers to archive — or delete for good — those translations at once.
+        on_row_action_error [:delete, :permanent_destroy], &LanguageEditions.on_delete_refused/3
+        on_bulk_action_error [:archive, :permanent_destroy], &LanguageEditions.on_delete_refused/3
+
+        on_bulk_action_success [:archive, :permanent_destroy],
+                               &LanguageEditions.on_delete_refused/3
+
+        # One row per page rather than one per translation, lifted while searching — see
+        # `MishkaCmsCore.LanguageEditions`. A hook and not the read action, because only a hook runs
+        # late enough to see whether a search is active. A live update is asked of the same read, and
+        # `on_realtime` redraws a translation's master.
+        on_load fn query, state ->
+          {:cont, LanguageEditions.scope_to_masters(query, state)}
+        end
+
+        on_realtime fn notification, socket ->
+          LanguageEditions.on_realtime(notification, socket)
         end
       end
     end
@@ -1271,6 +1368,7 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       change slugify(:name, into: :name)
       change Changes.NameFromTitle
+      change {Changes.SetLanguageGroupId, before_action?: true}
 
       change fn changeset, _context ->
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
@@ -1323,6 +1421,7 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       change slugify(:name, into: :name)
       change Changes.NameFromTitle
+      change {Changes.SetLanguageGroupId, before_action?: true}
 
       change fn changeset, _context ->
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
@@ -1372,6 +1471,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       end
 
       change slugify(:name, into: :name)
+      change {Changes.SetLanguageGroupId, before_action?: true}
 
       description "Updates page for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1417,6 +1517,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       end
 
       change slugify(:name, into: :name)
+      change {Changes.SetLanguageGroupId, before_action?: true}
     end
 
     read :archived do
@@ -1548,6 +1649,8 @@ defmodule MishkaCmsCore.Runtime.Page do
         end
       end
 
+      validate MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDeletion
+
       change set_attribute(:active, false)
     end
 
@@ -1567,6 +1670,8 @@ defmodule MishkaCmsCore.Runtime.Page do
         end
       end
 
+      validate MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDeletion
+
       change set_attribute(:active, false)
     end
 
@@ -1579,6 +1684,10 @@ defmodule MishkaCmsCore.Runtime.Page do
       change set_attribute(:archived_at, nil)
       change set_attribute(:active, false)
 
+      # A PAGE ARCHIVED BEFORE IT HAD A LANGUAGE GROUP gets one here, in the restoring write: the
+      # only write the archived-page trigger lets through, so `PageLanguageBackfill` skips it.
+      change {Changes.SetLanguageGroupId, before_action?: true}
+      change Changes.PreventOrphanedTranslationRestore
       atomic_upgrade_with :archived
 
       description "Restores an archived page as inactive — activate it to compile and go live (tenant users)"
@@ -1599,6 +1708,9 @@ defmodule MishkaCmsCore.Runtime.Page do
       change set_attribute(:archived_at, nil)
       change set_attribute(:active, false)
 
+      # A page archived before it had a language group, as in `:unarchive`.
+      change {Changes.SetLanguageGroupId, before_action?: true}
+      change Changes.PreventOrphanedTranslationRestore
       atomic_upgrade_with :master_get_archived
     end
 
@@ -1606,6 +1718,8 @@ defmodule MishkaCmsCore.Runtime.Page do
       require_atomic? false
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+
+      validate MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDeletion
 
       description "Permanently removes page and version history from database (tenant users) - use with extreme caution"
     end
@@ -1616,6 +1730,8 @@ defmodule MishkaCmsCore.Runtime.Page do
       multitenancy :bypass
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      validate MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDeletion
     end
 
     # VERSION MANAGEMENT
@@ -2427,6 +2543,22 @@ defmodule MishkaCmsCore.Runtime.Page do
       description "The layout this page uses (tenant access with globals)"
     end
 
+    has_many :language_variants, MishkaCmsCore.Runtime.Page do
+      public? true
+      destination_attribute :language_group_id
+      source_attribute :language_group_id
+      description "Every language edition of this page, itself included"
+    end
+
+    # Bypass relationship - for master admin users without tenant
+    has_many :master_language_variants, MishkaCmsCore.Runtime.Page do
+      public? true
+      destination_attribute :language_group_id
+      source_attribute :language_group_id
+      read_action :read_any
+      description "Every language edition of this page (master admin access, bypass tenant)"
+    end
+
     has_many :sorted_versions, MishkaCmsCore.Runtime.Page.Version do
       public? true
       source_attribute :id
@@ -2560,6 +2692,22 @@ defmodule MishkaCmsCore.Runtime.Page do
       message dgettext_noop("errors", "Page path must be unique within a site.")
       all_tenants? true
       nils_distinct? false
+    end
+
+    # NULLS DISTINCT, unlike blog posts and documents, which had the column from their first row. A
+    # page stored before it has no group until `MishkaCmsCore.Runtime.PageLanguageBackfill` runs at
+    # boot, and the migration creating this index runs before that — on a database where every old
+    # page is (en, NULL, site), which an index whose NULLs are not distinct refuses. Every page written
+    # since has a group, so nothing that holds one is left unchecked.
+    identity :unique_language_per_group, [:language, :language_group_id, :site_id] do
+      description "Ensures each language appears only once per language group within a site"
+
+      message dgettext_noop(
+                "errors",
+                "A page with this language already exists in this language group."
+              )
+
+      all_tenants? true
     end
   end
 end
