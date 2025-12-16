@@ -388,6 +388,7 @@ defmodule MishkaCmsCore.Runtime do
 
   resources do
     resource MishkaCmsCore.Runtime.Setting
+    resource MishkaCmsCore.Runtime.Translation
 
     resource MishkaCmsCore.Runtime.Site
 

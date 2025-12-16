@@ -19,6 +19,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     {Phoenix.PubSub, name: MishkaCmsCore.PubSub},
     MishkaCmsCore.Runtime.States.SiteState,
     MishkaCmsCore.Runtime.States.SettingsState,
+    MishkaCmsCore.Runtime.States.TranslationsState,
     MishkaCmsCore.Runtime.States.ViewerState,
     MishkaCmsCore.Runtime.States.RateLimitState,
     {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},

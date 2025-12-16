@@ -34,6 +34,7 @@ defmodule MishkaCmsCore.Runtime.Component do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   require Ash.Query
+  alias MishkaCmsCore.Runtime.Resources.Changes
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -2141,6 +2142,10 @@ defmodule MishkaCmsCore.Runtime.Component do
     publish :master_destroy, [[nil, :site_id], "destroyed"]
     publish :permanent_destroy, [[nil, :site_id], "destroyed"]
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
+  end
+
+  changes do
+    change Changes.RegisterTranslationKeys, on: [:create, :update]
   end
 
   # Multi-tenancy configuration using site_id attribute

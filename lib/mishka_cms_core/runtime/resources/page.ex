@@ -2251,6 +2251,10 @@ defmodule MishkaCmsCore.Runtime.Page do
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  changes do
+    change Changes.RegisterTranslationKeys, on: [:create, :update]
+  end
+
   # Multi-tenancy configuration - pages are always site-specific
   multitenancy do
     strategy :attribute
