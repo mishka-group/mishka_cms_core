@@ -1,0 +1,111 @@
+<div>
+  <.header>
+    {gettext("Translations")}
+    <:subtitle>
+      {raw(
+        gettext("Words your templates ask for with %{code}, per language.",
+          code: ~s[<code class="font-mono">t("…")</code>]
+        )
+      )}
+    </:subtitle>
+    <:actions>
+      <div :if={@writable?} class="flex flex-wrap items-center gap-2">
+        <.button
+          id="translations-sync"
+          variant="accent"
+          icon="hero-arrow-path"
+          phx-click="translations_sync"
+        >
+          {gettext("Scan templates")}
+        </.button>
+        <.button
+          id="translations-purge-unused"
+          variant="soft"
+          icon="hero-trash"
+          phx-click="translations_unused"
+        >
+          {gettext("Remove unused")}
+        </.button>
+        <.button id="translations-add" phx-click="translation_add">
+          {gettext("+ Add translation")}
+        </.button>
+      </div>
+    </:actions>
+  </.header>
+
+  <MishkaCmsCoreWeb.Live.Admin.Components.DetailModal.shell
+    id={@modal_id}
+    icon="hero-language"
+    max_width="max-w-2xl"
+    title={if(@translation_group, do: gettext("Translate"), else: gettext("Add translation"))}
+    active_tab="edit"
+    tabs={[]}
+    tab_event="noop"
+    close_event="close_translation_modal"
+  >
+    <div class="max-h-[72vh] overflow-y-auto px-6 py-5">
+      <MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup.translation_group
+        :if={@translation_group}
+        id="translation-group"
+        group={@translation_group}
+        current_user={@current_user}
+      />
+      <.live_component
+        :if={!@translation_group}
+        module={MishkaGervaz.Form.Web.Live}
+        id={MishkaGervaz.Resource.Info.Form.component_id(MishkaCmsCore.Runtime.Translation)}
+        resource={MishkaCmsCore.Runtime.Translation}
+        current_user={@current_user}
+        record_id={nil}
+      />
+    </div>
+  </MishkaCmsCoreWeb.Live.Admin.Components.DetailModal.shell>
+
+  <MishkaCmsCoreWeb.Live.Admin.Components.DetailModal.shell
+    id={@unused_modal_id}
+    icon="hero-trash"
+    max_width="max-w-5xl"
+    title={gettext("Unused words")}
+    active_tab="list"
+    tabs={[]}
+    tab_event="noop"
+    close_event="close_unused_modal"
+  >
+    <div :if={@unused_ids} class="max-h-[72vh] space-y-4 overflow-y-auto px-6 py-5">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <p id="translations-unused-summary" class="text-[13px] text-[#5c5a54]">
+          {if @unused_ids == [],
+            do: gettext("Every word is still asked for by a template."),
+            else: gettext("No template asks for these any more. Delete one, or all of them.")}
+        </p>
+        <.button
+          :if={@unused_ids != []}
+          id="translations-purge-confirm"
+          variant="soft"
+          icon="hero-trash"
+          phx-click="translations_purge_unused"
+        >
+          {gettext("Delete all")}
+        </.button>
+      </div>
+
+      <.live_component
+        :if={@unused_ids != []}
+        module={MishkaGervaz.Table.Web.Live}
+        id={@unused_table_id}
+        resource={MishkaCmsCore.Runtime.Translation}
+        current_user={@current_user}
+        url_state={%{path_params: %{id: @unused_ids}}}
+        url_sync={false}
+      />
+    </div>
+  </MishkaCmsCoreWeb.Live.Admin.Components.DetailModal.shell>
+
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id={@table_id}
+    resource={MishkaCmsCore.Runtime.Translation}
+    current_user={@current_user}
+    url_state={@url_state}
+  />
+</div>
