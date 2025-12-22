@@ -219,6 +219,9 @@ defmodule MishkaCmsCore.Dev.Generator do
         active: true,
         precompile: false,
         permissions: [],
+        # And the create action's own argument: an unset one is invented too, as a random kind of
+        # record written into `extra`. It follows the `extra` a caller gives instead.
+        record: MishkaCmsCore.Runtime.Seo.record_of(opts[:extra]),
         layout_id: nil,
         # A new page is the English master of a group of its own — see
         # `MishkaCmsCore.Runtime.PageEditions`.

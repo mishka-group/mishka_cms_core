@@ -860,6 +860,30 @@ defmodule MishkaCmsCore.Settings do
           gettext_noop(
             "How many codes from an authenticator app one account may try, right or wrong — signing in, setting one up or turning it off — before it waits for the 5 minutes to pass. Each site counts its own accounts; masters are counted together."
           )
+      ),
+      # Read on every request for /robots.txt — see `MishkaCmsCoreWeb.SeoController`.
+      define("seo.robots.extra", :text,
+        default: "",
+        category: "seo",
+        scope: :both,
+        label: gettext_noop("Extra robots.txt rules"),
+        description:
+          gettext_noop(
+            "Lines added to robots.txt below the rules every site has, which keep crawlers out of /admin/, /api/, /auth/ and /_preview/. Disallow: / hides the whole site; an Allow: line opens a path again."
+          )
+      ),
+      # Read when the site's sitemap is built, and a change rebuilds it — see
+      # `MishkaCmsCore.Runtime.Compilers.SitemapCompiler`.
+      define("seo.sitemap.paths", :list,
+        default: [],
+        validate: &sitemap_paths?/1,
+        category: "seo",
+        scope: :site,
+        label: gettext_noop("Extra sitemap addresses"),
+        description:
+          gettext_noop(
+            "Addresses on this site the sitemap lists besides its pages, separated by commas — /pricing, /contact. Each starts with / and is one address, with no : or *, written as a URL spells it — a space is %20."
+          )
       )
     ] ++ email_definitions() ++ MishkaCmsCore.Accounts.AuthGate.definitions()
   end
@@ -921,6 +945,11 @@ defmodule MishkaCmsCore.Settings do
         )
       ]
   end
+
+  # One address on the site each, as a URL spells it: `/pricing`, `/search?q=a&b=c`, never a pattern
+  # that stands for many.
+  defp sitemap_paths?(paths),
+    do: Enum.all?(paths, &Regex.match?(~r{\A/[A-Za-z0-9\-._~!$&'()+,;=/?%@]*\z}, &1))
 
   defp provider_definitions do
     Application.get_env(:mishka_cms_core, :settings_providers, [])

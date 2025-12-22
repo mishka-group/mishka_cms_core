@@ -749,6 +749,38 @@ defmodule MishkaCmsCore.Runtime.Page do
           end
         end
 
+        # WHAT EACH ADDRESS OF THE PAGE SHOWS — a post at `/:lang/blog/:slug` — out of the kinds the
+        # installed extensions name (`MishkaCmsCore.Runtime.Seo.record_types/1`), kept in `extra` by
+        # `MishkaCmsCore.Runtime.Resources.Changes.SetRecordKind`. The extension that owns the kind
+        # fills the page's SEO from the record, and the record's own permissions apply.
+        field :record, :relation do
+          virtual true
+          mode :search
+          min_chars 0
+          page_size 50
+          depends_on :site_id
+
+          # Each extension's kinds under its name. Hung on the site, as Layout is, and a function
+          # of the form state: that is what has Gervaz load the kinds when the form opens, so a
+          # saved one shows its label; a master picks the site first. The kinds are the same on
+          # every site, and their samples are not needed here.
+          options fn _state ->
+            MishkaCmsCore.Runtime.Seo.record_types(nil)
+            |> Enum.chunk_by(& &1.group)
+            |> Enum.map(fn [%{group: group} | _] = types ->
+              {group, Enum.map(types, &{&1.label, &1.id})}
+            end)
+          end
+
+          include_nil fn -> dgettext("mishka_gervaz", "Custom page: one page, one address") end
+          derive_value fn page -> MishkaCmsCore.Runtime.Seo.record_of(page.extra) end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "This page shows each") end
+            placeholder fn -> dgettext("mishka_gervaz", "Custom page: one page, one address") end
+          end
+        end
+
         field :section do
           ui do
             label fn -> dgettext("mishka_gervaz", "Section") end
@@ -1317,6 +1349,10 @@ defmodule MishkaCmsCore.Runtime.Page do
     default_accept @admin_fields
 
     create :create do
+      # The kind of record each address shows, written into `extra`.
+      argument :record, :string, allow_nil?: true
+      change MishkaCmsCore.Runtime.Resources.Changes.SetRecordKind
+
       # Blank means "I will build it in the editor" — filled in before the validations below
       # ask for a template, so a document can be created without anyone writing HEEx first.
       change MishkaCmsCore.Runtime.Resources.Changes.BlankTemplateStartsEmpty
@@ -1378,6 +1414,10 @@ defmodule MishkaCmsCore.Runtime.Page do
     end
 
     create :master_create do
+      # The kind of record each address shows, written into `extra`.
+      argument :record, :string, allow_nil?: true
+      change MishkaCmsCore.Runtime.Resources.Changes.SetRecordKind
+
       # Blank means "I will build it in the editor" — filled in before the validations below
       # ask for a template, so a document can be created without anyone writing HEEx first.
       change MishkaCmsCore.Runtime.Resources.Changes.BlankTemplateStartsEmpty
@@ -1431,6 +1471,10 @@ defmodule MishkaCmsCore.Runtime.Page do
     end
 
     update :update do
+      # The kind of record each address shows, written into `extra`.
+      argument :record, :string, allow_nil?: true
+      change MishkaCmsCore.Runtime.Resources.Changes.SetRecordKind
+
       primary? true
       require_atomic? false
       transaction? true
@@ -1477,6 +1521,10 @@ defmodule MishkaCmsCore.Runtime.Page do
     end
 
     update :master_update do
+      # The kind of record each address shows, written into `extra`.
+      argument :record, :string, allow_nil?: true
+      change MishkaCmsCore.Runtime.Resources.Changes.SetRecordKind
+
       description "Updates page for master users - bypasses tenant context, prevents site_id changes"
       require_atomic? false
       multitenancy :bypass
