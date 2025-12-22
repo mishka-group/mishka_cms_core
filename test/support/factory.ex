@@ -31,6 +31,54 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  @chelekom Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+
+  @doc """
+  The named rows of the Chelekom kit this library ships, as palette entries (`name`, `attrs`,
+  `slots`, `template`), in the order asked. The bundle is 12 MB, so call it from `setup_all`.
+  """
+  def chelekom_rows(names) do
+    rows =
+      @chelekom
+      |> File.read!()
+      |> Jason.decode!()
+      |> Map.fetch!("components")
+      |> Map.new(&{&1["name"], &1})
+
+    Enum.map(names, &palette_row(Map.fetch!(rows, &1)))
+  end
+
+  defp palette_row(row),
+    do: %{
+      name: row["name"],
+      attrs: row["attrs"] || [],
+      slots: row["slots"] || [],
+      template: row["template"] || ""
+    }
+
+  @doc """
+  Chelekom's Form Wrapper and Simple Form copied as `wrapper` and `simple`, the Simple Form calling
+  the copied wrapper and no longer requiring `for`: a pair only their markup marks as forms. `rows`
+  holds both originals, as `chelekom_rows/1` answers them.
+  """
+  def renamed_form_pair(rows, wrapper \\ "acme-wrapper", simple \\ "acme-simple") do
+    by_name = Map.new(rows, &{&1.name, &1})
+
+    [
+      %{Map.fetch!(by_name, "chelekom-form-wrapper") | name: wrapper},
+      by_name
+      |> Map.fetch!("chelekom-simple-form")
+      |> Map.put(:name, simple)
+      |> Map.update!(:template, &String.replace(&1, "chelekom-form-wrapper", wrapper))
+      |> Map.update!(:attrs, &Enum.map(&1, fn attr -> optional_for(attr) end))
+    ]
+  end
+
+  defp optional_for(%{"name" => "for", "opts" => opts} = attr),
+    do: %{attr | "opts" => Map.put(opts, "required", false)}
+
+  defp optional_for(attr), do: attr
+
   # Layout factory
   def create_layout!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

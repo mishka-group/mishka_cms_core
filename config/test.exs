@@ -94,6 +94,22 @@ config :mishka_installer, MishkaInstaller.MnesiaRepo,
   mnesia_dir: Path.expand(".mnesia/test"),
   essential: [MishkaInstaller.Event.Event, MishkaInstaller.Installer.Installer]
 
+# A BUNDLE A DEVELOPER PLACED BY HAND WINS HERE, until a version is picked in the installer.
+# Production looks up the newest release instead, so a stale file in an image cannot stand in for it —
+# see `MishkaCmsCore.Runtime.Handlers.UiKitHandler.prefer_local?/0`. Both environments still fall
+# back to the other source, so neither dead-ends.
+config :mishka_cms_core, :prefer_local_ui_kits, true
+
+# THE SHIPPED STYLED KIT, FROM DISK, WITH NOTHING TO DOWNLOAD. The code default also offers the
+# headless package, which is not in `priv/cms_ui_kits/`, so every cold catalogue — the Studio sheet,
+# the Registry tab — fell through to a real HTTP request and parsed Chelekom behind it, and a test
+# waiting on that render timed out whenever the internet was slow. `url: nil` fails without a
+# request, so a missing file is reported rather than fetched. A test about downloading configures
+# its own list and a `:ui_kit_req_options` plug, and restores this one afterwards.
+config :mishka_cms_core, :official_ui_kits, [
+  %{key: :styled, label: "Chelekom — styled", file: "chelekom.json", tag: "test", url: nil}
+]
+
 # A message the locale has no translation for reads as its text behind a `"[<locale>] "` marker, so a
 # test sees a word go through `MishkaCmsCore.Gettext` in the reader's locale without a `.po` for it.
 config :mishka_cms_core, :gettext_marks_untranslated, true
