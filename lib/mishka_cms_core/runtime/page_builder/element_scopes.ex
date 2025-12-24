@@ -41,6 +41,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementScopes do
   """
 
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
 
   # `Tree.scope/2`'s `pb-xxxxxxxx` as it sits in text: a whole class in `class="…"`, or the `.pb-…`
@@ -106,7 +107,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementScopes do
   styled by nothing and a row nobody prunes.
   """
   @spec owner(String.t() | atom() | nil, String.t()) :: String.t()
-  def owner(section, id), do: "#{section}-#{id}"
+  def owner(section, id), do: "#{Section.normalize(section)}-#{id}"
 
   @doc """
   `value` with a fresh class in place of every scope class it holds, and the `%{held => fresh}` map
