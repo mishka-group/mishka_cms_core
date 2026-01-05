@@ -37,6 +37,8 @@ defmodule MishkaCmsCore.Builder.FormRole do
 
   use GuardedStruct
 
+  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+
   @roles ~w(wrapper field error fieldset submit)
 
   guardedstruct do
@@ -94,8 +96,8 @@ defmodule MishkaCmsCore.Builder.FormRole do
 
   defp declared_names(entry) do
     entry
-    |> Map.get("attrs", [])
-    |> Enum.map(&Map.get(&1, "name"))
+    |> Inspector.attrs()
+    |> Enum.map(&Inspector.name/1)
     |> Enum.reject(&is_nil/1)
     |> MapSet.new(&to_string/1)
   end
