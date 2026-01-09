@@ -102,6 +102,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
@@ -1098,6 +1100,45 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   def form_controls, do: @form_controls
 
   @doc """
+  The Form section's controls for the working form `node`: `form_controls/0`, then How it works
+  where the form can work as they type (`FormPlacement.as_typed_offered?/2`). `session` is the
+  editing session.
+  """
+  @spec form_controls(Node.t(), map()) :: [control()]
+  def form_controls(node, session) do
+    case FormPlacement.as_typed_offered?(session, node) do
+      true -> @form_controls ++ [how_control(PageForms.as_typed?(node))]
+      false -> @form_controls
+    end
+  end
+
+  # How a working form sends; its words follow the choice the form carries now.
+  defp how_control(typing?),
+    do: %{
+      key: "how",
+      attr: nil,
+      id: "pb-form-how",
+      label: gettext("How it works"),
+      widget:
+        {:choices,
+         [
+           {"send", gettext("When they press Send")},
+           {"typing", gettext("As they type (no Send button)")}
+         ]},
+      stacked: true,
+      help: how_help(typing?)
+    }
+
+  defp how_help(true),
+    do:
+      gettext(
+        "There is no Send button. What they type is checked as they type. Pressing Enter never reloads the page, and in a form with a single box it still sends."
+      )
+
+  defp how_help(false),
+    do: gettext("What they type is checked as they type, and sent when they press Send.")
+
+  @doc """
   The Form · Phoenix section's options for the form `node`: the ones whose attribute it forwards to
   the form it renders (`Fields.takes?/3`). Open result in is left out while the form sends to
   another address, which opens the result in the same tab. Every one of them with no node.
@@ -1228,6 +1269,58 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   @spec address_takes?(Node.t(), [map()]) :: boolean()
   def address_takes?(node, components),
     do: Enum.all?(@address_attrs, &Fields.takes?(node, &1, components))
+
+  @doc """
+  The ops "Send to another address" issues for what was typed: an `https` address writes `action`,
+  `method="post"`, `csrf_token={false}` and the form's `phx-trigger-action` (`Naming.trigger/1`)
+  together, and removes a `target`, so the result opens in the tab it was sent from. It also turns
+  `multipart` on when a file field sits inside the form in `tree` (`FormPlacement.files_ops/3`). An
+  empty one removes the four. Anything else is refused with a sentence.
+  """
+  @spec address_ops(Tree.t(), Node.t(), String.t() | nil, [map()]) ::
+          {:ok, [map()]} | {:error, String.t()}
+  def address_ops(tree, %Node{id: id} = node, typed, components) do
+    case address(typed) do
+      :none ->
+        {:ok, Enum.map(@address_attrs, &%{kind: :delete_attr, node_id: id, name: &1})}
+
+      {:ok, url} ->
+        {:ok,
+         Enum.map(
+           [
+             {"action", {:string, url}},
+             {"method", {:string, "post"}},
+             {"csrf_token", {:expr, "false"}},
+             node |> form_seed() |> Naming.trigger()
+           ],
+           &op(id, &1)
+         ) ++ untargeted(node) ++ FormPlacement.files_ops(tree, node, components)}
+
+      :error ->
+        {:error, gettext("Use a full web address that starts with https://")}
+    end
+  end
+
+  # LiveView leaves the page it posts from, so a result opened in a new tab would leave this one
+  # dead.
+  defp untargeted(%Node{id: id} = node) do
+    case Node.attr(node, "target") do
+      nil -> []
+      _set -> [%{kind: :delete_attr, node_id: id, name: "target"}]
+    end
+  end
+
+  defp address(typed) when is_binary(typed), do: typed |> String.trim() |> checked_address()
+  defp address(_typed), do: :none
+
+  defp checked_address(""), do: :none
+
+  defp checked_address(url) do
+    case URI.parse(url) do
+      %URI{scheme: "https", host: host} when is_binary(host) and host != "" -> {:ok, url}
+      _other -> :error
+    end
+  end
 
   @doc """
   Whether a file field sits inside `form`: an `<input type="file">`, a `live_file_input`, or a
@@ -1481,6 +1574,56 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   defp entry_code(%{code: code}), do: code
   defp entry_code(%{"code" => code}), do: code
   defp entry_code(_entry), do: nil
+
+  @doc """
+  What a form does, in two sentences for someone who does not write code: what happens while a
+  visitor types, and where it goes when they press Send, or as they type when the form has no Send
+  button (`PageForms.as_typed?/1`). The second reads the audit's own check
+  (`FormChecks.receiver/2`), so it never says more than `form-no-destination` does. `record` is the
+  page, read for its stored handlers. No event name is in either sentence.
+  """
+  @spec form_story(Node.t(), map() | nil) :: {String.t(), String.t()}
+  def form_story(node, record) do
+    typing =
+      node
+      |> PageForms.handlers(stored_events(record))
+      |> Enum.find(&(&1.kind == :validate))
+      |> typing()
+
+    {typing, story_sending(PageForms.as_typed?(node), FormChecks.receiver(node, record))}
+  end
+
+  defp stored_events(%{events: events}) when is_list(events), do: events
+  defp stored_events(_record), do: []
+
+  defp typing(nil),
+    do: gettext("While a visitor types: nothing is checked until they press Send.")
+
+  defp typing(%{custom?: true}), do: gettext("While a visitor types: your own code runs.")
+  defp typing(%{custom?: false}), do: gettext("While a visitor types: the fields are checked.")
+
+  defp story_sending(true, :code), do: gettext("What they type: your own code receives it.")
+
+  defp story_sending(true, :plugin),
+    do: gettext("What they type: an installed plugin receives it.")
+
+  defp story_sending(true, :action),
+    do: gettext("What they type: it goes to the web address the form names.")
+
+  defp story_sending(true, :none),
+    do: gettext("What they type: nothing stores or sends what visitors type yet.")
+
+  defp story_sending(false, :code),
+    do: gettext("When they press Send: your own code receives it.")
+
+  defp story_sending(false, :plugin),
+    do: gettext("When they press Send: an installed plugin receives it.")
+
+  defp story_sending(false, :action),
+    do: gettext("When they press Send: it goes to the web address the form names.")
+
+  defp story_sending(false, :none),
+    do: gettext("When they press Send: nothing stores or sends what visitors type yet.")
 
   @doc "The Events-tab handlers this form's `phx-change` and `phx-submit` currently point at."
   @spec bound_handlers(Node.t(), [map()]) :: [String.t()]
