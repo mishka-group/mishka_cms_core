@@ -11,6 +11,10 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
   Ecto.Migrator.up(MishkaCmsCore.Repo, 0, MishkaCmsCore.Test.ObanMigration, log: false)
   :ok = Supervisor.stop(MishkaCmsCore.Repo)
 
+  # Runtime module compilation picks its supervisor partition off this counter, so it has to exist
+  # before anything compiles a page, layout or component.
+  :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
+
   children = [
     MishkaCmsCore.Repo,
     # The runtime workers this library owns go through Oban, so it has to exist. `testing: :manual`

@@ -14,6 +14,8 @@ defmodule MishkaCmsCore.Test.Factory do
   import MishkaCmsCore.Dev.Generator, except: [generate: 1, generate: 2]
   import Ash.Generator, only: [generate: 1]
 
+  alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
+
   require Ash.Query
 
   def create_site!(overrides \\ []) do
@@ -23,13 +25,125 @@ defmodule MishkaCmsCore.Test.Factory do
   end
 
   # Component factory
+  #
+  # THE ROW GOES WITH THE TEST, THE MODULE BUILT FROM IT DOES NOT. A module is named from the
+  # component's name and its site's name, so the next test to make a site and a component of the
+  # same names would be handed this one, built for a site that no longer exists — which
+  # `MishkaCmsCore.Runtime.LiveViewHelpers` refuses to draw. The module, and a failure remembered
+  # for it, go when the test does.
   def create_component!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)
 
-    overrides
-    |> component(site_id)
-    |> generate()
+    component =
+      overrides
+      |> component(site_id)
+      |> generate()
+
+    component.name
+    |> Helpers.module_name(site_name(site_id), "Component")
+    |> forget_on_exit()
+
+    component
   end
+
+  @doc """
+  A component module put by hand at the name the compilers would have built for `name` on `site` (a
+  site, or `nil` for a global one), drawing `html` — for a test about the canvas rather than the
+  compile pipeline.
+
+  It answers the site it stands for as a compiled one does, since
+  `MishkaCmsCore.Runtime.LiveViewHelpers` draws a module only for its own site, and it goes when the
+  test does.
+  """
+  def define_component!(name, site, html) do
+    module = Helpers.module_name(name, site && site.name, "Component")
+    site_id = site && site.id
+
+    ModuleCompiler.unload(module)
+
+    Module.create(
+      module,
+      quote do
+        def __component_information__([:private, :site_id]), do: unquote(site_id)
+        def __component_information__(_path), do: []
+        def unquote(String.to_atom(name))(_assigns), do: Phoenix.HTML.raw(unquote(html))
+      end,
+      Macro.Env.location(__ENV__)
+    )
+
+    forget_on_exit(module)
+  end
+
+  @doc """
+  The same cleanup `create_component!/1` registers, for a name the component only takes during the
+  test — a rename builds a second module, under the new name.
+  """
+  def forget_component_on_exit(name, site_id \\ nil) do
+    name
+    |> Helpers.module_name(site_name(site_id), "Component")
+    |> forget_on_exit()
+  end
+
+  @doc """
+  An `attrs` declaration holding one of every option shape the Chelekom kit ships, for a test about
+  what a save keeps.
+
+  Defaults of `nil`, `""`, `false`, `true`, `0`, `1.0` and `[]`; `values` that include `nil`, as
+  `chelekom-button`'s `type` does; `editor`; and `default_struct` on a struct attribute. Rows are
+  string-keyed, as a row read back from the database is. `every_option_template/0` reads each one.
+  """
+  def every_option_shape do
+    [
+      %{
+        "name" => "type",
+        "type" => "any",
+        "opts" => %{
+          "default" => nil,
+          "doc" => "Specifies the type of the element",
+          "values" => ["button", "submit", "reset", nil]
+        }
+      },
+      %{
+        "name" => "size",
+        "type" => "string",
+        "opts" => %{"default" => "large", "values" => ["small", "large"]}
+      },
+      %{"name" => "icon", "type" => "string", "opts" => %{"default" => nil, "editor" => "icon"}},
+      %{"name" => "label", "type" => "string", "opts" => %{"default" => ""}},
+      %{"name" => "full_width", "type" => "boolean", "opts" => %{"default" => false}},
+      %{"name" => "pill", "type" => "boolean", "opts" => %{"default" => true}},
+      %{"name" => "step", "type" => "integer", "opts" => %{"default" => 0}},
+      %{"name" => "precision", "type" => "float", "opts" => %{"default" => 1.0}},
+      %{"name" => "items", "type" => "list", "opts" => %{"default" => []}},
+      %{
+        "name" => "on_show",
+        "type" => "struct",
+        "struct_name" => "Phoenix.LiveView.JS",
+        "opts" => %{"default_struct" => true}
+      }
+    ]
+  end
+
+  @doc """
+  A template reading every attribute `every_option_shape/0` declares, so a default lost on the way
+  raises `KeyError` the first time the component renders without that attribute.
+  """
+  def every_option_template do
+    ~s|<button type={@type} class={[@size, @label]} data-icon={@icon} data-full={to_string(@full_width)} data-pill={to_string(@pill)} data-step={@step} data-precision={@precision} data-items={length(@items)} phx-click={@on_show}>go</button>|
+  end
+
+  defp forget_on_exit(module) do
+    ExUnit.Callbacks.on_exit({__MODULE__, module}, fn ->
+      ModuleCompiler.unload(module)
+    end)
+
+    module
+  end
+
+  defp site_name(nil), do: nil
+
+  defp site_name(site_id),
+    do: Ash.get!(MishkaCmsCore.Runtime.Site, site_id, action: :get_any, authorize?: false).name
 
   @chelekom Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
 
