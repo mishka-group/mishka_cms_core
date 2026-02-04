@@ -26,6 +26,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     MishkaCmsCore.Runtime.States.TranslationsState,
     MishkaCmsCore.Runtime.States.ViewerState,
     MishkaCmsCore.Runtime.States.RateLimitState,
+    MishkaCmsCore.Runtime.States.AssetsState,
     {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
     MishkaCmsCore.TestEndpoint
   ]

@@ -94,6 +94,16 @@ config :mishka_installer, MishkaInstaller.MnesiaRepo,
   mnesia_dir: Path.expand(".mnesia/test"),
   essential: [MishkaInstaller.Event.Event, MishkaInstaller.Installer.Installer]
 
+# The compilers read these versions even when they never invoke the binaries.
+config :tailwind,
+  version: "4.3.3",
+  # The profile `TailwindCompiler` runs; the host names its own (the CMS calls it `mishka_cms_css`).
+  # Without it every runtime CSS compile logs "unknown tailwind profile" and returns an error.
+  mishka_cms_core_css: [
+    args: ~w(),
+    cd: Path.expand("..", __DIR__)
+  ]
+
 # A BUNDLE A DEVELOPER PLACED BY HAND WINS HERE, until a version is picked in the installer.
 # Production looks up the newest release instead, so a stale file in an image cannot stand in for it —
 # see `MishkaCmsCore.Runtime.Handlers.UiKitHandler.prefer_local?/0`. Both environments still fall
