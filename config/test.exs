@@ -104,6 +104,14 @@ config :tailwind,
     cd: Path.expand("..", __DIR__)
   ]
 
+config :esbuild,
+  version: "0.28.2",
+  # The profile `JavaScriptCompiler` runs; the host names its own (the CMS calls it `mishka_cms_js`).
+  mishka_cms_core_js: [
+    args: [],
+    env: %{"NODE_PATH" => Path.expand("../priv/static/temp/js_assets/node_modules", __DIR__)}
+  ]
+
 # A BUNDLE A DEVELOPER PLACED BY HAND WINS HERE, until a version is picked in the installer.
 # Production looks up the newest release instead, so a stale file in an image cannot stand in for it —
 # see `MishkaCmsCore.Runtime.Handlers.UiKitHandler.prefer_local?/0`. Both environments still fall

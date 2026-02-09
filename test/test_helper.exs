@@ -46,6 +46,9 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     MishkaInstaller.Event.Event.unregister(:name, event.name, false)
   end
 
+  # esbuild resolves the generated entry file's `import … from "phoenix"` through here.
+  MishkaCmsCore.Test.JsAssets.install!()
+
   # `render_async/1` WAITS THIS LONG, and 100ms is not a number anybody here chose. LiveView's
   # default is `Application.fetch_env!(:ex_unit, :assert_receive_timeout)`, and every `render_async`
   # in these suites is waiting on a real database load — the editor's `start_async` record fetch,

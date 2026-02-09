@@ -26,6 +26,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Hooks do
   """
 
   alias MishkaCmsCore.Builder.Events
+  alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.JsHook
 
   require Ash.Query
@@ -56,9 +57,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Hooks do
   defp offerable?(row, nil), do: is_nil(row.site_id)
   defp offerable?(_row, _site_name), do: true
 
-  defp entry(row, _site_name) do
+  defp entry(row, site_name) do
     %{
-      name: row.name,
+      name: JavaScriptCompiler.browser_name(row, site_name),
       hook: row.name,
       description: row.description,
       global?: is_nil(row.site_id)

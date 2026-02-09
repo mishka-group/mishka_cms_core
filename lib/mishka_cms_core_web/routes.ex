@@ -25,7 +25,9 @@ defmodule MishkaCmsCoreWeb.Routes do
 
   def routes(:public) do
     [
-      {:put, "/admin/language", MishkaCmsCoreWeb.AdminLanguageController, :update}
+      {:put, "/admin/language", MishkaCmsCoreWeb.AdminLanguageController, :update},
+      {:get, "/assets/css/:site/:hash", MishkaCmsCoreWeb.AssetsController, :css},
+      {:get, "/assets/js/:site/:hash", MishkaCmsCoreWeb.AssetsController, :js}
     ]
   end
 
