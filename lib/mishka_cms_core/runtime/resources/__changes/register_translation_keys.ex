@@ -21,6 +21,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.RegisterTranslationKeys do
   template and the code alone — a rename, a toggle — registers nothing either: the keys are the
   ones it already had.
 
+  ## Not when the template has its own `t`
+
+  A template whose helpers define a function named `t` is not importing ours, so its `t("…")` calls
+  are its own business and nothing is registered for them.
+
   ## It never refuses a save
 
   Registration errors are collected and dropped. A template is the thing being saved; a key it could
@@ -28,13 +33,14 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.RegisterTranslationKeys do
   """
   use Ash.Resource.Change
 
-  alias MishkaCmsCore.Runtime.Translations
+  alias MishkaCmsCore.Runtime.{LiveViewHelpers, Translations}
 
   @impl true
   def change(changeset, _opts, _context) do
     if changeset.action_type == :create or asks_anew?(changeset) do
       Ash.Changeset.after_action(changeset, fn _changeset, record ->
-        :ok = Translations.register(record.site_id, Translations.source_keys(record))
+        if translated?(record),
+          do: :ok = Translations.register(record.site_id, Translations.source_keys(record))
 
         {:ok, record}
       end)
@@ -48,4 +54,10 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.RegisterTranslationKeys do
     |> Translations.source_fields()
     |> Enum.any?(&Ash.Changeset.changing_attribute?(changeset, &1))
   end
+
+  # A TEMPLATE WHOSE OWN HELPERS DEFINE `t` IS NOT ASKING US. `LiveViewHelpers.imports/1` leaves our
+  # `t/1` out of it, so its `t("…")` calls reach its own function — registering them would fill the
+  # admin with rows nothing will ever ask for. The same function decides both, so they cannot differ.
+  defp translated?(record),
+    do: {:t, 1} in LiveViewHelpers.imports(Map.get(record, :helpers))
 end
