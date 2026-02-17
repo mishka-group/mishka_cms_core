@@ -60,6 +60,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
@@ -891,6 +892,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks do
   defp sent(event, _node, {entries, plugin?}),
     do:
       entries
+      |> Enum.reject(&untouched?(&1, event))
       |> PageForms.answered?(event)
       |> by_code(plugin?)
 
@@ -900,6 +902,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks do
   defp by_code(true, _plugin?), do: :code
   defp by_code(false, true), do: :plugin
   defp by_code(false, false), do: :none
+
+  defp untouched?(entry, name),
+    do: LiveViewCompiler.untouched_handler?(:submit, entry_code(entry), name)
+
+  defp entry_code(%{code: code}), do: code
+  defp entry_code(%{"code" => code}), do: code
+  defp entry_code(_entry), do: nil
 
   defp presence(nil), do: nil
   defp presence(value), do: value |> String.trim() |> filled()
