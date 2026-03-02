@@ -48,6 +48,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   import Phoenix.Component
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
+  alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaInstaller.Event.Hook
@@ -94,6 +96,18 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
 
   A `:site` that is neither global nor the site this process renders for draws nothing and builds
   nothing — see "Which site's components a render reaches" above.
+
+  A component whose `precompile` flag is unset is not built at boot, so **this is where it is
+  built** — the first render that names it. `MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler`
+  coordinates through its registry, so concurrent first renders of the same component wait on one
+  compile rather than racing, and a component whose template does not compile is remembered in
+  `MishkaCmsCore.Runtime.States.CompileFailureState` so the next render short-circuits to the
+  placeholder instead of retrying.
+
+  The component's CSS does not depend on this: `MishkaCmsCore.Runtime.Handlers.BootHandler` writes
+  a template file for every active component whether or not it compiles a module, and that file is
+  what the closure walk and Tailwind read. So a lazily-built component renders styled the first
+  time it is seen.
   """
   def component(assigns) when is_map(assigns) do
     name = assigns[:component_name] || raise "component name is required"
@@ -272,7 +286,31 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     do: available?(Helpers.loaded?(module), module, name, site)
 
   defp available?(true, _module, _name, _site), do: true
-  defp available?(false, _module, _name, _site), do: false
+  defp available?(false, module, name, site), do: build(module, name, site, tenant_for(site))
+
+  # A site name that `SiteState` does not know belongs to a site that has been archived or deleted.
+  # Falling back to no tenant would read the GLOBAL row of that name and compile it under the
+  # tenant's module hash, so there is nothing to build.
+  defp build(_module, _name, _site, :error), do: false
+
+  defp build(module, name, site, {:ok, tenant}) do
+    case ModuleCompilerHandler.compile_or_return_module(module, name, site, tenant) do
+      {:ok, _module} -> true
+      {:error, reason} -> remember(module, reason)
+    end
+  end
+
+  # A NAME THAT RESOLVES TO NOTHING MUST NOT COST TWICE. `ModuleCompilerHandler` leaves `:not_found`
+  # deliberately uncached, which is right for a page: routing rejects an unknown path before the
+  # compiler is ever asked, and a page that appears later has to compile. A component has no such
+  # table in front of it, so an unresolvable name here would start a supervised worker and read the
+  # database on EVERY render of the template that carries it. Remembering the outcome makes the
+  # second render an ETS lookup, and `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` forgets
+  # it as soon as a component of that name is created, activated or edited.
+  defp remember(module, reason) do
+    CompileFailureState.record(module, reason)
+    false
+  end
 
   # The site NAME travels in the assigns because that is what the module hash is built from; the
   # compile needs the site's id to read the row as that tenant. "Global" is the name a global

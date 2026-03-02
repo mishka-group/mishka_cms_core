@@ -15,6 +15,7 @@ defmodule MishkaCmsCore.Test.Factory do
   import Ash.Generator, only: [generate: 1]
 
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
+  alias MishkaCmsCore.Runtime.States.CompileFailureState
 
   require Ash.Query
 
@@ -135,6 +136,7 @@ defmodule MishkaCmsCore.Test.Factory do
   defp forget_on_exit(module) do
     ExUnit.Callbacks.on_exit({__MODULE__, module}, fn ->
       ModuleCompiler.unload(module)
+      CompileFailureState.clear(module)
     end)
 
     module
