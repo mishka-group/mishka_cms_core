@@ -26,6 +26,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     MishkaCmsCore.Runtime.States.TranslationsState,
     MishkaCmsCore.Runtime.States.ViewerState,
     MishkaCmsCore.Runtime.States.RateLimitState,
+    MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,
     MishkaCmsCore.Runtime.States.AssetsState,
     MishkaCmsCore.Runtime.States.CompileFailureState,
     # The runtime compiler: the gate that bounds how many compiles run at once, the registry that
