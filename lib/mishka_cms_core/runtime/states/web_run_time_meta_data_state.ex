@@ -94,6 +94,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   """
   use GenServer
 
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.Languages
 
   # ETS table names
@@ -670,8 +671,13 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     {:ok, %{}, {:continue, :load}}
   end
 
+  # Rehydrate routing rows if the owner restarted; gated off under test env (the suite seeds
+  # WebRunTimeMetaDataState directly and a GenServer can't see a test transaction's rows).
   @impl true
   def handle_continue(:load, state) do
+    if !Application.get_env(:mishka_cms_core, :env_test?, false),
+      do: BootHandler.load_web_metadata()
+
     {:noreply, state}
   end
 

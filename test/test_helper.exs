@@ -39,6 +39,9 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
      child_spec: DynamicSupervisor,
      name: MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandlerPartition,
      partitions: System.schedulers_online()},
+    # The unlinked tasks `BootHandler.build_sitemaps/0` builds each site's sitemap under, and
+    # `SitemapCompiler` enqueues every site's in once its plugin chain changes.
+    {Task.Supervisor, name: MishkaCmsCore.Runtime.TaskSupervisor},
     {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
     MishkaCmsCore.TestEndpoint
   ]

@@ -122,6 +122,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
 
   require Logger
 
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
+
   # ETS table names
   @main_table :mishka_sites
   @host_index :mishka_sites_host_index
@@ -714,8 +716,13 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     {:ok, %{}, {:continue, :load}}
   end
 
+  # Self-heal on (re)start: an owner crash empties these tables, so rebuild them from the DB by
+  # reusing the same streaming loader BootHandler runs at boot (`BootHandler.load_sites/0`).
+  # Skipped in test — the suite seeds SiteState directly and a GenServer can't see a test
+  # transaction's rows anyway; tests drive `BootHandler.load_sites/0` from their own process.
   @impl true
   def handle_continue(:load, state) do
+    if !Application.get_env(:mishka_cms_core, :env_test?, false), do: BootHandler.load_sites()
     {:noreply, state}
   end
 
