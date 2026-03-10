@@ -2299,7 +2299,9 @@ defmodule MishkaCmsCore.Runtime.Page do
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  # Background job triggers for page compilation
   changes do
+    change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
     change Changes.RegisterTranslationKeys, on: [:create, :update]
   end
 
@@ -2620,6 +2622,13 @@ defmodule MishkaCmsCore.Runtime.Page do
   end
 
   calculations do
+    calculate :page_module,
+              :atom,
+              {MishkaCmsCore.Runtime.Resources.Calculations.ModuleName, [global?: false]} do
+      description "Generates the runtime module name for page compilation"
+      public? true
+    end
+
     # THE PAGE'S OWN SITE'S LAYOUT OR A SHARED ONE, and nothing else, whoever loads it: the compiler
     # wraps the public page in this, so a layout of another site would put that site's template on
     # this one. Read as the system through the page's site, not through the id alone.

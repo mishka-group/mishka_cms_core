@@ -57,6 +57,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
 
   require Ash.Query
+  alias MishkaCmsCore.Runtime.Resources.Changes
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
 
   @format_badge %{
@@ -1766,6 +1767,11 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  # Background job triggers for error page compilation
+  changes do
+    change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
+  end
+
   # Multi-tenancy configuration - error pages are always site-specific
   multitenancy do
     strategy :attribute
@@ -1891,6 +1897,12 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
   end
 
   calculations do
+    calculate :error_module,
+              :atom,
+              {MishkaCmsCore.Runtime.Resources.Calculations.ModuleName, [global?: false]} do
+      description "Generates the runtime module name for error page compilation"
+    end
+
     calculate :configured_statuses, {:array, MishkaCmsCore.Runtime.ErrorStatus} do
       description "Extracts and sorts all configured statuses (HTTP codes, then :offline) from error pages array"
 

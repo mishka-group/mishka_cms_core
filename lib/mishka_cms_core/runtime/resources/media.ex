@@ -42,6 +42,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
+  alias MishkaCmsCore.Runtime.Resources.Changes
 
   @type_badge %{
     colors: %{
@@ -1930,6 +1931,10 @@ defmodule MishkaCmsCore.Runtime.Media do
     publish :master_toggle_featured, [[nil, :site_id], "updated"]
     publish :master_destroy, [[nil, :site_id], "destroyed"]
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
+  end
+
+  changes do
+    change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
   end
 
   multitenancy do

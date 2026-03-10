@@ -2144,7 +2144,9 @@ defmodule MishkaCmsCore.Runtime.Component do
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  # Background job triggers for component compilation
   changes do
+    change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
     change Changes.RegisterTranslationKeys, on: [:create, :update]
   end
 
@@ -2440,6 +2442,14 @@ defmodule MishkaCmsCore.Runtime.Component do
               ) do
       public? true
       description "Whether the Examples modal would have anything to show"
+    end
+
+    calculate :component_module,
+              :atom,
+              {MishkaCmsCore.Runtime.Resources.Calculations.ModuleName,
+               [global?: true, field: :name]} do
+      public? true
+      description "Generates the runtime module name for the component based on its name and site"
     end
 
     calculate :is_global, :boolean do

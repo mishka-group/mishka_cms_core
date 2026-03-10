@@ -36,6 +36,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [cell_stacked: 1]
   require Ash.Query
+  alias MishkaCmsCore.Runtime.Resources.Changes
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1637,6 +1638,11 @@ defmodule MishkaCmsCore.Runtime.JsHook do
     publish :master_destroy, [[nil, :site_id], "destroyed"]
     publish :permanent_destroy, [[nil, :site_id], "destroyed"]
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
+  end
+
+  # Background job triggers for JS hook processing
+  changes do
+    change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
   end
 
   # Multi-tenancy configuration using site_id attribute

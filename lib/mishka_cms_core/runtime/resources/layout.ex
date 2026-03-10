@@ -1922,7 +1922,9 @@ defmodule MishkaCmsCore.Runtime.Layout do
     publish :master_permanent_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  # Background job triggers for layout compilation
   changes do
+    change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
     change Changes.RegisterTranslationKeys, on: [:create, :update]
   end
 
@@ -2120,6 +2122,13 @@ defmodule MishkaCmsCore.Runtime.Layout do
   end
 
   calculations do
+    calculate :layout_module,
+              :atom,
+              {MishkaCmsCore.Runtime.Resources.Calculations.ModuleName, [global?: true]} do
+      description "Generates the runtime module name for layout compilation"
+      public? true
+    end
+
     calculate :is_global, :boolean do
       description "Determines if the layout is globally available across all sites"
       public? true
