@@ -36,6 +36,7 @@ defmodule MishkaCmsCore.Runtime.Site do
 
   import Phoenix.Component, only: [sigil_H: 2]
 
+  alias MishkaCmsCore.Runtime.Resources.Changes
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -1062,6 +1063,8 @@ defmodule MishkaCmsCore.Runtime.Site do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
       validate MishkaCmsCore.Runtime.Resources.Validations.MasterSiteStays
 
+      change {Changes.ScheduleSiteTeardown, []}
+
       description "Permanently removes site and all associated data (master users only) - extremely destructive operation"
     end
   end
@@ -1111,6 +1114,10 @@ defmodule MishkaCmsCore.Runtime.Site do
     publish :unarchive, [[nil, :_pkey], "updated"]
     publish :destroy, [[nil, :_pkey], "destroyed"]
     publish :permanent_destroy, [[nil, :_pkey], "destroyed"]
+  end
+
+  changes do
+    change {Changes.ScheduleSiteRuntime, []}, on: [:create, :update, :destroy]
   end
 
   attributes do

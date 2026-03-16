@@ -279,6 +279,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteGuardedStructTest do
         |> Enum.map(fn c -> elem(c.change, 0) end)
 
       assert GuardedStruct.AshResource.Change in change_modules
+      assert MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime in change_modules
     end
 
     test "host downcase + name slugify both land on the persisted row" do
