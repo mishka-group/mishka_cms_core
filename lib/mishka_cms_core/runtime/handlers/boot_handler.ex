@@ -29,6 +29,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   6. **Page Compilation**: Compiles individual content pages
   7. **Asset Jobs**: Schedules CSS and JavaScript compilation jobs
 
+  Once they are done, every open site's sitemap is built on this node (`build_sitemaps/0`).
+
   ## Architecture Integration
 
   The BootHandler integrates with several MishkaCms subsystems:
@@ -85,6 +87,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   alias MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
+  alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAudit
   alias MishkaCmsCore.Runtime.PageLanguageBackfill
   import Ecto.Query
@@ -170,7 +173,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     Logger.info("[BootHandler] Starting boot process...")
 
     Oban.Job
-    |> where([j], j.queue in ["default", "assets"])
+    |> where([j], j.queue in ["default", "assets", "sitemaps"])
     |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
     |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
     |> Oban.cancel_all_jobs()
@@ -241,6 +244,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
     _ = TailwindCompiler.compile_and_store_shared_base()
     _ = create_assets_compilation_jobs()
+
+    # AFTER `load_sites`, the only pass that fills `SiteState`, and here rather than in a job so
+    # every node fills its own cache.
+    _ = build_sitemaps()
 
     # AFTER the compiles, because `CodeSignature` names each unverified snippet as it turns it into
     # an inert clause and this is the total of those lines rather than a separate opinion. Reads
@@ -477,8 +484,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   @doc """
   Recompiles every active dependent part of a single site — the per-site
   counterpart to the boot passes. Writes templates + routing for active records,
-  compiles the precompiled modules, and rebuilds the site's CSS/JS bundle. Used by the Site
-  runtime worker on activate / unarchive / rename.
+  compiles the precompiled modules, and rebuilds the site's CSS/JS bundle and its
+  sitemap. Used by the Site runtime worker on activate / unarchive / rename.
   """
   def compile_site(site_id, site_name) do
     MishkaInstaller.Event.Hook.call(
@@ -495,6 +502,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     create_js_hooks_template(site_id)
 
     site_name |> asset_job(site_id, "asset") |> Oban.insert()
+    site_name |> asset_job(site_id, "sitemap") |> Oban.insert()
 
     MishkaInstaller.Event.Hook.call(
       "runtime:boot:after_compile_site",
@@ -1018,6 +1026,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     * `"asset"` - Standard asset compilation (CSS, JS)
     * `"css"` - CSS-only compilation
     * `"js"` - JavaScript-only compilation
+    * `"sitemap"` - the site's sitemap (`MishkaCmsCore.Runtime.Compilers.SitemapCompiler`)
 
   ## Return Values
 
@@ -1095,7 +1104,49 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     end
   end
 
-  # Per-site asset (css/js) build job: unique + debounced (3s `schedule_in` coalesces a
+  @doc """
+  Builds every open site's sitemap into THIS node's `AssetsState` — the boot counterpart of the
+  site's `"sitemap"` job (see `MishkaCmsCore.Runtime.Compilers.SitemapCompiler`).
+
+  Two sites at a time, whatever the node's size, so a node booting with many sites reads their rows
+  a couple at a time instead of all at once. Each is built in its own task under
+  `MishkaCmsCore.Runtime.TaskSupervisor`, unlinked, so a site whose build raises or runs past a
+  minute is left without one and the rest are still built. The first request for it enqueues its
+  job.
+
+  ## Return Values
+
+  * `:ok` - Every open site's sitemap is stored
+  * `{:error, {:sitemaps_failed, failed}}` - One entry per site not built: `{:ok, {name, {:error,
+    reason}}}`, or `{:exit, {name, reason}}` for a build that raised or timed out
+  """
+  @spec build_sitemaps() :: :ok | {:error, {:sitemaps_failed, [term()]}}
+  def build_sitemaps do
+    names = Enum.map(SiteState.stream(%{active: true}), & &1.name)
+
+    MishkaCmsCore.Runtime.TaskSupervisor
+    |> Task.Supervisor.async_stream_nolink(
+      names,
+      &{&1, SitemapCompiler.compile_and_store(&1)},
+      max_concurrency: 2,
+      ordered: false,
+      timeout: :timer.minutes(1),
+      on_timeout: :kill_task,
+      zip_input_on_exit: true
+    )
+    |> Enum.reject(&match?({:ok, {_name, {:ok, _sitemap}}}, &1))
+    |> case do
+      [] ->
+        Logger.info("[BootHandler] Sitemaps built for active sites")
+        :ok
+
+      failed ->
+        Logger.warning("[BootHandler] Sitemaps not built: #{inspect(failed)}")
+        {:error, {:sitemaps_failed, failed}}
+    end
+  end
+
+  # Per-site asset (css/js/sitemap) build job: unique + debounced (3s `schedule_in` coalesces a
   # burst, each insert moving a pending one later; `replace: []` leaves it where it is instead, and
   # `states:` widens which jobs already there count). `site_id` lives in `data` so the Oban→PubSub
   # bridge broadcasts on the per-site topic, letting that site's admins see the rebuild live.
@@ -1122,6 +1173,20 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       ],
       replace: Keyword.get(opts, :replace, rules.replace)
     )
+  end
+
+  # A SITEMAP READS EVERY ROW OF ITS SITE, so it has a queue of its own, where a large site's build
+  # holds up no stylesheet an editor is waiting on, and one job per site however long it has been
+  # waiting: a build that failed and waits to retry is pending too, brought forward by a change
+  # rather than joined by another, and given up after three tries.
+  defp job_rules("sitemap") do
+    %{
+      queue: :sitemaps,
+      max_attempts: 3,
+      period: :infinity,
+      states: [:available, :scheduled, :retryable],
+      replace: [scheduled: [:scheduled_at], retryable: [:scheduled_at]]
+    }
   end
 
   defp job_rules(_asset) do

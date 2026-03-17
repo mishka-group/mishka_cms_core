@@ -7,7 +7,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   alias MishkaCmsCore.Runtime.Compilers.{
     TailwindCompiler,
     JavaScriptCompiler,
-    ModuleCompiler
+    ModuleCompiler,
+    SitemapCompiler
   }
 
   import MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler,
@@ -25,6 +26,19 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   def perform(%Oban.Job{args: args} = job) do
     if builds_for_inactive_site?(args), do: :ok, else: run(job)
   end
+
+  # A SITEMAP BUILD HAS TEN MINUTES, so one that never ends cannot hold the `:sitemaps` queue for
+  # good; it is retried as a job that raised. Every other job runs as long as it needs.
+  @impl Oban.Worker
+  def timeout(%Oban.Job{
+        args: %{
+          "resource" => "MishkaCmsCore.Runtime.Handlers.BootHandler",
+          "data" => %{"type" => "sitemap"}
+        }
+      }),
+      do: :timer.minutes(10)
+
+  def timeout(_job), do: :infinity
 
   @building ["create", "update", "unarchive"]
 
@@ -56,6 +70,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
           end)
 
         run_asset_compiler(site_name, site_id, "css")
+        run_asset_compiler(site_name, site_id, "sitemap")
         result
     end
   end
@@ -75,10 +90,14 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
             apply_module_lifecycle(action, layout, layout_module, "layout", "Layout")
           end)
 
+        # A layout's robots `noindex` hides its pages from the sitemap
+        # (`MishkaCmsCore.Runtime.PageEditions.indexable/1`).
         if is_nil(site_id) do
           BootHandler.create_assets_compilation_jobs("css")
+          BootHandler.create_assets_compilation_jobs("sitemap")
         else
           run_asset_compiler(site_name, site_id, "css")
+          run_asset_compiler(site_name, site_id, "sitemap")
         end
 
         result
@@ -214,6 +233,20 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
          }
        }) do
     JavaScriptCompiler.compile_and_store(site_name)
+  end
+
+  defp run(%Oban.Job{
+         args: %{
+           "resource" => "MishkaCmsCore.Runtime.Handlers.BootHandler",
+           "data" => %{"site_name" => site_name, "type" => "sitemap"}
+         }
+       }) do
+    # A site no longer cached, or gone while it was built, has nothing to build, as
+    # `resolve_site/1`'s `:skip`.
+    case SitemapCompiler.compile_and_store(site_name) do
+      {:error, :no_site} -> :ok
+      built -> built
+    end
   end
 
   defp run(%Oban.Job{args: _args}) do

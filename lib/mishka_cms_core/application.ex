@@ -67,6 +67,7 @@ defmodule MishkaCmsCore.Application do
         [{AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]}] ++ plugins()
 
     MishkaCmsCore.PluginRegistrations.attach()
+    MishkaCmsCore.Runtime.Compilers.SitemapCompiler.attach()
 
     opts = [strategy: :one_for_one, name: MishkaCmsCore.Supervisor]
     Supervisor.start_link(children, opts)

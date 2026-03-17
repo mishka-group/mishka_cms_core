@@ -33,7 +33,8 @@ defmodule MishkaCmsCore.Runtime.Setting do
     authorizers: [Ash.Policy.Authorizer],
     notifiers: [
       Ash.Notifier.PubSub,
-      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh
     ]
 
   alias MishkaCmsCore.Runtime.Resources.Validations.TenantContext
