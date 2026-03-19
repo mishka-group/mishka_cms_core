@@ -68,6 +68,14 @@ defmodule MishkaCmsCore.TestRouter do
     delete "/auth/sign-out", MishkaCmsCoreWeb.AuthController, :sign_out, as: :auth
   end
 
+  # The public extension routes the CMS also mounts outside `/admin` — the per-site asset bundles,
+  # robots.txt and the sitemap. A router that mounted only the admin routes could not exercise them.
+  scope "/" do
+    pipe_through [:browser]
+
+    extension_routes(:public)
+  end
+
   scope "/admin/dashboard" do
     pipe_through [:browser]
 

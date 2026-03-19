@@ -23,11 +23,21 @@ defmodule MishkaCmsCoreWeb.Routes do
     []
   end
 
+  # A crawler asks for these by what they are, so each also answers an `Accept` naming text or xml
+  # alone, which a page refuses, and a stored sitemap file whatever it names — see
+  # `MishkaCmsCore.ExtensionRouter.route_accepts/2`.
+  @file_formats %{accepts: ["html", "txt", "xml"]}
+  @stored_file %{accepts: :any}
+
   def routes(:public) do
     [
       {:put, "/admin/language", MishkaCmsCoreWeb.AdminLanguageController, :update},
       {:get, "/assets/css/:site/:hash", MishkaCmsCoreWeb.AssetsController, :css},
-      {:get, "/assets/js/:site/:hash", MishkaCmsCoreWeb.AssetsController, :js}
+      {:get, "/assets/js/:site/:hash", MishkaCmsCoreWeb.AssetsController, :js},
+      {:get, "/robots.txt", MishkaCmsCoreWeb.SeoController, :robots, private: @file_formats},
+      {:get, "/sitemap.xml", MishkaCmsCoreWeb.SeoController, :sitemap, private: @file_formats},
+      {:get, "/sitemap-:file", MishkaCmsCoreWeb.SeoController, :sitemap_file,
+       private: @stored_file}
     ]
   end
 
