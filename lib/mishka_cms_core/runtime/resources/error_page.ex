@@ -926,6 +926,8 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     create :create do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -950,6 +952,8 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
     create :master_create do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -977,6 +981,8 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     update :update do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -1003,6 +1009,8 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
     update :master_update do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}

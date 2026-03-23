@@ -491,6 +491,19 @@ defmodule MishkaCmsCore.Runtime.PageProvisionTest do
       assert PageProvision.note(hd(report.skipped)) ==
                "#{hd(paths(site.id))} — something the site already has holds it"
     end
+
+    # AND ONLY A PAGE BEING TAKEN IS ONE. A template that does not compile is a mistake in the
+    # definition, and swallowing it would write the pages around it and report a success.
+    test "is not what any other refusal is read as", %{site: site} do
+      broken =
+        site.id
+        |> definitions()
+        |> List.update_at(1, &%{&1 | template: ~S(<div>{@nothing_closes_this)})
+
+      assert_raise Ash.Error.Invalid, fn -> run(site.id, broken) end
+
+      assert Enum.map(rows(site.id), & &1.path) == [hd(paths(site.id))]
+    end
   end
 
   describe "the mark a provisioned page carries" do

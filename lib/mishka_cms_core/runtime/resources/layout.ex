@@ -892,6 +892,8 @@ defmodule MishkaCmsCore.Runtime.Layout do
     default_accept @admin_fields
 
     create :create do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -927,6 +929,8 @@ defmodule MishkaCmsCore.Runtime.Layout do
     end
 
     create :master_create do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -961,6 +965,8 @@ defmodule MishkaCmsCore.Runtime.Layout do
     end
 
     update :update do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -1009,6 +1015,8 @@ defmodule MishkaCmsCore.Runtime.Layout do
     end
 
     update :master_update do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 

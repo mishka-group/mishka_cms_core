@@ -1104,6 +1104,8 @@ defmodule MishkaCmsCore.Runtime.Component do
     default_accept @admin_fields
 
     create :create do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
       # Interface tab, the Components form, an import. See `Validations.InterfaceDeclaration`.
@@ -1136,6 +1138,8 @@ defmodule MishkaCmsCore.Runtime.Component do
     end
 
     create :master_create do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
       # Interface tab, the Components form, an import. See `Validations.InterfaceDeclaration`.
@@ -1167,6 +1171,8 @@ defmodule MishkaCmsCore.Runtime.Component do
     end
 
     update :update do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
       # Interface tab, the Components form, an import. See `Validations.InterfaceDeclaration`.
@@ -1219,6 +1225,8 @@ defmodule MishkaCmsCore.Runtime.Component do
     end
 
     update :master_update do
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
       # Interface tab, the Components form, an import. See `Validations.InterfaceDeclaration`.

@@ -266,11 +266,65 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       assert length(page.events) == 2
     end
 
+    # CODE THAT WILL NOT COMPILE DOES NOT GET STORED. Until this validation existed the save
+    # succeeded, the runtime-status panel said Ready — a page that does not precompile is not built
+    # when it is saved — and the first visitor got the 500. Worse, on a page whose module was already
+    # loaded, the failed recompile left the previous version serving and the author's change simply
+    # never appeared.
+    #
+    # The fixtures these two tests used to carry were literally JavaScript in an Elixir field, which
+    # is how easy it is for this to go unnoticed.
+    test "refuses a handler that will not compile" do
+      site = create_site!()
+
+      assert_raise Ash.Error.Invalid, ~r/missing terminator/, fn ->
+        create_page!(site_id: site.id, events: [%{name: "click", code: "{:noreply, socket"}])
+      end
+    end
+
+    # An empty body never reaches the code check — the attribute's own `allow_nil?: false` refuses
+    # it first. `CodeCheck` still names it, because the builder asks before Ash does and "this
+    # handler has no code" is a better sentence than "value must not be nil".
     test "refuses a handler with no code" do
       site = create_site!()
 
       assert_raise Ash.Error.Invalid, fn ->
         create_page!(site_id: site.id, events: [%{name: "click", code: ""}])
+      end
+    end
+
+    test "refuses a helper whose argument list is not one" do
+      site = create_site!()
+
+      assert_raise Ash.Error.Invalid, ~r/syntax error/, fn ->
+        create_page!(site_id: site.id, helpers: [%{name: "h", args: "a,", code: ":ok"}])
+      end
+    end
+
+    test "refuses a template that will not parse" do
+      site = create_site!()
+
+      assert_raise Ash.Error.Invalid, ~r/unmatched closing tag/, fn ->
+        create_page!(site_id: site.id, template: "<div><span></div>")
+      end
+    end
+
+    # The check runs over the WHOLE page, not the changed fragment: deleting the helper a handler
+    # calls has to be refused, and nothing about the handler changed.
+    test "refuses an update that breaks code it did not touch" do
+      site = create_site!()
+
+      page =
+        create_page!(
+          site_id: site.id,
+          helpers: [%{name: "shout", args: "text", code: "String.upcase(text)"}],
+          events: [%{name: "go", code: ~S|{:noreply, assign(socket, :s, shout("hi"))}|}]
+        )
+
+      assert_raise Ash.Error.Invalid, ~r/undefined function shout/, fn ->
+        page
+        |> Ash.Changeset.for_update(:master_update, %{helpers: []}, authorize?: false)
+        |> Ash.update!(authorize?: false)
       end
     end
 
