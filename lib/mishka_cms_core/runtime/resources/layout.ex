@@ -894,6 +894,9 @@ defmodule MishkaCmsCore.Runtime.Layout do
     create :create do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A layout")}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -931,6 +934,9 @@ defmodule MishkaCmsCore.Runtime.Layout do
     create :master_create do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A layout")}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -966,6 +972,9 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
     update :update do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A layout")}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -1016,6 +1025,9 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
     update :master_update do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A layout")}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -1529,6 +1541,11 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.Layout.Version}
+
+      # AFTER THE CHANGE THAT COPIES THE SNAPSHOT, because validations and changes run in the order
+      # they are declared, and a restore writes markup like any other save.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A layout")}
 
       description "Restores the layout to a previous version"
     end

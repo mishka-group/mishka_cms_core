@@ -928,6 +928,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "An error page")}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -954,6 +957,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "An error page")}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -983,6 +989,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "An error page")}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
 
@@ -1011,6 +1020,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       change {MishkaCmsCore.Runtime.Resources.Changes.ErrorPageAddress, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "An error page")}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -1372,6 +1384,11 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.ErrorPage.Version}
+
+      # AFTER THE CHANGE THAT COPIES THE SNAPSHOT, because validations and changes run in the order
+      # they are declared, and a restore writes markup like any other save.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "An error page")}
     end
 
     action :restore_version_api, :struct do

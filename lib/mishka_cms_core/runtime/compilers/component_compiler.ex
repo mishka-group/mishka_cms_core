@@ -470,7 +470,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   defp reserved_names(params) do
-    reserved = []
+    reserved = MishkaCmsCore.Runtime.Resources.Validations.StatefulShape.reserved_names()
 
     for %{name: name} <- (params[:attrs] || []) ++ (params[:slots] || []),
         to_string(name) in reserved,

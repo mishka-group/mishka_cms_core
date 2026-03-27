@@ -1370,6 +1370,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -1434,6 +1435,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -1505,6 +1507,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}
@@ -1557,6 +1560,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       change {MishkaCmsCore.Runtime.Resources.Changes.SignCode, []}

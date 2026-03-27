@@ -1106,6 +1106,11 @@ defmodule MishkaCmsCore.Runtime.Component do
     create :create do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulShape, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
       # Interface tab, the Components form, an import. See `Validations.InterfaceDeclaration`.
@@ -1140,6 +1145,11 @@ defmodule MishkaCmsCore.Runtime.Component do
     create :master_create do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulShape, []}
+
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
       # Interface tab, the Components form, an import. See `Validations.InterfaceDeclaration`.
@@ -1172,6 +1182,11 @@ defmodule MishkaCmsCore.Runtime.Component do
 
     update :update do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulShape, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
@@ -1226,6 +1241,11 @@ defmodule MishkaCmsCore.Runtime.Component do
 
     update :master_update do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulShape, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
       # A declaration that will not compile is refused wherever it is written — the builder's
@@ -1455,6 +1475,10 @@ defmodule MishkaCmsCore.Runtime.Component do
       change set_attribute(:archived_at, nil)
       change set_attribute(:active, false)
 
+      # A LIVE COMPONENT COMING BACK is one more way into reach of whatever already names it.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
+
       atomic_upgrade_with :archived
 
       description "Restores an archived component as inactive — activate it to compile and go live (tenant users)"
@@ -1479,6 +1503,10 @@ defmodule MishkaCmsCore.Runtime.Component do
 
       change set_attribute(:archived_at, nil)
       change set_attribute(:active, false)
+
+      # A LIVE COMPONENT COMING BACK is one more way into reach of whatever already names it.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
 
       atomic_upgrade_with :master_archived
     end
@@ -1822,6 +1850,11 @@ defmodule MishkaCmsCore.Runtime.Component do
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.Component.Version}
+
+      # AFTER THE CHANGE THAT COPIES THE SNAPSHOT, because validations and changes run in the order
+      # they are declared, and a restore is a write of the markup and the live flag like any other.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement,
+                noun: dgettext_noop("errors", "A component")}
 
       description "Restores the component to a previous version"
     end
