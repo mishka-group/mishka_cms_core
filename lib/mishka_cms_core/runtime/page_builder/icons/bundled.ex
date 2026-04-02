@@ -235,5 +235,5 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Icons.Bundled do
 
   defp variants_of(_icons), do: [{"", @all_variants}]
 
-  defp kits_dir, do: Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits"])
+  defp kits_dir, do: MishkaCmsCore.Runtime.Handlers.UiKitHandler.kits_dir()
 end

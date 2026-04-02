@@ -172,7 +172,16 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   # still had to carry the source at all.
   def features(%{features: %{} = features}) when map_size(features) > 0, do: features
 
-  def features(_component), do: %{}
+  def features(component) do
+    MishkaCmsCore.Runtime.Handlers.UiKitHandler.component_features(%{
+      "attrs" => Enum.map(attrs(component), &stringify/1),
+      "helpers" => Enum.map(helpers(component), &stringify/1),
+      # The template comes along because that is where the axis→attribute binding is written: a
+      # helper's parameter is called `color`, and the call site says which attribute is passed into
+      # it. Without it every axis stays keyed by the helper's own vocabulary.
+      "template" => template(component)
+    })
+  end
 
   @doc "A component's template, however the caller happens to hold the component."
   @spec template(map()) :: String.t()

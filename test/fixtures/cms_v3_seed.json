@@ -1,0 +1,556 @@
+{
+  "$schema": "mishka.ui_kit.bundle.v3",
+  "components": [
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "default": null,
+            "doc": "DOM id"
+          },
+          "type": "string"
+        },
+        {
+          "name": "variant",
+          "opts": {
+            "default": "default"
+          },
+          "type": "string"
+        },
+        {
+          "name": "color",
+          "opts": {
+            "default": "primary"
+          },
+          "type": "string"
+        },
+        {
+          "name": "on_click",
+          "opts": {},
+          "struct_name": "Phoenix.LiveView.JS",
+          "type": "struct"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": null,
+      "examples": [],
+      "extra": {
+        "clauses": null,
+        "component": "sample_button",
+        "function": "sample_button",
+        "module_attributes": [
+          {
+            "name": "indicator_positions",
+            "value": [
+              "left",
+              "right"
+            ]
+          }
+        ],
+        "prelude": null,
+        "ui_kit": "kit",
+        "ui_kit_version": "0.0.1"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "assigns",
+          "attrs": [
+            {
+              "name": "position",
+              "opts": {
+                "default": "left"
+              },
+              "type": "string"
+            },
+            {
+              "name": "class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            }
+          ],
+          "code": "~H\"\"\"\n<span class={[\"indicator\", @position, @class]} aria-hidden=\"true\"/>\n\"\"\"",
+          "discriminators": [],
+          "name": "sample_button_indicator",
+          "slots": []
+        },
+        {
+          "args": "\"default\", \"primary\"",
+          "attrs": [],
+          "code": "\"bg-blue-600 text-white\"",
+          "discriminators": [
+            {
+              "axis": "color",
+              "values": [
+                "primary"
+              ]
+            },
+            {
+              "axis": "variant",
+              "values": [
+                "default"
+              ]
+            }
+          ],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "\"default\", \"danger\"",
+          "attrs": [],
+          "code": "\"bg-red-600 text-white\"",
+          "discriminators": [
+            {
+              "axis": "color",
+              "values": [
+                "danger"
+              ]
+            },
+            {
+              "axis": "variant",
+              "values": [
+                "default"
+              ]
+            }
+          ],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "\"outline\", \"primary\"",
+          "attrs": [],
+          "code": "\"border border-blue-600 text-blue-600\"",
+          "discriminators": [
+            {
+              "axis": "color",
+              "values": [
+                "primary"
+              ]
+            },
+            {
+              "axis": "variant",
+              "values": [
+                "outline"
+              ]
+            }
+          ],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "%{a: 1} = _multi_line_pattern_match",
+          "attrs": [],
+          "code": "\"complex\"",
+          "discriminators": [],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "_, _",
+          "attrs": [],
+          "code": "\"\"",
+          "discriminators": [],
+          "name": "color_variant",
+          "slots": []
+        }
+      ],
+      "name": "kit-sample-button",
+      "permissions": [],
+      "priority": 50,
+      "site_id": null,
+      "slots": [
+        {
+          "attrs": [],
+          "name": "inner_block",
+          "opts": {
+            "required": false
+          }
+        }
+      ],
+      "template": "<button id={@id} class={[\"btn\", color_variant(@variant, @color), @class]} {@rest}>\n  <.sample_button_indicator position=\"left\" class={@class}/>\n  {render_slot(@inner_block)}\n</button>\n"
+    },
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "href",
+          "opts": {
+            "required": true
+          },
+          "type": "string"
+        },
+        {
+          "name": "variant",
+          "opts": {
+            "default": "default"
+          },
+          "type": "string"
+        },
+        {
+          "name": "color",
+          "opts": {
+            "default": "primary"
+          },
+          "type": "string"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": null,
+      "examples": [],
+      "extra": {
+        "clauses": null,
+        "component": "sample_button",
+        "function": "sample_button_link",
+        "module_attributes": [
+          {
+            "name": "indicator_positions",
+            "value": [
+              "left",
+              "right"
+            ]
+          }
+        ],
+        "prelude": null,
+        "ui_kit": "kit",
+        "ui_kit_version": "0.0.1"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "assigns",
+          "attrs": [
+            {
+              "name": "position",
+              "opts": {
+                "default": "left"
+              },
+              "type": "string"
+            },
+            {
+              "name": "class",
+              "opts": {
+                "default": null
+              },
+              "type": "any"
+            }
+          ],
+          "code": "~H\"\"\"\n<span class={[\"indicator\", @position, @class]} aria-hidden=\"true\"/>\n\"\"\"",
+          "discriminators": [],
+          "name": "sample_button_indicator",
+          "slots": []
+        },
+        {
+          "args": "\"default\", \"primary\"",
+          "attrs": [],
+          "code": "\"bg-blue-600 text-white\"",
+          "discriminators": [
+            {
+              "axis": "color",
+              "values": [
+                "primary"
+              ]
+            },
+            {
+              "axis": "variant",
+              "values": [
+                "default"
+              ]
+            }
+          ],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "\"default\", \"danger\"",
+          "attrs": [],
+          "code": "\"bg-red-600 text-white\"",
+          "discriminators": [
+            {
+              "axis": "color",
+              "values": [
+                "danger"
+              ]
+            },
+            {
+              "axis": "variant",
+              "values": [
+                "default"
+              ]
+            }
+          ],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "\"outline\", \"primary\"",
+          "attrs": [],
+          "code": "\"border border-blue-600 text-blue-600\"",
+          "discriminators": [
+            {
+              "axis": "color",
+              "values": [
+                "primary"
+              ]
+            },
+            {
+              "axis": "variant",
+              "values": [
+                "outline"
+              ]
+            }
+          ],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "%{a: 1} = _multi_line_pattern_match",
+          "attrs": [],
+          "code": "\"complex\"",
+          "discriminators": [],
+          "name": "color_variant",
+          "slots": []
+        },
+        {
+          "args": "_, _",
+          "attrs": [],
+          "code": "\"\"",
+          "discriminators": [],
+          "name": "color_variant",
+          "slots": []
+        }
+      ],
+      "name": "kit-sample-button-link",
+      "permissions": [],
+      "priority": 50,
+      "site_id": null,
+      "slots": [
+        {
+          "attrs": [],
+          "name": "inner_block",
+          "opts": {
+            "required": true
+          }
+        }
+      ],
+      "template": "<a href={@href} class={[\"btn\", color_variant(@variant, @color), @class]} {@rest}>\n  {render_slot(@inner_block)}\n</a>\n"
+    },
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "default": null
+          },
+          "type": "string"
+        },
+        {
+          "name": "rounded",
+          "opts": {
+            "default": "small"
+          },
+          "type": "string"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": null,
+      "examples": [],
+      "extra": {
+        "clauses": null,
+        "component": "sample_card",
+        "function": "sample_card",
+        "module_attributes": [],
+        "prelude": null,
+        "ui_kit": "kit",
+        "ui_kit_version": "0.0.1"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "\"small\"",
+          "attrs": [],
+          "code": "\"rounded\"",
+          "discriminators": [
+            {
+              "axis": "rounded",
+              "values": [
+                "small"
+              ]
+            }
+          ],
+          "name": "rounded_class",
+          "slots": []
+        },
+        {
+          "args": "\"large\"",
+          "attrs": [],
+          "code": "\"rounded-lg\"",
+          "discriminators": [
+            {
+              "axis": "rounded",
+              "values": [
+                "large"
+              ]
+            }
+          ],
+          "name": "rounded_class",
+          "slots": []
+        },
+        {
+          "args": "_",
+          "attrs": [],
+          "code": "\"\"",
+          "discriminators": [],
+          "name": "rounded_class",
+          "slots": []
+        }
+      ],
+      "name": "kit-sample-card",
+      "permissions": [],
+      "priority": 50,
+      "site_id": null,
+      "slots": [
+        {
+          "attrs": [],
+          "name": "inner_block",
+          "opts": {
+            "required": true
+          }
+        }
+      ],
+      "template": "<div id={@id} class={[\"card\", rounded_class(@rounded), @class]} {@rest}>\n  <.component component_name=\"kit-sample-card-title\" site={assigns[:site]} :if={@id} title={@id}/>\n  {render_slot(@inner_block)}\n</div>\n"
+    },
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "default": null
+          },
+          "type": "string"
+        },
+        {
+          "name": "title",
+          "opts": {
+            "required": true
+          },
+          "type": "string"
+        },
+        {
+          "name": "class",
+          "opts": {
+            "default": null
+          },
+          "type": "any"
+        }
+      ],
+      "body": null,
+      "examples": [],
+      "extra": {
+        "clauses": null,
+        "component": "sample_card",
+        "function": "sample_card_title",
+        "module_attributes": [],
+        "prelude": null,
+        "ui_kit": "kit",
+        "ui_kit_version": "0.0.1"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "\"small\"",
+          "attrs": [],
+          "code": "\"rounded\"",
+          "discriminators": [
+            {
+              "axis": "rounded",
+              "values": [
+                "small"
+              ]
+            }
+          ],
+          "name": "rounded_class",
+          "slots": []
+        },
+        {
+          "args": "\"large\"",
+          "attrs": [],
+          "code": "\"rounded-lg\"",
+          "discriminators": [
+            {
+              "axis": "rounded",
+              "values": [
+                "large"
+              ]
+            }
+          ],
+          "name": "rounded_class",
+          "slots": []
+        },
+        {
+          "args": "_",
+          "attrs": [],
+          "code": "\"\"",
+          "discriminators": [],
+          "name": "rounded_class",
+          "slots": []
+        }
+      ],
+      "name": "kit-sample-card-title",
+      "permissions": [],
+      "priority": 50,
+      "site_id": null,
+      "slots": [
+        {
+          "attrs": [],
+          "name": "inner_block",
+          "opts": {
+            "required": false
+          }
+        }
+      ],
+      "template": "<h3 id={@id} class={[\"card-title\", @class]}>\n  {@title}\n  {render_slot(@inner_block)}\n</h3>\n"
+    }
+  ],
+  "name": "kit",
+  "scripts": [],
+  "version": "0.0.1"
+}
