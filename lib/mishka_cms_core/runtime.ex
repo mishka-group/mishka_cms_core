@@ -461,5 +461,11 @@ defmodule MishkaCmsCore.Runtime do
 
     resource MishkaCmsCore.Runtime.MediaCategory do
     end
+
+    resource MishkaCmsCore.Runtime.PageBuilderEvent do
+    end
+
+    resource MishkaCmsCore.Runtime.PageBuilderSnapshot do
+    end
   end
 end
