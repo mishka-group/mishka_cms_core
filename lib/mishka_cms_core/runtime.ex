@@ -456,6 +456,36 @@ defmodule MishkaCmsCore.Runtime do
         not_found_error?: false
     end
 
+    resource MishkaCmsCore.Runtime.PageDraft do
+      define :get_page_draft, action: :master_get, get_by: :id
+
+      define :get_page_draft_by_token,
+        action: :by_token,
+        args: [:preview_token],
+        get?: true,
+        not_found_error?: false
+    end
+
+    resource MishkaCmsCore.Runtime.LayoutDraft do
+      define :get_layout_draft, action: :master_get, get_by: :id
+
+      define :get_layout_draft_by_token,
+        action: :by_token,
+        args: [:preview_token],
+        get?: true,
+        not_found_error?: false
+    end
+
+    resource MishkaCmsCore.Runtime.ErrorPageDraft do
+      define :get_error_page_draft, action: :master_get, get_by: :id
+
+      define :get_error_page_draft_by_token,
+        action: :by_token,
+        args: [:preview_token],
+        get?: true,
+        not_found_error?: false
+    end
+
     resource MishkaCmsCore.Runtime.Media do
     end
 

@@ -59,7 +59,11 @@ defmodule MishkaCmsCore.Runtime.PageBuilderEvent do
     component: MishkaCmsCore.Runtime.Component
   }
 
-  @drafts %{}
+  @drafts %{
+    page: MishkaCmsCore.Runtime.PageDraft,
+    layout: MishkaCmsCore.Runtime.LayoutDraft,
+    error_page: MishkaCmsCore.Runtime.ErrorPageDraft
+  }
   @buckets [:content, :style, :publish]
   @author_types [:human, :ai, :system]
 
