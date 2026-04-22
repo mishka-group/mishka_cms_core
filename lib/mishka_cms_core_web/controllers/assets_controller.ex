@@ -34,7 +34,8 @@ defmodule MishkaCmsCoreWeb.AssetsController do
     * on the address of its own site: anyone while the site is up; while it is offline, its
       stylesheet to anyone, since the offline page its visitors get links it, and its script to its
       admins and the masters;
-    * on any other address: a master, as the page builder's canvas asks for it;
+    * on any other address: a master, as the page builder's canvas asks for it, and whoever holds
+      a preview link of that site (`?preview=<token>`), by the same rule as its own address;
     * `__shared_base__`, the base every site's bundle starts with: anyone.
 
   Anything else — a stale or unknown hash, another site's bundle, a site that is down — is a 404
@@ -146,7 +147,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
   use Phoenix.Controller, formats: [:html, :json]
   import Plug.Conn
   alias MishkaCmsCore.Accounts.Helper
-  alias MishkaCmsCore.Runtime.SiteAvailability
+  alias MishkaCmsCore.Runtime.{DraftPreviewAssets, SiteAvailability}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaInstaller.Event.Hook
 
@@ -189,9 +190,22 @@ defmodule MishkaCmsCoreWeb.AssetsController do
         {:ok, @private}
 
       true ->
+        preview(conn.params["preview"], cached_site_id(site), viewer, type)
+    end
+  end
+
+  # A preview link of this site, by the same rule as its own address.
+  defp preview(token, site_id, viewer, type) when is_binary(site_id) do
+    case DraftPreviewAssets.site(token) do
+      {:ok, ^site_id} ->
+        with {:ok, _cache} <- by_state(site_id, viewer, type), do: {:ok, @private}
+
+      _another_site_or_none ->
         {:error, :address}
     end
   end
+
+  defp preview(_token, _not_cached, _viewer, _type), do: {:error, :address}
 
   defp by_state(site_id, viewer, type) do
     case SiteAvailability.state(site_id) do

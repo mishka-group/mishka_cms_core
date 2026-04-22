@@ -6,6 +6,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   use ExUnit.Case, async: false
   import Ash.Test
   alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.States.AssetsState
   require Ash.Query
   @moduletag :unit
 
@@ -1905,6 +1906,142 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.run_action(authorize?: false)
 
       assert preview.description == "Original"
+    end
+  end
+
+  defp seed_css!(record) do
+    AssetsState.save(%{
+      id: record.preview_token,
+      type: "css",
+      value: ".stale{}",
+      hash: "deadbeef",
+      updated_at: DateTime.utc_now()
+    })
+
+    assert AssetsState.exists?(record.preview_token, "css")
+    record
+  end
+
+  # THE PREVIEW'S STYLESHEET IS CACHED UNDER THE RECORD'S TOKEN and compiled only when that key is
+  # absent, so a write that leaves the key behind serves the CSS of the version before it for the
+  # life of the node: the utility classes that write introduced have no rules, and the reviewer sent
+  # `/_preview/page/<token>` reads the markup as broken rather than the stylesheet as old. The
+  # builder's own save purged the key; these three write the same row and did not.
+  describe "the live page's preview stylesheet" do
+    import MishkaCmsCore.Test.VersionHelpers
+    alias MishkaCmsCore.Runtime.PageDraft
+
+    setup do
+      site = create_site!()
+      page = create_page!(site_id: site.id)
+
+      %{site: site, page: seed_css!(page)}
+    end
+
+    test "is dropped when a draft is published over it", %{site: site, page: page} do
+      draft =
+        PageDraft
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            name: page.name,
+            title: page.title,
+            path: page.path,
+            template: ~s(<h1 class="mt-77">published</h1>),
+            source_page_id: page.id
+          },
+          tenant: site.id
+        )
+        |> Ash.create!(authorize?: false)
+
+      draft
+      |> Ash.Changeset.for_update(:publish, %{}, tenant: site.id)
+      |> Ash.update!(authorize?: false)
+
+      refute AssetsState.exists?(page.preview_token, "css"),
+             "the shareable preview kept the stylesheet from before the publish"
+    end
+
+    test "and when a version is restored over it", %{site: site, page: page} do
+      page
+      |> Ash.Changeset.for_update(:update, %{description: "Changed"}, tenant: site.id)
+      |> Ash.update!(authorize?: false)
+
+      version = first_version(MishkaCmsCore.Runtime.Page.Version, page.id)
+
+      # That update is itself a write, so it took the key the setup seeded with it — the restore has
+      # to be given its own stale stylesheet to drop.
+      seed_css!(page)
+
+      {:ok, _restored} =
+        Page
+        |> Ash.ActionInput.for_action(
+          :master_restore_version,
+          %{
+            id: page.id,
+            version_id: version.id
+          },
+          authorize?: false
+        )
+        |> Ash.run_action(authorize?: false)
+
+      refute AssetsState.exists?(page.preview_token, "css"),
+             "the shareable preview kept the stylesheet from before the restore"
+    end
+
+    # The inspector's Configuration tab is an `AshPhoenix.Form` over this very action.
+    test "and when the Configuration form saves it", %{page: page} do
+      Page
+      |> Ash.get!(page.id, action: :master_get, authorize?: false)
+      |> Ash.Changeset.for_update(:master_update, %{template: ~s(<h1 class="mt-77">config</h1>)},
+        authorize?: false
+      )
+      |> Ash.update!(authorize?: false)
+
+      refute AssetsState.exists?(page.preview_token, "css"),
+             "the shareable preview kept the stylesheet from before the save"
+    end
+
+    # Archiving is a soft DESTROY, not an update: the row is unreachable afterwards, so a key left
+    # behind is one nothing can ever drop again.
+    test "and when the page is archived", %{page: page} do
+      Ash.destroy!(page, authorize?: false)
+
+      refute AssetsState.exists?(page.preview_token, "css"),
+             "an archived page left its preview stylesheet in the cache for good"
+    end
+
+    # A PURGE THAT RUNS BEFORE THE COMMIT PUTS THE STALE SHEET BACK: in the window between it and
+    # the commit, a reader of `/_preview/page/<token>` finds the key missing, compiles the row as it
+    # still is — the version before the save — and stores it under the token nobody will drop again.
+    test "and not before the row it invalidates is committed", %{site: site, page: page} do
+      test_pid = self()
+
+      page
+      |> Ash.Changeset.for_update(:update, %{description: "Committed"}, tenant: site.id)
+      |> Ash.Changeset.after_action(fn _changeset, record ->
+        send(test_pid, {:mid_transaction, AssetsState.exists?(page.preview_token, "css")})
+        {:ok, record}
+      end)
+      |> Ash.update!(authorize?: false)
+
+      assert_receive {:mid_transaction, true}
+      refute AssetsState.exists?(page.preview_token, "css")
+    end
+
+    # THE CACHE IS NOT A DEPENDENCY OF WRITING A PAGE. `AssetsState` owns its ETS table, the host
+    # app restarts it like any other child, and the sibling extensions' suites never start one —
+    # so a write path that cannot survive its absence turns a page save into a 500.
+    test "and the save still lands while the cache is not running", %{site: site, page: page} do
+      :ok = Supervisor.terminate_child(MishkaCmsCore.TestSupervisor, AssetsState)
+      on_exit(fn -> Supervisor.restart_child(MishkaCmsCore.TestSupervisor, AssetsState) end)
+
+      saved =
+        page
+        |> Ash.Changeset.for_update(:update, %{description: "No cache"}, tenant: site.id)
+        |> Ash.update!(authorize?: false)
+
+      assert saved.description == "No cache"
     end
   end
 end

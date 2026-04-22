@@ -2315,6 +2315,7 @@ defmodule MishkaCmsCore.Runtime.Page do
   changes do
     change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
     change Changes.RegisterTranslationKeys, on: [:create, :update]
+    change {Changes.PurgePreviewAssets, []}, on: [:update, :destroy]
   end
 
   # Multi-tenancy configuration - pages are always site-specific

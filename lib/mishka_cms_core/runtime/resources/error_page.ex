@@ -1795,6 +1795,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
   # Background job triggers for error page compilation
   changes do
     change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
+    change {Changes.PurgePreviewAssets, []}, on: [:update, :destroy]
   end
 
   # Multi-tenancy configuration - error pages are always site-specific

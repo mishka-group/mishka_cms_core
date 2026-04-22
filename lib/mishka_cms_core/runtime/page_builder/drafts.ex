@@ -22,6 +22,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Drafts do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.DraftPreviewAssets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.ErrorPageDraft
   alias MishkaCmsCore.Runtime.LayoutDraft
@@ -486,12 +487,29 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Drafts do
       draft
       |> Ash.Changeset.for_update(:master_update, attrs, actor: actor, context: @fork)
       |> Ash.update(actor: actor)
+      |> invalidate_preview()
 
   defp update(draft, attrs, %{site_id: site_id} = actor),
     do:
       draft
       |> Ash.Changeset.for_update(:update, attrs, tenant: site_id, actor: actor, context: @fork)
       |> Ash.update(actor: actor)
+      |> invalidate_preview()
+
+  # A DRAFT'S PREVIEW STYLESHEET IS COMPILED ONCE AND KEYED BY THE DRAFT'S TOKEN.
+  # `DraftPreviewAssets.ensure_css/2` compiles only when that key is absent, which is what keeps
+  # opening a preview cheap — and meant every edit after the first preview was rendered against the
+  # stylesheet of the version before it. A utility class typed a moment ago simply had no rule, so
+  # the element drew unstyled and looked exactly like a class that does not exist.
+  #
+  # DROPPED, NOT RECOMPILED. A Tailwind pass on every autosave would pay for a preview nobody may
+  # open; `ensure_css/2` already compiles on the way in, so throwing the key away is the whole fix.
+  defp invalidate_preview({:ok, draft} = result) do
+    DraftPreviewAssets.purge(draft)
+    result
+  end
+
+  defp invalidate_preview(other), do: other
 
   defp fetch(module, id, %{site_id: nil} = actor),
     do: Ash.get(module, id, action: :master_get, actor: actor)

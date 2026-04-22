@@ -1951,6 +1951,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
   changes do
     change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
     change Changes.RegisterTranslationKeys, on: [:create, :update]
+    change {Changes.PurgePreviewAssets, []}, on: [:update, :destroy]
   end
 
   # Multi-tenancy configuration using site_id attribute
