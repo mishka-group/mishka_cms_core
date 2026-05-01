@@ -1,0 +1,72 @@
+/* The ADMIN CHROME's stylesheet — the dashboard, the page builder and the login page.
+ *
+ * Deliberately its own file, and deliberately NOT `app.css`.
+ *
+ * `MishkaCmsCore.Runtime.Compilers.TailwindCompiler.build_css_content_static_base/0` reads
+ * `priv/static/assets/css/app.css` and inlines its whole content into the static base, which is then
+ * prepended to EVERY site's compiled CSS. Compiling the admin's utilities into `app.css` would
+ * therefore ship the entire dashboard inside every public page's stylesheet. `app.css` stays what
+ * the compiler expects it to be: a small file carrying `@theme` tokens.
+ *
+ * Nothing here reaches a site. It is built by `mix tailwind mishka_cms_admin` into
+ * `priv/static/assets/css/admin.css` and linked only where the root layout sets `full_tailwind`.
+ *
+ * ## Why this file has to exist at all
+ *
+ * It did not, and the consequence was that the admin had no compiled CSS whatsoever — every utility
+ * class in the sidebar, the tables, the modals and the inspector was generated in the browser by
+ * Tailwind's JIT, on every page load, from a 275 KB script. That is the right tool for the page
+ * builder's canvas, where a reader types `px-7` into the inspector and the utility must exist a
+ * frame later. It is the wrong tool for a settings page whose classes have not changed since it was
+ * written.
+ *
+ * ## Where the `@source` globs are
+ *
+ * In `Mix.Tasks.AdminCss`, not here, because they must be ABSOLUTE. Tailwind v4 filters relative
+ * source paths through `.gitignore`, and this repo gitignores `__extensions/mishka_gervaz/`
+ * and the vendored `ash` packages — so a relative glob silently matched nothing for them. That is
+ * what broke
+ * the dashboard: the admin's own pages compiled while every Gervaz table lost its spacing, its grid
+ * and its layout, with no error to show for it.
+ *
+ * Build this with `mix admin_css`, never `mix tailwind admin_chrome` directly.
+ */
+
+/* The same variants the runtime compiler declares for a site, because the admin uses them too. */
+@custom-variant phx-click-loading (.phx-click-loading&, .phx-click-loading &);
+@custom-variant phx-submit-loading (.phx-submit-loading&, .phx-submit-loading &);
+@custom-variant phx-change-loading (.phx-change-loading&, .phx-change-loading &);
+@custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+/* CLASSES BUILT AT RUNTIME, which no scan can see.
+ *
+ * `MishkaCmsCore.Dashboard.Widget.col_span_class/1` returns `"col-span-#{n}"` for a span between 2
+ * and 6, read from a widget row in the database. Only `col-span-2` appears literally in the source,
+ * so a dashboard laid out with wider widgets lost its grid entirely — every card fell to the same
+ * width. It was the single class the browser JIT was still earning its keep for, and the reason the
+ * dashboard broke when the generator was removed.
+ *
+ * Safelisted rather than hunted down and rewritten: a span is data, and data-driven utilities are a
+ * normal thing for a dashboard to have. `@source inline(...)` is Tailwind's own answer for them.
+ */
+@source inline("col-span-{2,3,4,5,6}");
+@source inline("max-[980px]:col-span-1!");
+
+/* THE DASHBOARD'S BARS, for the same reason and with the same answer.
+ *
+ * Four widgets draw a proportion as a bar, and a proportion is measured, not written: the compile
+ * chart's `h-[…%]` is `max(round(count / max * 100), 8)` over the week's busiest day, and the bundle
+ * and permission-access bars' `w-[…%]` are percentages of a cap and of a user count. Each used to be
+ * a `style` attribute, which bought the whole `style-src-attr 'unsafe-inline'` directive for four
+ * bars — and CSP has no nonce for an attribute, so the only way to close it is for the attributes not
+ * to exist. See `MishkaCmsCore.Runtime.Plugs.SecurityHeaders`.
+ *
+ * Declared here rather than in `Mix.Tasks.AdminCss`'s `accent_utilities/0`: that function is composed
+ * into `public_css/1` only, and these render on the dashboard. This file is concatenated into the
+ * ADMIN sheet, which is the audience that needs them.
+ *
+ * `h-` starts at 8 because the chart floors an empty day there — a range wide enough to be honest
+ * about the source, narrow enough that no rule here is dead.
+ */
+@source inline("w-[{0..100}%]");
+@source inline("h-[{8..100}%]");
