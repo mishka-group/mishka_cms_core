@@ -66,6 +66,8 @@ defmodule MishkaCmsCore.Application do
       installer_children() ++
         [{AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]}] ++ plugins()
 
+    MishkaCmsCore.Activity.Sources.Oban.attach()
+    MishkaCmsCore.Activity.Sources.RuntimeCompile.attach()
     MishkaCmsCore.PluginRegistrations.attach()
     MishkaCmsCore.Runtime.Compilers.SitemapCompiler.attach()
 
