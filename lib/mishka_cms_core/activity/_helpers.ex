@@ -310,6 +310,39 @@ defmodule MishkaCmsCore.Activity.Helpers do
   @doc "Tailwind `bg-/text-` classes for a badge/avatar palette tone (the timeline UI)."
   def tone_class(tone), do: Map.get(@tone_classes, tone, "bg-gray-100 text-gray-700")
 
+  @doc """
+  What the log calls each of `user_ids`, for `viewer`, as `%{user_id => label}`.
+
+  The email of an actor `viewer` may read (see `MishkaCmsCore.Activity.Query.actor_emails/2`),
+  "Master" for a master's id, "Unknown" for any other id. Two reads for the whole list. Read a label
+  back with `actor_label/2`.
+  """
+  @spec actor_labels([String.t() | nil], map() | nil) :: %{String.t() => String.t()}
+  def actor_labels(user_ids, viewer) do
+    ids = user_ids |> Enum.reject(&is_nil/1) |> Enum.uniq()
+    users = MishkaCmsCore.Activity.Query.actor_emails(ids, viewer)
+
+    masters =
+      case ids |> Enum.reject(&Map.has_key?(users, &1)) |> AccountsHelper.master_ids() do
+        {:ok, masters} -> masters
+        {:error, _reason} -> MapSet.new()
+      end
+
+    Map.new(ids, fn id ->
+      {id, AccountsHelper.who(Map.get(users, id), MapSet.member?(masters, id), :unknown)}
+    end)
+  end
+
+  @doc """
+  The label `actor_labels/2` gave `user_id`: "System" for no user, "Unknown" for an id it was not
+  given.
+  """
+  @spec actor_label(map(), String.t() | nil) :: String.t()
+  def actor_label(_labels, nil), do: AccountsHelper.label(:system)
+
+  def actor_label(labels, user_id),
+    do: Map.get_lazy(labels, user_id, fn -> AccountsHelper.label(:unknown) end)
+
   @doc "Up to two uppercase initials for an actor display name (`\"?\"` when blank)."
   def initials(name) when is_binary(name) and name != "" do
     name
