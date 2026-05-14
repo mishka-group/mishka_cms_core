@@ -1,0 +1,52 @@
+<div>
+  <div>
+    <div class="mb-[22px] flex flex-wrap items-start justify-between gap-5">
+      <div>
+        <div class="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#5b57d6]">
+          {gettext("Runtime")}
+        </div>
+        <h1 class="m-0 font-['Newsreader'] text-[32px] font-medium leading-[1.05] tracking-[-0.01em] text-[#17161a]">
+          {gettext("Activity Logs")}
+        </h1>
+        <div class="mt-2 max-w-[560px] text-[13.5px] font-medium text-[#7c7a75]">
+          {gettext(
+            "A unified stream of changes, jobs and events across every site and extension."
+          )}
+        </div>
+      </div>
+    </div>
+
+    <div
+      :if={@counts}
+      data-role="kpis"
+      class="mb-5 grid grid-cols-4 gap-3 max-[980px]:grid-cols-2!"
+    >
+      <div
+        :for={{label, key, label_color, dot} <- kpi_cards()}
+        class="rounded-[14px] border border-[#ecebe6] bg-white px-4 py-[15px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+      >
+        <div class={[
+          "flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.05em]",
+          label_color
+        ]}>
+          <span :if={dot} class={["size-[7px] rounded-full", dot]}></span>
+          {label}
+        </div>
+        <div
+          id={"activity-kpi-#{key}"}
+          class="mt-[7px] font-['Space_Grotesk'] text-[28px] font-semibold tracking-[-0.03em] text-[#17161a]"
+        >
+          {delimited(Map.get(@counts, key, 0))}
+        </div>
+      </div>
+    </div>
+
+    <.live_component
+      module={MishkaGervaz.Table.Web.Live}
+      id="activity-table"
+      resource={MishkaCmsCore.Activity.ActivityEntry}
+      current_user={@current_user}
+      url_state={@url_state}
+    />
+  </div>
+</div>

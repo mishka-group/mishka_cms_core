@@ -207,6 +207,23 @@ defmodule MishkaCmsCore.Activity.ActivityEntryTest do
     end
   end
 
+  describe "gervaz table integration" do
+    test "State.init resolves the custom template, columns and filters" do
+      state = State.init("activity", ActivityEntry, %{id: "u", site_id: nil, role: :admin})
+
+      assert state.template == MishkaCmsCoreWeb.Templates.ActivityTimeline
+      assert length(state.static.columns) == 4
+      assert length(state.static.filters) == 4
+      assert state.master_user?
+    end
+
+    test "tenant State.init flags master_user? false" do
+      site = create_site!()
+      state = State.init("activity", ActivityEntry, %{id: "u", site_id: site.id, role: :user})
+      refute state.master_user?
+    end
+  end
+
   describe "actor + site resolution (the render-helper lookups)" do
     test "actor_name: master sees any email; tenant sees same-site, Master for a master" do
       site = create_site!()

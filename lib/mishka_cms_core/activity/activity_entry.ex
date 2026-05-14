@@ -27,6 +27,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
   alias MishkaCmsCore.Activity.{Helpers, Query}
+  alias MishkaCmsCoreWeb.Templates.ActivityTimeline
 
   @entry_keys [
     :id,
@@ -97,7 +98,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
               id: record.id,
               initials: Helpers.initials(name),
               name: name,
-              tone: record.tone || record.severity
+              tone: ActivityTimeline.avatar_tone_class(record.tone || record.severity)
             }
 
             ~H"""
@@ -228,6 +229,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
       end
 
       presentation do
+        template MishkaCmsCoreWeb.Templates.ActivityTimeline
         template_options timestamp: :inserted_at, max_cap: Query.max_cap()
         features [:filter, :paginate]
       end
