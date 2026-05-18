@@ -5,15 +5,27 @@ defmodule MishkaCmsCore.Application do
 
   use Application
 
+  @dashboard_widgets []
+
+  @doc """
+  The core dashboard widget plugins. Each is supervised so it self-registers on the
+  `dashboard:widgets` event once `mishka_installer` is ready (the plugin retries until then), and
+  `MishkaCmsCore.Dashboard.WidgetSettings` walks this same list to register each widget's own
+  settings with the Settings page — so the two can never disagree about which widgets exist.
+  """
+  @spec dashboard_widgets() :: [module()]
+  def dashboard_widgets, do: @dashboard_widgets
+
   # Notification producer plugins — each reacts to an existing `<app>:<resource>:after_<action>`
   # event and hands off to `MishkaCmsCore.Notify.deliver/3`.
   @notify_producers [
     MishkaCmsCore.Notify.Producers.PermissionsChanged
   ]
 
-  # `settings:register` plugins — every sidebar entry's position/visibility switches under the
-  # Sidebar tab.
+  # `settings:register` plugins — the core widgets' settings under the General tab, and every
+  # sidebar entry's position/visibility switches under the Sidebar tab.
   @settings_plugins [
+    MishkaCmsCore.Dashboard.WidgetSettings,
     MishkaCmsCore.Sidebar.MenuSettings
   ]
 
@@ -50,7 +62,7 @@ defmodule MishkaCmsCore.Application do
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: @notify_producers ++ @settings_plugins ++ @mail_providers
+  def plugins, do: @dashboard_widgets ++ @notify_producers ++ @settings_plugins ++ @mail_providers
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
