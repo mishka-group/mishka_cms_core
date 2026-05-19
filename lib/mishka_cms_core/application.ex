@@ -5,7 +5,11 @@ defmodule MishkaCmsCore.Application do
 
   use Application
 
-  @dashboard_widgets []
+  @dashboard_widgets [
+    MishkaCmsCore.Dashboard.Widgets.SiteOverview,
+    MishkaCmsCore.Dashboard.Widgets.UsersSummary,
+    MishkaCmsCore.Dashboard.Widgets.QuickActions
+  ]
 
   @doc """
   The core dashboard widget plugins. Each is supervised so it self-registers on the
