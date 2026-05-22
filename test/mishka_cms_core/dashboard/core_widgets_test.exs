@@ -15,14 +15,20 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
 
   alias MishkaCmsCore.Dashboard.Widgets.{
     SiteOverview,
+    RuntimeHealth,
+    RecentActivity,
     UsersSummary,
-    QuickActions
+    QuickActions,
+    CmsStatus
   }
 
   @widgets [
     {SiteOverview, "site-overview", "Sites"},
+    {RuntimeHealth, "runtime-health", "Running"},
+    {RecentActivity, "recent-activity", nil},
     {UsersSummary, "users-summary", "users total"},
-    {QuickActions, "quick-actions", "New page"}
+    {QuickActions, "quick-actions", "New page"},
+    {CmsStatus, "cms-status", "Public site"}
   ]
 
   test "every core widget plugin registers on the dashboard:widgets event" do
@@ -81,7 +87,8 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
   describe "who sees each core widget" do
     @areas [
       {UsersSummary, "admin:dashboard:user"},
-      {SiteOverview, "admin:dashboard:runtime:site"}
+      {SiteOverview, "admin:dashboard:runtime:site"},
+      {RecentActivity, "admin:dashboard:runtime:activity"}
     ]
 
     for {module, area} <- @areas do
@@ -99,7 +106,12 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
       end
     end
 
-    for module <- [QuickActions] do
+    for module <- [
+          MishkaCmsCore.Dashboard.Widgets.OverviewMetrics,
+          RuntimeHealth,
+          CmsStatus,
+          QuickActions
+        ] do
       test "#{inspect(module)} is for anyone holding anything on the dashboard" do
         site = create_site!()
         widget = unquote(module).widget()
@@ -128,6 +140,20 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
       refute html =~ "New layout"
     end
 
+    test "the overview band shows a count only to whoever may see the card it comes from" do
+      site = create_site!()
+
+      users = fn user ->
+        Enum.find(
+          MishkaCmsCore.Dashboard.Widgets.OverviewMetrics.load(user).kpis,
+          &(&1.label == "Users")
+        ).value
+      end
+
+      assert users.(holder(["admin:dashboard:user"], site)) =~ ~r/^\d+$/
+      assert users.(holder(["admin:dashboard:runtime:media"], site)) == "—"
+    end
+
     test "the users card counts a holder of one area among its admins" do
       site = create_site!()
       before = UsersSummary.load(holder(["admin:dashboard:user"], site)).admins
@@ -138,6 +164,76 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
 
       assert UsersSummary.load(holder(["admin:dashboard:user"], site)).admins == before + 3
     end
+  end
+
+  # A site switched offline on its own and every site switched offline from Global read alike in a
+  # single flag, so a tenant whose own site was down saw "Operational" and a master saw nothing.
+  describe "cms-status: which switch holds the public site offline" do
+    setup do
+      snapshot = MishkaCmsCore.Runtime.States.SettingsState.snapshot()
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SettingsState.restore(snapshot) end)
+      unique = "offline-widget-#{System.unique_integer([:positive])}"
+      site = create_site!(name: unique, host: "#{unique}.test", active: true)
+
+      :ok =
+        MishkaCmsCore.Runtime.States.SiteState.save(%{
+          id: site.id,
+          name: site.name,
+          host: site.host,
+          priority: site.priority,
+          active: true
+        })
+
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.delete(site.id) end)
+      %{site: site}
+    end
+
+    test "a tenant whose own site is offline is told it is its own switch", %{site: site} do
+      {:ok, _} = MishkaCmsCore.Settings.put("cms.offline", true, site_id: site.id)
+
+      html = rendered(CmsStatus, tenant(site))
+
+      assert html =~ "OFFLINE"
+      assert html =~ "by this site&#39;s own switch"
+    end
+
+    test "a tenant is told when Global holds every site offline", %{site: site} do
+      {:ok, _} = MishkaCmsCore.Settings.put("cms.offline", true)
+
+      html = rendered(CmsStatus, tenant(site))
+
+      assert html =~ "OFFLINE"
+      assert html =~ "every site, by Global"
+    end
+
+    test "a master sees how many sites are offline on their own", %{site: site} do
+      before = sites_offline(rendered(CmsStatus, master()))
+
+      {:ok, _} = MishkaCmsCore.Settings.put("cms.offline", true, site_id: site.id)
+
+      html = rendered(CmsStatus, master())
+      assert html =~ "ONLINE"
+      assert sites_offline(html) == before + 1
+    end
+  end
+
+  defp sites_offline(html) do
+    [count] =
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#cms-status-sites-offline span:last-child")
+      |> LazyHTML.text()
+      |> String.split()
+
+    String.to_integer(count)
+  end
+
+  defp rendered(module, user) do
+    render_component(&Widget.card/1,
+      widget: module.widget(),
+      state: {:ok, module.load(user)},
+      current_user: user
+    )
   end
 
   # A master is a user whose `site_id` is nil — NOT a missing user, which `Widget.scope/1` now

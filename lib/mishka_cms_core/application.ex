@@ -6,9 +6,13 @@ defmodule MishkaCmsCore.Application do
   use Application
 
   @dashboard_widgets [
+    MishkaCmsCore.Dashboard.Widgets.OverviewMetrics,
     MishkaCmsCore.Dashboard.Widgets.SiteOverview,
+    MishkaCmsCore.Dashboard.Widgets.RuntimeHealth,
+    MishkaCmsCore.Dashboard.Widgets.RecentActivity,
     MishkaCmsCore.Dashboard.Widgets.UsersSummary,
-    MishkaCmsCore.Dashboard.Widgets.QuickActions
+    MishkaCmsCore.Dashboard.Widgets.QuickActions,
+    MishkaCmsCore.Dashboard.Widgets.CmsStatus
   ]
 
   @doc """
