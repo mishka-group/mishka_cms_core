@@ -9,6 +9,10 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlugTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  import Plug.Conn
+  import Plug.Test
+
+  alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.LanguagePlug
   alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
   alias MishkaCmsCore.Settings
@@ -56,6 +60,15 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlugTest do
         language: language
       })
   end
+
+  defp request(site, path, session \\ %{}) do
+    :get
+    |> conn(path)
+    |> assign(:current_site, %{name: site.name, id: site.id})
+    |> init_test_session(session)
+  end
+
+  defp opts(live_view \\ @cms), do: LanguagePlug.init(router: @router, live_view: live_view)
 
   describe "target/3 — where a request belongs" do
     test "a first segment that is one of the site's languages is the answer", %{where: where} do
@@ -119,6 +132,95 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlugTest do
 
       assert LanguagePlug.target(["blog"], {site.name, site.id}, nil) ==
                {:redirect, "/fa/blog", "fa"}
+    end
+  end
+
+  # `/admin/dashboard` throughout, a LiveView address `MishkaCmsCore.TestRouter` HAS and can be told
+  # the CMS answers. `target/3` above is where the rule itself is exercised; these are about what
+  # `call/2` does with its answer — the redirect, the session, the locale and the route guard.
+  describe "call/2" do
+    test "redirects and keeps the query string", %{site: site} do
+      route!(site, "/:lang/admin/dashboard")
+
+      conn =
+        :get
+        |> conn("/admin/dashboard?page=2&q=ash")
+        |> assign(:current_site, %{name: site.name, id: site.id})
+        |> init_test_session(%{})
+        |> LanguagePlug.call(opts())
+
+      assert conn.status == 302
+      assert conn.halted
+      assert get_resp_header(conn, "location") == ["/en/admin/dashboard?page=2&q=ash"]
+    end
+
+    test "remembers the language a visitor is reading in", %{site: site} do
+      route!(site, "/:lang/pricing")
+
+      conn = request(site, "/fa/pricing") |> LanguagePlug.call(opts())
+
+      refute conn.halted
+      assert get_session(conn, Languages.session()) == "fa"
+      assert conn.assigns.site_language == "fa"
+    end
+
+    test "the remembered language decides the next unprefixed address", %{site: site} do
+      route!(site, "/:lang/admin/dashboard")
+
+      conn =
+        site
+        |> request("/admin/dashboard", %{Languages.session() => "fa"})
+        |> LanguagePlug.call(opts())
+
+      assert get_resp_header(conn, "location") == ["/fa/admin/dashboard"]
+    end
+
+    test "a remembered language the site no longer publishes in is ignored", %{site: site} do
+      route!(site, "/:lang/admin/dashboard")
+
+      conn =
+        site
+        |> request("/admin/dashboard", %{Languages.session() => "de"})
+        |> LanguagePlug.call(opts())
+
+      assert get_resp_header(conn, "location") == ["/en/admin/dashboard"]
+    end
+
+    test "Gettext answers in the language of the response", %{site: site} do
+      route!(site, "/:lang/pricing")
+      Gettext.put_locale("en")
+
+      _conn = request(site, "/fa/pricing") |> LanguagePlug.call(opts())
+
+      assert Gettext.get_locale(MishkaCmsCore.Gettext) == "fa"
+    end
+
+    # A page published at `/en/admin/dashboard` would otherwise take the dashboard down with it.
+    test "a route the CMS does not answer is never moved", %{site: site} do
+      route!(site, "/en/admin/dashboard")
+
+      conn = request(site, "/admin/dashboard") |> LanguagePlug.call(opts(SomeOtherLiveView))
+
+      refute conn.halted
+      assert conn.status == nil
+      assert conn.assigns.site_language == "en"
+    end
+
+    test "and one it does answer is", %{site: site} do
+      route!(site, "/en/admin/dashboard")
+
+      conn = request(site, "/admin/dashboard") |> LanguagePlug.call(opts())
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/en/admin/dashboard"]
+    end
+
+    test "a request with no site is not this module's business" do
+      conn =
+        :get |> conn("/admin/dashboard") |> init_test_session(%{}) |> LanguagePlug.call(opts())
+
+      refute conn.halted
+      refute conn.assigns[:site_language]
     end
   end
 

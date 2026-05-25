@@ -1,0 +1,110 @@
+<div>
+  <div>
+    <%!-- ── header ── --%>
+    <div class="mb-6 flex items-end justify-between gap-5">
+      <div>
+        <div class="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#5b57d6]">
+          {date_str()}
+        </div>
+        <h1 class="m-0 font-['Newsreader'] text-[34px] font-medium leading-[1.05] tracking-[-0.01em] text-[#17161a]">
+          {greeting(@current_user)}
+        </h1>
+        <div class="mt-2 text-[13.5px] font-medium text-[#7c7a75]">
+          {gettext("Everything across your sites, at a glance.")}
+        </div>
+      </div>
+
+      <div :if={@customize?} class="flex items-center gap-2.5">
+        <button
+          type="button"
+          phx-click="reset"
+          class="h-10 rounded-[11px] border border-[#ecebe6] bg-white px-4 text-[13px] font-semibold text-[#5c5a54] transition hover:bg-[#f7f6f3]"
+        >
+          {gettext("Reset")}
+        </button>
+        <button
+          type="button"
+          phx-click="toggle_customize"
+          class="h-10 rounded-[11px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-5 text-[13px] font-semibold text-white shadow-[0_5px_14px_rgba(79,75,204,0.3)]"
+        >
+          {gettext("Done")}
+        </button>
+      </div>
+      <button
+        :if={!@customize?}
+        type="button"
+        phx-click="toggle_customize"
+        class="flex h-10 items-center gap-2 rounded-[11px] border border-[#dcdbf5] bg-white px-[18px] text-[13px] font-semibold text-[#4f4bcc] transition hover:bg-[#eeedfb]"
+      >
+        <.icon name="hero-squares-2x2" class="size-[15px]" /> {gettext("Customize")}
+      </button>
+    </div>
+
+    <%!-- ── widget library (customize) ── --%>
+    <div
+      :if={@customize?}
+      class="mb-5 rounded-[16px] border-[1.5px] border-dashed border-[#cfceee] bg-[#f4f3fd] px-5 py-[18px]"
+    >
+      <div class="mb-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
+        <.icon name="hero-squares-plus" class="size-4 text-[#5b57d6]" />
+        <span class="font-['Space_Grotesk'] text-sm font-bold text-[#17161a]">
+          {gettext("Widget library")}
+        </span>
+        <span class="text-[12.5px] font-medium text-[#7c7a75]">
+          {gettext("Drag a card to reorder, hide from its handle, or add hidden widgets back.")}
+        </span>
+      </div>
+      <div
+        id="dash-tray"
+        phx-hook="DashboardTray"
+        class="mt-3 flex min-h-9 flex-wrap items-center gap-2"
+      >
+        <div
+          :for={w <- @available}
+          id={"tray-#{w.id}"}
+          data-id={w.id}
+          phx-click="add"
+          phx-value-id={w.id}
+          title={MishkaCmsCore.Settings.text(w.description)}
+          class="flex cursor-grab touch-none select-none items-center gap-1.5 rounded-[10px] border border-[#dcdbf5] bg-white px-[13px] py-2 text-[12.5px] font-semibold text-[#4f4bcc] transition hover:bg-[#eeedfb] active:cursor-grabbing"
+        >
+          <.icon name="hero-plus" class="size-3" />{MishkaCmsCore.Settings.text(w.title)}
+        </div>
+        <p :if={@available == []} class="text-[12.5px] font-semibold text-[#5b57d6]">
+          {gettext("Every widget is on your board.")}
+        </p>
+      </div>
+    </div>
+
+    <%!-- ── the 6-column board (the KPI band is the first, full-width widget) ── --%>
+    <div
+      id="dash-grid"
+      phx-hook="DashboardGrid"
+      data-customize={to_string(@customize?)}
+      class={[
+        "grid grid-cols-6 items-start gap-4 max-[980px]:grid-cols-1!",
+        @customize? && "min-h-28"
+      ]}
+    >
+      <div
+        :for={w <- @widgets}
+        id={"dash-#{w.id}"}
+        data-id={w.id}
+        class={span_class(w, @widget_layout)}
+      >
+        <MishkaCmsCore.Dashboard.Widget.card
+          widget={w}
+          state={Map.get(@data, w.id, :loading)}
+          current_user={@current_user}
+          customize?={@customize?}
+          span={Widget.span(w, @widget_layout)}
+          config={Widget.config(w, @current_user, @widget_layout)}
+        />
+      </div>
+    </div>
+
+    <p :if={@widgets == [] and not @customize?} class="text-[#7c7a75]">
+      {gettext("No widgets on your dashboard.")}
+    </p>
+  </div>
+</div>

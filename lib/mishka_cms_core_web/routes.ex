@@ -8,6 +8,7 @@ defmodule MishkaCmsCoreWeb.Routes do
   @impl true
   def routes(:admin) do
     [
+      {:live, "/", MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index, :index},
       {:live, "/runtime/activity", MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index, :index},
       {:live, "/runtime/translations",
        MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index, :index},

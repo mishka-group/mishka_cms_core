@@ -446,6 +446,14 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       end
     end
 
+    # A PAGE IS STILL HTML ALONE: the file's route names what it answers, the rest of the router
+    # keeps refusing what is not a page.
+    test "leaves every other route refusing what is not html", %{site: site} do
+      for accept <- ["application/gzip", "application/x-gzip"] do
+        assert_error_sent 406, fn -> fetch(site, "/admin/dashboard", accept: accept) end
+      end
+    end
+
     test "answers a name that is no file with a 404 no cache keeps, heard first", %{site: site} do
       register!(SitemapUnavailable, "web:request:sitemap_unavailable")
       site_id = site.id

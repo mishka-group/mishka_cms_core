@@ -277,6 +277,25 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
     end
   end
 
+  # A MASTER SIGNS IN ON THE MASTER SITE'S OWN ADDRESS, once its sign-in page was asked for the
+  # master accounts: the flag that leaves the sign-in unscoped travels in the session.
+  describe "master sign-in" do
+    test "a master signs in on the master site's own address", %{conn: conn} do
+      master = user_with(["admin:dashboard:*"], nil)
+
+      signed_in =
+        conn
+        |> Plug.Test.init_test_session(%{master_mode: true})
+        |> get(handoff(master))
+
+      assert redirected_to(signed_in) == "/"
+      assert get_session(signed_in, "user_token")
+
+      next = signed_in |> Phoenix.ConnTest.recycle() |> with_host() |> get("/admin/dashboard")
+      assert next.assigns.current_user.id == master.id
+    end
+  end
+
   # AN OFFLINE SITE SIGNS IN ONLY WHO MAY SEE IT: its own admins, and masters. Everyone else is
   # turned back at the one place every sign-in ends, before a session is written, and is told why.
   # The emails that would lead to a sign-in are not sent to them either.
