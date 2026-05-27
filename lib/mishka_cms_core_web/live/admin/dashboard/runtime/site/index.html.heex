@@ -1,0 +1,42 @@
+<div>
+  <.header>
+    {gettext("Sites")}
+    <:subtitle>{gettext("Manage your application sites and configurations.")}</:subtitle>
+    <:actions>
+      <.button phx-click="site_modal_add">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2.2"
+          stroke-linecap="round"
+          stroke-linejoin="round"
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+        {gettext("Add Site")}
+      </.button>
+    </:actions>
+  </.header>
+
+  <%!-- Site details modal: Overview (read-only details + real health) + Configuration (the form). --%>
+  <MishkaCmsCoreWeb.Live.Admin.Components.SiteDetailsModal.modal
+    site_modal={@site_modal}
+    current_user={@current_user}
+  />
+
+  <%!-- Sites Table — System Logs sit between the filters and the table via :before_table. --%>
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="sites-table"
+    resource={MishkaCmsCore.Runtime.Site}
+    current_user={@current_user}
+    url_state={@url_state}
+  >
+    <:filter_actions>
+      <MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.feed setup={@activity_feed} />
+    </:filter_actions>
+  </.live_component>
+</div>

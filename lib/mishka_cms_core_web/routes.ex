@@ -10,6 +10,7 @@ defmodule MishkaCmsCoreWeb.Routes do
     [
       {:live, "/", MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index, :index},
       {:live, "/runtime/activity", MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index, :index},
+      {:live, "/runtime/sites", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index, :index},
       {:live, "/runtime/translations",
        MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index, :index},
       {:live, "/runtime/medias", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index,

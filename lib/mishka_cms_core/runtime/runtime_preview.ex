@@ -676,8 +676,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   Overview detail rows (`{label, value}`) for `record` of `resource`. Resource-specific
   fields (section, layout, priority) appear only when present.
   """
-  def details(record, _resource) do
+  def details(record, resource) do
+    config = MishkaCmsCore.Runtime.RuntimeStatus.config(resource)
+
     [
+      {gettext("Type"), config.label},
       maybe_row(gettext("Section"), Map.get(record, :section) || Map.get(record, :description)),
       {gettext("Format"), format_value(record)},
       maybe_row(gettext("Priority"), Map.get(record, :priority)),
