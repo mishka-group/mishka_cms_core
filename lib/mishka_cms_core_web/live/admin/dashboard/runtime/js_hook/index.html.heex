@@ -1,0 +1,27 @@
+<div>
+  <.header>
+    {gettext("JS Hooks")}
+    <:subtitle>{gettext("Manage your JavaScript hooks.")}</:subtitle>
+    <:actions>
+      <.button :if={@writable?} id="add-js_hook" phx-click="preview_add">
+        {gettext("+ Add JS Hook")}
+      </.button>
+    </:actions>
+  </.header>
+
+  <%!-- Runtime detail modal: Overview · Code · Versions · Configuration (add/edit in-modal). --%>
+  <MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal.modal preview={@preview} />
+
+  <%!-- JS Hooks Table — System Logs sit between the filters and the table via :before_table. --%>
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="js-hooks-table"
+    resource={MishkaCmsCore.Runtime.JsHook}
+    current_user={@current_user}
+    url_state={@url_state}
+  >
+    <:filter_actions>
+      <MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.feed setup={@activity_feed} />
+    </:filter_actions>
+  </.live_component>
+</div>

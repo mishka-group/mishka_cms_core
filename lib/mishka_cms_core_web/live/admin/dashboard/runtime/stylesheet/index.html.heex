@@ -1,0 +1,27 @@
+<div>
+  <.header>
+    {gettext("Stylesheets")}
+    <:subtitle>{gettext("Manage your runtime stylesheets.")}</:subtitle>
+    <:actions>
+      <.button :if={@writable?} id="add-stylesheet" phx-click="preview_add">
+        {gettext("+ Add Stylesheet")}
+      </.button>
+    </:actions>
+  </.header>
+
+  <%!-- Runtime detail modal: Overview · Code · Versions · Configuration (add/edit in-modal). --%>
+  <MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal.modal preview={@preview} />
+
+  <%!-- Stylesheets Table — System Logs sit between the filters and the table via :before_table. --%>
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="stylesheets-table"
+    resource={MishkaCmsCore.Runtime.Stylesheet}
+    current_user={@current_user}
+    url_state={@url_state}
+  >
+    <:filter_actions>
+      <MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.feed setup={@activity_feed} />
+    </:filter_actions>
+  </.live_component>
+</div>
