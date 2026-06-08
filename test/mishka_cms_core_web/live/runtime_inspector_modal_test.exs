@@ -27,7 +27,10 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Page, Site}
+  alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.LiveViewHelpers
+  alias MishkaCmsCore.Runtime.PageBuilder.Interface
 
   require Ash.Query
 
@@ -76,6 +79,12 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
   defp form_wrapper(resource),
     do: "#" <> MishkaGervaz.Resource.Info.Form.component_id(resource) <> "-form-wrapper"
 
+  defp form_selector(resource),
+    do: "#" <> MishkaGervaz.Resource.Info.Form.component_id(resource) <> "-form"
+
+  # Each declared attribute's options by name, whichever key shape the row is in.
+  defp options(component), do: Map.new(Interface.attrs(component), &{&1["name"], &1["opts"]})
+
   # The pencil, as the table actually renders it: an `:event` row action is a button carrying its
   # event name, so clicking this drives resource DSL → table component → parent LiveView.
   defp pencil(table, event), do: ~s(##{table} button[phx-value-event="#{event}"])
@@ -108,6 +117,201 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
       assert has_element?(view, form_wrapper(Site)),
              "the pencil did not reach the site's Configuration tab"
+    end
+  end
+
+  describe "saving a component's Configuration form" do
+    # A RENAME IS NOT A REDECLARATION. Each attribute's options are drawn as three controls —
+    # Required, Default, Doc — and a text box shows `nil` as nothing at all, while `values` gets no
+    # control. Saved as the form sent them back, a rename of `chelekom-button` declared `attr :type`
+    # with no default, and the first page that left `type` unset raised `key :type not found`.
+    test "a renamed chelekom-button still renders without a type", %{conn: conn} do
+      source =
+        create_component!(
+          name: "chelekom-button-copy-#{unique()}",
+          template: ~s|<button type={@type} class={@size}>Send</button>|,
+          attrs: Enum.filter(every_option_shape(), &(&1["name"] in ["type", "size"])),
+          slots: [],
+          active: true,
+          precompile: false
+        )
+
+      renamed = "acme-go-#{unique()}"
+      forget_component_on_exit(renamed)
+      save_through_the_form(conn, %{"name" => renamed})
+
+      assert Ash.get!(Component, source.id, authorize?: false).name == renamed,
+             "the save did not go through"
+
+      assert render_by_name(renamed) =~ ~s(<button class="large">Send</button>)
+    end
+
+    # What is kept is what the author did not touch. A default they empty is gone and one they type
+    # is theirs — the options beside it stay either way.
+    test "a default the author clears is cleared, and one they type replaces nil", %{conn: conn} do
+      source =
+        create_component!(
+          name: "typed-#{unique()}",
+          template: ~s|<button type={@type} class={@size}>Send</button>|,
+          attrs: Enum.filter(every_option_shape(), &(&1["name"] in ["type", "size"])),
+          slots: [],
+          active: true,
+          precompile: false
+        )
+
+      save_through_the_form(conn, %{
+        "attrs" => %{
+          "0" => %{"opts" => %{"default" => "submit"}},
+          "1" => %{"opts" => %{"default" => ""}}
+        }
+      })
+
+      assert options(Ash.get!(Component, source.id, authorize?: false)) == %{
+               "type" => %{
+                 "default" => "submit",
+                 "doc" => "Specifies the type of the element",
+                 "values" => ["button", "submit", "reset", nil]
+               },
+               "size" => %{"values" => ["small", "large"]}
+             }
+    end
+
+    # The same loss, for every option shape the kit ships: `false`, `true`, `""` and `[]` come back
+    # blank and were dropped, `0` and `1.0` came back as the strings Phoenix refuses as an integer's
+    # and a float's default, and `editor` and `default_struct` were never sent at all.
+    test "a rename keeps every option the form does not show, and the component still renders", %{
+      conn: conn
+    } do
+      source =
+        create_component!(
+          name: "shapes-#{unique()}",
+          template: every_option_template(),
+          attrs: every_option_shape(),
+          slots: [],
+          active: true,
+          precompile: false
+        )
+
+      renamed = "acme-go-#{unique()}"
+      forget_component_on_exit(renamed)
+      save_through_the_form(conn, %{"name" => renamed})
+
+      stored = Ash.get!(Component, source.id, authorize?: false)
+      assert stored.name == renamed, "the save did not go through"
+      assert options(stored) == options(source)
+
+      html = render_by_name(renamed)
+
+      assert html =~ ~s(class="large ")
+      assert html =~ ~s(data-full="false")
+      assert html =~ ~s(data-pill="true")
+      assert html =~ ~s(data-step="0")
+      assert html =~ ~s(data-precision="1.0")
+      assert html =~ ~s(data-items="0")
+      refute html =~ ~s(type="), "an unset type is drawn as no attribute at all"
+    end
+
+    # The pencil on the table's one row, then the form's own submit with `changes` typed in — the
+    # browser sends every other control as it was drawn.
+    defp save_through_the_form(conn, changes) do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/components")
+      render_async(view, @await)
+      view |> element(pencil("components-table", "edit_preview_modal")) |> render_click()
+      render_async(view, @await)
+
+      view
+      |> form(form_selector(Component), %{"form" => changes})
+      |> render_submit()
+    end
+
+    # A page's `<.component component_name="…" site="Global"/>`, passing nothing else.
+    defp render_by_name(name) do
+      %{component_name: name, site: nil}
+      |> LiveViewHelpers.component()
+      |> Phoenix.HTML.Safe.to_iodata()
+      |> IO.iodata_to_binary()
+    end
+  end
+
+  describe "Force compile" do
+    # A lazy record is built by the first request that needs it, which is a poor way to find out its
+    # template no longer compiles: the person who broke it is not the person who discovers it. The
+    # button is the author's way to ask now — and it is a button, not something the modal does on
+    # open, because what it produces is code held in RAM for the life of the node.
+    test "builds a lazy component's module, which merely opening the modal does not", %{
+      conn: conn,
+      site: site
+    } do
+      n = unique()
+
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "force-c-#{n}",
+          template: ~s(<b class="force-probe">built</b>),
+          precompile: false
+        )
+
+      module = Helpers.module_name(component.name, site.name, "Component")
+      on_exit(fn -> ModuleCompiler.unload(module) end)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/components")
+      send(view.pid, {:row_action, "show_preview_modal", %{"id" => component.id}})
+      html = render_async(view, @await)
+
+      refute Helpers.loaded?(module), "opening the modal must not compile anything"
+
+      assert html =~ "Force compile",
+             "the action is not offered for an active, module-backed record"
+
+      render_click(view, "preview_force_compile", %{})
+      render_async(view, 30_000)
+
+      assert Helpers.loaded?(module),
+             "Force compile left the module unbuilt — a lazy record cannot be checked before a visitor finds it"
+    end
+
+    test "and a lazy layout's, whose preview otherwise never compiles it", %{
+      conn: conn,
+      site: site
+    } do
+      n = unique()
+
+      layout =
+        create_layout!(
+          site_id: site.id,
+          name: "force-l-#{n}",
+          path: "/force-l-#{n}",
+          precompile: false
+        )
+
+      module = Helpers.module_name(layout.id, site.name, "Layout")
+      on_exit(fn -> ModuleCompiler.unload(module) end)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/layouts")
+      send(view.pid, {:row_action, "show_preview_modal", %{"id" => layout.id}})
+      render_async(view, @await)
+
+      refute Helpers.loaded?(module)
+
+      render_click(view, "preview_force_compile", %{})
+      render_async(view, 30_000)
+
+      assert Helpers.loaded?(module)
+    end
+
+    # The button names a real cost, so it must not be offered where it cannot act. An inactive record
+    # is read back by the compile worker through the same query the runtime uses, which for a
+    # Component filters on `active` — so the compile would report `:not_found` and nothing else.
+    test "is not offered for an inactive record", %{conn: conn, site: site} do
+      component = create_component!(site_id: site.id, name: "off-#{unique()}", active: false)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/components")
+      send(view.pid, {:row_action, "show_preview_modal", %{"id" => component.id}})
+      html = render_async(view, @await)
+
+      refute html =~ "Force compile",
+             "the action is offered for a record whose compile can only fail"
     end
   end
 

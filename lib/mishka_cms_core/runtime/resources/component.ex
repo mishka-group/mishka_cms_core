@@ -1042,6 +1042,12 @@ defmodule MishkaCmsCore.Runtime.Component do
         features :all
       end
 
+      # The options it draws are fewer than a declaration holds, and a save keeps the rest — see
+      # `MishkaCmsCoreWeb.Forms.ComponentSubmit`.
+      events do
+        submit MishkaCmsCoreWeb.Forms.ComponentSubmit
+      end
+
       hooks do
         on_cancel fn state -> state end
       end
