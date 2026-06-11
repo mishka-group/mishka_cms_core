@@ -86,6 +86,7 @@ defmodule MishkaCmsCore.LanguageEditions do
   alias MishkaCmsCore.Accounts.Helper
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDeletion
+  alias MishkaCmsCoreWeb.Live.Admin.Components.TranslationsRefusal
   alias MishkaGervaz.Resource.Info.Table, as: TableInfo
   alias MishkaGervaz.Table.Web.{DataLoader, Events}
   alias MishkaGervaz.Table.Web.Events.BulkActionResult
@@ -258,12 +259,13 @@ defmodule MishkaCmsCore.LanguageEditions do
   """
   @spec on_delete_refused(term(), map(), Phoenix.LiveView.Socket.t()) ::
           Phoenix.LiveView.Socket.t() | {:halt, Phoenix.LiveView.Socket.t()}
-  def on_delete_refused(failure, _state, socket) do
+  def on_delete_refused(failure, state, socket) do
     case refused_originals(failure) do
       [] ->
         socket
 
-      _refused ->
+      refused ->
+        TranslationsRefusal.show(state.static.resource, refused)
         if only_refusals?(failure), do: {:halt, socket}, else: socket
     end
   end

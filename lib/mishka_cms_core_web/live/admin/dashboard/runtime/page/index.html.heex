@@ -1,0 +1,156 @@
+<div>
+  <.header>
+    {gettext("Pages")}
+    <:subtitle>{gettext("Manage your site pages and their content.")}</:subtitle>
+    <:actions>
+      <%!-- CREATING WRITES, so it is offered to a writer of the type; everyone else reads the list. --%>
+      <.create_menu
+        :if={@writable?}
+        id="add-page"
+        label={gettext("+ Add Page")}
+        navigate={Section.builder_path("page")}
+        modal={MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.modal_id()}
+      >
+        <:way
+          id="pb-create-form-page"
+          label={gettext("Create with the full form")}
+          event="preview_add"
+        >
+          {gettext("Every field this one has, on one form — then back to this list.")}
+        </:way>
+        <:way
+          id="pb-create-open-page"
+          label={gettext("Fill in the form, then open the editor")}
+          event="create_and_open"
+        >
+          {gettext("The same form, and the visual editor opens on what it saved.")}
+        </:way>
+      </.create_menu>
+    </:actions>
+  </.header>
+
+  <%!-- Runtime detail modal: Overview · Preview · Code · Versions · Pipeline · Configuration
+        (add/edit in-modal, so there is no second form modal on this page). --%>
+  <MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal.modal preview={@preview} />
+
+  <.modal
+    :if={@translation}
+    id="page-translation-modal"
+    show
+    on_cancel={JS.push("translation_cancel")}
+    width_class="max-w-md"
+  >
+    <div id="page-translation">
+      <div class="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#5b57d6]">
+        {gettext("Add translation")}
+      </div>
+      <h2 class="m-0 font-['Newsreader'] text-[24px] font-medium leading-[1.05] text-[#17161a]">
+        {@translation.page.name}
+      </h2>
+
+      <.form
+        for={@translation.form}
+        id="page-translation-form"
+        phx-change="translation_change"
+        phx-submit="translation_create"
+        class="mt-5 flex flex-col gap-4"
+      >
+        <div>
+          <label
+            for="page-translation-language"
+            class="mb-2 flex flex-wrap items-center gap-[9px] text-[13px] font-semibold text-[#3a382f]"
+          >
+            {gettext("Language")}
+          </label>
+          <input
+            type="text"
+            id="page-translation-language"
+            dir="ltr"
+            name={@translation.form[:language].name}
+            value={@translation.form[:language].value}
+            list="page-translation-languages"
+            autocomplete="off"
+            placeholder={gettext("en, fa, ar, ...")}
+            class="h-[46px] w-full rounded-xl border border-[#ecebe6] bg-[#faf9f6] px-[15px] text-[13.5px] font-medium text-[#1b1a18] outline-none transition focus:border-[#c3c1f0] focus:bg-white focus:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]"
+          />
+          <datalist id="page-translation-languages">
+            <option :for={language <- @translation.languages} value={language}>
+              {String.upcase(language)}
+            </option>
+          </datalist>
+          <p
+            :if={@translation.languages == []}
+            id="page-translation-none"
+            class="mt-2 text-[12px] font-medium text-[#9a978f]"
+          >
+            {gettext(
+              "This page already has an edition in every language this site and its pages use. Type another code to start one."
+            )}
+          </p>
+        </div>
+
+        <div>
+          <label
+            for="page-translation-path"
+            class="mb-2 flex flex-wrap items-center gap-[9px] text-[13px] font-semibold text-[#3a382f]"
+          >
+            {gettext("Path")}
+          </label>
+          <input
+            type="text"
+            id="page-translation-path"
+            dir="ltr"
+            name={@translation.form[:path].name}
+            value={@translation.form[:path].value}
+            class="h-[46px] w-full rounded-xl border border-[#ecebe6] bg-[#faf9f6] px-[15px] text-[13.5px] font-medium text-[#1b1a18] outline-none transition focus:border-[#c3c1f0] focus:bg-white focus:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]"
+          />
+          <p class="mt-2 text-[12px] font-medium text-[#9a978f]">
+            {gettext(
+              "A copy of this page — its template, layout, code and permissions — that stays inactive until you activate it."
+            )}
+          </p>
+          <p
+            :if={@translation.unreachable}
+            id="page-translation-unreachable"
+            class="mt-2 text-[12px] font-medium text-[#b45309]"
+          >
+            {gettext(
+              "This page's address takes its language from the site's list, so it will not answer %{language} until you add it under Settings, General, Languages.",
+              language: String.upcase(@translation.form[:language].value || "")
+            )}
+          </p>
+        </div>
+
+        <p
+          :if={@translation.error}
+          id="page-translation-error"
+          class="text-[12px] font-medium text-[#c0392b]"
+        >
+          {@translation.error}
+        </p>
+
+        <button
+          type="submit"
+          id="page-translation-submit"
+          class="flex h-10 items-center justify-center gap-2 rounded-[11px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-[17px] text-[12.5px] font-bold text-white shadow-[0_5px_14px_rgba(79,75,204,0.3)] transition-opacity hover:opacity-95"
+        >
+          <.icon name="hero-language" class="size-[15px]" /> {gettext("Create translation")}
+        </button>
+      </.form>
+    </div>
+  </.modal>
+
+  <%!-- Pages Table Component (MishkaGervaz) — System Logs sit between the filters and the table
+        via the table's :before_table slot. --%>
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="pages-table"
+    resource={MishkaCmsCore.Runtime.Page}
+    current_user={@current_user}
+    url_state={@url_state}
+  >
+    <:filter_actions>
+      <MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.feed setup={@activity_feed} />
+    </:filter_actions>
+  </.live_component>
+</div>

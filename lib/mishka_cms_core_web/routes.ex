@@ -11,6 +11,7 @@ defmodule MishkaCmsCoreWeb.Routes do
       {:live, "/", MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index, :index},
       {:live, "/runtime/activity", MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index, :index},
       {:live, "/runtime/sites", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index, :index},
+      {:live, "/runtime/pages", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index, :index},
       {:live, "/runtime/components",
        MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index, :index},
       {:live, "/runtime/error-pages",

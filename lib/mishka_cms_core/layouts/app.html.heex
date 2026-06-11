@@ -1,4 +1,11 @@
-<.flash_group flash={@flash} />
+<.flash_group flash={@flash}>
+  <.live_component
+    :if={assigns[:current_user]}
+    module={MishkaCmsCoreWeb.Live.Admin.Components.TranslationsRefusal}
+    id={MishkaCmsCoreWeb.Live.Admin.Components.TranslationsRefusal.id()}
+    current_user={assigns[:current_user]}
+  />
+</.flash_group>
 
 <div class="flex h-screen overflow-hidden bg-[#f6f5f2] font-[Manrope,ui-sans-serif,system-ui,sans-serif] text-[#1b1a18] antialiased [[data-theme=dark]_&]:[filter:invert(0.92)_hue-rotate(180deg)] [[data-theme=dark]_&]:[transition:filter_.3s_ease]">
   <.sidebar current_path={assigns[:current_path]} current_user={assigns[:current_user]} />
