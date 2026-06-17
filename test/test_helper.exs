@@ -29,6 +29,8 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,
     MishkaCmsCore.Runtime.States.AssetsState,
     MishkaCmsCore.Runtime.States.CompileFailureState,
+    MishkaCmsCore.Runtime.States.EditorSessionState,
+    MishkaCmsCore.Runtime.States.EditorHistoryState,
     # The runtime compiler: the gate that bounds how many compiles run at once, the registry that
     # makes concurrent requests for one module wait on a single compile, and the partitioned
     # supervisor those compiles run under. A test that renders a lazy component compiles it for
