@@ -497,5 +497,8 @@ defmodule MishkaCmsCore.Runtime do
 
     resource MishkaCmsCore.Runtime.PageBuilderSnapshot do
     end
+
+    resource MishkaCmsCore.Runtime.PageComment do
+    end
   end
 end
