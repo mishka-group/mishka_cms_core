@@ -503,5 +503,10 @@ defmodule MishkaCmsCore.Runtime do
 
     resource MishkaCmsCore.Runtime.PageComment do
     end
+
+    # A resource with no data layer: the Studio's Design tokens tab, whose rows are parsed out of the
+    # site's stylesheets and handed to `Ash.DataLayer.Simple` by the table's own `on_load` hook.
+    resource MishkaCmsCore.Runtime.PageBuilder.DesignToken do
+    end
   end
 end
