@@ -30,6 +30,13 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Notify.Producers.PermissionsChanged
   ]
 
+  # Cache coherence as a plugin rather than a call wired into the compiler: the core participates in
+  # its own events (ADR-14), so this reacts to `runtime:after_module_compile` exactly as an extension
+  # would.
+  @cache_plugins [
+    MishkaCmsCore.Runtime.PageBuilder.CardPreviewInvalidator
+  ]
+
   # `settings:register` plugins — the core widgets' settings under the General tab, and every
   # sidebar entry's position/visibility switches under the Sidebar tab.
   @settings_plugins [
@@ -70,7 +77,10 @@ defmodule MishkaCmsCore.Application do
   left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
-  def plugins, do: @dashboard_widgets ++ @notify_producers ++ @settings_plugins ++ @mail_providers
+  def plugins,
+    do:
+      @dashboard_widgets ++
+        @notify_producers ++ @settings_plugins ++ @cache_plugins ++ @mail_providers
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

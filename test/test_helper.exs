@@ -29,6 +29,9 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,
     MishkaCmsCore.Runtime.States.AssetsState,
     MishkaCmsCore.Runtime.States.CompileFailureState,
+    # Rendered palette-card previews. Keyed on the template a card would drop, because a
+    # component's first render is a module compile and every later one is two milliseconds.
+    MishkaCmsCore.Runtime.States.CardPreviewState,
     MishkaCmsCore.Runtime.States.EditorSessionState,
     MishkaCmsCore.Runtime.States.EditorHistoryState,
     MishkaCmsCore.Runtime.PageBuilder.Presence,

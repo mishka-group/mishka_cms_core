@@ -10,15 +10,16 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
       ** (ArgumentError) cannot convert component … to HTML.
       A component must always be returned directly as part of a LiveView template.
 
-  Three surfaces render a runtime template to a string and then hand the string somewhere that is not
+  Four surfaces render a runtime template to a string and then hand the string somewhere that is not
   a LiveView: the admin's Preview tab and its version previews
-  (`MishkaCmsCore.Runtime.RuntimePreview`), the examples encoder, and the public
+  (`MishkaCmsCore.Runtime.RuntimePreview`), the palette's card thumbnails
+  (`MishkaCmsCore.Runtime.PageBuilder.CardPreview`), the examples encoder, and the public
   draft-preview URL. Before this, a page holding a live component gave every one of them that
   message instead of a picture.
 
   **Which one a template gets is decided by the CALLER's import list, not by the template.**
   `LiveViewCompiler.render_template/2` builds its own eval environment, and that environment is our
-  code rather than a generated module — so swapping the import there fixes all three at once, and
+  code rather than a generated module — so swapping the import there fixes all four at once, and
   nothing a kit or an author writes can reach past it. A compiled page module imports the live
   `LiveViewHelpers` and is unaffected: a published page IS a LiveView and must get the real thing.
 
