@@ -33,8 +33,26 @@ defmodule MishkaCmsCoreWeb.Routes do
     ]
   end
 
+  @doc """
+  The visual page builder, in its own `live_session`.
+
+  `:section` is page | layout | error-page | component; the canvas is a second LiveView the chrome
+  embeds in an iframe, addressed by its session token.
+
+  These are `:admin_standalone` rather than `:admin` because the builder is the one admin page whose
+  `<head>` is not the admin's usual head — it carries the in-browser Tailwind JIT and the shim that
+  nonces what that JIT and CodeMirror create. The root layout builds `<head>` on a dead render only,
+  so a live navigation into the builder would hand it the previous page's head. The separate session
+  is what makes arriving here a fresh document; navigation BETWEEN these routes stays live and fast.
+  """
   def routes(:admin_standalone) do
-    []
+    [
+      {:live, "/runtime/builder/:section/:id", MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive,
+       :edit},
+      {:live, "/runtime/builder/:section", MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive, :new},
+      {:live, "/runtime/builder-canvas/:token", MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive,
+       :canvas}
+    ]
   end
 
   # A crawler asks for these by what they are, so each also answers an `Accept` naming text or xml

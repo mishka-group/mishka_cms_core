@@ -13,6 +13,11 @@ defmodule MishkaCmsCore.TestRouter do
   `config :mishka_cms_core, :extensions`, which here lists only `MishkaCmsCoreWeb`. The `on_mount`
   hooks are `MishkaCmsCore.LiveUserAuth`, standing in for the host's.
 
+  It mounts `extension_routes(:admin_standalone)` in a SECOND `live_session`, as the CMS does. The
+  boundary is the point of that list — LiveView will not live-navigate across one, so the page
+  builder is always entered on a fresh document with the head it asks for — and a harness that put
+  both lists in one session would let a test pass where a browser would not.
+
   See `MishkaCmsCore.TestJsonApiRouter` for which domains the API mounts.
   """
 
@@ -85,6 +90,18 @@ defmodule MishkaCmsCore.TestRouter do
         {MishkaCmsCore.LiveUserAuth, {:require_permission, [{:under, "admin:dashboard"}]}}
       ] do
       extension_routes(:admin)
+    end
+
+    # The second session, mirroring the CMS again: the page builder is routed apart from the rest of
+    # the admin so that reaching it is a full page load and the root layout is re-rendered with the
+    # head it needs. Omitting it here does not fail quietly — every builder route 404s — which is
+    # how a harness should react to a router it no longer mirrors.
+    ash_authentication_live_session :test_authenticated_standalone_routes,
+      on_mount: [
+        {MishkaCmsCore.LiveUserAuth, :live_user_required},
+        {MishkaCmsCore.LiveUserAuth, {:require_permission, [{:under, "admin:dashboard"}]}}
+      ] do
+      extension_routes(:admin_standalone)
     end
   end
 end
