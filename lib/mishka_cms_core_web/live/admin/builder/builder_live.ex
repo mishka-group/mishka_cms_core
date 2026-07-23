@@ -25,8 +25,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.PaletteEntry
+  alias MishkaCmsCore.Runtime.PageBuilder.CardPreview
   alias MishkaCmsCore.Runtime.PageBuilder.Strict
 
   require MishkaCmsCore.Runtime.PageBuilder.Strict
@@ -41,11 +43,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.States.EditorSessionState
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
+  alias MishkaCmsCore.Runtime.PageBuilder.Presets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Sidebar
   alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
 
   @devices [
@@ -97,6 +101,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     )
     |> redirect(to: Section.list_path(section))
   end
+
+  defp permitted(entries, socket),
+    do: Descriptor.permitted(entries, socket.assigns[:current_user])
 
   # A DEAD LINK IS NOT AN EMPTY EDITOR. `load_record/3` answers nil for "no id was asked for", which
   # is the create flow, and for "the id in the URL could not be read" — a deleted row, a malformed
@@ -444,6 +451,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp assign_defaults(socket) do
     socket
+    |> assign_new(:left_tab, fn -> :components end)
+    |> assign_new(:left_w, fn -> 344 end)
+    |> assign_new(:left_hidden, fn -> false end)
     # WHERE THE SESSION LEFT IT, not always desktop. The breakpoint is restored from the saved
     # session; the frame was not. Reopen an editor last used on Mobile and the Mobile tab is active
     # over a desktop-width canvas — and the first click on Mobile then appears to do nothing, because
@@ -452,6 +462,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:zoom, fn -> 100 end)
     |> assign_new(:frame_zoom, fn -> 30 end)
     |> assign_new(:frame_row, fn -> true end)
+    |> assign_new(:component_presets, fn -> %{} end)
+    |> assign_new(:presets_count, fn -> -1 end)
+    # COLLECTED ONCE, not per render. Both libraries are merged with whatever extensions contribute
+    # here rather than inside the Blocks panel, because that panel is a render function — a plugin's
+    # code was running twice on every debounced keystroke in the search box. A plugin set does not
+    # change mid-session, so once at mount is also when it is true.
+    # SCOPED TO THE DOCUMENT for the reason the elements are: the three form blocks are bound to
+    # handlers, and only a Page has an `events` column to hold one.
+    |> assign_new(:block_library, fn ->
+      Events.collect_appended(
+        :blocks,
+        MishkaCmsCore.Runtime.PageBuilder.Blocks.for_section(section(socket))
+      )
+    end)
+    # SCOPED TO THE DOCUMENT, because four of them are. `{@inner_content}` is an assign only a layout
+    # is handed, and offering it on a page would be offering a document that will not compile.
+    |> assign_new(:element_library, fn ->
+      Events.collect_appended(
+        :elements,
+        MishkaCmsCore.Runtime.PageBuilder.Elements.for_section(section(socket))
+      )
+    end)
+    |> assign_new(:command_open, fn -> false end)
+    |> assign_new(:command_query, fn -> "" end)
+    |> assign_new(:palette_query, fn -> "" end)
+    |> assign_new(:palette_cat, fn -> "all" end)
     |> assign_new(:reload_confirm, fn -> false end)
     # Where the author was going when the editor stopped them, and the only thing that renders the
     # question. Nil is the ordinary state: nothing to lose, or nobody leaving.
@@ -473,8 +509,36 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:theme, fn -> "light" end)
     |> assign_new(:stage, fn -> :draft end)
     |> assign_new(:mob_panel, fn -> :canvas end)
+    |> assign_new(:commands, fn ->
+      permitted(Events.collect(:commands, Panels.core_commands()), socket)
+    end)
+    # NO `:toolbar` HERE. The element toolbar is drawn inside the frame, by `CanvasLive`, which
+    # collects `builder:canvas:toolbar` with the seed it renders. Collecting it again out here draws
+    # nothing and fires every plugin a second time, with a seed that disagrees with the one on
+    # screen — which is what it used to do.
+    |> assign_new(:goto, fn -> goto_targets(socket.assigns[:current_user]) end)
+    # This site by default, even for a master: the editor is open on one site, and sharing a
+    # package with every site on the server should be a thing someone chose.
+    |> assign_new(:block_cat, fn -> "all" end)
+    |> assign_new(:block_query, fn -> "" end)
   end
 
+  # The palette's "Go to" group is the admin's real menu, already permission-filtered by
+  # `MishkaCmsCore.Sidebar.menu/1` — so it can never offer a page this user would be refused, and it
+  # picks up whatever an extension registered on `sidebar:menus` without knowing those routes here.
+  defp goto_targets(actor) do
+    %{main: main, footer: footer} = Sidebar.menu(actor)
+
+    (main ++ footer)
+    |> Enum.flat_map(fn
+      %{items: items} -> items
+      item -> [item]
+    end)
+    |> Enum.map(&%{key: &1.key, label: &1.label, path: &1.path, icon: &1.icon})
+  end
+
+  defp assign_panel_tab(socket, panel) when panel in [:components],
+    do: assign(socket, :left_tab, panel)
   defp assign_panel_tab(socket, _panel), do: socket
 
   defp reload_canvas(socket) do
@@ -489,7 +553,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     socket
     |> assign(:editor, editor)
     |> assign(:tree, editor.tree)
+    |> assign_presets(editor)
     |> assign(:selection, editor.selection)
+    |> assign(:picked, editor.picked)
     |> assign(:selected_node, Tree.get(editor.tree, editor.selection))
     |> assign(:crumbs, Tree.path(editor.tree, editor.selection))
     |> assign(:breakpoint, editor.breakpoint)
@@ -822,6 +888,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_async(:autosave, {:exit, _reason}, socket),
     do: {:noreply, socket |> assign(:autosaving?, false) |> holding_draft() |> autosave_failed()}
 
+  # WHAT THE CARD WILL PUT ON THE PAGE, rendered while the pointer rests on it.
+  #
+  # The client owns everything about showing it — when to ask, where to put it, when to take it away
+  # — and the server owns only the render. So this pushes the document back rather than assigning it:
+  # a preview that followed the pointer through the LiveView diff would patch the panel on every
+  # card, and the panel is the one piece of chrome that must never flicker.
+  #
+  # `cancel_async` first, because `start_async` does not replace an in-flight task of the same name;
+  # without it, a slow first render for one card could land after a fast one for the next and show
+  # the wrong component.
+  def handle_async(:card_preview, {:ok, {template, {:ok, html}}}, socket),
+    do: {:noreply, push_event(socket, "pb:card-preview", %{template: template, html: html})}
+
+  def handle_async(:card_preview, {:ok, {template, {:error, message}}}, socket),
+    do: {:noreply, push_event(socket, "pb:card-preview", %{template: template, note: message})}
+
+  # A render that crashes says so in the panel rather than leaving a spinner turning for ever. The
+  # component's own author is who can fix it, and the log already carries the crash.
+  def handle_async(:card_preview, {:exit, _reason}, socket),
+    do:
+      {:noreply,
+       push_event(socket, "pb:card-preview", %{
+         template: nil,
+         note: gettext("This component could not be drawn.")
+       })}
+
   # NOTHING IS SAVED WHILE PUBLISHING. The stage says where the next press goes, and on Publish the
   # answer is the live page — so a draft written behind it would be a second copy nobody asked for.
   # It also makes the promise the bar makes true: leave in publish mode and a reload shows the
@@ -1002,6 +1094,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   @impl true
+  def handle_event("set_left_tab", %{"tab" => tab}, socket),
+    do: {:noreply, assign(socket, :left_tab, tab_atom(tab, [:components, :blocks]))}
+
+  def handle_event("toggle_left", _params, socket),
+    do: {:noreply, assign(socket, :left_hidden, !socket.assigns.left_hidden)}
+
+  # Sent ONCE, when the grip is released — the drag itself is the browser's, painted locally at frame
+  # rate. This is the value the panel is rendered from afterwards, so it still has to be clamped
+  # here: what arrives is whatever the page chose to send.
+  def handle_event("resize", %{"panel" => "left", "value" => value}, socket),
+    do: {:noreply, assign(socket, :left_w, clamped(:left, value))}
+
   # THE LINK HAS TO RUN BOTH WAYS OR IT IS A TRAP. Choosing a breakpoint moves the frame; choosing a
   # FRAME left the breakpoint exactly where it was. So the canvas went to 390px while the Inspector's
   # strip still read Desktop — and every control on that strip still carried the `base` bucket, which
@@ -1109,6 +1213,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, socket |> save_draft_now() |> holding_draft() |> flash_drafted()}
   end
 
+  def handle_event("toggle_command", _params, socket),
+    do: {:noreply, update(socket, :command_open, &(!&1))}
+
+  def handle_event("command_query", %{"value" => value}, socket),
+    do: {:noreply, assign(socket, :command_query, value)}
+
+  def handle_event("palette_query", %{"value" => value}, socket),
+    do: {:noreply, assign(socket, :palette_query, value)}
+
+  def handle_event("palette_cat", %{"cat" => cat}, socket),
+    do: {:noreply, assign(socket, :palette_cat, cat)}
+
+  def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
+    do: {:noreply, assign(socket, command_open: true, command_query: "", mob_panel: :canvas)}
+
   def handle_event("set_mob_panel", %{"panel" => "dir"}, socket) do
     {:ok, _editor} =
       EditorSession.set_dir(socket.assigns.token, (socket.assigns.dir == "rtl" && "ltr") || "rtl")
@@ -1117,7 +1236,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(canvas) do
+      when panel in ~w(canvas components) do
     panel = String.to_existing_atom(panel)
 
     {:noreply,
@@ -1125,6 +1244,47 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      |> assign(mob_panel: panel)
      |> assign_panel_tab(panel)}
   end
+
+  def handle_event("pick", %{"name" => name}, socket), do: arm_or_place(socket, name)
+
+  def handle_event("place", params, socket) do
+    case EditorSession.place(
+           socket.assigns.token,
+           params["parent_id"] || "root",
+           to_int(params["index"] || 0)
+         ) do
+      {:ok, _editor} -> {:noreply, socket}
+      {:relocated, _editor, note} -> {:noreply, put_flash(socket, :info, note)}
+      {:error, :nothing_picked} -> {:noreply, socket}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  # THE POINTER HAS RESTED ON A CARD. The template is the one the card would drop, sent up rather
+  # than looked up, so the preview matches the drag even when a preset changed it.
+  #
+  # `PbPaletteHover` only asks once the pointer has settled, and asks again for nothing it has
+  # already been given — so this is one render per component per session, not one per pass of the
+  # mouse. See `MishkaCmsCore.Runtime.PageBuilder.CardPreview` for what that costs.
+  def handle_event("preview_card", %{"template" => template}, socket)
+      when is_binary(template) and template != "" do
+    site_name = socket.assigns.editor.site_name
+
+    # READ HERE, not in the task. A srcdoc document inherits this page's Content-Security-Policy, and
+    # the admin's enforces `style-src-elem 'self' 'nonce-<n>'` — so the preview's own `<style>` needs
+    # the nonce or it is refused and the card draws unstyled, which reads as a broken component. The
+    # nonce lives on the socket, and the task does not get to look at the socket.
+    nonce = socket.assigns[:csp_nonce]
+
+    {:noreply,
+     socket
+     |> cancel_async(:card_preview)
+     |> MishkaGervaz.Messages.start_async(:card_preview, fn ->
+       {template, CardPreview.document(template, site_name, nonce)}
+     end)}
+  end
+
+  def handle_event("preview_card", _params, socket), do: {:noreply, socket}
 
   # A pick is placed by CLICKING, and the layers tree is somewhere you can click. Clicking a row
   # while something is picked means "put it in here" — the same gesture the canvas offers, through
@@ -1159,6 +1319,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("close_reload", _params, socket),
     do: {:noreply, assign(socket, :reload_confirm, false)}
+
+  # Re-runs the read the `:failed` slot's Retry button offers. Almost every palette failure is
+  # transient — a connection dropped under load — so trying again is the whole remedy, and doing it
+  # without a page reload keeps the document, the history and the selection intact.
+  def handle_event("retry_palette", _params, socket) do
+    editor = socket.assigns.editor
+    params = %{"site_id" => editor.site_id}
+
+    {:noreply, load_palette_async(socket, editor, socket.assigns[:current_user], params)}
+  end
 
   # LEAVING IN PUBLISH MODE IS THE ONE WAY TO LOSE WORK HERE. Every other mode writes as you go, so
   # the door is free to walk through; publish mode deliberately writes nothing, which is what makes
@@ -1252,6 +1422,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, reload_canvas(saved)}
   end
 
+  # SAME FLOW AS A COMPONENT, THROUGH THE SAME FIELD. The pick lives in the SESSION so the canvas
+  # sees it too: held in this LiveView's own assigns it armed the panel and nothing else, and
+  # clicking the page did nothing while the hint said "click the canvas or a layer".
+  #
+  # `Tree.insert/4` splices a section's several roots in as ONE undoable op, so a forty-node pricing
+  # table arrives and leaves in a single step.
+  def handle_event("pick_block", %{"block" => id}, socket), do: arm_or_place(socket, {:block, id})
+
+  def handle_event("block_cat", %{"cat" => cat}, socket),
+    do: {:noreply, assign(socket, :block_cat, cat)}
+
+  def handle_event("block_query", %{"value" => value}, socket),
+    do: {:noreply, assign(socket, :block_query, value)}
+
+  # The pills are the gervaz table's own filter now — the template renders them and the table handles
+  # the event, so the editor no longer keeps a parallel copy of which one is active.
+
   def handle_event("op", params, socket) do
     case EditorSession.apply_op(socket.assigns.token, params) do
       {:ok, _editor} -> {:noreply, socket}
@@ -1327,9 +1514,45 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, socket}
   end
 
+  # A SELECTION IS ALREADY AN ANSWER TO "WHERE". Picking with an element selected used to arm the
+  # palette and then wait for a click naming the element that was already named — so putting a card
+  # inside the section you were looking at took two clicks on the same thing. It places instead, by
+  # the rule a click on that element would have used: inside it when it can hold this, immediately
+  # after it when it cannot, and beside the other bands when what is being placed is a slice of the
+  # page. `place_at/2` clears the pick, so nothing is left armed behind it.
+  #
+  # With nothing selected the pick still arms, because there is no answer yet — the canvas and the
+  # layers tree are both waiting to give one.
+  defp arm_or_place(socket, choice) do
+    %{token: token, editor: editor} = socket.assigns
+
+    cond do
+      editor.picked == choice ->
+        {:ok, _editor} = EditorSession.pick(token, nil)
+        {:noreply, socket}
+
+      is_binary(editor.selection) ->
+        {:ok, _editor} = EditorSession.pick(token, choice)
+        place_or_select(choice, editor.selection, socket)
+
+      true ->
+        {:ok, _editor} = EditorSession.pick(token, choice)
+        {:noreply, socket}
+    end
+  end
+
   defp place_or_select(nil, id, socket) do
     {:ok, _editor} = EditorSession.select(socket.assigns.token, id)
     {:noreply, socket}
+  end
+
+  defp place_or_select(_picked, id, socket) do
+    case EditorSession.place_at(socket.assigns.token, id) do
+      {:ok, _editor} -> {:noreply, socket}
+      {:relocated, _editor, note} -> {:noreply, put_flash(socket, :info, note)}
+      {:error, :nothing_picked} -> {:noreply, socket}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
   end
 
   defp section(%{assigns: %{section: section}}), do: section
@@ -1342,13 +1565,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp shortcut("paste", socket), do: handle_event("paste", %{}, socket)
   defp shortcut("duplicate", socket), do: handle_event("duplicate", %{}, socket)
   defp shortcut("delete", socket), do: handle_event("delete", %{}, socket)
+  defp shortcut("command", socket), do: handle_event("toggle_command", %{}, socket)
   defp shortcut("preview", socket), do: handle_event("toggle_preview", %{}, socket)
   defp shortcut("fit", socket), do: {:noreply, assign(socket, :zoom, 100)}
 
   defp shortcut("escape", socket) do
     {:ok, _editor} = EditorSession.select(socket.assigns.token, nil)
     {:ok, _editor} = EditorSession.pick(socket.assigns.token, nil)
-    {:noreply, socket}
+    {:noreply, assign(socket, command_open: false)}
   end
 
   defp shortcut(_key, socket), do: {:noreply, socket}
@@ -1713,6 +1937,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp tab_atom(value, allowed) when is_atom(value),
     do: if(value in allowed, do: value, else: hd(allowed))
 
+  defp clamped(panel, value) do
+    {min, max} = Panels.resize_bounds(panel)
+    clamp(value, min, max)
+  end
+
   defp clamp(value, min, max), do: value |> to_int() |> max(min) |> min(max)
 
   defp zoomed(kind, value) do
@@ -1748,6 +1977,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   defp to_int(_value), do: 0
+
+  # THE PALETTE ARRIVES LATE. It is read asynchronously, so the first `assign_editor/2` sees no
+  # components and the presets map would stay empty for the whole session — every card dragging the
+  # kit's default while a click placed the site's. Keyed on the COUNT rather than the list: keeping
+  # a second copy of 177 components in assigns to diff against is exactly the weight the palette
+  # work went to remove, and the list only changes when one is installed or removed.
+  defp assign_presets(socket, editor) do
+    case socket.assigns[:presets_count] == length(editor.components) do
+      true ->
+        socket
+
+      false ->
+        socket
+        |> assign(:presets_count, length(editor.components))
+        |> assign(
+          :component_presets,
+          Events.preset_choices(
+            Presets.for_entries(editor.components, editor.site_id),
+            %{site_id: editor.site_id}
+          )
+        )
+    end
+  end
 
   # `:frames` is the one frame that is not a breakpoint — it is all three at once — so it moves
   # nothing, which is the same answer `follow_breakpoint/2` gives when it is showing.
@@ -1866,12 +2118,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       <Panels.mobile_bar mob_panel={@mob_panel} dir={@dir} />
 
       <div data-role="pb-body" class="flex min-h-0 flex-1">
+        <Panels.left_panel
+          editor={@editor}
+          palette={@palette}
+          component_presets={@component_presets}
+          picked={@picked}
+          palette_query={@palette_query}
+          palette_cat={@palette_cat}
+          block_query={@block_query}
+          block_cat={@block_cat}
+          block_library={@block_library}
+          element_library={@element_library}
+          left_hidden={@left_hidden}
+          left_tab={@left_tab}
+          left_w={@left_w}
+          mob_panel={@mob_panel}
+        />
         <Panels.center
           token={@token}
           record={@record}
           crumbs={@crumbs}
           selection={@selection}
           selected_node={@selected_node}
+          picked={@picked}
           device={@device}
           zoom={@zoom}
           frame_row={@frame_row}
@@ -1882,6 +2151,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         />
       </div>
 
+      <Panels.command_palette :if={@command_open} {assigns} />
       <Panels.reload_modal :if={@reload_confirm} />
       <Panels.leave_modal :if={@leave_to} />
     </div>

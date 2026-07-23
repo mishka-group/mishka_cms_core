@@ -15,12 +15,15 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
+  alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.Plugins.BuilderPageStarterPlugin, as: PageStarterPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarInvokedProbe, as: ToolbarInvokedProbe
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarProbe, as: ToolbarProbe
+  alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
 
   require Ash.Query
 
@@ -113,6 +116,10 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     |> AshAuthentication.Plug.Helpers.store_in_session(user)
   end
 
+  # Save moved off the top bar into the ••• menu when the header was matched to the prototype: the
+  # editor autosaves, so the bar has a stage control where the prototype has one and nothing else.
+  defp save!(view), do: more!(view, "#pb-save")
+
   # Writing the live record is Publish, and Publish is two gestures: the stage is chosen, then the
   # button beside it carries it out.
   defp publish!(view) do
@@ -165,6 +172,11 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   # An element's own opening tag, for asserting on ITS classes rather than its children's.
   defp opening_tag(html), do: html |> String.split(">", parts: 2) |> hd()
 
+  # A palette entry as the panel sees it, for asserting on what the card would draw.
+  defp entry(view, name) do
+    view |> editor() |> Map.fetch!(:components) |> Enum.find(&(&1.name == name))
+  end
+
   defp editor(view), do: elem(EditorSession.fetch(token(view)), 1)
 
   # The compiled bundles the frame is served. Read off the LiveView rather than out of its HTML,
@@ -185,6 +197,31 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   defp node_with_tag(view, tag) do
     view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.tag == tag))
   end
+
+  defp node_count(view), do: view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> length()
+
+  # WHATEVER IS ON SCREEN, both notices at once: a flash is the only place a refused command speaks
+  # to the author, and which of the two it picks is not the point of the assertions below. The tags
+  # come off first — Tailwind writes `hover:bg-white` into the class list, which reads exactly like
+  # an inspected atom to anything looking for one.
+  defp flashes(view) do
+    ["#flash-info", "#flash-error"]
+    |> Enum.filter(&has_element?(view, &1))
+    |> Enum.map_join(" ", &(view |> element(&1) |> render() |> String.replace(~r/<[^>]*>/, "")))
+    |> String.trim()
+  end
+
+  # A flash is set, never unset: nothing on the server clears one, and the hook that pushes
+  # `lv:clear-flash` after the fade does not run here — so a stale sentence would answer for the
+  # next command and hide a handler that went silent.
+  defp clear_flashes(view) do
+    for key <- ~w(info error), do: render_click(view, "lv:clear-flash", %{"key" => key})
+    view
+  end
+
+  # AN INSPECTED TERM WHERE A SENTENCE BELONGS: a map, a tuple, or a bare atom reason. Every one of
+  # them is an internal the author has no word for, and all three read the same way in a flash.
+  defp internals?(text), do: text =~ ~r/%\{|\{:|:[a-z_]/
 
   # The style overrides a node actually carries — what every control in the Layout and Appearance
   # sections is a way of writing, and the only record of them there is.
@@ -438,6 +475,88 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute assigns[:admin_css], "the canvas must not pull the dashboard's stylesheet"
       assert assigns[:admin_fonts], "its chrome names the admin faces in inline `font:` shorthand"
       assert assigns[:live_tailwind], "a class typed in the inspector must exist a frame later"
+    end
+
+    # THE FAST WAY TO THE ONE THING PEOPLE CHANGE. Everything else on the element toolbar acts at
+    # once; layout is a choice, so the bar grows a row of shapes rather than sending the reader off
+    # to the Inspector. It offers only what the component itself declares.
+    test "the toolbar's layout button opens column shapes for a grid", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "tbgrid",
+        template: ~s|<div class="grid">g</div>|,
+        attrs: [
+          %{
+            "name" => "cols",
+            "type" => "string",
+            "opts" => %{"values" => ~w(one two three four), "default" => "two"}
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-tbgrid") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, "#pb-eltb-layout"), "the four-way arrow is on the toolbar"
+
+      # The row is RENDERED with the selection and revealed in the browser — asking the server to
+      # show a row already on the page would patch the toolbar and drop it out of the top layer.
+      assert has_element?(canvas, "#pb-eltb-cols"), "the row ships with the selection"
+
+      assert render(canvas) =~ "#pb-eltb-cols { display: none;",
+             "and starts hidden, for the hook to open"
+
+      assert has_element?(canvas, "#pb-eltb-cols-four")
+
+      refute render(canvas) =~ ~s(id="pb-eltb-layout" phx-click),
+             "the arrow carries no server event at all"
+
+      # THE VALUE MUST RIDE THE BUTTON'S OWN `value`. LiveView's `extractMeta` writes
+      # `meta.value = el.value` AFTER collecting `phx-value-*`, so `phx-value-value` on a button is
+      # always overwritten with "". `render_click/1` sends the attribute map WITHOUT that override,
+      # so it passes either way — this is the only thing that catches it.
+      shape = canvas |> element("#pb-eltb-cols-four") |> render()
+
+      assert shape =~ ~s(value="four"),
+             "the shape carries its value where the browser will read it"
+
+      refute shape =~ "phx-value-value", "and never where the browser will blank it"
+
+      # THE PANEL MUST OUTLIVE A CHOICE. Choosing writes to the document, so the server re-renders
+      # this element — and a patch takes back the `display` the hook wrote, leaving the rule's own
+      # `none` underneath. The hook holds the open flag and re-applies it in `placeToolbar`, which
+      # `updated()` already calls, so a reader can try six options without reopening between each
+      # one. All the server may ever say is "shut"; rendering it open would fight the browser for
+      # the same property.
+      assert render(canvas) =~ "#pb-eltb-cols { display: none;",
+             "the server always renders the panel shut and never tries to render it open"
+
+      canvas |> element("#pb-eltb-cols-four") |> render_click()
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(placed.id)
+             |> Map.fetch!(:attrs)
+             |> Map.new()
+             |> Map.get("cols") == {:string, "four"}
     end
 
     # DIRECTION, SPREAD, ALIGN AND WRAP, each drawn as a picture of what it does — and each writing
@@ -834,6 +953,182 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   end
 
   describe "panels" do
+    test "and the search boxes that sit in a form do too", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+
+      for id <- ~w(pb-find-form pb-block-search-form) do
+        case Regex.run(~r/<form[^>]*id="#{id}"[^>]*>/, html) do
+          nil -> :not_rendered_in_this_state
+          [form] -> assert form =~ "phx-submit"
+        end
+      end
+    end
+
+    # A CONTRIBUTED CATEGORY NEEDS A CHIP TO REACH IT BY. The row was built from the core lists, so a
+    # block an extension added under its own category could only ever be found under "all" — while
+    # showing under every other filter too, because the merge happened after the filtering.
+    test "the block category chips include the ones extensions brought", %{conn: conn, page: page} do
+      {:ok, _} =
+        MishkaInstaller.Event.Event.write(%{
+          name: MishkaCmsCore.Test.Plugins.BuilderBlockPlugin,
+          event: "builder:blocks",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = MishkaInstaller.Event.EventHandler.do_compile("builder:blocks", :start, false)
+
+      on_exit(fn ->
+        MishkaInstaller.Event.Event.unregister(
+          :name,
+          MishkaCmsCore.Test.Plugins.BuilderBlockPlugin,
+          false
+        )
+      end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-lefttab-blocks") |> render_click()
+
+      assert has_element?(view, "#pb-blockcat-social-proof")
+      assert has_element?(view, "#pb-blockcat-all")
+    end
+
+    test "the hover preview panel is there for the hook to drive", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-card-preview[phx-hook='PbPaletteHover'][hidden]")
+      assert has_element?(view, "#pb-card-preview [data-role='pb-card-preview-frame']")
+      assert has_element?(view, "#pb-card-preview [data-role='pb-card-preview-note']")
+    end
+
+    # THE ONE TOKEN THAT MUST NEVER BE THERE. The frame holds a component's own markup, which is
+    # authored in the CMS and therefore untrusted; `allow-same-origin` is granted so the panel can
+    # read the drawn height and size itself to it, and that is only safe while nothing inside can
+    # run. Add `allow-scripts` beside it and the frame can reach straight into the admin session.
+    test "and the frame it draws into can never run scripts", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+
+      assert html =~ ~s|sandbox="allow-same-origin"|
+      refute html =~ "allow-scripts"
+    end
+
+    test "asking for a preview answers with a document", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_hook(view, "preview_card", %{"template" => "<p>a paragraph</p>"})
+
+      assert_push_event(view, "pb:card-preview", %{template: template, html: html})
+      assert template == "<p>a paragraph</p>"
+      assert html =~ "<p>a paragraph</p>"
+    end
+
+    # A component that needs configuring says so, rather than showing an empty box that reads as a
+    # broken component.
+    test "and a template that will not render answers with the reason", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_hook(view, "preview_card", %{"template" => "<p>{@nothing_supplies_this}</p>"})
+
+      assert_push_event(view, "pb:card-preview", %{note: note})
+      assert is_binary(note) and note != ""
+    end
+
+    test "an empty ask is ignored rather than rendered", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_hook(view, "preview_card", %{"template" => ""})
+
+      refute_push_event(view, "pb:card-preview", %{})
+    end
+
+    test "the palette carries what the star and recent rows need", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "starrable",
+        template: ~s|<div class="p-4">hi</div>|
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-palette[phx-hook='PbPalettePrefs'][data-scope]")
+      assert has_element?(view, "#pb-palette-fav[data-pb-prefchip='fav']")
+      assert has_element?(view, "#pb-palette-recent[data-pb-prefchip='recent']")
+      assert has_element?(view, "[data-role='pb-count']")
+
+      # Both empty states ship hidden — the server cannot know whether anything is starred.
+      assert has_element?(view, "#pb-palette-empty-fav[hidden]")
+      assert has_element?(view, "#pb-palette-empty-recent[hidden]")
+
+      cell = view |> element("[data-role='pb-compcell']") |> render()
+      assert cell =~ ~s(data-name=)
+      assert cell =~ ~s(data-role="pb-fav")
+
+      # NO `phx-click` ON THE STAR. It sits on top of the tile that places the component; an event
+      # here would be a round trip, and a re-render of the tile under the pointer.
+      star = view |> element("[data-role='pb-fav']") |> render()
+      refute star =~ "phx-click"
+    end
+
+    # BETWEEN A COMPONENT AND A WHOLE-PAGE PRESET there was nothing, so a landing page meant placing
+    # a grid, a heading, a paragraph and a button and repeating it for every band down the page.
+    test "a section drops in as one block", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-lefttab-blocks") |> render_click()
+      assert has_element?(view, "#pb-block-features-four")
+
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> length()
+
+      view |> element("#pb-block-features-four") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      after_place = view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> length()
+
+      assert after_place > before + 20,
+             "a four-across feature row is forty-odd nodes, not one"
+
+      # …and it is ONE step, so a section leaves the way it arrived.
+      render_click(view, "undo", %{})
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> length() == before
+    end
+
+    test "the block list filters by category and by search", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-lefttab-blocks") |> render_click()
+
+      view |> element("#pb-blockcat-Footer") |> render_click()
+      assert has_element?(view, "#pb-block-footer-columns")
+      refute has_element?(view, "#pb-block-hero-centred")
+
+      view |> element("#pb-blockcat-all") |> render_click()
+      render_change(view, "block_query", %{"value" => "pricing"})
+
+      assert has_element?(view, "#pb-block-pricing-three")
+      refute has_element?(view, "#pb-block-hero-centred")
+    end
+
+    # Every block is plain HTML and Tailwind on purpose: one reaching for `chelekom-card` would fail
+    # on an install without Chelekom, which is the assumption this whole effort has been removing.
+    test "blocks depend on no kit", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-lefttab-blocks") |> render_click()
+      view |> element("#pb-block-hero-centred") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      kinds =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.map(& &1.kind) |> Enum.uniq()
+
+      refute :component in kinds
+    end
+
     # A RUNTIME COMPONENT IS BUILT ON FIRST USE, which is right — a kit of 136 must not compile 136
     # modules to open a page that places five. But the canvas walks the tree NODE BY NODE and blocks
     # on each one in turn: measured cold against the real kit, five components are 623 ms serial and
@@ -942,6 +1237,23 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
   # Checked against the v1 prototype served at :8000, option by option.
   describe "the demo's chrome" do
+    test "the palette is grouped under category headings with counts", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "grid-box", type: "layout")
+      create_component!(site_id: site.id, name: "big-title", type: "text")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      html = render(view)
+
+      assert html =~ "LAYOUT"
+      assert html =~ "TEXT"
+      assert html =~ "Global — all sites"
+      assert html =~ "Tenant only"
+    end
+
     # The stage control is the prototype's split button and it has two distinct looks. Publishing is
     # outward-facing, so this is the one place the published styling is checked.
     test "the stage button is violet-tinted as a draft and solid once published", %{
@@ -971,6 +1283,41 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert published =~ "text-white"
       assert published =~ "Save draft"
       refute view |> element("#pb-stage-menu") |> render() =~ "animate-pulse"
+    end
+
+    # A `javascript:` in a link the ADMIN renders is the one way a third-party kit's bundle could
+    # reach into this page, so only an http(s) address is offered.
+    test "a doc_url that is not a web address is not offered", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "sneaky",
+        template: ~s|<div>x</div>|,
+        extra: %{"doc_url" => "javascript:alert(1)"}
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      view |> element("#pb-comp-sneaky") |> render_click()
+      render_click(canvas, "select", %{})
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      # SELECTING ON THE CANVAS, not in the panel. A panel selection is navigation and leaves the
+      # left tab where the reader put it; a canvas click means "work on this", which is what swings
+      # the panel to the Inspector the link lives in.
+      render_click(canvas, "select", %{"id" => node.id})
+
+      refute has_element?(view, "#pb-docs-link")
     end
 
     # The theme is client state — `<html data-theme>` plus localStorage — so the button carries a hook
@@ -1914,6 +2261,41 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # The three form blocks ship `phx-change` and `phx-submit` bound to handlers, and only a Page has
+  # an `events` column to hold one.
+  describe "the blocks a section can use" do
+    test "a page is offered the form blocks", %{conn: _conn} do
+      ids = Enum.map(Blocks.for_section("page"), & &1.id)
+
+      assert "form-contact" in ids
+      assert "form-newsletter" in ids
+    end
+
+    test "and a layout, a component and an error page are not" do
+      for section <- ~w(layout component error-page) do
+        ids = Enum.map(Blocks.for_section(section), & &1.id)
+
+        refute "form-contact" in ids, section
+        refute "form-fieldset" in ids, section
+        refute "form-newsletter" in ids, section
+
+        assert "hero-split" in ids or ids != [],
+               "everything else still belongs everywhere"
+      end
+    end
+
+    # The same rule the elements already follow, so the exception has to be declared rather than
+    # inferred from a category name.
+    test "a block that declares no sections belongs everywhere" do
+      everywhere = Enum.reject(Blocks.all(), &Map.has_key?(&1, :sections))
+
+      for section <- ~w(page layout component error-page) do
+        ids = Enum.map(Blocks.for_section(section), & &1.id)
+        assert Enum.all?(everywhere, &(&1.id in ids)), section
+      end
+    end
+  end
+
   describe "saving" do
     test "save writes the serialized tree back to the page", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
@@ -1970,6 +2352,87 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-device-frames") |> render_click()
       assert has_element?(view, "#pb-frame-1180")
       assert has_element?(view, "#pb-frame-560")
+    end
+
+    test "the command palette opens and filters", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "toggle_command", %{})
+      assert has_element?(view, "#pb-command-input")
+      assert has_element?(view, "#pb-cmd-publish")
+
+      # By the command's own id, not by its text: "Publish" is also the label on the top bar's
+      # button, so a whole-page text match would pass whether the palette filtered or not.
+      render_change(view, "command_query", %{"value" => "undo"})
+      assert has_element?(view, "#pb-cmd-undo")
+      refute has_element?(view, "#pb-cmd-publish")
+    end
+
+    # The prototype's palette is two groups, and "Go to" is the real admin menu rather than a list of
+    # routes retyped here — so it can never offer a page the viewer would be refused.
+    test "the palette offers Go-to targets from the real admin menu", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_command", %{})
+
+      html = render(view)
+      assert html =~ "Actions"
+      assert html =~ "Go to"
+      assert has_element?(view, ~s(a[href="/admin/dashboard/runtime/pages"]))
+    end
+
+    test "a query filters both groups, and no match says so", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_command", %{})
+
+      render_change(view, "command_query", %{"value" => "stylesheet"})
+      html = render(view)
+      assert has_element?(view, ~s(a[href="/admin/dashboard/runtime/stylesheets"]))
+      refute html =~ "Actions"
+
+      render_change(view, "command_query", %{"value" => "zzzznothing"})
+      assert render(view) =~ "No matches."
+    end
+
+    test "a command's hint and shortcut both render", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_command", %{})
+
+      html = view |> element("#pb-cmd-save") |> render()
+      assert html =~ "Write the draft"
+      assert html =~ "⌘S"
+    end
+
+    # THE WHOLE TABLE, SERVER-SIDE. The hook sends a name and nothing else — it knows nothing about
+    # the selection or the clipboard — so every name it can send has to be answered in the author's
+    # words: never an inspected struct, and never an internal field the author has no word for.
+    #
+    # The names are `PB_SHORTCUTS`' own (assets/js/admin_hooks.js), which is the whole list the two
+    # key handlers and the preview bar can push. `code` and `preview` are toggles, so each is
+    # pressed twice and the view ends where it started.
+    test "every shortcut the hook can send is answered without internals", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = node_count(view)
+
+      keys = ~w(undo redo save copy cut paste duplicate delete fit code code preview preview)
+
+      for key <- keys ++ ["nosuchkey"] do
+        clear_flashes(view)
+        render_click(view, "shortcut", %{"key" => key})
+        refute internals?(flashes(view)), key
+        refute flashes(view) =~ "node_id", key
+      end
+
+      # None of them edits the page when nothing is selected and the clipboard is empty.
+      assert node_count(view) == before
+
+      render_click(view, "shortcut", %{"key" => "command"})
+      assert has_element?(view, "#pb-command-input")
+
+      render_click(view, "shortcut", %{"key" => "escape"})
+      refute has_element?(view, "#pb-command-input")
     end
 
     # The toggle mirrors the PAGE, not the panels around it: an author checking a Persian or Arabic
@@ -2258,6 +2721,407 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-dir-rtl") |> render_click()
 
       assert render(canvas) =~ ~s(dir="rtl")
+    end
+  end
+
+  describe "the palette" do
+    setup %{site: site} do
+      %{component: create_component!(site_id: site.id, name: "hero-card")}
+    end
+
+    test "lists the site's components and filters by search", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-comp-hero-card")
+
+      render_change(view, "palette_query", %{"value" => "zzzz"})
+      refute has_element?(view, "#pb-comp-hero-card")
+
+      render_change(view, "palette_query", %{"value" => "hero"})
+      assert has_element?(view, "#pb-comp-hero-card")
+    end
+
+    # Every admin table links the editor as `?site_id=…`, so this is how a master actually arrives.
+    # It used to hand that site to `:master_read`, whose `TenantContext` validation refuses a non-nil
+    # tenant on a multitenancy-bypass action — the read errored and the palette rendered empty.
+    test "a master arriving with ?site_id= still gets the site's components", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}?site_id=#{site.id}")
+
+      assert has_element?(view, "#pb-comp-hero-card")
+    end
+
+    test "?site_id= scopes the palette to that site plus the global components", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      other = create_site!(name: "other", host: "other.test", active: true)
+      create_component!(site_id: other.id, name: "foreign-card")
+      create_component!(name: "global-card")
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}?site_id=#{site.id}")
+
+      assert has_element?(view, "#pb-comp-hero-card")
+      assert has_element?(view, "#pb-comp-global-card")
+      refute has_element?(view, "#pb-comp-foreign-card")
+    end
+
+    # A component names its own palette glyph in `extra.icon`. Nothing else may override that — it is
+    # the authored answer, and the suggestion below exists only for rows that have none.
+    test "a component's own extra.icon is the glyph the palette draws", %{conn: conn, page: page} do
+      create_component!(name: "kit-thing", extra: %{"icon" => "gallery"})
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert Panels.entry_icon(entry(view, "kit-thing")) == :gallery
+    end
+
+    test "an unknown icon name falls back rather than rendering nothing", %{
+      conn: conn,
+      page: page
+    } do
+      create_component!(name: "kit-odd", extra: %{"icon" => "not-an-icon"})
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert Panels.entry_icon(entry(view, "kit-odd")) == :box
+    end
+
+    # 183 components will not all be annotated by hand, so the palette suggests from the name.
+    test "a component with no icon gets one suggested from its name", %{conn: conn, page: page} do
+      for name <-
+            ~w(kit-password-field kit-mega-menu kit-heading-two kit-image-block kit-data-table) do
+        create_component!(name: name)
+      end
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert Panels.entry_icon(entry(view, "kit-password-field")) == :lock
+      assert Panels.entry_icon(entry(view, "kit-mega-menu")) == :nav
+      assert Panels.entry_icon(entry(view, "kit-heading-two")) == :head
+      assert Panels.entry_icon(entry(view, "kit-image-block")) == :img
+      assert Panels.entry_icon(entry(view, "kit-data-table")) == :table
+    end
+
+    test "a name that suggests nothing falls back to the component's category", %{
+      conn: conn,
+      page: page
+    } do
+      create_component!(name: "kit-zzz", type: "media")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert Panels.entry_icon(entry(view, "kit-zzz")) == :image
+    end
+
+    # Every card is the same box whatever its name is; one wrapping label must not make its row grow.
+    test "every palette card is the same fixed height", %{conn: conn, page: page} do
+      create_component!(name: "kit-x")
+      create_component!(name: "kit-with-a-very-long-name-that-wraps-twice")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      html = render(view)
+
+      [short, long] =
+        for name <- ~w(kit-x kit-with-a-very-long-name-that-wraps-twice) do
+          [_before, after_id] = String.split(html, ~s(id="pb-comp-#{name}"), parts: 2)
+          [tag, _rest] = String.split(after_id, ">", parts: 2)
+          tag =~ "h-[86px]"
+        end
+
+      assert short
+      assert long
+      assert html =~ "line-clamp-2"
+    end
+
+    # The kit's own name is on every one of its components, so printing it on every card spends the
+    # label on the one word that never varies and pushes the part that does off the card.
+    test "a kit prefix is dropped from the card label but kept everywhere else", %{
+      conn: conn,
+      page: page
+    } do
+      for name <- ~w(acme-alert acme-toast acme-banner solo-widget) do
+        create_component!(name: name)
+      end
+
+      {:ok, view, _html} = open_builder(conn, page)
+      entries = editor(view) |> Map.fetch!(:components)
+      prefixes = Panels.kit_prefixes(entries)
+
+      assert Panels.short_label(entry(view, "acme-alert"), prefixes) == "Alert"
+      assert Panels.short_label(entry(view, "acme-banner"), prefixes) == "Banner"
+
+      # Used three times, "acme" is a kit; "solo" is used once and stays.
+      assert Panels.short_label(entry(view, "solo-widget"), prefixes) == "Solo Widget"
+
+      # The full name is still what the card is titled with and what it inserts.
+      assert view |> element("#pb-comp-acme-alert") |> render() =~ "acme-alert"
+    end
+
+    test "picking a component arms placement, and placing inserts it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-hero-card") |> render_click()
+      assert render(view) =~ "Placing hero-card"
+
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      inserted =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      assert inserted.tag == ".component"
+      assert MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(inserted) == "hero-card"
+      refute render(view) =~ "Placing hero-card"
+    end
+
+    # The click that places happens inside the CANVAS, which is a different LiveView — so an
+    # arming flag kept in the chrome's own assigns left the browser selecting elements while the hint
+    # said "click the canvas". This drives the two the way a person does.
+    test "arming in the chrome and clicking IN THE CANVAS places the component", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      view |> element("#pb-comp-hero-card") |> render_click()
+      section = node_with_tag(view, "section")
+      render_click(canvas, "select", %{"id" => section.id})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      assert placed
+      # Inside the clicked container, as its last child — and the arming is spent.
+      assert placed.parent_id == section.id
+      refute render(view) =~ "Placing hero-card"
+    end
+
+    # Clicking a component that declares no slot is someone pointing at WHERE they want the new
+    # element, not a request to nest it there. The browser answered that with a red
+    # "does not declare a slot" toast and placed nothing.
+    test "clicking an element that cannot hold children places after it", %{
+      conn: conn,
+      site: site
+    } do
+      define_component!("pb-leaf", nil, "<hr/>")
+      create_component!(name: "pb-leaf")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><.component component_name="pb-leaf" site="Global" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      leaf =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      view |> element("#pb-comp-hero-card") |> render_click()
+      render_click(canvas, "select", %{"id" => leaf.id})
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      placed = tree |> Tree.walk() |> Enum.find(&(Node.component_name(&1) == "hero-card"))
+
+      assert placed
+      # A sibling of the leaf, not a child of it.
+      assert placed.parent_id == leaf.parent_id
+      assert Tree.index_of(tree, placed.id) == Tree.index_of(tree, leaf.id) + 1
+    end
+
+    test "a canvas click with nothing armed still selects", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      section = node_with_tag(view, "section")
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+
+      render_click(canvas, "select", %{"id" => section.id})
+
+      assert view |> editor() |> Map.fetch!(:selection) == section.id
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
+    end
+
+    test "a click on no element places at the end of the document", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      view |> element("#pb-comp-hero-card") |> render_click()
+      render_click(canvas, "select", %{})
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      assert tree |> Tree.get(List.last(tree.roots)) |> Map.fetch!(:kind) == :component
+    end
+
+    # Dropping a global component onto a site's page has to render it. The palette used to bind every
+    # card to the page's site, which for a global component named a module nobody ever built.
+    test "placing a GLOBAL component from the palette renders it on the canvas", %{
+      conn: conn,
+      site: site
+    } do
+      define_component!("pb-drop-footer", nil, "<footer>dropped global footer</footer>")
+      create_component!(name: "pb-drop-footer")
+
+      page = create_page!(site_id: site.id, template: ~s(<div id="root"></div>))
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-pb-drop-footer") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "0"})
+
+      assert editor_html(view) =~ ~s(site="Global")
+
+      {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+      assert html =~ "dropped global footer"
+      refute html =~ "failed to render"
+    end
+
+    # A component that declares a property as required will not render without it, so a page missing
+    # one is already broken — publishing it just puts the breakage in front of visitors. A DRAFT is
+    # allowed to be half-finished; that is what a draft is.
+    test "a missing required property blocks the save and names itself", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "needs-title",
+        attrs: [%{"name" => "title", "type" => "string", "opts" => %{"required" => true}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-needs-title") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      html = publish!(view)
+      assert html =~ "Not saved"
+      assert html =~ "needs-title.title"
+
+      # Fill it and the save goes through.
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => placed.id,
+        "name" => "title",
+        "value" => "Real title"
+      })
+
+      assert save!(view) =~ "saved"
+    end
+
+    # Blurring a field you only clicked into must not wipe the component's default.
+    test "leaving an untouched property alone keeps the default", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "defaulted",
+        attrs: [%{"name" => "message", "type" => "string", "opts" => %{"default" => "Hello"}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-defaulted") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      # What a blur with nothing typed sends.
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => placed.id,
+        "name" => "message",
+        "value" => ""
+      })
+
+      # The attribute is gone, so the component renders its own default again rather than an empty
+      # string that overrides it.
+      node = view |> editor() |> Map.fetch!(:tree) |> Tree.get(placed.id)
+      assert Node.attr_text(node, "message") == nil
+    end
+
+    test "editing a prop writes the attribute and clearing it removes it", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "plain-box")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-plain-box") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => placed.id,
+        "name" => "variant",
+        "value" => "filled"
+      })
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(placed.id) |> Node.attr("variant") ==
+               {:string, "filled"}
+
+      render_click(view, "op", %{
+        "kind" => "delete_attr",
+        "node_id" => placed.id,
+        "name" => "variant"
+      })
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(placed.id) |> Node.attr("variant") ==
+               nil
+    end
+
+    test "a placed component serializes in the form the compilers read", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-hero-card") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ ~s(component_name="hero-card")
+      assert reloaded.template =~ "<.component"
     end
   end
 end

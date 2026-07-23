@@ -446,6 +446,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> assign(:live_tailwind, true)
     |> assign(:page_title, gettext("Canvas"))
     |> assign(:preview?, session.preview?)
+    |> assign(:placing, session.picked)
     |> assign_new(:toolbar, fn assigns -> toolbar_actions(assigns[:current_user]) end)
     |> assign_new(:bucket, fn -> "base" end)
   end
@@ -576,13 +577,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       when event != "leave_preview",
       do: {:noreply, socket}
 
+  # While a palette component is armed, a click on the page PLACES it rather than selecting: that is
+  # what the empty-page placeholder's "click here to place it" promises.
   # THE PROP TRAVELS WITH THE CLICK. A component that cannot render without a value shows a
   # placeholder saying which one, and until now that placeholder only selected the node: the author
   # landed on an eighteen-row Inspector with nothing marked and had to find `src` or `name`
   # themselves. The attribute is right there in the sentence they clicked, so it goes with them —
   # and for the two that have a chooser, the chooser opens.
   def handle_event("select", params, socket) when is_map(params) do
-    place_or_select(nil, params["id"], params["prop"], socket)
+    place_or_select(socket.assigns.placing, params["id"], params["prop"], socket)
   end
 
   # LEAVING PREVIEW IS THE CHROME'S DECISION, not this frame's — the button that turns it on lives up
@@ -751,10 +754,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     {:noreply, socket}
   end
 
+  defp place_or_select(placing, id, _prop, socket), do: place_or_select(placing, id, socket)
+
   # `:canvas` when the click named no attribute, so every existing reader keeps matching on the atom
   # it has always matched on; the pair only when the placeholder said which value is missing.
   defp origin(prop) when is_binary(prop) and prop != "", do: {:canvas, prop}
   defp origin(_prop), do: :canvas
+
+  defp place_or_select(_placing, id, socket) do
+    case EditorSession.place_at(socket.assigns.token, id) do
+      {:ok, _session} ->
+        {:noreply, socket}
+
+      {:relocated, _session, note} ->
+        {:noreply, push_event(socket, "pb:drop-moved", %{message: note})}
+
+      {:error, :nothing_picked} ->
+        {:noreply, socket}
+
+      {:error, reason} ->
+        {:noreply, push_event(socket, "pb:drop-rejected", %{message: message(reason)})}
+    end
+  end
 
   defp write_style(%{assigns: %{selection: nil}} = socket, _prop, _value), do: {:noreply, socket}
 
