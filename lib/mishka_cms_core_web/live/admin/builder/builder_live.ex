@@ -45,6 +45,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Presets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
@@ -452,8 +453,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp assign_defaults(socket) do
     socket
     |> assign_new(:left_tab, fn -> :components end)
+    |> assign_new(:right_tab, fn -> :layers end)
     |> assign_new(:left_w, fn -> 344 end)
+    |> assign_new(:right_w, fn -> 300 end)
     |> assign_new(:left_hidden, fn -> false end)
+    |> assign_new(:right_hidden, fn -> false end)
     # WHERE THE SESSION LEFT IT, not always desktop. The breakpoint is restored from the saved
     # session; the frame was not. Reopen an editor last used on Mobile and the Mobile tab is active
     # over a desktop-width canvas — and the first click on Mobile then appears to do nothing, because
@@ -462,6 +466,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:zoom, fn -> 100 end)
     |> assign_new(:frame_zoom, fn -> 30 end)
     |> assign_new(:frame_row, fn -> true end)
+    |> assign_new(:find_open, fn -> false end)
+    |> assign_new(:find, fn -> "" end)
+    |> assign_new(:replace, fn -> "" end)
+    |> assign_new(:find_hits, fn -> [] end)
     |> assign_new(:component_presets, fn -> %{} end)
     |> assign_new(:presets_count, fn -> -1 end)
     # COLLECTED ONCE, not per render. Both libraries are merged with whatever extensions contribute
@@ -509,6 +517,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:theme, fn -> "light" end)
     |> assign_new(:stage, fn -> :draft end)
     |> assign_new(:mob_panel, fn -> :canvas end)
+    # A PLUGIN'S ENTRY NAMES WHO MAY SEE IT (`MishkaCmsCore.Builder.Descriptor.permitted/2`), and an
+    # entry the reader may not see is not drawn, so its events never fire either.
+    |> assign_new(:rails, fn -> permitted(Events.collect(:rails, Panels.core_rails()), socket) end)
     |> assign_new(:commands, fn ->
       permitted(Events.collect(:commands, Panels.core_commands()), socket)
     end)
@@ -539,6 +550,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp assign_panel_tab(socket, panel) when panel in [:components],
     do: assign(socket, :left_tab, panel)
+  defp assign_panel_tab(socket, panel) when panel in [:layers],
+    do: assign(socket, :right_tab, panel)
+  defp assign_panel_tab(%{assigns: %{rails: rails}} = socket, panel) do
+    case Enum.any?(rails, &(to_string(Descriptor.key(&1)) == to_string(panel))) do
+      true -> assign(socket, :right_tab, panel)
+      false -> socket
+    end
+  end
+
   defp assign_panel_tab(socket, _panel), do: socket
 
   defp reload_canvas(socket) do
@@ -547,14 +567,64 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> push_event("pb:reload-canvas", %{})
   end
 
+  # Two levels open on arrival — the roots and their children — because a tree that starts fully
+  # collapsed shows one row and says nothing about the page, and one that starts fully open buries
+  # the shape of it in text nodes. Only branches that HAVE children are listed, so the set never
+  # holds an id whose row draws no chevron.
+  defp default_expanded(tree) do
+    children = Enum.flat_map(tree.roots, &branch_ids(tree, &1))
+
+    MapSet.new(Enum.filter(tree.roots, &branch?(tree, &1)) ++ children)
+  end
+
+  defp branch_ids(tree, id) do
+    case Tree.get(tree, id) do
+      nil -> []
+      node -> Enum.filter(node.children, &branch?(tree, &1))
+    end
+  end
+
+  defp branch?(tree, id) do
+    case Tree.get(tree, id) do
+      %{children: [_ | _]} -> true
+      _leaf_or_missing -> false
+    end
+  end
+
+  # Selecting a component on the canvas opens it in the tree as well, so its children and its markup
+  # are there without a second click.
+  #
+  # ITS PROPERTIES ARE NOT OPENED WITH IT, and used to be. A `chelekom-modal` declares nineteen of
+  # them; expanding that group on selection pushed the component's own children some four hundred
+  # pixels down the rail, behind rows that are not drop targets and never were. So the commonest
+  # thing an author does with a dialog — drag something into it — had no reachable target in the
+  # tree, which is exactly how it was reported: "so much property listed instead of under
+  # something". The group is one click away and its row says how many it holds.
+  #
+  # Opening the branch is not enough when the tree is long: the row can be five hundred pixels below
+  # the fold. The scroll is pushed rather than left to the hook's own lifecycle — the rail is patched
+  # row by row and `updated()` does not reliably fire for an attribute deep inside it, which is why
+  # selecting on the canvas left the rail wherever it was.
+  defp expand_selected(socket, %{selection: id}) when is_binary(id) do
+    socket
+    |> update(:expanded, &MapSet.put(&1, id))
+    |> push_event("pb:reveal-layer", %{id: id})
+  end
+
+  defp expand_selected(socket, _editor), do: socket
+
   defp assign_editor(socket, editor) do
     {undone, total} = EditorSession.history_counter(editor)
 
     socket
+    |> assign_new(:expanded, fn -> default_expanded(editor.tree) end)
+    |> expand_to_selection(editor)
+    |> expand_selected(editor)
     |> assign(:editor, editor)
     |> assign(:tree, editor.tree)
     |> assign_presets(editor)
     |> assign(:selection, editor.selection)
+    |> assign(:marked, editor.marked)
     |> assign(:picked, editor.picked)
     |> assign(:selected_node, Tree.get(editor.tree, editor.selection))
     |> assign(:crumbs, Tree.path(editor.tree, editor.selection))
@@ -591,6 +661,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       false ->
         socket |> assign(:drafted_revision, editor.revision) |> autosave()
     end
+  end
+
+  # Selecting on the canvas has to reveal the node in the layers tree, or the two panels disagree
+  # about where you are. Ancestors are opened, never closed: a branch the author opened by hand
+  # stays open.
+  defp expand_to_selection(socket, %{selection: nil}), do: socket
+
+  defp expand_to_selection(socket, editor) do
+    ancestors = editor.tree |> Tree.ancestors(editor.selection) |> Enum.map(& &1.id)
+
+    socket
+    |> assign_new(:expanded, fn -> MapSet.new() end)
+    |> update(:expanded, fn expanded -> Enum.reduce(ancestors, expanded, &MapSet.put(&2, &1)) end)
   end
 
   # LiveView's own async assign, so the panel gets `AsyncResult.loading/0` and `<.async_result>`
@@ -1097,14 +1180,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("set_left_tab", %{"tab" => tab}, socket),
     do: {:noreply, assign(socket, :left_tab, tab_atom(tab, [:components, :blocks]))}
 
+  # THE RAILS THAT EXIST, not the three the core ships. A whitelist of atoms rejected a contributed
+  # rail before it could open — the tab drew, the click did nothing, and the registry that invited
+  # the extension in was the thing refusing it.
+  def handle_event("set_right_tab", %{"tab" => tab}, socket),
+    do: {:noreply, assign(socket, :right_tab, rail_tab(socket, tab))}
+
   def handle_event("toggle_left", _params, socket),
     do: {:noreply, assign(socket, :left_hidden, !socket.assigns.left_hidden)}
+
+  def handle_event("toggle_right", _params, socket),
+    do: {:noreply, assign(socket, :right_hidden, !socket.assigns.right_hidden)}
 
   # Sent ONCE, when the grip is released — the drag itself is the browser's, painted locally at frame
   # rate. This is the value the panel is rendered from afterwards, so it still has to be clamped
   # here: what arrives is whatever the page chose to send.
   def handle_event("resize", %{"panel" => "left", "value" => value}, socket),
     do: {:noreply, assign(socket, :left_w, clamped(:left, value))}
+
+  def handle_event("resize", %{"panel" => "right", "value" => value}, socket),
+    do: {:noreply, assign(socket, :right_w, clamped(:right, value))}
 
   # THE LINK HAS TO RUN BOTH WAYS OR IT IS A TRAP. Choosing a breakpoint moves the frame; choosing a
   # FRAME left the breakpoint exactly where it was. So the canvas went to 390px while the Inspector's
@@ -1236,7 +1331,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(canvas components) do
+      when panel in ~w(canvas components layers) do
     panel = String.to_existing_atom(panel)
 
     {:noreply,
@@ -1295,6 +1390,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     place_or_select(socket.assigns.editor.picked, id, socket)
   end
 
+  def handle_event("toggle_expand", %{"id" => id}, socket) do
+    expanded = socket.assigns.expanded
+
+    expanded =
+      case MapSet.member?(expanded, id) do
+        true -> MapSet.delete(expanded, id)
+        false -> MapSet.put(expanded, id)
+      end
+
+    {:noreply, assign(socket, :expanded, expanded)}
+  end
+
   def handle_event("toggle_lock", %{"id" => id}, socket) do
     {:ok, _editor} = EditorSession.toggle_lock(socket.assigns.token, id)
     {:noreply, socket}
@@ -1319,6 +1426,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("close_reload", _params, socket),
     do: {:noreply, assign(socket, :reload_confirm, false)}
+
+  # The tree is the map and the Inspector is the form, so a row that HAS a form opens it: the left
+  # panel comes back if it was collapsed, lands on the Inspector, and the named property is focused
+  # and ringed so it is obvious which of thirty fields you asked for.
+  # A component or slot row opens its form — unless something is picked, in which case the click
+  # means the same thing it means on every other row and on the canvas: put it in here. Without this
+  # the tree would place into a `<div>` but not into the component you actually wanted it inside,
+  # which is the only reason to click a component row while placing.
+  def handle_event("inspect", %{"id" => id}, socket) do
+    case socket.assigns.editor.picked do
+      nil -> {:noreply, open_inspector(socket, id)}
+      picked -> place_or_select(picked, id, socket)
+    end
+  end
 
   # Re-runs the read the `:failed` slot's Retry button offers. Almost every palette failure is
   # transient — a connection dropped under load — so trying again is the whole remedy, and doing it
@@ -1439,6 +1560,34 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # The pills are the gervaz table's own filter now — the template renders them and the table handles
   # the event, so the editor no longer keeps a parallel copy of which one is active.
 
+  # Both halves of the hybrid. `drag_start` hands the rail (and the palette, which drags into the
+  # canvas across the frame boundary) the whole tree's verdict for this one drag, so its drop line is
+  # a lookup rather than a round trip. See `EditorSession.drop_hints/2`.
+  def handle_event("drag_start", params, socket) do
+    case EditorSession.drop_hints(socket.assigns.token, params) do
+      {:ok, accepts} ->
+        {:noreply,
+         push_event(socket, "pb:drop-hints", %{
+           accepts: accepts,
+           field: EditorSession.drop_field?(socket.assigns.token, params)
+         })}
+
+      {:error, _reason} ->
+        {:noreply, socket}
+    end
+  end
+
+  # A drop resolved by the client is still only a proposal: it becomes a `:move` or an `:insert` here
+  # and is re-checked against containment before the tree changes. A refusal relocates rather than
+  # discards — see `EditorSession.apply_drop/2`.
+  def handle_event("drop", params, socket) do
+    case EditorSession.apply_drop(socket.assigns.token, params) do
+      {:ok, _editor} -> {:noreply, socket}
+      {:relocated, _editor, note} -> {:noreply, put_flash(socket, :info, note)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
   def handle_event("op", params, socket) do
     case EditorSession.apply_op(socket.assigns.token, params) do
       {:ok, _editor} -> {:noreply, socket}
@@ -1470,8 +1619,82 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # THE RIGHT-CLICK MENU, from either surface. What each entry does lives in
+  # `EditorSession.context_action/3` so the canvas and the layers rail cannot answer the same word
+  # differently; what is left here is the one entry that is not an edit — saving a selection for
+  # reuse is a form, and the form is already in the Studio.
+  #
+  # Right-clicking also SELECTS. Every other builder does, and without it the menu acts on one node
+  # while the inspector beside it describes another.
+  # ⌘-CLICK HOLDS A SECOND ELEMENT. The ordinary selection stays exactly one — it is what the
+  # inspector edits and the toolbar names — and these ride alongside it, so nothing that reads a
+  # single selection had to change.
+  def handle_event("mark", %{"id" => node_id}, socket) when is_binary(node_id) do
+    {:ok, _editor} = EditorSession.mark(socket.assigns.token, node_id)
+    {:noreply, socket}
+  end
+
+  def handle_event("clear_marks", _params, socket) do
+    {:ok, _editor} = EditorSession.clear_marks(socket.assigns.token)
+    {:noreply, socket}
+  end
+
+  # FIND AND REPLACE, over the page's words rather than its markup — see
+  # `EditorSession.find_text/2` for why the two are not the same search.
+  def handle_event("open_find", _params, socket),
+    do: {:noreply, socket |> assign(:find_open, true) |> refresh_hits()}
+
+  def handle_event("close_find", _params, socket),
+    do: {:noreply, assign(socket, :find_open, false)}
+
+  def handle_event("find_query", params, socket) do
+    {:noreply,
+     socket
+     |> assign(:find, params["find"] || "")
+     |> assign(:replace, params["replace"] || "")
+     |> refresh_hits()}
+  end
+
+  def handle_event("replace_all", _params, socket) do
+    case EditorSession.replace_text(
+           socket.assigns.token,
+           socket.assigns.find,
+           socket.assigns.replace
+         ) do
+      {:ok, _editor} -> {:noreply, socket |> assign(:find, "") |> assign(:find_hits, [])}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  def handle_event("bulk", %{"action" => action}, socket) do
+    case EditorSession.bulk(socket.assigns.token, action) do
+      {:ok, _editor} -> {:noreply, socket}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  def handle_event("ctx", %{"action" => action, "node_id" => node_id}, socket)
+      when is_binary(node_id) do
+    case action in Panels.context_actions() do
+      false -> {:noreply, socket}
+      true -> {:noreply, run_context_action(socket, action, node_id)}
+    end
+  end
+
   def handle_event("duplicate", _params, socket), do: selection_op(socket, "duplicate")
   def handle_event("delete", _params, socket), do: selection_op(socket, "delete")
+
+  # HIDDEN FROM VISITORS, OR SHOWN AGAIN. The Inspector's Show names its node; the keyboard and the
+  # command palette act on the selection. See `MishkaCmsCore.Runtime.PageBuilder.Visibility`.
+  def handle_event("toggle_visibility", %{"id" => id}, socket) when is_binary(id),
+    do: {:noreply, run_context_action(socket, "visibility", id)}
+
+  def handle_event("toggle_visibility", _params, socket) do
+    case socket.assigns.selection do
+      nil -> {:noreply, needs_selection(socket)}
+      id -> {:noreply, run_context_action(socket, "visibility", id)}
+    end
+  end
 
   # SAVE MEANS SAVE THE DRAFT. It used to write the live page and enqueue a compile — under a button
   # called "Save draft now", with the stage chip reading Draft — so a keystroke meant for safekeeping
@@ -1512,6 +1735,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event(event, _params, socket) do
     Strict.violation!("builder_live", "no handler for the #{inspect(event)} event")
     {:noreply, socket}
+  end
+
+  defp open_inspector(socket, id) do
+    {:ok, _editor} = EditorSession.select(socket.assigns.token, id)
+
+    socket
+    |> assign(:left_hidden, false)
+    |> assign(:left_tab, :inspector)
   end
 
   # A SELECTION IS ALREADY AN ANSWER TO "WHERE". Picking with an element selected used to arm the
@@ -1565,7 +1796,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp shortcut("paste", socket), do: handle_event("paste", %{}, socket)
   defp shortcut("duplicate", socket), do: handle_event("duplicate", %{}, socket)
   defp shortcut("delete", socket), do: handle_event("delete", %{}, socket)
+  defp shortcut("visibility", socket), do: handle_event("toggle_visibility", %{}, socket)
   defp shortcut("command", socket), do: handle_event("toggle_command", %{}, socket)
+  defp shortcut("find", socket), do: handle_event("open_find", %{}, socket)
   defp shortcut("preview", socket), do: handle_event("toggle_preview", %{}, socket)
   defp shortcut("fit", socket), do: {:noreply, assign(socket, :zoom, 100)}
 
@@ -1754,11 +1987,31 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         :info,
         stage
         |> saved_message(socket.assigns.section)
+        |> hidden_note(stage, editor.tree)
       )
     else
       {:error, reason} -> put_flash(socket, :error, human(reason))
     end
   end
+
+  # WHAT A PUBLISH LEFT OUT, said once, at the moment it was left out — so an element hidden weeks
+  # ago and forgotten is not a mystery on the live page. See `PageBuilder.Visibility`.
+  defp hidden_note(saved, :published, tree) do
+    case length(Visibility.hidden_roots(tree)) do
+      0 ->
+        saved
+
+      count ->
+        ngettext(
+          "%{saved} 1 hidden element was left out.",
+          "%{saved} %{count} hidden elements were left out.",
+          count,
+          saved: saved
+        )
+    end
+  end
+
+  defp hidden_note(saved, _stage, _tree), do: saved
 
   defp next_stage(:published), do: :draft
   defp next_stage(stage), do: stage
@@ -1931,6 +2184,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp saved_message(_stage, section),
     do: gettext("%{section} saved.", section: section_label(section))
 
+  # A rail's key is whatever the registry answered with, so the open tab is matched against that
+  # list rather than against a fixed set — and an unknown one falls back to the first rail there is.
+  defp rail_tab(%{assigns: %{rails: rails}}, tab) do
+    keys = Enum.map(rails, &to_string(Descriptor.key(&1)))
+
+    case to_string(tab) in keys do
+      true -> String.to_existing_atom(to_string(tab))
+      false -> :layers
+    end
+  end
+
+  defp rail_tab(_socket, _tab), do: :layers
+
   defp tab_atom(value, allowed) when is_binary(value),
     do: Enum.find(allowed, hd(allowed), &(Atom.to_string(&1) == value))
 
@@ -2001,6 +2267,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # Re-run against the tree as it is NOW, so a replace, an undo or a co-editor's change leaves the
+  # list saying something true rather than offering nodes that have moved on.
+  defp refresh_hits(socket),
+    do:
+      assign(
+        socket,
+        :find_hits,
+        EditorSession.find_text(socket.assigns.editor, socket.assigns.find)
+      )
+
+  # The right-click menu SELECTS what it acts on, the way every other builder does — without it the
+  # menu edits one node while the inspector beside it still describes another.
+  defp run_context_action(socket, action, node_id) do
+    EditorSession.select(socket.assigns.token, node_id)
+
+    case EditorSession.context_action(socket.assigns.token, action, node_id) do
+      {:open, :snippet} -> assign(socket, sheet: :studio, studio_tab: :snippets)
+      {:ok, _editor} -> socket
+      {:relocated, _editor, note} -> put_flash(socket, :info, note)
+      {:error, reason} -> put_flash(socket, :error, human(reason))
+    end
+  end
+
   # `:frames` is the one frame that is not a breakpoint — it is all three at once — so it moves
   # nothing, which is the same answer `follow_breakpoint/2` gives when it is showing.
   defp follow_device(socket, :frames), do: assign(socket, :device, :frames)
@@ -2028,6 +2317,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp human(:unknown_node), do: gettext("That element is no longer on the page.")
   defp human(:unknown_session), do: gettext("This editing session expired. Reload the builder.")
   defp human(:invalid_parent), do: gettext("That element cannot hold content.")
+
+  defp human(:nothing_to_link),
+    do: gettext("That element holds nothing a link could go around.")
+
+  defp human(:already_linked), do: gettext("That is a link already, or sits inside one.")
+  defp human(:cyclic_move), do: gettext("An element cannot be moved inside itself.")
+
+  defp human(:not_siblings),
+    do: gettext("Only elements sitting side by side can be wrapped together.")
 
   defp human(:document_root),
     do: gettext("That is the document itself — put content inside it rather than around it.")
@@ -2148,12 +2446,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           breakpoint={@breakpoint}
           status={@status}
           statuses={@statuses}
+          marked={@marked}
+        />
+        <Panels.right_panel
+          rails={@rails}
+          right_tab={@right_tab}
+          right_hidden={@right_hidden}
+          right_w={@right_w}
+          mob_panel={@mob_panel}
+          editor={@editor}
+          tree={@tree}
+          selection={@selection}
+          expanded={@expanded}
         />
       </div>
 
       <Panels.command_palette :if={@command_open} {assigns} />
       <Panels.reload_modal :if={@reload_confirm} />
       <Panels.leave_modal :if={@leave_to} />
+      <%!-- ONE menu for both surfaces. The layers rail right-clicks into it directly; the canvas is a
+            frame with none of this stylesheet, so it forwards its right-clicks here rather than
+            drawing a second, inline-styled copy that would drift. --%>
+      <Panels.find_modal :if={@find_open} find={@find} replace={@replace} hits={@find_hits} />
+      <Panels.context_menu id="pb-ctx" target="[data-layer-row]" key="layerRow" />
     </div>
     """
   end

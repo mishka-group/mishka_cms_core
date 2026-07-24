@@ -101,6 +101,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
+  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
@@ -559,10 +560,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # that is already selected in the session, and the client — which owns the ring, and may never
   # have been told about that selection at all — was told nothing again. The ring stayed off, and
   # the toolbar with it. A push_event is a few bytes; a selection nobody can see is a bug.
+  # THE MARKS TRAVEL THE SAME WAY THE SELECTION DOES — as an id list the hook paints, never as
+  # per-node markup. Rendering `data-marked` on every node would re-render the whole document on
+  # every ⌘-click, which is the trap the selection ring already sidesteps.
   defp sync_selection(socket, _previous, %{selection: selection} = session) do
     socket
     |> assign_session(session)
     |> push_event("pb:selected", %{id: selection})
+    |> push_event("pb:marked", %{ids: MapSet.to_list(session.marked || MapSet.new())})
   end
 
   @impl true
@@ -593,6 +598,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # toggles preview, rather than a second route that would have to be kept in step with it.
   def handle_event("leave_preview", _params, socket),
     do: {:noreply, push_event(socket, "pb:leave-preview", %{})}
+
+  # ⌘-click. The session holds the marks, so the chrome's bar and this frame's outlines are the same
+  # answer arriving at two subscribers rather than two ideas of what is held.
+  def handle_event("mark", %{"id" => node_id}, socket) when is_binary(node_id) do
+    EditorSession.mark(socket.assigns.token, node_id)
+    {:noreply, socket}
+  end
 
   # FROM SCRATCH IS STILL A STARTING POINT. It used to place whatever was armed in the palette — and
   # nothing at all when nothing was, which is the state a reader who has not picked anything is in.
@@ -861,7 +873,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       [data-node-id]:hover { outline: 1px dashed #a5b4e8; outline-offset: 1px; }
       [data-node-id][data-selected="true"] { outline: 2px dashed #3a6cf4; outline-offset: 1px; }
       [data-node-id][data-selected="true"]:hover { outline: 2px dashed #3a6cf4; }
+      /* Held with ⌘, alongside the one selection. Solid rather than dashed so the element being
+         edited is still tellable from the ones going along with it. */
+      [data-node-id][data-marked="true"] { outline: 2px solid #8580d8; outline-offset: 1px; }
       [data-node-id] [data-node-id]:hover { outline-color: #c3c1f0; }
+      /* HIDDEN FROM VISITORS: kept in the page, left out of what a visitor gets. Faded and grey, and
+         outlined while the hover and selection rings are not using the outline. One inside another
+         is not faded twice. */
+      [data-pb-hidden] { opacity: .38; filter: grayscale(1); }
+      [data-pb-hidden] [data-pb-hidden] { opacity: 1; }
+      [data-pb-hidden]:not([data-selected="true"]):not(:hover) { outline: 1px dashed #b4b1c8; outline-offset: 2px; }
       /* AN OVERLAY OPENS WHEN IT IS SELECTED, AND SHUTS WHEN THE SELECTION MOVES ON.
 
          Fourteen kit components render their content closed, and every one of them used to be held
@@ -1673,6 +1694,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
   defp render_node(%{node: nil} = assigns), do: ~H""
 
+  # HIDDEN FROM VISITORS IS NOT IN THE PREVIEW, which is the page a visitor gets. While editing it is
+  # drawn as it is, faded by the `data-pb-hidden` rule in `#pb-canvas-chrome`.
+  defp render_node(%{preview?: true, node: %Node{} = node} = assigns) do
+    case Visibility.hidden?(node) do
+      true -> ~H""
+      false -> visible_node(assigns)
+    end
+  end
+
   defp render_node(%{node: %Node{}} = assigns) do
     case Node.hidden?(assigns.node, assigns.hidden) and !assigns.preview? do
       true -> folded_node(assigns)
@@ -2090,6 +2120,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       "data-pb-overlay" => assigns[:overlay],
       "data-pb-reveal" => assigns[:reveal],
       "data-pb-hollow" => assigns[:hollow],
+      "data-pb-hidden" => Visibility.hidden?(assigns.node) && "true",
       "phx-click" => "select",
       "phx-value-id" => assigns.node.id,
       "phx-value-prop" => assigns[:wants_media] || List.first(missing)

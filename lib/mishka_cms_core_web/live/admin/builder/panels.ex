@@ -22,8 +22,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias Phoenix.LiveView.JS
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
+  alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
@@ -286,6 +290,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # a plain `width:272px` that would stamp the stale server width over the width under the reader's
   # cursor — an autosave tick or another editor's keystroke mid-drag, and the panel jumps.
   defp grip_var(:left), do: "--pb-left-w"
+  defp grip_var(:right), do: "--pb-right-w"
 
   # The two canvas zooms, in percent: `:single` is one device frame, `:frame` the all-breakpoints row.
   @zoom_bounds %{single: {40, 200}, frame: {20, 100}}
@@ -302,6 +307,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp zoom_min(kind), do: kind |> zoom_bounds() |> elem(0)
   defp zoom_max(kind), do: kind |> zoom_bounds() |> elem(1)
+
+  @doc "The keys the core draws itself; everything else is drawn by its own descriptor."
+  def core_rail_keys, do: ["layers", "assistant", "audit"]
+
+  # The open rail, when an extension contributed it. The core's three are spelled out above because
+  # each takes a different slice of the editor's state.
+  defp contributed_rails(rails, open) do
+    Enum.filter(rails, fn rail ->
+      key = to_string(Descriptor.key(rail))
+      key == to_string(open) and key not in core_rail_keys()
+    end)
+  end
+
+  @doc "The core's right-rail tabs — the seed of the `builder:rails` registry."
+  def core_rails do
+    [
+      descriptor("layers", :rail_tab, gettext_noop("Layers"), 10, icon: "layers"),
+    ]
+  end
 
   @doc "The core's ⌘K commands — the seed of `builder:commands`."
   def core_commands do
@@ -324,6 +348,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         shortcut: "⇧⌘Z",
         icon: "redo",
         description: gettext_noop("Step forward again")
+      ),
+      descriptor("duplicate", :command, gettext_noop("Duplicate selection"), 50,
+        shortcut: "⌘D",
+        icon: "copy",
+        description: gettext_noop("Copy the selected element in place")
+      ),
+      descriptor("toggle_visibility", :command, gettext_noop("Hide or show for visitors"), 55,
+        shortcut: "⇧⌘H",
+        icon: "eye_off",
+        description:
+          gettext_noop("Keep the selection in the page, shown to nobody, or show it again")
+      ),
+      descriptor("delete", :command, gettext_noop("Delete selection"), 60,
+        shortcut: "⌫",
+        icon: "trash",
+        description: gettext_noop("Remove the selected element")
       ),
       descriptor("toggle_preview", :command, gettext_noop("Toggle preview"), 80,
         shortcut: "⌘P",
@@ -582,6 +622,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             icon={:draft}
             label={gettext("Save draft now")}
             badge="⌘S"
+          />
+          <.more_item
+            id="pb-find-open"
+            event="open_find"
+            value={%{}}
+            icon={:search}
+            label={gettext("Find and replace")}
+            badge="⌘F"
           />
           <%!-- The direction toggle has its own pair of buttons in the bar, but that pair is the
                 first thing the collapse ladder drops — so it needs a home that survives. --%>
@@ -1477,6 +1525,278 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  # THE SAME MENU IN BOTH PLACES, written once. The canvas and the layers rail are separate
+  # LiveViews; a menu authored twice is a menu whose two halves drift, and the entry that drifts
+  # first is always Delete.
+  @context_menu [
+    [
+      %{action: "duplicate", label: gettext_noop("Duplicate"), icon: :copy, keys: "⌘D"},
+      %{
+        action: "visibility",
+        label: gettext_noop("Hide from visitors"),
+        icon: :eye_off,
+        keys: "⇧⌘H"
+      },
+      %{action: "wrap", label: gettext_noop("Wrap in a container"), icon: :box, keys: nil},
+      %{action: "link", label: gettext_noop("Make it a link"), icon: :link, keys: nil}
+    ],
+    [
+      %{action: "copy", label: gettext_noop("Copy"), icon: :copy, keys: "⌘C"},
+      %{action: "cut", label: gettext_noop("Cut"), icon: :crop, keys: "⌘X"},
+      %{action: "paste", label: gettext_noop("Paste after"), icon: :attach, keys: "⌘V"}
+    ],
+    [
+      %{action: "copy_styles", label: gettext_noop("Copy styles"), icon: :sliders, keys: nil},
+      %{action: "paste_styles", label: gettext_noop("Paste styles"), icon: :sliders, keys: nil}
+    ],
+    [
+      %{action: "snippet", label: gettext_noop("Save as snippet"), icon: :draft, keys: nil},
+      %{action: "delete", label: gettext_noop("Delete"), icon: :trash, keys: "⌫"}
+    ]
+  ]
+
+  attr(:find, :string, default: "")
+  attr(:replace, :string, default: "")
+  attr(:hits, :list, default: [])
+
+  @doc """
+  Find and replace over the page's WORDS.
+
+  Deliberately not over the markup: a page says "Contact Us" in four places and the fifth is a class
+  called `contact-us`. Renaming the company should not touch the CSS, so class names, attributes and
+  expressions are out of reach here — the code drawer is where those are edited, by someone who
+  means to.
+  """
+  def find_modal(assigns) do
+    ~H"""
+    <div
+      id="pb-find"
+      class="fixed inset-0 z-[92] flex items-start justify-center bg-[#17161a]/[.42] px-5 pt-[12vh]"
+      phx-mounted={modal_in("#pb-find > section")}
+      phx-remove={modal_out("#pb-find > section")}
+      phx-window-keydown="close_find"
+      phx-key="escape"
+    >
+      <section
+        phx-click-away="close_find"
+        class="flex max-h-[70vh] w-full max-w-[560px] flex-col overflow-hidden rounded-[16px] bg-white shadow-[0_30px_80px_rgba(20,18,26,.4)]"
+      >
+        <form
+          id="pb-find-form"
+          phx-change="find_query"
+          phx-submit="find_query"
+          class="flex flex-none gap-2 border-b border-[#f0efea] p-3.5"
+        >
+          <div class="relative flex-1">
+            <.icon
+              name={:search}
+              size={14}
+              class="pointer-events-none absolute left-[11px] top-1/2 -translate-y-1/2 text-[#a8a5a0]"
+            />
+            <input
+              type="text"
+              name="find"
+              id="pb-find-input"
+              value={@find}
+              autocomplete="off"
+              phx-debounce="150"
+              placeholder={gettext("Find in the page's text…")}
+              class="peer h-[38px] w-full rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-[34px] pr-[30px] text-[12.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white"
+            />
+            <%!-- One form, two fields, one handler that reads both — so clearing either has to
+                  restate the other, or "clear the search" would silently throw away the replacement
+                  the author had typed beside it. --%>
+            <.clear_field
+              field="pb-find-input"
+              event="find_query"
+              params={%{"find" => "", "replace" => @replace}}
+            />
+          </div>
+          <div class="relative w-[180px] flex-none">
+            <input
+              type="text"
+              name="replace"
+              id="pb-replace-input"
+              value={@replace}
+              autocomplete="off"
+              phx-debounce="150"
+              placeholder={gettext("Replace with…")}
+              class="peer h-[38px] w-full rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-3 pr-[30px] text-[12.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white"
+            />
+            <.clear_field
+              field="pb-replace-input"
+              event="find_query"
+              params={%{"find" => @find, "replace" => ""}}
+            />
+          </div>
+        </form>
+
+        <%!-- Each hit is a way IN as well as a count: pressing one selects that element, which is
+              usually what someone wanted from a search in the first place. --%>
+        <div class="min-h-0 flex-1 overflow-y-auto p-2">
+          <p
+            :if={@hits == [] and String.trim(@find) != ""}
+            id="pb-find-none"
+            class="px-2.5 py-8 text-center text-[12px] font-medium text-[#6d6a63]"
+          >
+            {gettext("No text on this page says that.")}
+          </p>
+          <p
+            :if={String.trim(@find) == ""}
+            class="px-2.5 py-8 text-center text-[12px] font-medium text-[#a8a5a0]"
+          >
+            {gettext("Type to search the words on this page.")}
+          </p>
+          <button
+            :for={hit <- @hits}
+            type="button"
+            id={"pb-find-hit-#{hit.id}"}
+            phx-click="select"
+            phx-value-id={hit.id}
+            class="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-2 text-left hover:bg-[#f2f1fc]"
+          >
+            <span class="grid size-[15px] flex-none place-items-center text-[#6d6a63]">
+              <.icon name={:text} size={12} />
+            </span>
+            <span class="min-w-0 flex-1 truncate text-[11.5px] font-medium text-[#3a382f]">
+              {String.trim(hit.text)}
+            </span>
+            <span
+              :if={hit.count > 1}
+              class="flex-none font-['Space_Grotesk'] text-[10px] font-bold text-[#6d6a63]"
+            >
+              ×{hit.count}
+            </span>
+          </button>
+        </div>
+
+        <div class="flex flex-none items-center gap-2 border-t border-[#f0efea] px-3.5 py-2.5">
+          <span class="flex-1 text-[11px] font-semibold text-[#6d6a63]">
+            {find_summary(@hits)}
+          </span>
+          <button
+            type="button"
+            phx-click="close_find"
+            class="h-8 flex-none rounded-[9px] border border-[#ecebe6] bg-white px-3 text-[11.5px] font-semibold text-[#5c5a54] hover:bg-[#f6f5f2]"
+          >
+            {gettext("Close")}
+          </button>
+          <%!-- ONE UNDO STEP for the whole sweep. Forty entries would mean forty presses to get back
+                to where you were, and no way to tell which of them was the accident. --%>
+          <button
+            type="button"
+            id="pb-find-replace-all"
+            phx-click="replace_all"
+            disabled={@hits == []}
+            class="h-8 flex-none rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-3 font-['Space_Grotesk'] text-[11.5px] font-bold text-white disabled:opacity-40"
+          >
+            {gettext("Replace all")}
+          </button>
+        </div>
+      </section>
+    </div>
+    """
+  end
+
+  defp find_summary([]), do: gettext("Nothing to replace")
+
+  defp find_summary(hits) do
+    total = Enum.reduce(hits, 0, &(&1.count + &2))
+    places = length(hits)
+
+    ngettext("%{count} match in %{places}", "%{count} matches in %{places}", total,
+      places: ngettext("%{count} place", "%{count} places", places)
+    )
+  end
+
+  attr(:id, :string, required: true)
+
+  attr(:target, :string,
+    required: true,
+    doc: "the selector for a row or node this menu belongs to — what a right-click has to land on"
+  )
+
+  attr(:key, :string,
+    required: true,
+    doc: "the dataset key on that element holding the node id — `nodeId` or `layerRow`"
+  )
+
+  @doc """
+  The right-click menu, for a canvas node or a layers row.
+
+  Nothing in here is dynamic, deliberately: the hook stamps the node it was opened on and pushes the
+  action itself, so opening the menu costs no round trip and no patch can arrive mid-gesture and
+  replace the row under the pointer. See `Hooks.PbContextMenu`.
+  """
+  def context_menu(assigns) do
+    assigns = assign(assigns, :groups, @context_menu)
+
+    ~H"""
+    <div
+      id={@id}
+      phx-hook="PbContextMenu"
+      data-target={@target}
+      data-key={@key}
+      data-hidden="false"
+      hidden
+      class="group/ctx fixed z-[95] w-[216px] rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
+    >
+      <div
+        :for={{group, index} <- Enum.with_index(@groups)}
+        class={["flex flex-col", index > 0 && "mt-1 border-t border-[#f4f3ef] pt-1"]}
+      >
+        <button
+          :for={item <- group}
+          type="button"
+          data-action={item.action}
+          class={[
+            "flex w-full items-center gap-2.5 rounded-[9px] px-2 py-[6px] text-left",
+            "text-[11.5px] font-semibold text-[#3a382f] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]",
+            item.action == "delete" && "hover:bg-[#fdf3f1] hover:text-[#c0473d]"
+          ]}
+        >
+          <%!-- ONE ENTRY, TWO WORDS. The menu is drawn once for every node, so the hook marks it with
+                whether the node it opened on is hidden from visitors, and the entry says what a
+                click will do. --%>
+          <span
+            :if={item.action != "visibility"}
+            class="grid size-[15px] flex-none place-items-center text-[#6d6a63]"
+          >
+            <.icon name={item.icon} size={13} />
+          </span>
+          <span :if={item.action != "visibility"} class="flex-1 truncate">
+            {translate(item.label)}
+          </span>
+          <span
+            :if={item.action == "visibility"}
+            class="grid size-[15px] flex-none place-items-center text-[#6d6a63]"
+          >
+            <.icon name={:eye_off} size={13} class="group-data-[hidden=true]/ctx:hidden" />
+            <.icon name={:eye} size={13} class="hidden group-data-[hidden=true]/ctx:block" />
+          </span>
+          <span :if={item.action == "visibility"} class="flex-1 truncate">
+            <span class="group-data-[hidden=true]/ctx:hidden">{translate(item.label)}</span>
+            <span class="hidden group-data-[hidden=true]/ctx:inline">
+              {gettext("Show to visitors")}
+            </span>
+          </span>
+          <span
+            :if={item.keys}
+            class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#a8a5a0]"
+          >
+            {item.keys}
+          </span>
+        </button>
+      </div>
+    </div>
+    """
+  end
+
+  @doc "Every action the right-click menu can send — the list both LiveViews validate against."
+  @spec context_actions() :: [String.t()]
+  def context_actions,
+    do: Enum.flat_map(@context_menu, fn group -> Enum.map(group, & &1.action) end)
+
   attr(:picked_block, :any, default: nil)
   attr(:block_cat, :string, default: "all")
   attr(:block_query, :string, default: "")
@@ -1776,6 +2096,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp picked_label(name) when is_binary(name), do: name
   defp picked_label(_other), do: ""
 
+  # Hidden from visitors on this row: `:self` where it was hidden, `:parent` inside a hidden one.
+  defp visitor_off(tree, id) do
+    case Visibility.hidden_by(tree, id) do
+      nil -> nil
+      %{id: ^id} -> :self
+      _container -> :parent
+    end
+  end
+
   attr(:fault, :map, required: true)
   attr(:error, :string, default: nil)
   attr(:section, :string, default: "page")
@@ -1884,6 +2213,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:breakpoint, :atom, default: :base)
   attr(:status, :any, default: nil)
   attr(:statuses, :list, default: [])
+  attr(:marked, :any, default: nil)
+
   def center(assigns) do
     ~H"""
     <main
@@ -1892,6 +2223,51 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       data-role="pb-canvaswrap"
       class="flex min-w-0 flex-1 flex-col bg-[#f6f5f2]"
     >
+      <%!-- HOLDING SEVERAL. It appears only once a second element is held, says how many, and every
+            button on it acts on all of them as ONE undo step. Above the canvas rather than floating
+            over it: a bar that covers the page hides the thing it is about. --%>
+      <div
+        :if={marked_count(@marked) > 0}
+        id="pb-multi-bar"
+        class="flex h-10 flex-none items-center gap-2 border-b border-[#dcdbf5] bg-[#f2f1fc] px-3"
+      >
+        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#e4e2f7] text-[#4f4bcc]">
+          <.icon name={:layers} size={12} />
+        </span>
+        <span class="flex-1 text-[11.5px] font-bold text-[#2e2b6b]">
+          {ngettext("%{count} element held", "%{count} elements held", marked_count(@marked) + 1)}
+        </span>
+        <button
+          :for={
+            {action, label} <- [
+              {"wrap", gettext("Wrap together")},
+              {"duplicate", gettext("Duplicate")},
+              {"paste_styles", gettext("Paste styles")},
+              {"delete", gettext("Delete")}
+            ]
+          }
+          type="button"
+          id={"pb-multi-#{action}"}
+          phx-click="bulk"
+          phx-value-action={action}
+          class={[
+            "h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-white px-2.5",
+            "font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#faf9fe]",
+            action == "delete" && "text-[#c0473d] hover:bg-[#fdf3f1]"
+          ]}
+        >
+          {label}
+        </button>
+        <button
+          type="button"
+          id="pb-multi-clear"
+          phx-click="clear_marks"
+          title={gettext("Back to one element")}
+          class="grid size-7 flex-none place-items-center rounded-[8px] text-[#6d6a63] hover:bg-white hover:text-[#1b1a18]"
+        >
+          <.icon name={:close} size={13} />
+        </button>
+      </div>
       <%!-- An error page is a LIST of per-status templates, not one document, so it gets a strip to
             choose which status the canvas is showing. Every other section has nothing to switch. --%>
       <div
@@ -2256,6 +2632,490 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp frame_active?(:tablet, "Tablet"), do: true
   defp frame_active?(:mobile, "Mobile"), do: true
   defp frame_active?(_breakpoint, _label), do: false
+
+  @doc "The right panel — Layers, Assistant and Audit — as `builder:rails` contributions."
+  # DECLARED, NEVER SPLATTED — see `left_panel/1`. The union of this function's own five and what
+  # its three tabs read, because they share this component's assigns.
+  attr(:rails, :list, required: true)
+  attr(:right_tab, :atom, default: :layers)
+  attr(:right_hidden, :boolean, default: false)
+  attr(:right_w, :integer, required: true)
+  attr(:mob_panel, :atom, default: :canvas)
+  attr(:editor, :any, required: true)
+  attr(:tree, :any, required: true)
+  attr(:selection, :string, default: nil)
+  attr(:expanded, :any, required: true)
+  def right_panel(assigns) do
+    ~H"""
+    <div
+      :if={!@right_hidden}
+      data-role="pb-grip"
+      id="pb-grip-right"
+      phx-hook="PbGrip"
+      data-panel="right"
+      data-min={grip_min(:right)}
+      data-max={grip_max(:right)}
+      data-var={grip_var(:right)}
+      class="w-1.5 flex-none cursor-col-resize hover:bg-[#e4e2f7] max-[900px]:hidden"
+    />
+
+    <aside
+      :if={!@right_hidden}
+      data-role="pb-right"
+      id="pb-right"
+      style={"width:var(--pb-right-w, #{@right_w}px)"}
+      class={[
+        "flex flex-none flex-col border-l border-[#e6e4de] bg-white",
+        mobile_visibility(@mob_panel, [:layers, :assistant, :audit])
+      ]}
+    >
+      <%!-- Mirrored from the left panel: the collapse chevron sits on the outside edge, so both
+            panels fold away from the canvas rather than toward it. --%>
+      <div class="flex flex-none items-center gap-1 px-3.5 pt-3">
+        <button
+          type="button"
+          phx-click="toggle_right"
+          title={gettext("Collapse panel")}
+          class="grid h-[30px] w-5 flex-none place-items-center text-[#a8a5a0] hover:text-[#4f4bcc]"
+        >
+          <.icon name={:chevron} size={13} />
+        </button>
+        <div class="flex min-w-0 flex-1 gap-0.5 rounded-[10px] bg-[#f2f1ec] p-[3px]">
+          <button
+            :for={rail <- @rails}
+            type="button"
+            id={"pb-rail-#{rail.key}"}
+            phx-click="set_right_tab"
+            phx-value-tab={rail.key}
+            title={translate(rail.label)}
+            class={[
+              "flex h-[30px] min-w-0 flex-1 items-center justify-center gap-1.5 truncate rounded-[8px] px-1 text-[10.5px] font-bold",
+              (to_string(@right_tab) == rail.key &&
+                 "bg-white text-[#4f4bcc] shadow-[0_1px_3px_rgba(30,28,24,.12)]") || "text-[#6d6a63]"
+            ]}
+          >
+            <.icon name={rail_icon(rail)} size={13} class="flex-none" />{translate(rail.label)}
+          </button>
+        </div>
+      </div>
+
+      <.layers
+        :if={@right_tab == :layers}
+        editor={@editor}
+        tree={@tree}
+        selection={@selection}
+        expanded={@expanded}
+      />
+
+      <%!-- AND WHATEVER AN EXTENSION ADDED. The three above are the core's own rails and stay
+            spelled out, because each takes a different slice of the editor's state; a contributed
+            one is handed the same assigns and draws itself. Without this a plugin's rail drew a tab
+            button that opened onto nothing, which is worse than not offering the seam at all. --%>
+      <%= for rail <- contributed_rails(@rails, @right_tab) do %>
+        {Descriptor.render(rail, assigns)}
+      <% end %>
+    </aside>
+
+    <button
+      :if={@right_hidden}
+      type="button"
+      phx-click="toggle_right"
+      id="pb-right-rail"
+      title={gettext("Show layers panel")}
+      class="flex w-[34px] flex-none flex-col items-center gap-3 border-l border-[#e6e4de] bg-white py-3 hover:bg-[#faf9f6] max-[900px]:hidden"
+    >
+      <.icon name={:chevron} size={15} class="rotate-180 text-[#4f4bcc]" />
+      <span class="text-[10px] font-bold uppercase tracking-[0.13em] text-[#6d6a63] [writing-mode:vertical-rl]">
+        {gettext("Layers")}
+      </span>
+    </button>
+    """
+  end
+
+  attr(:editor, :any, required: true)
+  attr(:tree, :any, required: true)
+  attr(:selection, :string, default: nil)
+  attr(:expanded, :any, required: true)
+  defp layers(assigns) do
+
+    ~H"""
+    <div
+      id="pb-layers"
+      data-role="pb-scroll"
+      phx-hook="PbLayers"
+      data-parent-id="root"
+      class="min-h-0 flex-1 overflow-y-auto p-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+    >
+      <div class="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-[#6d6a63]">
+        {gettext("Elements hierarchy")}
+      </div>
+
+
+      <.layer_row
+        :for={{id, index} <- Enum.with_index(@tree.roots)}
+        id={id}
+        index={index}
+        depth={0}
+        tree={@tree}
+        selection={@selection}
+        expanded={@expanded}
+        editor={@editor}
+      />
+      <p :if={@tree.roots == []} class="py-8 text-center text-[12px] font-medium text-[#a8a5a0]">
+        {gettext("Nothing on this page yet.")}
+      </p>
+
+      <%!-- THE END OF THE PAGE, which the rail could not otherwise offer. Every other target here is
+            a row, so a document with one root had exactly one place to aim at and an EMPTY one had
+            none — the tray's whole gesture, dragging a card into a page that has nothing in it yet,
+            could only be done on the canvas. Last in the rail, so revealing it moves nothing above
+            it, and revealed for the length of a gesture like every other target. --%>
+      <div
+        data-role="pb-root-drop"
+        data-parent-id="root"
+        class={[
+          "mt-1 hidden items-center gap-2 rounded-[9px] border border-dashed border-[#dcdbf5]",
+          "py-[7px] pl-[9px] pr-[9px] text-[#8580d8] data-[show=true]:flex",
+          "data-[drop=inside]:border-solid data-[drop=inside]:border-[#5b57d6] data-[drop=inside]:bg-[#f2f1fc]"
+        ]}
+      >
+        <span class="grid size-[15px] flex-none place-items-center">
+          <.icon name={:plus} size={11} />
+        </span>
+        <span class="min-w-0 flex-1 truncate text-[11.5px] font-semibold">
+          {gettext("drop at the end of the page")}
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:index, :integer, default: 0)
+  attr(:depth, :integer, required: true)
+  attr(:tree, :any, required: true)
+  attr(:selection, :string, default: nil)
+  attr(:expanded, :any, required: true)
+  attr(:editor, :any, required: true)
+  defp layer_row(assigns) do
+    assigns =
+      assigns
+      |> assign(:node, Tree.get(assigns.tree, assigns.id))
+      |> then(&assign(&1, :kids, listed_children(&1.node, &1.tree)))
+      |> then(&assign(&1, :folded?, folded?(&1.node, &1.editor)))
+      |> then(&assign(&1, :entry, layer_entry(&1.node, &1.tree, &1.editor)))
+      |> then(&assign(&1, :ghosts, addable_slots(&1.node, &1.entry, &1.tree)))
+      |> then(&assign(&1, :holds?, drop_target?(&1.node, &1.entry)))
+      |> then(&assign(&1, :off, visitor_off(&1.tree, &1.id)))
+
+    ~H"""
+    <div :if={@node && !whitespace?(@node)} data-layer-id={@id}>
+      <%!-- Everything a drop needs to be resolved without a round trip: who the row's parent is,
+            where it sits among its siblings, and whether it can take children at all. The server
+            re-checks containment before it moves anything, so a wrong guess here is refused rather
+            than trusted.
+
+            `data-can` is WHERE THIS PARTICULAR DRAG COULD GO, written by the hook from the server's
+            own verdict and standing for the length of one gesture. `Containment` has always been
+            able to answer it; the rail just never showed it, so the only way to find out whether a
+            container would take something was to drop it and read the flash. Drawn as an OUTLINE
+            rather than a border or a tint because both of those are already spoken for by the drop
+            marker, and because an outline costs no layout at all — which on this surface is the
+            whole point. --%>
+      <div
+        draggable="true"
+        data-layer-row={@id}
+        data-parent-id={@node.parent_id || "root"}
+        data-index={@index}
+        data-container={@holds? && "true"}
+        data-kind={@node.kind}
+        data-open={openness(assigns)}
+        data-pb-hidden={@off && "true"}
+        class={[
+          "group flex items-center gap-2 rounded-[9px] border py-[7px] pr-[9px]",
+          "data-[drop=before]:border-t-[#5b57d6] data-[drop=after]:border-b-[#5b57d6]",
+          "data-[drop=inside]:border-[#5b57d6] data-[drop=inside]:bg-[#f2f1fc]",
+          "data-[can=true]:[outline:1px_dashed_#cfcdf0] data-[can=true]:[outline-offset:-2px]",
+          cond do
+            @id == @selection -> "border-[#dcdbf5] bg-[#f2f1fc]"
+            held?(@editor, @id) -> "border-[#e4e2f7] bg-[#faf9fe]"
+            true -> "border-transparent hover:bg-[#f7f6f3]"
+          end
+        ]}
+        style={"padding-left:#{9 + @depth * 13}px"}
+      >
+        <button
+          :if={expandable?(assigns)}
+          type="button"
+          phx-click="toggle_expand"
+          phx-value-id={@id}
+          class="grid size-4 flex-none place-items-center text-[#a8a5a0]"
+        >
+          <.icon
+            name={:chevron}
+            size={11}
+            class={(MapSet.member?(@expanded, @id) && "rotate-90") || ""}
+          />
+        </button>
+        <span :if={!expandable?(assigns)} class="w-3.5 flex-none" />
+        <%!-- A component's own glyph is the marker. It differs from every tag glyph already, so a
+              border, a tint or a badge would add weight for a distinction the icon has made. --%>
+        <span class={[
+          "grid size-[15px] flex-none place-items-center",
+          (@id == @selection && "text-[#4f4bcc]") || "text-[#6d6a63]"
+        ]}>
+          <.icon name={layer_icon(@node)} size={13} />
+        </span>
+        <%!-- A component or a slot is a thing with a FORM behind it, so clicking it opens that form:
+              the left panel comes back if it was collapsed and lands on the Inspector. Anything else
+              is just a selection. --%>
+        <button
+          type="button"
+          phx-click="select"
+          phx-value-id={@id}
+          title={(@node.kind == :slot && slot_label(@node, @tree)) || node_label(@node)}
+          class={[
+            "min-w-0 flex-1 truncate text-left font-['Space_Grotesk'] text-[12px]",
+            (@id == @selection && "font-bold text-[#2e2b6b]") ||
+              (@off && "font-medium text-[#a8a5a0]") || "font-medium text-[#3a382f]"
+          ]}
+        >
+          {(@node.kind == :slot && slot_label(@node, @tree)) || node_label(@node)}
+        </button>
+        <%!-- HIDDEN FROM VISITORS, said where it was done, and pressed to show it again; what is
+              inside it is dimmed instead. --%>
+        <button
+          :if={@off == :self}
+          type="button"
+          id={"pb-layer-hidden-#{@id}"}
+          phx-click="toggle_visibility"
+          phx-value-id={@id}
+          title={gettext("Hidden from visitors. Click to show it again.")}
+          class="flex-none rounded-[5px] bg-[#f2f1ec] px-[5px] py-px font-['Space_Grotesk'] text-[9.5px] font-bold text-[#6d6a63] hover:bg-[#e9e7fa] hover:text-[#4f4bcc]"
+        >
+          {gettext("Hidden")}
+        </button>
+        <span
+          :if={@kids != []}
+          class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]"
+        >
+          ({length(@kids)})
+        </span>
+        <%!-- WHERE CONTENT GOES, SAID ON THE ROW ITSELF.
+
+              This was a separate strip under every container, revealed for the row under the
+              pointer — and revealing an in-flow box is a reflow. Showing one is harmless (it only
+              moves what is BELOW its own row); HIDING the previous one is not, because that box sits
+              ABOVE the row now under the pointer and is taller than a row. Travelling down the rail,
+              every row-to-row step pulled the new row up by more than its own height, so the drop
+              line jumped from "before footer" to "inside footer" with the pointer standing still —
+              and reaching the end-of-page target moved it out from under the pointer entirely, which
+              is a released drop that fires no `drop` event and reports nothing.
+
+              A chip inside the row cannot do any of that. The row's height is fixed by the controls
+              beside it, the chip is shorter than they are, and the only thing that changes when it
+              appears is how much width the name gets — which `truncate` already handles. Nothing in
+              the rail moves during a drag now, at all.
+
+              Hidden by default rather than `group-hover`: `:hover` does not apply during a native
+              drag, and this is only ever true during one. --%>
+        <span
+          :if={@holds?}
+          data-role="pb-drop-inside"
+          class={[
+            "hidden flex-none items-center rounded-[6px] bg-[#5b57d6] px-[6px] py-px",
+            "text-[9.5px] font-bold uppercase tracking-[0.06em] text-white",
+            "group-data-[drop=inside]:flex"
+          ]}
+        >
+          {gettext("drop inside")}
+        </span>
+        <%!-- STATE STAYS, CONTROLS ARRIVE. Hidden and locked are state the tree exists to report, and
+              state you have to hunt for with the pointer is state you miss — so a row that IS hidden
+              or IS locked keeps saying so at rest, and so does the selected row. What was costing the
+              name its width is the other case: four controls held open on every row to offer actions
+              nobody had asked for yet. Those wait for the pointer or the keyboard.
+
+              `hidden` rather than `opacity-0`, because the point is the width: an invisible button
+              still holds its column, and the name would truncate exactly as before. Reserved with
+              `group-focus-within` too, so tab-through reaches them. --%>
+        <button
+          type="button"
+          phx-click="toggle_hidden"
+          phx-value-id={@id}
+          title={
+            (@folded? && gettext("Show on canvas")) ||
+              gettext("Fold away on canvas, only for you. Visitors still see it.")
+          }
+          class={[
+            "size-3.5 flex-none place-items-center hover:text-[#4f4bcc]",
+            "group-hover:grid group-focus-within:grid",
+            (@folded? || @id == @selection) && "grid",
+            !(@folded? || @id == @selection) && "hidden",
+            (@folded? && "text-[#8580d8]") ||
+              ((@id == @selection && "text-[#8580d8]") || "text-[#6d6a63]")
+          ]}
+        >
+          <.icon name={(@folded? && :eye_off) || :eye} size={12} />
+        </button>
+        <button
+          type="button"
+          phx-click="toggle_lock"
+          phx-value-id={@id}
+          title={(MapSet.member?(@editor.locked, @id) && gettext("Unlock")) || gettext("Lock")}
+          class={[
+            "size-5 flex-none place-items-center rounded-[6px] hover:bg-[#f2f1ec]",
+            "group-hover:grid group-focus-within:grid",
+            (MapSet.member?(@editor.locked, @id) || @id == @selection) && "grid",
+            !(MapSet.member?(@editor.locked, @id) || @id == @selection) && "hidden",
+            (MapSet.member?(@editor.locked, @id) && "text-[#cf8a24]") || "text-[#a8a5a0]"
+          ]}
+        >
+          <.icon name={:lock} size={12} />
+        </button>
+        <%!-- Deleting a row deletes the branch under it, which is why the title says how many go with
+              it rather than leaving that to be discovered. --%>
+        <button
+          type="button"
+          id={"pb-layer-delete-#{@id}"}
+          phx-click="op"
+          phx-value-kind="delete"
+          phx-value-node_id={@id}
+          title={delete_title(@tree, @id)}
+          class={[
+            "size-5 flex-none place-items-center rounded-[6px] text-[#a8a5a0] hover:bg-[#fdf3f1] hover:text-[#c0473d]",
+            "group-hover:grid group-focus-within:grid",
+            (@id == @selection && "grid") || "hidden"
+          ]}
+        >
+          <.icon name={:trash} size={12} />
+        </button>
+      </div>
+
+      <%!-- A Phoenix component's PROPERTIES are part of its shape, so the tree carries them the way it
+            carries children: one row each, under a group that says how many there are. Clicking one
+            opens the Inspector on that exact field — the tree is the map, the Inspector is the form.
+            Slots sit directly under the component, not inside a folder, and carry their own
+            properties the same way. --%>
+      <%!-- WHAT THIS SLOT IS, when it is not what it looks like. A slot the component never renders is
+            configuration wearing a container's clothes: it has a row, it has children in the tree, and
+            the canvas draws none of them. The report was exactly that — "i add a card in source but
+            tell me what is the source here, because when i put card it does not show anything but it
+            is located under the source".
+
+            Containment now refuses the drop, so this is the other half: the sentence that says why,
+            in the one place the question gets asked. --%>
+      <div
+        :if={MapSet.member?(@expanded, @id) and @node.kind == :slot and not @holds?}
+        class="py-[5px] pr-[9px] text-[10.5px] font-medium text-[#a8a5a0]"
+        style={"padding-left:#{9 + (@depth + 1) * 13}px"}
+      >
+        {gettext("set by its properties — nothing dropped here is drawn")}
+      </div>
+
+
+      <%!-- WHAT CAN GO INSIDE, as the other half of the same question `.properties` answers. The two
+            are peers and read as peers: same row, same chevron, same count, both folded until asked.
+
+            This replaces a bare `__ no slots declared` line that hung off the bottom of the property
+            list. It was the wrong shape three times over — it appeared on the COMMON case (most
+            components declare no slots), it was written in the tree's internal vocabulary rather
+            than the author's, and it sat under `.properties`, which is not what it was about. A
+            component that takes no slots now says so once, inside the group that was asked to open,
+            and says nothing at all until then. --%>
+      <div :if={MapSet.member?(@expanded, @id) and @node.kind == :component and @entry != nil}>
+        <button
+          type="button"
+          id={"pb-slots-#{@id}"}
+          phx-click="toggle_expand"
+          phx-value-id={"slots:" <> @id}
+          class="flex w-full items-center gap-2 rounded-[9px] py-[6px] pr-[9px] text-left hover:bg-[#f7f6f3]"
+          style={"padding-left:#{9 + (@depth + 1) * 13}px"}
+        >
+          <.icon
+            name={:chevron}
+            size={11}
+            class={
+              "flex-none text-[#a8a5a0] " <>
+                ((MapSet.member?(@expanded, "slots:" <> @id) && "rotate-90") || "")
+            }
+          />
+          <span class="grid size-[15px] flex-none place-items-center text-[#6d6a63]">
+            <.icon name={:layers} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#6d6a63]">
+            {gettext(".slots")}
+          </span>
+          <span class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
+            ({length(@ghosts)})
+          </span>
+        </button>
+
+        <div
+          :if={MapSet.member?(@expanded, "slots:" <> @id) and @ghosts == []}
+          class="py-[5px] pr-[9px] text-[10.5px] font-medium text-[#a8a5a0]"
+          style={"padding-left:#{9 + (@depth + 2) * 13}px"}
+        >
+          {slots_note(@entry)}
+        </div>
+
+        <%!-- An empty slot is still part of the component's shape, so it is listed rather than
+              hidden: seeing `:actions` here is how you learn the component takes one, and clicking
+              it fills it. Named the way it is WRITTEN — `<:actions>` in the markup — rather than as
+              `__actions_slot`, which was the tree's own bookkeeping leaking into the label.
+
+              `index` is sent because `Op`'s own default is 0, and a slot inserted FIRST is invisible
+              and poisonous: the component renders it wherever its markup says — usually last — while
+              every child after it in the tree now counts one place higher than the box it draws,
+              which is how a field dropped after a textarea landed in front of it. Appended, the two
+              agree. --%>
+        <button
+          :for={
+            {slot, filled?, markup} <-
+              (MapSet.member?(@expanded, "slots:" <> @id) && @ghosts) || []
+          }
+          type="button"
+          id={"pb-slot-add-#{@id}-#{slot}"}
+          phx-click="op"
+          phx-value-kind="insert"
+          phx-value-parent_id={@id}
+          phx-value-index={length(@node.children)}
+          phx-value-template={markup}
+          title={
+            (filled? && gettext("Add another :%{slot} slot", slot: slot)) ||
+              gettext("Add the :%{slot} slot to this component", slot: slot)
+          }
+          class="flex w-full items-center gap-2 rounded-[9px] border border-dashed border-[#dcdbf5] py-[6px] pr-[9px] text-left hover:bg-[#f7f6ff]"
+          style={"padding-left:#{9 + (@depth + 2) * 13}px"}
+        >
+          <span class="grid size-[15px] flex-none place-items-center text-[#8580d8]">
+            <.icon name={:plus} size={11} />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[12px] font-medium text-[#8580d8]">
+            :{slot}
+          </span>
+          <span class="flex-none text-[9.5px] font-semibold text-[#a8a5a0]">
+            {ghost_note(@entry, slot, filled?)}
+          </span>
+        </button>
+      </div>
+
+
+      <.layer_row
+        :for={
+          {child, index} <- Enum.with_index((MapSet.member?(@expanded, @id) && @node.children) || [])
+        }
+        id={child}
+        index={index}
+        depth={@depth + 1}
+        tree={@tree}
+        selection={@selection}
+        expanded={@expanded}
+        editor={@editor}
+      />
+    </div>
+    """
+  end
 
   @doc "⌘K — actions first, then the admin routes to jump to."
   def command_palette(assigns) do
@@ -2649,6 +3509,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     [
       {"canvas", gettext("Canvas")},
       {"components", gettext("Components")},
+      {"layers", gettext("Layers")},
       {"palette", gettext("Search")},
       {"dir", String.upcase(assigns.dir)}
     ]
@@ -2712,6 +3573,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # THE WORDING LIVES ON THE NODE. A review note captures it and `Review.locate/2` compares against
   # it, so the panel cannot be the only place that knows how an element is named.
   defdelegate node_label(node), to: Node, as: :label
+
+  defp whitespace?(%Node{meta: %{whitespace?: true}}), do: true
+  defp whitespace?(_node), do: false
+
+  # How many are held BESIDE the ordinary selection. The bar counts them together, because "3
+  # elements held" is what the reader sees on the canvas.
+  defp marked_count(%MapSet{} = marked), do: MapSet.size(marked)
+  defp marked_count(_none), do: 0
+
+  defp held?(%{marked: %MapSet{} = marked}, id), do: MapSet.member?(marked, id)
+  defp held?(_editor, _id), do: false
+
+  defp folded?(%Node{} = node, %{hidden: %MapSet{} = hidden}), do: Node.hidden?(node, hidden)
+  defp folded?(_node, _editor), do: false
 
   # The prototype's per-category icon tints, so a palette scanned at speed reads by colour.
   # One colour per category, used three ways: the dot beside a group heading, the icon tile's text,
@@ -2887,6 +3762,249 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       false -> key in words
     end
   end
+
+  # The rail tabs carry a glyph each, like the palette's. A rail contributed by a plugin names its
+  # own icon; the core's three are matched by key.
+  defp rail_icon(%{icon: icon}) when is_binary(icon), do: icon_name(icon)
+  defp rail_icon(%{key: "layers"}), do: :nav
+  defp rail_icon(%{key: "assistant"}), do: :sparkle
+  defp rail_icon(%{key: "audit"}), do: :shield
+  defp rail_icon(_rail), do: :chevron
+
+  # What kind of thing a layer row is, at a glance. The prototype gives every row an icon; here it
+  # comes from the node's own kind rather than being authored per row.
+  # Whether something may be DROPPED into this row.
+  #
+  # A plain tag takes children because HTML says so. A runtime component takes them only if it
+  # declares a slot to put them in — 120 of the kit's 183 components do, and 82 of those name it
+  # `inner_block`, which is Phoenix's own name for "whatever you write between the tags". A component
+  # with no slot renders nothing you drop into it, so it is not a target and the tree does not
+  # pretend otherwise. A slot is always a target: holding content is what a slot is.
+  #
+  # ASKED OF `Containment`, NOT ANSWERED HERE. This used to be its own reading of those rules and it
+  # was a strictly narrower one — `entry != nil` made a palette row a requirement, so a component the
+  # kit does not ship was a dead end no matter what it declared. The `<.form>` `FormPlacement` puts
+  # around every loose field is exactly that: Phoenix declares its `inner_block`, the server accepts
+  # drops into it, and the rail drew it as a row that takes nothing. `Containment` also counts a
+  # component that ALREADY holds children, which no reading here ever did.
+  #
+  # The catalog is the one row this layer already resolved. `catalog_slots?/2` looks the component up
+  # by name, and the row it would find is the row we have.
+  defp drop_target?(node, entry),
+    do: Containment.holds_children?(node, components: List.wrap(entry))
+
+  # WHETHER THIS ROW IS SHUT OVER SOMETHING, which is what lets a drag open it on the way past.
+  #
+  # A tree of any depth is mostly shut — `default_expanded/1` opens the roots and one level below —
+  # so a `<span>` four levels inside a `<p>` inside a `<div>` simply has no row to aim at, and the
+  # only way to reach it was to let go of what you were holding, click your way down, and pick it up
+  # again. The hook springs a shut row open after a dwell, and this is what tells it which rows are
+  # worth waiting on: `nil` for a row with nothing under it at all, so the timer is never set for a
+  # leaf.
+  defp openness(assigns) do
+    cond do
+      not expandable?(assigns) -> nil
+      MapSet.member?(assigns.expanded, assigns.id) -> "true"
+      true -> "false"
+    end
+  end
+
+  # A row opens when it has ANYTHING under it: children, properties, an unfilled slot, or a
+  # component's own markup. The last one is checked without parsing — the parse only happens once the
+  # row is actually open, and a chevron that depended on it could never appear.
+  defp expandable?(%{kids: kids, ghosts: ghosts}) do
+    kids != [] or ghosts != []
+  end
+
+  # WHAT THE PANEL WILL ACTUALLY DRAW. The indentation between two tags is a child like any other and
+  # the rows have always hidden it, so counting it left a `div` announcing seven children above three
+  # rows, and a chevron on a container that opens onto nothing.
+  defp listed_children(%Node{children: children}, tree),
+    do: Enum.reject(children, &whitespace?(Tree.get(tree, &1)))
+
+  defp listed_children(_node, _tree), do: []
+
+  # WHICH KIND OF SLOT THE GHOST WILL ADD, said before it is added rather than discovered after.
+  #
+  # "empty" and "add another" answer how MANY there are. They do not answer the question that
+  # actually bites: thirteen of the kit's slots are read for their attributes and never rendered, so
+  # adding one and putting something in it produces a row in the tree and nothing on the page.
+  defp ghost_note(entry, slot, filled?) do
+    cond do
+      not filled? and required_slot?(entry, slot) -> gettext("required")
+      not Inspector.renders_slot?(entry, slot) -> gettext("properties only")
+      filled? -> gettext("add another")
+      true -> gettext("empty")
+    end
+  end
+
+  defp required_slot?(entry, slot) do
+    entry
+    |> Inspector.slots()
+    |> Enum.any?(&(Inspector.name(&1) == slot and Inspector.required?(&1)))
+  end
+
+  # WHAT AN EMPTY `.slots` GROUP MEANS, which is two different things.
+  #
+  # `Inspector.addable_slots/1` leaves out `inner_block`, because that is not a slot anybody adds —
+  # it is whatever you write between the tags. So a component declaring only `inner_block` counted
+  # zero and was told "this component takes no slots", which is the opposite of true: 69 of the
+  # kit's 136 components are exactly that, they take content, the rail marks them as containers and
+  # a drop into them lands. The line said the one thing that would stop an author trying.
+  defp slots_note(entry) do
+    case Enum.any?(Inspector.slots(entry), &Inspector.inner_block?/1) do
+      true -> gettext("no named slots — what you drop in goes straight inside")
+      false -> gettext("this component takes nothing inside")
+    end
+  end
+
+  # The palette entry behind a component node — what says which slots and properties it has.
+  defp layer_entry(%Node{kind: :component} = node, _tree, editor),
+    do: entry_named(Node.component_name(node), editor)
+
+  # A slot borrows its parent component's entry: that is where its own declaration lives.
+  defp layer_entry(%Node{kind: :slot, parent_id: parent_id}, tree, editor)
+       when is_binary(parent_id) do
+    case Tree.get(tree, parent_id) do
+      %Node{kind: :component} = parent -> entry_named(Node.component_name(parent), editor)
+      _other -> nil
+    end
+  end
+
+  defp layer_entry(_node, _tree, _editor), do: nil
+
+  defp entry_named(name, %{components: components}) when is_binary(name),
+    do: Enum.find(components, &(&1.name == name))
+
+  defp entry_named(_name, _editor), do: nil
+
+  # Every slot the component declares, as `{name, already_there?}`. A Phoenix slot may be given more
+  # than once — `slot :item` and three `<:item>` is ordinary — so a filled one keeps its row and
+  # reads "add another" rather than disappearing. `inner_block` is not listed: it IS the inner
+  # content, and a drop into the component lands there.
+  defp addable_slots(%Node{kind: :component} = node, entry, tree) when not is_nil(entry) do
+    filled = filled_slots(node, tree)
+
+    entry
+    |> Inspector.addable_slots()
+    |> Enum.reject(&(Inspector.name(&1) == nil))
+    |> Enum.map(fn slot ->
+      name = Inspector.name(slot)
+      {name, MapSet.member?(filled, name), slot_markup(slot)}
+    end)
+  end
+
+  defp addable_slots(_node, _entry, _tree), do: []
+
+  # WHAT `+ :source` ACTUALLY WRITES, which used to be `<:source></:source>` and nothing else.
+  #
+  # A slot declares attributes of its own, and eleven of the kit's slots declare REQUIRED ones. The
+  # component reads them directly — `chelekom-video` does `src={source.src}` — so a bare slot is not
+  # an empty slot, it is a missing key, and the page stopped rendering the instant the button was
+  # pressed: "could not render — key :src not found". The one control in the editor whose whole job
+  # is "add the thing this component asks for" was the one that broke the page.
+  #
+  # Every required attribute is written, using the value the kit declares as its default and an empty
+  # one of the right shape when it declares none. Empty is not a guess about what the author wants —
+  # it is the smallest thing that RENDERS, and the Inspector opens on the slot with those fields
+  # ready to fill in. Optional attributes are left out: they are what the Inspector is for.
+  defp slot_markup(slot) do
+    name = Inspector.name(slot)
+
+    attrs =
+      slot
+      |> Inspector.attrs()
+      |> Enum.filter(&Inspector.required?/1)
+      |> Enum.map_join("", &" #{Inspector.name(&1)}=#{attr_seed(&1)}")
+
+    "<:#{name}#{attrs}></:#{name}>"
+  end
+
+  # Written the way HEEx takes it: a string in quotes, everything else in braces.
+  defp attr_seed(attr) do
+    case {Inspector.default(attr), Inspector.type(attr)} do
+      {nil, "boolean"} -> "{false}"
+      {nil, "integer"} -> "{0}"
+      {nil, "float"} -> "{0.0}"
+      {nil, "list"} -> "{[]}"
+      {nil, _string} -> ~s("")
+      {default, "string"} -> ~s("#{default}")
+      {default, _other} -> "{#{inspect(default)}}"
+    end
+  end
+
+  defp filled_slots(node, tree) do
+    node.children
+    |> Enum.map(&Tree.get(tree, &1))
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&Node.slot_name/1)
+    |> MapSet.new()
+  end
+
+  # `:item` when there is one, `:item 1` / `:item 2` when a component was given several — the number
+  # is what tells two otherwise identical rows apart.
+  #
+  # Written the way the MARKUP writes it. These used to read `__item_slot_1`, which is the tree's own
+  # bookkeeping: no author types that anywhere, and the rail's other slot rows now say `:item`, so
+  # one screen had two names for one thing.
+  defp slot_label(node, tree) do
+    name = Node.slot_name(node) || "slot"
+    siblings = same_named_slots(node, tree, name)
+
+    case siblings do
+      [_only] -> ":#{name}"
+      many -> ":#{name} #{Enum.find_index(many, &(&1 == node.id)) + 1}"
+    end
+  end
+
+  defp same_named_slots(node, tree, name) do
+    case Tree.get(tree, node.parent_id) do
+      nil ->
+        [node.id]
+
+      parent ->
+        for id <- parent.children,
+            child = Tree.get(tree, id),
+            child != nil,
+            child.kind == :slot,
+            Node.slot_name(child) == name,
+            do: id
+    end
+  end
+
+  # "Delete <div> and the 12 elements inside it" — a branch is a lot to lose to a small button.
+  defp delete_title(tree, id) do
+    tree
+    |> Tree.subtree(id)
+    |> Tree.walk()
+    |> Enum.count(&(!whitespace?(&1)))
+    |> case do
+      1 ->
+        gettext("Delete this element")
+
+      size ->
+        ngettext(
+          "Delete this element and the %{count} inside it",
+          "Delete this element and the %{count} inside it",
+          size - 1
+        )
+    end
+  end
+
+  defp layer_icon(%Node{kind: :text}), do: :text
+  defp layer_icon(%Node{kind: :component}), do: :grid
+  defp layer_icon(%Node{kind: :slot}), do: :layers
+  defp layer_icon(%Node{kind: kind}) when kind in [:eex, :eex_block], do: :code
+  defp layer_icon(%Node{kind: kind}) when kind in [:eex_comment, :html_comment], do: :comment
+  defp layer_icon(%Node{tag: tag}) when tag in ~w(h1 h2 h3 h4 h5 h6 p span strong em), do: :text
+  defp layer_icon(%Node{tag: tag}) when tag in ~w(a nav), do: :nav
+  defp layer_icon(%Node{tag: tag}) when tag in ~w(img picture video figure), do: :image
+
+  defp layer_icon(%Node{tag: tag}) when tag in ~w(button form input select textarea label),
+    do: :form
+
+  defp layer_icon(%Node{tag: tag}) when tag in ~w(table thead tbody tr td th), do: :table
+  defp layer_icon(_node), do: :box
 
   # One template string serves both insertion gestures — the drag payload and the click-to-place
   # op — so the two can never disagree about what a palette card actually inserts.

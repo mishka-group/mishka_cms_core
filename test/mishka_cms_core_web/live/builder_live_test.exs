@@ -13,13 +13,16 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Test.Plugins.BuilderBlockPlugin, as: BlockPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderPageStarterPlugin, as: PageStarterPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarInvokedProbe, as: ToolbarInvokedProbe
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarProbe, as: ToolbarProbe
@@ -179,6 +182,44 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
   defp editor(view), do: elem(EditorSession.fetch(token(view)), 1)
 
+  # A component that declares one required property and one required slot, and one optional property
+  # beside them — the smallest shape that can tell the marked apart from the unmarked.
+  defp needy(site) do
+    create_component!(
+      site_id: site,
+      name: "needful",
+      template:
+        ~s|<figure><img src={@src} alt={@alt} /><figcaption>{render_slot(@caption)}</figcaption></figure>|,
+      attrs: [
+        %{"name" => "src", "type" => "string", "opts" => %{"required" => true}},
+        %{"name" => "alt", "type" => "string", "opts" => %{}}
+      ],
+      slots: [%{"name" => "caption", "opts" => %{"required" => true}, "attrs" => []}]
+    )
+  end
+
+  defp needful_node(view),
+    do:
+      view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :component))
+
+  # OPEN, NOT TOGGLED. `default_expanded/1` already opens the roots and the level below them, so a
+  # page whose only root is the component under test starts open — and `toggle_expand` would shut it.
+  defp expand!(view, id) do
+    open? = view |> element(~s([data-layer-row="#{id}"])) |> render() =~ ~s(data-open="true")
+    unless open?, do: render_click(view, "toggle_expand", %{"id" => id})
+    :ok
+  end
+
+  # Every row the layers rail offers as a drop target, by the id a drop would resolve to.
+  defp rail_row_ids(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.filter("[data-layer-row]")
+    |> LazyHTML.attribute("data-layer-row")
+    |> Enum.uniq()
+  end
+
   # The compiled bundles the frame is served. Read off the LiveView rather than out of its HTML,
   # because the `<link>` is rendered by the root layout — see the canvas tests for why it moved.
   defp css_hrefs(view), do: :sys.get_state(view.pid).socket.assigns.canvas_css_hrefs
@@ -189,6 +230,19 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     |> Map.fetch!(:tree)
     |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize()
   end
+
+  defp component_node(view, name) do
+    view
+    |> editor()
+    |> Map.fetch!(:tree)
+    |> Tree.walk()
+    |> Enum.find(&(Node.component_name(&1) == name))
+  end
+
+  defp headings(nodes), do: Enum.count(nodes, &(&1.tag == "h1"))
+
+  defp node_parent(view, id),
+    do: view |> editor() |> Map.fetch!(:tree) |> Tree.get(id) |> Map.fetch!(:parent_id)
 
   # The `{@inner_content}` chip — a layout's one obligation, and the node most of these tests act on.
   defp expression_node(view),
@@ -234,6 +288,26 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       |> then(&Map.get(&1.meta, :styles, %{}))
 
   describe "mount" do
+    test "renders the editor shell", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-root")
+      assert has_element?(view, "#pb-left")
+      assert has_element?(view, "#pb-right")
+
+      # The top bar has the prototype's stage split-button and no Save — the editor autosaves, and
+      # "Save draft now" lives in the ••• menu, which is folded away in the markup rather than
+      # fetched: `#pb-more-btn` toggles it in the browser and never reaches this process.
+      assert has_element?(view, "#pb-stage")
+      assert has_element?(view, "#pb-stage-menu")
+      assert has_element?(view, "#pb-more-menu.hidden")
+      assert view |> element("#pb-more-btn") |> render() =~ "#pb-more-menu"
+
+      assert has_element?(view, "#pb-save")
+      assert has_element?(view, "#pb-undo")
+      assert has_element?(view, "#pb-redo")
+    end
+
     # The editor takes the whole viewport, like the prototype: no admin sidebar, no admin topbar, no
     # 1340px content column. It is a `h-screen` three-column workspace, and nesting it in the admin
     # shell's scrolling, padded, width-capped `<main>` costs it the canvas and adds a second
@@ -1077,6 +1151,30 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute star =~ "phx-click"
     end
 
+    # The grip drags locally and reports once, so the bounds have to reach the browser: without
+    # data-min/data-max the drag would run past the ceiling and then jump back when the server
+    # clamped what it was finally told. Same numbers on both sides, from `Panels.resize_bounds/1`.
+    test "the resize grips carry the same bounds the server clamps to", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      for {panel, id} <- [left: "#pb-grip-left", right: "#pb-grip-right"] do
+        {min, max} = Panels.resize_bounds(panel)
+
+        assert view |> element(id) |> render() =~ ~s(data-min="#{min}")
+        assert view |> element(id) |> render() =~ ~s(data-max="#{max}")
+      end
+
+      # And the value the grip finally reports is clamped again here, because what arrives is
+      # whatever the page chose to send.
+      # The server's number is the FALLBACK of a custom property a drag overrides — see
+      # `Panels.resize_bounds/1` and the `--pb-*` variables — so that is where the clamp shows up.
+      render_click(view, "resize", %{"panel" => "left", "value" => 9_000})
+      assert render(view) =~ "var(--pb-left-w, #{elem(Panels.resize_bounds(:left), 1)}px)"
+
+      render_click(view, "resize", %{"panel" => "left", "value" => 10})
+      assert render(view) =~ "var(--pb-left-w, #{elem(Panels.resize_bounds(:left), 0)}px)"
+    end
+
     # BETWEEN A COMPONENT AND A WHOLE-PAGE PRESET there was nothing, so a landing page meant placing
     # a grid, a heading, a paragraph and a button and repeating it for every band down the page.
     test "a section drops in as one block", %{conn: conn, page: page} do
@@ -1165,6 +1263,13 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       # The canvas has never mounted; the module is there because the mount asked for it.
       assert Helpers.loaded?(module),
              "the editor did not warm the components its own document uses"
+    end
+
+    test "the layers panel lists the document's elements", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-layers")
+      assert render(view) =~ "section"
     end
   end
 
@@ -1285,6 +1390,636 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute view |> element("#pb-stage-menu") |> render() =~ "animate-pulse"
     end
 
+    # The layers tree is the other way into the document, and it had three holes: a row named every
+    # component ".component", a row could not be dropped onto another one, and there was no way to
+    # delete a branch from it.
+    test "a component row is named after the component, not the wrapper tag", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="chelekom-alert" site="Global"/></div>)
+        )
+
+      # The tree opens two levels deep on arrival, so a component one level in is already listed.
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+      assert html =~ "chelekom-alert"
+      refute html =~ ">.component<"
+    end
+
+    # A DEFAULT IS NOT ALWAYS A WORD. `chelekom-banner` declares `params` with a default of
+    # `%{kind: "banner"}`, and the layers row rendered it with `to_string/1` — which raises
+    # `Protocol.UndefinedError` on a map and took the whole builder LiveView down the moment a banner
+    # appeared in the tree. Seven of the kit's components declare a map or list default this way.
+    test "a component whose attribute defaults to a map still renders its row", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "mappy",
+        template: "<div>{@params[:kind]}</div>",
+        attrs: [
+          %{"name" => "params", "type" => "map", "opts" => %{"default" => %{"kind" => "banner"}}}
+        ],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="mappy" site="#{site.name}"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert render(view) =~ "mappy"
+    end
+
+    # Rendering the layers row was only the FIRST of eight places that stringified a default. Opening
+    # the inspector went through `plain_input/1` and raised there instead — same map, same
+    # `Protocol.UndefinedError`, and because a raise inside a render kills the LiveView, the author
+    # saw the canvas flash and reconnect rather than an inspector.
+    #
+    # So this selects the node, which is what a click does, and covers every widget the eight call
+    # sites belong to: a map and a list default against a text box, a colour, a link, an image and a
+    # select.
+    test "selecting a component with structured defaults opens the inspector", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "structy",
+        template:
+          "<div class={@color}><a href={@href}><img src={@src} /></a>{@params[:kind]}{@classes}{@variant}</div>",
+        attrs: [
+          %{"name" => "params", "type" => "map", "opts" => %{"default" => %{"kind" => "banner"}}},
+          %{"name" => "classes", "type" => "list", "opts" => %{"default" => ["a", "b"]}},
+          %{"name" => "color", "type" => "string", "opts" => %{"default" => %{"x" => 1}}},
+          %{"name" => "href", "type" => "string", "opts" => %{"default" => %{"x" => 1}}},
+          %{"name" => "src", "type" => "string", "opts" => %{"default" => %{"x" => 1}}},
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => %{"x" => 1}, "values" => ["default", "outline"]}
+          }
+        ],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="structy" site="#{site.name}"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      component = node_with_tag(view, ".component")
+
+      render_click(view, "inspect", %{"id" => component.id})
+
+      # It is still alive, and it is showing the component rather than a reconnect.
+      assert render(view) =~ "structy"
+    end
+
+    # A component's slots ARE its children in the tree, and each is named by the slot it fills —
+    # written the way the markup writes it, `:label`, rather than as the tree's own `__label_slot`.
+    test "a component's slots appear in the tree, named", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: """
+          <div id="root"><.component component_name="chelekom-alert" site="Global">\
+          <:label>Careful</:label></.component></div>\
+          """
+        )
+
+      # Two levels are open on arrival, and a component with a slot is a branch — so both the
+      # component and the slot under it are already listed.
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+      assert html =~ "chelekom-alert"
+      assert html =~ ":label"
+      refute html =~ "__label_slot"
+    end
+
+    # A component takes a drop only where the drop can land: it needs a slot to hold it. 120 of the
+    # kit's components declare one; a component that declares none renders nothing you drop in, so
+    # the tree must not offer it as a target.
+    test "only a component with a slot is a drop target", %{conn: conn, site: site} do
+      with_slot =
+        create_component!(
+          site_id: nil,
+          name: "demo-card",
+          slots: [%{"name" => "inner_block", "opts" => %{"required" => false}}],
+          template: "<div class=\"card\">{render_slot(@inner_block)}</div>"
+        )
+
+      without = create_component!(site_id: nil, name: "demo-rule", template: "<hr class=\"r\"/>")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: """
+          <div id="root">\
+          <.component component_name="#{with_slot.name}" site="Global"/>\
+          <.component component_name="#{without.name}" site="Global"/>\
+          </div>\
+          """
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      nodes =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.filter(&(&1.kind == :component))
+
+      [card, rule] = Enum.sort_by(nodes, &Node.component_name/1)
+
+      assert view |> element(~s([data-layer-row="#{card.id}"])) |> render() =~
+               ~s(data-container="true")
+
+      refute view |> element(~s([data-layer-row="#{rule.id}"])) |> render() =~
+               ~s(data-container="true")
+    end
+
+    # WHAT CAN GO INSIDE, folded like everything else in the rail. The slot rows used to hang off the
+    # component at full volume, and a component that declared NONE got a line reading
+    # `__ no slots declared` — the common case, written in the tree's own vocabulary, filed under
+    # `.properties`, which is not what it was about. Reported on the editor issue as "it doesn't look
+    # good, it's confusing".
+    test "a component's slots are a folded group, not loose rows", %{conn: conn, site: site} do
+      create_component!(
+        site_id: nil,
+        name: "demo-panel",
+        slots: [%{"name" => "footer", "opts" => %{"required" => false}}],
+        template: "<div>{render_slot(@inner_block)}</div>"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-panel" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      panel = component_node(view)
+      render_click(view, "toggle_expand", %{"id" => panel.id})
+
+      assert has_element?(view, "#pb-slots-#{panel.id}"), "the rail has no .slots group"
+
+      refute has_element?(view, "#pb-slot-add-#{panel.id}-footer"),
+             "the slot rows are open before anybody asked for them"
+
+      view |> element("#pb-slots-#{panel.id}") |> render_click()
+
+      assert has_element?(view, "#pb-slot-add-#{panel.id}-footer")
+    end
+
+    # Named the way it is WRITTEN. `<:footer>` is what goes in the markup; `__footer_slot` was the
+    # tree's bookkeeping leaking into a label the author has to read.
+    test "and a slot is labelled the way it is written in the markup", %{conn: conn, site: site} do
+      create_component!(
+        site_id: nil,
+        name: "demo-aside",
+        slots: [%{"name" => "footer", "opts" => %{"required" => false}}],
+        template: "<div>{render_slot(@inner_block)}</div>"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-aside" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      aside = component_node(view)
+      render_click(view, "toggle_expand", %{"id" => aside.id})
+      view |> element("#pb-slots-#{aside.id}") |> render_click()
+
+      row = view |> element("#pb-slot-add-#{aside.id}-footer") |> render()
+
+      assert row =~ ":footer"
+      refute row =~ "__footer_slot"
+    end
+
+    # THE COMMON CASE SAYS NOTHING UNTIL ASKED. Most components declare no slots at all, and the old
+    # line announced that on every one of them.
+    test "a component with no slots is silent until the group is opened", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: nil,
+        name: "demo-rule",
+        slots: [],
+        template: "<hr />"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-rule" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      rule = component_node(view)
+      render_click(view, "toggle_expand", %{"id" => rule.id})
+
+      refute render(view) =~ "no slots declared", "the dead line is back"
+      refute render(view) =~ "takes nothing inside"
+
+      view |> element("#pb-slots-#{rule.id}") |> render_click()
+
+      assert render(view) =~ "takes nothing inside"
+    end
+
+    defp component_node(view) do
+      view
+      |> editor()
+      |> Map.fetch!(:tree)
+      |> Tree.walk()
+      |> Enum.find(&(&1.kind == :component))
+    end
+
+    # A Phoenix slot may be given more than once, and two rows called `__item_slot` tell you nothing
+    # about which is which.
+    test "repeated slots are numbered in the tree", %{conn: conn, site: site} do
+      create_component!(
+        site_id: nil,
+        name: "demo-list",
+        slots: [%{"name" => "item", "opts" => %{"required" => false}}],
+        template: "<ul>{render_slot(@item)}</ul>"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: """
+          <div id="root"><.component component_name="demo-list" site="Global">\
+          <:item>One</:item><:item>Two</:item></.component></div>\
+          """
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      list = component_node(view)
+
+      html = render(view)
+      assert html =~ ":item 1"
+      assert html =~ ":item 2"
+
+      # And the row to add a third says so rather than claiming the slot is empty. It lives in the
+      # component's `.slots` group now, which is folded until it is asked for.
+      view |> element("#pb-slots-#{list.id}") |> render_click()
+      assert render(view) =~ "add another"
+    end
+
+    # The rule that a component needs somewhere to put a child is the SERVER's, not the browser's —
+    # the tree only mirrors it, so a tampered payload has to be refused here.
+    test "the server refuses a drop into a component with no slot", %{conn: conn, site: site} do
+      create_component!(site_id: nil, name: "demo-hr", template: "<hr/>")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-hr" site="Global"/><p>x</p></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      tree = editor(view).tree
+      target = tree |> Tree.walk() |> Enum.find(&(&1.kind == :component))
+      dragged = tree |> Tree.walk() |> Enum.find(&(&1.tag == "p"))
+
+      html =
+        render_click(view, "drop", %{
+          "node_id" => dragged.id,
+          "parent_id" => target.id,
+          "index" => "0"
+        })
+
+      assert html =~ "does not declare a slot"
+      # And nothing moved.
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(dragged.id)
+             |> Map.fetch!(:parent_id) ==
+               dragged.parent_id
+    end
+
+    # A required slot is the same promise as a required property.
+    test "a missing required slot blocks the save", %{conn: conn, site: site} do
+      create_component!(
+        site_id: nil,
+        name: "demo-collapse",
+        slots: [%{"name" => "trigger", "opts" => %{"required" => true}}],
+        template: "<div>{render_slot(@trigger)}</div>"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-collapse" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = publish!(view)
+      assert html =~ "Not saved"
+      assert html =~ "demo-collapse.:trigger"
+    end
+
+    # A component's markup lives on the COMPONENT, not on the page — so the tree shows it in place
+    # rather than sending anyone to another screen, and shows it as a window, not as rows to edit.
+    test "a component's own markup is listed inside it, read-only", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: nil,
+          name: "demo-footer",
+          template: ~s(<footer class="f"><p>Built with MishkaCMS</p></footer>)
+        )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="#{component.name}" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+      assert html =~ "demo-footer"
+      # Its insides are there…
+      assert html =~ "footer"
+
+      # …but they carry none of the row actions, because editing them would rewrite the component
+      # under every other page using it.
+      instance =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      refute has_element?(view, "#pb-layer-delete-#{instance.id} ~ *")
+    end
+
+    test "a layers row carries what a drop needs and deletes its branch", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      row = view |> element(~s([data-layer-row="#{section.id}"])) |> render()
+      assert row =~ ~s(draggable="true")
+      assert row =~ ~s(data-parent-id=)
+      assert row =~ ~s(data-index=)
+      assert row =~ ~s(data-container="true")
+      assert row =~ ~s(data-kind="tag")
+
+      # And the delete button takes the branch with it.
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+      view |> element("#pb-layer-delete-#{section.id}") |> render_click()
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() < before
+      refute has_element?(view, ~s([data-layer-row="#{section.id}"]))
+    end
+
+    # A COUNT HAS TO MATCH THE ROWS UNDER IT. The panel has always hidden the indentation between two
+    # tags, but it counted it — so an indented `<div>` announced seven children over three rows, and a
+    # container holding nothing but a newline offered a chevron that opened onto nothing.
+    test "a row counts the children it is going to draw", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: "<section>\n  <p>One</p>\n  <p>Two</p>\n</section>\n<div>\n</div>"
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      assert length(section.children) == 5, "three runs of indentation and two paragraphs"
+
+      row = view |> element(~s([data-layer-row="#{section.id}"])) |> render()
+      assert row =~ "(2)"
+      refute row =~ "(5)"
+      assert row =~ ~s(phx-value-id="#{section.id}"), "and it is still expandable"
+
+      empty = node_with_tag(view, "div")
+      assert empty.children != [], "the div is holding its newline"
+
+      empty_row = view |> element(~s([data-layer-row="#{empty.id}"])) |> render()
+      refute empty_row =~ "(1)", "a container with only indentation in it has nothing to open"
+      refute empty_row =~ "toggle_expand"
+    end
+
+    # ONE MENU FOR BOTH SURFACES. The canvas is a frame rendering the site's own document with none
+    # of the admin stylesheet, so it forwards its right-clicks to the chrome rather than drawing a
+    # second, inline-styled copy — which is why there is exactly one of these in the page and why it
+    # carries no `phx-click`: the hook stamps the node and pushes the action, so opening costs
+    # nothing and no patch can swap the row out mid-gesture.
+    test "the right-click menu is rendered once, for both surfaces", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(
+               view,
+               "#pb-ctx[phx-hook='PbContextMenu'][data-target='[data-layer-row]']"
+             )
+
+      assert has_element?(view, "#pb-ctx[hidden]")
+
+      menu = view |> element("#pb-ctx") |> render()
+      refute menu =~ "phx-click"
+
+      for action <- Panels.context_actions(), do: assert(menu =~ ~s(data-action="#{action}"))
+    end
+
+    test "an entry acts on the node it names, not on the selection", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      render_click(view, "ctx", %{"action" => "duplicate", "node_id" => h1.id})
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> headings() == 2
+    end
+
+    # WITHOUT THIS the menu edits one element while the inspector beside it still describes another,
+    # which is how you change the padding of something you are not looking at. `duplicate` is the
+    # wrong entry to assert it with — a copy takes the focus, and should.
+    test "opening the menu selects what it was opened on", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      render_click(view, "ctx", %{"action" => "copy_styles", "node_id" => h1.id})
+
+      assert editor(view).selection == h1.id
+    end
+
+    test "wrap puts the node inside a fresh container", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "ctx", %{"action" => "wrap", "node_id" => h1.id})
+
+      wrapper = view |> editor() |> Map.fetch!(:tree) |> Tree.get(node_parent(view, h1.id))
+      assert wrapper.tag == "div"
+      assert h1.id in wrapper.children
+    end
+
+    test "an element the words sit in offers no such button", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+
+      refute has_element?(view, "#pb-text-link")
+    end
+
+    test "styles travel between two elements", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      p = node_with_tag(view, "p")
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => h1.id,
+        "bucket" => "base",
+        "prop" => "padding",
+        "value" => "8"
+      })
+
+      render_click(view, "ctx", %{"action" => "copy_styles", "node_id" => h1.id})
+      render_click(view, "ctx", %{"action" => "paste_styles", "node_id" => p.id})
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(p.id)
+             |> Map.fetch!(:meta)
+             |> then(& &1.styles.base) == %{"padding" => "8"}
+    end
+
+    # The action is a word off the wire. Anything the menu does not offer is dropped rather than
+    # being handed to the session to interpret.
+    test "an action the menu never offers is ignored", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+
+      render_click(view, "ctx", %{"action" => "publish_everything", "node_id" => h1.id})
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
+    end
+
+    # THE BAR ONLY EXISTS WHILE SOMETHING IS HELD. It sits above the canvas rather than floating over
+    # it, because a bar that covers the page hides the thing it is about.
+    test "holding a second element opens the bulk bar", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      refute has_element?(view, "#pb-multi-bar")
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+      render_click(view, "mark", %{"id" => node_with_tag(view, "p").id})
+
+      assert has_element?(view, "#pb-multi-bar")
+      assert render(view) =~ "2 elements held"
+
+      render_click(view, "bulk", %{"action" => "delete"})
+
+      refute has_element?(view, "#pb-multi-bar")
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> headings() == 0
+    end
+
+    test "clearing lets go without changing the page", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+      render_click(view, "mark", %{"id" => node_with_tag(view, "p").id})
+      render_click(view, "clear_marks", %{})
+
+      refute has_element?(view, "#pb-multi-bar")
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
+    end
+
+    # OVER THE PAGE'S WORDS, not its markup. A page says "Contact Us" in four places and the fifth is
+    # a class called `contact-us`; renaming the company must not touch the CSS.
+    test "find and replace sweeps the text and nothing else", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<section class="contact-us"><h1>Contact Us</h1><p>contact us today</p></section>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_find", %{})
+      assert has_element?(view, "#pb-find")
+
+      render_change(view, "find_query", %{"find" => "contact us", "replace" => "Talk to us"})
+
+      # Two places, and the class is not one of them — the search is case-insensitive so the
+      # capitalised heading counts.
+      assert render(view) =~ "2 matches in 2 places"
+
+      render_click(view, "replace_all", %{})
+
+      heex = view |> editor() |> Map.fetch!(:tree) |> Tree.Serializer.serialize()
+      assert heex =~ "<h1>Talk to us</h1>"
+      assert heex =~ "<p>Talk to us today</p>"
+      assert heex =~ ~s(class="contact-us"), "a class is not a word on the page"
+    end
+
+    test "a replace-all is one undo", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><p>one</p><p>one</p><p>one</p></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.Serializer.serialize()
+
+      render_click(view, "open_find", %{})
+      render_change(view, "find_query", %{"find" => "one", "replace" => "two"})
+      render_click(view, "replace_all", %{})
+
+      render_click(view, "undo", %{})
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.Serializer.serialize() == before
+    end
+
+    test "searching for something that is not there says so", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_find", %{})
+      render_change(view, "find_query", %{"find" => "zzzz", "replace" => ""})
+
+      assert has_element?(view, "#pb-find-none")
+      assert has_element?(view, "#pb-find-replace-all[disabled]")
+    end
+
     # A `javascript:` in a link the ADMIN renders is the one way a third-party kit's bundle could
     # reach into this page, so only an http(s) address is offered.
     test "a doc_url that is not a web address is not offered", %{
@@ -1318,6 +2053,19 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       render_click(canvas, "select", %{"id" => node.id})
 
       refute has_element?(view, "#pb-docs-link")
+    end
+
+    # Clicking a row has to move the ring on the CANVAS, which is a different LiveView. The push that
+    # carries it compared the new selection against itself, so it never fired.
+    test "selecting in the layers rail reaches the canvas", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+
+      assert_push_event(canvas, "pb:selected", %{id: id})
+      assert id == h1.id
     end
 
     # The theme is client state — `<html data-theme>` plus localStorage — so the button carries a hook
@@ -2261,6 +3009,1297 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  describe "drag and drop" do
+    test "a drop carrying a node id is a move", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "drop", %{"node_id" => h1.id, "parent_id" => "root", "index" => "0"})
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      assert Tree.get(tree, h1.id).parent_id == nil
+      assert hd(tree.roots) == h1.id
+    end
+
+    test "a drop carrying a template is an insert", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => "<figure></figure>",
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert node_with_tag(view, "figure")
+    end
+
+    test "the drop index is honoured", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => "<figure></figure>",
+        "parent_id" => section.id,
+        "index" => "1"
+      })
+
+      tags =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.children(section.id)
+        |> Enum.map(& &1.tag)
+
+      assert Enum.at(tags, 1) == "figure"
+    end
+
+    # The client resolves geometry; it does not get to decide legality. A payload naming an illegal
+    # parent is refused as a CHILD here even though no browser would have produced it — and lands
+    # beside the target instead, which is the half of the contract the drag hint promises.
+    test "a tampered drop is refused as a child and relocated beside the target", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      html =
+        render_click(view, "drop", %{
+          "template" => "<section></section>",
+          "parent_id" => h1.id,
+          "index" => "0"
+        })
+
+      assert html =~ "text and inline"
+      assert html =~ "Placed after"
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      inserted = Enum.find(Tree.walk(tree), &(&1.tag == "section" and &1.children == []))
+
+      assert inserted.parent_id == h1.parent_id
+      refute inserted.parent_id == h1.id
+
+      siblings = Tree.child_ids(tree, h1.parent_id || :root)
+
+      assert Enum.find_index(siblings, &(&1 == inserted.id)) ==
+               Enum.find_index(siblings, &(&1 == h1.id)) + 1
+    end
+
+    test "a drop with nowhere legal to land is refused outright", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      h1 = node_with_tag(view, "h1")
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+
+      # Beside the h1 is still inside the section being moved, so the retry fails too.
+      html =
+        render_click(view, "drop", %{
+          "node_id" => section.id,
+          "parent_id" => h1.id,
+          "index" => "0"
+        })
+
+      assert html =~ "inside itself" or html =~ "text and inline"
+      refute html =~ "Placed after"
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
+    end
+
+    test "dropping a node into its own descendant is refused", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      h1 = node_with_tag(view, "h1")
+
+      html =
+        render_click(view, "drop", %{
+          "node_id" => section.id,
+          "parent_id" => h1.id,
+          "index" => "0"
+        })
+
+      assert html =~ "inside itself" or html =~ "text and inline"
+      assert Tree.get(view |> editor() |> Map.fetch!(:tree), section.id).parent_id == nil
+    end
+
+    # WHAT THE RAIL OFFERS TO DROP INTO, AND HOW IT SAYS SO.
+    #
+    # This was a separate strip under every expanded COMPONENT — so every plain tag, the `<div>`,
+    # `<main>` and `<footer>` a page is actually built out of, had no target in the tree at all, and
+    # an empty `<div>` could not even be expanded to get one (`expandable?/1` is false for it on all
+    # four counts). It was also permanent, standing on every expanded component whether or not
+    # anything was being dragged.
+    #
+    # Revealing it per hover was the obvious repair and is the wrong shape: showing an in-flow box
+    # only moves what is BELOW its own row, but hiding the previous one moves the row now UNDER the
+    # pointer, and the strip was taller than a row. So the answer is written on the row, which
+    # already has its size.
+    test "a container row says so, on itself, only while it is the target", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, template: ~s(<main><p>Words</p></main><div></div>))
+      {:ok, view, _html} = open_builder(conn, page)
+
+      for tag <- ["main", "div"] do
+        row = view |> element(~s([data-layer-row="#{node_with_tag(view, tag).id}"])) |> render()
+
+        assert row =~ ~s(data-role="pb-drop-inside"), "#{tag} can be dropped into"
+        assert row =~ "drop inside"
+        assert row =~ "hidden", "and says nothing until a drag makes it the target"
+        assert row =~ "group-data-[drop=inside]:flex"
+      end
+    end
+
+    test "a row that cannot hold children never offers to", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<p>Words</p><img src="/a.png" />))
+      {:ok, view, _html} = open_builder(conn, page)
+
+      text =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :text))
+
+      for id <- [text.id, node_with_tag(view, "img").id] do
+        row = view |> element(~s([data-layer-row="#{id}"])) |> render()
+
+        refute row =~ ~s(data-role="pb-drop-inside")
+        refute row =~ ~s(data-container="true")
+      end
+    end
+
+    # The map of where this drag could land. `data-can` is written by the hook from the server's own
+    # verdict; the row has to be able to DRAW it, and as an outline rather than a border or a tint
+    # because both of those are already spoken for by the drop marker.
+    test "a row can be drawn as somewhere this drag would go", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      row =
+        view |> element(~s([data-layer-row="#{node_with_tag(view, "section").id}"])) |> render()
+
+      assert row =~ "data-[can=true]:[outline:1px_dashed_#cfcdf0]"
+      assert row =~ "data-[drop=inside]:bg-[#f2f1fc]"
+      assert row =~ ~s(data-container="true")
+    end
+
+    # A SHUT BRANCH IS NOT IN THE DOCUMENT AT ALL, so a drag cannot reach into one — and
+    # `default_expanded/1` opens the roots and one level below them and nothing else, so a tree of
+    # any depth is mostly shut. A `<span>` inside a `<p>` inside a `<div>` had no row to aim at, and
+    # the only way to reach it was to let go of what you were holding, click down to it, and pick it
+    # up again. The hook springs a shut row open after a dwell; this is what tells it which rows are
+    # worth waiting on.
+    test "a row says whether it is shut over something", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<section><div><p><span>Deep</span></p></div></section>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      # Open by default: `default_expanded/1` takes the roots and the branch children of the roots,
+      # and stops. Two levels, however deep the document goes.
+      for tag <- ["section", "div"] do
+        assert view |> element(~s([data-layer-row="#{node_with_tag(view, tag).id}"])) |> render() =~
+                 ~s(data-open="true")
+      end
+
+      # Shut, and worth waiting on — this is the row the drag has to open to get any further, and
+      # the `<span>` under it is not in the document at all until it does.
+      assert view |> element(~s([data-layer-row="#{node_with_tag(view, "p").id}"])) |> render() =~
+               ~s(data-open="false")
+
+      refute has_element?(view, ~s([data-layer-row="#{node_with_tag(view, "span").id}"]))
+    end
+
+    test "a row with nothing under it says nothing, so no drag waits on it", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, template: ~s(<section><hr /></section>))
+      {:ok, view, _html} = open_builder(conn, page)
+
+      row = view |> element(~s([data-layer-row="#{node_with_tag(view, "hr").id}"])) |> render()
+      refute row =~ ~s(data-open=)
+    end
+
+    # The event the spring pushes is the chevron's own, which is what keeps one behaviour rather than
+    # two: whatever a click opens, a dwell opens.
+    test "the branch a drag opens is the branch a click opens", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<section><div><p><span>Deep</span></p></div></section>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      paragraph = node_with_tag(view, "p")
+      span = node_with_tag(view, "span")
+      refute has_element?(view, ~s([data-layer-row="#{span.id}"]))
+
+      render_click(view, "toggle_expand", %{"id" => paragraph.id})
+
+      assert has_element?(view, ~s([data-layer-row="#{span.id}"]))
+
+      assert view |> element(~s([data-layer-row="#{paragraph.id}"])) |> render() =~
+               ~s(data-open="true")
+    end
+
+    # And it stays a window rather than becoming part of the document: no drag handle, no id a drop
+    # could resolve to. Editing it here would rewrite the component under every other page silently.
+    test "a component's own markup is not a drop target", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "windowed",
+        template: ~s|<footer><div>a</div></footer>|,
+        slots: []
+      )
+
+      page =
+        create_page!(site_id: site.id, template: ~s|<.component component_name="windowed" />|)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "markup:" <> node.id})
+
+      rows = view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.map(& &1.id)
+
+      # Every addressable row in the rail is a node of the PAGE's tree. The markup contributes none.
+      for id <- rail_row_ids(view) do
+        assert id in rows, "#{id} is drawn as a drop target but is not in the document"
+      end
+    end
+
+    # `Inspector.addable_slots/1` leaves out `inner_block` — that is not a slot anybody adds, it is
+    # whatever you write between the tags — so a component declaring only `inner_block` counted zero
+    # and was told "this component takes no slots". That is the opposite of true, and it is the
+    # commonest shape in the kit: the rail marks such a component a container and a drop into it
+    # lands. The line said the one thing that would stop an author trying.
+    test "a component whose only slot is inner_block is not told it takes none", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "holds-anything",
+        template: ~s|<div>{render_slot(@inner_block)}</div>|,
+        slots: [%{"name" => "inner_block", "opts" => %{}, "attrs" => []}]
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<.component component_name="holds-anything">hi</.component>|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "slots:" <> node.id})
+
+      html = render(view)
+      refute html =~ "this component takes no slots"
+      assert html =~ "goes straight inside"
+
+      # And the rail really does accept a drop into it, which is what makes the old line a lie.
+      assert view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~
+               ~s(data-container="true")
+    end
+
+    test "a component that takes nothing inside still says so", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "holds-nothing",
+        template: ~s|<hr class="r" />|,
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<.component component_name="holds-nothing" />|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "slots:" <> node.id})
+
+      assert render(view) =~ "takes nothing inside"
+    end
+
+    # `+ :source` USED TO BREAK THE PAGE.
+    #
+    # The button wrote `<:source></:source>` and nothing else, but a slot declares attributes of its
+    # own and eleven of the kit's slots declare REQUIRED ones. The component reads them directly —
+    # `chelekom-video` does `src={source.src}` — so a bare slot is not an empty slot, it is a missing
+    # key: "chelekom-video could not render — key :src not found", the instant the button was
+    # pressed. The one control whose whole job is "add the thing this component asks for" was the one
+    # that stopped the page rendering.
+    test "adding a slot writes the attributes that slot cannot render without", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "mediaish",
+        template: ~s|<video><source :for={s <- @source} src={s.src} type={s.type} /></video>|,
+        slots: [
+          %{
+            "name" => "source",
+            "opts" => %{},
+            "attrs" => [
+              %{"name" => "src", "type" => "string", "opts" => %{"required" => true}},
+              %{"name" => "type", "type" => "string", "opts" => %{"required" => true}},
+              %{"name" => "label", "type" => "string", "opts" => %{}}
+            ]
+          }
+        ]
+      )
+
+      page =
+        create_page!(site_id: site.id, template: ~s|<.component component_name="mediaish" />|)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "slots:" <> node.id})
+
+      ghost = view |> element("#pb-slot-add-#{node.id}-source") |> render()
+      assert ghost =~ ~s(src=)
+      assert ghost =~ ~s(type=)
+      refute ghost =~ ~s(label=), "optional attributes are what the Inspector is for"
+
+      # And pressing it leaves a slot the component can actually render.
+      view |> element("#pb-slot-add-#{node.id}-source") |> render_click()
+
+      slot =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :slot))
+
+      assert slot, "the slot was inserted"
+
+      written = Enum.map(slot.attrs, fn {name, _value} -> name end)
+      assert "src" in written
+      assert "type" in written
+    end
+
+    # A slot with nothing required stays as bare as it always was — there is nothing to seed.
+    test "a slot that requires nothing is still added bare", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "looseish",
+        template: ~s|<div><div :for={a <- @extra}>{render_slot(a)}</div></div>|,
+        slots: [%{"name" => "extra", "opts" => %{}, "attrs" => []}]
+      )
+
+      page =
+        create_page!(site_id: site.id, template: ~s|<.component component_name="looseish" />|)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "slots:" <> node.id})
+
+      assert view |> element("#pb-slot-add-#{node.id}-extra") |> render() =~
+               ~s(phx-value-template="&lt;:extra&gt;&lt;/:extra&gt;")
+    end
+
+    # The kit declares defaults for some of them, and a default beats an empty every time: it is the
+    # value the component was designed around.
+    test "a required attribute with a declared default is seeded with it", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "defaultish",
+        template: ~s|<div><span :for={i <- @item}>{i.kind}</span></div>|,
+        slots: [
+          %{
+            "name" => "item",
+            "opts" => %{},
+            "attrs" => [
+              %{
+                "name" => "kind",
+                "type" => "string",
+                "opts" => %{"required" => true, "default" => "info"}
+              }
+            ]
+          }
+        ]
+      )
+
+      page =
+        create_page!(site_id: site.id, template: ~s|<.component component_name="defaultish" />|)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "slots:" <> node.id})
+
+      assert view |> element("#pb-slot-add-#{node.id}-item") |> render() =~ "info"
+    end
+
+    # The number the badge shows is the SUBTREE's, which is the whole point: a shut component says
+    # something inside it is unfinished without being opened.
+    test "the row counts everything unfinished under it, shut or open", %{conn: conn, site: site} do
+      needy(site.id)
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<div><.component component_name="needful" /></div>|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      wrapper = node_with_tag(view, "div")
+      row = view |> element(~s([data-layer-row="#{wrapper.id}"])) |> render()
+
+      assert row =~ "needed", "the div itself needs nothing; the component inside it does"
+      assert row =~ "2 needed", "one blank required property and one missing required slot"
+    end
+
+    # A count on a shut row is a riddle without it, and the two cases need different words: a row
+    # whose own properties are fine and whose CHILD is unfinished must not claim the problem is here.
+    test "the badge says what is behind its number, in the right number", %{
+      conn: conn,
+      site: site
+    } do
+      needy(site.id)
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<div><.component component_name="needful" src="/a.png" /></div>|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      component = needful_node(view)
+      wrapper = node_with_tag(view, "div")
+
+      # Its own: one required slot, never added.
+      assert view |> element(~s([data-layer-row="#{component.id}"])) |> render() =~
+               "1 slot required here is still empty"
+
+      # The wrapper's: nothing of its own, one thing underneath.
+      assert view |> element(~s([data-layer-row="#{wrapper.id}"])) |> render() =~
+               "1 required thing inside this is still empty"
+    end
+
+    test "and says nothing at all once everything is filled", %{conn: conn, site: site} do
+      needy(site.id)
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s|<.component component_name="needful" src="/a.png"><:caption>hi</:caption></.component>|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node = needful_node(view)
+      refute view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "needed"
+    end
+
+    # THE BADGE AND THE BUTTON READ THE SAME ANSWER. Two implementations of one rule drift, and a
+    # badge that disagrees with the refusal beside it is worse than no badge.
+    test "the badge counts exactly what publishing refuses", %{conn: conn, site: site} do
+      needy(site.id)
+      page = create_page!(site_id: site.id, template: ~s|<.component component_name="needful" />|)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node = needful_node(view)
+      assert view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "2 needed"
+
+      html = render_click(view, "publish", %{})
+      assert html =~ "needful.src"
+      assert html =~ "needful.:caption"
+    end
+
+    # A kit this editor has never seen declares its requirements the same way, so nothing here is
+    # keyed to a component name or an attribute name.
+    test "a component nobody has heard of is marked the same way", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "zzz-unknown-widget",
+        template: ~s|<div data-x={@mandatory}></div>|,
+        attrs: [%{"name" => "mandatory", "type" => "string", "opts" => %{"required" => true}}],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<.component component_name="zzz-unknown-widget" />|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node = needful_node(view)
+      assert view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "1 needed"
+    end
+
+    # THE END OF THE PAGE, which no row can stand for. A document with one root had exactly one place
+    # to aim at in the rail and an EMPTY one had none at all — so the tray's whole gesture, dragging
+    # a card into a page with nothing in it yet, could only be done on the canvas. It is the last
+    # element in the rail, which is why it is allowed to appear and disappear when nothing else is.
+    test "the rail offers the end of the page as a target", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, ~s([data-role='pb-root-drop'][data-parent-id='root']))
+
+      tail = view |> element(~s([data-role='pb-root-drop'])) |> render()
+      assert tail =~ "drop at the end of the page"
+      assert tail =~ "data-[show=true]:flex"
+      refute tail =~ ~s(data-show=)
+    end
+
+    # The same payload the rail's tail sends, taken at its word by the server: a template with no
+    # `node_id` is an insert, and an index past the end appends.
+    test "a template dropped at the end of the page becomes a new root", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      roots = length(view |> editor() |> Map.fetch!(:tree) |> Map.fetch!(:roots))
+
+      render_click(view, "drop", %{
+        "template" => "<figure></figure>",
+        "parent_id" => "root",
+        "index" => "9999"
+      })
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      assert length(tree.roots) == roots + 1
+      assert Tree.get(tree, List.last(tree.roots)).tag == "figure"
+    end
+
+    test "a move is undoable like any other edit", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "drop", %{"node_id" => h1.id, "parent_id" => "root", "index" => "0"})
+      undo!(view)
+
+      assert Tree.get(view |> editor() |> Map.fetch!(:tree), h1.id).parent_id != nil
+    end
+
+    # 183 components carrying their templates, attrs, slots and examples is 3.4 MB and 1.6 seconds.
+    # Reading it during mount meant the editor drew nothing until it landed; it now arrives after,
+    # and the panel says so rather than claiming there are no components.
+    test "the palette loads after mount, showing a skeleton until it lands", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "late-arrival")
+
+      {:ok, view, html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      # Before the async read returns: a skeleton, and NOT the "no components" answer — an empty
+      # palette and one that has not arrived are different things to say.
+      assert html =~ "pb-palette-skeleton"
+      refute html =~ "No components match."
+
+      loaded = render_async(view)
+
+      refute loaded =~ "pb-palette-skeleton"
+      assert loaded =~ "pb-comp-late-arrival"
+      # It lands on the SESSION too, because the canvas binds components to a site from that list.
+      assert view |> editor() |> Map.fetch!(:components) != []
+    end
+
+    test "palette cards advertise the same template click-to-place inserts", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "drag-me")
+      {:ok, view, html} = open_builder(conn, page)
+
+      assert html =~ ~s(data-template="&lt;.component component_name=&quot;drag-me&quot;)
+      assert has_element?(view, "#pb-comp-drag-me[draggable]")
+    end
+
+    # The hint is what the drag paints its line from. It is asked for ONCE, at dragstart, and it has
+    # to agree with the check that later admits the drop — which is why both come from the same
+    # function. A hint that says yes where the drop says no is the bug this guards.
+    test "dragstart answers with the whole tree's verdict for the thing being dragged", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drag_start", %{"template" => "<section></section>"})
+      assert_push_event(view, "pb:drop-hints", %{accepts: accepts})
+
+      assert accepts[section.id] == true
+      assert accepts[h1.id] == false
+      assert map_size(accepts) == view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+    end
+
+    # The hint is only worth having if the drop keeps its promise, so this asserts the promise on both
+    # sides: where it says yes the node lands inside, where it says no the node lands beside instead.
+    test "the drop keeps the promise the hint made", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "drag_start", %{"template" => "<figure></figure>"})
+      assert_push_event(view, "pb:drop-hints", %{accepts: accepts})
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      {yes, true} = Enum.find(accepts, fn {_id, allowed?} -> allowed? end)
+
+      # A refused node whose PARENT accepts — so "beside it" is a place the retry can actually land.
+      refused =
+        Enum.find_value(accepts, fn
+          {id, false} ->
+            with %{} = node <- Tree.get(tree, id), true <- accepts[node.parent_id], do: node
+
+          {_id, true} ->
+            nil
+        end)
+
+      render_click(view, "drop", %{
+        "template" => "<figure></figure>",
+        "parent_id" => yes,
+        "index" => "0"
+      })
+
+      assert node_with_tag(view, "figure").parent_id == yes
+
+      render_click(view, "drop", %{
+        "template" => "<aside></aside>",
+        "parent_id" => refused.id,
+        "index" => "0"
+      })
+
+      assert node_with_tag(view, "aside").parent_id == refused.parent_id
+    end
+
+    test "a locked node accepts nothing, and a locked node being dragged is offered nowhere", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      h1 = node_with_tag(view, "h1")
+
+      {:ok, _locked} = EditorSession.toggle_lock(token(view), section.id)
+
+      render_click(view, "drag_start", %{"template" => "<figure></figure>"})
+      assert_push_event(view, "pb:drop-hints", %{accepts: locked_target})
+      assert locked_target[section.id] == false
+
+      render_click(view, "drag_start", %{"node_id" => section.id})
+      assert_push_event(view, "pb:drop-hints", %{accepts: locked_source})
+      assert Enum.all?(locked_source, fn {_id, allowed?} -> allowed? == false end)
+      assert locked_source[h1.id] == false
+    end
+
+    # SELECTING FIRST IS ALREADY SAYING WHERE. Picking with something selected used to arm the palette
+    # and wait for a click on the element the reader had just clicked; it places into it instead.
+    test "picking with an element selected places into it at once", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "straight-in")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "pick", %{"name" => "straight-in"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "straight-in"))
+
+      assert placed, "one click on the palette should have been enough"
+      assert placed.parent_id == section.id
+      assert placed.id == List.last(Tree.get(editor(view).tree, section.id).children)
+
+      # And nothing is left armed, so the next click on a row selects.
+      assert view |> editor() |> Map.fetch!(:picked) == nil
+    end
+
+    # A BAND IS A SLICE OF THE PAGE, so it goes beside the other slices rather than into whatever was
+    # selected. Every block in the library is one, which is why the whole library follows this rule
+    # and a kit component, one test above, does not.
+    test "picking a block with a section selected places it after that section", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      before = Tree.get(editor(view).tree, section.id).children
+      block = hd(MishkaCmsCore.Runtime.PageBuilder.Blocks.all())
+      render_click(view, "pick_block", %{"block" => block.id})
+
+      tree = editor(view).tree
+      assert Tree.get(tree, section.id).children == before, "the section was not opened up"
+
+      placed = Tree.get(tree, List.last(tree.roots))
+      assert placed.parent_id == nil
+      assert Tree.index_of(tree, placed.id) == Tree.index_of(tree, section.id) + 1
+      assert view |> editor() |> Map.fetch!(:picked) == nil
+    end
+
+    # AND A BLOCK AN EXTENSION BROUGHT IS ONE OF THEM. The palette draws the merged library while the
+    # click was resolved in the core one, so a contributed card answered "that element is no longer
+    # on the page" — and dragging the identical card worked, which is what made it look like a
+    # palette bug rather than a lookup that never asked the registry.
+    test "and a block an extension contributed lands the same way", %{conn: conn, page: page} do
+      register_plugin(BlockPlugin, "builder:blocks")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "pick_block", %{"block" => BlockPlugin.block().id})
+
+      tree = editor(view).tree
+      placed = Tree.get(tree, List.last(tree.roots))
+
+      assert Tree.index_of(tree, placed.id) == Tree.index_of(tree, section.id) + 1
+      assert Serializer.serialize(tree) =~ "They loved it.", "the plugin's own template"
+    end
+
+    # AN ELEMENT RIDES THE SAME ROUTE AS A BLOCK — one armed slot, two libraries — so a `<section>`
+    # arrives by exactly the mechanism a finished Hero does, and lands by the same rule.
+    test "picking a structural element places an empty container beside it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "pick_block", %{"block" => "el-section"})
+
+      tree = editor(view).tree
+      placed = Tree.get(tree, List.last(tree.roots))
+
+      assert placed.tag == "section"
+      assert placed.parent_id == nil
+      assert Tree.index_of(tree, placed.id) == Tree.index_of(tree, section.id) + 1
+      assert placed.children == [], "a layout element is a hole to put things in"
+      assert view |> editor() |> Map.fetch!(:picked) == nil
+    end
+
+    # THE REPORTED BUG. A call to action clicked while the page header was selected became a third
+    # item in the header's flex row and rendered a quarter of the width.
+    test "a band clicked into a header lands beside the header, not in it", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<header class="flex"><a href="/">Logo</a><nav></nav></header><main></main>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      header = node_with_tag(view, "header")
+      before = Tree.get(editor(view).tree, header.id).children
+
+      render_click(view, "select", %{"id" => header.id})
+      render_click(view, "pick_block", %{"block" => "cta-band"})
+
+      tree = editor(view).tree
+      assert Tree.get(tree, header.id).children == before, "the header was left alone"
+
+      placed = Tree.get(tree, Enum.at(tree.roots, 1))
+      assert placed.tag == "section"
+      assert placed.parent_id == nil
+    end
+
+    # CLIMBING MORE THAN ONE LEVEL. Clicking the heading inside a hero has to pop the band out of the
+    # heading AND out of the hero — and that landing place is one the selection ring does not explain
+    # on its own, so it is the one case that says where it went.
+    test "a band clicked deep inside a section climbs out of the whole branch", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+
+      html = render_click(view, "pick_block", %{"block" => "cta-band"})
+
+      tree = editor(view).tree
+      placed = Tree.get(tree, List.last(tree.roots))
+
+      assert placed.tag == "section"
+      assert placed.parent_id == nil
+      assert Tree.index_of(tree, placed.id) == Tree.index_of(tree, section.id) + 1
+      assert html =~ "Sections sit beside each other"
+    end
+
+    # THE CLIMB STOPS AT A WRAPPER THAT ALREADY HOLDS BANDS. A page wrapped in one div is an ordinary
+    # shape, and lifting every new section out of it would put them somewhere the page does not live.
+    test "a band is not lifted out of a wrapper that already holds bands", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="app"><section id="a"><p>One</p></section><section id="b"></section></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      wrapper = node_with_tag(view, "div")
+      p = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => p.id})
+      render_click(view, "pick_block", %{"block" => "cta-band"})
+
+      placed =
+        editor(view).tree
+        |> Tree.walk()
+        |> Enum.find(&(&1.tag == "section" and Node.attr(&1, "id") == nil))
+
+      assert placed.parent_id == wrapper.id
+    end
+
+    # AN EMPTY BOX IS A HOLE TO PUT THINGS IN. It is the one container that cannot squeeze the band
+    # into a narrow column, because there is nothing beside it — and it is the escape hatch that
+    # keeps "make a section, then fill it" working.
+    test "a band clicked into an empty section goes inside it", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<section class="py-16"></section>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "pick_block", %{"block" => "cta-band"})
+
+      assert Tree.get(editor(view).tree, section.id).children != []
+    end
+
+    # `<main>` is a band host by vocabulary, so a band clicked into one goes in rather than beside.
+    test "a band clicked into main goes inside it", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<main><p>One</p></main>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      main = node_with_tag(view, "main")
+
+      render_click(view, "select", %{"id" => main.id})
+      render_click(view, "pick_block", %{"block" => "cta-band"})
+
+      assert Tree.get(editor(view).tree, main.id).children |> length() == 2
+    end
+
+    # WHAT MUST NOT CHANGE. Only a band climbs. A paragraph, a heading or a kit component clicked
+    # while a section is selected still goes straight inside it — the gesture this editor is built on.
+    test "a leaf clicked into a section still goes inside it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "pick_block", %{"block" => "el-paragraph"})
+
+      children = Tree.get(editor(view).tree, section.id).children
+      assert Tree.get(editor(view).tree, List.last(children)).tag == "p"
+    end
+
+    # `header` AND `footer` ARE NOT BANDS BY TAG. The spec puts them inside `<article>` and
+    # `<section>` as readily as at page level, and treating them as page slices made "give this
+    # section its own header" impossible to do by clicking.
+    test "a bare header element goes inside the section that was selected", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: ~s(<section id="s"><p>One</p></section>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "pick_block", %{"block" => "el-header"})
+
+      children = Tree.get(editor(view).tree, section.id).children
+      assert Tree.get(editor(view).tree, List.last(children)).tag == "header"
+    end
+
+    # WHAT MAKES THE PAGE FOOTER DIFFERENT IS THE LIBRARY. `footer-columns` is rooted in a `<footer>`
+    # exactly like the element above, and it still climbs — every entry in Blocks is a slice of the
+    # page by construction.
+    test "the footer block still lands beside, not inside", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<section id="s"><p>One</p></section>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      before = Tree.get(editor(view).tree, section.id).children
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "pick_block", %{"block" => "footer-columns"})
+
+      tree = editor(view).tree
+      assert Tree.get(tree, section.id).children == before
+      assert Tree.get(tree, List.last(tree.roots)).tag == "footer"
+    end
+
+    # THE RULE IS A CLICK-PATH POLICY. A drag names its parent with the pointer, and a deliberate one
+    # must still be obeyed — every builder in the field keeps these two answers separate.
+    test "a dragged band still lands exactly where it was dropped", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: ~s(<header class="flex"><a>Logo</a></header>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      header = node_with_tag(view, "header")
+
+      render_click(view, "drop", %{
+        "template" => "<section></section>",
+        "parent_id" => header.id,
+        "index" => "0"
+      })
+
+      placed = Tree.get(editor(view).tree, hd(Tree.get(editor(view).tree, header.id).children))
+      assert placed.tag == "section", "a pointer knows better than a policy"
+    end
+
+    test "the Blocks panel lists the elements alongside the sections", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-lefttab-blocks") |> render_click()
+
+      assert has_element?(view, "#pb-el-el-section")
+      assert has_element?(view, "#pb-el-el-columns-3")
+      assert has_element?(view, "#pb-el-el-h2")
+      assert has_element?(view, "#pb-block-hero-centred"), "the sections are still there"
+    end
+
+    # The categories filter one library or the other, never a mix of both — choosing Layout should
+    # not leave eight finished marketing sections underneath it.
+    test "an element category hides the sections", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-lefttab-blocks") |> render_click()
+
+      render_click(view, "block_cat", %{"cat" => "Layout"})
+
+      assert has_element?(view, "#pb-el-el-section")
+      refute has_element?(view, "#pb-block-hero-centred")
+      refute has_element?(view, "#pb-el-el-h2"), "H2 is Text, not Layout"
+    end
+
+    # WITH NOTHING SELECTED IT STILL ARMS, because there is no answer yet — the canvas and the tree
+    # are both waiting to give one.
+    test "picking with no selection arms the palette instead", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "waits-for-a-click")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "pick", %{"name" => "waits-for-a-click"})
+
+      assert view |> editor() |> Map.fetch!(:picked) == "waits-for-a-click"
+
+      refute view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.walk()
+             |> Enum.find(&(Node.component_name(&1) == "waits-for-a-click"))
+    end
+
+    # Click-to-place accepts a click on the TREE as well as on the canvas, and lands in the row that
+    # was clicked — inside it when it can hold the component, immediately after it when it cannot.
+    test "a picked component is placed by clicking a layer row", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "place-me")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "pick", %{"name" => "place-me"})
+      render_click(view, "select", %{"id" => section.id})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "place-me"))
+
+      assert placed.parent_id == section.id
+
+      # The pick is spent, so the next click on a row selects again rather than placing a second one.
+      assert view |> editor() |> Map.fetch!(:picked) == nil
+
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      assert view |> editor() |> Map.fetch!(:selection) == h1.id
+    end
+
+    # A component that declares `id` as required raises the moment it renders without one. Generating
+    # it where such nodes are created means that never has to be handled later — and it is written
+    # into the template as an ordinary attribute, so it can be renamed. A node that declares no `id`
+    # is left alone, plain HTML included: minting one for every `<figure>` would rewrite a document
+    # nobody edited.
+    test "a node that declares an id is given one", %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: nil,
+        name: "needs-id",
+        attrs: [%{"name" => "id", "type" => "string", "opts" => %{"required" => true}}],
+        template: "<div id={@id}>x</div>"
+      )
+
+      create_component!(site_id: site.id, name: "no-id-attr")
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => "<figure></figure>",
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert is_nil(Node.attr(node_with_tag(view, "figure"), "id"))
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="needs-id" site="Global"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      declared = component_node(view, "needs-id")
+      assert Node.attr_text(declared, "id") =~ ~r/\S/
+
+      # A component that never declared `id` is not given one — an undeclared assign is noise.
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="no-id-attr" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert is_nil(Node.attr(component_node(view, "no-id-attr"), "id"))
+
+      # An empty one is no id either — a snippet shipping `id=""` is as broken as one shipping none,
+      # so a DECLARING node fills it. This `<article>` declares nothing, and keeps what it was given.
+      render_click(view, "drop", %{
+        "template" => ~s(<article id=""></article>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert Node.attr_text(node_with_tag(view, "article"), "id") == ""
+
+      # An expression is a VALUE — the author bound the id to their data, and it is left alone.
+      render_click(view, "drop", %{
+        "template" => ~s(<aside id={@row.id}></aside>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      assert {:expr, expr} = Node.attr(node_with_tag(view, "aside"), "id")
+      assert expr =~ "@row.id"
+    end
+
+    # A raise inside the canvas takes the LiveView with it, and the reload costs the author every
+    # unsaved edit. A required attribute that is empty is knowable before rendering, so it is checked
+    # rather than caught — no `try` on a path that runs for every component on every diff.
+    test "a component missing a required attribute renders a placeholder, not a crash", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: nil,
+        name: "strict-card",
+        attrs: [%{"name" => "title", "type" => "string", "opts" => %{"required" => true}}],
+        template: "<div>{@title}</div>"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="strict-card" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, ~s([data-incomplete="true"]))
+      assert html =~ "strict-card"
+      assert html =~ "needs title"
+
+      # And it is still a node: selectable, so the missing field can be filled in the inspector.
+      card = component_node(view, "strict-card")
+      assert has_element?(canvas, ~s([data-node-id="#{card.id}"]))
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => card.id,
+        "name" => "title",
+        "value" => "filled in"
+      })
+
+      refute has_element?(canvas, ~s([data-incomplete="true"]))
+    end
+
+    # THE OTHER HALF, AND THE HARDER ONE. A missing required attribute is knowable before rendering,
+    # so it gets a check. Everything else a component might do — a bad value shape, an atom that does
+    # not exist, an outright `raise` — is not, and it used to take the canvas LiveView with it:
+    # crash, reload, and every unsaved edit in the session gone.
+    #
+    # It has to be a REAL compiled component. A database row whose module was never built takes the
+    # runtime's "failed to render" branch and never runs at all, which is a different case and was
+    # already handled — that is why this uses `MishkaCmsCore.Test.RaisingComponent`, whose one
+    # attribute is declared, defaulted, and perfectly fine until it is given a value that names no
+    # atom.
+    test "a component that raises leaves the canvas standing", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root">) <>
+              ~s(<MishkaCmsCore.Test.RaisingComponent.boom tone="nope-not-an-atom" />) <>
+              ~s(<p>after</p></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, ~s([data-render-error="true"]))
+      assert html =~ "could not render"
+
+      # THE PAGE AROUND IT IS UNHARMED, which is the whole point — one bad component costs its own
+      # box and nothing else.
+      assert html =~ "after"
+      assert Process.alive?(canvas.pid)
+
+      # And it is still a node: selectable, so it can be inspected and deleted.
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      assert has_element?(canvas, ~s([data-node-id="#{node.id}"]))
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node.id})
+
+      assert Process.alive?(canvas.pid)
+      refute has_element?(canvas, ~s([data-render-error="true"]))
+    end
+
+    # THE BOUND `contain/2` CANNOT GIVE. It covers every way a render can LEAVE; it cannot cover one
+    # that does not leave, and a render allocating without limit takes the whole node rather than one
+    # iframe. A heap ceiling is the only bound available without a second process, and a second
+    # process is not available here — the sandbox does not cross one.
+    test "the canvas runs under a heap ceiling, so a runaway render cannot take the node", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      {:max_heap_size, limit} = Process.info(canvas.pid, :max_heap_size)
+
+      assert limit.size > 0, "an unbounded canvas is one component away from an unbounded node"
+      assert limit.kill, "a ceiling that only logs is not a ceiling"
+
+      # And it is nowhere near what an honest canvas uses, or it would be a new way to lose work.
+      {:total_heap_size, used} = Process.info(canvas.pid, :total_heap_size)
+      assert used < div(limit.size, 10)
+    end
+
+    # A `rescue` catches an exception and NOTHING ELSE. A component that throws, or that calls a
+    # GenServer which is not running — an `exit`, and the likeliest of the three in a component that
+    # talks to anything — went straight past the guard above and killed the canvas, which is the very
+    # outcome that guard exists to prevent.
+    for {function, leaving} <- [{"tossed", "throws"}, {"departed", "exits"}] do
+      test "a component that #{leaving} leaves the canvas standing too", %{
+        conn: conn,
+        site: site
+      } do
+        page =
+          create_page!(
+            site_id: site.id,
+            template:
+              ~s(<div id="root">) <>
+                ~s(<MishkaCmsCore.Test.RaisingComponent.#{unquote(function)} />) <>
+                ~s(<p>after</p></div>)
+          )
+
+        {:ok, view, _html} = open_builder(conn, page)
+        {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+        assert has_element?(canvas, ~s([data-render-error="true"]))
+        assert html =~ "after", "the page around it is unharmed"
+        assert Process.alive?(canvas.pid)
+        assert Process.alive?(view.pid)
+      end
+    end
+
+    test "layer rows are addressable as sortable items", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      assert has_element?(view, "#pb-layers[phx-hook='PbLayers']")
+      assert has_element?(view, "[data-layer-id='#{section.id}']")
+    end
+  end
+
   # The three form blocks ship `phx-change` and `phx-submit` bound to handlers, and only a Page has
   # an `events` column to hold one.
   describe "the blocks a section can use" do
@@ -2400,6 +4439,54 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       html = view |> element("#pb-cmd-save") |> render()
       assert html =~ "Write the draft"
       assert html =~ "⌘S"
+    end
+
+    # NOTHING SELECTED IS THE STATE THE BUILDER OPENS IN, and the palette offers "Delete selection"
+    # in it — a plain button, no keyboard needed. It used to push a nil node id into the op funnel
+    # and hand the author `Op.build/1`'s own complaint about the payload.
+    test "a selection command with nothing selected answers in words", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = node_count(view)
+      render_click(view, "toggle_command", %{})
+
+      for id <- ~w(pb-cmd-delete pb-cmd-duplicate) do
+        refute has_element?(clear_flashes(view), "#flash-info"), id
+        view |> element("##{id}") |> render_click()
+
+        assert flashes(view) =~ "Select an element on the page first.", id
+        refute internals?(flashes(view)), id
+        refute flashes(view) =~ "node_id", id
+      end
+
+      assert node_count(view) == before
+    end
+
+    test "the palette's delete removes the element that is selected", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+      render_click(view, "toggle_command", %{})
+
+      view |> element("#pb-cmd-delete") |> render_click()
+      refute node_with_tag(view, "h1")
+    end
+
+    # THE OTHER HALF OF THE SAME LEAK, and the one an author reaches by holding two elements and
+    # clicking the bar above the page: the reason is a bare atom, which used to be printed as one.
+    test "wrapping elements that are not side by side says so", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<header><h1>Title</h1></header><footer><a href="/x">Link</a></footer>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+      render_click(view, "mark", %{"id" => node_with_tag(view, "a").id})
+
+      view |> element("#pb-multi-wrap") |> render_click()
+
+      refute internals?(flashes(view))
+      assert flashes(view) =~ "side by side"
     end
 
     # THE WHOLE TABLE, SERVER-SIDE. The hook sends a name and nothing else — it knows nothing about
@@ -2701,6 +4788,23 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       view |> element("#pb-dir-ltr") |> render_click()
       assert editor(view).dir == "ltr"
+    end
+
+    test "the mobile bar swaps the body for the panel it names", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      # Nothing is duplicated: the same panels are re-pointed by the media query, so the layers panel
+      # is the one that was already there.
+      assert view |> element("#pb-right") |> render() =~ "max-[900px]:hidden"
+
+      view |> element("#pb-mobtab-layers") |> render_click()
+
+      assert view |> element("#pb-right") |> render() =~ "max-[900px]:flex"
+      assert view |> element("#pb-left") |> render() =~ "max-[900px]:hidden"
+      assert has_element?(view, "#pb-layers")
+
+      view |> element("#pb-mobtab-canvas") |> render_click()
+      assert view |> element("#pb-right") |> render() =~ "max-[900px]:hidden"
     end
 
     test "the mobile bar's direction tab flips the canvas", %{conn: conn, page: page} do
@@ -3122,6 +5226,76 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert reloaded.template =~ ~s(component_name="hero-card")
       assert reloaded.template =~ "<.component"
+    end
+  end
+
+  describe "hidden from visitors" do
+    test "the right-click menu, the keyboard and the palette each toggle it as one undoable step",
+         %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+
+      render_click(view, "shortcut", %{"key" => "visibility"})
+      assert flashes(view) =~ "Select an element on the page first."
+
+      render_click(view, "ctx", %{"action" => "visibility", "node_id" => p.id})
+      assert Visibility.hidden?(node_with_tag(view, "p"))
+      assert %{label: "Hidden from visitors"} = hd(editor(view).past)
+
+      render_click(view, "select", %{"id" => p.id})
+      render_click(view, "shortcut", %{"key" => "visibility"})
+      refute Visibility.hidden?(node_with_tag(view, "p"))
+      assert %{label: "Shown to visitors"} = hd(editor(view).past)
+
+      render_click(view, "shortcut", %{"key" => "command"})
+      view |> element("#pb-cmd-toggle_visibility") |> render_click()
+      assert Visibility.hidden?(node_with_tag(view, "p"))
+
+      undo!(view)
+      refute Visibility.hidden?(node_with_tag(view, "p"))
+    end
+
+    test "preview draws nothing of a hidden element, editing draws it dimmed",
+         %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "ctx", %{
+        "action" => "visibility",
+        "node_id" => node_with_tag(view, "h1").id
+      })
+
+      {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ "Contact Us"
+      assert canvas |> element("#pb-canvas-chrome") |> render() =~ "[data-pb-hidden]"
+
+      view |> element("#pb-preview") |> render_click()
+
+      refute render(canvas) =~ "Contact Us"
+      assert render(canvas) =~ "Reach out any time."
+    end
+
+    test "publishing keeps it in the page, leaves it out of what visitors get, and says so",
+         %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "ctx", %{
+        "action" => "visibility",
+        "node_id" => node_with_tag(view, "h1").id
+      })
+
+      publish!(view)
+
+      assert flashes(view) =~ "Page published. 1 hidden element was left out."
+
+      stored =
+        Ash.get!(MishkaCmsCore.Runtime.Page, page.id, authorize?: false, tenant: page.site_id)
+
+      assert stored.template =~ "<h1 data-pb-hidden>Contact Us</h1>"
+
+      html = LiveViewCompiler.render_template(stored.template, %{})
+      refute html =~ "Contact Us"
+      assert html =~ "Reach out any time."
     end
   end
 end
