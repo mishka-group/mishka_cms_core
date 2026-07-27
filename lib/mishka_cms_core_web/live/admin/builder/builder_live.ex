@@ -25,6 +25,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  alias MishkaCmsCore.Builder.Collection
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.PaletteEntry
@@ -470,7 +471,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp assign_defaults(socket) do
     socket
     |> assign_new(:left_tab, fn -> :components end)
+    |> assign_new(:icon_picker, fn -> nil end)
     |> assign_new(:group_folds, fn -> %{} end)
+    |> assign_new(:icon_query, fn -> "" end)
+    |> assign_new(:icon_variant, fn -> "" end)
+    |> assign_new(:icon_library, fn -> nil end)
     |> assign_new(:right_tab, fn -> :layers end)
     |> assign_new(:left_w, fn -> 344 end)
     |> assign_new(:right_w, fn -> 300 end)
@@ -533,11 +538,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:command_query, fn -> "" end)
     |> assign_new(:palette_query, fn -> "" end)
     |> assign_new(:palette_cat, fn -> "all" end)
+    |> assign_new(:attr_form, fn -> false end)
     |> assign_new(:reload_confirm, fn -> false end)
     # Where the author was going when the editor stopped them, and the only thing that renders the
     # question. Nil is the ordinary state: nothing to lose, or nobody leaving.
     |> assign_new(:leave_to, fn -> nil end)
     |> assign_new(:autosave_failed?, fn -> false end)
+    # Which property the Inspector should land on, set when a property row in the tree is clicked.
+    |> assign_new(:focus_attr, fn -> nil end)
     |> assign_new(:draft, fn -> nil end)
     |> assign_new(:autosaving?, fn -> false end)
     |> assign_new(:autosaving_revision, fn -> nil end)
@@ -972,6 +980,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      socket
      |> sync_session(token)
      |> assign(left_hidden: false, left_tab: :inspector)}
+  end
+
+  # CLICKED ON THE THING THAT SAYS WHAT IS MISSING. A component that cannot render without a value
+  # draws "needs src — click to choose src" in its place, and the attribute travels with the click,
+  # so the author lands ON that row rather than on an eighteen-row form with nothing marked.
+  #
+  # And where there is a chooser, it opens. The icon picker and the media library both already
+  # existed and both already worked — they were reachable only by knowing which row to scroll to and
+  # which small button to press, which is the whole of reports 12 and 13. `Inspector.widget/3` says
+  # which chooser a property has, so nothing here guesses from the attribute's name.
+  def handle_info({:builder_session, token, {:selection, id, {:canvas, prop}}}, socket)
+      when is_binary(id) and is_binary(prop) do
+    socket = socket |> sync_session(token) |> assign(left_hidden: false, left_tab: :inspector)
+
+    {:noreply, offer_chooser(socket, id, prop)}
   end
 
   def handle_info({:builder_session, token, _message}, socket),
@@ -1542,9 +1565,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # means the same thing it means on every other row and on the canvas: put it in here. Without this
   # the tree would place into a `<div>` but not into the component you actually wanted it inside,
   # which is the only reason to click a component row while placing.
-  def handle_event("inspect", %{"id" => id}, socket) do
+  def handle_event("inspect", %{"id" => id} = params, socket) do
     case socket.assigns.editor.picked do
-      nil -> {:noreply, open_inspector(socket, id)}
+      nil -> {:noreply, open_inspector(socket, id, params["prop"])}
       picked -> place_or_select(picked, id, socket)
     end
   end
@@ -1567,6 +1590,86 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     params = %{"site_id" => editor.site_id}
 
     {:noreply, load_palette_async(socket, editor, socket.assigns[:current_user], params)}
+  end
+
+  # CLICKING THE OPEN ONE CLOSES IT, which needs the already-open case to match rather than be
+  # computed: `(open == name && nil) || name` yields `name` when they are equal, because `nil || name`
+  # is `name`. Written that way the picker opened and never closed.
+  def handle_event(
+        "toggle_icon_picker",
+        %{"name" => name},
+        %{assigns: %{icon_picker: name}} = socket
+      ),
+      do: {:noreply, socket |> assign(:icon_picker, nil) |> assign(:icon_query, "")}
+
+  def handle_event("toggle_icon_picker", %{"name" => name}, socket),
+    do: {:noreply, socket |> assign(:icon_picker, name) |> assign(:icon_query, "")}
+
+  def handle_event("close_icon_picker", _params, socket),
+    do: {:noreply, assign(socket, :icon_picker, nil)}
+
+  # TYPED, not picked. The control is a combobox: the catalogue is a suggestion, never a whitelist.
+  #
+  # The reason is that the catalogue can only ever be the sets this install registered, and an author
+  # may legitimately name an icon from one it has not — a second kit's own glyphs, a class the host
+  # ships itself. A control that refuses those makes the editor the arbiter of what icons exist,
+  # which it is not in a position to be. So every keystroke writes the attribute AND narrows the
+  # grid, and the grid is there to save typing rather than to constrain it.
+  def handle_event(
+        "icon_typed",
+        %{"name" => name, "node_id" => node_id, "value" => value} = params,
+        socket
+      ) do
+    # Through the ordinary `op` path, so clearing the box removes the attribute and the component's
+    # own default comes back — the same rule every other field follows.
+    {:noreply, socket} =
+      handle_event(
+        "op",
+        icon_op(params, %{"kind" => "set_attr", "node_id" => node_id, "name" => name}, value),
+        socket
+      )
+
+    {:noreply, socket |> assign(:icon_query, value) |> assign(:icon_picker, name)}
+  end
+
+  def handle_event("icon_variant", %{"variant" => variant}, socket),
+    do: {:noreply, assign(socket, :icon_variant, variant)}
+
+  # PICKING is a decision; typing is not. The grid used to fire `op` directly, which set the
+  # attribute and left the popover sitting open over the rest of the panel — the reader had chosen,
+  # and the editor still looked like it was asking. Typing deliberately keeps it open, because there
+  # the list is a filter being narrowed rather than a question being answered.
+  def handle_event("icon_picked", %{"value" => value} = params, socket) do
+    op = params |> Map.take(["node_id", "name"]) |> Map.put("kind", "set_attr")
+
+    {:noreply, socket} = handle_event("op", icon_op(params, op, value), socket)
+
+    {:noreply, assign(socket, :icon_picker, nil)}
+  end
+
+  # Only rendered when more than one icon set is registered, so on a stock install this never fires.
+  # Clicking the active one clears the filter, which is how every other toggle here behaves.
+  def handle_event(
+        "icon_library",
+        %{"library" => library},
+        %{assigns: %{icon_library: library}} = socket
+      ),
+      do: {:noreply, assign(socket, :icon_library, nil)}
+
+  def handle_event("icon_library", %{"library" => library}, socket),
+    do: {:noreply, assign(socket, :icon_library, library)}
+
+  # An attribute the component never declared — `aria-label`, `data-role`, a stray `phx-hook`. It
+  # reaches the component through its `@rest` catch-all, which is why the panel lists these apart
+  # from the declared properties rather than pretending they are the same thing.
+  #
+  # A blank name is a no-op, not an error: the form is a text box, and typing nothing into it is a
+  # way of changing your mind.
+  def handle_event("add_extra_attr", %{"node_id" => id, "name" => name}, socket) do
+    case String.trim(name) do
+      "" -> {:noreply, socket}
+      trimmed -> attr_added(socket, Tree.get(socket.assigns.editor.tree, id), trimmed, nil)
+    end
   end
 
   # LEAVING IN PUBLISH MODE IS THE ONE WAY TO LOSE WORK HERE. Every other mode writes as you go, so
@@ -1678,6 +1781,43 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # The pills are the gervaz table's own filter now — the template renders them and the table handles
   # the event, so the editor no longer keeps a parallel copy of which one is active.
 
+  # THE WHOLE COLLECTION, REWRITTEN. One `set_attr` per change, so one add, one removal and one edit
+  # are each one undo step — and an attribute the editor could not read is left alone rather than
+  # replaced with what it made of it.
+  def handle_event("collection_add", %{"node_id" => node_id, "name" => name}, socket) do
+    write_collection(socket, node_id, name, fn items ->
+      Collection.add(items, Collection.blank(items))
+    end)
+  end
+
+  def handle_event(
+        "collection_remove",
+        %{"node_id" => node_id, "name" => name, "index" => index},
+        socket
+      ) do
+    write_collection(socket, node_id, name, &Collection.remove(&1, to_index(index)))
+  end
+
+  def handle_event(
+        "collection_set",
+        %{"node_id" => node_id, "name" => name, "index" => index, "value" => value} = params,
+        socket
+      ) do
+    at = to_index(index)
+
+    change =
+      case params["key"] do
+        blank when blank in [nil, ""] -> &Collection.put(&1, at, value)
+        "__key" -> &Collection.put_side(&1, at, :key, value)
+        "__value" -> &Collection.put_side(&1, at, :value, value)
+        key -> &Collection.put_in_item(&1, at, String.to_existing_atom(key), value)
+      end
+
+    write_collection(socket, node_id, name, change)
+  rescue
+    ArgumentError -> {:noreply, socket}
+  end
+
   # A Behavior switch edits the element's `class`, so it goes through the same `set_attr` op every
   # other property edit uses — one funnel, one history entry, one containment check.
   #
@@ -1711,6 +1851,30 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           },
           socket
         )
+    end
+  end
+
+  def handle_event("toggle_attr_form", _params, socket),
+    do: {:noreply, update(socket, :attr_form, &(!&1))}
+
+  # Adding an attribute is the same `set_attr` op the existing rows use — the form only supplies the
+  # name, which those rows cannot. A blank name is ignored rather than writing a nameless attribute.
+  #
+  # An ELEMENT is where `:if`, `phx-click` and `phx-hook` live, and this box asks the same question
+  # of a name as its sibling in Advanced does: the list above it holds every attribute the element
+  # carries, so a name already in that list is a row to land on and not a second attribute. Typing
+  # one with the value box left empty used to reach the empty-value rule below and REMOVE it.
+  def handle_event("add_attr", %{"attr" => %{"name" => name} = attr}, socket) do
+    socket = assign(socket, :attr_form, false)
+
+    case String.trim(name) do
+      "" ->
+        {:noreply, socket}
+
+      trimmed ->
+        node = Tree.get(socket.assigns.editor.tree, socket.assigns.editor.selection)
+
+        attr_added(socket, node, trimmed, attr["value"])
     end
   end
 
@@ -1765,6 +1929,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       {:relocated, _editor, note} -> {:noreply, put_flash(socket, :info, note)}
       {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
     end
+  end
+
+  # Setting a property to nothing REMOVES it, so the component's own default comes back. Writing an
+  # empty string instead is what made a field you merely clicked into and left blank the message —
+  # blur sent "", the attribute was written empty, and the default it was showing disappeared.
+  def handle_event("op", %{"kind" => "set_attr", "value" => value} = params, socket)
+      when value in ["", nil] do
+    handle_event("op", Map.put(params, "kind", "delete_attr"), socket)
   end
 
   def handle_event("op", params, socket) do
@@ -1954,12 +2126,156 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, socket}
   end
 
-  defp open_inspector(socket, id) do
+  # CLEARING IS A CHOICE; FAILING TO BUILD ONE IS NOT. `Interactions.source/3` answers `nil` for both
+  # — for an action outside its own table, which is every action an extension contributes to the
+  # dropdown, and for a class-taking action whose class box is empty. Writing that `nil` deleted
+  # whatever interaction the element already had, so picking a plugin's action or forgetting to type
+  # a class threw away working behaviour and said "Click action removed."
+  # THE TARGET NEEDS A HANDLE TOO, and it is the same handle: `Tree.ensure_scope/2` mints the node's
+  # `pb-xxxxxxxx` class if it has none, which is what the action's `to:` then names. Minting it here
+  # rather than asking the author for an id is the same bargain `save_hook` already makes — a person
+  # choosing "open the newsletter dialog" should not have to give it a name first.
+  #
+  # An empty target, or one naming the element being clicked, is not a target at all: the action
+  # falls back to the element's own scope, which is what every interaction written before this did.
+  # WHAT THE ATTRIBUTE HOLDS, WHICH IS NOT ALWAYS A NAME. `chelekom-pagination` declares each of its
+  # arrows as a map so an author can put a caption there instead of a glyph, and the control has to
+  # write the map back or the component's own `Map.get(@previous_label, :type)` is a `Map.get/2` on a
+  # binary. Clearing the box still removes the attribute, so the component's default comes back.
+  defp icon_op(%{"shape" => "map"}, op, ""), do: Map.put(op, "value", "")
+
+  defp icon_op(%{"shape" => "map"}, op, value) do
+    op
+    |> Map.put("value", ~s(%{type: :icon, value: #{inspect(value)}}))
+    |> Map.put("value_kind", "expr")
+  end
+
+  defp icon_op(_params, op, value), do: Map.put(op, "value", value)
+
+  defp to_index(index) do
+    case Integer.parse(to_string(index)) do
+      {number, ""} when number >= 0 -> number
+      _other -> -1
+    end
+  end
+
+  # Read the node, change the list, write it back as an expression — through the same `op` funnel as
+  # every other Inspector write, so it is one undo step, one broadcast and one history entry rather
+  # than a change the canvas only finds out about on its next reload.
+  #
+  # `:error` is an attribute bound to something outside the page — `media={@photos}` — and the only
+  # right answer there is to leave it exactly as the author wrote it.
+  defp write_collection(socket, node_id, name, change) do
+    with %{} = editor <- socket.assigns[:editor],
+         %Node{} = node <- Tree.get(editor.tree, node_id),
+         {:ok, items} <- Collection.read(node, name, declared_default(socket, node, name)) do
+      handle_event(
+        "op",
+        %{
+          "kind" => "set_attr",
+          "node_id" => node_id,
+          "name" => name,
+          "value" => items |> change.() |> Collection.write(),
+          "value_kind" => "expr"
+        },
+        socket
+      )
+    else
+      _unreadable -> {:noreply, socket}
+    end
+  end
+
+  defp declared_default(socket, node, name) do
+    with %{} = editor <- socket.assigns[:editor],
+         %{} = entry <-
+           Enum.find(editor.components || [], &(&1.name == Node.component_name(node))),
+         %{} = attr <- Enum.find(Inspector.attrs(entry), &(Inspector.name(&1) == name)) do
+      Inspector.default(attr)
+    else
+      _none -> []
+    end
+  end
+
+  # A NAME THE NODE ALREADY CARRIES IS NOT A SECOND ATTRIBUTE. Both add boxes are free text, and
+  # Advanced lists only what the component does not declare, so `color="primary"` is nowhere on
+  # screen while it is being typed — and an add has no value to offer that the row it lands on does
+  # not already hold. That emptied a string attribute down to `color=""`, which beats the component's
+  # own default, and an expression down to `:if={}`, which HEEx reads as nil: the element and
+  # everything inside it stopped being rendered while the tree went on showing the node. The box on
+  # an element sends a value with the name, so there it was the empty-value rule that took over and
+  # the attribute was REMOVED instead. So the panel lands on the row that already holds the name
+  # rather than writing over it — `Panels.attr_addable?/3` asks the same rules the list beside each
+  # box is built from, and that row rings to say where the name went.
+  defp attr_added(socket, %Node{} = node, name, value) do
+    case Panels.attr_addable?(socket.assigns, node, name) do
+      true ->
+        {:noreply, written} = handle_event("op", added_attr_op(node, name, value), socket)
+        {:noreply, assign(written, :focus_attr, name)}
+
+      false ->
+        {:noreply, assign(socket, :focus_attr, name)}
+    end
+  end
+
+  defp attr_added(socket, _gone, _name, _value), do: {:noreply, socket}
+
+  # Through `op` like every other write in the panel, so containment, the permission check and a
+  # plugin's veto all apply and a refusal is put on screen rather than swallowed. The kind is stated
+  # because an add box only ever types a literal, and an empty value is left OUT rather than sent:
+  # the row has to exist before it can be typed into, and an empty `value` is the one thing that
+  # funnel turns into a `delete_attr`.
+  defp added_attr_op(node, name, value) do
+    op = %{
+      "kind" => "set_attr",
+      "node_id" => node.id,
+      "name" => name,
+      "value_kind" => "string"
+    }
+
+    case value do
+      blank when blank in [nil, ""] -> op
+      typed -> Map.put(op, "value", typed)
+    end
+  end
+
+  # WHICH CHOOSER THIS PROPERTY HAS, asked of the same function the Inspector asks when it draws the
+  # row — a second rule keyed on the attribute's name would drift from it the first time a kit called
+  # something `poster` instead of `src`.
+  defp offer_chooser(socket, id, prop) do
+    socket = assign(socket, :focus_attr, prop)
+
+    case chooser_for(socket, id, prop) do
+      :icon ->
+        socket |> assign(:icon_picker, prop) |> assign(:icon_query, "")
+
+
+      _no_chooser ->
+        socket
+    end
+  end
+
+  defp chooser_for(socket, id, prop) do
+    with %Node{kind: :component} = node <- Tree.get(socket.assigns.editor.tree, id),
+         %{} = entry <-
+           Enum.find(socket.assigns.editor.components, &(&1.name == Node.component_name(node))),
+         %{} = attr <- Enum.find(entry.attrs || [], &(attr_name(&1) == prop)) do
+      Inspector.widget(attr, Inspector.features(entry), entry)
+    else
+      _unknown -> nil
+    end
+  end
+
+  defp attr_name(%{name: name}), do: name
+  defp attr_name(%{"name" => name}), do: name
+  defp attr_name(_attr), do: nil
+
+  defp open_inspector(socket, id, prop) do
     {:ok, _editor} = EditorSession.select(socket.assigns.token, id)
 
     socket
     |> assign(:left_hidden, false)
     |> assign(:left_tab, :inspector)
+    |> assign(:focus_attr, prop)
   end
 
   # A SELECTION IS ALREADY AN ANSWER TO "WHERE". Picking with an element selected used to arm the
@@ -2935,6 +3251,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       <div data-role="pb-body" class="flex min-h-0 flex-1">
         <Panels.left_panel
           editor={@editor}
+          section={@section}
           palette={@palette}
           component_presets={@component_presets}
           picked={@picked}
@@ -2949,10 +3266,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           left_w={@left_w}
           mob_panel={@mob_panel}
           selected_node={@selected_node}
+          attr_form={@attr_form}
           breakpoint={@breakpoint}
           pseudo={@pseudo}
+          focus_attr={@focus_attr}
           group_folds={@group_folds}
           style_tokens={@style_tokens}
+          icon_picker={@icon_picker}
+          icon_query={@icon_query}
+          icon_library={@icon_library}
+          icon_variant={@icon_variant}
           element_css={@element_css}
           element_css_error={@element_css_error}
           element_css_advice={@element_css_advice}
@@ -2984,6 +3307,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           tree={@tree}
           selection={@selection}
           expanded={@expanded}
+          record={@record}
         />
       </div>
 

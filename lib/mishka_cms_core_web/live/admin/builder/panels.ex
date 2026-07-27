@@ -18,17 +18,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Builder.Collection
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.PaletteEntry
   alias Phoenix.LiveView.JS
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.PageBuilder.Icons
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.PageBuilder.Interface
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
@@ -58,6 +62,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # instant because it opens under the cursor, a sheet is quick, a modal takes the longest because
   # it covers the page. Leaving is faster than arriving in every pair — waiting to get somewhere is
   # normal, waiting to leave is not.
+  # A row nobody has anything to say about. Named so the layers row can read one shape whether or not
+  # the sweep found it, rather than every reader guarding on nil.
+  @no_needs %{attrs: 0, slots: 0, total: 0}
+
   @menu_in {"transition-[opacity,transform] ease-out duration-100", "opacity-0 scale-95",
             "opacity-100 scale-100"}
   @menu_out {"transition-[opacity,transform] ease-in duration-75", "opacity-100 scale-100",
@@ -70,6 +78,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
              "opacity-100 scale-100"}
   @modal_out {"transition-[opacity,transform] ease-in duration-150", "opacity-100 scale-100",
               "opacity-0 scale-95"}
+
+  @doc false
+  def menu_in, do: JS.transition(@menu_in, time: 100)
+
+  @doc false
+  def menu_out, do: JS.hide(transition: @menu_out, time: 75)
 
   # A MENU IS THE BROWSER'S BUSINESS. Nothing behind these needs the server: the markup is already
   # on the page, so opening it over the wire buys a round trip, a re-render of the panel it hangs
@@ -340,6 +354,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       descriptor("layout", :inspector_section, gettext_noop("Layout"), 40),
       descriptor("appearance", :inspector_section, gettext_noop("Appearance"), 50),
       descriptor("behavior", :inspector_section, gettext_noop("Behavior"), 60),
+      descriptor("attributes", :inspector_section, gettext_noop("Attributes"), 70),
+      descriptor("props", :inspector_section, gettext_noop("Props"), 80)
     ]
   end
 
@@ -1079,13 +1095,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:left_w, :integer, required: true)
   attr(:mob_panel, :atom, default: :canvas)
   attr(:selected_node, :any, default: nil)
+  attr(:attr_form, :any, default: nil)
   attr(:breakpoint, :atom, default: :base)
   attr(:pseudo, :atom, default: :base)
+  attr(:focus_attr, :string, default: nil)
   attr(:group_folds, :map, default: %{})
   attr(:style_tokens, :list, default: [])
+  attr(:icon_picker, :string, default: nil)
+  attr(:icon_query, :string, default: "")
+  attr(:icon_library, :any, default: nil)
+  attr(:icon_variant, :string, default: nil)
   attr(:element_css, :string, default: "")
   attr(:element_css_error, :string, default: nil)
   attr(:element_css_advice, :string, default: nil)
+  attr(:section, :string, default: "page", doc: "which of the four documents is being edited")
+
   # The record is here for the Expression section, which offers what THIS document declares — a
   # component's own attributes and slots — rather than a vocabulary written into the editor.
   attr(:record, :any, default: nil)
@@ -1197,13 +1221,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           :if={@left_tab == :inspector}
           editor={@editor}
           selected_node={@selected_node}
+          attr_form={@attr_form}
           breakpoint={@breakpoint}
           pseudo={@pseudo}
+          focus_attr={@focus_attr}
           group_folds={@group_folds}
           style_tokens={@style_tokens}
+          icon_picker={@icon_picker}
+          icon_query={@icon_query}
+          icon_library={@icon_library}
+          icon_variant={@icon_variant}
           element_css={@element_css}
           element_css_error={@element_css_error}
           element_css_advice={@element_css_advice}
+          section={@section}
           record={@record}
         />
       </aside>
@@ -2192,6 +2223,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               {selection_meta(@selected_node)}
             </div>
           </div>
+          <%!-- THE KIT ALREADY SAYS WHERE ITS DOCS ARE. Every Chelekom component carries a `doc_url`
+                and nothing read it, so someone stuck on what `variant` means had the answer sitting
+                in the database with no way to reach it. Here, beside the name of the thing they are
+                stuck on. Opens in a new tab: the editor holds unsaved work. --%>
+          <a
+            :if={docs_url(component_entry(assigns))}
+            id="pb-docs-link"
+            href={docs_url(component_entry(assigns))}
+            target="_blank"
+            rel="noopener noreferrer"
+            title={gettext("Open this component's documentation")}
+            class="inline-flex h-7 flex-none items-center gap-1.5 rounded-[8px] border border-[#dcdbf5] bg-white px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f7f6ff]"
+          >
+            {gettext("Docs")} <.icon name={:external} size={11} />
+          </a>
         </div>
 
         <.hidden_note
@@ -2199,8 +2245,87 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           hider={Visibility.hidden_by(@editor.tree, @selected_node.id)}
         />
 
+        <%!-- A component's own properties and slots come FIRST. They are what the component is; the
+              breakpoint, state and box controls under them apply to any element and are the same
+              everywhere. --%>
+        <.props
+          :if={component_entry(assigns)}
+          entry={component_entry(assigns)}
+          node={@selected_node}
+          hidden={panel_owned(@selected_node, @section)}
+          focus={@focus_attr}
+          icon_picker={@icon_picker}
+          icon_query={@icon_query}
+          icon_variant={@icon_variant}
+          icon_library={@icon_library}
+          group_folds={@group_folds}
+        />
 
+        <%!-- A SLOT AN AUTHOR HAS TO ADD IS NOT A DETAIL. Folded, the row that says "End section +"
+              was the one thing a field could not be built without — the only way to put a button
+              inside an input's border — and nobody found it. A component with nothing but an
+              inner_block has nothing to add here and stays folded. --%>
+        <.inspector_group
+          :if={slot_entries(assigns) != [] or inner_block_slot?(assigns)}
+          title={gettext_noop("Slots")}
+          group_folds={@group_folds}
+          folded_by_default={slot_entries(assigns) == []}
+        >
+          <div class="flex flex-col gap-1.5">
+            <div
+              :for={slot <- slot_entries(assigns)}
+              class="flex items-center justify-between gap-2 rounded-[8px] bg-[#faf9f6] px-2.5 py-1.5"
+            >
+              <span class="truncate font-['Space_Grotesk'] text-[11px] font-bold text-[#5c5a54]">
+                {Inspector.label(slot)}
+              </span>
+              <button
+                type="button"
+                id={"pb-slot-add-inspector-#{Inspector.name(slot)}"}
+                phx-click="op"
+                phx-value-kind="insert"
+                phx-value-parent_id={@selected_node.id}
+                phx-value-template={"<:#{Inspector.name(slot)}></:#{Inspector.name(slot)}>"}
+                class="shrink-0 rounded-[6px] px-1.5 py-0.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+              >
+                {gettext("+ Add")}
+              </button>
+            </div>
+            <%!-- The inner content gets a line of its own rather than an Add button. `<:inner_block>`
+                  is not writable — the HEEx compiler rejects the name — and the thing it stands for is
+                  filled by putting elements IN the component, which is what this says. --%>
+            <p
+              :if={inner_block_slot?(assigns)}
+              id="pb-slot-inner-block"
+              class="rounded-[8px] bg-[#faf9f6] px-2.5 py-1.5 text-[10.5px] font-medium leading-[1.55] text-[#6d6a63]"
+            >
+              <span class="font-['Space_Grotesk'] text-[11px] font-bold text-[#5c5a54]">
+                {gettext("Inner block")}
+              </span>
+              {gettext(
+                "— drop an element onto this component, or pick one from the palette and click it, to fill its content."
+              )}
+            </p>
+          </div>
+        </.inspector_group>
 
+        <%!-- THE CHIP ON THE CANVAS PROMISED THIS AND IT DID NOT EXIST. An expression's own title
+              attribute read "edit its source in the inspector"; the inspector had nothing for one, so
+              `{@inner_content}` in a layout and `{render_slot(@inner_block)}` in a component — the
+              two expressions those documents are BUILT on — could be seen, selected, moved and
+              deleted, and changed only by opening the code drawer.
+
+              A plain text box rather than a picker, because what goes in it is Elixir and the editor
+              has no business narrowing that. It writes through `set_text`, the op that already exists
+              for exactly this shape: the serializer emits an `:eex` node's text back into `{…}` or
+              `<%= … %>` depending on how it was written, so the form it was authored in survives. --%>
+        <.expression_section
+          :if={expression_node?(@selected_node)}
+          node={@selected_node}
+          section={@section}
+          record={@record}
+          group_folds={@group_folds}
+        />
 
 
         <%!-- THE BREAKPOINT IS A TAB, AND WHAT IT GOVERNS SITS INSIDE IT. It used to be a folded
@@ -2548,6 +2673,132 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           </div>
         </.inspector_group>
 
+        <%!-- Raw HTML attributes — `aria-label`, `data-*`, and `phx-hook` where one would attach. A
+              COMPONENT has no use for them: what it accepts is declared, and the properties form
+              above is where that is set, so this would be a second attribute editor disagreeing
+              with the first. --%>
+        <.inspector_group
+          :if={styleable?(@selected_node) and @selected_node.kind != :component}
+          title={gettext_noop("Attributes")}
+          group_folds={@group_folds}
+          folded_by_default={true}
+        >
+          <div class="flex flex-col">
+            <%!-- One bordered list, a violet key and its value beside it — the prototype's shape. The
+                  value is editable here and each row can be removed, which its static mock could not
+                  do; the row still reads the same. --%>
+            <div
+              :if={attr_rows(@selected_node) != []}
+              class="overflow-hidden rounded-[11px] border border-[#ecebe6]"
+            >
+              <%!-- Rung when the add box below sends the reader here: a name typed into it that the
+                    element already carries is refused rather than written over, and the row it was
+                    refused in favour of is the whole of what says so. --%>
+              <div
+                :for={{name, kind, value} <- attr_rows(@selected_node)}
+                id={"pb-attr-row-#{@selected_node.id}-#{name}"}
+                class={[
+                  "scroll-mt-4 border-b border-[#f4f3ee] px-[11px] py-[9px] last:border-b-0",
+                  (@focus_attr == name && "bg-[#f7f6ff]") || "bg-[#faf9f6]"
+                ]}
+                phx-mounted={@focus_attr == name && JS.dispatch("pb:reveal")}
+              >
+                <div class="flex items-center gap-2">
+                  <span class="flex-none font-['Space_Grotesk'] text-[10.5px] font-bold text-[#7a5bd0]">
+                    {name}
+                  </span>
+                  <%!-- The box shows the expression's source, the same as a property box does, so the
+                        mark is what says this one is code and not the words it looks like. --%>
+                  <span
+                    :if={kind == "expr"}
+                    id={"pb-attr-row-expr-#{name}"}
+                    title={
+                      gettext("%{name} holds an expression — what is in the box is its source",
+                        name: name
+                      )
+                    }
+                    class="flex-none rounded-[5px] bg-[#f2f1fc] px-[5px] py-px font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc]"
+                  >
+                    ƒx
+                  </span>
+                  <.attr_row_control
+                    node={@selected_node}
+                    name={name}
+                    kind={kind}
+                    value={value}
+                    widget={Inspector.element_widget(@selected_node.tag, name)}
+                  />
+                  <button
+                    type="button"
+                    phx-click="op"
+                    phx-value-kind="delete_attr"
+                    phx-value-node_id={@selected_node.id}
+                    phx-value-name={name}
+                    title={gettext("Remove attribute")}
+                    class="grid size-5 flex-none place-items-center rounded-[6px] text-[#a8a5a0] hover:bg-[#fbe9e7] hover:text-[#d5544b]"
+                  >
+                    <.icon name={:close} size={11} />
+                  </button>
+                </div>
+                <p
+                  :if={name == "style" and !SecurityHeaders.inline_style_allowed?()}
+                  class="mt-[5px] flex items-start gap-1 font-['Space_Grotesk'] text-[10px] leading-[1.35] text-[#a5691a]"
+                >
+                  <.icon name={:shield} size={11} class="mt-[1px] flex-none" />
+                  <span>
+                    {gettext(
+                      "This site's security policy ignores inline styles, so the published page will not use this. Put it in a class instead."
+                    )}
+                  </span>
+                </p>
+              </div>
+            </div>
+
+            <%!-- Listing the attributes a node already has is not the same as being able to give it
+                  one. Without this the only way to add `aria-label`, `phx-hook` or a data attribute
+                  was to type it into the code drawer. --%>
+            <.form
+              :if={@attr_form}
+              for={%{}}
+              as={:attr}
+              id="pb-attr-form"
+              phx-submit="add_attr"
+              class="mt-[9px] flex items-center gap-1.5"
+            >
+              <input
+                type="text"
+                name="attr[name]"
+                placeholder={gettext("name")}
+                autocomplete="off"
+                class="h-7 w-[86px] flex-none rounded-[7px] border border-[#c9c6f0] bg-white px-2 font-['Space_Grotesk'] text-[11px] font-bold text-[#3a382f] outline-none"
+              />
+              <input
+                type="text"
+                name="attr[value]"
+                placeholder={gettext("value")}
+                autocomplete="off"
+                class="h-7 min-w-0 flex-1 rounded-[7px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-medium text-[#3a382f] outline-none focus:border-[#c9c6f0]"
+              />
+              <button
+                type="submit"
+                title={gettext("Add attribute")}
+                class="grid size-7 flex-none place-items-center rounded-[7px] bg-[#4f4bcc] text-white hover:bg-[#413ea8]"
+              >
+                <.icon name={:check} size={12} />
+              </button>
+            </.form>
+
+            <button
+              :if={!@attr_form}
+              type="button"
+              id="pb-attr-add"
+              phx-click="toggle_attr_form"
+              class="mt-[9px] h-[34px] w-full rounded-[9px] border border-dashed border-[#d9d7d0] bg-white text-[11.5px] font-semibold text-[#5c5a54] hover:border-[#5b57d6] hover:text-[#4f4bcc]"
+            >
+              {gettext("+ Add attribute")}
+            </button>
+          </div>
+        </.inspector_group>
 
         <.element_css
           node={@selected_node}
@@ -2561,6 +2812,197 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
       </div>
     </div>
+    """
+  end
+
+  # The component property panel: every declared attribute as a real control, grouped, with its
+  # option list folded in from the kit's helper discriminators.
+  #
+  # This is the surface the React editor never had — it shipped a well-designed
+  # `PropertiesPanel` type→widget mapping that nothing rendered, so "configure everything visually"
+  # was unmet for all 1,764 attributes in the bundle.
+  #
+  attr(:entry, :map, required: true)
+  attr(:node, :any, required: true)
+  attr(:focus, :string, default: nil, doc: "the property a tree row asked to land on")
+  attr(:icon_picker, :string, default: nil, doc: "the property whose icon picker is open")
+  attr(:icon_query, :string, default: "")
+  attr(:icon_variant, :string, default: "")
+  attr(:icon_library, :string, default: nil)
+  attr(:group_folds, :map, default: %{}, doc: "the sections the reader has explicitly folded")
+  attr(:hidden, :list, default: [], doc: "attributes another section of the panel writes")
+
+  defp props(assigns) do
+    assigns =
+      assigns
+      |> assign(:groups, assigns.entry |> grouped_attrs() |> without(assigns.hidden))
+      |> assign(
+        :extras,
+        assigns.entry |> extra_attr_rows(assigns.node) |> without(assigns.hidden)
+      )
+
+    ~H"""
+    <%!-- Each group folds, and only the two an author actually came for start open: the words on the
+          element and the options the component declares. Appearance, Layout and Behavior are real
+          groups but secondary ones — starting them open pushed Properties off the first screen on
+          every component with more than a handful of attributes. --%>
+    <section :for={{group, attrs} <- @groups}>
+      <.fold_heading
+        title={group}
+        scope="prop"
+        group_folds={@group_folds}
+        folded_by_default={group not in ~w(Content Properties)}
+      >
+        <:meta>
+          <span
+            :if={folded?(@group_folds, "prop", group, group not in ~w(Content Properties))}
+            class="flex-none font-['Space_Grotesk'] text-[9.5px] font-semibold text-[#a8a5a0]"
+          >
+            {length(attrs)}
+          </span>
+        </:meta>
+      </.fold_heading>
+
+      <div :if={!folded?(@group_folds, "prop", group, false)} class="mb-3 flex flex-col gap-2.5">
+        <.attr_input
+          :for={attr <- attrs}
+          attr={attr}
+          node={@node}
+          focus={@focus}
+          icon_picker={@icon_picker}
+          icon_query={@icon_query}
+          icon_variant={@icon_variant}
+          icon_library={@icon_library}
+          widget={Inspector.widget(attr, @entry.features, @entry)}
+        />
+      </div>
+    </section>
+
+    <p :if={@groups == []} class="text-[10.5px] font-medium text-[#a8a5a0]">
+      {gettext("This one declares no properties of its own.")}
+    </p>
+
+    <%!-- Everything the component did NOT declare: `aria-*`, `data-*`, a stray `phx-hook`. It is a
+          real need and a rare one, so it lives at the bottom behind a disclosure rather than in the
+          list of the component's own properties. --%>
+    <section :if={@extras != [] or @node.kind == :component}>
+      <button
+        type="button"
+        id="pb-prop-advanced"
+        phx-click={
+          JS.toggle(to: "#pb-prop-advanced-body", display: "flex")
+          |> JS.toggle_class("rotate-90", to: "#pb-prop-advanced > svg")
+        }
+        class="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left hover:bg-[#f6f5f2]"
+      >
+        <.icon name={:chevron} size={11} />
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("Advanced")}
+        </span>
+        <span class="flex-1"></span>
+        <span
+          :if={@extras != []}
+          class="flex-none rounded-full bg-[#f2f1ec] px-1.5 text-[9.5px] font-bold text-[#6d6a63]"
+        >
+          {length(@extras)}
+        </span>
+      </button>
+
+      <div id="pb-prop-advanced-body" class="mt-1.5 hidden flex-col gap-2.5">
+        <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+          <.sentence
+            text={
+              gettext_noop(
+                "HTML attributes this component does not declare. They reach it through its %{rest} catch-all."
+              )
+            }
+            parts={%{rest: {"code", nil, "@rest"}}}
+          />
+        </p>
+
+        <div
+          :if={@extras != []}
+          class="overflow-hidden rounded-[11px] border border-[#ecebe6]"
+        >
+          <%!-- Rung the same way a declared property is, because the box below sends the reader here
+                rather than writing over what is already in the row: a name typed into it that the
+                node already carries is refused, and this is the whole of what says so. --%>
+          <div
+            :for={{name, kind, value} <- @extras}
+            id={"pb-extra-row-#{name}"}
+            class={[
+              "flex scroll-mt-4 items-center gap-2 border-b border-[#f4f3ee] px-[11px] py-[9px] last:border-b-0",
+              (@focus == name && "bg-[#f7f6ff]") || "bg-[#faf9f6]"
+            ]}
+            phx-mounted={@focus == name && JS.dispatch("pb:reveal")}
+          >
+            <span class="flex-none font-['Space_Grotesk'] text-[10.5px] font-bold text-[#7a5bd0]">
+              {name}
+            </span>
+            <%!-- The box shows the expression's source, so the mark is what says this one is code. --%>
+            <span
+              :if={kind == "expr"}
+              id={"pb-extra-expr-#{name}"}
+              title={
+                gettext("%{name} holds an expression — what is in the box is its source", name: name)
+              }
+              class="flex-none rounded-[5px] bg-[#f2f1fc] px-[5px] py-px font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc]"
+            >
+              ƒx
+            </span>
+            <.field_form
+              id={"pb-extra-form-#{@node.id}-#{name}"}
+              class="min-w-0 flex-1"
+              phx-value-kind="set_attr"
+              phx-value-node_id={@node.id}
+              phx-value-name={name}
+              phx-value-value_kind={kind}
+            >
+              <input
+                type="text"
+                id={"pb-extra-#{name}"}
+                value={value}
+                name="value"
+                phx-debounce="350"
+                class="w-full truncate border-0 bg-transparent p-0 font-['Space_Grotesk'] text-[11px] font-medium text-[#3a382f] outline-none"
+              />
+            </.field_form>
+            <button
+              type="button"
+              phx-click="op"
+              phx-value-kind="delete_attr"
+              phx-value-node_id={@node.id}
+              phx-value-name={name}
+              title={gettext("Remove attribute")}
+              class="grid size-5 flex-none place-items-center rounded-[6px] text-[#a8a5a0] hover:bg-[#fbe9e7] hover:text-[#d5544b]"
+            >
+              <.icon name={:close} size={11} />
+            </button>
+          </div>
+        </div>
+
+        <form
+          id={"pb-extra-form-#{@node.id}"}
+          phx-submit="add_extra_attr"
+          class="flex items-center gap-1.5"
+        >
+          <input type="hidden" name="node_id" value={@node.id} />
+          <input
+            type="text"
+            name="name"
+            placeholder="aria-label"
+            autocomplete="off"
+            class="h-[26px] min-w-0 flex-1 rounded-[7px] border border-[#ecebe6] bg-white px-2 font-['Space_Grotesk'] text-[11px] text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+          />
+          <button
+            type="submit"
+            class="grid size-[26px] flex-none place-items-center rounded-[7px] border border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            <.icon name={:plus} size={12} />
+          </button>
+        </form>
+      </div>
+    </section>
     """
   end
 
@@ -2779,6 +3221,40 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     end)
   end
 
+  # Every property the component declares, in the panel's own section order — not "the ones already
+  # set, and the rest behind a `+`". A component's option surface IS the thing an author came to the
+  # inspector for; alert declares seventeen properties and used to show two.
+  #
+  # `Inspector.grouped/1` has always known how to do this (Layout, Appearance, Behavior, Content,
+  # Properties) and its result was flattened away at the only call site.
+  # A working form's names and options are the Form panel's, not Props' or Advanced's, on a
+  # document the Form panel is shown in.
+  defp panel_owned(node, section) do
+    case Inspector.form_node?(node) and handles_events?(section) do
+      true -> Inspector.form_panel_attrs()
+      false -> []
+    end
+  end
+
+  defp without(groups_or_rows, []), do: groups_or_rows
+
+  defp without([{_group, attrs} | _rest] = groups, hidden) when is_list(attrs) do
+    groups
+    |> Enum.map(fn {group, attrs} ->
+      {group, Enum.reject(attrs, &(Inspector.name(&1) in hidden))}
+    end)
+    |> Enum.reject(fn {_group, attrs} -> attrs == [] end)
+  end
+
+  defp without(rows, hidden),
+    do: Enum.reject(rows, fn {name, _kind, _value} -> name in hidden end)
+
+  defp grouped_attrs(entry) do
+    entry
+    |> Inspector.grouped()
+    |> Enum.reject(fn {_group, attrs} -> attrs == [] end)
+  end
+
   # The whole style vocabulary `Tree.Styles` can express, split the way the panel groups it. A
   # property missing here is one the author cannot reach even though the serialiser understands it —
   # a template carrying `max-w-[60ch]` would parse into an override the panel could neither show nor
@@ -2875,6 +3351,250 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     end
   end
 
+  # The attributes written on the node that the component never declared — what the Advanced
+  # disclosure lists. `id` is excluded: it has its own row above, and offering it twice invites two
+  # controls writing the same attribute.
+  defp extra_attr_rows(entry, node) do
+    declared = declared_names(entry)
+
+    for {name, _kind, _value} = row <- attr_rows(node),
+        not MapSet.member?(declared, name),
+        do: row
+  end
+
+  # `rest_attrs/1` too: a switch the panel now offers for a key the component reads out of `@rest`
+  # has a control of its own above, and listing it here as well puts two controls on one attribute
+  # — flip the switch and the same name appears again in Advanced, holding the value it just wrote.
+  #
+  # AN ELEMENT DECLARES NOTHING. It has no entry, so there is no control above for a row to collide
+  # with and `id` is an ordinary row in its own list — excluding it there would take away the only
+  # way the panel has of giving an element one.
+  defp declared_names(nil), do: MapSet.new()
+
+  defp declared_names(entry) do
+    (Inspector.attrs(entry) ++ Inspector.rest_attrs(entry))
+    |> MapSet.new(&Inspector.name/1)
+    |> MapSet.put("id")
+  end
+
+  @doc """
+  Whether a free-text add box may put `name` on this node — asked by Advanced's box and by the
+  Attributes list's on an element, of the same rules the list above each box is built from, so the
+  add and the list cannot disagree.
+
+  A name the node already carries is refused. An add has no value to offer that the row it would
+  land on does not already hold: Advanced sends none at all, and the Attributes box sends whatever
+  was typed beside it, empty included. An empty one is worse than nothing — it either beats the
+  component's own default, or is taken for a removal by the funnel every write goes through, and
+  `class=""` throws away everything the style panel wrote while `:if={}` reads as nil, which takes
+  the element and all of its content off the published page.
+
+  A HEEx special — `:if`, `:for`, `:let` — is refused whether the node carries it or not: it must be
+  an expression between braces, so `:if=""` is not a condition that never matches, it is a template
+  that will not compile at all, and a box that can only produce a string has no way to write one.
+  The Conditions section above is where a `:if` is written, through
+  `MishkaCmsCore.Runtime.PageBuilder.Conditions`.
+
+  A name the component declares is refused because Advanced is the attributes it does NOT declare —
+  that property has a control of its own above, and a row written here would never appear.
+  """
+  @spec attr_addable?(map(), Node.t() | nil, String.t()) :: boolean()
+  def attr_addable?(assigns, %Node{} = node, name) do
+    entry = component_entry(Map.put(assigns, :selected_node, node))
+
+    is_nil(Node.attr(node, name)) and not String.starts_with?(name, ":") and
+      not MapSet.member?(declared_names(entry), name)
+  end
+
+  def attr_addable?(_assigns, _gone, _name), do: false
+
+  attr(:attr, :map, required: true)
+  attr(:node, :any, required: true)
+  attr(:widget, :any, required: true)
+  attr(:focus, :string, default: nil, doc: "the property a tree row asked to land on")
+  attr(:icon_picker, :string, default: nil)
+  attr(:icon_query, :string, default: "")
+  attr(:icon_variant, :string, default: "")
+  attr(:icon_library, :string, default: nil)
+
+  # One property control, chosen by `MishkaCmsCore.Runtime.PageBuilder.Inspector.widget/2`.
+  #
+  # An attribute the author has not set renders the component's own default and serializes nothing —
+  # the explicit-versus-default distinction the demo marks with an override dot. Clearing a control
+  # removes the attribute rather than writing an empty string, so the default comes back.
+  #
+  defp attr_input(assigns) do
+    assigns =
+      assigns
+      |> assign(:name, Inspector.name(assigns.attr))
+      |> assign(:doc, Inspector.doc(assigns.attr))
+      |> assign(:atom?, Inspector.atom?(assigns.attr))
+      # AN ICON IN A MAP IS STILL AN ICON. The control shows and writes a name; the map around it is
+      # the component's business, and `Inspector.icon_in/1` reads the name out of whichever shape the
+      # value arrives in — the bundle's default or the expression the editor writes back.
+      |> assign(:icon_map?, Inspector.icon_map?(assigns.attr))
+      |> then(&assign(&1, :value, shown(&1, Node.attr_text(&1.node, &1.name))))
+      |> then(&assign(&1, :default, shown(&1, Inspector.default(&1.attr))))
+      # An ATOM is written as an expression too — `kind={:danger}` is how HEEx spells one — but it is
+      # a literal the editor itself writes that way, not a binding to something outside. Only the
+      # ones that are genuinely bound get marked, or every option pill in the panel would claim to be.
+      # A map holding an icon is the same case: the editor composed it, and offering to store it as
+      # plain text would hand the component a binary where its own `Map.get/2` expects a map.
+      |> then(
+        &assign(
+          &1,
+          :expr?,
+          not &1.atom? and not &1.icon_map? and
+            match?({:expr, _source}, Node.attr(&1.node, &1.name))
+        )
+      )
+
+    assigns =
+      assigns
+      |> assign(:required?, Inspector.required?(assigns.attr))
+      |> then(&assign(&1, :missing?, &1.required? and blank?(&1.value)))
+
+    ~H"""
+    <%!-- One property. It carries its own state rather than leaving it to be inferred: a violet dot
+          when this page has set it, a red border and a line of text when it is required and empty,
+          and a delete that is disabled — not hidden — when the property cannot be removed at all.
+          Arriving from a property row in the tree also rings it and scrolls it into view. --%>
+    <div
+      id={"pb-attr-#{@node.id}-#{@name}"}
+      class={[
+        "scroll-mt-4 rounded-[10px] border px-2.5 py-2",
+        (@missing? && "border-[#e8b7b1] bg-[#fdf6f5]") ||
+          ((@focus == @name && "border-[#c3c1f0] bg-[#f7f6ff]") || "border-[#ecebe6] bg-white")
+      ]}
+      phx-mounted={@focus == @name && JS.dispatch("pb:reveal")}
+    >
+      <label class="block" title={Inspector.doc(@attr)}>
+        <span class="mb-1.5 flex items-center gap-1.5">
+          <span class="min-w-0 flex-1 truncate text-[10.5px] font-bold text-[#3a382f]">
+            {Inspector.label(@attr)}<span :if={@required?} class="text-[#d5544b]">*</span>
+          </span>
+
+          <span
+            :if={!is_nil(@value)}
+            title={gettext("Set on this page")}
+            class="size-[7px] flex-none rounded-full bg-[#4f4bcc]"
+          />
+
+          <%!-- THIS ONE IS BOUND, NOT TYPED. `name={@icon}` and `name="hero-bolt"` looked identical
+                in this panel — both drew a box reading what was between the braces — and the write
+                that went back turned the first into the second, silently. A component that nests
+                another component is made of these bindings, so the mark says which box is one, and
+                pressing it is the way to stop it being one deliberately. --%>
+          <button
+            :if={@expr?}
+            type="button"
+            id={"pb-attr-literal-#{@node.id}-#{@name}"}
+            phx-click="op"
+            phx-value-kind="set_attr"
+            phx-value-node_id={@node.id}
+            phx-value-name={@name}
+            phx-value-value={@value}
+            phx-value-value_kind="string"
+            title={
+              gettext("%{name} is bound to %{value} — press to store it as plain text instead",
+                name: @name,
+                value: @value
+              )
+            }
+            class="flex-none rounded-[5px] bg-[#f2f1fc] px-[5px] py-px font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#e4e2f7]"
+          >
+            ƒx
+          </button>
+
+          <%!-- Required properties keep the control, greyed: a disabled affordance says "not here",
+                where a missing one says "look elsewhere". --%>
+          <button
+            type="button"
+            id={"pb-attr-clear-#{@node.id}-#{@name}"}
+            phx-click={!@required? && "op"}
+            phx-value-kind="delete_attr"
+            phx-value-node_id={@node.id}
+            phx-value-name={@name}
+            disabled={@required?}
+            title={
+              (@required? &&
+                 gettext("%{label} is required — it cannot be removed", label: Inspector.label(@attr))) ||
+                gettext("Remove this property and go back to the component's default")
+            }
+            class="grid size-[18px] flex-none place-items-center rounded-[5px] text-[#a8a5a0] hover:bg-[#fdf3f1] hover:text-[#c0473d] disabled:cursor-not-allowed disabled:bg-transparent disabled:text-[#d5d3cc]"
+          >
+            <.icon name={:trash} size={11} />
+          </button>
+        </span>
+
+        <.widget_control {assigns} />
+      </label>
+
+      <%!-- The kit writes an explanation for 1743 of its 1764 properties and it used to be reachable
+            only by hovering a row you had already added — invisible at the one moment it is most
+            needed, which is while you are deciding whether you want the property at all. --%>
+      <p
+        :if={@doc not in [nil, ""] and !@missing?}
+        class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#8a877f]"
+      >
+        {@doc}
+      </p>
+
+      <p :if={@missing?} class="mt-1.5 text-[10px] font-semibold text-[#c0473d]">
+        {gettext("Required — the page cannot be saved without it.")}
+      </p>
+      <p
+        :if={!@missing? and is_nil(@value) and @default not in [nil, ""]}
+        class="mt-1.5 text-[10px] font-medium text-[#a8a5a0]"
+      >
+        {gettext("Using the component's default.")}
+      </p>
+    </div>
+    """
+  end
+
+  # An ATOM attribute is written as an expression — `kind={:danger}` — because that is the value the
+  # component's clauses match on. Handed the string `"danger"` they all fall through and the
+  # component renders whatever its catch-all renders, silently: every colour of alert came out
+  # identical, which is exactly how this was found. The kit's own examples write it the same way.
+  defp option_kind(true), do: "expr"
+  defp option_kind(_string), do: nil
+
+  # A NUMBER HAS TO BE WRITTEN AS ONE. The stepper wrote `value="45"` — a HEEx string literal — and
+  # the kit's own body does arithmetic on it, so a progress bar set to 45 rendered a bare track and a
+  # section set to 45 rendered 0%. It looked as though the field did nothing.
+  #
+  # Keyed on the DECLARED type and not on the widget, because `opts.editor == "number"` may sit on a
+  # string attribute that genuinely wants quotes — `chelekom-range-field`'s value among them. The
+  # three numeric types are the ones `Inspector.widget/2` itself routes to a number box.
+  defp number_kind(attr) do
+    (Inspector.type(attr) in ~w(integer float pos_integer) && "expr") || nil
+  end
+
+  defp option_value(value, true), do: ":#{value}"
+  defp option_value(value, _string), do: value
+
+  # The node stores `:danger` for an atom and `danger` for a string; the control's options are
+  # labelled without the colon either way, so the leading one is ignored when matching.
+  defp chosen?(nil, _value), do: false
+
+  defp chosen?(current, value),
+    do: String.trim_leading(to_string(current), ":") == to_string(value)
+
+  # What the control puts in its box. An icon carried in a map shows the name inside it; everything
+  # else shows itself.
+  defp shown(%{icon_map?: true}, value), do: Inspector.icon_in(value)
+  defp shown(_assigns, value), do: value
+
+  defp blank?(nil), do: true
+  defp blank?(value) when is_binary(value), do: String.trim(value) == ""
+  defp blank?(_value), do: false
+
+  # HOW MANY BARS TO DRAW for each value the kit offers. A kit may spell its columns as words
+  # (Chelekom's `one`..`twelve`) or as numbers; anything this cannot count is drawn as a single bar
+  # rather than dropped, so an unfamiliar vocabulary still gets a picker it can click.
+  @column_words ~w(one two three four five six seven eight nine ten eleven twelve)
+
   # ONE `picked` FIELD, TWO KINDS. A block arrives tagged `{:block, id}` so the canvas, the layer
   # tree and both hints all read the same field and cannot disagree about what is armed — and so a
   # tuple never reaches a template, which is not renderable.
@@ -2884,6 +3604,701 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp picked_label({:block, id}), do: id
   defp picked_label(name) when is_binary(name), do: name
   defp picked_label(_other), do: ""
+
+  defp column_choices(values), do: Enum.map(values, &{&1, column_count(&1)})
+
+  defp column_count(value) do
+    word = value |> to_string() |> String.trim_leading(":") |> String.downcase()
+
+    case Integer.parse(word) do
+      {count, ""} when count > 0 and count < 13 -> count
+      _not_a_number -> (Enum.find_index(@column_words, &(&1 == word)) || 0) + 1
+    end
+  end
+
+  defp widget_control(%{widget: :toggle} = assigns) do
+    ~H"""
+    <%!-- The switch's ON state travels in the button's OWN `value`, for the reason the breakpoint
+          tabs above already document: `View.extractMeta` overwrites `meta.value` with `el.value`
+          after collecting the `phx-value-*` attributes, and a button with no `value` is `""`. An
+          empty value is how this editor spells "remove the attribute" — so turning a property ON
+          arrived as a delete, and the switch could only ever move one way. --%>
+    <button
+      type="button"
+      role="switch"
+      value="true"
+      aria-checked={to_string(@value == "" or @value == "true")}
+      phx-click="op"
+      phx-value-kind={(is_nil(@value) && "set_attr") || "delete_attr"}
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-value_kind="boolean"
+      class={[
+        "relative h-[23px] w-10 rounded-full transition",
+        (is_nil(@value) && "bg-[#e0ded7]") || "bg-[#4f4bcc]"
+      ]}
+    >
+      <span class={[
+        "absolute top-[3px] size-[17px] rounded-full bg-white shadow transition-all",
+        (is_nil(@value) && "left-[3px]") || "left-5"
+      ]} />
+    </button>
+    """
+  end
+
+  defp widget_control(%{widget: {:segmented, values}} = assigns) do
+    assigns = assign(assigns, :values, values)
+
+    ~H"""
+    <div class="flex gap-0.5 rounded-[9px] bg-[#f2f1ec] p-0.5">
+      <button
+        :for={value <- @values}
+        type="button"
+        phx-click="op"
+        phx-value-kind="set_attr"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        phx-value-value_kind={option_kind(@atom?)}
+        value={option_value(value, @atom?)}
+        class={[
+          "h-7 min-w-0 flex-1 truncate rounded-[7px] px-1 text-[10.5px] font-semibold capitalize",
+          (chosen?(@value, value) && "bg-white text-[#4f4bcc] shadow-sm") || "text-[#6d6a63]"
+        ]}
+      >
+        {value}
+      </button>
+    </div>
+    """
+  end
+
+  # THE SHAPE, NOT THE WORD. Same event contract as the segmented control above — the value rides on
+  # the button's own `value`, because LiveView overwrites `phx-value-value` with `el.value`.
+  defp widget_control(%{widget: {:columns, values}} = assigns) do
+    assigns = assign(assigns, :values, values)
+
+    ~H"""
+    <div class="flex flex-wrap gap-[5px]">
+      <button
+        :for={{value, count} <- column_choices(@values)}
+        type="button"
+        id={"pb-cols-#{@node.id}-#{value}"}
+        phx-click="op"
+        phx-value-kind="set_attr"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        phx-value-value_kind={option_kind(@atom?)}
+        value={option_value(value, @atom?)}
+        title={ngettext("%{count} column", "%{count} columns", count)}
+        aria-label={ngettext("%{count} column", "%{count} columns", count)}
+        class={[
+          "flex h-[30px] w-[54px] flex-none gap-[3px] rounded-[9px] border p-[6px]",
+          (chosen?(@value, value) && "border-[#4f4bcc] bg-[#f2f1fc]") ||
+            "border-[#ecebe6] bg-white hover:border-[#c9c7ee]"
+        ]}
+      >
+        <span
+          :for={_slot <- 1..count//1}
+          class={[
+            "flex-1 rounded-[2px]",
+            (chosen?(@value, value) && "bg-[#4f4bcc]") || "bg-[#e6e4de]"
+          ]}
+        ></span>
+      </button>
+    </div>
+    """
+  end
+
+  defp widget_control(%{widget: {:select, values}} = assigns) do
+    assigns = assign(assigns, :values, values)
+
+    ~H"""
+    <%!-- The `phx-value-*` that say WHICH property this is are only merged into the payload for FORM
+          events, and `phx-change` on a bare `<select>` outside a form fires nothing at all. Without
+          this wrapper every property whose option list is long enough to be a dropdown — 381 of the
+          kit's attributes, `variant` and `color` among them — silently could not be changed, while
+          the short ones next to them worked because a segmented control is a button. --%>
+    <.form
+      for={%{}}
+      id={"pb-attr-form-#{@node.id}-#{@name}"}
+      phx-change="op"
+      phx-value-kind="set_attr"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-value_kind={option_kind(@atom?)}
+    >
+      <select
+        id={"pb-attr-#{@name}"}
+        name="value"
+        class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-semibold text-[#3a382f]"
+      >
+        <option value="">
+          {(default_text(@default) && gettext("%{value} (default)", value: default_text(@default))) ||
+            gettext("— default —")}
+        </option>
+        <option
+          :for={value <- @values}
+          value={option_value(value, @atom?)}
+          selected={chosen?(@value, value)}
+        >
+          {value}
+        </option>
+      </select>
+    </.form>
+    """
+  end
+
+  defp widget_control(%{widget: {:number, min, max, step}} = assigns) do
+    assigns = assigns |> assign(:min, min) |> assign(:max, max) |> assign(:step, step)
+
+    ~H"""
+    <.field_form
+      id={"pb-attr-form-#{@node.id}-#{@name}"}
+      phx-value-kind="set_attr"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-value_kind={number_kind(@attr)}
+    >
+      <input
+        type="number"
+        id={"pb-attr-#{@name}"}
+        name="value"
+        value={@value}
+        min={@min}
+        max={@max}
+        step={@step}
+        placeholder={default_text(@default)}
+        phx-debounce="350"
+        class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-semibold text-[#3a382f]"
+      />
+    </.field_form>
+    """
+  end
+
+  # An icon's value is a CLASS NAME the Tailwind heroicons plugin resolves — `hero-check`,
+  # `hero-check-solid`. Fifty-seven attributes across the kit are one, and every one of them used to
+  # be a bare text box: the author had to know the exact string, and a typo rendered nothing at all
+  # rather than an error. The catalogue is read from the same directory the plugin reads.
+  #
+  # The chip shows what is set; the popover searches 1,288 classes across the four weights the set
+  # ships. `MishkaCmsCore.Runtime.PageBuilder.Icons.available?/0` is false when the host has no
+  # heroicons, and the control falls back to the text box below.
+  defp widget_control(%{widget: :icon} = assigns) do
+    assigns =
+      assigns
+      |> assign(:open?, assigns.icon_picker == assigns.name)
+      |> assign_new(:icon_library, fn -> nil end)
+      |> assign_new(:icon_map?, fn -> false end)
+
+    # THE BUTTON WAS DEAD. `:icon_library` was assigned on the LiveView and defaulted here, and then
+    # never reached `Icons.search/2` — while `icon_variant`, threaded one line above, did. Clicking a
+    # library left the grid on the same 60 heroicons and the footer reading "Showing 60 of 316",
+    # because `Enum.take/2` on the merged list is spent before a second set is reached.
+    library = library_module(assigns.icon_library)
+
+    assigns =
+      assigns
+      |> assign(
+        :results,
+        Icons.search(assigns.icon_query, variant: assigns.icon_variant, library: library)
+      )
+      |> assign(:total, Icons.count(assigns.icon_query, assigns.icon_variant, library: library))
+
+    ~H"""
+    <div :if={!Icons.available?()}>
+      <.plain_input {assigns} />
+    </div>
+
+    <div :if={Icons.available?()} class="relative">
+      <%!-- The TRIGGER IS THE FIELD. It was a button opening a popover with a search box of its own,
+            so the only reachable values were the ones this install has a catalogue for — and the
+            catalogue is only ever the sets registered here. An author naming a glyph from a set the
+            editor was never told about had no way to write it down. Typing now sets the attribute
+            directly and narrows the grid below with the same keystrokes. --%>
+      <form
+        id={"pb-icon-form-#{@node.id}-#{@name}"}
+        phx-change="icon_typed"
+        phx-submit="icon_typed"
+        class="flex h-[30px] w-full items-center gap-2 rounded-[8px] border border-[#ecebe6] bg-white px-2 focus-within:border-[#c3c1f0]"
+      >
+        <input type="hidden" name="name" value={@name} />
+        <input type="hidden" name="node_id" value={@node.id} />
+        <%!-- WHAT THE COMPONENT EXPECTS BACK. A bare name for an icon-typed attribute, and the map
+              the component reads `type` and `value` out of for one declared as a map — writing a
+              binary into the second is a `Map.get/2` on a string the moment it renders. --%>
+        <input :if={@icon_map?} type="hidden" name="shape" value="map" />
+
+        <span :if={Icons.known?(@value)} class="flex-none text-[#3a382f]">
+          {Icons.svg(@value, 15)}
+        </span>
+        <span
+          :if={!Icons.known?(@value)}
+          class="grid size-[15px] flex-none place-items-center rounded-[4px] bg-[#f2f1ec] text-[9px] font-bold text-[#a8a5a0]"
+          title={gettext("Not in any installed icon set — it will still be written as you typed it")}
+        >
+          ?
+        </span>
+        <input
+          type="text"
+          id={"pb-icon-open-#{@node.id}-#{@name}"}
+          name="value"
+          value={@value}
+          placeholder={@default || gettext("Type or pick an icon")}
+          autocomplete="off"
+          spellcheck="false"
+          phx-debounce="250"
+          phx-focus="toggle_icon_picker"
+          phx-value-name={@name}
+          class="min-w-0 flex-1 border-0 bg-transparent p-0 font-['Space_Grotesk'] text-[11px] font-semibold text-[#1b1a18] placeholder:font-medium placeholder:text-[#a8a5a0] focus:outline-none"
+        />
+        <button
+          type="button"
+          phx-click="toggle_icon_picker"
+          phx-value-name={@name}
+          class="flex-none"
+          aria-label={gettext("Browse icons")}
+        >
+          <.icon name={:chevron} size={11} class="rotate-90 text-[#a8a5a0]" />
+        </button>
+      </form>
+
+      <div
+        :if={@open?}
+        id={"pb-icon-picker-#{@name}"}
+        phx-mounted={menu_in()}
+        phx-remove={menu_out()}
+        phx-click-away="close_icon_picker"
+        class="absolute left-0 right-0 top-[34px] z-50 rounded-[12px] border border-[#ecebe6] bg-white p-2 shadow-[0_16px_44px_rgba(20,18,26,.2)]"
+      >
+        <%!-- One row per registered set, and only when there is a choice to make. `Icons.libraries/0`
+              is a list, so an install that adds Lucide beside Heroicons gets the selector for free. --%>
+        <div :if={length(Icons.libraries()) > 1} class="mb-1.5 flex gap-1">
+          <button
+            :for={library <- Icons.libraries()}
+            type="button"
+            id={"pb-icon-library-#{library.prefixes() |> List.first() |> to_string() |> String.trim_trailing("-")}"}
+            phx-click="icon_library"
+            phx-value-library={inspect(library)}
+            class={[
+              "h-[22px] flex-1 rounded-[6px] text-[9.5px] font-bold",
+              (library_module(@icon_library) == library && "bg-[#4f4bcc] text-white") ||
+                "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            ]}
+          >
+            {library.label()}
+          </button>
+        </div>
+
+        <div class="mb-1.5 flex gap-1">
+          <button
+            :for={{suffix, label} <- Icons.variants()}
+            type="button"
+            id={"pb-icon-variant-#{(suffix == "" && "outline") || String.trim_leading(suffix, "-")}"}
+            phx-click="icon_variant"
+            phx-value-variant={suffix}
+            class={[
+              "h-[22px] flex-1 rounded-[6px] text-[9.5px] font-bold",
+              (@icon_variant == suffix && "bg-[#17161a] text-white") ||
+                "bg-[#f6f5f2] text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            ]}
+          >
+            {translate(label)}
+          </button>
+        </div>
+
+        <div class="grid max-h-[188px] grid-cols-8 gap-1 overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <button
+            :for={name <- @results}
+            type="button"
+            id={"pb-icon-#{name}"}
+            phx-click="icon_picked"
+            phx-value-node_id={@node.id}
+            phx-value-name={@name}
+            phx-value-shape={@icon_map? && "map"}
+            value={name}
+            title={name}
+            class={[
+              "grid aspect-square place-items-center rounded-[6px] hover:bg-[#f2f1fc]",
+              (@value == name && "bg-[#f2f1fc] ring-1 ring-[#c3c1f0]") || ""
+            ]}
+          >
+            <span class="text-[#3a382f]">{Icons.svg(name, 15)}</span>
+          </button>
+        </div>
+
+        <p :if={@results == []} class="px-1 py-3 text-center text-[10.5px] font-medium text-[#a8a5a0]">
+          {gettext("No icon matches “%{query}”.", query: @icon_query)}
+        </p>
+
+        <p
+          :if={@total > length(@results)}
+          class="mt-1 px-1 text-[9.5px] font-medium text-[#a8a5a0]"
+        >
+          {gettext("Showing %{shown} of %{total} — keep typing to narrow it.",
+            shown: length(@results),
+            total: @total
+          )}
+        </p>
+      </div>
+    </div>
+    """
+  end
+
+  defp widget_control(%{widget: :color} = assigns) do
+    ~H"""
+    <.field_form
+      id={"pb-attr-form-#{@node.id}-#{@name}"}
+      phx-value-kind="set_attr"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+    >
+      <div class="flex items-center gap-1.5">
+        <span
+          class="size-8 shrink-0 rounded-[8px] border border-[#ecebe6]"
+          style={"background:#{swatch(@value)}"}
+        />
+        <input
+          type="text"
+          id={"pb-attr-#{@name}"}
+          name="value"
+          value={@value}
+          placeholder={default_text(@default) || gettext("e.g. primary or #4f4bcc")}
+          phx-debounce="350"
+          class="h-8 min-w-0 flex-1 rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f]"
+        />
+      </div>
+    </.field_form>
+    """
+  end
+
+  # A link the author types, with the one thing a text field cannot do: open it. The check is
+  # deliberately loose — a relative `/about` is as valid a link as an absolute one.
+  defp widget_control(%{widget: :url} = assigns) do
+    ~H"""
+    <div class="flex items-center gap-1.5">
+      <.field_form
+        id={"pb-attr-form-#{@node.id}-#{@name}"}
+        phx-value-kind="set_attr"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        class="min-w-0 flex-1"
+      >
+        <input
+          type="text"
+          id={"pb-attr-#{@name}"}
+          name="value"
+          value={@value}
+          inputmode="url"
+          placeholder={default_text(@default) || "https://…"}
+          phx-debounce="350"
+          class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f]"
+        />
+      </.field_form>
+      <a
+        :if={openable?(@value)}
+        href={@value}
+        target="_blank"
+        rel="noopener noreferrer"
+        id={"pb-attr-open-#{@name}"}
+        title={gettext("Open in a new tab")}
+        class="grid size-8 flex-none place-items-center rounded-[8px] border border-[#ecebe6] bg-[#faf9f6] text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+      >
+        <.icon name={:external} size={12} />
+      </a>
+    </div>
+    """
+  end
+
+
+  # A BOX WITH A PLUS, which is what was asked for. Thirty-nine attributes across the kit hold a
+  # collection — `chelekom-filterable-gallery` keeps its whole content in two of them — and every one
+  # of them drew a one-line text box whose write turned the value into a string, so the component
+  # raised the moment anything was typed. "we cannot add any image and it's not clear how it works".
+  #
+  # A ROW PER ITEM AND A TILE TO ADD ONE. A list of maps is cards — a picture, the words that go with
+  # it, and whichever other keys the kit put there; a list of anything else is one field each. Every
+  # change rewrites the whole collection as one `set_attr`, so one add, one removal or one edit is
+  # one undo step.
+  #
+  # AND AN ATTRIBUTE THAT IS NOT DATA IS LEFT ALONE. `media={@photos}` is an author binding the list
+  # to something outside the page, and the panel says so rather than offering to overwrite it with
+  # what it could not read.
+  defp widget_control(%{widget: {:collection, _kind}} = assigns) do
+    assigns =
+      case Collection.read(assigns.node, assigns.name, assigns.default) do
+        {:ok, items} -> assigns |> assign(:items, items) |> assign(:bound?, false)
+        :error -> assigns |> assign(:items, []) |> assign(:bound?, true)
+      end
+
+    ~H"""
+    <p :if={@bound?} class="rounded-[8px] bg-[#faf9f6] px-2 py-1.5 text-[10.5px] text-[#6d6a63]">
+      <.sentence
+        text={gettext_noop("This is bound to %{value}, so the editor leaves it alone.")}
+        parts={%{value: {"span", "font-semibold", @value}}}
+      />
+    </p>
+
+    <div :if={!@bound?} class="flex flex-col gap-1.5">
+      <.collection_item
+        :for={{item, index} <- Enum.with_index(@items)}
+        node={@node}
+        name={@name}
+        index={index}
+        item={item}
+        options={sibling_options(@node, @name)}
+      />
+
+      <button
+        type="button"
+        id={"pb-collection-add-#{@node.id}-#{@name}"}
+        phx-click="collection_add"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        class="flex h-[34px] items-center justify-center gap-1.5 rounded-[8px] border border-dashed border-[#cfcdf0] bg-[#faf9ff] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+      >
+        <.icon name={:plus} size={12} /> {gettext("Add")}
+      </button>
+    </div>
+    """
+  end
+
+  defp widget_control(%{widget: :textarea} = assigns) do
+    ~H"""
+    <.field_form
+      id={"pb-attr-form-#{@node.id}-#{@name}"}
+      phx-value-kind="set_attr"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+    >
+      <textarea
+        id={"pb-attr-#{@name}"}
+        name="value"
+        rows="3"
+        placeholder={default_text(@default)}
+        phx-debounce="350"
+        class="w-full resize-y rounded-[8px] border border-[#ecebe6] bg-white p-2 text-[12px] font-medium text-[#3a382f]"
+      >{@value}</textarea>
+    </.field_form>
+    """
+  end
+
+  defp widget_control(%{widget: {:struct, struct_name}} = assigns) do
+    assigns = assign(assigns, :struct_name, struct_name)
+
+    ~H"""
+    <span
+      title={gettext("Struct attributes are set in code, not visually")}
+      class="inline-flex items-center gap-1.5 rounded-[7px] bg-[#f2f1ec] px-2 py-1.5 font-['Space_Grotesk'] text-[10.5px] font-bold text-[#8a877f]"
+    >
+      <.icon name={:lock} size={11} /> {@struct_name || gettext("struct")}
+    </span>
+    """
+  end
+
+  defp widget_control(assigns), do: plain_input(assigns)
+
+  attr(:node, :map, required: true)
+  attr(:name, :string, required: true)
+  attr(:index, :integer, required: true)
+  attr(:item, :any, required: true)
+  attr(:options, :list, default: [])
+
+  # One card. A map shows a field per key it already has — the kit decided which those are, and
+  # inventing more would write keys the component never reads.
+  defp collection_item(%{item: item} = assigns) when is_map(item) do
+    assigns = assign(assigns, :keys, item |> Map.keys() |> Enum.sort_by(&key_rank/1))
+
+    ~H"""
+    <div class="flex flex-col gap-1.5 rounded-[9px] border border-[#ecebe6] bg-white p-2">
+      <div class="flex items-center justify-between">
+        <span class="font-['Space_Grotesk'] text-[10px] font-bold text-[#a8a5a0]">
+          {@index + 1}
+        </span>
+        <button
+          type="button"
+          id={"pb-collection-del-#{@node.id}-#{@name}-#{@index}"}
+          phx-click="collection_remove"
+          phx-value-node_id={@node.id}
+          phx-value-name={@name}
+          phx-value-index={@index}
+          title={gettext("Remove")}
+          class="grid size-[18px] place-items-center rounded-[5px] text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]"
+        >
+          <.icon name={:trash} size={11} />
+        </button>
+      </div>
+
+
+      <div :for={key <- @keys} class="flex items-center gap-1.5">
+        <span class="w-[58px] flex-none truncate text-[10px] font-semibold text-[#8a877f]">
+          {Inspector.label(to_string(key))}
+        </span>
+
+        <.collection_field
+          node={@node}
+          name={@name}
+          index={@index}
+          key={key}
+          value={Map.get(@item, key)}
+          options={options_for(@name, key, @options)}
+        />
+
+      </div>
+    </div>
+    """
+  end
+
+  # ONE SIDE EACH. A `map` attribute is read out as its pairs — `chelekom-flash` holds
+  # `%{"info" => "…"}`, `chelekom-pagination` a map of query parameters — and a pair is two fields,
+  # not one value with a tuple in it.
+  defp collection_item(%{item: {key, value}} = assigns) do
+    assigns = assigns |> assign(:pair_key, key) |> assign(:pair_value, value)
+
+    ~H"""
+    <div class="flex items-center gap-1.5">
+      <.collection_field
+        node={@node}
+        name={@name}
+        index={@index}
+        key="__key"
+        value={@pair_key}
+        options={[]}
+      />
+      <span class="flex-none text-[11px] font-bold text-[#a8a5a0]">→</span>
+      <.collection_field
+        node={@node}
+        name={@name}
+        index={@index}
+        key="__value"
+        value={@pair_value}
+        options={[]}
+      />
+      <button
+        type="button"
+        id={"pb-collection-del-#{@node.id}-#{@name}-#{@index}"}
+        phx-click="collection_remove"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        phx-value-index={@index}
+        title={gettext("Remove")}
+        class="grid size-8 flex-none place-items-center rounded-[8px] text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]"
+      >
+        <.icon name={:trash} size={12} />
+      </button>
+    </div>
+    """
+  end
+
+  defp collection_item(assigns) do
+    ~H"""
+    <div class="flex items-center gap-1.5">
+      <.collection_field
+        node={@node}
+        name={@name}
+        index={@index}
+        key={nil}
+        value={@item}
+        options={[]}
+      />
+      <button
+        type="button"
+        id={"pb-collection-del-#{@node.id}-#{@name}-#{@index}"}
+        phx-click="collection_remove"
+        phx-value-node_id={@node.id}
+        phx-value-name={@name}
+        phx-value-index={@index}
+        title={gettext("Remove")}
+        class="grid size-8 flex-none place-items-center rounded-[8px] text-[#a8a5a0] hover:bg-[#fdf6f5] hover:text-[#d5544b]"
+      >
+        <.icon name={:trash} size={12} />
+      </button>
+    </div>
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:name, :string, required: true)
+  attr(:index, :integer, required: true)
+  attr(:key, :any, default: nil)
+  attr(:value, :any, default: nil)
+  attr(:options, :list, default: [])
+
+  # A CATEGORY IS ONE OF THE FILTERS, not a word to spell again. The options come off the sibling
+  # attribute on the same node, so a filter renamed in the list above is the list this offers.
+  defp collection_field(assigns) do
+    ~H"""
+    <form
+      id={"pb-collection-form-#{@node.id}-#{@name}-#{@index}-#{@key || "item"}"}
+      phx-change="collection_set"
+      phx-submit="collection_set"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-index={@index}
+      phx-value-key={@key}
+      class="min-w-0 flex-1"
+    >
+      <select
+        :if={@options != []}
+        name="value"
+        class="h-[26px] w-full rounded-[7px] border border-[#ecebe6] bg-white px-1.5 text-[11px] font-semibold text-[#3a382f]"
+      >
+        <option value="">{gettext("— none —")}</option>
+        <option :for={option <- @options} value={option} selected={printable(@value) == option}>
+          {option}
+        </option>
+      </select>
+
+      <input
+        :if={@options == []}
+        type="text"
+        name="value"
+        value={printable(@value)}
+        phx-debounce="350"
+        class="h-[26px] w-full rounded-[7px] border border-[#ecebe6] bg-white px-1.5 text-[11px] font-medium text-[#3a382f]"
+      />
+    </form>
+    """
+  end
+
+  # WHATEVER IS IN THERE, AS A WORD. A collection is a kit's own data and may hold anything its
+  # component reads; the field shows what can be shown and leaves the rest to the expression.
+  defp printable(value) when is_binary(value), do: value
+  defp printable(value) when is_number(value) or is_atom(value), do: to_string(value)
+  defp printable(value), do: inspect(value)
+
+  # The picture first, then the words, then whatever else the kit put there.
+  defp key_rank(key) do
+    case to_string(key) do
+      name when name in ~w(src image poster) -> {0, name}
+      name when name in ~w(alt title label) -> {1, name}
+      name -> {2, name}
+    end
+  end
+
+  # THE LIST THIS ONE IS CATEGORISED BY. `chelekom-filterable-gallery` keeps its buttons in
+  # `filters` and each picture's `category` has to be one of them; nothing else in the kit pairs two
+  # collections this way, so this is asked of the node rather than declared anywhere.
+  defp sibling_options(node, "media"), do: strings_in(node, "filters")
+  defp sibling_options(_node, _name), do: []
+
+  # THE LIST BELONGS TO ONE KEY, NOT TO THE WHOLE ROW. `sibling_options/2` answers "a filterable
+  # gallery's categories come from its filters", which is about `category` and about nothing else —
+  # but it was handed to every key in the item that was not a picture, so `alt` drew a dropdown of
+  # Branding / Web design / Print and the alt text of a photograph could not be typed at all.
+  #
+  # Named here rather than guessed at: a key is offered a sibling's list only when that is what the
+  # list is a list of. Everything else gets the text box it always should have had.
+  @drawn_from_siblings %{"media" => "category"}
+
+  defp options_for(name, key, options) do
+    if Map.get(@drawn_from_siblings, name) == to_string(key), do: options, else: []
+  end
+
+  defp strings_in(node, name) do
+    case Collection.read(node, name, []) do
+      {:ok, items} -> Enum.filter(items, &is_binary/1)
+      :error -> []
+    end
+  end
 
   # Hidden from visitors on this row: `:self` where it was hidden, `:parent` inside a hidden one.
   defp visitor_off(tree, id) do
@@ -2927,6 +4342,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  # The text box every control that has nothing better falls back to — including the icon picker on a
+  # host that ships no heroicons.
+  defp plain_input(assigns) do
+    ~H"""
+    <.field_form
+      id={"pb-attr-form-#{@node.id}-#{@name}"}
+      phx-value-kind="set_attr"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+    >
+      <input
+        type="text"
+        id={"pb-attr-#{@name}"}
+        name="value"
+        value={@value}
+        placeholder={default_text(@default)}
+        phx-debounce="350"
+        class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f]"
+      />
+    </.field_form>
+    """
+  end
+
+  # Loose on purpose: a relative `/about` is as much a link as an absolute one, and refusing to offer
+  # Open for one would be wrong more often than guessing right.
+  defp openable?(value) when is_binary(value),
+    do: String.starts_with?(value, ["http://", "https://", "/"])
+
+  defp openable?(_value), do: false
+
+  # A named kit colour has no hex the panel can know, so the chip shows the literal when it is one
+  # and a neutral otherwise rather than guessing wrong.
+  defp swatch("#" <> _rest = value), do: value
+  defp swatch(_value), do: "#f2f1ec"
+
   defp component_entry(%{selected_node: %Node{kind: :component} = node, editor: editor} = assigns) do
     name = Node.component_name(node)
 
@@ -2963,6 +4413,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp override?(_node, :base, _prop), do: false
   defp override?(node, bucket, prop), do: own_style(node, bucket, prop)
+
+  # `inner_block` is deliberately absent: it is not a slot you add, it is the content you put inside
+  # the component. Offering it as one emitted `<:inner_block></:inner_block>`, which the HEEx compiler
+  # refuses outright — "the slot name :inner_block is reserved" — so the button could only ever fail.
+  defp slot_entries(assigns) do
+    case component_entry(assigns) do
+      nil -> []
+      entry -> Inspector.addable_slots(entry)
+    end
+  end
 
   # THE DECLARATION FOR A COMPONENT YOU ARE STANDING INSIDE.
   #
@@ -3015,6 +4475,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       examples: [],
       global?: is_nil(Map.get(record, :site_id))
     }
+  end
+
+  defp inner_block_slot?(assigns) do
+    case component_entry(assigns) do
+      nil -> false
+      entry -> entry |> Inspector.slots() |> Enum.any?(&Inspector.inner_block?/1)
+    end
   end
 
   attr(:title, :string,
@@ -3266,6 +4733,83 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # finds it. `interpolated_class_test.exs` cannot tell those apart from the outside, and earning a
   # whole-file exemption for one line would blunt it across eleven thousand.
   defp var(token), do: "var(--" <> String.trim_leading(token, "-") <> ")"
+
+  attr(:node, :map, required: true)
+  attr(:name, :string, required: true)
+  attr(:value, :string, required: true)
+  attr(:kind, :string, required: true, doc: "what the attribute holds — `string` or `expr`")
+  attr(:widget, :atom, required: true)
+
+  @doc false
+  # THE SAME AFFORDANCES A COMPONENT'S PROPERTIES GET, for the attributes nobody declared. Everything
+  # in this list used to be a text box, so a block's `<img src>` was a path to type from memory while
+  # the media library sat one panel away, and its `<a href>` was a URL with nothing to check it
+  # against — on the two attributes a page is most often edited through.
+  #
+  # `Inspector.element_widget/2` reads the TAG as well as the name, which is what separates a
+  # picture's `src` from an `<iframe>`'s. Ids are `pb-attr-row-*` and not `pb-attr-*`: a component
+  # node draws its declared properties above this list and both would answer to the same id.
+
+  defp attr_row_control(%{widget: :url} = assigns) do
+    ~H"""
+    <.attr_row_field node={@node} name={@name} kind={@kind} value={@value} />
+    <a
+      :if={openable?(@value)}
+      href={@value}
+      target="_blank"
+      rel="noopener noreferrer"
+      id={"pb-attr-row-open-#{@name}"}
+      title={gettext("Open in a new tab")}
+      class="grid size-[18px] flex-none place-items-center rounded-[5px] text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+    >
+      <.icon name={:external} size={11} />
+    </a>
+    """
+  end
+
+  defp attr_row_control(%{widget: :color} = assigns) do
+    ~H"""
+    <span
+      class="size-[14px] flex-none rounded-[4px] border border-[#ecebe6]"
+      style={"background:#{swatch(@value)}"}
+    />
+    <.attr_row_field node={@node} name={@name} kind={@kind} value={@value} />
+    """
+  end
+
+  defp attr_row_control(assigns) do
+    ~H"""
+    <.attr_row_field node={@node} name={@name} kind={@kind} value={@value} />
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:name, :string, required: true)
+  attr(:value, :string, required: true)
+  attr(:kind, :string, required: true, doc: "what the attribute holds — `string` or `expr`")
+
+  @doc false
+  defp attr_row_field(assigns) do
+    ~H"""
+    <.field_form
+      id={"pb-attr-row-form-#{@node.id}-#{@name}"}
+      class="min-w-0 flex-1"
+      phx-value-kind="set_attr"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      phx-value-value_kind={@kind}
+    >
+      <input
+        type="text"
+        id={"pb-attr-row-#{@name}"}
+        value={@value}
+        name="value"
+        phx-debounce="350"
+        class="w-full truncate border-0 bg-transparent p-0 font-['Space_Grotesk'] text-[11px] font-medium text-[#3a382f] outline-none"
+      />
+    </.field_form>
+    """
+  end
 
   # A ROW OF WORDS, EACH DRAWN AS THE THING IT NAMES. The select `style_group/1` falls back to spells
   # an enumerated value the way Tailwind does — `font-extrabold`, `normal-case` — which is a class
@@ -4264,6 +5808,225 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  attr(:node, :any, required: true)
+  attr(:section, :string, default: "page")
+  attr(:record, :any, default: nil)
+  attr(:group_folds, :map, default: %{})
+
+  # An `:eex_block` is a `<%= for … do %>` — its source is the WHOLE construct, including everything
+  # nested inside it, so a text box would be editing a container's structure through a keyhole. The
+  # document's code is the right surface for that one, and the panel opens it rather than offering a
+  # box that would silently drop the block's children.
+  defp expression_section(%{node: %Node{kind: :eex_block}} = assigns) do
+    ~H"""
+    <section>
+      <.fold_heading
+        title={gettext_noop("Expression")}
+        group_folds={@group_folds}
+        folded_by_default={false}
+      />
+      <div
+        :if={!folded?(@group_folds, "section", "Expression", false)}
+        class="flex flex-col gap-2"
+      >
+        <p
+          id="pb-expr-block-note"
+          class="rounded-[8px] bg-[#faf9f6] px-2.5 py-2 text-[10.5px] font-medium leading-[1.55] text-[#6d6a63]"
+        >
+          <span class="font-['Space_Grotesk'] font-bold text-[#5c5a54]">{Node.label(@node)}</span>
+          {gettext(
+            "wraps the elements inside it, so its source is edited as code — a box here would rewrite the block and drop what it contains."
+          )}
+        </p>
+      </div>
+    </section>
+    """
+  end
+
+  defp expression_section(assigns) do
+    assigns = assign(assigns, :offers, expression_offers(assigns.section, assigns.record))
+
+    ~H"""
+    <section>
+      <.fold_heading
+        title={gettext_noop("Expression")}
+        group_folds={@group_folds}
+        folded_by_default={false}
+      />
+
+      <div
+        :if={!folded?(@group_folds, "section", "Expression", false)}
+        class="flex flex-col gap-2"
+      >
+        <%!-- WHAT THIS DOCUMENT ACTUALLY HAS TO OFFER. The box stays a box — what goes in it is
+              Elixir and the editor has no business narrowing that — but it was the WHOLE surface,
+              and a text field whose only guidance is a placeholder asks the author to remember the
+              names of things this editor already knows.
+
+              Read off the record's own declaration, so a component that declares `size` offers
+              `@size` the moment it is declared and stops offering it the moment it is not. Nothing
+              here is a list of names: a layout has exactly one assign to be handed, and a page's
+              assigns come from handlers this editor cannot read, so it offers none and says so in
+              the line underneath rather than pretending. --%>
+        <div :if={@offers != []} class="flex flex-wrap gap-1" id={"pb-expr-offers-#{@node.id}"}>
+          <button
+            :for={offer <- @offers}
+            type="button"
+            id={"pb-expr-offer-#{@node.id}-#{offer.name}"}
+            phx-click="op"
+            phx-value-kind="set_text"
+            phx-value-node_id={@node.id}
+            phx-value-text={offer.token}
+            title={offer.title}
+            class={[
+              "max-w-full truncate rounded-[7px] border px-[7px] py-[3px] font-['Space_Grotesk'] text-[10.5px] font-semibold",
+              (@node.text == offer.token &&
+                 "border-[#c3c1f0] bg-[#f2f1fc] text-[#4f4bcc]") ||
+                "border-[#ecebe6] bg-white text-[#5c5a54] hover:border-[#c3c1f0] hover:bg-[#f7f6fd] hover:text-[#4f4bcc]"
+            ]}
+          >
+            {offer.token}
+          </button>
+        </div>
+
+        <form id={"pb-expr-form-#{@node.id}"} phx-change="op" phx-submit="op">
+          <input type="hidden" name="kind" value="set_text" />
+          <input type="hidden" name="node_id" value={@node.id} />
+          <div class="relative">
+            <textarea
+              id={"pb-expr-input-#{@node.id}"}
+              name="text"
+              rows="2"
+              spellcheck="false"
+              phx-debounce="300"
+              placeholder={expression_placeholder(@offers)}
+              class="peer w-full resize-y rounded-[8px] border border-[#ecebe6] bg-[#faf9f6] px-2.5 py-2 font-['Space_Grotesk'] text-[11.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white"
+            >{@node.text}</textarea>
+          </div>
+        </form>
+        <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+          {expression_hint(@section)}
+        </p>
+      </div>
+    </section>
+    """
+  end
+
+  # Whether this document holds handlers — asked of the resource, the way the code tabs ask it, so
+  # one that gains or loses the column answers differently without a list of section names here.
+  defp handles_events?(section) do
+    resource = Section.resource(Section.normalize(section))
+
+    not is_nil(Ash.Resource.Info.attribute(resource, :events))
+  end
+
+  # Whatever this document is actually handed, so the empty box stops suggesting `@inner_content` to
+  # the three sections that are never handed one.
+  defp expression_placeholder([%{token: token} | _rest]), do: token
+  defp expression_placeholder(_none), do: "@assign"
+
+  @typep expression_offer :: %{name: String.t(), token: String.t(), title: String.t()}
+
+  # THE SAME QUESTION THE HINT ANSWERS IN WORDS, answered in things that can be clicked — and
+  # answered from the RECORD rather than from a list in this file, because which names are real is a
+  # property of the component somebody is editing and of nothing else.
+  #
+  # Replacing rather than inserting at the caret: an `:eex` node IS one expression, the common case
+  # is "this one should be `@size`", and a replacement is one `set_text` op — which means one undo
+  # step back to whatever was typed, the same as every other write in this panel.
+  @spec expression_offers(String.t(), map() | nil) :: [expression_offer()]
+  defp expression_offers("component", record) do
+    Enum.map(Interface.attrs(record), fn attr ->
+      name = Interface.value(attr, "name")
+
+      %{
+        name: name,
+        token: "@" <> name,
+        title: use_attribute_title(name, Interface.value(attr, "type"))
+      }
+    end) ++
+      Enum.map(Interface.slots(record), fn slot ->
+        name = Interface.value(slot, "name")
+
+        %{
+          name: name,
+          token: "render_slot(@#{name})",
+          title: gettext("Render whatever was put in the %{name} slot here", name: name)
+        }
+      end)
+  end
+
+  # A layout is handed exactly one thing, and it is the thing a layout is FOR.
+  defp expression_offers("layout", _record),
+    do: [
+      %{
+        name: "inner_content",
+        token: "@inner_content",
+        title: gettext("Render the page this layout is wrapping here")
+      }
+    ]
+
+  # AND AN ERROR PAGE IS HANDED THREE, on exactly the same footing.
+  # `MishkaCmsCore.Runtime.Compilers.ErrorCompiler` binds `conn`, `status` and `site` before the
+  # stored template renders, unconditionally — so `{@status}` is as certain here as
+  # `{@inner_content}` is on a layout. It was falling into the page's clause, which offers nothing
+  # because a page's assigns come from handlers; an error page has no handlers and these three
+  # instead, which made it the one section that could see neither.
+  defp expression_offers("error-page", _record),
+    do: [
+      %{
+        name: "status",
+        token: "@status",
+        title:
+          gettext(
+            "The status this page answers — 404, 500, or :offline while the site is offline"
+          )
+      },
+      %{name: "conn", token: "@conn", title: gettext("The connection that was refused")},
+      %{name: "site", token: "@site", title: gettext("The site this page belongs to")}
+    ]
+
+  # A page's assigns come from handlers written on the Handlers tab, which this editor does not
+  # evaluate. Offering a guess would be worse than offering nothing.
+  defp expression_offers(_page, _record), do: []
+
+  defp use_attribute_title(name, ""),
+    do: gettext("Use the %{name} attribute here", name: name)
+
+  defp use_attribute_title(name, type),
+    do: gettext("Use the %{name} attribute here — declared as %{type}", name: name, type: type)
+
+  # WHAT AN EXPRESSION CAN NAME DEPENDS ON WHAT IS BEING EDITED, and nothing in the editor said so.
+  # A layout is handed `@inner_content`; a component is handed its own declared attributes and its
+  # `@inner_block`; a page is handed the assigns its own handlers put there. Naming the right one is
+  # most of the question "how do I put an expression in here".
+  defp expression_hint("layout"),
+    do:
+      gettext(
+        "Elixir, evaluated when the page renders. A layout is handed @inner_content — the page that is being wrapped — plus the site's own assigns."
+      )
+
+  defp expression_hint("component"),
+    do:
+      gettext(
+        "Elixir, evaluated when the component renders. A component is handed every attribute it declares as @name, and render_slot(@inner_block) for whatever was put inside it."
+      )
+
+  defp expression_hint("error-page"),
+    do:
+      gettext(
+        "Elixir, evaluated when the error page renders. It is handed @status, @conn and @site — and nothing else: an error page is served by a controller and holds no handlers of its own."
+      )
+
+  defp expression_hint(_page),
+    do:
+      gettext(
+        "Elixir, evaluated when the page renders. It can name any assign the page's own handlers set — @posts, @current_user."
+      )
+
+  defp expression_node?(%Node{kind: kind}) when kind in [:eex, :eex_block], do: true
+  defp expression_node?(_node), do: false
+
   attr(:title, :string, required: true)
   attr(:group_folds, :map, default: %{})
   attr(:folded_by_default, :boolean, default: false)
@@ -4878,6 +6641,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:tree, :any, required: true)
   attr(:selection, :string, default: nil)
   attr(:expanded, :any, required: true)
+  # `record` is read by `.audit`, which derives its findings from the document and the row, and by
+  # `.layers`, whose `.interface` group is a view of two of that row's columns. `section` says which
+  # kind of document this is, which is the only thing that decides whether that group exists at all.
+  attr(:record, :any, default: nil)
   def right_panel(assigns) do
     ~H"""
     <div
@@ -4938,6 +6705,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         tree={@tree}
         selection={@selection}
         expanded={@expanded}
+        record={@record}
       />
 
       <%!-- AND WHATEVER AN EXTENSION ADDED. The three above are the core's own rails and stay
@@ -4969,7 +6737,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:tree, :any, required: true)
   attr(:selection, :string, default: nil)
   attr(:expanded, :any, required: true)
+  attr(:record, :any, default: nil)
   defp layers(assigns) do
+    assigns = assign(assigns, :unmet, unmet_map(assigns.tree, declarations(assigns)))
 
     ~H"""
     <div
@@ -4993,6 +6763,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         selection={@selection}
         expanded={@expanded}
         editor={@editor}
+        unmet={@unmet}
       />
       <p :if={@tree.roots == []} class="py-8 text-center text-[12px] font-medium text-[#a8a5a0]">
         {gettext("Nothing on this page yet.")}
@@ -5023,6 +6794,30 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  # THE SAME TWO THINGS `component_entry/1` HAS TO REACH FOR. The rail counts what a node still
+  # needs from the palette, and the palette is missing the component being edited and its private
+  # helpers — so a required property on one of those was never counted, and the rail said nothing
+  # while the panel beside it said "1 needed". Record entries go first, so a palette component of
+  # the same name still wins, which is the order `component_entry/1` resolves in.
+  defp declarations(%{editor: editor, record: %{} = record}),
+    do: own_entries(record) ++ editor.components
+
+  defp declarations(%{editor: editor}), do: editor.components
+
+  defp own_entries(record) do
+    named = to_string(Map.get(record, :name) || "")
+
+    own = (named != "" && [record_entry(record, named, record)]) || []
+
+    helpers =
+      for helper <- List.wrap(Map.get(record, :helpers)),
+          helper_name = to_string(Inspector.name(helper) || ""),
+          helper_name != "",
+          do: record_entry(record, helper_name, helper)
+
+    own ++ helpers
+  end
+
   attr(:id, :string, required: true)
   attr(:index, :integer, default: 0)
   attr(:depth, :integer, required: true)
@@ -5030,6 +6825,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:selection, :string, default: nil)
   attr(:expanded, :any, required: true)
   attr(:editor, :any, required: true)
+  attr(:unmet, :map, default: %{})
   defp layer_row(assigns) do
     assigns =
       assigns
@@ -5038,7 +6834,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       |> then(&assign(&1, :folded?, folded?(&1.node, &1.editor)))
       |> then(&assign(&1, :entry, layer_entry(&1.node, &1.tree, &1.editor)))
       |> then(&assign(&1, :ghosts, addable_slots(&1.node, &1.entry, &1.tree)))
+      |> then(&assign(&1, :props, layer_props(&1.node, &1.entry, &1.tree)))
       |> then(&assign(&1, :holds?, drop_target?(&1.node, &1.entry)))
+      |> then(&assign(&1, :needs, Map.get(&1.unmet, &1.id, @no_needs)))
       |> then(&assign(&1, :off, visitor_off(&1.tree, &1.id)))
 
     ~H"""
@@ -5104,7 +6902,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               is just a selection. --%>
         <button
           type="button"
-          phx-click="select"
+          phx-click={(@node.kind in [:component, :slot] && "inspect") || "select"}
           phx-value-id={@id}
           title={(@node.kind == :slot && slot_label(@node, @tree)) || node_label(@node)}
           class={[
@@ -5128,6 +6926,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         >
           {gettext("Hidden")}
         </button>
+        <%!-- STILL MISSING, SOMEWHERE UNDER HERE. A required property left blank refuses the Publish
+              button, and until this row drew it the first anyone heard was a flash naming a field
+              several rows inside a component that may not even be open. It counts the whole subtree,
+              which is the point: a shut `chelekom-video` says the `:source` inside it is unfinished
+              without being opened.
+
+              It is STATE, so it stands at rest — the same rule the hidden and locked marks follow,
+              and the opposite of the controls beside it, which wait for the pointer. --%>
+        <span
+          :if={@needs.total > 0}
+          title={needs_title(@needs)}
+          class={[
+            "flex-none rounded-[5px] bg-[#fdf3f1] px-[5px] py-px",
+            "font-['Space_Grotesk'] text-[9.5px] font-bold text-[#c0473d]"
+          ]}
+        >
+          {gettext("%{count} needed", count: @needs.total)}
+        </span>
         <span
           :if={@kids != []}
           class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]"
@@ -5246,6 +7062,92 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         {gettext("set by its properties — nothing dropped here is drawn")}
       </div>
 
+      <div :if={MapSet.member?(@expanded, @id) and (@props != [] or @node.kind == :component)}>
+        <button
+          type="button"
+          id={"pb-props-#{@id}"}
+          phx-click="toggle_expand"
+          phx-value-id={"props:" <> @id}
+          class="flex w-full items-center gap-2 rounded-[9px] py-[6px] pr-[9px] text-left hover:bg-[#f7f6f3]"
+          style={"padding-left:#{9 + (@depth + 1) * 13}px"}
+        >
+          <.icon
+            name={:chevron}
+            size={11}
+            class={
+              "flex-none text-[#a8a5a0] " <>
+                ((MapSet.member?(@expanded, "props:" <> @id) && "rotate-90") || "")
+            }
+          />
+          <span class="grid size-[15px] flex-none place-items-center text-[#6d6a63]">
+            <.icon name={:dial} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#6d6a63]">
+            {gettext(".properties")}
+          </span>
+          <span
+            :if={@needs.attrs > 0}
+            class="flex-none rounded-[5px] bg-[#fdf3f1] px-[5px] py-px font-['Space_Grotesk'] text-[9.5px] font-bold text-[#c0473d]"
+          >
+            {gettext("%{count} needed", count: @needs.attrs)}
+          </span>
+          <span class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
+            ({length(@props)})
+          </span>
+        </button>
+
+        <%!-- Silence reads as "not loaded". A component that declares nothing says so, and says where
+              to add one, rather than leaving an empty group behind a chevron. --%>
+        <div
+          :if={MapSet.member?(@expanded, "props:" <> @id) and @props == []}
+          class="py-[5px] pr-[9px] text-[10.5px] font-medium text-[#a8a5a0]"
+          style={"padding-left:#{9 + (@depth + 2) * 13}px"}
+        >
+          {gettext("none declared — add one on the component itself")}
+        </div>
+
+        <button
+          :for={prop <- (MapSet.member?(@expanded, "props:" <> @id) && @props) || []}
+          type="button"
+          id={"pb-prop-row-#{@id}-#{prop.name}"}
+          phx-click="inspect"
+          phx-value-id={@id}
+          phx-value-prop={prop.name}
+          title={gettext("Edit %{name} in the Inspector", name: prop.name)}
+          class="flex w-full items-center gap-2 rounded-[9px] py-[5px] pr-[9px] text-left hover:bg-[#f2f1fc]"
+          style={"padding-left:#{9 + (@depth + 2) * 13}px"}
+        >
+          <span class="w-3.5 flex-none"></span>
+          <span class={[
+            "size-[6px] flex-none rounded-full",
+            cond do
+              prop.missing? -> "bg-[#c0473d]"
+              prop.set? -> "bg-[#4f4bcc]"
+              true -> "bg-[#d5d3cc]"
+            end
+          ]} />
+          <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-medium text-[#3a382f]">
+            {prop.name}
+          </span>
+          <%!-- WHICH OF THESE THE COMPONENT CANNOT DO WITHOUT. They were drawn identically to the
+                optional ones, so the only way to learn that `src` was compulsory was to press
+                Publish and read the refusal. Loud while it is empty, quiet once it is filled: a
+                satisfied requirement is worth knowing before you clear it, and worth nothing louder
+                than that. --%>
+          <span
+            :if={prop.required?}
+            class={[
+              "flex-none rounded-[5px] px-[5px] py-px text-[9px] font-bold uppercase tracking-[0.05em]",
+              (prop.missing? && "bg-[#fdf3f1] text-[#c0473d]") || "bg-[#f2f1ec] text-[#a8a5a0]"
+            ]}
+          >
+            {gettext("required")}
+          </span>
+          <span class="max-w-[86px] flex-none truncate font-['Space_Grotesk'] text-[10px] font-medium text-[#6d6a63]">
+            {prop.value}
+          </span>
+        </button>
+      </div>
 
       <%!-- WHAT CAN GO INSIDE, as the other half of the same question `.properties` answers. The two
             are peers and read as peers: same row, same chevron, same count, both folded until asked.
@@ -5278,6 +7180,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           </span>
           <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#6d6a63]">
             {gettext(".slots")}
+          </span>
+          <span
+            :if={@needs.slots > 0}
+            class="flex-none rounded-[5px] bg-[#fdf3f1] px-[5px] py-px font-['Space_Grotesk'] text-[9.5px] font-bold text-[#c0473d]"
+          >
+            {gettext("%{count} needed", count: @needs.slots)}
           </span>
           <span class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
             ({length(@ghosts)})
@@ -5345,6 +7253,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         selection={@selection}
         expanded={@expanded}
         editor={@editor}
+        unmet={@unmet}
       />
     </div>
     """
@@ -5868,11 +7777,58 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp marked_count(%MapSet{} = marked), do: MapSet.size(marked)
   defp marked_count(_none), do: 0
 
+  # Only an http(s) address is offered. The value comes from a kit's own bundle, and a `javascript:`
+  # in a link the admin renders is the one way a third-party kit could reach into this page.
+  defp docs_url(%{doc_url: url}) when is_binary(url) do
+    case String.starts_with?(url, ["https://", "http://"]) do
+      true -> url
+      false -> nil
+    end
+  end
+
+  defp docs_url(_entry), do: nil
+
   defp held?(%{marked: %MapSet{} = marked}, id), do: MapSet.member?(marked, id)
   defp held?(_editor, _id), do: false
 
   defp folded?(%Node{} = node, %{hidden: %MapSet{} = hidden}), do: Node.hidden?(node, hidden)
   defp folded?(_node, _editor), do: false
+
+  # The dynamic wrapper's own two attributes are not attributes of the component, so they are kept out
+  # of the editable list and reported on their own, read-only.
+  @wrapper_attrs ~w(component_name site)
+
+  defp attr_rows(%Node{kind: :component, attrs: attrs} = node) do
+    for {name, _value} <- attrs,
+        is_binary(name),
+        name not in @wrapper_attrs,
+        do: attr_row(node, name)
+  end
+
+  defp attr_rows(%Node{attrs: attrs} = node) do
+    for {name, _value} <- attrs, is_binary(name), do: attr_row(node, name)
+  end
+
+  # THE BOX HOLDS THE SOURCE, NOT THE BRACES AROUND IT. This list drew `phx-click={JS.toggle(…)}`
+  # into an editable field, and the field posted the braces back as the value — so the stored source
+  # became `{JS.toggle(…)}` and serialized to `phx-click={{JS.toggle(…)}}`. That is a one-tuple:
+  # `Protocol.UndefinedError` where the page renders, and a `:if` condition that is truthy whatever
+  # it was guarding, so an element hidden from signed-out visitors came back for everyone. Every
+  # re-edit added another pair, and nothing between the field and the tree takes braces off again.
+  #
+  # `Node.attr_text/2` is the one reading of an attribute's text — the same one the property panel
+  # asks, which is why that panel round-trips a binding and this list did not. The kind rides along
+  # with the row so the write STATES it instead of leaving `Op` to re-read the tree for it.
+  defp attr_row(node, name), do: {name, attr_kind(node, name), Node.attr_text(node, name)}
+
+  # A bare attribute is offered as a string: typing into the empty box beside `disabled` is how it
+  # becomes `disabled="true"`, where `:boolean` would throw away what was typed.
+  defp attr_kind(node, name) do
+    case Node.attr(node, name) do
+      {:expr, _source} -> "expr"
+      _string_or_bare -> "string"
+    end
+  end
 
   # The prototype's per-category icon tints, so a palette scanned at speed reads by colour.
   # One colour per category, used three ways: the dot beside a group heading, the icon tile's text,
@@ -6079,6 +8035,50 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp drop_target?(node, entry),
     do: Containment.holds_children?(node, components: List.wrap(entry))
 
+  @doc false
+  # WHAT IS STILL MISSING, FOR EVERY ROW AT ONCE.
+  #
+  # A required property left blank refuses the Publish button (`BuilderLive.missing_required/1`) and
+  # the rail said nothing about it, so the first anyone heard was a flash naming a field several rows
+  # inside a component that may not even be open. `Inspector.unmet/3` is the one answer both take.
+  #
+  # Swept once for the whole tree rather than asked per row: this is O(nodes), where asking each row
+  # about its own subtree would be O(nodes²) on a document that can be hundreds deep.
+  #
+  # `total` carries the subtree, which is what lets a SHUT component say that something inside it is
+  # unfinished — the case the badge exists for. `attrs` and `slots` are this node's own, so the two
+  # groups can each say how many of the number are theirs.
+  def unmet_map(%Tree{} = tree, components) when is_list(components) do
+    lookup = Map.new(components, &{&1.name, &1})
+
+    Enum.reduce(tree.roots, %{}, fn root, acc ->
+      acc |> roll_unmet(tree, root, lookup) |> elem(0)
+    end)
+  end
+
+  def unmet_map(_tree, _components), do: %{}
+
+  defp roll_unmet(acc, tree, id, lookup) do
+    case Tree.get(tree, id) do
+      nil ->
+        {acc, 0}
+
+      node ->
+        {acc, beneath} =
+          Enum.reduce(node.children, {acc, 0}, fn child, {acc, sum} ->
+            {acc, count} = roll_unmet(acc, tree, child, lookup)
+            {acc, sum + count}
+          end)
+
+        own = Inspector.unmet(node, tree, lookup)
+        attrs = Enum.count(own, &match?({:attr, _name}, &1))
+        slots = Enum.count(own, &match?({:slot, _name}, &1))
+        total = attrs + slots + beneath
+
+        {Map.put(acc, id, %{attrs: attrs, slots: slots, total: total}), total}
+    end
+  end
+
   # WHETHER THIS ROW IS SHUT OVER SOMETHING, which is what lets a drag open it on the way past.
   #
   # A tree of any depth is mostly shut — `default_expanded/1` opens the roots and one level below —
@@ -6098,8 +8098,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # A row opens when it has ANYTHING under it: children, properties, an unfilled slot, or a
   # component's own markup. The last one is checked without parsing — the parse only happens once the
   # row is actually open, and a chevron that depended on it could never appear.
-  defp expandable?(%{kids: kids, ghosts: ghosts}) do
-    kids != [] or ghosts != []
+  defp expandable?(%{kids: kids, ghosts: ghosts, props: props}) do
+    kids != [] or ghosts != [] or props != []
   end
 
   # WHAT THE PANEL WILL ACTUALLY DRAW. The indentation between two tags is a child like any other and
@@ -6129,6 +8129,45 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     |> Inspector.slots()
     |> Enum.any?(&(Inspector.name(&1) == slot and Inspector.required?(&1)))
   end
+
+  # The badge names what is behind the number, so a count on a shut row is not a riddle. Two
+  # sentences, because a row whose own properties are fine and whose CHILD is unfinished is the case
+  # the badge mostly exists for, and "2 properties required here" would be a lie about where to look.
+  defp needs_title(%{attrs: attrs, slots: slots, total: total}) do
+    case Enum.reject([{attrs, :property}, {slots, :slot}], &(elem(&1, 0) == 0)) do
+      [] ->
+        ngettext(
+          "%{count} required thing inside this is still empty",
+          "%{count} required things inside this are still empty",
+          total
+        )
+
+      here ->
+        words =
+          case here do
+            [{count, kind}] ->
+              needed_count(kind, count)
+
+            [{first, first_kind}, {second, second_kind}] ->
+              gettext("%{first} and %{second}",
+                first: needed_count(first_kind, first),
+                second: needed_count(second_kind, second)
+              )
+          end
+
+        ngettext(
+          "%{words} required here is still empty",
+          "%{words} required here are still empty",
+          attrs + slots,
+          words: words
+        )
+    end
+  end
+
+  defp needed_count(:property, count),
+    do: ngettext("%{count} property", "%{count} properties", count)
+
+  defp needed_count(:slot, count), do: ngettext("%{count} slot", "%{count} slots", count)
 
   # WHAT AN EMPTY `.slots` GROUP MEANS, which is two different things.
   #
@@ -6163,6 +8202,78 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     do: Enum.find(components, &(&1.name == name))
 
   defp entry_named(_name, _editor), do: nil
+
+  # Every property a component declares, with what this instance sets for it. A slot's properties come
+  # from the slot's own declaration on the parent component, which is why the parent is looked up.
+  defp layer_props(%Node{kind: :component} = node, entry, _tree) when not is_nil(entry),
+    do:
+      entry
+      |> Inspector.grouped()
+      |> Enum.flat_map(fn {_group, attrs} -> attrs end)
+      |> prop_rows(node)
+
+  # A slot's properties are declared on the component that owns it, so the parent's entry is what
+  # says which they are. `layer_props/3` is given the parent's entry by the row above it.
+  defp layer_props(%Node{kind: :slot} = node, entry, _tree) when not is_nil(entry) do
+    name = Node.slot_name(node)
+
+    entry
+    |> Inspector.slots()
+    |> Enum.find(&(Inspector.name(&1) == name))
+    |> Inspector.attrs()
+    |> prop_rows(node)
+  end
+
+  defp layer_props(_node, _entry, _tree), do: []
+
+  defp prop_rows(attrs, node) do
+    for attr <- attrs, name = Inspector.name(attr), not is_nil(name) do
+      value = Node.attr_text(node, name)
+      required? = Inspector.required?(attr)
+
+      %{
+        name: name,
+        set?: !is_nil(value),
+        required?: required?,
+        missing?: required? and blank?(value),
+        value: value || default_text(Inspector.default(attr)) || ""
+      }
+    end
+  end
+
+  @doc false
+  # A DEFAULT IS NOT ALWAYS A WORD, and every control in this module used to assume it was.
+  #
+  # `chelekom-banner` declares `params` with a default of `%{kind: "banner"}`, which reaches here as
+  # the bundle's encoded `%{"__atom_map__" => …}`. `to_string/1` on a map raises
+  # `Protocol.UndefinedError`, and the raise is inside a render — so it did not show an error in the
+  # panel, it killed the whole builder LiveView. The browser reconnected and remounted, which the
+  # author sees as the canvas flashing and the inspector never opening.
+  #
+  # Seven components declare a map or list default this way: `banner`, `badge`, `toast`, `pagination`,
+  # `flash`, `rating`, `simple-form`. It reached the author through EIGHT separate call sites — the
+  # layers row, and every widget that shows the default as its placeholder — which is why this is one
+  # function rather than a guard at each of them.
+  #
+  # `nil` means "nothing worth showing": a structured default has no one-line form, and the property
+  # panel edits it through its own widget rather than through a text box.
+  #
+  # A BLANK DEFAULT IS NOT A DEFAULT WORTH NAMING, and treating it as one was visible. Several kit
+  # attributes declare `default: ""` and derive their options from their helper clauses instead —
+  # `chelekom-popover`'s `space` is one, and it is the component the question "how do I set this up"
+  # was asked about. An empty string is truthy in Elixir, so the select's first option interpolated
+  # it and read " (default)": a blank label, a stray space, and no way to tell it from a broken row.
+  # It means exactly what "— default —" means, so it says that.
+  def default_text(value) when is_binary(value) do
+    case String.trim(value) do
+      "" -> nil
+      _named -> value
+    end
+  end
+
+  def default_text(value) when is_number(value) or is_boolean(value), do: to_string(value)
+  def default_text(value) when is_atom(value) and not is_nil(value), do: to_string(value)
+  def default_text(_value), do: nil
 
   # Every slot the component declares, as `{name, already_there?}`. A Phoenix slot may be given more
   # than once — `slot :item` and three `<:item>` is ordinary — so a filled one keeps its row and
@@ -6445,4 +8556,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   @spec icon_name(String.t() | nil) :: atom()
   def icon_name(name), do: Map.get(@icon_names, name, :chevron)
 
+  # A MODULE, resolved by identity rather than by name. The event carries `inspect(library)` because
+  # that is what survives a round trip through the DOM, and turning it back with
+  # `String.to_existing_atom/1` would be taking a module name from a client. Matching against the
+  # registered list can only ever yield a library that is already installed.
+  defp library_module(nil), do: nil
+
+  defp library_module(chosen) when is_binary(chosen),
+    do: Enum.find(Icons.libraries(), &(inspect(&1) == chosen))
+
+  defp library_module(chosen) when is_atom(chosen), do: chosen
 end

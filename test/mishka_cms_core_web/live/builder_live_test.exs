@@ -306,6 +306,23 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   defp attr_of(view, id, name),
     do: view |> editor() |> Map.fetch!(:tree) |> Tree.get(id) |> Node.attr(name)
 
+  # The value a box is offering — what the browser posts straight back when the author clicks into
+  # the row and leaves it alone.
+  defp field_value(view, id) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s([id="#{id}"]))
+    |> LazyHTML.attribute("value")
+    |> List.first()
+  end
+
+  # A row committed the way the browser commits one, through the form that owns it. Addressed by
+  # attribute and not by `#id`: `:if` is an attribute name, and a colon in a CSS id selector is a
+  # pseudo-class.
+  defp commit_row(view, form_id, value),
+    do: view |> element(~s(form[id="#{form_id}"])) |> render_change(%{"value" => value})
+
   # A value the property will take, for walking the whole vocabulary. An enumerated one must be one
   # of its own; a free-form one is never validated, so any length does.
   defp sample_style(prop), do: prop |> Styles.options() |> List.first("7px")
@@ -744,6 +761,101 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
              |> Map.fetch!(:tree)
              |> Tree.get(node.id)
              |> then(& &1.meta.styles) == %{base: %{"display" => "grid"}}
+    end
+
+    # The builder SHELL is admin chrome and keeps all three.
+    test "the builder shell keeps the admin stylesheet", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      assigns = :sys.get_state(view.pid).socket.assigns
+
+      assert assigns[:admin_css]
+      assert assigns[:admin_fonts]
+      assert assigns[:live_tailwind]
+    end
+
+    # The icon control is a COMBOBOX: the catalogue suggests, it does not gate. It can only ever hold
+    # the sets this install registered, so an author naming a glyph from one it was never told about
+    # — a second kit's own icons, a class the host ships itself — must still be able to write it
+    # down. Before this the trigger was a button and the only reachable values were catalogued ones.
+    test "an icon field accepts a value no installed set ships", %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "iconish",
+        template: "<div><span class={@icon}></span></div>",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{}}],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="iconish" site="#{site.name}"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_tag(view, ".component")
+
+      render_click(view, "inspect", %{"id" => component.id})
+
+      render_change(view, "icon_typed", %{
+        "name" => "icon",
+        "node_id" => component.id,
+        "value" => "lucide-rocket"
+      })
+
+      edited = view |> editor() |> Map.fetch!(:tree) |> Tree.get(component.id)
+
+      assert {"icon", {:string, "lucide-rocket"}} in edited.attrs
+    end
+
+    # Picking is a decision, so the popover has answered its question and gets out of the way. Typing
+    # is not — there the list is a filter being narrowed, and closing it on every keystroke would
+    # make the grid useless.
+    test "picking an icon writes it and closes the picker; typing keeps it open", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "picky",
+        template: "<div><span class={@icon}></span></div>",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{}}],
+        slots: []
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="picky" site="#{site.name}"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_tag(view, ".component")
+      render_click(view, "inspect", %{"id" => component.id})
+
+      render_click(view, "toggle_icon_picker", %{"name" => "icon"})
+      assert has_element?(view, "#pb-icon-picker-icon")
+
+      render_change(view, "icon_typed", %{
+        "name" => "icon",
+        "node_id" => component.id,
+        "value" => "bell"
+      })
+
+      assert has_element?(view, "#pb-icon-picker-icon"), "typing must not close the list"
+
+      render_click(view, "icon_picked", %{
+        "node_id" => component.id,
+        "name" => "icon",
+        "value" => "hero-bell"
+      })
+
+      refute has_element?(view, "#pb-icon-picker-icon")
+
+      edited = view |> editor() |> Map.fetch!(:tree) |> Tree.get(component.id)
+      assert {"icon", {:string, "hero-bell"}} in edited.attrs
     end
 
     test "renders the document with the site's scope", %{conn: conn, page: page} do
@@ -1275,6 +1387,187 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert render(view) =~ "var(--pb-left-w, #{elem(Panels.resize_bounds(:left), 0)}px)"
     end
 
+    # A slot's properties are drawn from the SAME option lists the parent component's are, and the
+    # panel reads `entry.features` unconditionally. Selecting any slot used to raise
+    # `KeyError :features` and take the whole editor down with it.
+    test "selecting a slot opens its properties instead of crashing", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "has-slots",
+        template: "<div>{render_slot(@item)}</div>",
+        slots: [
+          %{
+            "name" => "item",
+            "opts" => %{"doc" => "One row"},
+            "attrs" => [%{"name" => "color", "type" => "string", "opts" => %{}}]
+          }
+        ],
+        helpers: [
+          %{
+            "name" => "color_variant",
+            "code" => "defp color_variant(_, _), do: nil",
+            "discriminators" => [%{"axis" => "color", "values" => ["primary", "danger"]}]
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" =>
+          ~s(<.component component_name="has-slots" site="#{site.name}"><:item>hi</:item></.component>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      slot = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :slot))
+      assert slot, "the dropped component should carry a slot node"
+
+      render_click(view, "select", %{"id" => slot.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      html = render(view)
+      assert html =~ "Color"
+      # The parent's option list reached the slot, so this is a picker and not a text box.
+      assert html =~ "primary"
+    end
+
+    # `:global` is the component's `@rest` catch-all. Offering it wrote a literal `rest=""` into the
+    # page and then rendered a control whose own copy said it did nothing.
+    test "the property menu never offers the global catch-all", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "with-rest",
+        attrs: [
+          %{"name" => "title", "type" => "string", "opts" => %{}},
+          %{"name" => "rest", "type" => "global", "opts" => %{}}
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="with-rest" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "with-rest")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      html = render(view)
+
+      # The component's own property is on the form…
+      assert html =~ "Title"
+
+      # …and its `@rest` catch-all is not a property at all: offering it wrote a literal `rest=""`
+      # into the page and then drew a control whose own copy said it did nothing.
+      refute html =~ ">Rest<"
+      refute has_element?(view, "#pb-extra-rest")
+    end
+
+    # An icon attribute's value is a class name the Tailwind heroicons plugin resolves. Fifty-seven
+    # of the kit's attributes are one, and every one used to be a text box the author had to type
+    # `hero-exclamation-triangle` into from memory — a typo rendering nothing at all.
+    test "an icon property offers the catalogue instead of a text box", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "iconed",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{"default" => "hero-check"}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="iconed" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "iconed")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # Closed, it is a chip naming the default — not an empty text input.
+      assert has_element?(view, "#pb-icon-open-#{node.id}-icon")
+      refute has_element?(view, "#pb-attr-icon")
+
+      render_click(view, "toggle_icon_picker", %{"name" => "icon"})
+      assert has_element?(view, "#pb-icon-picker-icon")
+      assert has_element?(view, "#pb-icon-hero-academic-cap")
+
+      # The four weights the set actually ships.
+      assert has_element?(view, "#pb-icon-variant-outline")
+      assert has_element?(view, "#pb-icon-variant-solid")
+      assert has_element?(view, "#pb-icon-variant-mini")
+      assert has_element?(view, "#pb-icon-variant-micro")
+
+      # Searching narrows it, and the count says how much was left out.
+      # THROUGH THE FIELD, which is the only thing that narrows the grid. The trigger is the input:
+      # typing sets the attribute and filters the catalogue with the same keystrokes, so there is no
+      # search box of its own to drive.
+      render_change(view, "icon_typed", %{
+        "name" => "icon",
+        "node_id" => node.id,
+        "value" => "arrow-up"
+      })
+
+      assert has_element?(view, "#pb-icon-hero-arrow-up")
+      refute has_element?(view, "#pb-icon-hero-academic-cap")
+
+      # Switching weight keeps the query and re-suffixes the results.
+      render_click(view, "icon_variant", %{"variant" => "-solid"})
+      assert has_element?(view, "#pb-icon-hero-arrow-up-solid")
+
+      # Picking one writes it through the ordinary set_attr op, so it is undoable.
+      view |> element("#pb-icon-hero-arrow-up-solid") |> render_click()
+
+      assert Node.attr_text(component_node(view, "iconed"), "icon") == "hero-arrow-up-solid"
+      assert view |> editor() |> Map.fetch!(:past) |> hd() |> Map.fetch!(:label) == "Set icon"
+    end
+
+    test "the icon picker closes on click-away", %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "iconed-two",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="iconed-two" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "iconed-two")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      render_click(view, "toggle_icon_picker", %{"name" => "icon"})
+      assert has_element?(view, "#pb-icon-picker-icon")
+
+      render_click(view, "close_icon_picker", %{})
+      refute has_element?(view, "#pb-icon-picker-icon")
+    end
+
     # BETWEEN A COMPONENT AND A WHOLE-PAGE PRESET there was nothing, so a landing page meant placing
     # a grid, a heading, a paragraph and a button and repeating it for every band down the page.
     test "a section drops in as one block", %{conn: conn, page: page} do
@@ -1327,6 +1620,53 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute :component in kinds
     end
 
+    # A ROW OF SHAPES, NOT A WORD TO SPELL. A grid's column count was a blank text box whose
+    # placeholder was the WORD "twelve", so `4` did nothing and the author had to guess `four`.
+    test "a column count is picked by clicking a shape", %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "colgrid",
+        template: ~s|<div class="grid">g</div>|,
+        attrs: [
+          %{
+            "name" => "cols",
+            "type" => "string",
+            "opts" => %{"values" => ~w(one two three four), "default" => "two"}
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-colgrid") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      assert has_element?(view, "#pb-cols-#{placed.id}-four"),
+             "every column count the kit offers is a button"
+
+      refute has_element?(view, "#pb-cols-#{placed.id}-four input"),
+             "and none of them is a text field"
+
+      view |> element("#pb-cols-#{placed.id}-four") |> render_click()
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(placed.id)
+             |> Map.fetch!(:attrs)
+             |> Map.new()
+             |> Map.get("cols") == {:string, "four"}
+    end
+
     # SPACING AND COLOUR ARE WHAT PEOPLE REACH FOR FIRST, and both shipped folded shut — three folds
     # and a scroll below the component's own properties. Nothing said they were there.
     test "Layout and Appearance are open the first time a node is selected", %{
@@ -1343,6 +1683,355 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert html =~ "Padding", "the Layout controls are on screen without unfolding anything"
       assert has_element?(view, "#pb-swatch-white"), "and so is the background swatch row"
+    end
+
+    # PRESSING THE OPEN ONE CLOSES IT. Three toggles here were written as
+    # `(open == name && nil) || name`, which yields `name` when they are EQUAL — `nil || name` is
+    # `name` — so the picker opened and then would not close by the control that opened it. Only
+    # click-away worked, and only click-away was tested.
+    test "the icon picker closes when its own field is pressed again", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "iconed-three",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="iconed-three" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "iconed-three")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      render_click(view, "toggle_icon_picker", %{"name" => "icon"})
+      assert has_element?(view, "#pb-icon-picker-icon")
+
+      render_click(view, "toggle_icon_picker", %{"name" => "icon"})
+      refute has_element?(view, "#pb-icon-picker-icon")
+    end
+
+    # Same shape, same bug: choosing the library that is already chosen clears the filter.
+    test "choosing the active icon library again clears it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "icon_library", %{"library" => "heroicons"})
+      assert :sys.get_state(view.pid).socket.assigns.icon_library == "heroicons"
+
+      render_click(view, "icon_library", %{"library" => "heroicons"})
+      assert is_nil(:sys.get_state(view.pid).socket.assigns.icon_library)
+    end
+
+    # A NUMBER WRITTEN AS A STRING IS NOT A NUMBER. The stepper wrote `value="45"` onto an attribute
+    # the kit declares `:integer`, which is a type error where Phoenix checks it and arithmetic on a
+    # binary where it does not — a progress bar set to 45 drew a bare track and a section drew 0%,
+    # so the box looked as though it did nothing. Reported for the linear bar and again for the
+    # circular ones; it is every numeric attribute in the kit.
+    test "a numeric property is written as an expression, not a string", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "counted",
+        attrs: [
+          %{"name" => "value", "type" => "integer", "opts" => %{"default" => 0}},
+          %{"name" => "label", "type" => "string", "opts" => %{}}
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="counted" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "counted")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      view
+      |> element(~s(form[phx-value-name="value"]))
+      |> render_change(%{"value" => "45"})
+
+      assert Node.attr(component_node(view, "counted"), "value") == {:expr, "45"},
+             "the number went in as a string, which the component cannot do arithmetic on"
+
+      # AND A STRING PROPERTY IS STILL A STRING. The kind is keyed on the DECLARED type, not on the
+      # control, so a text box beside it is untouched.
+      view
+      |> element(~s(form[phx-value-name="label"]))
+      |> render_change(%{"value" => "hello"})
+
+      assert Node.attr(component_node(view, "counted"), "label") == {:string, "hello"}
+    end
+
+    # `kind="danger"` matches none of the component's clauses — they are written against the ATOM
+    # `:danger` — so it falls through to the catch-all and every colour renders identically. The
+    # kit's own examples write `kind={:primary}`; so must the panel.
+    test "an atom property is written as an expression, not a string", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "atomic",
+        attrs: [
+          %{
+            "name" => "kind",
+            "type" => "atom",
+            "opts" => %{"default" => "natural", "values" => ["natural", "danger", "success"]}
+          },
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "base", "values" => ["base", "outline"]}
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="atomic" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "atomic")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # The control offers the bare name but carries the atom form as its value.
+      html = render(view)
+      assert html =~ ~s(value=":danger")
+      assert html =~ ~s(phx-value-value_kind="expr")
+
+      # Driven through the CONTROL, not by pushing the event by hand — three values make this a
+      # segmented control, and the pill carries the atom form in its own `value`.
+      view
+      |> element(~s(button[phx-value-name="kind"][value=":danger"]))
+      |> render_click()
+
+      assert Node.attr(component_node(view, "atomic"), "kind") == {:expr, ":danger"}
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize() =~ "kind={:danger}"
+
+      # …and the control marks it chosen, matching the stored `:danger` against the bare label.
+      pill =
+        render(view)
+        |> String.split("<button")
+        |> Enum.find(&String.contains?(&1, ~s(value=":danger")))
+
+      assert pill, "the panel should render a pill carrying the atom form"
+      assert pill =~ "bg-white"
+    end
+
+    test "a string property is still written as a string", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "stringy",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "base", "values" => ["base", "outline"]}
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="stringy" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "stringy")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      html = render(view)
+      refute html =~ ~s(value=":outline")
+      assert html =~ ~s(value="outline")
+    end
+
+    # `kind={:danger}` is a literal like `size={5}` — parsing it is not evaluating it. Refusing atoms
+    # meant the attribute never reached the component, so it rendered whatever its catch-all renders
+    # and EVERY Chelekom alert came out `natural` whichever colour was chosen — including the kit's
+    # own examples, which are written `kind={:primary}`.
+    test "an atom expression reaches the component on the canvas", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      define_component!("atom-canvas", site, "<div>atom canvas</div>")
+
+      create_component!(
+        site_id: site.id,
+        name: "atom-canvas",
+        template: "<div>atom canvas</div>",
+        attrs: [%{"name" => "kind", "type" => "atom", "opts" => %{"default" => "natural"}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" =>
+          ~s(<.component component_name="atom-canvas" site="#{site.name}" kind={:danger}/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "atom-canvas")
+      assert Node.attr(node, "kind") == {:expr, ":danger"}
+
+      # The canvas is a second LiveView; what matters is that it renders the node without dropping
+      # the attribute on the way in.
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ "atom canvas"
+      refute html =~ "failed to render"
+    end
+
+    # A dropdown property could never be changed: `phx-change` on a bare `<select>` outside a form
+    # fires no event, so 381 of the kit's attributes — `variant` and `color` among them — were inert
+    # while the short ones beside them worked, because a segmented control is a button.
+    test "a dropdown property applies to the document", %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "droppy",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{
+              "default" => "base",
+              "values" => ["base", "outline", "shadow", "bordered", "gradient", "filled"]
+            }
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="droppy" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "droppy")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # Six values, so this is a dropdown rather than a segmented control.
+      assert has_element?(view, ~s(form[phx-value-name="variant"] select))
+
+      view
+      |> element(~s(form[phx-value-name="variant"]))
+      |> render_change(%{"value" => "outline"})
+
+      assert Node.attr_text(component_node(view, "droppy"), "variant") == "outline"
+
+      # …and clearing it removes the attribute rather than writing an empty string.
+      view
+      |> element(~s(form[phx-value-name="variant"]))
+      |> render_change(%{"value" => ""})
+
+      assert is_nil(Node.attr(component_node(view, "droppy"), "variant"))
+    end
+
+    # The site's compiled stylesheet is generated from the classes its own pages RENDER, so a
+    # component's DEFAULT icon appears in no page's HTML and has no rule — `chelekom-alert` drew an
+    # empty 28px box where its icon belongs. The canvas supplies the rules for the icons in play.
+    test "the canvas carries the CSS for the icons it renders", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      define_component!("iconful", site, "<div>iconful</div>")
+
+      create_component!(
+        site_id: site.id,
+        name: "iconful",
+        template: "<div>iconful</div>",
+        attrs: [
+          %{"name" => "icon", "type" => "any", "opts" => %{"default" => "hero-bell"}}
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="iconful" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      # The DEFAULT reaches the stylesheet even though the document never names it…
+      assert html =~ "pb-canvas-icons"
+      assert html =~ ".hero-bell{"
+      assert html =~ "background-color:currentColor"
+    end
+
+    test "an icon set on a node reaches the canvas stylesheet too", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      define_component!("iconset", site, "<div>iconset</div>")
+
+      create_component!(
+        site_id: site.id,
+        name: "iconset",
+        template: "<div>iconset</div>",
+        attrs: [%{"name" => "icon", "type" => "any", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" =>
+          ~s(<.component component_name="iconset" site="#{site.name}" icon="hero-rocket-launch"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ ".hero-rocket-launch{"
     end
 
     test "the inspector shows the selected element", %{conn: conn, page: page} do
@@ -1518,6 +2207,212 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert view |> element("#pb-find-input") |> render() =~ ~s(value="Contact")
       assert view |> element("#pb-replace-input") |> render() =~ ~s(value="")
+    end
+
+    # THE CHIP PROMISED AN EDITOR THAT DID NOT EXIST. An expression on the canvas carries the title
+    # "edit its source in the inspector", and the inspector had nothing for one — so `{@inner_content}`
+    # in a layout and `{render_slot(@inner_block)}` in a component, the two expressions those
+    # documents are built on, could be selected, moved and deleted but changed only through the code
+    # drawer.
+    test "an expression's source is editable in the inspector", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          name: "shell",
+          site_id: site.id,
+          template: ~s(<div id="shell">{@inner_content}</div>)
+        )
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      expression = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex))
+      assert expression, "the fixture has to contain an expression"
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => expression.id})
+      assert has_element?(view, "#pb-expr-input-#{expression.id}")
+
+      render_change(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => expression.id,
+        "text" => "@inner_content |> raw()"
+      })
+
+      assert Tree.get(editor(view).tree, expression.id).text == "@inner_content |> raw()"
+      assert {:ok, heex} = Serializer.to_heex(editor(view).tree)
+      assert heex =~ "{@inner_content |> raw()}"
+    end
+
+    # A TEXT FIELD WHOSE ONLY GUIDANCE IS A PLACEHOLDER asks the author to remember the names of
+    # things this editor already knows. The box stays — what goes in it is Elixir — but beside it now
+    # are the names THIS document actually has, read off its own declaration rather than listed here.
+    test "and the box offers what the component itself declares", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "offering",
+          template: ~s|<div>{@size}</div>|,
+          attrs: [%{"name" => "size", "type" => "string"}, %{"name" => "tone", "type" => "atom"}],
+          slots: [%{"name" => "inner_block"}, %{"name" => "actions"}]
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      expression = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex))
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => expression.id})
+
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-size")
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-tone")
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-actions")
+
+      # A slot is offered as the call that RENDERS it, because naming it is not what anybody wants.
+      assert view |> element("#pb-expr-offer-#{expression.id}-inner_block") |> render() =~
+               "render_slot(@inner_block)"
+
+      # And the free-text box is still there.
+      assert has_element?(view, "#pb-expr-input-#{expression.id}")
+    end
+
+    test "and pressing one writes it", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "offering-write",
+          template: ~s|<div>{@size}</div>|,
+          attrs: [%{"name" => "size", "type" => "string"}],
+          slots: [%{"name" => "actions"}]
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      expression = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex))
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => expression.id})
+
+      view |> element("#pb-expr-offer-#{expression.id}-actions") |> render_click()
+
+      assert Tree.get(editor(view).tree, expression.id).text == "render_slot(@actions)"
+
+      # One op, so one undo back to what was typed before.
+      render_click(view, "undo", %{})
+      assert Tree.get(editor(view).tree, expression.id).text == "@size"
+    end
+
+    # READ OFF THE RECORD, so it follows the declaration rather than a list in the editor.
+    test "offering nothing for a component that declares nothing", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "offering-nothing",
+          template: ~s|<div>{@size}</div>|,
+          attrs: [],
+          slots: []
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      expression = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex))
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => expression.id})
+
+      refute has_element?(view, "#pb-expr-offers-#{expression.id}")
+      assert has_element?(view, "#pb-expr-input-#{expression.id}"), "the box is still there"
+    end
+
+    # An error page is handed three things on exactly the same footing as a layout's one: the
+    # compiler binds `conn`, `status` and `site` before the stored template renders, unconditionally.
+    # It was falling into the page's clause — which offers nothing, because a page's assigns come
+    # from handlers — so the one section with guaranteed assigns was the one offered none.
+    test "an error page offers the three its compiler binds", %{conn: conn, site: site} do
+      error_page =
+        create_error_page!(
+          name: "offering-errors",
+          site_id: site.id,
+          error_pages: [%{"status" => 404, "template" => ~s(<div>{@status}</div>)}]
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      _loaded = render_async(view)
+      expression = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex))
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => expression.id})
+
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-status")
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-conn")
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-site")
+
+      # And it stops being told about handlers it cannot hold.
+      html = render(view)
+      assert html =~ "served by a controller"
+      refute html =~ "the page's own handlers"
+    end
+
+    # A layout is handed exactly one thing and it is the thing a layout is FOR; a page's assigns come
+    # from handlers this editor does not evaluate, so it offers none rather than guessing.
+    test "a layout offers the one assign it is handed, and a page offers none", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      layout =
+        create_layout!(
+          name: "offering-shell",
+          site_id: site.id,
+          template: ~s(<div id="shell">{@inner_content}</div>)
+        )
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      expression = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex))
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => expression.id})
+
+      assert has_element?(view, "#pb-expr-offer-#{expression.id}-inner_content")
+
+      {:ok, pages, _html} = open_builder(conn, page)
+      on_page = Enum.find(Tree.walk(editor(pages).tree), &(&1.kind == :eex))
+
+      if on_page do
+        render_click(pages, "set_left_tab", %{"tab" => "inspector"})
+        render_click(pages, "select", %{"id" => on_page.id})
+        refute has_element?(pages, "#pb-expr-offers-#{on_page.id}")
+      end
+    end
+
+    # WHAT AN EXPRESSION CAN NAME DEPENDS ON WHAT IS BEING EDITED, and the panel that offers them
+    # has to agree: a page is never handed `@inner_content`.
+    test "the element library offers the page-content slot only where it exists", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      layout =
+        create_layout!(name: "shell", site_id: site.id, template: ~s(<div>{@inner_content}</div>))
+
+      {:ok, layout_view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      render_click(layout_view, "set_left_tab", %{"tab" => "blocks"})
+      assert render(layout_view) =~ "Page content"
+
+      {:ok, page_view, _html} = open_builder(conn, page)
+      render_click(page_view, "set_left_tab", %{"tab" => "blocks"})
+
+      page_html = render(page_view)
+      refute page_html =~ "Page content"
+      # The one that belongs everywhere is still there.
+      assert page_html =~ "Any Elixir the document can evaluate"
     end
 
     # A RUNTIME COMPONENT IS BUILT ON FIRST USE, which is right — a kit of 136 must not compile 136
@@ -1847,6 +2742,61 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       refute view |> element(~s([data-layer-row="#{rule.id}"])) |> render() =~
                ~s(data-container="true")
+    end
+
+    # `<:inner_block>` is not writable HEEx — the compiler answers "the slot name :inner_block is
+    # reserved" — so offering it as a slot to add gave a button whose only possible outcome was that
+    # error in a flash. It is the content you put IN the component, and the panel now says so.
+    test "the inner block is described rather than offered as a slot to add", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: nil,
+        name: "demo-note",
+        slots: [
+          %{"name" => "inner_block", "opts" => %{"required" => false}},
+          %{"name" => "footer", "opts" => %{"required" => false}}
+        ],
+        template: "<div>{render_slot(@inner_block)}</div>"
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-note" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      note =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => note.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # NOT CLICKED OPEN. A component with a slot to add now arrives with the group unfolded — the
+      # "End section +" row on a field was the one thing a joined input could not be built without,
+      # and folded, nobody found it. Clicking here would close it again.
+      assert has_element?(view, "#pb-slot-add-inspector-footer")
+      refute has_element?(view, "#pb-slot-add-inspector-inner_block")
+      assert has_element?(view, "#pb-slot-inner-block")
+      # The layers rail keeps the same rule: a ghost row for `footer`, none for the inner block.
+      refute has_element?(view, "#pb-slot-add-#{note.id}-inner_block")
+
+      # And it is still a drop target: the inner block is exactly where a drop lands.
+      render_click(view, "drop", %{
+        "template" => "<figure></figure>",
+        "parent_id" => note.id,
+        "index" => "0"
+      })
+
+      assert node_with_tag(view, "figure").parent_id == note.id
     end
 
     # WHAT CAN GO INSIDE, folded like everything else in the rail. The slot rows used to hang off the
@@ -2180,6 +3130,30 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert h1.id in wrapper.children
     end
 
+    # THE HALF THE MENU ENTRY IS FOR. A link put around the words is only useful if the address can
+    # then be typed, and a bare `<a>` draws no field at all — the Attributes list only lists what the
+    # node carries.
+    test "the link it makes has an address to fill in", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      text = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :text))
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "ctx", %{"action" => "link", "node_id" => text.id})
+
+      link = Enum.find(Tree.walk(editor(view).tree), &(&1.tag == "a"))
+      assert Node.attr_text(link, "href") == "#"
+      assert text.id in link.children
+
+      assert editor(view).selection == link.id, "the link is what the author now edits"
+
+      render_click(view, "toggle_prop_group", %{
+        "group" => "section:Attributes",
+        "folded" => "true"
+      })
+
+      assert has_element?(view, ~s(form[id="pb-attr-row-form-#{link.id}-href"]))
+    end
+
     # The dead end a run of text used to be: a panel saying what it could not do and offering one way
     # out, to the element around it.
     test "a run of text offers the link from the inspector", %{conn: conn, page: page} do
@@ -2326,6 +3300,47 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert has_element?(view, "#pb-find-none")
       assert has_element?(view, "#pb-find-replace-all[disabled]")
+    end
+
+    # THE KIT ALREADY SAYS WHERE ITS DOCS ARE. All 136 Chelekom components carry a `doc_url` and
+    # nothing read it, so someone stuck on what `variant` means had the answer in the database with
+    # no way to reach it.
+    test "a component's docs are one click from its properties", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "documented",
+        template: ~s|<div class="p-4">hi</div>|,
+        extra: %{"doc_url" => "https://mishka.tools/chelekom/docs/alert"}
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      view |> element("#pb-comp-documented") |> render_click()
+      render_click(canvas, "select", %{})
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      # SELECTING ON THE CANVAS, not in the panel. A panel selection is navigation and leaves the
+      # left tab where the reader put it; a canvas click means "work on this", which is what swings
+      # the panel to the Inspector the link lives in.
+      render_click(canvas, "select", %{"id" => node.id})
+
+      assert has_element?(
+               view,
+               ~s(#pb-docs-link[href="https://mishka.tools/chelekom/docs/alert"])
+             )
+
+      assert has_element?(view, ~s(#pb-docs-link[target="_blank"][rel="noopener noreferrer"]))
     end
 
     # A `javascript:` in a link the ADMIN renders is the one way a third-party kit's bundle could
@@ -3511,6 +4526,96 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert view |> element("#pb-toggle-shadow") |> render() =~ ~s(aria-checked="false")
     end
 
+    # Listing the attributes a node already has is not the same as being able to give it one; before
+    # this the only way to add `aria-label` or a data attribute was the code drawer.
+    test "a new attribute can be added by name", %{view: view, node: node} do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "aria-label", "value" => "Hero"}})
+      |> render_submit()
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(node.id)
+             |> Node.attr_text("aria-label") ==
+               "Hero"
+    end
+
+    # EVERY ATTRIBUTE IN THIS LIST USED TO BE A TEXT BOX, including the two a page is most often
+    # edited through. A block's `<img src>` was a path to type from memory while the site's media
+    # library sat one panel away, and its `<a href>` was a URL with nothing to open it.
+    test "a picture's source offers the library, and a link offers to open itself", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "parent_id" => node_with_tag(view, "section").id,
+        "template" => ~s(<img src="/uploads/a.png" alt="a" />)
+      })
+
+      image = node_with_tag(view, "img")
+      render_click(view, "select", %{"id" => image.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      view |> element("#pb-section-attributes") |> render_click()
+
+      assert has_element?(view, "#pb-attr-row-pick-src")
+      refute has_element?(view, "#pb-attr-row-open-src")
+    end
+
+    test "and a link offers to open itself where a picture does not", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "parent_id" => node_with_tag(view, "section").id,
+        "template" => ~s(<a href="https://example.com">x</a>)
+      })
+
+      link = node_with_tag(view, "a")
+      render_click(view, "select", %{"id" => link.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      view |> element("#pb-section-attributes") |> render_click()
+
+      assert has_element?(view, "#pb-attr-row-open-href")
+      refute has_element?(view, "#pb-attr-row-pick-href")
+    end
+
+    # And the row is still the field it was: the widget decorates it, it does not replace it.
+    test "a widget row still writes the attribute", %{view: view, node: node} do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "data-role", "value" => "hero"}})
+      |> render_submit()
+
+      view
+      |> element("#pb-attr-row-form-#{node.id}-data-role")
+      |> render_change(%{"value" => "banner"})
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(node.id)
+             |> Node.attr_text("data-role") == "banner"
+    end
+
+    test "adding an attribute with no name changes nothing", %{view: view, node: node} do
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs)
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "  ", "value" => "x"}})
+      |> render_submit()
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs) ==
+               before
+    end
+
     test "the field written to follows the breakpoint selector", %{view: view, node: node} do
       render_click(view, "set_breakpoint", %{"value" => "mobile"})
 
@@ -3601,6 +4706,507 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
         view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles)
 
       assert styles == %{}
+    end
+  end
+
+  # THE ROW USED TO CORRUPT WHAT IT SHOWED. An expression's braces belong to the markup around the
+  # value, not to the value, and drawing them inside an editable box put them back into the document
+  # the moment the row was touched. `phx-click={{JS…}}` is a one-tuple, which raises
+  # `Protocol.UndefinedError` where the page renders; `:if={{assigns[:current_user]}}` is a one-tuple
+  # too, and truthy, so an element hidden from signed-out visitors came back for everyone. Nothing
+  # downstream takes braces off, so each re-edit added another pair.
+  @click_source ~S|JS.toggle_class("is-open", to: ".pb-1")|
+  @condition_source "assigns[:current_user]"
+
+  describe "an attribute that holds an expression" do
+    setup %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~S"""
+          <section id="hero">
+            <div phx-click={JS.toggle_class("is-open", to: ".pb-1")} :if={assigns[:current_user]} data-role="hero">
+              secret
+            </div>
+          </section>
+          """
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      node = node_with_tag(view, "div")
+
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      view |> element("#pb-section-attributes") |> render_click()
+
+      %{view: view, node: node}
+    end
+
+    test "the box offers the source, and the mark says that is what it is", %{view: view} do
+      assert field_value(view, "pb-attr-row-phx-click") == @click_source
+      assert field_value(view, "pb-attr-row-:if") == @condition_source
+
+      assert has_element?(view, "#pb-attr-row-expr-phx-click")
+      assert has_element?(view, ~s([id="pb-attr-row-expr-:if"]))
+
+      # A plain attribute reads as itself and carries no mark.
+      assert field_value(view, "pb-attr-row-data-role") == "hero"
+      refute has_element?(view, "#pb-attr-row-expr-data-role")
+    end
+
+    # STATED, NOT INFERRED. The write says what the box is holding, so what the row does no longer
+    # depends on `Op` reading the tree back to guess it.
+    test "each row says which kind its write is", %{view: view, node: node} do
+      for {name, kind} <- [{"phx-click", "expr"}, {":if", "expr"}, {"data-role", "string"}] do
+        assert has_element?(
+                 view,
+                 ~s(form[id="pb-attr-row-form-#{node.id}-#{name}"][phx-value-value_kind="#{kind}"])
+               ),
+               "the #{name} row does not state that it writes #{kind}"
+      end
+    end
+
+    test "a row posted back unchanged leaves the expression as it was", %{view: view, node: node} do
+      commit_row(
+        view,
+        "pb-attr-row-form-#{node.id}-phx-click",
+        field_value(view, "pb-attr-row-phx-click")
+      )
+
+      assert attr_of(view, node.id, "phx-click") == {:expr, @click_source}
+
+      # Twice, because the braces were cumulative: a second pair is what a second edit used to add.
+      commit_row(
+        view,
+        "pb-attr-row-form-#{node.id}-phx-click",
+        field_value(view, "pb-attr-row-phx-click")
+      )
+
+      assert attr_of(view, node.id, "phx-click") == {:expr, @click_source}
+      assert editor_html(view) =~ ~s(phx-click={#{@click_source}})
+    end
+
+    test "and a touched condition is still a condition, not a truthy tuple", %{
+      view: view,
+      node: node
+    } do
+      commit_row(view, "pb-attr-row-form-#{node.id}-:if", field_value(view, "pb-attr-row-:if"))
+
+      assert attr_of(view, node.id, ":if") == {:expr, @condition_source}
+      assert editor_html(view) =~ ~s(:if={#{@condition_source}})
+      refute editor_html(view) =~ "{{"
+    end
+
+    test "an edit reaches the expression, not the braces that used to be round it", %{
+      view: view,
+      node: node
+    } do
+      # What the author does by hand: click into the row, add a space, blur. Taken from the BOX and
+      # not from the source behind it, because what the row offers is the whole of what an edit
+      # sends back — braces round it and all, when there were any.
+      edited =
+        view |> field_value("pb-attr-row-phx-click") |> String.replace(", to:", ",  to:")
+
+      commit_row(view, "pb-attr-row-form-#{node.id}-phx-click", edited)
+
+      assert attr_of(view, node.id, "phx-click") ==
+               {:expr, String.replace(@click_source, ", to:", ",  to:")}
+    end
+
+    test "what the rows wrote survives serializing and parsing it again", %{
+      view: view,
+      node: node
+    } do
+      commit_row(
+        view,
+        "pb-attr-row-form-#{node.id}-phx-click",
+        field_value(view, "pb-attr-row-phx-click")
+      )
+
+      commit_row(view, "pb-attr-row-form-#{node.id}-:if", field_value(view, "pb-attr-row-:if"))
+
+      markup = editor_html(view)
+      {:ok, reparsed} = Tree.parse(markup)
+
+      assert Serializer.serialize(reparsed) == markup
+
+      again = reparsed |> Tree.walk() |> Enum.find(&(&1.tag == "div"))
+
+      assert Node.attr(again, "phx-click") == {:expr, @click_source}
+      assert Node.attr(again, ":if") == {:expr, @condition_source}
+    end
+
+    # AND THE PAGE STILL ANSWERS. What the rows store is only half the promise: the other half is the
+    # compiler reading that markup back, which is the path a published page is served through. A
+    # one-tuple raises there rather than rendering, and a `:if` holding one is truthy whatever it was
+    # guarding — so the element a signed-out visitor must not see came back for everyone.
+    test "and the markup they leave behind renders the way the page is served", %{
+      view: view,
+      node: node
+    } do
+      commit_row(
+        view,
+        "pb-attr-row-form-#{node.id}-phx-click",
+        field_value(view, "pb-attr-row-phx-click")
+      )
+
+      commit_row(view, "pb-attr-row-form-#{node.id}-:if", field_value(view, "pb-attr-row-:if"))
+
+      markup = editor_html(view)
+
+      signed_out = LiveViewCompiler.render_template(markup, %{})
+
+      assert is_binary(signed_out),
+             "the page no longer renders at all: #{inspect(signed_out, limit: 3)}"
+
+      refute signed_out =~ "secret", "the condition no longer hides what it guards"
+
+      signed_in = LiveViewCompiler.render_template(markup, %{current_user: %{id: "u1"}})
+
+      assert is_binary(signed_in),
+             "the page no longer renders for a visitor who is signed in: #{inspect(signed_in, limit: 3)}"
+
+      assert signed_in =~ "secret"
+      assert signed_in =~ "toggle_class"
+    end
+
+    # THE BOX BESIDE THE LIST COULD DELETE WHAT THE LIST WAS SHOWING. It sends a name and whatever is
+    # typed next to it, and an empty value is how every other control in the panel says "take this
+    # attribute off" — so typing the name of a row that is already there, with the value box left
+    # alone, removed it. On `:if` that publishes to everyone what the condition was keeping back.
+    test "a name the element already carries is not added over the top of it", %{
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => ":if", "value" => ""}})
+      |> render_submit()
+
+      assert attr_of(view, node.id, ":if") == {:expr, @condition_source}
+      assert editor_html(view) =~ ~s(:if={#{@condition_source}})
+
+      signed_out = LiveViewCompiler.render_template(editor_html(view), %{})
+
+      assert is_binary(signed_out)
+
+      refute signed_out =~ "secret",
+             "the condition the add box was typed at is no longer guarding"
+    end
+
+    # AND NOT WITH A VALUE BESIDE IT EITHER. The row is in the list above the box with its own field;
+    # an add reaching the same name is a name typed twice, and taking the second one would throw away
+    # what the first holds — on `class` that is everything the style panel wrote.
+    test "and a value typed beside a name already in the list does not replace it", %{
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "data-role", "value" => "banner"}})
+      |> render_submit()
+
+      assert attr_of(view, node.id, "data-role") == {:string, "hero"}
+    end
+
+    # AND THE READER IS TOLD WHERE THE NAME WENT. A refusal that changes nothing on screen is a box
+    # that swallowed what was typed into it, so the row holding that name is rung the same way a
+    # property row arrived at from the tree is.
+    test "the row that already holds the name is rung instead", %{view: view, node: node} do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "data-role", "value" => ""}})
+      |> render_submit()
+
+      assert view
+             |> element(~s([id="pb-attr-row-#{node.id}-data-role"]))
+             |> render() =~ "bg-[#f7f6ff]"
+
+      refute view
+             |> element(~s([id="pb-attr-row-#{node.id}-phx-click"]))
+             |> render() =~ "bg-[#f7f6ff]"
+    end
+
+    # A HEEX SPECIAL IS NOT A LITERAL. `:if`, `:for` and `:let` must be an expression between braces,
+    # and this box only ever writes one of the words typed into it: `:for="item <- @items"` is not a
+    # loop, it is a template the compiler refuses outright, so the page stopped rendering at all.
+    test "a name HEEx reserves is refused rather than written as a string", %{
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => ":for", "value" => "item <- @items"}})
+      |> render_submit()
+
+      assert attr_of(view, node.id, ":for") == nil
+      refute editor_html(view) =~ ":for"
+
+      assert is_binary(LiveViewCompiler.render_template(editor_html(view), %{})),
+             "the page the add box left behind no longer compiles"
+    end
+
+    # And a name it does not carry is still added, with the empty row the author came for: the old
+    # write sent `value: ""`, which the funnel read as a removal, so nothing appeared at all.
+    test "a name the element does not carry arrives as a row to type into", %{
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "aria-label", "value" => ""}})
+      |> render_submit()
+
+      assert attr_of(view, node.id, "aria-label") == {:string, ""}
+      assert has_element?(view, "#pb-attr-row-#{node.id}-aria-label")
+    end
+
+    # INCLUDING `id`. A component is refused that one because the property list above already offers
+    # it; an element declares nothing, its list holds `id` like any other row, and this box is the
+    # only place the panel has to give an element one.
+    test "and an element with no id can still be given one", %{view: view, node: node} do
+      view |> element("#pb-attr-add") |> render_click()
+
+      view
+      |> form("#pb-attr-form", %{"attr" => %{"name" => "id", "value" => "hero-copy"}})
+      |> render_submit()
+
+      assert attr_of(view, node.id, "id") == {:string, "hero-copy"}
+    end
+  end
+
+  # THE SAME LIST A SECOND TIME. A component's Advanced disclosure is built from the same rows, for
+  # the attributes it never declared and takes through its `@rest` catch-all — so a `phx-*` on a
+  # component corrupted exactly the way one on an element did.
+  describe "a component attribute that holds an expression" do
+    test "the Advanced row keeps the expression it shows", %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "with-rest",
+        attrs: [
+          %{"name" => "title", "type" => "string", "opts" => %{}},
+          %{"name" => "rest", "type" => "global", "opts" => %{}}
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "drop", %{
+        "template" =>
+          ~s(<.component component_name="with-rest" site="#{site.name}" phx-click={#{@click_source}}/>),
+        "parent_id" => node_with_tag(view, "section").id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "with-rest")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      assert field_value(view, "pb-extra-phx-click") == @click_source
+      assert has_element?(view, "#pb-extra-expr-phx-click")
+
+      assert has_element?(
+               view,
+               ~s(form[id="pb-extra-form-#{node.id}-phx-click"][phx-value-value_kind="expr"])
+             ),
+             "the Advanced row does not state that it writes an expression"
+
+      commit_row(
+        view,
+        "pb-extra-form-#{node.id}-phx-click",
+        field_value(view, "pb-extra-phx-click")
+      )
+
+      assert attr_of(view, node.id, "phx-click") == {:expr, @click_source}
+      assert editor_html(view) =~ ~s(phx-click={#{@click_source}})
+    end
+  end
+
+  # THE BOX HAD NO IDEA WHAT THE NODE ALREADY HELD. It is free text, it sends a name and no value,
+  # and the write went straight to the session with `value: ""` — past the rule that turns an empty
+  # value into a removal, so the empty one landed. A string attribute came back as `color=""`, which
+  # beats the component's own default; an expression came back as `:if={}`, which HEEx reads as nil,
+  # so the element and everything inside it left the published page while the tree went on showing
+  # the node. The comment above the handler said a duplicate name was a no-op; nothing checked.
+  describe "the Advanced attribute editor" do
+    setup %{conn: conn, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "with-advanced",
+        template: ~s(<div class={@color} {@rest}>advanced</div>),
+        attrs: [
+          %{"name" => "color", "type" => "string", "opts" => %{}},
+          %{"name" => "rest", "type" => "global", "opts" => %{}}
+        ]
+      )
+
+      page = create_page!(site_id: site.id, template: @template)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "drop", %{
+        "template" =>
+          ~s(<.component component_name="with-advanced" site="#{site.name}" color="primary" aria-label="Hero" :if={#{@condition_source}}/>),
+        "parent_id" => node_with_tag(view, "section").id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "with-advanced")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      %{view: view, node: node}
+    end
+
+    defp add_extra(view, node, name),
+      do: view |> form("#pb-extra-form-#{node.id}", %{"name" => name}) |> render_submit()
+
+    test "a name the node does not carry arrives as a row to type into", %{
+      view: view,
+      node: node
+    } do
+      refute has_element?(view, "#pb-extra-data-role")
+
+      add_extra(view, node, "data-role")
+
+      assert has_element?(view, "#pb-extra-data-role")
+      assert field_value(view, "pb-extra-data-role") == ""
+      assert attr_of(view, node.id, "data-role") == {:string, ""}
+    end
+
+    # The name is trimmed on the way in, so the row it lands on is the one the author meant.
+    test "and the space around what was typed is not part of the name", %{view: view, node: node} do
+      add_extra(view, node, "  data-role  ")
+
+      assert has_element?(view, "#pb-extra-data-role")
+      assert attr_of(view, node.id, "data-role") == {:string, ""}
+    end
+
+    test "a name already on the node keeps the value it is holding", %{view: view, node: node} do
+      add_extra(view, node, "aria-label")
+
+      assert attr_of(view, node.id, "aria-label") == {:string, "Hero"}
+      assert field_value(view, "pb-extra-aria-label") == "Hero"
+    end
+
+    # AND THE READER IS TOLD WHERE IT WENT. Refusing without changing anything on screen is a box
+    # that swallowed what was typed into it, so the row holding that name is rung the same way a
+    # property row arrived at from the tree is.
+    test "and the row holding it is rung instead", %{view: view, node: node} do
+      add_extra(view, node, "aria-label")
+
+      assert view |> element("#pb-extra-row-aria-label") |> render() =~ "bg-[#f7f6ff]"
+
+      add_extra(view, node, "data-role")
+
+      refute view |> element("#pb-extra-row-aria-label") |> render() =~ "bg-[#f7f6ff]"
+      assert view |> element("#pb-extra-row-data-role") |> render() =~ "bg-[#f7f6ff]"
+    end
+
+    # A HEEX SPECIAL IS NOT A LITERAL. `:if`, `:for` and `:let` must be an expression between braces,
+    # and this box has no value to put in one: `:for=""` is not a loop over nothing, it is a template
+    # the compiler refuses outright, so the whole page stopped rendering rather than one element.
+    test "a name HEEx reserves is refused even when the node does not carry it", %{
+      view: view,
+      node: node
+    } do
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs)
+
+      add_extra(view, node, ":for")
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs) ==
+               before
+
+      refute editor_html(view) =~ ":for"
+    end
+
+    # `color` is DECLARED, so Advanced never lists it — the author is typing a name with no row on
+    # screen to say it is already set, and the panel is the only thing that can know.
+    test "a declared property is not blanked by a name Advanced does not list", %{
+      view: view,
+      node: node
+    } do
+      add_extra(view, node, "color")
+
+      assert attr_of(view, node.id, "color") == {:string, "primary"}
+      refute has_element?(view, "#pb-extra-color")
+    end
+
+    # AND THE ELEMENT IS STILL ON THE PAGE. `:if={}` is not a condition that never matches, it is a
+    # condition HEEx reads as nil — the element and its subtree are never emitted at all.
+    test "an existing condition is not emptied out from under the page", %{
+      view: view,
+      node: node
+    } do
+      add_extra(view, node, ":if")
+
+      assert attr_of(view, node.id, ":if") == {:expr, @condition_source}
+      assert editor_html(view) =~ ~s(:if={#{@condition_source}})
+      refute editor_html(view) =~ ":if={}"
+    end
+
+    # AND NOT WHEN IT IS UNSET EITHER. A declared property with nothing written on the node is the
+    # component's own default doing its job. `color=""` beats that default, and Advanced would not
+    # list the row it had just written — so the component changed on the canvas and nothing on
+    # screen said why.
+    test "a declared property the node has not set keeps its default", %{view: view, site: site} do
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="with-advanced" site="#{site.name}"/>),
+        "parent_id" => node_with_tag(view, "section").id,
+        "index" => "1"
+      })
+
+      plain =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(
+          &(Node.component_name(&1) == "with-advanced" and is_nil(Node.attr(&1, "color")))
+        )
+
+      render_click(view, "select", %{"id" => plain.id})
+      add_extra(view, plain, "color")
+
+      assert attr_of(view, plain.id, "color") == nil
+      refute has_element?(view, "#pb-extra-color")
+    end
+
+    # AND A REFUSAL IS SAID OUT LOUD. The write went straight to the session and threw the answer
+    # away, so an op the session declines left the author looking at a box that had done nothing and
+    # explained nothing.
+    test "a refused write says so rather than leaving the row missing", %{view: view, node: node} do
+      render_click(view, "toggle_lock", %{"id" => node.id})
+
+      add_extra(view, node, "data-role")
+
+      assert has_element?(view, "#flash-error")
+      assert attr_of(view, node.id, "data-role") == nil
+    end
+
+    # The dynamic wrapper's own two attributes are on the node like any other, so the same lookup
+    # covers them: blanking `site` is a component that no longer resolves to anything.
+    test "the wrapper's own attributes survive being typed at", %{view: view, node: node} do
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs)
+
+      add_extra(view, node, "site")
+      add_extra(view, node, "component_name")
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs) ==
+               before
+    end
+
+    test "typing nothing into the box changes nothing", %{view: view, node: node} do
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs)
+
+      add_extra(view, node, "   ")
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs) ==
+               before
     end
   end
 
@@ -4802,6 +6408,47 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       render_click(view, "toggle_expand", %{"id" => "slots:" <> node.id})
 
       assert view |> element("#pb-slot-add-#{node.id}-item") |> render() =~ "info"
+    end
+
+    # A REQUIRED PROPERTY LEFT BLANK REFUSES THE PUBLISH BUTTON, and the rail never said so — the
+    # first anyone heard was a flash naming a field several rows inside a component that may not even
+    # be open. Read off the DECLARATION, so a kit nobody here has seen is marked the same way.
+    test "the property row says which ones are compulsory", %{conn: conn, site: site} do
+      needy(site.id)
+      page = create_page!(site_id: site.id, template: ~s|<.component component_name="needful" />|)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node = needful_node(view)
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "props:" <> node.id})
+
+      required = view |> element("#pb-prop-row-#{node.id}-src") |> render()
+      optional = view |> element("#pb-prop-row-#{node.id}-alt") |> render()
+
+      assert required =~ "required"
+      refute optional =~ "required"
+    end
+
+    # Loud while empty, quiet once filled: a satisfied requirement is worth knowing before you
+    # clear it, and worth nothing louder than that.
+    test "and stops shouting once it is filled", %{conn: conn, site: site} do
+      needy(site.id)
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<.component component_name="needful" src="/a.png" />|
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node = needful_node(view)
+      expand!(view, node.id)
+      render_click(view, "toggle_expand", %{"id" => "props:" <> node.id})
+
+      row = view |> element("#pb-prop-row-#{node.id}-src") |> render()
+      assert row =~ "required"
+      refute row =~ "#c0473d", "filled, so it is not drawn as a problem"
     end
 
     # The number the badge shows is the SUBTREE's, which is the whole point: a shut component says
@@ -7058,6 +8705,161 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
       assert html =~ "dropped global footer"
       refute html =~ "failed to render"
+    end
+
+    test "selecting a placed component shows its properties as real controls", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "fancy-box",
+        attrs: [
+          %{"name" => "color", "type" => "string", "opts" => %{}},
+          %{"name" => "variant", "type" => "string", "opts" => %{}},
+          %{"name" => "disabled", "type" => "boolean", "opts" => %{}},
+          %{"name" => "title", "type" => "string", "opts" => %{"required" => true}}
+        ],
+        helpers: [
+          %{
+            "name" => "color_class",
+            "args" => "color",
+            "code" => "defp color_class(_), do: \"\"",
+            "discriminators" => [
+              %{"axis" => "color", "values" => ~w(primary secondary danger warning info light)},
+              %{"axis" => "variant", "values" => ~w(base filled)}
+            ]
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-fancy-box") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # EVERY declared property is on the form, each as its own typed control. A component's option
+      # surface is what the author opened the inspector for; showing only the ones already set meant
+      # alert's seventeen properties arrived as two.
+      html = render(view)
+      assert html =~ "Title"
+      assert html =~ "Required"
+      assert html =~ "Variant"
+      assert html =~ "Color"
+      assert html =~ "Disabled"
+
+      # …and they are sectioned, not one flat column.
+      assert html =~ "Appearance"
+
+      # The preset rides in the button's OWN `value`, not `phx-value-value`: LiveView overwrites the
+      # latter with `el.value`, which on a button is empty, so the preset arrived blank.
+      assert html =~ ~s(value="filled")
+      refute html =~ ~s(phx-value-value=)
+
+      # A six-value list is a select, a two-value list is segmented, a boolean is a switch.
+      assert html =~ "<select"
+      assert html =~ ~s(<option value="secondary")
+      assert html =~ ~s(role="switch")
+
+      # A required property keeps its delete control, disabled — an absent one would read as
+      # "look somewhere else".
+      assert view |> element("#pb-attr-clear-#{placed.id}-title") |> render() =~ "disabled"
+    end
+
+    # A component's own properties open; the chrome under a long panel does not. Sixteen rows of
+    # properties with the state pills wedged above them is the layout the fold exists to fix, and a
+    # plain element with no properties at all keeps its chrome open. The BREAKPOINT strip is exempt:
+    # it is what tells a reader which device the settings below belong to, and a fold that hides that
+    # is how someone edits Mobile believing they are editing Desktop.
+    test "on a component with many properties the chrome starts folded and the properties do not",
+         %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "wide-box",
+        attrs:
+          Enum.map(~w(a b c d e f g h i j), &%{"name" => &1, "type" => "string", "opts" => %{}})
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-wide-box") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      html = render(view)
+      assert html =~ "pb-attr-#{placed.id}-a"
+      refute html =~ "pb-state-hover", "State starts folded behind a long property panel"
+
+      # The breakpoint tabs are always on screen — they name the scope of everything under them.
+      assert html =~ "pb-bp-tablet"
+
+      # …and the folded chrome opens on the reader's say-so, because the heading tells the server
+      # which state it is in rather than making the toggle guess at the default.
+      assert view |> element("#pb-section-state") |> render_click() =~ "pb-state-hover"
+    end
+
+    # "Layout" names both a property group of a component and a section of the style panel. They were
+    # one key and one DOM id, so folding either folded both — and duplicate ids break DOM patching.
+    test "folding a component's Layout group leaves the style panel's Layout alone", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "gap-box",
+        attrs: [%{"name" => "padding", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-gap-box") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # The two "Layout"s are different things — a property group of the COMPONENT and a section of
+      # the style panel — and they keep separate fold state. The style one is open on selection, so
+      # the claim is that toggling either leaves the other exactly as it was.
+      assert render(view) =~ "pb-style-form-base-gap"
+
+      assert view |> element("#pb-prop-layout") |> render_click() =~ "pb-style-form-base-gap"
+      assert view |> element("#pb-prop-layout") |> render_click() =~ "pb-style-form-base-gap"
+
+      # And back the other way: closing the style section does not close the component's group.
+      view |> element("#pb-section-layout") |> render_click()
+      html = view |> element("#pb-prop-layout") |> render_click()
+
+      assert html =~ "pb-attr-#{placed.id}-padding"
+      refute html =~ "pb-style-form-base-gap"
     end
 
     # A component that declares a property as required will not render without it, so a page missing
