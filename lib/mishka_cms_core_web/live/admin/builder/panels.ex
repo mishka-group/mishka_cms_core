@@ -19,8 +19,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Builder.Descriptor
+  alias MishkaCmsCore.Builder.PaletteEntry
   alias Phoenix.LiveView.JS
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
+  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
@@ -28,8 +30,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
   # enough" is the difference a reader notices first, and several of these are two or three shapes
   # (a camera lens, an eye's pupil, a duplicate's offset card) that a single path cannot express.
@@ -327,6 +331,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     ]
   end
 
+  @doc "The core's inspector sections — the seed of `builder:inspector:sections`."
+  def core_inspector_sections do
+    [
+      descriptor("element", :inspector_section, gettext_noop("Element"), 10),
+      descriptor("editing_at", :inspector_section, gettext_noop("Editing at"), 20),
+      descriptor("state", :inspector_section, gettext_noop("State"), 30),
+      descriptor("layout", :inspector_section, gettext_noop("Layout"), 40),
+      descriptor("appearance", :inspector_section, gettext_noop("Appearance"), 50),
+      descriptor("behavior", :inspector_section, gettext_noop("Behavior"), 60),
+    ]
+  end
+
   @doc "The core's ⌘K commands — the seed of `builder:commands`."
   def core_commands do
     [
@@ -373,7 +389,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     ]
   end
 
-  defp descriptor(key, kind, label, priority, opts) do
+  defp descriptor(key, kind, label, priority, opts \\ []) do
     {:ok, built} =
       Descriptor.builder(%{
         key: key,
@@ -1062,6 +1078,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:left_tab, :atom, default: :components)
   attr(:left_w, :integer, required: true)
   attr(:mob_panel, :atom, default: :canvas)
+  attr(:selected_node, :any, default: nil)
+  attr(:breakpoint, :atom, default: :base)
+  attr(:pseudo, :atom, default: :base)
+  attr(:group_folds, :map, default: %{})
+  attr(:style_tokens, :list, default: [])
+  attr(:element_css, :string, default: "")
+  attr(:element_css_error, :string, default: nil)
+  attr(:element_css_advice, :string, default: nil)
+  # The record is here for the Expression section, which offers what THIS document declares — a
+  # component's own attributes and slots — rather than a vocabulary written into the editor.
+  attr(:record, :any, default: nil)
+
   def left_panel(assigns) do
     ~H"""
     <%!-- One wrapper that is ALWAYS in the DOM. The rail and the panel swap inside it, so the number
@@ -1108,6 +1136,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 {key, label, icon} <- [
                   {:components, gettext("Components"), :grid},
                   {:blocks, gettext("Blocks"), :card},
+                  {:inspector, gettext("Inspector"), :sliders}
                 ]
               }
               type="button"
@@ -1163,6 +1192,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           block_query={@block_query}
           block_library={@block_library}
           element_library={@element_library}
+        />
+        <.inspector
+          :if={@left_tab == :inspector}
+          editor={@editor}
+          selected_node={@selected_node}
+          breakpoint={@breakpoint}
+          pseudo={@pseudo}
+          group_folds={@group_folds}
+          style_tokens={@style_tokens}
+          element_css={@element_css}
+          element_css_error={@element_css_error}
+          element_css_advice={@element_css_advice}
+          record={@record}
         />
       </aside>
 
@@ -2086,6 +2128,753 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp column_span({:split, count}), do: count
   defp column_span(_part), do: 0
 
+  attr(:node, :any, required: true)
+  attr(:hider, :any, required: true)
+
+  # HIDDEN FROM VISITORS, said where the element is being edited, with the way back: Show for the one
+  # that was hidden, the element that hides it for one inside it. See `PageBuilder.Visibility`.
+  defp hidden_note(assigns) do
+    ~H"""
+    <div
+      :if={@hider}
+      id="pb-insp-hidden"
+      class="flex items-center gap-2.5 rounded-[12px] border border-[#e6e4de] bg-[#faf9f6] px-3 py-2.5"
+    >
+      <.icon name={:eye_off} size={14} class="flex-none text-[#8a877f]" />
+      <span class="min-w-0 flex-1 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]">
+        {(@hider.id == @node.id &&
+            gettext("Hidden from visitors. It stays in the page, with everything inside it.")) ||
+          gettext("Hidden from visitors with the element around it.")}
+      </span>
+      <button
+        :if={@hider.id == @node.id}
+        type="button"
+        id="pb-insp-show"
+        phx-click="toggle_visibility"
+        phx-value-id={@node.id}
+        class="inline-flex h-[26px] flex-none items-center gap-1.5 rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+      >
+        <.icon name={:eye} size={12} /> {gettext("Show")}
+      </button>
+      <button
+        :if={@hider.id != @node.id}
+        type="button"
+        id="pb-insp-select-hider"
+        phx-click="select"
+        phx-value-id={@hider.id}
+        class="inline-flex h-[26px] flex-none items-center gap-1.5 rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+      >
+        <.icon name={:layers} size={12} /> {gettext("Select it")}
+      </button>
+    </div>
+    """
+  end
+
+  defp inspector(assigns) do
+    ~H"""
+    <div class="flex min-h-0 flex-1 flex-col overflow-y-auto px-3.5 pb-4 pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <p :if={!@selected_node} class="py-10 text-center text-[12px] font-medium text-[#a8a5a0]">
+        {gettext("Select an element on the canvas to edit it.")}
+      </p>
+
+      <div :if={@selected_node} class="flex flex-col gap-[14px]">
+        <div class="flex items-center gap-2.5 rounded-[12px] border border-[#e4e2f7] bg-[#f2f1fc] px-3 py-2.5">
+          <span class="grid size-[30px] flex-none place-items-center rounded-[9px] bg-[#e4e2f7] text-[#4f4bcc]">
+            <.icon name={:layers} size={15} />
+          </span>
+          <div class="min-w-0 flex-1">
+            <div class="flex min-w-0 items-center gap-1.5">
+              <div class="truncate font-['Space_Grotesk'] text-[12.5px] font-bold text-[#2e2b6b]">
+                {selection_tag(@selected_node)}
+              </div>
+            </div>
+            <div class="text-[10.5px] font-medium text-[#6d6a63]">
+              {selection_meta(@selected_node)}
+            </div>
+          </div>
+        </div>
+
+        <.hidden_note
+          node={@selected_node}
+          hider={Visibility.hidden_by(@editor.tree, @selected_node.id)}
+        />
+
+
+
+
+
+        <%!-- THE BREAKPOINT IS A TAB, AND WHAT IT GOVERNS SITS INSIDE IT. It used to be a folded
+              group of three buttons with State, Layout and Appearance as its SIBLINGS — nothing said
+              those sections were the tab's contents, so an author who left the panel on Mobile and
+              came back later read the Layout numbers as the element's, not as a mobile override, and
+              edited the wrong breakpoint. Drawing the body joined to the active tab says it once, in
+              a way nobody has to be told.
+
+              Component properties stay ABOVE this on purpose: a property is one value for the whole
+              page, and putting it inside a breakpoint would promise a per-device version that does
+              not exist. Everything below the strip is per-breakpoint; everything above is not.
+
+              The count on a tab is the only way to SEE that a page carries mobile overrides without
+              opening each one — the thing that makes a responsive edit findable a week later. --%>
+        <div :if={styleable?(@selected_node)}>
+          <div
+            data-role="pb-bptabs"
+            class="flex gap-1 rounded-t-[12px] border border-b-0 border-[#e6e4de] bg-[#f2f1ec] p-1"
+          >
+            <%!-- The breakpoint travels in the button's OWN `value`, not in `phx-value-value`.
+                  `View.extractMeta` writes `meta.value = el.value` after collecting the `phx-value-*`
+                  attributes, and a button's `value` is `""` unless it is given one — so the two
+                  collide and the server was told `%{"value" => ""}` every time. Every tab in this
+                  panel picked the first option no matter which one was clicked, which reads as "the
+                  tabs are dead". --%>
+            <button
+              :for={{bp, label, icon, tip} <- breakpoint_tabs()}
+              type="button"
+              id={"pb-bp-#{bp}"}
+              phx-click="set_breakpoint"
+              value={bp}
+              title={tip}
+              aria-pressed={to_string(@breakpoint == bp)}
+              class={[
+                "flex h-[30px] min-w-0 flex-1 items-center justify-center gap-1.5 overflow-hidden rounded-[8px] text-[10.5px] font-bold",
+                (@breakpoint == bp && "bg-white text-[#4f4bcc] shadow-[0_1px_3px_rgba(30,28,24,.12)]") ||
+                  "text-[#6d6a63]"
+              ]}
+            >
+              <.icon name={icon} size={12} class="flex-none" />
+              <span class="min-w-0 truncate">{label}</span>
+              <span
+                :if={override_count(@selected_node, bp) > 0}
+                id={"pb-bp-count-#{bp}"}
+                title={gettext("%{count} set here", count: override_count(@selected_node, bp))}
+                class={[
+                  "grid size-[15px] flex-none place-items-center rounded-full font-['Space_Grotesk'] text-[9px] font-bold",
+                  (@breakpoint == bp && "bg-[#e4e2f7] text-[#4f4bcc]") ||
+                    "bg-[#e0ded7] text-[#6d6a63]"
+                ]}
+              >
+                {override_count(@selected_node, bp)}
+              </span>
+            </button>
+          </div>
+
+          <div class="flex flex-col gap-[14px] rounded-b-[12px] border border-[#e6e4de] bg-white px-3 py-[13px]">
+            <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+              {breakpoint_note(@breakpoint)}
+            </p>
+
+            <section>
+              <.fold_heading
+                title={gettext_noop("State")}
+                group_folds={@group_folds}
+                folded_by_default={true}
+              >
+                <:meta>
+                  <span
+                    :if={@pseudo != :base}
+                    id="pb-state-recorded"
+                    class="inline-flex items-center gap-1.5 rounded-full border border-[#f0e3c9] bg-[#fbf1df] px-2 py-0.5 text-[10px] font-bold text-[#8a5514]"
+                  >
+                    <span class="size-[5px] rounded-full bg-[#cf8a24]"></span>{gettext("Recorded")}
+                  </span>
+                </:meta>
+              </.fold_heading>
+              <div
+                :if={!folded?(@group_folds, "section", "State", dense_panel?(assigns))}
+                class="flex flex-wrap gap-1"
+              >
+                <button
+                  :for={
+                    {ps, label} <- [
+                      {:base, gettext("Normal")},
+                      {:hover, ":hover"},
+                      {:focus, ":focus"},
+                      {:active, ":active"}
+                    ]
+                  }
+                  type="button"
+                  id={"pb-state-#{ps}"}
+                  phx-click="set_pseudo"
+                  value={ps}
+                  class={[
+                    "h-[26px] flex-none rounded-full border px-2.5 font-['Space_Grotesk'] text-[10px] font-semibold",
+                    (@pseudo == ps && "border-[#17161a] bg-[#17161a] text-white") ||
+                      "border-[#ecebe6] bg-[#f6f5f2] text-[#6d6a63]"
+                  ]}
+                >
+                  {label}
+                </button>
+              </div>
+              <p
+                :if={!folded?(@group_folds, "section", "State", dense_panel?(assigns))}
+                class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#6d6a63]"
+              >
+                {state_note(@pseudo)}
+              </p>
+            </section>
+
+            <%!-- Layout and Appearance write STYLE overrides into the bucket the tab strip and the
+                  State chips choose, which is what makes those selectors mean something. Without
+                  these controls the breakpoint tabs pick a bucket nothing ever writes to. --%>
+            <%!-- OPEN, because spacing is the first thing anyone reaches for and it was three folds
+                  and a scroll away. `group_folds` still remembers a deliberate collapse. --%>
+            <.style_group
+              title={gettext_noop("Layout")}
+              group_folds={@group_folds}
+              folded_by_default={false}
+              props={layout_props()}
+              node={@selected_node}
+              bucket={write_bucket(assigns)}
+              breakpoint={@breakpoint}
+              pseudo={@pseudo}
+              covered={covered_controls(@element_css, write_bucket(assigns))}
+            >
+              <:pre>
+                <.layout_pictures
+                  node={@selected_node}
+                  bucket={write_bucket(assigns)}
+                  covered={covered_controls(@element_css, write_bucket(assigns))}
+                />
+
+                <div class="mt-3">
+                  <.spacing_box
+                    node={@selected_node}
+                    bucket={write_bucket(assigns)}
+                    covered={covered_controls(@element_css, write_bucket(assigns))}
+                  />
+                </div>
+
+                <div class="mt-2.5">
+                  <.style_group
+                    title={gettext_noop("Spacing by axis")}
+                    group_folds={@group_folds}
+                    folded_by_default={
+                      !axes_in_play?(
+                        @selected_node,
+                        write_bucket(assigns),
+                        covered_controls(@element_css, write_bucket(assigns))
+                      )
+                    }
+                    props={axis_props()}
+                    node={@selected_node}
+                    bucket={write_bucket(assigns)}
+                    breakpoint={@breakpoint}
+                    pseudo={@pseudo}
+                    covered={covered_controls(@element_css, write_bucket(assigns))}
+                  />
+                </div>
+              </:pre>
+            </.style_group>
+
+            <.style_group
+              title={gettext_noop("Typography")}
+              group_folds={@group_folds}
+              folded_by_default={false}
+              props={typography_props()}
+              node={@selected_node}
+              bucket={write_bucket(assigns)}
+              breakpoint={@breakpoint}
+              pseudo={@pseudo}
+              covered={covered_controls(@element_css, write_bucket(assigns))}
+            />
+
+            <section>
+              <.fold_heading
+                title={gettext_noop("Appearance")}
+                group_folds={@group_folds}
+                folded_by_default={false}
+              />
+              <div
+                :if={!folded?(@group_folds, "section", "Appearance", false)}
+                class="mb-[7px] flex items-center gap-1.5 text-[10.5px] font-semibold text-[#6d6a63]"
+              >
+                {gettext("Background")}
+              </div>
+              <div
+                :if={!folded?(@group_folds, "section", "Appearance", false)}
+                class="flex flex-wrap gap-[7px]"
+              >
+                <button
+                  :for={{name, value, tint} <- swatches()}
+                  type="button"
+                  id={"pb-swatch-#{name}"}
+                  phx-click="op"
+                  phx-value-kind="set_style"
+                  phx-value-node_id={@selected_node.id}
+                  phx-value-bucket={write_bucket(assigns)}
+                  phx-value-prop="background"
+                  value={
+                    (own_style(@selected_node, write_bucket(assigns), "background") == value && "") ||
+                      value
+                  }
+                  title={gettext("Background %{value}", value: value)}
+                  aria-pressed={
+                    to_string(own_style(@selected_node, write_bucket(assigns), "background") == value)
+                  }
+                  class={[
+                    "size-[34px] rounded-[9px] border-2",
+                    tint,
+                    (own_style(@selected_node, write_bucket(assigns), "background") == value &&
+                       "border-[#5b57d6]") || "border-[#ecebe6]"
+                  ]}
+                ></button>
+
+              </div>
+
+              <section :if={@style_tokens != []} class="mt-[13px]">
+                <.fold_heading
+                  title={gettext_noop("Site colours")}
+                  group_folds={@group_folds}
+                  folded_by_default={true}
+                >
+                  <:meta>
+                    <span class="grid h-[15px] min-w-[15px] flex-none place-items-center rounded-full bg-[#e0ded7] px-1 font-['Space_Grotesk'] text-[9px] font-bold text-[#6d6a63]">
+                      {length(@style_tokens)}
+                    </span>
+                  </:meta>
+                </.fold_heading>
+
+                <div
+                  :if={!folded?(@group_folds, "section", "Site colours", true)}
+                  class="flex flex-wrap gap-[7px]"
+                >
+                  <.token_swatch
+                    :for={{key, value, label} <- @style_tokens}
+                    node={@selected_node}
+                    bucket={write_bucket(assigns)}
+                    prop="background"
+                    token={key}
+                    value={value}
+                    label={label}
+                  />
+                </div>
+              </section>
+
+              <div :if={!folded?(@group_folds, "section", "Appearance", false)} class="mt-[13px]">
+                <.style_group
+                  props={appearance_props()}
+                  node={@selected_node}
+                  bucket={write_bucket(assigns)}
+                  breakpoint={@breakpoint}
+                  pseudo={@pseudo}
+                  covered={covered_controls(@element_css, write_bucket(assigns))}
+                />
+              </div>
+
+              <div :if={!folded?(@group_folds, "section", "Appearance", false)} class="mt-[13px]">
+                <.shadow_editor
+                  node={@selected_node}
+                  bucket={write_bucket(assigns)}
+                  covered={covered_controls(@element_css, write_bucket(assigns))}
+                />
+              </div>
+            </section>
+
+            <%!-- Clearing ONE bucket, not the element's styles: the tab and the State chips name a
+                  bucket, and this is how you undo what was written into it without hunting each
+                  field's own reset dot. Absent when the bucket holds nothing, because a button that
+                  would do nothing reads as one that is broken. --%>
+            <button
+              :if={bucket_written?(@selected_node, write_bucket(assigns))}
+              type="button"
+              id="pb-style-reset"
+              phx-click="op"
+              phx-value-kind="reset_styles"
+              phx-value-node_id={@selected_node.id}
+              phx-value-bucket={write_bucket(assigns)}
+              class="inline-flex h-[26px] items-center gap-1.5 self-start rounded-[8px] border border-[#f0dcd8] bg-[#fdf3f1] px-2.5 text-[10.5px] font-bold text-[#c0473d] hover:bg-[#fbe9e7]"
+            >
+              <.icon name={:undo} size={12} /> {gettext("Clear %{bucket} overrides",
+                bucket: bucket_label(write_bucket(assigns))
+              )}
+            </button>
+          </div>
+        </div>
+        <div
+          :if={!styleable?(@selected_node)}
+          id="pb-not-styleable"
+          class="flex flex-col gap-2 rounded-[12px] border border-[#e6e4de] bg-[#faf9f6] px-3 py-[13px]"
+        >
+          <p class="text-[10.5px] font-medium leading-[1.55] text-[#6d6a63]">
+            {unstyleable_note(@selected_node)}
+          </p>
+          <button
+            :if={@selected_node.parent_id}
+            type="button"
+            id="pb-select-parent"
+            phx-click="select"
+            phx-value-id={@selected_node.parent_id}
+            class="inline-flex h-[26px] items-center gap-1.5 self-start rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+          >
+            <.icon name={:layers} size={12} /> {gettext("Style the element around it")}
+          </button>
+          <%!-- WHERE SOMEBODY HAS ALREADY POINTED AT THE WORDS. The right-click menu offers this on
+                every node, but a run of text is the one selection whose panel is otherwise a dead
+                end — and turning words into a link is the commonest thing an author wants from a
+                run of text that is not editing it. --%>
+          <button
+            :if={@selected_node.kind == :text}
+            type="button"
+            id="pb-text-link"
+            phx-click="ctx"
+            phx-value-action="link"
+            phx-value-node_id={@selected_node.id}
+            class="inline-flex h-[26px] items-center gap-1.5 self-start rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+          >
+            <.icon name={:link} size={12} /> {gettext("Make it a link")}
+          </button>
+        </div>
+
+        <%!-- Each switch is a class the element either carries or does not, so the toggle reports the
+              document's real state rather than a preference stored beside it. Visibility and locking
+              are NOT here: those are session state and belong to the layers rail, which is where the
+              prototype keeps them too. --%>
+        <.inspector_group
+          :if={styleable?(@selected_node)}
+          title={gettext_noop("Behavior")}
+          group_folds={@group_folds}
+          folded_by_default={true}
+        >
+          <div class="flex flex-col">
+            <.toggle_row
+              :for={{key, label, _classes} <- behavior_toggles()}
+              id={"pb-toggle-#{key}"}
+              label={label}
+              on={behavior_on?(@selected_node, key)}
+              event="toggle_behavior"
+              node_id={@selected_node.id}
+              value={key}
+            />
+          </div>
+        </.inspector_group>
+
+
+        <.element_css
+          node={@selected_node}
+          entry={component_entry(assigns)}
+          css={@element_css}
+          error={@element_css_error}
+          advice={@element_css_advice}
+        />
+
+
+
+      </div>
+    </div>
+    """
+  end
+
+  attr(:node, :any, required: true)
+  attr(:entry, :any, default: nil)
+  attr(:css, :string, default: "")
+  attr(:error, :string, default: nil)
+  attr(:advice, :string, default: nil)
+
+  @doc """
+  One element's own CSS.
+
+  Behind a disclosure, next to Advanced, for the same reason: it is a real need and a rare one, and
+  the panel above it answers the common case. `&` means this element — plain CSS nesting rather
+  than Elementor's `selector` keyword or Bricks' `%root%`, so what is typed is real CSS and can be
+  checked by reading it. See `MishkaCmsCore.Runtime.PageBuilder.ElementCss`.
+
+  A COMPONENT IS ONE NODE AND MANY ELEMENTS. The rule is keyed on a class written into the node's
+  `class` attribute, which reaches the DOM only if the component declares `class` and puts it
+  somewhere — a kit component that does not is unreachable this way, and offering the box anyway
+  would take CSS that could never match. Those say so instead, and name the way round.
+
+  The movable list carries NO `phx-no-curly-interpolation`. That attribute is a parse-time switch
+  over the template source and everything nested in it; a declaration's text arrives at runtime,
+  where braces are never interpolated and so need no protecting. Wearing it anyway cost the row its
+  content — the author read the interpolation's own characters back, never the line they had just
+  written. The `&` and `&:hover` shown above the box keep theirs: those ARE template source, and
+  read as literal text either way.
+
+  THE ADVICE IS SHOWN WHERE THE CSS WAS TYPED. `MishkaCmsCore.Runtime.PageBuilder.ElementCss.advice/1`
+  catches the one mistake the validator cannot refuse — `main { … }` is valid CSS that quietly aims
+  at a `main` INSIDE this element rather than at the element — and the reply only ever reached the
+  code drawer. An author working in this box wrote a rule, watched the page not change, and was
+  told nothing: `inspector/1` took `element_css_advice` and never passed it on. It is drawn next to
+  `@error` and hidden behind it, because a body that will not parse has no aim to comment on yet.
+  """
+  def element_css(assigns) do
+    assigns =
+      assigns
+      |> assign(:targetable?, targetable?(assigns.node, assigns.entry))
+      |> assign(:movable, movable_declarations(assigns.css))
+      |> assign(:reaching, ElementCss.reaching_selectors(assigns.css))
+      |> assign(:kit, kit_label(assigns.entry))
+
+    ~H"""
+    <section :if={@node.kind in [:tag, :component]}>
+      <button
+        type="button"
+        id="pb-css-toggle"
+        phx-click={
+          JS.toggle(to: "#pb-css-body", display: "flex")
+          |> JS.toggle_class("rotate-90", to: "#pb-css-toggle > svg")
+        }
+        class="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left hover:bg-[#f6f5f2]"
+      >
+        <.icon name={:chevron} size={11} />
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("Custom CSS")}
+        </span>
+        <span class="flex-1"></span>
+        <span
+          :if={String.trim(@css) != ""}
+          class="size-[6px] flex-none rounded-full bg-[#8580d8]"
+          title={gettext("This element has its own CSS")}
+        ></span>
+      </button>
+
+      <div id="pb-css-body" class="mt-1.5 hidden flex-col gap-2">
+        <%!-- A DEAD END WITH A DOOR IN IT. Saying "put it inside a container" and leaving the reader
+              to find out how is the same as saying no: the wrapper is one op the editor already has,
+              so it is offered here rather than described. --%>
+        <div :if={!@targetable?} class="flex flex-col gap-1.5">
+          <p
+            id="pb-css-unreachable"
+            class="rounded-[9px] bg-[#faf9f6] px-2.5 py-2 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]"
+          >
+            {gettext(
+              "This component takes no class of its own, so there is nothing here for a rule to attach to. Put it inside a container and style that instead."
+            )}
+          </p>
+          <button
+            type="button"
+            id="pb-css-wrap"
+            phx-click="op"
+            phx-value-kind="wrap"
+            phx-value-node_id={@node.id}
+            phx-value-tag="div"
+            class="w-full rounded-[9px] border border-[#dcdbf5] bg-[#f2f1fc] py-2 text-[11.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            {gettext("Wrap it in a div")}
+          </button>
+        </div>
+
+        <p :if={@targetable?} class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+          <.sentence
+            text={
+              gettext_noop(
+                "Declarations for this element. Write %{self} where you mean it — %{hover}, or a media query."
+              )
+            }
+            parts={%{self: {"code", nil, "&"}, hover: {"code", nil, "&:hover"}}}
+          />
+        </p>
+
+        <form :if={@targetable?} id={"pb-css-form-#{@node.id}"} phx-submit="save_element_css">
+          <input type="hidden" name="node_id" value={@node.id} />
+          <textarea
+            id="pb-css-text"
+            name="css"
+            spellcheck="false"
+            rows="6"
+            placeholder="padding: 20px;&#10;&#10;&:hover {&#10;  opacity: .8;&#10;}"
+            data-accent-panel
+            class="w-full resize-y rounded-[10px] border-0 bg-[#17161a] px-3 py-2.5 font-['Space_Grotesk'] text-[11.5px] leading-[1.7] text-[#c9c7d1] outline-none [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
+          >{@css}</textarea>
+
+          <p
+            :if={@error}
+            id="pb-css-error"
+            class="mt-1.5 rounded-[8px] bg-[#fdf3f1] px-2.5 py-1.5 text-[10.5px] font-semibold text-[#c0473d]"
+          >
+            {@error}
+          </p>
+
+          <p
+            :if={!@error && @advice}
+            id="pb-css-advice"
+            class="mt-1.5 rounded-[8px] bg-[#fdf8ef] px-2.5 py-1.5 text-[10.5px] font-medium leading-[1.5] text-[#8a6d3b]"
+          >
+            {@advice}
+          </p>
+
+          <%!-- REACHING INTO MARKUP THE AUTHOR DOES NOT OWN. `& > .badge` on a component aims a rule
+                at the kit's own elements, which the next version of the kit is free to rename. Not
+                refused — sometimes it is the only way to style the thing — but said out loud, and
+                named with the kit and version so the reader knows what they are betting on. --%>
+          <p
+            :if={@reaching != [] and @node.kind == :component}
+            id="pb-css-reaching"
+            class="mt-1.5 rounded-[8px] bg-[#fdf8ef] px-2.5 py-1.5 text-[10px] font-medium leading-[1.5] text-[#8a6d3b]"
+          >
+            <span class="font-bold">{Enum.join(@reaching, ", ")}</span>
+            {gettext(
+              "reaches inside %{kit}, whose markup this page does not own. A future version of the kit can rename it and this rule would stop matching.",
+              kit: @kit
+            )}
+          </p>
+
+          <button
+            type="submit"
+            id="pb-css-save"
+            class="mt-2 w-full rounded-[9px] border border-[#dcdbf5] bg-[#f2f1fc] py-2 text-[11.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            {gettext("Apply")}
+          </button>
+        </form>
+
+        <div :if={@targetable? and @movable != []} id="pb-css-movable" class="flex flex-col gap-1">
+          <%!-- NOT "same result". A control writes an ordinary utility, where this text is emitted
+                last and beats everything — so on an element already carrying a class for the same
+                property, moving the line hands the argument to that class. Saying so is one line;
+                a reader who has just watched the padding change and been told it would not is a
+                reader who stops trusting the panel. --%>
+          <p class="text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+            {gettext(
+              "These have a control of their own. Moving one takes it out of the text and sets the control — one place to change it, though a class already on the element can then win."
+            )}
+          </p>
+          <div
+            :for={{declaration, index, prop} <- @movable}
+            class="flex items-center gap-1.5 rounded-[8px] border border-[#ecebe6] bg-[#faf9f6] px-2 py-1.5"
+          >
+            <code class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10.5px] font-semibold text-[#3a382f]">
+              {declaration.text}
+            </code>
+            <span
+              :if={declaration.bucket != :base}
+              class="flex-none text-[9px] font-bold uppercase tracking-[0.06em] text-[#a8a5a0]"
+            >
+              {source_word(declaration.bucket)}
+            </span>
+            <button
+              type="button"
+              id={"pb-css-move-#{index}"}
+              phx-click="move_css_to_controls"
+              phx-value-node_id={@node.id}
+              phx-value-index={index}
+              title={gettext("Set the %{prop} control from this line", prop: prop)}
+              class="h-[21px] flex-none rounded-[6px] border border-[#dcdbf5] bg-white px-2 text-[10px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+            >
+              {gettext("Move to controls")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  # THE LINES A CONTROL COULD HOLD INSTEAD, paired with their position in the text so the server can
+  # take exactly that line back out. A declaration the panel has no control for — `border-image`,
+  # anything carrying `!important`, a value the enumerated controls cannot spell — is absent rather
+  # than offered and then refused.
+  #
+  # Only base, hover, focus and active: those are the buckets the panel can write, and a media query
+  # an author wrote by hand need not line up with Tablet or Mobile.
+  defp movable_declarations(css) do
+    css
+    |> ElementCss.declarations()
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {declaration, index} ->
+      case Styles.from_declaration(declaration.property, declaration.value) do
+        {:ok, {prop, _value}} -> [{declaration, index, prop}]
+        :error -> []
+      end
+    end)
+  end
+
+  # The whole style vocabulary `Tree.Styles` can express, split the way the panel groups it. A
+  # property missing here is one the author cannot reach even though the serialiser understands it —
+  # a template carrying `max-w-[60ch]` would parse into an override the panel could neither show nor
+  # undo. `builder_live_test.exs` walks `Styles.properties/0` and fails if a control is missing.
+  # `display`, `direction`, `justify`, `align`, `wrap` and `gap` are ABSENT on purpose: they have the
+  # picture controls above instead — the same properties, a control someone who does not write CSS
+  # can read. Two controls writing one override is how a panel starts disagreeing with itself.
+  # THE BOX DRAWS THE EDGES NOW. Padding top and Padding bottom used to be two fields in a flat list
+  # of thirteen, with no left or right at all and no margin edge of any kind — so `mt-*`, the third
+  # most common utility in the block library, had no control, and the two edges that did exist sat a
+  # scroll apart from each other. `spacing_box/1` puts all eight where they are on the element.
+  #
+  # What stays here is what a box cannot show.
+  @layout_props [
+    {"width", gettext_noop("Width")},
+    {"height", gettext_noop("Height")},
+    {"min-height", gettext_noop("Min height")},
+    {"max-width", gettext_noop("Max width")},
+    {"z-index", gettext_noop("Z index")}
+  ]
+
+  # THE AXES, folded away under the box. A page may already carry `py-[…]` — absorbed from something
+  # somebody typed, or written by this panel before the box existed — and an override with no
+  # control is one nobody can clear. They are also how a reader who thinks in axes rather than in
+  # edges sets both at once.
+  @axis_props [
+    {"padding", gettext_noop("Padding")},
+    {"py", gettext_noop("Padding Y")},
+    {"px", gettext_noop("Padding X")},
+    {"margin", gettext_noop("Margin")},
+    {"my", gettext_noop("Margin Y")},
+    {"mx", gettext_noop("Margin X")}
+  ]
+
+  # SIZE, WEIGHT AND CASE ARE NOT DECORATION. Across the eleven starter blocks there are 54 font
+  # sizes, 37 weights, 33 top margins, 10 letter-spacings and 7 alignments — and until now the only
+  # one of them the panel could touch was the colour. Changing a hero heading's size meant writing
+  # CSS by hand in the box at the bottom of the drawer.
+  #
+  # Colour moves here from Appearance, where it was the odd one out: it is the thing people set
+  # SECOND, right after the size, and every other editor groups it with the type for that reason.
+  @typography_props [
+    {"font-size", gettext_noop("Size")},
+    {"line-height", gettext_noop("Line height")},
+    {"letter-spacing", gettext_noop("Letter spacing")},
+    {"color", gettext_noop("Colour")},
+    {"font-weight", gettext_noop("Weight")},
+    {"text-align", gettext_noop("Align")},
+    {"text-transform", gettext_noop("Case")}
+  ]
+
+  # A BORDER COLOUR ON ITS OWN CHANGES NOTHING, which is how this list read before: an element with
+  # no border took the colour, drew nothing, and the control looked broken. Width and style are what
+  # make it a border.
+  @appearance_props [
+    {"background", gettext_noop("Background")},
+    {"radius", gettext_noop("Radius")},
+    {"border-color", gettext_noop("Border colour")},
+    {"border-width", gettext_noop("Border width")},
+    {"opacity", gettext_noop("Opacity")},
+    {"border-style", gettext_noop("Border style")}
+  ]
+
+  @doc false
+  def layout_props, do: @layout_props
+
+  @doc false
+  def axis_props, do: @axis_props
+
+  @doc false
+  def typography_props, do: @typography_props
+
+  @doc false
+  def appearance_props, do: @appearance_props
+
+  # `background` is BOTH a swatch row and a field, which is the shape Gap already has: named values
+  # for the ones a page reuses, and a box for everything else.
+  #
+  # Swatches alone made **Move to controls** a one-way door. `background-color: #dadada` left the
+  # text box, matched none of the five, and there was then nothing on screen that held it — no
+  # selected swatch, no field, nothing to clear but the whole bucket. `color` and `border-color`
+  # never had that problem because they are fields, and this is the same field.
+
+  # Whether the property panel above the chrome is long enough that "Editing at" should start folded.
+  # The threshold is a screenful: alert declares seventeen properties, and pushing the breakpoint and
+  # state rows between the reader and those properties is what the fold is for. A plain `<div>` has
+  # no properties at all and the chrome IS the panel, so it stays open.
+  @dense_panel 8
+
+  defp dense_panel?(assigns) do
+    case component_entry(assigns) do
+      nil -> false
+      entry -> length(Inspector.attrs(entry)) > @dense_panel
+    end
+  end
+
   # ONE `picked` FIELD, TWO KINDS. A block arrives tagged `{:block, id}` so the canvas, the layer
   # tree and both hints all read the same field and cannot disagree about what is armed — and so a
   # tuple never reaches a template, which is not renderable.
@@ -2103,6 +2892,1450 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       %{id: ^id} -> :self
       _container -> :parent
     end
+  end
+
+  # "Layout" is both a property group of a COMPONENT and a section of the style panel, so the fold
+  # state is namespaced by which one it is — otherwise closing one closed the other, and the two
+  # headings collided on the same DOM id.
+  defp folded?(folds, scope, name, default), do: Map.get(folds, "#{scope}:#{name}", default)
+
+  # "Editing at" is a heading, not an id. A space in one is invalid HTML and unaddressable from a
+  # selector, which is how the fold toggle came to be untestable and unclickable.
+  defp slug(title), do: title |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-")
+
+  attr(:id, :string, required: true)
+  attr(:event, :string, default: "op", doc: "the change event; `op` for anything editing a node")
+  attr(:rest, :global)
+  slot(:inner_block, required: true)
+
+  @doc false
+  # Every editable field lives in one of these.
+  #
+  # Two reasons, and the second is the one that bites. A bare `<input phx-change>` outside a form
+  # fires NOTHING — LiveView binds change events through forms — and the `phx-value-*` that say which
+  # property is being written are only merged into the payload for form events. That is the same trap
+  # that left every dropdown in this panel inert.
+  #
+  # The first reason is what the reader feels: committing on `phx-blur` meant a change only landed
+  # when you clicked somewhere else, so typing a title and looking at the canvas showed nothing until
+  # you clicked away. With `phx-debounce` on the input the field commits itself while you type.
+  def field_form(assigns) do
+    ~H"""
+    <form id={@id} phx-change={@event} phx-submit={@event} {@rest}>
+      {render_slot(@inner_block)}
+    </form>
+    """
+  end
+
+  defp component_entry(%{selected_node: %Node{kind: :component} = node, editor: editor} = assigns) do
+    name = Node.component_name(node)
+
+    Enum.find(editor.components, &(&1.name == name)) || own_declaration(assigns, node, name)
+  end
+
+  # A slot has properties of its own. Phoenix declares them in the slot's block —
+  # `slot :item do attr :id, :string end` — so they live on the OWNING component, not on the slot
+  # node, and 63 of the kit's components use them. Looking the parent up and handing the slot's own
+  # block back as an entry is what puts them in the inspector; selecting a slot that declares six
+  # properties used to read "Nothing set yet".
+  #
+  # `slots: []` is not laziness: a slot cannot contain another slot, so there is nothing to list.
+  defp component_entry(%{selected_node: %Node{kind: :slot} = node, editor: editor}) do
+    with %Node{} = parent <- Tree.get(editor.tree, node.parent_id),
+         %{} = entry <- Enum.find(editor.components, &(&1.name == Node.component_name(parent))),
+         %{} = slot <-
+           Enum.find(Inspector.slots(entry), &(Inspector.name(&1) == Node.slot_name(node))) do
+      # The parent's feature map comes along: a slot's `color` or `size` is drawn from the SAME
+      # option lists the component's own are, and the panel reads `entry.features` unconditionally —
+      # without this key, selecting any slot raised `KeyError :features` and took the editor down.
+      %{
+        name: Node.slot_name(node),
+        attrs: Inspector.attrs(slot),
+        slots: [],
+        features: Map.get(entry, :features, %{})
+      }
+    else
+      _no_declaration -> nil
+    end
+  end
+
+  defp component_entry(_assigns), do: nil
+
+  defp override?(_node, :base, _prop), do: false
+  defp override?(node, bucket, prop), do: own_style(node, bucket, prop)
+
+  # THE DECLARATION FOR A COMPONENT YOU ARE STANDING INSIDE.
+  #
+  # `editor.components` is the palette, and the palette is missing exactly the two things a
+  # component builder meets in its own markup. The component being edited is kept out of it so it
+  # cannot be dropped into itself — `chelekom-menu` renders itself for its submenus, so its own
+  # inner node had no declaration and drew a panel with no properties, no slots and no docs. And a
+  # component's private helpers (`<.badge_dismiss>`, twenty-three of them across the kit) are never
+  # in the palette at all, because `palette_entry/1` deliberately drops the `helpers` column — it is
+  # 87% of the palette's weight, and the palette rides inside the editing session.
+  #
+  # Both are on the record in hand, so both are answered from it. Built off the component's own
+  # entry with the helper's declaration swapped in, so a helper inherits every other key an entry
+  # carries rather than needing a second list of them here.
+  defp own_declaration(%{record: %{} = record}, node, name) do
+    cond do
+      to_string(Map.get(record, :name)) == name -> record_entry(record, name, record)
+      helper = local_helper(record, node) -> record_entry(record, name, helper)
+      true -> nil
+    end
+  end
+
+  defp own_declaration(_assigns, _node, _name), do: nil
+
+  # A dotted tag that is not `<.component>` names a function in the component's own prelude, which
+  # is where its `attrs` and `slots` are declared.
+  defp local_helper(record, %Node{tag: "." <> _rest} = node) do
+    wanted = Node.component_name(node)
+
+    record
+    |> Map.get(:helpers)
+    |> List.wrap()
+    |> Enum.find(fn helper -> to_string(Inspector.name(helper)) == wanted end)
+  end
+
+  defp local_helper(_record, _node), do: nil
+
+  defp record_entry(record, name, declaring) do
+    %{
+      id: Map.get(record, :id),
+      key: name,
+      name: name,
+      label: Phoenix.Naming.humanize(String.replace(name, "-", "_")),
+      type: Map.get(record, :type) || "general",
+      description: Map.get(record, :description),
+      template: Map.get(record, :template),
+      attrs: Inspector.attrs(declaring),
+      slots: Inspector.slots(declaring),
+      features: Inspector.features(declaring),
+      examples: [],
+      global?: is_nil(Map.get(record, :site_id))
+    }
+  end
+
+  attr(:title, :string,
+    default: nil,
+    doc: "omit to render the fields alone, inside another section"
+  )
+
+  attr(:props, :list, required: true)
+  attr(:node, :any, required: true)
+  attr(:bucket, :atom, required: true)
+  attr(:breakpoint, :atom, required: true)
+  attr(:pseudo, :atom, required: true)
+  attr(:group_folds, :map, default: %{})
+  attr(:folded_by_default, :boolean, default: false)
+  attr(:covered, :map, default: %{})
+
+  slot(:pre, doc: "controls shown above the field grid, folding with it")
+
+  # One group of style overrides, written into whichever bucket the breakpoint tab / State chips
+  # currently name. Each row shows where its effective value comes from — the prototype's
+  # `inherited` / `from desktop` provenance — and an override dot that resets just this bucket.
+  defp style_group(assigns) do
+    ~H"""
+    <section class={[!@title && "contents"]}>
+      <.fold_heading
+        :if={@title}
+        title={@title}
+        group_folds={@group_folds}
+        folded_by_default={@folded_by_default}
+      />
+
+      <div
+        :if={
+          @pre != [] and (!@title or !folded?(@group_folds, "section", @title, @folded_by_default))
+        }
+        class="mb-3"
+      >
+        {render_slot(@pre)}
+      </div>
+
+      <div
+        :if={!@title or !folded?(@group_folds, "section", @title, @folded_by_default)}
+        class="grid grid-cols-2 gap-2.5"
+      >
+        <%!-- A `div` rather than a `label`, because an enumerated property's control is a form (see
+              below) and a form is not valid inside a label. --%>
+        <div :for={{prop, label} <- @props} class={["min-w-0", labelled?(prop) && "col-span-2"]}>
+          <span class="mb-1.5 flex items-center gap-1.5">
+            <span class="min-w-0 truncate text-[10.5px] font-semibold text-[#6d6a63]">{translate(
+              label
+            )}</span>
+            <%!-- Only away from base. At Desktop/Normal the value IS the element's value, not an
+                  override of one, and marking it as such made every styled element look edited. --%>
+            <span
+              :if={override?(@node, @bucket, prop)}
+              title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
+              class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
+            />
+            <.overruled covered={@covered} prop={prop} />
+            <span class="flex-1"></span>
+            <button
+              :if={override?(@node, @bucket, prop)}
+              type="button"
+              id={"pb-style-clear-#{@bucket}-#{prop}"}
+              phx-click="op"
+              phx-value-kind="set_style"
+              phx-value-node_id={@node.id}
+              phx-value-bucket={@bucket}
+              phx-value-prop={prop}
+              value=""
+              title={gettext("Clear this %{bucket} override", bucket: source_word(@bucket))}
+              class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
+            >
+              {gettext("Reset")}
+            </button>
+            <span
+              :if={!own_style(@node, @bucket, prop) && inherited_from(@node, @bucket, prop)}
+              class="flex-none text-[9px] font-bold text-[#a8a5a0]"
+            >
+              {gettext("from %{source}", source: inherited_from(@node, @bucket, prop))}
+            </span>
+          </span>
+          <%!-- The `phx-value-*` that say WHICH override this is are only merged into the payload
+                for form events — a bare `<select phx-change>` sends nothing but its own value, so the
+                op would arrive with no node, bucket or property. --%>
+          <div :if={labelled?(prop)} class="flex flex-wrap gap-1">
+            <button
+              :for={{value, title, tailwind, _css} <- Styles.labels(prop)}
+              type="button"
+              id={"pb-style-#{@bucket}-#{prop}-#{value}"}
+              phx-click="op"
+              phx-value-kind="set_style"
+              phx-value-node_id={@node.id}
+              phx-value-bucket={@bucket}
+              phx-value-prop={prop}
+              value={(own_style(@node, @bucket, prop) == value && "") || value}
+              title={Styles.value_title(prop, value)}
+              aria-pressed={to_string(own_style(@node, @bucket, prop) == value)}
+              class={[
+                "h-[27px] min-w-[52px] flex-1 rounded-[8px] border px-2 text-[10.5px]",
+                (own_style(@node, @bucket, prop) == value &&
+                   "border-[#5b57d6] bg-[#f2f1fc] text-[#4f4bcc]") ||
+                  "border-[#ecebe6] bg-[#faf9f6] text-[#6d6a63] hover:border-[#c3c1f0]"
+              ]}
+            >
+              <span class={["block w-full truncate", tailwind]}>{translate(title)}</span>
+            </button>
+          </div>
+          <.form
+            :if={Styles.options(prop) != [] and !labelled?(prop)}
+            for={%{}}
+            id={"pb-style-form-#{@bucket}-#{prop}"}
+            phx-change="op"
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop={prop}
+          >
+            <div class="relative">
+              <select
+                id={"pb-style-#{@bucket}-#{prop}"}
+                name="value"
+                class={[
+                  "h-9 w-full appearance-none rounded-[9px] border py-0 pl-2.5 pr-7 text-[11.5px] font-semibold text-[#3a382f] outline-none",
+                  (own_style(@node, @bucket, prop) && "border-[#c3c1f0] bg-white") ||
+                    "border-[#ecebe6] bg-[#faf9f6]"
+                ]}
+              >
+                <option value="">{effective_style(@node, @bucket, prop) || gettext("unset")}</option>
+                <option
+                  :for={option <- Styles.options(prop)}
+                  value={option}
+                  selected={own_style(@node, @bucket, prop) == option}
+                >
+                  {option}
+                </option>
+              </select>
+              <.icon
+                name={:chevron}
+                size={11}
+                class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90 text-[#a8a5a0]"
+              />
+            </div>
+          </.form>
+          <.field_form
+            :if={Styles.options(prop) == []}
+            id={"pb-style-form-#{@bucket}-#{prop}"}
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop={prop}
+          >
+            <%!-- WHAT THE BOX TAKES, when there is nothing in it to imply it. These fields accept
+                  any CSS length — `50%`, `2rem`, `600px`, `calc(100% - 2rem)` — and a bare number is
+                  read as pixels. The placeholder said "unset", so an author who typed `1000`, got
+                  pixels and had no reason to try anything else concluded the field was pixels-only,
+                  and reported it as such. Gap has said "any length, e.g. 2rem" all along; the rest
+                  now say it too. Only when empty: an inherited value is a better hint than any
+                  sentence, and it goes on saying what the element actually has. --%>
+            <input
+              type="text"
+              id={"pb-style-#{@bucket}-#{prop}"}
+              name="value"
+              value={own_style(@node, @bucket, prop)}
+              placeholder={effective_style(@node, @bucket, prop) || length_hint(prop)}
+              phx-debounce="350"
+              data-inherited={
+                (!own_style(@node, @bucket, prop) && effective_style(@node, @bucket, prop) &&
+                   "true") || nil
+              }
+              class={
+                [
+                  "h-9 w-full rounded-[9px] border px-2.5 font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#1b1a18] outline-none",
+                  (own_style(@node, @bucket, prop) && "border-[#c3c1f0] bg-white") ||
+                    "border-[#ecebe6] bg-[#faf9f6]",
+                  # A VALUE THE AUTHOR SET IS NOT AN EXAMPLE. An empty field's placeholder is a
+                  # made-up hint — "any length, e.g. 2rem" — and a field inheriting from another
+                  # bucket showed the REAL value in the same grey, so `1000px` read as a suggestion
+                  # rather than as the width this element actually has. Reported as the value being
+                  # missing on reopen, which is how an inherited value that looks like a hint reads.
+                  #
+                  # Darker and not italic, so it is legibly a value, while staying lighter than an own
+                  # value so the two are still told apart at a glance. The `from base` chip beside the
+                  # label says where it comes from; this says it is real.
+                  !own_style(@node, @bucket, prop) && effective_style(@node, @bucket, prop) &&
+                    "placeholder:font-semibold placeholder:text-[#6d6a63]"
+                ]
+              }
+            />
+          </.field_form>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:bucket, :string, required: true)
+  attr(:prop, :string, required: true)
+  attr(:token, :string, required: true)
+  attr(:value, :string, required: true)
+  attr(:label, :string, required: true)
+
+  @doc false
+  # ONE OF THE SITE'S OWN COLOURS, and the reason to prefer it over the hex beside it: it writes
+  # `var(--danger-light)`, so the element resolves through the same declaration every component on
+  # the site resolves through. Change the token in the Studio and this element changes with
+  # everything else — which is what "rebrand" means, and what typing `#de1135` here can never do.
+  #
+  # Drawn in the colour it actually is, read from the stylesheet rather than from a list here: a
+  # swatch that shows the editor's idea of `--danger-light` would be wrong the moment somebody
+  # edited it.
+  #
+  # SMALLER THAN THE FIVE ABOVE, and folded away behind a count. A kit theme declares every state of
+  # every variant — the installed one is 251 colours — so a row of them at the neutrals' size is a
+  # wall the Background control disappears into. The five that are always open are the editor's own;
+  # these are the site's, and worth a click.
+  defp token_swatch(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={"pb-token-#{@bucket}-#{@prop}-#{String.trim_leading(@token, "-")}"}
+      phx-click="op"
+      phx-value-kind="set_style"
+      phx-value-node_id={@node.id}
+      phx-value-bucket={@bucket}
+      phx-value-prop={@prop}
+      value={(own_style(@node, @bucket, @prop) == var(@token) && "") || var(@token)}
+      title={"#{@label} — #{@token} (#{@value})"}
+      aria-label={@label}
+      aria-pressed={to_string(own_style(@node, @bucket, @prop) == var(@token))}
+      class={[
+        "size-[24px] rounded-[7px] border-2",
+        (own_style(@node, @bucket, @prop) == var(@token) && "border-[#5b57d6]") ||
+          "border-[#ecebe6]"
+      ]}
+      style={"background:#{@value}"}
+    ></button>
+    """
+  end
+
+  # A CUSTOM PROPERTY IS ALWAYS TWO DASHES, and a token's key reaches here spelled either way
+  # depending on which sheet declared it. Normalising here is what stops `var(danger-light)` — a
+  # reference to nothing, in a page that then paints its default and reads as a broken control.
+  #
+  # Joined rather than interpolated on purpose. This is a CSS VALUE, not a class name — it becomes
+  # the element's `background` override, and the class around it (`bg-[var(--danger-light)]`) is
+  # assembled by `Tree.Styles` and written into the stored template, where the per-site Tailwind pass
+  # finds it. `interpolated_class_test.exs` cannot tell those apart from the outside, and earning a
+  # whole-file exemption for one line would blunt it across eleven thousand.
+  defp var(token), do: "var(--" <> String.trim_leading(token, "-") <> ")"
+
+  # A ROW OF WORDS, EACH DRAWN AS THE THING IT NAMES. The select `style_group/1` falls back to spells
+  # an enumerated value the way Tailwind does — `font-extrabold`, `normal-case` — which is a class
+  # name to decode rather than a choice to make. A labelled property carries its own words instead,
+  # styled by the rule it sets: Bold is bold, UPPER is upper case, Dashed is underlined with a dashed
+  # rule. Clicking the one already chosen clears it, the same as a swatch.
+  defp labelled?(prop), do: Styles.labels(prop) != []
+
+  # Whether the axis pair holds anything worth opening the fold for: an override written into this
+  # bucket, or a hand-written declaration that has taken one of them over.
+  defp axes_in_play?(node, bucket, covered) do
+    Enum.any?(@axis_props, fn {prop, _label} ->
+      own_style(node, bucket, prop) || covered[prop]
+    end)
+  end
+
+  attr(:node, :map, required: true)
+  attr(:bucket, :string, required: true)
+  attr(:covered, :map, required: true)
+
+  @doc false
+  # A SHADOW IS SIX DECISIONS, NOT ONE STRING. `0 10px 24px -4px rgba(15,23,42,.18)` is a value people
+  # paste, not one they write — so a single text box for it is a control that only helps somebody who
+  # already had the answer. Which side the shadow falls on is two numbers; how soft it is, a third.
+  #
+  # Taken apart they are all nudgeable, which is exactly what Chrome's own shadow editor does and why
+  # its numbers are the ones designers reach for. The presets are above them because elevation is a
+  # scale before it is a measurement: most of the time the answer is "a bit more than that one", and
+  # each swatch really casts the shadow it offers — the rule the layout pictures already follow, and
+  # the only way "L" means anything before you click it.
+  #
+  # Inset is a switch beside the numbers rather than a fifth preset, because an inner shadow is a
+  # different thing and not a smaller one: a pressed field rather than a lifted card.
+  defp shadow_editor(assigns) do
+    assigns = assign(assigns, :parts, shadow_parts(assigns.node, assigns.bucket))
+
+    ~H"""
+    <section>
+      <div class="mb-[7px] flex items-center gap-1.5">
+        <span class="text-[10.5px] font-semibold text-[#6d6a63]">{gettext("Shadow")}</span>
+        <span
+          :if={own_style(@node, @bucket, "shadow")}
+          title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
+          class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
+        />
+        <.overruled covered={@covered} prop="shadow" />
+        <span class="flex-1"></span>
+        <button
+          :if={own_style(@node, @bucket, "shadow")}
+          type="button"
+          id={"pb-shadow-clear-#{@bucket}"}
+          phx-click="op"
+          phx-value-kind="set_style"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-prop="shadow"
+          value=""
+          title={gettext("Clear this %{bucket} override", bucket: source_word(@bucket))}
+          class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
+        >
+          {gettext("Reset")}
+        </button>
+      </div>
+
+      <div class="flex items-stretch gap-[7px]">
+        <button
+          :for={{name, value} <- Shadow.presets()}
+          type="button"
+          id={"pb-shadow-preset-#{String.downcase(name)}"}
+          phx-click="op"
+          phx-value-kind="set_style"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-prop="shadow"
+          value={(own_style(@node, @bucket, "shadow") == value && "") || value}
+          title={gettext("Shadow %{value}", value: value)}
+          aria-pressed={to_string(own_style(@node, @bucket, "shadow") == value)}
+          class={[
+            "grid h-[34px] flex-1 place-items-center rounded-[9px] border-2",
+            (own_style(@node, @bucket, "shadow") == value && "border-[#5b57d6]") ||
+              "border-[#ecebe6]"
+          ]}
+        >
+          <span
+            class="grid size-[17px] place-items-center rounded-[5px] bg-white text-[8.5px] font-bold text-[#6d6a63]"
+            style={"box-shadow: #{value}"}
+          >
+            {name}
+          </span>
+        </button>
+      </div>
+
+      <div class="mt-[9px] grid grid-cols-4 gap-1.5">
+        <.shadow_field
+          :for={{field, label} <- shadow_fields()}
+          node={@node}
+          bucket={@bucket}
+          field={field}
+          label={label}
+          value={Map.get(@parts, field)}
+        />
+      </div>
+
+      <div class="mt-1.5 flex items-center gap-1.5">
+        <.field_form
+          id={"pb-shadow-form-#{@bucket}-color"}
+          event="set_shadow"
+          class="min-w-0 flex-1"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-field="color"
+        >
+          <input
+            type="text"
+            id={"pb-shadow-#{@bucket}-color"}
+            name="value"
+            value={@parts.color}
+            aria-label={gettext("Shadow colour")}
+            phx-debounce="350"
+            class="h-[27px] w-full rounded-[7px] border border-[#ecebe6] bg-white px-2 font-['Space_Grotesk'] text-[10.5px] font-semibold text-[#3a382f] outline-none"
+          />
+        </.field_form>
+
+        <button
+          type="button"
+          id={"pb-shadow-#{@bucket}-inset"}
+          phx-click="set_shadow"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-field="inset"
+          value={to_string(!@parts.inset)}
+          title={gettext("Cast the shadow inside the element instead of behind it")}
+          aria-pressed={to_string(@parts.inset)}
+          class={[
+            "h-[27px] flex-none rounded-[7px] border px-2.5 text-[10.5px] font-bold",
+            (@parts.inset && "border-[#5b57d6] bg-[#f2f1fc] text-[#4f4bcc]") ||
+              "border-[#ecebe6] bg-[#faf9f6] text-[#6d6a63]"
+          ]}
+        >
+          {gettext("Inside")}
+        </button>
+      </div>
+    </section>
+    """
+  end
+
+  # RIGHT AND DOWN, not X and Y. The axis names are what CSS calls them and what nobody else does;
+  # a reader deciding which way the shadow falls is choosing a direction, not naming an axis.
+  defp shadow_fields,
+    do: [
+      {:x, gettext("Right")},
+      {:y, gettext("Down")},
+      {:blur, gettext("Blur")},
+      {:spread, gettext("Spread")}
+    ]
+
+  # What the controls open on: the element's own shadow when it has one this can hold, and otherwise
+  # a shadow worth seeing — nudging Down on `0 0 0 0 transparent` would move nothing at all.
+  defp shadow_parts(node, bucket) do
+    case Shadow.parse(effective_style(node, bucket, "shadow")) do
+      {:ok, parts} -> parts
+      :error -> Shadow.default()
+    end
+  end
+
+  attr(:node, :map, required: true)
+  attr(:bucket, :string, required: true)
+  attr(:field, :atom, required: true)
+  attr(:label, :string, required: true)
+  attr(:value, :string, required: true)
+
+  @doc false
+  defp shadow_field(assigns) do
+    ~H"""
+    <.field_form
+      id={"pb-shadow-form-#{@bucket}-#{@field}"}
+      event="set_shadow"
+      phx-value-node_id={@node.id}
+      phx-value-bucket={@bucket}
+      phx-value-field={@field}
+    >
+      <label class="block">
+        <span class="mb-1 block text-[9px] font-bold uppercase tracking-[.08em] text-[#a8a5a0]">
+          {@label}
+        </span>
+        <input
+          type="text"
+          id={"pb-shadow-#{@bucket}-#{@field}"}
+          name="value"
+          value={@value}
+          phx-debounce="350"
+          class="h-[27px] w-full rounded-[7px] border border-[#ecebe6] bg-white text-center font-['Space_Grotesk'] text-[10.5px] font-bold text-[#3a382f] outline-none"
+        />
+      </label>
+    </.field_form>
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:bucket, :string, required: true)
+  attr(:covered, :map, required: true)
+
+  @doc false
+  # THE ELEMENT, DRAWN, WITH ITS EDGES WHERE THEY ARE. Spacing was eight numbers in a two-column list
+  # of `Padding Y`, `Padding X`, `Padding top`, `Padding bottom` — four of the eight edges missing
+  # outright, and the four that existed named in a vocabulary you have to translate before you can
+  # use it. Nobody thinks "padding-block". They think "more room under this heading", and they point.
+  #
+  # So this is the box model, the same shape Chrome, Figma and every builder draws it in: margin
+  # outside, padding inside, and each edge sitting where it will actually apply. Reading which edge a
+  # value is on stops being a matter of remembering what the label meant.
+  #
+  # Each cell is its own tiny form for the reason every field in this panel is: a bare input outside
+  # one fires nothing, and the `phx-value-*` naming the property are only merged for form events.
+  defp spacing_box(assigns) do
+    ~H"""
+    <div class="rounded-[11px] border border-[#ecebe6] bg-[#faf9f6] p-2">
+      <div class="mb-1 flex items-center gap-1.5">
+        <span class="text-[9px] font-bold uppercase tracking-[.09em] text-[#a8a5a0]">{gettext(
+          "Margin"
+        )}</span>
+      </div>
+
+      <div class="grid grid-cols-[minmax(0,1fr)_minmax(0,1.6fr)_minmax(0,1fr)] items-center gap-1">
+        <span></span>
+        <.edge_field
+          node={@node}
+          bucket={@bucket}
+          covered={@covered}
+          prop="mt"
+          label={gettext("Top")}
+        />
+        <span></span>
+
+        <.edge_field
+          node={@node}
+          bucket={@bucket}
+          covered={@covered}
+          prop="ml"
+          label={gettext("Left")}
+        />
+
+        <div class="rounded-[9px] border border-[#e4e2f7] bg-white p-1.5">
+          <div class="mb-1 flex items-center justify-center gap-1.5">
+            <span class="text-[9px] font-bold uppercase tracking-[.09em] text-[#8580d8]">
+              {gettext("Padding")}
+            </span>
+          </div>
+
+          <div class="grid grid-cols-3 items-center gap-1">
+            <span></span>
+            <.edge_field
+              node={@node}
+              bucket={@bucket}
+              covered={@covered}
+              prop="pt"
+              label={gettext("Top")}
+            />
+            <span></span>
+
+            <.edge_field
+              node={@node}
+              bucket={@bucket}
+              covered={@covered}
+              prop="pl"
+              label={gettext("Left")}
+            />
+            <span class="text-center text-[9px] font-semibold text-[#c2c0ba]">{gettext("content")}</span>
+            <.edge_field
+              node={@node}
+              bucket={@bucket}
+              covered={@covered}
+              prop="pr"
+              label={gettext("Right")}
+            />
+
+            <span></span>
+            <.edge_field
+              node={@node}
+              bucket={@bucket}
+              covered={@covered}
+              prop="pb"
+              label={gettext("Bottom")}
+            />
+            <span></span>
+          </div>
+        </div>
+
+        <.edge_field
+          node={@node}
+          bucket={@bucket}
+          covered={@covered}
+          prop="mr"
+          label={gettext("Right")}
+        />
+
+        <span></span>
+        <.edge_field
+          node={@node}
+          bucket={@bucket}
+          covered={@covered}
+          prop="mb"
+          label={gettext("Bottom")}
+        />
+        <span></span>
+      </div>
+    </div>
+    """
+  end
+
+  attr(:node, :map, required: true)
+  attr(:bucket, :string, required: true)
+  attr(:covered, :map, required: true)
+  attr(:prop, :string, required: true)
+  attr(:label, :string, required: true)
+
+  @doc false
+  # One edge. The placeholder is what the edge reads as WITHOUT an override — inherited from a wider
+  # breakpoint, or from the element's own classes — so an empty cell still tells you what is there,
+  # and typing over it is visibly a change rather than a first value.
+  #
+  # `-` rather than `0` when nothing is set anywhere: a zero would be a lie about an element with
+  # `p-4` on it, and this box cannot read Tailwind's numeric scale.
+  #
+  # AND A SET EDGE HAS A WAY OUT THAT IS NOT THE KEYBOARD. Emptying the text was the only way to
+  # clear one, which fails in the one way a control must not: the field goes blank, the change does
+  # not reach the server, and the next render puts the old value back — so it reads as a box that
+  # remembers what you deleted. Every other control in this panel has a Reset; this is the box's.
+  defp edge_field(assigns) do
+    ~H"""
+    <div class="group/edge relative">
+      <.overruled
+        covered={@covered}
+        prop={@prop}
+        class="absolute -top-[3px] left-[3px] z-10"
+      />
+
+      <button
+        :if={own_style(@node, @bucket, @prop)}
+        type="button"
+        id={"pb-edge-clear-#{@bucket}-#{@prop}"}
+        phx-click="op"
+        phx-value-kind="set_style"
+        phx-value-node_id={@node.id}
+        phx-value-bucket={@bucket}
+        phx-value-prop={@prop}
+        value=""
+        title={gettext("Clear %{label}", label: @label)}
+        aria-label={gettext("Clear %{label}", label: @label)}
+        class="absolute -right-[4px] -top-[5px] z-10 grid size-[13px] place-items-center rounded-full border border-[#ecebe6] bg-white text-[#a8a5a0] opacity-0 hover:border-[#e8b7b1] hover:text-[#d5544b] focus:opacity-100 group-hover/edge:opacity-100"
+      >
+        <.icon name={:close} size={8} />
+      </button>
+      <.field_form
+        id={"pb-edge-form-#{@bucket}-#{@prop}"}
+        phx-value-kind="set_style"
+        phx-value-node_id={@node.id}
+        phx-value-bucket={@bucket}
+        phx-value-prop={@prop}
+      >
+        <input
+          type="text"
+          id={"pb-edge-#{@bucket}-#{@prop}"}
+          name="value"
+          value={own_style(@node, @bucket, @prop)}
+          placeholder={effective_style(@node, @bucket, @prop) || "–"}
+          title={
+            gettext("%{label} — %{property}",
+              label: @label,
+              property: Styles.declaration(@prop, "") |> elem(0)
+            )
+          }
+          aria-label={@label}
+          phx-debounce="350"
+          class={[
+            "h-[25px] w-full rounded-[7px] border text-center font-['Space_Grotesk'] text-[10.5px] font-bold outline-none",
+            (own_style(@node, @bucket, @prop) &&
+               "border-[#c3c1f0] bg-white text-[#4f4bcc]") ||
+              "border-[#ecebe6] bg-white text-[#3a382f] placeholder:text-[#c2c0ba]"
+          ]}
+        />
+      </.field_form>
+    </div>
+    """
+  end
+
+  attr(:covered, :map, required: true)
+  attr(:prop, :string, required: true)
+  attr(:class, :string, default: nil, doc: "where to put the dot when it is not in a heading row")
+
+  @doc false
+  # THE ONE PLACE A CONTROL SAYS IT HAS BEEN OVERRULED. A control writes a Tailwind utility; the
+  # element's own CSS is emitted last and unlayered, so where the two name the same property the CSS
+  # wins and the control moves nothing — which, without this, is a control that reads as broken.
+  #
+  # `#8580d8` rather than the `#5b57d6` beside it, because it is the colour the Custom CSS heading
+  # already uses for "this element has its own CSS". Same idea, same dot: the panel gains a meaning,
+  # not a palette.
+  #
+  # ONCE PER PROPERTY. `covered` is keyed by property and so is the id, so a property two widgets
+  # offer — `background` is a swatch row AND a free-form field, the shape Gap has — has to draw the
+  # dot on one of them. The field row `style_group` already draws is the one, because that list is
+  # where every other appearance property carries it. Marking the swatch heading as well put
+  # `pb-css-wins-background` in the document twice the moment an author wrote `background-color`
+  # into Custom CSS, which is a DOM patch aiming at whichever it finds first.
+  def overruled(assigns) do
+    ~H"""
+    <span
+      :if={@covered[@prop]}
+      id={"pb-css-wins-#{@prop}"}
+      title={
+        gettext("Custom CSS sets %{property} here, so it wins over this control.",
+          property: @covered[@prop]
+        )
+      }
+      class={["size-[6px] flex-none rounded-full bg-[#8580d8] ring-2 ring-[#efeefb]", @class]}
+    />
+    """
+  end
+
+  # Which controls this element's own CSS has taken over in the bucket the panel is writing to, each
+  # against THE PROPERTY THE AUTHOR ACTUALLY WROTE. Padding top is overruled by `padding: 20px`, and
+  # a note saying "Custom CSS sets padding-top here" would send them looking for a line that is not
+  # in the box.
+  #
+  # Read off the text on every render rather than stored: the text is the record, and a stored copy
+  # would be one Apply behind what the author is looking at.
+  defp covered_controls(css, bucket) do
+    css
+    |> ElementCss.declarations()
+    |> Enum.filter(&(&1.bucket == bucket))
+    |> Enum.flat_map(fn declaration ->
+      for control <- Styles.controls_for(declaration.property),
+          do: {control, declaration.property}
+    end)
+    |> Map.new()
+  end
+
+  attr(:node, :any, required: true)
+  attr(:bucket, :atom, required: true)
+  attr(:covered, :map, default: %{})
+
+  # THE SAME CONTROL THE CANVAS TOOLBAR USES, in the panel. Direction, Spread, Align and Wrap were
+  # `<select>`s listing `justify-around` and `items-baseline` — the serialiser's vocabulary shown raw
+  # to someone who is here because they do not write CSS. Each option is a picture of itself now,
+  # laid out with the rule it applies, over a plain-words name, and the whole row is one click rather
+  # than open-scan-choose.
+  #
+  # `Styles.pictures/1` is the single vocabulary both panels read, so the toolbar and the Inspector
+  # cannot offer different sets of the same property.
+  defp layout_pictures(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-2.5">
+      <div
+        :for={{prop, label} <- picture_rows(@node, @bucket)}
+        id={"pb-style-pics-#{@bucket}-#{prop}"}
+      >
+        <div class="mb-1.5 flex items-center gap-1.5">
+          <span class="text-[10.5px] font-semibold text-[#6d6a63]">{translate(label)}</span>
+          <span
+            :if={override?(@node, @bucket, prop)}
+            title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
+            class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
+          />
+          <.overruled covered={@covered} prop={prop} />
+          <span class="flex-1"></span>
+          <button
+            :if={override?(@node, @bucket, prop)}
+            type="button"
+            id={"pb-style-clear-#{@bucket}-#{prop}"}
+            phx-click="op"
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop={prop}
+            value=""
+            title={gettext("Clear this %{bucket} override", bucket: source_word(@bucket))}
+            class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
+          >
+            {gettext("Reset")}
+          </button>
+          <span class="truncate text-[9.5px] font-bold text-[#a8a5a0]">
+            {picture_hint(@node, @bucket, prop)}
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          <%!-- CLICKING THE CHOSEN ONE CLEARS IT. The value the button sends is `""` when it is
+                already the current one, so the same press that set an override takes it off again —
+                no separate reset dot for a control this small, and the server does no extra work to
+                decide it. --%>
+          <button
+            :for={{value, title, tailwind, _css, bars} <- Styles.pictures(prop)}
+            type="button"
+            id={"pb-style-pic-#{@bucket}-#{prop}-#{value}"}
+            phx-click="op"
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop={prop}
+            value={(own_style(@node, @bucket, prop) == value && "") || value}
+            title={translate(title)}
+            aria-label={translate(title)}
+            aria-pressed={to_string(own_style(@node, @bucket, prop) == value)}
+            class={[
+              "flex h-[26px] w-[34px] flex-none rounded-[7px] border p-[4px]",
+              (own_style(@node, @bucket, prop) == value && "border-[#5b57d6] bg-[#f2f1fc]") ||
+                "border-[#ecebe6] bg-[#faf9f6] hover:border-[#c3c1f0]"
+            ]}
+          >
+            <span class={["size-full gap-[1.5px]", tailwind, swatch_extra(prop)]}>
+              <span
+                :for={index <- 1..bars//1}
+                class={["rounded-[1.5px]", bar_tone(prop, index), bar_shape(prop, index)]}
+              ></span>
+            </span>
+          </button>
+        </div>
+      </div>
+
+      <div :if={grid?(@node, @bucket)} id={"pb-style-cols-#{@bucket}"}>
+        <div class="mb-1.5 flex items-center gap-1.5">
+          <span class="text-[10.5px] font-semibold text-[#6d6a63]">{gettext("Columns")}</span>
+          <span
+            :if={override?(@node, @bucket, "grid-cols")}
+            title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
+            class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
+          />
+          <.overruled covered={@covered} prop="grid-cols" />
+          <span class="flex-1"></span>
+          <span class="flex-none text-[9.5px] font-semibold text-[#a8a5a0]">
+            {effective_style(@node, @bucket, "grid-cols") || gettext("unset")}
+          </span>
+        </div>
+
+        <div class="flex flex-wrap gap-[7px]">
+          <button
+            :for={count <- 1..6}
+            type="button"
+            id={"pb-style-cols-#{@bucket}-#{count}"}
+            phx-click="op"
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop="grid-cols"
+            value={(own_style(@node, @bucket, "grid-cols") == to_string(count) && "") || count}
+            title={ngettext("%{count} column", "%{count} columns", count)}
+            aria-label={ngettext("%{count} column", "%{count} columns", count)}
+            aria-pressed={to_string(own_style(@node, @bucket, "grid-cols") == to_string(count))}
+            class={[
+              "flex h-[26px] w-[38px] flex-none rounded-[7px] border p-[4px]",
+              (own_style(@node, @bucket, "grid-cols") == to_string(count) &&
+                 "border-[#5b57d6] bg-[#f2f1fc]") ||
+                "border-[#ecebe6] bg-[#faf9f6] hover:border-[#c3c1f0]"
+            ]}
+          >
+            <span class="flex size-full gap-[1.5px]">
+              <span
+                :for={index <- 1..count//1}
+                class={["flex-1 rounded-[1.5px]", bar_tone("grid-cols", index)]}
+              ></span>
+            </span>
+          </button>
+        </div>
+
+        <.field_form
+          id={"pb-style-form-#{@bucket}-grid-cols"}
+          class="mt-1.5"
+          phx-value-kind="set_style"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-prop="grid-cols"
+        >
+          <input
+            type="text"
+            id={"pb-style-#{@bucket}-grid-cols"}
+            name="value"
+            value={own_style(@node, @bucket, "grid-cols")}
+            placeholder={gettext("a track list, e.g. 2fr 1fr")}
+            phx-debounce="350"
+            class={[
+              "h-8 w-full rounded-[8px] border px-2.5 font-['Space_Grotesk'] text-[11px] font-semibold text-[#1b1a18] outline-none",
+              (own_style(@node, @bucket, "grid-cols") && "border-[#c3c1f0] bg-white") ||
+                "border-[#ecebe6] bg-[#faf9f6]"
+            ]}
+          />
+        </.field_form>
+      </div>
+
+      <%!-- Gap is free-form — any length is legal — but the row of names is what stops someone
+            typing `16px` to get the thing every design system already calls medium. The field below
+            still takes anything, and the two write the same override. --%>
+      <div>
+        <div class="mb-1.5 flex items-center gap-1.5">
+          <span class="text-[10.5px] font-semibold text-[#6d6a63]">{gettext("Gap")}</span>
+          <span
+            :if={override?(@node, @bucket, "gap")}
+            title={gettext("Set for %{bucket}", bucket: source_word(@bucket))}
+            class="size-[6px] flex-none rounded-full bg-[#5b57d6]"
+          />
+          <.overruled covered={@covered} prop="gap" />
+          <span class="flex-1"></span>
+          <button
+            :if={override?(@node, @bucket, "gap")}
+            type="button"
+            id={"pb-style-clear-#{@bucket}-gap"}
+            phx-click="op"
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop="gap"
+            value=""
+            title={gettext("Clear this %{bucket} override", bucket: source_word(@bucket))}
+            class="h-[19px] flex-none rounded-[5px] border border-[#ecebe6] bg-white px-1.5 text-[10px] font-bold text-[#6d6a63] hover:border-[#e8b7b1] hover:text-[#d5544b]"
+          >
+            {gettext("Reset")}
+          </button>
+          <span class="truncate text-[9.5px] font-bold text-[#a8a5a0]">
+            {effective_style(@node, @bucket, "gap") || gettext("unset")}
+          </span>
+        </div>
+        <div class="flex flex-wrap gap-1">
+          <button
+            :for={{value, label} <- Styles.gap_presets()}
+            type="button"
+            id={"pb-style-gap-#{@bucket}-#{label}"}
+            phx-click="op"
+            phx-value-kind="set_style"
+            phx-value-node_id={@node.id}
+            phx-value-bucket={@bucket}
+            phx-value-prop="gap"
+            value={(own_style(@node, @bucket, "gap") == value && "") || value}
+            title={gettext("Gap %{value}", value: value)}
+            aria-pressed={to_string(own_style(@node, @bucket, "gap") == value)}
+            class={[
+              "h-[26px] flex-none rounded-[7px] border px-2 font-['Space_Grotesk'] text-[10px] font-bold",
+              (own_style(@node, @bucket, "gap") == value &&
+                 "border-[#5b57d6] bg-[#f2f1fc] text-[#4f4bcc]") ||
+                "border-[#ecebe6] bg-[#faf9f6] text-[#6d6a63] hover:border-[#c3c1f0]"
+            ]}
+          >
+            {label}
+          </button>
+        </div>
+        <.field_form
+          id={"pb-style-form-#{@bucket}-gap"}
+          class="mt-1.5"
+          phx-value-kind="set_style"
+          phx-value-node_id={@node.id}
+          phx-value-bucket={@bucket}
+          phx-value-prop="gap"
+        >
+          <input
+            type="text"
+            id={"pb-style-#{@bucket}-gap"}
+            name="value"
+            value={own_style(@node, @bucket, "gap")}
+            placeholder={effective_style(@node, @bucket, "gap") || gettext("any length, e.g. 2rem")}
+            phx-debounce="350"
+            class={[
+              "h-8 w-full rounded-[9px] border px-2.5 font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#1b1a18] outline-none",
+              (own_style(@node, @bucket, "gap") && "border-[#c3c1f0] bg-white") ||
+                "border-[#ecebe6] bg-[#faf9f6]"
+            ]}
+          />
+        </.field_form>
+      </div>
+    </div>
+    """
+  end
+
+  @flex_rows [
+    {"direction", gettext_noop("Direction")},
+    {"justify", gettext_noop("Spread")},
+    {"align", gettext_noop("Align")},
+    {"wrap", gettext_noop("Wrap")}
+  ]
+
+  # WHICH ROWS ARE WORTH SHOWING. Direction, Spread, Align and Wrap do nothing to an element that is
+  # not a flex row, so they appear when it is one and stay out of the way when it is not.
+  #
+  # The EFFECTIVE display decides, not the open bucket's own: Tablet and Mobile inherit Desktop
+  # unless they override it, so reading only the open bucket made these four vanish the moment you
+  # switched to Mobile — on an element that is plainly still a row on screen.
+  #
+  # A ROW THAT ALREADY HOLDS A VALUE IS DRAWN WHATEVER THE DISPLAY IS. `align-items: center` moved
+  # out of the CSS box onto an element that is not a row wrote an override with no control anywhere
+  # on screen: nothing showed it, and the only way to take it off again was to clear the whole
+  # bucket. An override doing nothing to the page is a reason to show it, not to hide it — and an
+  # authored `items-center` on a `block` element parses into exactly the same state.
+  defp picture_rows(node, bucket) do
+    [
+      {"display", gettext_noop("Layout")}
+      | Enum.filter(@flex_rows, &drawn_row?(node, bucket, elem(&1, 0)))
+    ]
+  end
+
+  defp drawn_row?(node, bucket, prop),
+    do: flex_row?(node, bucket) or effective_style(node, bucket, prop) != nil
+
+  defp flex_row?(node, bucket),
+    do: (own_style(node, bucket, "display") || own_style(node, :base, "display")) == "flex"
+
+  # The same question for a grid, and it has to be `effective_style/3` rather than the two `own`
+  # lookups above: a block ships `grid grid-cols-3` in its class attribute, which is absorbed into
+  # the base bucket on parse — but a reader who has switched to Mobile is on a bucket that owns
+  # nothing, and the columns row would vanish on the one breakpoint where changing it matters most.
+  # HOW MANY COLUMNS, DRAWN AS COLUMNS, and only where columns mean something. Making an element a
+  # grid was already one click, and then the count — the only thing anybody changes about a grid —
+  # had no control at all: `Features ×3` could be turned into the grid it already was, and not into
+  # two columns.
+  #
+  # Or already set, which is the same rule `drawn_row?/3` follows for the flex rows: an override that
+  # exists and has no control is one nobody can see, clear, or explain — including the one **Move to
+  # controls** has just written out of the Custom CSS box.
+  defp grid?(node, bucket) do
+    effective_style(node, bucket, "display") == "grid" or
+      effective_style(node, bucket, "grid-cols") != nil
+  end
+
+  # What the row reads as right now, in words rather than in Tailwind — and where it came from when
+  # this bucket did not set it, which is the same provenance the field rows below show.
+  defp picture_hint(node, bucket, prop) do
+    case {own_style(node, bucket, prop), effective_style(node, bucket, prop)} do
+      {nil, nil} ->
+        gettext("unset")
+
+      {nil, value} ->
+        gettext("%{title} · from %{source}",
+          title: Styles.value_title(prop, value),
+          source: inherited_from(node, bucket, prop) || gettext("desktop")
+        )
+
+      {value, _effective} ->
+        Styles.value_title(prop, value)
+    end
+  end
+
+  # The FIRST bar is brighter, which is the only way a reader can tell `row` from `row-reverse` in a
+  # picture: it shows where the children start.
+  defp bar_tone(_prop, 1), do: "bg-[#c3c1f0]"
+  defp bar_tone(_prop, _index), do: "bg-[#8a877f]"
+
+  # A BAR THAT GROWS CANNOT SHOW SPACING. Every one of these used to be `flex-1`, which fills the
+  # swatch — so `justify-start` and `justify-between` drew exactly the same picture, and the row that
+  # exists to make spacing legible was the one row you could not read. Spread and Wrap need bars that
+  # keep their width, so the FREE SPACE is what moves.
+  #
+  # Alignment sets `min-h` rather than `h` on purpose: a fixed height would defeat `items-stretch`,
+  # which is the one value whose whole point is that the child fills the box.
+  defp bar_shape("justify", _index), do: "w-[5px] flex-none"
+  defp bar_shape("align", 1), do: "w-[5px] flex-none min-h-[5px]"
+  defp bar_shape("align", 2), do: "w-[5px] flex-none min-h-[9px]"
+  defp bar_shape("align", _index), do: "w-[5px] flex-none min-h-[13px]"
+  # A wrapped line is only as tall as what is in it, and a bar with no height is nothing — the
+  # second row rendered at zero pixels and `wrap` looked like an empty box.
+  defp bar_shape("wrap", _index), do: "h-[6px] w-[9px] shrink-0 grow-0"
+  defp bar_shape(_prop, _index), do: "flex-1 min-h-[3px]"
+
+  # Four 9px bars cannot fit a 24px swatch, which is the point: `nowrap` runs them off the edge and
+  # `wrap` breaks them onto a second line. Without the clip the overflow spills over the border.
+  defp swatch_extra("wrap"), do: "content-start overflow-hidden"
+  defp swatch_extra(_prop), do: nil
+
+  # The three device tabs, and the widths their overrides actually apply below — `Styles` writes
+  # `max-[900px]:` and `max-[560px]:`, so the tooltip is the rule, not a label beside it.
+  defp breakpoint_tabs do
+    [
+      {:base, gettext("Desktop"), :desktop,
+       gettext("Everywhere, unless a narrower tab overrides it")},
+      {:tablet, gettext("Tablet"), :tablet, gettext("Applies below 900px")},
+      {:mobile, gettext("Mobile"), :mobile, gettext("Applies below 560px")}
+    ]
+  end
+
+  # How much this breakpoint sets of its own — the number on its tab. Only the breakpoint's own
+  # bucket counts; a state override recorded at :hover belongs to the State chips, not to a device.
+  @pseudo_states [:hover, :focus, :active]
+
+  # EVERYTHING WRITTEN AT THIS WIDTH, states included. The badge answers "does this breakpoint carry
+  # anything", and a hover colour set only on mobile is emphatically something it carries — counted
+  # against the width alone it was invisible, which is the whole reason a responsive edit is hard to
+  # find again a week later.
+  defp override_count(node, breakpoint) do
+    Enum.reduce([:base | @pseudo_states], 0, fn pseudo, total ->
+      total + (styles(node) |> Map.get(Styles.bucket(breakpoint, pseudo), %{}) |> map_size())
+    end)
+  end
+
+  # ONE RULE, NOT A MATCHING PAIR. This was a byte-identical copy of `EditorSession.write_bucket/1`,
+  # and it was the copy that ran — the server's own was called by nothing but its tests. Two rules
+  # that must agree, one of them untested, is the shape where the inspector highlights one bucket
+  # and the write lands in another.
+  defdelegate write_bucket(editor), to: MishkaCmsCore.Runtime.PageBuilder.EditorSession
+
+  defp styles(node), do: (node && node.meta[:styles]) || %{}
+
+  # Whether this bucket holds anything of its own — what decides if there is a reset to offer.
+  defp bucket_written?(node, bucket), do: styles(node) |> Map.get(bucket, %{}) |> map_size() > 0
+
+  # The words on the Reset button, and they name BOTH axes now: "Clear mobile :hover overrides" is a
+  # different button from "Clear mobile overrides", and clicking the wrong one is a different
+  # element's worth of work lost.
+  defp bucket_label(bucket) do
+    case Styles.axes(bucket) do
+      {:base, :base} ->
+        gettext("desktop")
+
+      {breakpoint, :base} ->
+        breakpoint_word(breakpoint)
+
+      {:base, pseudo} ->
+        ":#{pseudo}"
+
+      {breakpoint, pseudo} ->
+        gettext("%{breakpoint} :%{pseudo}",
+          breakpoint: breakpoint_word(breakpoint),
+          pseudo: pseudo
+        )
+    end
+  end
+
+  defp breakpoint_word(:tablet), do: gettext("tablet")
+  defp breakpoint_word(:mobile), do: gettext("mobile")
+  defp breakpoint_word(other), do: to_string(other)
+
+  defp own_style(node, bucket, prop), do: styles(node) |> Map.get(bucket, %{}) |> Map.get(prop)
+
+  # What the element actually shows for this property, following the cascade base → breakpoint →
+  # state, so an unset field's placeholder is the value the author is really seeing.
+  defp effective_style(node, bucket, prop) do
+    Enum.find_value(cascade(bucket), fn b -> own_style(node, b, prop) end)
+  end
+
+  defp inherited_from(node, bucket, prop) do
+    cascade(bucket)
+    |> Enum.drop(1)
+    |> Enum.find(fn b -> own_style(node, b, prop) end)
+    |> then(&(&1 && source_word(&1)))
+  end
+
+  defp source_word(:base), do: gettext("base")
+  defp source_word(bucket), do: breakpoint_word(bucket)
+
+  # WHAT THE ELEMENT REALLY SHOWS in this bucket, which is a search across two axes now rather than
+  # one. STATE BEATS WIDTH, because that is what the browser does: `hover:` carries a pseudo-class
+  # and `max-[560px]:` does not, so a plain hover outranks a mobile-only plain value even inside the
+  # query. Within one state the narrower width wins, which is emission order.
+  defp cascade(bucket) do
+    {breakpoint, pseudo} = Styles.axes(bucket)
+
+    for p <- states(pseudo), b <- widths(breakpoint), do: Styles.bucket(b, p)
+  end
+
+  defp widths(:mobile), do: [:mobile, :tablet, :base]
+  defp widths(:tablet), do: [:tablet, :base]
+  defp widths(:base), do: [:base]
+
+  defp states(:base), do: [:base]
+  defp states(pseudo), do: [pseudo, :base]
+
+  # The two selectors decide where an edit is written, which is not self-evident from a segmented
+  # control — the prototype puts a sentence under each one, and the widths quoted here are the real
+  # ones `Tree.Styles` compiles to.
+  defp breakpoint_note(:base),
+    do: gettext("Recorded as the value for every size unless a smaller one overrides it.")
+
+  defp breakpoint_note(:tablet),
+    do: gettext("Recorded against 900px and below. Desktop keeps its own value.")
+
+  defp breakpoint_note(:mobile),
+    do: gettext("Recorded against 560px and below. Desktop keeps its own value.")
+
+  defp state_note(:base), do: gettext("The resting state, as visitors first see it.")
+
+  defp state_note(pseudo),
+    do:
+      gettext("Recorded against :%{pseudo} — open the CSS pane to see the rule.", pseudo: pseudo)
+
+  # `<header>` for a plain tag, the label itself for anything else — a text node is not `<text>`.
+  @doc """
+  How a node is named in the chrome: `<header>` for an element, the component's own name for a
+  component. Public because `BuilderLive` labels an AI attachment with the same words the composer's
+  scope chip shows — one name for one thing.
+  """
+  @spec selection_tag(Node.t()) :: String.t()
+  def selection_tag(%Node{tag: tag} = node) when is_binary(tag) do
+    case tag =~ ~r/^[a-z][a-z0-9]*$/ do
+      true -> "<" <> tag <> ">"
+      false -> node_label(node)
+    end
+  end
+
+  def selection_tag(node), do: node_label(node)
+
+  defp selection_meta(%Node{children: []}), do: gettext("no children · selected")
+
+  defp selection_meta(%Node{children: children}),
+    do: ngettext("%{count} child · selected", "%{count} children · selected", length(children))
+
+  @doc """
+  The Behavior switches: a label and the classes each one adds.
+
+  Every switch is a real class on the element, so it reads the document rather than a flag kept
+  alongside it — turn one on, save, reopen, and it is still on because the class is still there.
+  """
+  @spec behavior_toggles() :: [{String.t(), String.t(), [String.t()]}]
+  def behavior_toggles do
+    [
+      {"sticky", gettext("Sticky on scroll"), ~w(sticky top-0 z-10)},
+      {"shadow", gettext("Drop shadow"), ~w(shadow-lg)},
+      {"container", gettext("Constrain to container"), ~w(max-w-5xl mx-auto)}
+    ]
+  end
+
+  @doc "Whether a node already carries every class one of the switches adds."
+  @spec behavior_on?(Node.t() | nil, String.t()) :: boolean()
+  def behavior_on?(nil, _key), do: false
+
+  def behavior_on?(node, key) do
+    case Enum.find(behavior_toggles(), fn {k, _label, _classes} -> k == key end) do
+      nil -> false
+      {_key, _label, classes} -> Enum.all?(classes, &(&1 in node_class_list(node)))
+    end
+  end
+
+  @doc """
+  A node's authored classes as a list, in the order they were written.
+
+  `Tree.classes/1` rather than the text of the attribute, because an expression's TEXT is not a list
+  of classes: reading `class={[@variant, "pb-…"]}` that way answered `["[@variant,", …]` and the
+  Behavior switches went on to write those fragments back as the class.
+  """
+  @spec node_class_list(Node.t() | nil) :: [String.t()]
+  def node_class_list(nil), do: []
+  def node_class_list(node), do: Tree.classes(node)
+
+  # The prototype's five background swatches. A named palette is faster than typing a hex for the
+  # colours a page actually reuses, and each one still lands in the same override bucket.
+  #
+  # Each row carries BOTH the value a click writes into the document and the class the button paints
+  # itself with. The two cannot drift, and `[background:…]` built by interpolation would be source
+  # text no Tailwind build can match — the swatches would all render blank.
+  #
+  # CLICKING THE CHOSEN ONE CLEARS IT, the way the picture rows and the gap presets do: the value
+  # sent is `""` when it is already the current one. They are presets over a field, not the only way
+  # in, so the field below carries the override dot and the Reset — see `appearance_props/0`.
+  # THE FIVE, AND THE ABSENCE OF ONE. Every swatch here paints something, so a row of them could set
+  # a background and never clear one back to nothing — and "nothing" is a real answer, not the lack
+  # of an answer: a card meant to show the section behind it needs `transparent`, and typing the word
+  # into the field below is not a thing anybody found. Reported on the editor issue as "you should
+  # add transparent as well".
+  #
+  # It leads the row rather than trailing it, because it is the one that UNDOES the other five, and
+  # its tint is the chequerboard every design tool draws for "see-through" — a plain white square
+  # would be indistinguishable from the white swatch beside it.
+  @transparent_tint "[background-image:linear-gradient(45deg,#e6e4de_25%,transparent_25%),linear-gradient(-45deg,#e6e4de_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#e6e4de_75%),linear-gradient(-45deg,transparent_75%,#e6e4de_75%)] [background-position:0_0,0_5px,5px_-5px,-5px_0] [background-size:10px_10px]"
+
+  defp swatches do
+    [
+      {"transparent", "transparent", @transparent_tint},
+      {"white", "#ffffff", "[background:#ffffff]"},
+      {"paper", "#faf9f6", "[background:#faf9f6]"},
+      {"sand", "#f2f1ec", "[background:#f2f1ec]"},
+      {"violet", "#4f4bcc", "[background:#4f4bcc]"},
+      {"ink", "#17161a", "[background:#17161a]"}
+    ]
+  end
+
+  attr(:id, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:on, :boolean, required: true)
+  attr(:event, :string, required: true)
+  attr(:node_id, :string, required: true)
+  attr(:value, :string, default: nil)
+
+  defp toggle_row(assigns) do
+    ~H"""
+    <div class="flex items-center gap-2.5 border-b border-[#f4f3ee] py-2 last:border-b-0">
+      <span class="flex-1 text-[11.5px] font-semibold text-[#3a382f]">{@label}</span>
+      <button
+        type="button"
+        id={@id}
+        role="switch"
+        aria-checked={to_string(@on)}
+        phx-click={@event}
+        phx-value-id={@node_id}
+        phx-value-key={@value}
+        class={[
+          "flex h-[23px] w-10 flex-none items-center rounded-full p-[3px] transition-colors",
+          (@on && "justify-end bg-[#4f4bcc]") || "justify-start bg-[#dcdad3]"
+        ]}
+      >
+        <span class="size-[17px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,.22)]"></span>
+      </button>
+    </div>
+    """
+  end
+
+  attr(:title, :string, required: true)
+  attr(:group_folds, :map, default: %{})
+  attr(:folded_by_default, :boolean, default: false)
+  attr(:scope, :string, default: "section", doc: "which namespace the fold state is kept under")
+  slot(:meta, doc: "extra chrome on the heading row, right-aligned")
+
+  @doc false
+  # Every heading in this panel folds, and they all fold the same way. The state lives on the server
+  # because the panel re-renders from it — a client-side toggle would be undone by the next patch.
+  defp fold_heading(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :folded,
+        folded?(assigns.group_folds, assigns.scope, assigns.title, assigns.folded_by_default)
+      )
+
+    ~H"""
+    <button
+      type="button"
+      id={"pb-#{@scope}-#{slug(@title)}"}
+      phx-click="toggle_prop_group"
+      phx-value-group={"#{@scope}:#{@title}"}
+      phx-value-folded={to_string(@folded)}
+      class="mb-[9px] flex w-full items-center gap-2 rounded-[7px] py-0.5 text-left hover:bg-[#f6f5f2]"
+    >
+      <.icon
+        name={:chevron}
+        size={10}
+        class={"flex-none text-[#a8a5a0] #{(@folded && "") || "rotate-90"}"}
+      />
+      <h3 class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+        {translate(@title)}
+      </h3>
+      <span class="h-px flex-1 bg-[#f0efea]"></span>
+      {render_slot(@meta)}
+    </button>
+    """
+  end
+
+  attr(:title, :string, required: true)
+  attr(:group_folds, :map, default: %{})
+
+  attr(:folded_by_default, :boolean,
+    default: false,
+    doc: "starts closed until the reader says otherwise; for chrome under a long property panel"
+  )
+
+  slot(:inner_block, required: true)
+
+  defp inspector_group(assigns) do
+    assigns = assign_new(assigns, :group_folds, fn -> %{} end)
+
+    ~H"""
+    <%!-- Flat, as in the prototype: a label and its controls. Boxing each group in a card cost 24px
+          of the panel's width, which is why the state pills wrapped onto a second line here and not
+          there.
+          The heading folds for the same reason the property groups do — on a component with thirty
+          properties, "Editing at" and "State" are two rows of chrome between the reader and the
+          thing they came for. Open by default, except where the panel above is already long enough
+          that the chrome pushes the properties off screen; the fold is theirs to choose either way. --%>
+    <section>
+      <.fold_heading
+        title={@title}
+        group_folds={@group_folds}
+        folded_by_default={@folded_by_default}
+      />
+      <div :if={!folded?(@group_folds, "section", @title, @folded_by_default)}>
+        {render_slot(@inner_block)}
+      </div>
+    </section>
+    """
   end
 
   attr(:fault, :map, required: true)
@@ -3261,6 +5494,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   def overlay?(entry) when is_map(entry), do: Map.get(entry, :concealed?, false) == true
   def overlay?(_entry), do: false
 
+  defp targetable?(%Node{kind: :tag}, _entry), do: true
+
+  defp targetable?(%Node{kind: :component}, entry) when not is_nil(entry),
+    do: entry |> Inspector.attrs() |> Enum.any?(&(Inspector.name(&1) == "class"))
+
+  defp targetable?(_node, _entry), do: false
+
+  # WHICH KIT, AND WHICH VERSION OF IT. A note that says "the component's own markup" tells a reader
+  # nothing they can act on; `chelekom 0.0.9` tells them exactly what they are betting on and what to
+  # re-check when it moves. Read off the palette entry, which carries the label and deliberately not
+  # the `extra` it came from. Falls back to the plain words for a component somebody wrote by hand
+  # here, which belongs to no kit and has no version to name.
+  defp kit_label(%{} = entry),
+    do: PaletteEntry.optional(entry, :kit) || gettext("this component's own markup")
+
+  defp kit_label(_entry), do: gettext("this component's own markup")
+
   @doc """
   The centred confirmation shown before reloading the canvas with unsaved work in the session.
 
@@ -3408,6 +5658,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  # A length takes any CSS length; everything else here is its own kind of value and says nothing.
+  defp length_hint(prop) do
+    case prop in Styles.lengths() do
+      true -> gettext("any length, e.g. 2rem")
+      false -> gettext("unset")
+    end
+  end
+
   defp devices,
     do: [
       {:frames, gettext("All breakpoints"), gettext("side by side")},
@@ -3510,10 +5768,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       {"canvas", gettext("Canvas")},
       {"components", gettext("Components")},
       {"layers", gettext("Layers")},
+      {"inspector", gettext("Inspector")},
       {"palette", gettext("Search")},
       {"dir", String.upcase(assigns.dir)}
     ]
   end
+
+  # The prototype names the document being edited beside its state — "contact.heex · saved" reads as
+  # a file, which is what a template is.
+  # WHAT A CLASS CAN LAND ON. Only an element, a component or a slot carries attributes; a run of
+  # text, an expression chip and both comment kinds are re-emitted verbatim by
+  # `MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer`, which has nowhere to put a class — so every
+  # override recorded against one was dropped on the way out and nothing on the canvas ever moved.
+  # The panel offered the whole surface anyway, on `{@inner_content}` most of all: the one node every
+  # layout has, and the first thing an author clicks.
+  defp styleable?(%Node{} = node), do: Node.container?(node)
+  defp styleable?(_node), do: false
+
+  # And it says what CAN be done there instead, which is the half a hidden panel does not supply.
+  defp unstyleable_note(%Node{kind: :text}),
+    do:
+      gettext(
+        "A run of text takes no styling of its own — double-click it on the canvas to change the words."
+      )
+
+  defp unstyleable_note(%Node{kind: kind}) when kind in [:eex, :eex_block],
+    do:
+      gettext(
+        "Dynamic content. What appears here is worked out when the page renders, so it carries no classes of its own."
+      )
+
+  defp unstyleable_note(_comment),
+    do: gettext("A comment renders nothing, so there is nothing to style.")
 
   # "Page builder" over a page, "Component builder" over a component. The noun comes from the same
   # table the back link and the flash messages read, so there is one place to change a name.
@@ -4109,6 +6395,48 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp translate(text) when is_binary(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
   defp translate(other), do: other
+
+  attr(:text, :string, required: true, doc: "a `gettext_noop` sentence with a `%{name}` per part")
+
+  attr(:parts, :map,
+    required: true,
+    doc: "`%{name => {tag, class, text}}`, drawn where `%{name}` stands in the sentence"
+  )
+
+  # A sentence with markup inside it, translated whole so a translation can put each part where its
+  # own word order needs it.
+  defp sentence(assigns) do
+    assigns = assign(assigns, :pieces, sentence_pieces(assigns.text, assigns.parts))
+
+    ~H"<.sentence_piece :for={piece <- @pieces} piece={piece} />"
+  end
+
+  attr(:piece, :any, required: true)
+
+  defp sentence_piece(%{piece: text} = assigns) when is_binary(text), do: ~H"{@piece}"
+
+  defp sentence_piece(%{piece: {tag, class, text}} = assigns) do
+    assigns = assign(assigns, tag: tag, class: class, text: text)
+
+    ~H"<.dynamic_tag tag_name={@tag} class={@class}>{@text}</.dynamic_tag>"
+  end
+
+  defp sentence_pieces(text, parts) do
+    bindings = Map.new(parts, fn {name, _part} -> {name, "%{#{name}}"} end)
+    by_name = Map.new(parts, fn {name, part} -> {to_string(name), part} end)
+
+    MishkaCmsCore.Gettext
+    |> Gettext.gettext(text, bindings)
+    |> then(&Regex.split(~r/%\{\w+\}/, &1, include_captures: true, trim: true))
+    |> Enum.map(fn piece ->
+      with "%{" <> rest <- piece,
+           {:ok, part} <- Map.fetch(by_name, String.trim_trailing(rest, "}")) do
+        part
+      else
+        _plain -> piece
+      end
+    end)
+  end
 
   @doc """
   The icon this panel draws for a descriptor's plain-string `icon`, so a plugin can name one without

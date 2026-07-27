@@ -422,6 +422,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       )
     )
     |> assign_new(:canvas_theme, fn -> theme_source(session.site_id) end)
+    |> assign(:element_css, session.element_css || "")
     # `suppress_site_js` keeps the site's own bundle (and its LiveSocket) out — a second LiveSocket
     # inside the frame would fight this canvas for the same DOM — and `standalone_assets` loads the
     # admin `app.js` instead, which is where this canvas's hooks live. `suppress_site_css` turns the
@@ -1231,6 +1232,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       nonce={assigns[:csp_nonce]}
     >
       <%= style_body(@canvas_theme) %>
+    </style>
+
+    <%!-- What an author wrote for one element, live. It is stored in a stylesheet row and reaches
+          the published page through the compiler, which runs on save — so without this the editor
+          would show the change one recompile late, which is the same as not showing it. Last in the
+          document, and unlayered, because element CSS is meant to win. --%>
+    <style
+      :if={@element_css != ""}
+      type="text/tailwindcss"
+      id="pb-canvas-element-css"
+      nonce={assigns[:csp_nonce]}
+    >
+      <%= style_body(@element_css) %>
     </style>
 
     <%!-- No `phx-click` on the root: a node's own click bubbles up here, and a deselect handler on
@@ -2942,9 +2956,31 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> Map.new()
     |> put_globals(node, Map.merge(declared, @wrapper_attrs), global_key(specs))
     |> Map.merge(slot_assigns(node, tree, assigns))
+    |> put_component_class(node, module)
     |> Map.put(@wrapper_attrs["component_name"], name)
     |> Map.put(@wrapper_attrs["site"], scope)
     |> tracked()
+  end
+
+  # THE INSPECTOR EDITS COMPONENTS TOO. `Tree.extract_styles/1` lifts a node's utilities out of its
+  # attributes into `meta.styles`, and the two tag clauses put them back through `put_class/2` — but
+  # a component's assigns are built from `node.attrs` alone, so every override an author set on a kit
+  # component painted nothing until the document was saved and reparsed. Padding, colour, radius,
+  # every state: the panel showed the value and the canvas ignored it.
+  #
+  # Only when the component DECLARES `class`. Handing an undeclared assign to a function component is
+  # a compile-time warning at best and a crash at worst, and a kit that styles itself from its own
+  # attrs has no business being handed one.
+  defp put_component_class(assigns, node, module) do
+    with atom when not is_nil(atom) <- declared_attr(module, "class"),
+         class when is_binary(class) <-
+           Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+             important?: node.kind == :component
+           ) do
+      Map.put(assigns, atom, class)
+    else
+      _undeclared_or_unstyled -> assigns
+    end
   end
 
   # The template's own `site` attribute wins over the editor's site scope. A site's page routinely
@@ -3069,8 +3105,30 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         []
     end)
     |> Map.new()
+    |> put_slot_class(slot_node)
     |> Map.put(:__slot__, slot_key(name))
     |> Map.put(:inner_block, render_children(children, tree, assigns))
+  end
+
+  # A SLOT'S OVERRIDES HAVE TO REACH ITS CLASS, and this is the only place they can. Parsing moves
+  # every recognised utility OUT of the slot's `class` attribute and into `meta.styles`, so building
+  # the slot assigns from `attrs` alone hands the kit a class with the author's overrides missing:
+  # the document is right, the canvas paints nothing, and a reload does not rescue it because the
+  # next parse lifts them straight back out again. Reported as "we cannot add any style to a table
+  # header".
+  #
+  # `important?: true`, the same as a component, and for the same reason — a slot's class lands
+  # inside the kit's own template, where its rules are written as descendant selectors:
+  # `chelekom-table`'s default `padding: "small"` emits `[&_table_.table-header]:px-4`, which is
+  # 0-2-1 against a plain `p-[8px]`'s 0-1-0 on the very same `<th>`. Without the bang the panel
+  # writes a rule that loses to the component's own default, every time.
+  defp put_slot_class(assigns, node) do
+    case Styles.merge_class(Node.attr_text(node, "class"), node.meta[:styles] || %{},
+           important?: true
+         ) do
+      nil -> assigns
+      class -> Map.put(assigns, :class, class)
+    end
   end
 
   defp existing_atom(name) do

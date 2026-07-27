@@ -14,12 +14,15 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
+  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.Plugins.BuilderBlockPlugin, as: BlockPlugin
@@ -145,6 +148,14 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     {:ok, view, render_async(view)}
   end
 
+  # THE ROW AS IT REALLY IS, read back through the same actor the editor writes with. Reading it
+  # with `nil` answers `%{}` whatever is in the database — which makes "the rule is gone" pass for
+  # the wrong reason, and is how the first version of these two tests fooled itself.
+  defp stored_element_css(view, page) do
+    actor = :sys.get_state(view.pid).socket.assigns.current_user
+    ElementCss.all(actor, page.site_id, "page-#{page.id}")
+  end
+
   # A plugin registered for the length of one test, exactly as an extension registers one.
   defp register_plugin(module, event) do
     {:ok, _} =
@@ -220,9 +231,22 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     |> Enum.uniq()
   end
 
+  # Which width the frame is showing. Session state on the LiveView rather than in the document, so
+  # it is read the same way the canvas hrefs are.
+  defp device(view), do: :sys.get_state(view.pid).socket.assigns.device
+
+  defp breakpoint(view), do: :sys.get_state(view.pid).socket.assigns.breakpoint
+
   # The compiled bundles the frame is served. Read off the LiveView rather than out of its HTML,
   # because the `<link>` is rendered by the root layout — see the canvas tests for why it moved.
   defp css_hrefs(view), do: :sys.get_state(view.pid).socket.assigns.canvas_css_hrefs
+
+  # The palette stays mounted and hides, so "is the palette showing?" is a class question rather than
+  # an existence one — see the `hidden` attr on `Panels.palette/1`.
+  defp palette_hidden?(view) do
+    assert has_element?(view, "#pb-palette"), "the palette stays mounted"
+    has_element?(view, ~s(#pb-palette[data-showing="false"]))
+  end
 
   defp editor_html(view) do
     view
@@ -277,6 +301,15 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   # them is an internal the author has no word for, and all three read the same way in a flash.
   defp internals?(text), do: text =~ ~r/%\{|\{:|:[a-z_]/
 
+  # How an attribute is HELD, which is what a row that shows it can corrupt: `{:expr, source}` is a
+  # binding, `{:string, text}` is words, `:boolean` is a bare attribute.
+  defp attr_of(view, id, name),
+    do: view |> editor() |> Map.fetch!(:tree) |> Tree.get(id) |> Node.attr(name)
+
+  # A value the property will take, for walking the whole vocabulary. An enumerated one must be one
+  # of its own; a free-form one is never validated, so any length does.
+  defp sample_style(prop), do: prop |> Styles.options() |> List.first("7px")
+
   # The style overrides a node actually carries — what every control in the Layout and Appearance
   # sections is a way of writing, and the only record of them there is.
   defp styles_of(view, node_id),
@@ -286,6 +319,11 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       |> Map.fetch!(:tree)
       |> Tree.get(node_id)
       |> then(&Map.get(&1.meta, :styles, %{}))
+
+  # A comment carries no tag, so it is found by kind instead.
+  defp node_with_kind(view, kind) do
+    view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == kind))
+  end
 
   describe "mount" do
     test "renders the editor shell", %{conn: conn, page: page} do
@@ -1027,6 +1065,49 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   end
 
   describe "panels" do
+    test "switching the left panel to the inspector", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-palette-search")
+      refute palette_hidden?(view)
+
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # HIDDEN, NOT REMOVED. The 177 cards stay in the DOM so coming back to the tab costs nothing;
+      # what the reader sees is the same either way.
+      assert palette_hidden?(view)
+      assert render(view) =~ "Select an element on the canvas"
+    end
+
+    # STARRING NEVER REACHES THE SERVER. Which four of 177 components one author keeps reaching for
+    # is not the site's data, so the star, the two chips and the recent row are the browser's from
+    # end to end — the rules are tested in `assets/js/pb_prefs.test.js`. What the server owes them is
+    # the handful of hooks and names they read, and that is what this pins: lose `data-name` and the
+    # star has nothing to star.
+    # WHAT A CARD WILL PUT ON THE PAGE, shown while the pointer rests on it.
+    #
+    # Everything about showing it is the client's: when to ask, where to put it, when to take it
+    # away. The server renders and pushes, and these assert exactly that seam — the panel exists for
+    # the hook to find, and the event answers with a document.
+    # ENTER IN A STYLE FIELD USED TO RELOAD THE PAGE. A LiveView form with `phx-change` and no
+    # `phx-submit` is not intercepted, so the browser applies its implicit-submission rule and does a
+    # native GET to the current URL — taking the whole editing session with it.
+    test "every style form can be submitted, so Enter never leaves the page", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      node = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      forms = ~r/<form[^>]*>/ |> Regex.scan(render(view)) |> List.flatten()
+      style_forms = Enum.filter(forms, &(&1 =~ "pb-style-form" or &1 =~ "pb-attr-form"))
+
+      assert style_forms != []
+      for form <- style_forms, do: assert(form =~ "phx-submit")
+    end
+
     test "and the search boxes that sit in a form do too", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
@@ -1151,6 +1232,25 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute star =~ "phx-click"
     end
 
+    # Clicking an element ON THE CANVAS means "work on this", so the chrome swings to its form. The
+    # canvas is a second LiveView, so what reaches this one is the session broadcast — which is what
+    # the test drives, origin and all.
+    test "a canvas click opens the inspector, a panel selection does not", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      token = view |> editor() |> Map.fetch!(:token)
+
+      {:ok, _session} = EditorSession.select(token, section.id, :panel)
+      refute palette_hidden?(view)
+
+      {:ok, _session} = EditorSession.select(token, section.id, :canvas)
+      assert palette_hidden?(view)
+      assert has_element?(view, "#pb-bp-mobile")
+    end
+
     # The grip drags locally and reports once, so the bounds have to reach the browser: without
     # data-min/data-max the drag would run past the ceiling and then jump back when the server
     # clamped what it was finally told. Same numbers on both sides, from `Panels.resize_bounds/1`.
@@ -1225,6 +1325,199 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
         view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.map(& &1.kind) |> Enum.uniq()
 
       refute :component in kinds
+    end
+
+    # SPACING AND COLOUR ARE WHAT PEOPLE REACH FOR FIRST, and both shipped folded shut — three folds
+    # and a scroll below the component's own properties. Nothing said they were there.
+    test "Layout and Appearance are open the first time a node is selected", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      html = render(view)
+
+      assert html =~ "Padding", "the Layout controls are on screen without unfolding anything"
+      assert has_element?(view, "#pb-swatch-white"), "and so is the background swatch row"
+    end
+
+    test "the inspector shows the selected element", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "select", %{"id" => section.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      html = render(view)
+      assert html =~ "section"
+      assert html =~ ~s(data-role="pb-bptabs")
+      assert html =~ "Attributes"
+    end
+
+    # TWO ELEMENTS ANSWERING TO ONE ID. Every palette entry is a worked example and an example names
+    # things — the kit's delete dialog ships `id="modal-delete-page"` with `id="btn-delete-cancel"`
+    # inside it. Placing one twice, which is how an author builds the second dialog, put both names
+    # in the document twice: the second button then opened the FIRST dialog, and LiveView raises
+    # trying to patch a container it cannot tell apart.
+    test "placing the same snippet twice renumbers the copy and repoints its own wiring", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      snippet =
+        ~S|<div id="modal-delete-page">Are you sure?</div>| <>
+          ~S|<button id="btn-delete" phx-click={JS.exec("data-pb-open", to: "#modal-delete-page")}>Delete</button>|
+
+      for index <- ["0", "1"] do
+        render_click(view, "op", %{
+          "kind" => "insert",
+          "template" => snippet,
+          "parent_id" => section.id,
+          "index" => index
+        })
+      end
+
+      tree = editor(view).tree
+      written = for node <- Tree.walk(tree), {:string, id} <- [Node.attr(node, "id")], do: id
+
+      assert Enum.sort(written) == [
+               "btn-delete",
+               "btn-delete-2",
+               # the fixture's own <section id="hero">
+               "hero",
+               "modal-delete-page",
+               "modal-delete-page-2"
+             ]
+
+      assert length(Enum.uniq(written)) == length(written), "no id may be claimed twice"
+
+      # And the copy's own button opens the copy, not the dialog that was already there.
+      openers =
+        for node <- Tree.walk(tree),
+            {:expr, source} <- [Node.attr(node, "phx-click")],
+            do: source
+
+      assert Enum.sort(openers) == [
+               ~S|JS.exec("data-pb-open", to: "#modal-delete-page")|,
+               ~S|JS.exec("data-pb-open", to: "#modal-delete-page-2")|
+             ]
+    end
+
+    # DUPLICATE USED TO ANSWER THIS DIFFERENTLY AND WORSE: it replaced the written id with a random
+    # one, so `modal-delete-page` became `phx-F_3nK…` — the author's name for the element thrown
+    # away — and nothing rewrote the copy's own button, which went on opening the original.
+    test "duplicating keeps the author's name for the element and takes the next number", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "template" => ~S|<div id="pricing-card"><a href="#pricing-card">anchor</a></div>|,
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      card =
+        editor(view).tree
+        |> Tree.walk()
+        |> Enum.find(&(Node.attr(&1, "id") == {:string, "pricing-card"}))
+
+      render_click(view, "op", %{"kind" => "duplicate", "node_id" => card.id})
+
+      tree = editor(view).tree
+      written = for node <- Tree.walk(tree), {:string, id} <- [Node.attr(node, "id")], do: id
+
+      assert Enum.sort(written) == ["hero", "pricing-card", "pricing-card-2"]
+
+      hrefs = for node <- Tree.walk(tree), {:string, href} <- [Node.attr(node, "href")], do: href
+      assert Enum.sort(hrefs) == ["#pricing-card", "#pricing-card-2"]
+    end
+
+    # A SEARCH BOX WITH NO WAY OUT. Every filtered list in the editor is filtered by a word held on
+    # the SERVER, so selecting the text and deleting it is the only way back to the full list — and
+    # nothing on the field said so. The ✖ is shown by `peer-placeholder-shown:hidden`, which is a
+    # CSS answer to a CSS question: an input is `:placeholder-shown` exactly while it is empty.
+    test "every live text field in the editor carries a clear control", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      _loaded = render_async(view)
+
+      render_click(view, "set_left_tab", %{"tab" => "blocks"})
+      render_click(view, "toggle_command", %{})
+      render_click(view, "open_find", %{})
+
+      html = render(view)
+
+      for field <- ~w(pb-palette-search pb-block-search pb-command-input pb-find-input
+                      pb-replace-input) do
+        assert html =~ ~s(data-for="#{field}"),
+               "#{field} has no clear control"
+      end
+
+      # Shown by CSS alone, so an empty field never draws one and no round trip reveals it.
+      assert html =~ "peer-placeholder-shown:hidden"
+    end
+
+    test "clicking the clear control blanks the field the server is filtering by", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      _loaded = render_async(view)
+
+      render_click(view, "palette_query", %{"value" => "zzzznothing"})
+      assert view |> element("#pb-palette-search") |> render() =~ ~s(value="zzzznothing")
+
+      view |> element(~s([data-for="pb-palette-search"])) |> render_click()
+
+      # The box AND the query behind the list, in one round trip — clearing only the box would leave
+      # the list filtered by a word no longer written anywhere.
+      assert view |> element("#pb-palette-search") |> render() =~ ~s(value="")
+    end
+
+    # AND THE CONTROL MUST NOT FOCUS THE FIELD IT JUST CLEARED. LiveView never overwrites the value
+    # of a focused input — `mergeFocusedInput` copies every attribute except `value` — so a
+    # `JS.focus` in this chain left the box still reading the old word over a list that had gone back
+    # to everything. Measured in a browser; the half-cleared state is invisible to a render test,
+    # which is why the command itself is asserted here.
+    test "the clear control pushes and does not focus the field", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      command =
+        view
+        |> element(~s([data-for="pb-palette-search"]))
+        |> render()
+
+      assert command =~ ~s([&quot;push&quot;)
+      refute command =~ "focus", "focusing the field stops LiveView from clearing it"
+    end
+
+    # ONE FORM, TWO FIELDS, ONE HANDLER THAT READS BOTH. Clearing the search term by pushing only
+    # `find` would have sent no `replace` at all, and the handler's `params["replace"] || ""` would
+    # have thrown away the replacement text sitting in the box beside it.
+    test "clearing Find leaves Replace alone, and the other way round", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_find", %{})
+      render_click(view, "find_query", %{"find" => "Contact", "replace" => "Reach"})
+
+      view |> element(~s([data-for="pb-find-input"])) |> render_click()
+
+      assert view |> element("#pb-find-input") |> render() =~ ~s(value="")
+      assert view |> element("#pb-replace-input") |> render() =~ ~s(value="Reach")
+
+      render_click(view, "find_query", %{"find" => "Contact", "replace" => "Reach"})
+      view |> element(~s([data-for="pb-replace-input"])) |> render_click()
+
+      assert view |> element("#pb-find-input") |> render() =~ ~s(value="Contact")
+      assert view |> element("#pb-replace-input") |> render() =~ ~s(value="")
     end
 
     # A RUNTIME COMPONENT IS BUILT ON FIRST USE, which is right — a kit of 136 must not compile 136
@@ -1887,6 +2180,21 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert h1.id in wrapper.children
     end
 
+    # The dead end a run of text used to be: a panel saying what it could not do and offering one way
+    # out, to the element around it.
+    test "a run of text offers the link from the inspector", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      text = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :text))
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => text.id})
+      assert has_element?(view, "#pb-text-link")
+
+      view |> element("#pb-text-link") |> render_click()
+
+      assert Enum.any?(Tree.walk(editor(view).tree), &(&1.tag == "a"))
+    end
+
     test "an element the words sit in offers no such button", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
@@ -2335,6 +2643,967 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # The style write path: without these controls the breakpoint tabs and State chips would choose a
+  # bucket that nothing ever writes to, which is what the audit found.
+  describe "responsive style overrides" do
+    setup %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # Layout and Appearance are open on selection — spacing and colour are what people reach for
+      # first. The rest still need opening the way a reader would. "Editing at" is not among them any
+      # more: the breakpoint is a permanent tab strip now, not a fold.
+      for title <- ~w(state behavior attributes) do
+        view |> element("#pb-section-#{title}") |> render_click()
+      end
+
+      %{view: view, node: section}
+    end
+
+    # THE BOX MODEL, AS A CONTROL. Eight edges, each where it is on the element. Before this the panel
+    # offered `Padding Y`, `Padding X`, `Padding top` and `Padding bottom` — four of the eight edges
+    # missing outright, including `margin-top`, which is the third most-used utility in the whole
+    # block library.
+    test "the spacing box draws all eight edges", %{view: view} do
+      for edge <- ~w(mt mr mb ml pt pr pb pl) do
+        assert has_element?(view, "#pb-edge-base-#{edge}"),
+               "the spacing box has no cell for #{edge}"
+      end
+    end
+
+    test "and typing in one writes that edge and nothing else", %{view: view, node: node} do
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => "40px"})
+
+      assert styles_of(view, node.id) == %{base: %{"mt" => "40px"}}
+
+      view |> element("#pb-edge-form-base-pl") |> render_change(%{"value" => "2rem"})
+
+      assert styles_of(view, node.id) == %{base: %{"mt" => "40px", "pl" => "2rem"}}
+    end
+
+    # THE BOX HAD NO WAY OUT BUT THE KEYBOARD, and that fails in the one way a control must not: you
+    # empty the field, the change does not reach the server, and the next render puts the old value
+    # back — so it reads as a box that remembers what you deleted. Every other control here has a
+    # Reset; this is the box's.
+    test "a set edge can be cleared without retyping", %{view: view, node: node} do
+      refute has_element?(view, "#pb-edge-clear-base-mt")
+
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => "40px"})
+
+      assert has_element?(view, "#pb-edge-clear-base-mt")
+
+      view |> element("#pb-edge-clear-base-mt") |> render_click()
+
+      assert styles_of(view, node.id) == %{}
+      refute has_element?(view, "#pb-edge-clear-base-mt")
+    end
+
+    test "and clearing one edge leaves the others alone", %{view: view, node: node} do
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => "40px"})
+      view |> element("#pb-edge-form-base-pl") |> render_change(%{"value" => "2rem"})
+
+      view |> element("#pb-edge-clear-base-mt") |> render_click()
+
+      assert styles_of(view, node.id) == %{base: %{"pl" => "2rem"}}
+    end
+
+    # Emptying the text is still a clear, for anyone who reaches for the keyboard first.
+    test "and emptying the field clears it too", %{view: view, node: node} do
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => "40px"})
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => ""})
+
+      assert styles_of(view, node.id) == %{}
+    end
+
+    test "and it reaches the published page", %{view: view, page: page} do
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => "40px"})
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ "mt-[40px]"
+    end
+
+    # An edge is per-breakpoint like every other override, which is the whole point of putting it in
+    # the panel rather than in the CSS box: `mt-10` on desktop and `mt-4` on mobile is one element.
+    test "an edge belongs to the breakpoint it was set on", %{view: view, node: node} do
+      view |> element("#pb-edge-form-base-mt") |> render_change(%{"value" => "40px"})
+      view |> element("#pb-bp-mobile") |> render_click()
+      view |> element("#pb-edge-form-mobile-mt") |> render_change(%{"value" => "12px"})
+
+      assert styles_of(view, node.id) == %{base: %{"mt" => "40px"}, mobile: %{"mt" => "12px"}}
+    end
+
+    # A VALUE THE AUTHOR SET IS NOT AN EXAMPLE. An empty field's placeholder is a made-up hint —
+    # "any length, e.g. 2rem" — and a field inheriting from another bucket put the REAL value in the
+    # same grey, so an author on Mobile read their own `1000px` as a suggestion and reported the
+    # value as missing on reopen.
+    test "an inherited value is marked as a value, not as a hint", %{view: view, node: node} do
+      view |> element("#pb-style-form-base-width") |> render_change(%{"value" => "1000px"})
+
+      # On base it is the author's own value, in the field itself.
+      assert view
+             |> element("#pb-style-base-width")
+             |> render() =~ ~s(value="1000px")
+
+      view |> element("#pb-bp-mobile") |> render_click()
+
+      mobile = view |> element("#pb-style-mobile-width") |> render()
+
+      assert mobile =~ ~s(placeholder="1000px"), "the inherited value is not offered at all"
+
+      assert mobile =~ ~s(data-inherited="true"),
+             "an inherited value is drawn the same as an invented example"
+
+      refute mobile =~ ~s(value="1000px"), "it is not this bucket's own value"
+
+      # And an untouched field still says what a value may look like, without claiming to have one.
+      height = view |> element("#pb-style-mobile-height") |> render()
+      assert height =~ "any length"
+      refute height =~ ~s(data-inherited="true")
+
+      assert styles_of(view, node.id) == %{base: %{"width" => "1000px"}}
+    end
+
+    test "the Typography group renders its own controls", %{view: view} do
+      html = render(view)
+
+      assert html =~ "Typography"
+      assert has_element?(view, "#pb-style-form-base-font-size")
+      assert has_element?(view, "#pb-style-form-base-line-height")
+      assert has_element?(view, "#pb-style-form-base-letter-spacing")
+      assert has_element?(view, "#pb-style-base-font-weight-font-bold")
+      assert has_element?(view, "#pb-style-base-text-align-text-center")
+      assert has_element?(view, "#pb-style-base-text-transform-uppercase")
+    end
+
+    # THE SIZE IS NOT A COLOUR, though Tailwind spells both `text-`. The panel writes the CSS
+    # property itself for exactly this reason, and the two have to survive together.
+    test "a size and a colour do not overwrite each other", %{view: view, node: node, page: page} do
+      view |> element("#pb-style-form-base-font-size") |> render_change(%{"value" => "3rem"})
+      view |> element("#pb-style-form-base-color") |> render_change(%{"value" => "#ff0000"})
+
+      assert styles_of(view, node.id) == %{base: %{"font-size" => "3rem", "color" => "#ff0000"}}
+
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ "[font-size:3rem]"
+      assert reloaded.template =~ "text-[#ff0000]"
+    end
+
+    # A PILL IS NOT A SELECT OF CLASS NAMES. `font-extrabold` and `normal-case` are Tailwind's
+    # spelling, not anybody's idea of a choice, so each option carries its own words and is drawn in
+    # the thing it names.
+    test "an enumerated typographic value offers words, not Tailwind", %{view: view} do
+      html = view |> element("#pb-style-base-font-weight-font-extrabold") |> render()
+
+      assert html =~ "Black"
+      refute html =~ ">font-extrabold<"
+
+      assert view |> element("#pb-style-base-text-transform-normal-case") |> render() =~
+               "As typed"
+    end
+
+    test "clicking a weight sets it, and clicking it again clears it", %{view: view, node: node} do
+      view |> element("#pb-style-base-font-weight-font-bold") |> render_click()
+
+      assert styles_of(view, node.id) == %{base: %{"font-weight" => "font-bold"}}
+
+      view |> element("#pb-style-base-font-weight-font-bold") |> render_click()
+
+      # The whole bucket goes with the last override in it: an empty `:base` left behind would read
+      # as an element that has been styled and reset rather than one nobody touched.
+      assert styles_of(view, node.id) == %{}
+    end
+
+    test "and so does an alignment and a case", %{view: view, node: node} do
+      view |> element("#pb-style-base-text-align-text-center") |> render_click()
+      view |> element("#pb-style-base-text-transform-uppercase") |> render_click()
+
+      assert styles_of(view, node.id) ==
+               %{base: %{"text-align" => "text-center", "text-transform" => "uppercase"}}
+    end
+
+    # A BORDER COLOUR ON ITS OWN PAINTS NOTHING, which is how the panel read before: the control took
+    # the colour, the element had no border, and nothing happened.
+    test "a border has a width and a style beside its colour", %{view: view, node: node} do
+      assert has_element?(view, "#pb-style-form-base-border-width")
+      assert has_element?(view, "#pb-style-base-border-style-border-dashed")
+
+      view |> element("#pb-style-form-base-border-width") |> render_change(%{"value" => "2px"})
+      view |> element("#pb-style-base-border-style-border-dashed") |> render_click()
+
+      assert styles_of(view, node.id) ==
+               %{base: %{"border-width" => "2px", "border-style" => "border-dashed"}}
+    end
+
+    test "the column count appears on a grid and not on anything else", %{view: view} do
+      refute has_element?(view, "#pb-style-cols-base-3")
+
+      view |> element("#pb-style-pic-base-display-grid") |> render_click()
+
+      assert has_element?(view, "#pb-style-cols-base-3")
+
+      view |> element("#pb-style-pic-base-display-flex") |> render_click()
+
+      refute has_element?(view, "#pb-style-cols-base-3")
+    end
+
+    test "and picking one writes Tailwind's own utility", %{view: view, node: node, page: page} do
+      view |> element("#pb-style-pic-base-display-grid") |> render_click()
+      view |> element("#pb-style-cols-base-2") |> render_click()
+
+      assert styles_of(view, node.id) == %{base: %{"display" => "grid", "grid-cols" => "2"}}
+
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      # `grid-cols-[2]` would be `grid-template-columns: 2`, which is not a track list and lays out
+      # nothing at all.
+      assert reloaded.template =~ "grid-cols-2"
+      refute reloaded.template =~ "grid-cols-[2]"
+    end
+
+    test "and a track list a count cannot express still goes in", %{view: view, node: node} do
+      view |> element("#pb-style-pic-base-display-grid") |> render_click()
+      view |> element("#pb-style-form-base-grid-cols") |> render_change(%{"value" => "2fr 1fr"})
+
+      assert styles_of(view, node.id) == %{base: %{"display" => "grid", "grid-cols" => "2fr 1fr"}}
+    end
+
+    # SIX CONTROLS, ONE PROPERTY. `box-shadow` is one string, and offering it as one text box only
+    # helps somebody who already knew the answer. Which side it falls on is two numbers.
+    test "the shadow editor offers the parts a shadow is made of", %{view: view} do
+      for field <- ~w(x y blur spread color) do
+        assert has_element?(view, "#pb-shadow-base-#{field}"), "no shadow #{field} control"
+      end
+
+      assert has_element?(view, "#pb-shadow-base-inset")
+      assert has_element?(view, "#pb-shadow-preset-m")
+    end
+
+    test "a preset writes the whole shadow", %{view: view, node: node} do
+      view |> element("#pb-shadow-preset-l") |> render_click()
+
+      assert %{base: %{"shadow" => shadow}} = styles_of(view, node.id)
+      assert shadow =~ "24px"
+    end
+
+    # One part at a time, and the other five have to survive it — six ops would be six undo steps for
+    # one decision, five of them shadows nobody chose.
+    test "and changing one part leaves the others alone", %{view: view, node: node} do
+      view |> element("#pb-shadow-preset-l") |> render_click()
+      %{base: %{"shadow" => before}} = styles_of(view, node.id)
+
+      view |> element("#pb-shadow-form-base-y") |> render_change(%{"value" => "30px"})
+
+      assert %{base: %{"shadow" => after_edit}} = styles_of(view, node.id)
+      assert after_edit =~ "30px"
+      assert after_edit =~ "rgba"
+      refute after_edit == before
+    end
+
+    test "an element with no shadow starts from one worth seeing", %{view: view, node: node} do
+      view |> element("#pb-shadow-form-base-y") |> render_change(%{"value" => "8px"})
+
+      assert %{base: %{"shadow" => shadow}} = styles_of(view, node.id)
+      assert shadow =~ "8px"
+      # Not `8px 0 0 0 transparent`: a shadow with no blur and no colour is one you cannot see, so
+      # the first nudge would look like a control that does nothing.
+      assert shadow =~ "rgba"
+    end
+
+    test "and Inside turns it into an inner shadow and back", %{view: view, node: node} do
+      view |> element("#pb-shadow-preset-m") |> render_click()
+      view |> element("#pb-shadow-base-inset") |> render_click()
+
+      assert %{base: %{"shadow" => shadow}} = styles_of(view, node.id)
+      assert String.starts_with?(shadow, "inset ")
+
+      view |> element("#pb-shadow-base-inset") |> render_click()
+
+      assert %{base: %{"shadow" => plain}} = styles_of(view, node.id)
+      refute plain =~ "inset"
+    end
+
+    test "and it reaches the page as a shadow utility", %{view: view, page: page} do
+      view |> element("#pb-shadow-preset-s") |> render_click()
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ "shadow-[0_1px_2px_0_rgba(15,23,42,0.08)]"
+    end
+
+    # A SWATCH ROW OF HARDCODED HEX IS A PALETTE WITH NOTHING TO DO WITH THE SITE. The five here are
+    # the editor's own neutrals; the site's real colours were declared in its stylesheet, listed in
+    # the Studio one panel away, and unreachable from the control that paints things — so a rebrand
+    # meant repainting every element by hand.
+    #
+    # A token writes `var(--danger-light)`, which is the difference: the element resolves through the
+    # same declaration every component on the site resolves through, and changing the token changes
+    # them together.
+    test "the site's own colours sit beside the editor's", %{conn: conn, page: page} do
+      {:ok, _sheet} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "swatch-theme-#{System.unique_integer([:positive])}",
+            kind: :theme,
+            content: ":root {\n  --danger-light: #de1135;\n  --radius-lg: 12px;\n}\n",
+            site_id: nil,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # FOLDED, BEHIND ITS COUNT. The installed kit theme declares 251 colours — every state of every
+      # variant — and a row of them at the neutrals' size is a wall the Background control disappears
+      # into. The five that are always open are the editor's own.
+      refute has_element?(view, "#pb-token-base-background-danger-light")
+
+      view |> element("#pb-section-site-colours") |> render_click()
+
+      assert has_element?(view, "#pb-token-base-background-danger-light")
+
+      # A length is not a colour. Offering `--radius-lg` as a background is a swatch that draws
+      # nothing, which reads as a broken control rather than as an unsuitable token.
+      refute has_element?(view, "#pb-token-base-background-radius-lg")
+
+      view |> element("#pb-token-base-background-danger-light") |> render_click()
+
+      assert styles_of(view, section.id) == %{base: %{"background" => "var(--danger-light)"}}
+    end
+
+    # AND THE ROW IS A CONVENIENCE, NOT A PRECONDITION. Reading the tokens means reading every
+    # stylesheet the site can see and parsing them; done on the mount, a sheet that cannot be read
+    # took the whole editor with it — trading something the author needs for something they would
+    # merely like.
+    test "an unreadable stylesheet costs the swatches, not the session", %{view: view} do
+      assert has_element?(view, "#pb-swatch-violet")
+      refute has_element?(view, "#pb-section-site-colours")
+    end
+
+    test "the Layout and Appearance groups render", %{view: view} do
+      html = render(view)
+      assert html =~ "Layout"
+      assert html =~ "Appearance"
+      assert html =~ "Gap"
+      assert html =~ "Background"
+    end
+
+    test "a style edit lands in the base bucket and compiles to a class on save", %{
+      conn: conn,
+      page: page,
+      view: view,
+      node: node
+    } do
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => node.id,
+        "bucket" => "base",
+        "prop" => "gap",
+        "value" => "20px"
+      })
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{base: %{"gap" => "20px"}}
+
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ "gap-[20px]"
+      assert conn
+    end
+
+    # Firing `op` directly proves the HANDLER. This proves the CONTROL, which is a different claim:
+    # the panel once offered breakpoint and state selectors that chose a bucket no widget ever wrote
+    # to, and a handler-level test cannot see a hole like that.
+    test "typing in a style field writes the override", %{view: view, node: node} do
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "18px"})
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{base: %{"gap" => "18px"}}
+
+      # No override marker at base: at Desktop/Normal the value IS the element's value, and the
+      # prototype marks a field as overridden only against that baseline.
+      refute has_element?(view, "#pb-style-clear-base-gap")
+
+      view |> element("#pb-bp-tablet") |> render_click()
+      view |> element("#pb-style-form-tablet-gap") |> render_change(%{"value" => "10px"})
+      assert has_element?(view, "#pb-style-clear-tablet-gap")
+    end
+
+    test "the override dot next to a set field clears just that bucket", %{
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "18px"})
+      view |> element("#pb-bp-tablet") |> render_click()
+      view |> element("#pb-style-form-tablet-gap") |> render_change(%{"value" => "10px"})
+
+      view |> element("#pb-style-clear-tablet-gap") |> render_click()
+
+      # Only the tablet bucket goes; the base value it was overriding stays.
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{base: %{"gap" => "18px"}}
+    end
+
+    # Every property the serialiser can express has to have a control, or the round trip is one-way:
+    # a template with `max-w-[60ch]` on it parses into an override the panel cannot show or undo.
+    # The claim is narrow and worth pinning: an editing field commits on its own debounce, so nobody
+    # has to click away to make a change land. Structurally that means every field lives in a FORM
+    # carrying `phx-change` and every input carries `phx-debounce` — a bare `phx-change` on an input
+    # outside a form fires nothing at all, which is how these fields were dead once before.
+    test "every editing field commits on debounce, with no blur required", %{
+      view: view,
+      node: node
+    } do
+      # The shape that makes a debounce commit work at all: the field is inside a form carrying the
+      # change event, and the input debounces. A bare `phx-change` on an input outside a form fires
+      # nothing — which is exactly how these fields were dead once before.
+      assert has_element?(view, ~s(form[phx-change="op"] input[phx-debounce="350"]))
+
+      # Nothing commits on blur any more; that is what forced the click-away.
+      refute has_element?(view, "[phx-blur]")
+
+      # And the behaviour itself, through the control rather than the handler: a change with no blur
+      # of any kind reaches the tree.
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "27px"})
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(node.id)
+             |> then(& &1.meta.styles) == %{base: %{"gap" => "27px"}}
+    end
+
+    test "every property the serialiser understands has a control", %{view: view} do
+      # Direction, Spread, Align and Wrap are shown only on an element that IS a flex row, and the
+      # column count only on one that is a grid — they do nothing to anything else, and an element
+      # cannot be both. So the claim is that every property is REACHABLE, not that every property is
+      # on screen at once: each is looked for on the display it belongs to.
+      # And the axis pair is folded away under the spacing box on an element that sets neither, so it
+      # is opened the way a reader opens it. Reachable, again, is the claim.
+      view |> element("#pb-section-spacing-by-axis") |> render_click()
+
+      view |> element("#pb-style-pic-base-display-flex") |> render_click()
+      as_flex = render(view)
+
+      view |> element("#pb-style-pic-base-display-grid") |> render_click()
+      as_grid = render(view)
+
+      for prop <- Styles.properties() do
+        assert control_for?(as_flex, prop) or control_for?(as_grid, prop),
+               "no control for the #{prop} override"
+      end
+
+      # Background has the swatch row on top of its field, the way Gap has its presets.
+      assert as_flex =~ "pb-swatch-"
+    end
+
+    # THE FIVE SHAPES A CONTROL COMES IN. A field in a form, the picture row an enumerated layout
+    # property gets, the styled-label pills the typographic ones get, a cell in the spacing box, and
+    # the shadow editor's own parts. What is pinned is that the property reaches the reader — not
+    # which widget it arrived in, which is a design decision and moves.
+    defp control_for?(html, prop) do
+      String.contains?(html, "pb-style-form-base-#{prop}") or
+        String.contains?(html, "pb-style-pics-base-#{prop}") or
+        String.contains?(html, "pb-style-base-#{prop}-") or
+        String.contains?(html, "pb-edge-form-base-#{prop}") or
+        (prop == "shadow" and String.contains?(html, "pb-shadow-base-blur"))
+    end
+
+    # A SWATCH IS A PRESET, NOT THE ONLY WAY IN. The field below holds anything, and the swatch it
+    # matches lights up — so a background typed by hand still reads as chosen when it is one of the
+    # five, and reads as itself when it is not.
+    test "the field and the swatches are one control", %{view: view, node: node} do
+      view |> element("#pb-swatch-ink") |> render_click()
+      assert has_element?(view, ~s(#pb-swatch-ink[aria-pressed="true"]))
+
+      view |> element("#pb-style-form-base-background") |> render_change(%{"value" => "#dadada"})
+
+      assert styles_of(view, node.id) == %{base: %{"background" => "#dadada"}}
+      assert has_element?(view, ~s(#pb-swatch-ink[aria-pressed="false"]))
+      assert view |> element("#pb-style-base-background") |> render() =~ "#dadada"
+
+      view |> element("#pb-style-form-base-background") |> render_change(%{"value" => "#17161a"})
+      assert has_element?(view, ~s(#pb-swatch-ink[aria-pressed="true"]))
+    end
+
+    # Every other preset row in the panel clears itself on a second press, and the one that did not
+    # was the one whose value could not be reached any other way.
+    test "pressing the chosen swatch clears it", %{view: view, node: node} do
+      view |> element("#pb-swatch-violet") |> render_click()
+      assert styles_of(view, node.id) == %{base: %{"background" => "#4f4bcc"}}
+
+      view |> element("#pb-swatch-violet") |> render_click()
+      assert styles_of(view, node.id) == %{}
+    end
+
+    test "clearing a bucket drops everything written into it and nothing else", %{
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "18px"})
+      view |> element("#pb-bp-tablet") |> render_click()
+      view |> element("#pb-style-form-tablet-gap") |> render_change(%{"value" => "10px"})
+      view |> element("#pb-style-form-tablet-width") |> render_change(%{"value" => "100%"})
+
+      view |> element("#pb-style-reset") |> render_click()
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{base: %{"gap" => "18px"}}
+    end
+
+    # A reset that would clear nothing reads as a broken button, so it is not drawn at all.
+    test "an untouched bucket offers no reset", %{view: view} do
+      refute has_element?(view, "#pb-style-reset")
+
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "18px"})
+      assert has_element?(view, "#pb-style-reset")
+    end
+
+    test "emptying a base field clears it", %{view: view, node: node} do
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "18px"})
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => ""})
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{}
+    end
+
+    # Display and its flex-only neighbours are pictures rather than a `<select>` of raw utilities:
+    # the value still written is the bare Tailwind class, which is what makes the round trip work.
+    test "picking a Layout picture writes the bare Tailwind utility", %{
+      conn: conn,
+      page: page,
+      view: view,
+      node: node
+    } do
+      view |> element("#pb-style-pic-base-display-grid") |> render_click()
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{base: %{"display" => "grid"}}
+
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ "grid"
+      assert conn
+    end
+
+    # §3 — the layout vocabulary as pictures. What is pinned is the behaviour a non-technical author
+    # depends on, not the markup: one click sets, the same click again clears, and the controls that
+    # cannot do anything are not offered.
+    test "clicking the chosen picture again clears the override", %{view: view, node: node} do
+      view |> element("#pb-style-pic-base-display-flex") |> render_click()
+      assert styles_of(view, node.id) == %{base: %{"display" => "flex"}}
+
+      view |> element("#pb-style-pic-base-display-flex") |> render_click()
+      assert styles_of(view, node.id) == %{}
+    end
+
+    test "the flex-only pictures appear only once the element is a row", %{view: view} do
+      refute has_element?(view, "#pb-style-pics-base-direction")
+      refute has_element?(view, "#pb-style-pics-base-justify")
+
+      view |> element("#pb-style-pic-base-display-flex") |> render_click()
+
+      assert has_element?(view, "#pb-style-pics-base-direction")
+      assert has_element?(view, "#pb-style-pics-base-align")
+      assert has_element?(view, "#pb-style-pics-base-wrap")
+
+      # …and they go again with the row, rather than lingering as settings with no effect.
+      view |> element("#pb-style-pic-base-display-block") |> render_click()
+      refute has_element?(view, "#pb-style-pics-base-justify")
+    end
+
+    # A row that inherits its display from Desktop is still a row on Mobile. Reading only the open
+    # bucket made these four vanish the moment the reader switched breakpoint.
+    test "a narrower breakpoint still offers the flex pictures it inherits", %{view: view} do
+      view |> element("#pb-style-pic-base-display-flex") |> render_click()
+      view |> element("#pb-bp-mobile") |> render_click()
+
+      assert has_element?(view, "#pb-style-pics-mobile-justify")
+    end
+
+    test "a gap preset writes the length it is named for", %{view: view, node: node} do
+      view |> element("#pb-style-gap-base-L") |> render_click()
+      assert styles_of(view, node.id) == %{base: %{"gap" => "16px"}}
+
+      # The field and the presets are one override, so the field shows what the preset wrote…
+      assert view |> element("#pb-style-base-gap") |> render() =~ ~s(value="16px")
+
+      # …and pressing the lit preset takes it off.
+      view |> element("#pb-style-gap-base-L") |> render_click()
+      assert styles_of(view, node.id) == %{}
+    end
+
+    # §4 — the breakpoint is a tab, and the count on it is how a responsive override stays findable.
+    test "each breakpoint tab counts what it sets, and only its own", %{view: view} do
+      refute has_element?(view, "#pb-bp-count-base")
+
+      view |> element("#pb-style-form-base-gap") |> render_change(%{"value" => "18px"})
+      assert view |> element("#pb-bp-count-base") |> render() =~ ~s(title="1 set here")
+      refute has_element?(view, "#pb-bp-count-mobile")
+
+      view |> element("#pb-bp-mobile") |> render_click()
+      view |> element("#pb-style-form-mobile-gap") |> render_change(%{"value" => "8px"})
+      view |> element("#pb-style-pic-mobile-display-flex") |> render_click()
+
+      assert view |> element("#pb-bp-count-mobile") |> render() =~ ~s(title="2 set here")
+      assert view |> element("#pb-bp-count-base") |> render() =~ ~s(title="1 set here")
+
+      # A STATE SET AT A WIDTH BELONGS TO THAT WIDTH. It used to be counted nowhere — the badge
+      # looked only at the plain breakpoint bucket — so a hover colour set on mobile was a change
+      # with nothing on screen pointing at it, which is exactly how a responsive edit becomes
+      # impossible to find again a week later.
+      view |> element("#pb-state-hover") |> render_click()
+      view |> element("#pb-style-form-mobile_hover-gap") |> render_change(%{"value" => "4px"})
+
+      assert view |> element("#pb-bp-count-mobile") |> render() =~ ~s(title="3 set here")
+      assert view |> element("#pb-bp-count-base") |> render() =~ ~s(title="1 set here")
+    end
+
+    # THE CANVAS GOES WHERE THE PANEL GOES. Choosing Tablet says "I am working on tablet", and
+    # leaving the frame at desktop width answers that with a page the override cannot be seen on:
+    # the author sets a value, nothing moves, and the control reads as broken when it is the
+    # viewport that is wrong.
+    test "the breakpoint tab moves the canvas with it", %{view: view} do
+      assert device(view) == :desktop
+
+      view |> element("#pb-bp-mobile") |> render_click()
+      assert device(view) == :mobile
+
+      view |> element("#pb-bp-tablet") |> render_click()
+      assert device(view) == :tablet
+
+      view |> element("#pb-bp-base") |> render_click()
+      assert device(view) == :desktop
+    end
+
+    # AND IT OPENS WHERE THE SESSION LEFT IT. The breakpoint survives a reload — that is what stops a
+    # refresh throwing the panel's place away — but the frame did not, so an editor last used on
+    # Mobile came back with the Mobile tab active over a desktop-width canvas. The first click on
+    # Mobile then looked broken, because the tab it highlights was already the highlighted one.
+    test "and the frame opens where the session left it", %{conn: conn, page: page, view: view} do
+      view |> element("#pb-bp-mobile") |> render_click()
+
+      assert device(view) == :mobile
+
+      # A second mount, the way a refresh is: the session hands back the breakpoint it was left on,
+      # and the frame has to come with it.
+      {:ok, reopened, _html} = open_builder(conn, page)
+
+      assert breakpoint(reopened) == :mobile, "the session did not keep the breakpoint"
+      assert device(reopened) == :mobile
+    end
+
+    # AND THE OTHER WAY ROUND, which is the half that was missing. The device strip moved the frame
+    # and left the breakpoint alone, so the canvas went to 390px while the Inspector kept writing the
+    # `base` bucket — an author sizing something on a mobile canvas was setting it for every width.
+    test "choosing a frame moves the breakpoint it shows", %{view: view} do
+      render_click(view, "set_device", %{"device" => "mobile"})
+      assert breakpoint(view) == :mobile
+
+      render_click(view, "set_device", %{"device" => "tablet"})
+      assert breakpoint(view) == :tablet
+
+      render_click(view, "set_device", %{"device" => "desktop"})
+      assert breakpoint(view) == :base, "the widest frame is what every width looks like"
+    end
+
+    # THE SYMPTOM AS REPORTED: the strip lit Mobile over a desktop canvas, so the first press on
+    # Mobile did nothing visible — it was already the lit tab. Asserted on the two together, because
+    # either one alone is only half the disagreement.
+    test "so the lit tab and the canvas never disagree", %{view: view} do
+      view |> element("#pb-bp-mobile") |> render_click()
+      render_click(view, "set_device", %{"device" => "desktop"})
+
+      assert {:desktop, :base} == {device(view), breakpoint(view)}
+
+      html = render(view)
+      assert html =~ ~s(id="pb-bp-base" phx-click="set_breakpoint" value="base" title)
+      assert html =~ ~s(aria-pressed="true")
+
+      refute view |> element("#pb-bp-mobile") |> render() =~ ~s(aria-pressed="true"),
+             "Mobile stayed lit over a desktop canvas"
+    end
+
+    # And the round trip is stable, so neither control can drift the other off by one.
+    test "and the two controls round-trip through each other", %{view: view} do
+      for {frame, bp} <- [{"mobile", :mobile}, {"tablet", :tablet}, {"desktop", :base}] do
+        render_click(view, "set_device", %{"device" => frame})
+        assert breakpoint(view) == bp
+
+        view |> element("#pb-bp-#{bp}") |> render_click()
+        assert device(view) == String.to_existing_atom(frame)
+      end
+    end
+
+    # LEAVING side by side is the one path where both controls move at once, and it is the one that
+    # took longest to settle on screen — three frames come down and one goes up. Asserted here rather
+    # than in the browser, where a probe can read between the two.
+    test "and leaving the side-by-side view lands on the frame that was asked for", %{view: view} do
+      view |> element("#pb-bp-mobile") |> render_click()
+      render_click(view, "set_device", %{"device" => "frames"})
+
+      assert {:frames, :mobile} == {device(view), breakpoint(view)},
+             "every width is already on screen, so it moves nothing"
+
+      render_click(view, "set_device", %{"device" => "desktop"})
+
+      assert {:desktop, :base} == {device(view), breakpoint(view)}
+    end
+
+    # EXCEPT SIDE BY SIDE, where every width is already on screen and switching to one would take
+    # away what the reader opened it for.
+    test "but not when the frames view is showing every width at once", %{view: view} do
+      render_click(view, "set_device", %{"device" => "frames"})
+
+      view |> element("#pb-bp-mobile") |> render_click()
+
+      assert device(view) == :frames
+    end
+
+    # THE BUG THIS MATRIX EXISTS FOR. A hover set while the panel says Mobile must not touch the
+    # desktop, and the two must be able to disagree.
+    test "a hover set on mobile is a mobile hover", %{view: view, node: node} do
+      view |> element("#pb-state-hover") |> render_click()
+      view |> element("#pb-style-form-hover-gap") |> render_change(%{"value" => "10px"})
+
+      view |> element("#pb-bp-mobile") |> render_click()
+      view |> element("#pb-style-form-mobile_hover-gap") |> render_change(%{"value" => "2px"})
+
+      assert styles_of(view, node.id) == %{
+               hover: %{"gap" => "10px"},
+               mobile_hover: %{"gap" => "2px"}
+             }
+    end
+
+    test "and it reaches the page as a query and a pseudo-class", %{view: view, page: page} do
+      view |> element("#pb-bp-mobile") |> render_click()
+      view |> element("#pb-state-hover") |> render_click()
+      view |> element("#pb-style-form-mobile_hover-gap") |> render_change(%{"value" => "2px"})
+
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ "max-[560px]:hover:gap-[2px]"
+    end
+
+    # EVERY BUCKET CAN BE CLEARED, not just the plain ones. The button reads the bucket it is
+    # clearing, so `mobile :hover` says so rather than offering to clear "mobile".
+    test "each bucket offers its own reset, named after itself", %{view: view, node: node} do
+      view |> element("#pb-bp-mobile") |> render_click()
+      view |> element("#pb-state-hover") |> render_click()
+      view |> element("#pb-style-form-mobile_hover-gap") |> render_change(%{"value" => "2px"})
+
+      assert view |> element("#pb-style-reset") |> render() =~ "mobile :hover"
+
+      view |> element("#pb-style-reset") |> render_click()
+
+      assert styles_of(view, node.id) == %{}
+    end
+
+    test "a background swatch writes into the current bucket", %{view: view, node: node} do
+      view |> element("#pb-swatch-ink") |> render_click()
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{base: %{"background" => "#17161a"}}
+    end
+
+    test "the Editing-at and State selectors each explain where an edit lands", %{view: view} do
+      assert render(view) =~ "Recorded as the value for every size"
+
+      render_click(view, "set_breakpoint", %{"value" => "tablet"})
+      assert render(view) =~ "Recorded against 900px and below"
+
+      render_click(view, "set_pseudo", %{"value" => "hover"})
+      html = render(view)
+      assert html =~ "Recorded against :hover"
+      assert html =~ "Recorded"
+    end
+
+    # Each Behavior switch is a class the element either carries or does not, so it reports the
+    # document rather than a flag kept beside it — save, reopen, and it is still on.
+    test "a Behavior switch adds and removes its classes", %{view: view, node: node} do
+      classes = fn ->
+        view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Node.attr_text("class")
+      end
+
+      view |> element("#pb-toggle-sticky") |> render_click()
+      assert classes.() =~ "sticky"
+      assert classes.() =~ "top-0"
+
+      view |> element("#pb-toggle-shadow") |> render_click()
+      assert classes.() =~ "shadow-lg"
+
+      view |> element("#pb-toggle-sticky") |> render_click()
+      refute classes.() =~ "sticky"
+      # Turning one off leaves the other alone.
+      assert classes.() =~ "shadow-lg"
+    end
+
+    # AND A SWITCH OVER A COMPUTED CLASS JOINS IT. The switch read the row as text and wrote all of
+    # it back as one string, so on `class={[@variant, "lead"]}` it put the expression's own source
+    # on the element as literal words: not Elixir, and a page that would no longer compile or save.
+    test "a switch joins a computed class rather than writing over it", %{view: view, node: node} do
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => node.id,
+        "name" => "class",
+        "value" => ~S|[@variant, "lead"]|,
+        "value_kind" => "expr"
+      })
+
+      view |> element("#pb-toggle-shadow") |> render_click()
+
+      assert attr_of(view, node.id, "class") == {:expr, ~S|[@variant, "lead", "shadow-lg"]|}
+      assert view |> element("#pb-toggle-shadow") |> render() =~ ~s(aria-checked="true")
+
+      assert CodeCheck.template(Serializer.serialize(editor(view).tree)) == :ok
+
+      view |> element("#pb-toggle-shadow") |> render_click()
+
+      assert attr_of(view, node.id, "class") == {:expr, ~S|[@variant, "lead"]|}
+    end
+
+    test "a switch reads as on when the element already carries its classes", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<section class="sticky top-0 z-10">x</section>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      view |> element("#pb-section-behavior") |> render_click()
+
+      assert view |> element("#pb-toggle-sticky") |> render() =~ ~s(aria-checked="true")
+      assert view |> element("#pb-toggle-shadow") |> render() =~ ~s(aria-checked="false")
+    end
+
+    test "the field written to follows the breakpoint selector", %{view: view, node: node} do
+      render_click(view, "set_breakpoint", %{"value" => "mobile"})
+
+      refute has_element?(view, "#pb-style-base-gap")
+      view |> element("#pb-style-form-mobile-gap") |> render_change(%{"value" => "6px"})
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles) ==
+               %{mobile: %{"gap" => "6px"}}
+    end
+
+    test "switching the breakpoint writes into that bucket instead", %{view: view, node: node} do
+      render_click(view, "set_breakpoint", %{"value" => "mobile"})
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => node.id,
+        "bucket" => "mobile",
+        "prop" => "py",
+        "value" => "14px"
+      })
+
+      styles =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles)
+
+      assert styles == %{mobile: %{"py" => "14px"}}
+      # Per-field Reset only — the prototype has no group-level one.
+      assert has_element?(view, "#pb-style-clear-mobile-py")
+    end
+
+    test "a state selector writes into the pseudo bucket", %{view: view, node: node} do
+      render_click(view, "set_pseudo", %{"value" => "hover"})
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => node.id,
+        "bucket" => "hover",
+        "prop" => "background",
+        "value" => "#17161a"
+      })
+
+      styles =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles)
+
+      assert styles == %{hover: %{"background" => "#17161a"}}
+    end
+
+    test "Reset clears only that bucket", %{view: view, node: node} do
+      for {bucket, value} <- [{"base", "8px"}, {"mobile", "2px"}] do
+        render_click(view, "op", %{
+          "kind" => "set_style",
+          "node_id" => node.id,
+          "bucket" => bucket,
+          "prop" => "gap",
+          "value" => value
+        })
+      end
+
+      render_click(view, "op", %{
+        "kind" => "reset_styles",
+        "node_id" => node.id,
+        "bucket" => "mobile"
+      })
+
+      styles =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles)
+
+      assert styles == %{base: %{"gap" => "8px"}}
+    end
+
+    test "clearing a field removes just that property", %{view: view, node: node} do
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => node.id,
+        "bucket" => "base",
+        "prop" => "gap",
+        "value" => "8px"
+      })
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => node.id,
+        "bucket" => "base",
+        "prop" => "gap",
+        "value" => ""
+      })
+
+      styles =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> then(& &1.meta.styles)
+
+      assert styles == %{}
+    end
+  end
+
   describe "the canvas's own event handlers" do
     setup %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
@@ -2713,6 +3982,60 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       # text node, and no `<b>` was ever built from it.
       assert render(canvas) =~ "Fish &amp; Chips &lt;b&gt;bold&lt;/b&gt;"
       refute has_element?(canvas, ~s(span[data-kind="text"] b))
+    end
+  end
+
+  describe "the controls a node can actually take" do
+    # `{@inner_content}` is the one node every layout has and the first thing anyone clicks. The
+    # Inspector offered it breakpoints, states, spacing, typography and the whole Appearance section
+    # — and the serializer emits an expression verbatim, with nowhere to put a class, so every one of
+    # those controls recorded an override that was dropped on the way out.
+    test "an expression is not offered styling that would be dropped", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          template: ~s(<main class="wrap">{@inner_content}</main>)
+        )
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      render_click(view, "select", %{"id" => expression_node(view).id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      refute has_element?(view, "#pb-style-base-font-size")
+      refute has_element?(view, ~s([data-role="pb-bptabs"]))
+      assert has_element?(view, "#pb-not-styleable")
+      assert has_element?(view, "#pb-select-parent"), "and it says where the styling does belong"
+    end
+
+    test "nor is a run of text", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<p>words</p>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      text =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == :text))
+
+      render_click(view, "select", %{"id" => text.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      refute has_element?(view, "#pb-style-base-font-size")
+      assert has_element?(view, "#pb-not-styleable")
+      assert render(view) =~ "double-click it on the canvas"
+    end
+
+    # The element it sits in still gets everything, which is the half that proves the gate is about
+    # the node rather than about the panel.
+    test "the element around it still gets the whole surface", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<p>words</p>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      assert has_element?(view, "#pb-style-base-font-size")
+      refute has_element?(view, "#pb-not-styleable")
     end
   end
 
@@ -4089,6 +5412,55 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert view |> editor() |> Map.fetch!(:selection) == h1.id
     end
 
+    # A component row pushes `inspect` rather than `select`, so placing had to be taught there too —
+    # otherwise the tree could place into a `<div>` but not into the component you meant.
+    test "a picked component is placed by clicking a component row", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: nil,
+        name: "demo-shell",
+        slots: [%{"name" => "inner_block", "opts" => %{"required" => false}}],
+        template: "<div>{render_slot(@inner_block)}</div>"
+      )
+
+      create_component!(site_id: nil, name: "goes-inside")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="demo-shell" site="Global"/></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      shell =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "pick", %{"name" => "goes-inside"})
+      render_click(view, "inspect", %{"id" => shell.id})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "goes-inside"))
+
+      assert placed.parent_id == shell.id
+
+      # With nothing picked the same click still opens the Inspector on that component.
+      render_click(view, "inspect", %{"id" => shell.id})
+      assert view |> editor() |> Map.fetch!(:selection) == shell.id
+      assert has_element?(view, "#pb-lefttab-inspector")
+    end
+
     # A component that declares `id` as required raises the moment it renders without one. Generating
     # it where such nodes are created means that never has to be handled later — and it is written
     # into the template as an ordinary attribute, so it can be renamed. A node that declares no `id`
@@ -4391,6 +5763,571 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-device-frames") |> render_click()
       assert has_element?(view, "#pb-frame-1180")
       assert has_element?(view, "#pb-frame-560")
+    end
+
+    # CSS FOR ONE ELEMENT — the thing the panel above it cannot offer, because a panel can only
+    # offer what somebody thought to add to it. Every builder in the field answers this with a
+    # per-element CSS box; this one keys the rule on a class minted into the markup, so it survives
+    # a save and travels with the node.
+    test "an element can be given its own CSS", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "padding: 20px;\n\n&:hover { opacity: .8; }"
+      })
+
+      tree = editor(view).tree
+      scope = Tree.scope(tree, section.id)
+
+      assert scope =~ ~r/^pb-[a-f0-9]{8}$/, "the element was named"
+      assert Serializer.serialize(tree) =~ scope, "and the name is in the markup"
+
+      css = :sys.get_state(view.pid).socket.assigns.element_css_rules[scope]
+      assert css =~ "padding: 20px;"
+      assert css =~ "&:hover"
+    end
+
+    # A COMPONENT IS ONE NODE AND MANY ELEMENTS, and the rule is keyed on a class written into the
+    # node — which reaches the DOM only if the component declares `class`. Offering the box anyway
+    # took CSS that could never match anything, which is how this was found in the browser.
+    test "a component that takes no class says so instead of taking CSS", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "classless", template: "<b>x</b>")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><.component component_name="classless" site="#{site.name}" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_kind(view, :component)
+      render_click(view, "select", %{"id" => component.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      html = render(view)
+      assert html =~ "pb-css-unreachable"
+      refute has_element?(view, "#pb-css-text")
+    end
+
+    # A DEAD END WITH A DOOR IN IT. Telling the reader to "put it inside a container" and leaving
+    # them to work out how is the same as telling them no — the wrapper is an op the editor already
+    # has, so it is offered rather than described.
+    test "a component that takes no class is offered the wrapper that would work", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "classless", template: "<b>x</b>")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><.component component_name="classless" site="#{site.name}" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_kind(view, :component)
+      render_click(view, "select", %{"id" => component.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      assert has_element?(view, "#pb-css-wrap")
+      render_click(view, "op", %{"kind" => "wrap", "node_id" => component.id, "tag" => "div"})
+
+      wrapped = Tree.get(editor(view).tree, component.id)
+      parent = Tree.get(editor(view).tree, wrapped.parent_id)
+
+      assert parent.tag == "div"
+      assert parent.id != component.id, "a new wrapper, not the one it was already in"
+
+      render_click(view, "select", %{"id" => parent.id})
+      assert has_element?(view, "#pb-css-text"), "and the wrapper can take CSS"
+    end
+
+    # `& > .badge` on a component aims a rule at markup the kit owns and the page does not. Not
+    # refused — sometimes it is the only way — but said out loud, and named with the kit and version
+    # so the reader knows what they are betting on.
+    test "a rule reaching into a component's own markup says whose markup it is", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "badged",
+        template: ~s(<div class={@class}><span class="badge">1</span></div>),
+        attrs: [%{"name" => "class", "type" => "string", "opts" => %{}}],
+        extra: %{"ui_kit" => "chelekom", "ui_kit_version" => "0.0.9"}
+      )
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><.component component_name="badged" site="#{site.name}" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      component = node_with_kind(view, :component)
+      render_click(view, "select", %{"id" => component.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => component.id,
+        "css" => "padding: 2px;\n&:hover { opacity: .9; }"
+      })
+
+      refute has_element?(view, "#pb-css-reaching"), "its own element and its own hover are fine"
+
+      render_click(view, "save_element_css", %{
+        "node_id" => component.id,
+        "css" => "& > .badge { color: red; }"
+      })
+
+      # NOT the html `render_click` returned. Applying CSS announces the tree through the session, and
+      # that message reaches this LiveView after the click handler has already replied — so the
+      # snapshot the click hands back predates the panel that reads it.
+      html = render(view)
+
+      assert has_element?(view, "#pb-css-reaching")
+      assert html =~ "chelekom 0.0.9", "named, so the reader knows what they are betting on"
+      assert html =~ "&gt; .badge", "and which selector it was"
+    end
+
+    test "a plain tag's own markup belongs to the author, so nothing is said", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "& > .badge { color: red; }"
+      })
+
+      refute has_element?(view, "#pb-css-reaching")
+    end
+
+    test "the canvas is given the rule so it paints without a recompile", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 13px;"})
+
+      html = render(canvas)
+      assert html =~ "pb-canvas-element-css"
+      assert html =~ "gap: 13px;"
+    end
+
+    test "clearing the box takes the name back off", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 4px;"})
+
+      assert Tree.scope(editor(view).tree, section.id)
+
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => ""})
+
+      refute Tree.scope(editor(view).tree, section.id),
+             "nothing is left carrying a name for a rule that no longer exists"
+    end
+
+    # The one structural rule: the text is wrapped in `.pb-xxxxxxxx { … }`, and a `}` typed at the
+    # top level closes that wrapper early and puts everything after it on the whole site.
+    test "CSS that would escape the element is refused", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      html =
+        render_click(view, "save_element_css", %{
+          "node_id" => section.id,
+          "css" => "gap: 1px; } body { display: none; "
+        })
+
+      assert html =~ "unmatched"
+      assert :sys.get_state(view.pid).socket.assigns.element_css_rules == %{}
+    end
+
+    # A RULE IS KEYED ON A CLASS IN THE MARKUP, so deleting the element takes the only reference to
+    # it away — and the rule stayed in the row, compiled into the site's stylesheet and served to
+    # every visitor, for as long as the page existed. `live_rules/2` was written and tested for this
+    # and had no caller at all.
+    test "saving drops the CSS of an element that is no longer there", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "gap: 9px;"})
+
+      scope = Tree.scope(editor(view).tree, heading.id)
+
+      # The stage says Draft, so the rule is held until a publish writes the markup carrying its
+      # class. That publish is the one that puts it in the row for the delete below to take out.
+      render_click(view, "publish", %{})
+
+      assert stored_element_css(view, page)[scope] =~ "gap: 9px",
+             "it was written in the first place"
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => heading.id})
+      render_click(view, "publish", %{})
+
+      refute Map.has_key?(stored_element_css(view, page), scope), "the rule went with the element"
+    end
+
+    # THROUGH THE SAVE ITSELF. Paste styles used to carry the source's minted class onto the target,
+    # which made the target answer with the source's name — and the prune then rewrote the row to
+    # hold only the names the tree still answers with, so the author's CSS on the target went with
+    # the paste. The unit tests for this ask `live_rules/2`; this one asks the row.
+    test "styles pasted from one element leave the other's CSS alone", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      p = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "save_element_css", %{"node_id" => h1.id, "css" => "gap: 9px;"})
+      render_click(view, "select", %{"id" => p.id})
+      render_click(view, "save_element_css", %{"node_id" => p.id, "css" => "gap: 11px;"})
+
+      source = Tree.scope(editor(view).tree, h1.id)
+      target = Tree.scope(editor(view).tree, p.id)
+
+      render_click(view, "ctx", %{"action" => "copy_styles", "node_id" => h1.id})
+      render_click(view, "ctx", %{"action" => "paste_styles", "node_id" => p.id})
+
+      assert Tree.scope(editor(view).tree, p.id) == target,
+             "the target still answers to its own name"
+
+      render_click(view, "publish", %{})
+
+      stored = stored_element_css(view, page)
+      assert stored[target] =~ "gap: 11px", "the target kept the CSS the author wrote on it"
+      assert stored[source] =~ "gap: 9px", "and the source's is untouched"
+    end
+
+    # Pruning against the tree in the editor rather than the tree that was saved would drop the CSS
+    # of an element the author is one ⌘Z away from bringing back.
+    test "an element still in the saved page keeps its CSS", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 9px;"})
+
+      scope = Tree.scope(editor(view).tree, section.id)
+      render_click(view, "publish", %{})
+
+      assert stored_element_css(view, page)[scope] =~ "gap: 9px"
+    end
+
+    # WRITTEN BY ONE SESSION, READ BY THE NEXT — and both name the row through `css_owner/1`, which
+    # is `ElementScopes.owner/2`. A second spelling anywhere in the round trip is an author shown an
+    # empty CSS box in front of rules the page is visibly wearing, and a next save that prunes them
+    # as belonging to no element at all.
+    test "and is shown them again the next time the document is opened", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 9px;"})
+
+      scope = Tree.scope(editor(view).tree, section.id)
+      render_click(view, "publish", %{})
+
+      {:ok, reopened, _html} = open_builder(conn, page)
+      rules = :sys.get_state(reopened.pid).socket.assigns.element_css_rules
+
+      assert Map.has_key?(rules, scope),
+             "the open read a different row than the save wrote"
+
+      assert rules[scope] =~ "gap: 9px"
+    end
+
+    # A CONTROL THAT HAS BEEN OVERRULED SAYS SO. Custom CSS is emitted last and unlayered, so where
+    # the two name one property the CSS wins and dragging the control moves nothing — which, unmarked,
+    # reads as a control that is broken rather than one that has been overridden.
+    test "a control whose property the element's own CSS also sets is marked", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      refute has_element?(view, "#pb-css-wins-padding")
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "padding: 20px;"
+      })
+
+      assert has_element?(view, "#pb-css-wins-padding"), "the control it beats outright"
+      assert has_element?(view, "#pb-css-wins-pt"), "and the longhands the shorthand swallows"
+      refute has_element?(view, "#pb-css-wins-gap"), "but nothing it does not set"
+    end
+
+    # A hover rule does NOT beat `hover:p-4` — that carries a pseudo-class and therefore more
+    # specificity — so the mark belongs to the bucket wearing the same selector and to no other.
+    test "the mark follows the bucket the declaration was written for", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "&:hover { opacity: .5; }"
+      })
+
+      refute has_element?(view, "#pb-css-wins-opacity"), "not while Normal is the open state"
+
+      render_click(view, "set_pseudo", %{"value" => "hover"})
+      assert has_element?(view, "#pb-css-wins-opacity")
+    end
+
+    test "a declaration a control could hold is offered, and one it could not is not", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "border-image: url(x);\ngap: 4px !important;\nalign-items: center;"
+      })
+
+      assert has_element?(view, "#pb-css-movable")
+      assert has_element?(view, "#pb-css-move-2"), "align-items has a control"
+      refute has_element?(view, "#pb-css-move-0"), "border-image has none"
+      refute has_element?(view, "#pb-css-move-1"), "and !important could not survive the move"
+    end
+
+    # THE ROW HAS TO NAME ITS LINE, or "Move to controls" is a button that moves something unnamed.
+    # `phx-no-curly-interpolation` on the `<code>` printed the interpolation itself, and the author
+    # read the template's own source where their declaration should have been.
+    test "the movable row shows the declaration, not the interpolation", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "background-color: #dadada;"
+      })
+
+      row = view |> element("#pb-css-movable") |> render()
+
+      assert row =~ "background-color: #dadada"
+      refute row =~ "declaration.text"
+
+      assert has_element?(view, "#pb-css-wins-background"),
+             "and the control it overrules says so — once, or LiveViewTest raises on the id"
+    end
+
+    # `main { … }` parses, saves and matches nothing, so the box has no reason to refuse it and the
+    # page simply does not change. The advice is the only thing that names the mistake, and it was
+    # reaching the code drawer alone — `inspector/1` received it and passed it no further.
+    test "advice about a selector that misses is shown in the box it was typed in", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "color: red;"
+      })
+
+      refute has_element?(view, "#pb-css-advice"), "a declaration on its own aims at the element"
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "main { color: red }"
+      })
+
+      advice = view |> element("#pb-css-advice") |> render()
+
+      assert advice =~ "INSIDE this element"
+      assert advice =~ "start the selector with"
+    end
+
+    # A BODY THAT WILL NOT PARSE HAS NO AIM TO COMMENT ON. The error and the advice share the slot
+    # under the box, so the one the author has to fix first is the one that gets it.
+    test "a refused body shows the error there instead of advice", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "main { color: red"
+      })
+
+      assert has_element?(view, "#pb-css-error")
+      refute has_element?(view, "#pb-css-advice")
+    end
+
+    # ONE LINE, MOVED: written as the override the control holds, and taken out of the text. The two
+    # never competed for storage, so nothing has to be merged — and what is left is a page that looks
+    # exactly the same with one fewer place to change it.
+    test "moving a declaration sets the control and takes the line out", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "align-items: center;\nborder-image: url(x);"
+      })
+
+      render_click(view, "move_css_to_controls", %{"node_id" => section.id, "index" => "0"})
+
+      assert Tree.get(editor(view).tree, section.id).meta.styles[:base]["align"] == "items-center"
+
+      scope = Tree.scope(editor(view).tree, section.id)
+      css = :sys.get_state(view.pid).socket.assigns.element_css_rules[scope]
+
+      refute css =~ "align-items"
+      assert css =~ "border-image", "the line it could not take is left where it was"
+      refute has_element?(view, "#pb-css-wins-align"), "and the mark goes with it"
+
+      # …and the control it landed in is on screen, on a `<section>` that is not a flex row. It was
+      # not: the four flex rows were drawn only for a row, so this override had nowhere to be read
+      # or undone.
+      assert has_element?(view, "#pb-style-pics-base-align")
+
+      view |> element("#pb-style-pic-base-align-items-center") |> render_click()
+      assert styles_of(view, section.id) == %{}
+    end
+
+    # THE LINE THAT STARTED THIS. `#dadada` is none of the five swatches, so the swatch row showed
+    # nothing selected, no field held the value, and the only way to take it off again was to clear
+    # the whole bucket — a control that cannot represent what was moved into it.
+    test "a moved background can be seen, changed and cleared", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "background-color: #dadada;"
+      })
+
+      render_click(view, "move_css_to_controls", %{"node_id" => section.id, "index" => "0"})
+
+      assert styles_of(view, section.id) == %{base: %{"background" => "#dadada"}}
+      assert view |> element("#pb-style-base-background") |> render() =~ "#dadada"
+
+      view |> element("#pb-style-form-base-background") |> render_change(%{"value" => "#101010"})
+      assert styles_of(view, section.id) == %{base: %{"background" => "#101010"}}
+
+      view |> element("#pb-style-form-base-background") |> render_change(%{"value" => ""})
+      assert styles_of(view, section.id) == %{}
+    end
+
+    # A DECLARATION NAMES ITS OWN BUCKET, and the panel was left wherever it happened to be. The
+    # State section is folded by default and carries no count, so a `&:hover` line moved into the
+    # hover bucket left the author looking at a panel that had not changed.
+    test "moving a hover line puts the panel on the state that holds it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      render_click(view, "save_element_css", %{
+        "node_id" => section.id,
+        "css" => "&:hover { opacity: .5; }"
+      })
+
+      render_click(view, "move_css_to_controls", %{"node_id" => section.id, "index" => "0"})
+
+      assert styles_of(view, section.id) == %{hover: %{"opacity" => ".5"}}
+      assert has_element?(view, "#pb-state-recorded")
+      assert view |> element("#pb-style-hover-opacity") |> render() =~ ~s(value=".5")
+    end
+
+    # THE AUDIT, RUN. Every line the panel offers to move has to land in a control the author can
+    # then see — background landed in a swatch row with no swatch for it, and the four flex rows
+    # landed on an element that drew none of them.
+    test "every declaration a control can hold lands where the panel shows it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      for prop <- Styles.properties() do
+        {css_prop, css_value} = Styles.declaration(prop, sample_style(prop))
+
+        # Every property meets the same plain `<section>`: one that has moved a `display: flex` a
+        # moment ago is a different element, and the four flex rows would draw for that reason
+        # rather than for the value they now hold.
+        render_click(view, "op", %{
+          "kind" => "reset_styles",
+          "node_id" => section.id,
+          "bucket" => "base"
+        })
+
+        render_click(view, "save_element_css", %{
+          "node_id" => section.id,
+          "css" => "#{css_prop}: #{css_value};"
+        })
+
+        assert has_element?(view, "#pb-css-move-0"),
+               "#{css_prop} is not offered, though #{prop} is a control"
+
+        render_click(view, "move_css_to_controls", %{"node_id" => section.id, "index" => "0"})
+
+        # `render/1` and not the click's own return: the op is announced to the LiveView rather than
+        # assigned inside the handler, so the reply is drawn from the tree as it was BEFORE the move
+        # and every picture row would read as missing.
+        html = render(view)
+
+        assert control_for?(html, prop),
+               "#{css_prop} moved into #{prop}, and nothing on screen holds it"
+      end
+    end
+
+    test "a stale index moves nothing", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 4px;"})
+
+      html =
+        render_click(view, "move_css_to_controls", %{"node_id" => section.id, "index" => "7"})
+
+      assert html =~ "no longer there"
+      scope = Tree.scope(editor(view).tree, section.id)
+      assert :sys.get_state(view.pid).socket.assigns.element_css_rules[scope] =~ "gap: 4px"
     end
 
     test "the command palette opens and filters", %{conn: conn, page: page} do
@@ -4770,6 +6707,22 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute row =~ "zoom:0."
     end
 
+    # The frame matching the breakpoint being edited is ringed and names the selection, so the row
+    # doubles as a reminder of where an override would land.
+    test "the frame for the breakpoint being edited is marked", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "set_device", %{"device" => "frames"})
+
+      html = view |> element("#pb-framerow") |> render()
+      assert html =~ "border-[#8481de]"
+      assert html =~ "&lt;h1&gt;"
+
+      render_click(view, "set_breakpoint", %{"value" => "mobile"})
+      assert view |> element("#pb-framerow") |> render() =~ "border-[#8481de]"
+    end
+
     test "the direction toggle flips the canvas, not the editor chrome", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
@@ -4805,6 +6758,14 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       view |> element("#pb-mobtab-canvas") |> render_click()
       assert view |> element("#pb-right") |> render() =~ "max-[900px]:hidden"
+    end
+
+    test "a mobile panel tab also selects that panel's tab", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-mobtab-inspector") |> render_click()
+
+      assert has_element?(view, "#pb-lefttab-inspector.bg-white")
     end
 
     test "the mobile bar's direction tab flips the canvas", %{conn: conn, page: page} do
@@ -5229,7 +7190,175 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # A CSS BODY IS AUTHORED TEXT, AND THE CANVAS PUTS IT IN A `<style>` TAG. `</style>` ends that tag
+  # wherever it appears, so the browser stops reading CSS and starts reading markup: the rest of the
+  # body becomes elements in the canvas document. Every body the canvas styles with is authored —
+  # an element's own box, a site's stylesheet row — so the sequence can arrive.
+  describe "a CSS body that tries to close the style tag" do
+    setup %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><p>hello</p></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.tag == "p"))
+
+      %{view: view, conn: conn, node: node}
+    end
+
+    defp canvas_html(conn, view) do
+      {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+      html
+    end
+
+    test "cannot close it", %{conn: conn, view: view, node: node} do
+      render_click(view, "save_element_css", %{
+        "node_id" => node.id,
+        "css" => ~s|color: red;\n/* </style><span id="escaped">out</span> */|
+      })
+
+      html = canvas_html(conn, view)
+
+      refute html =~ ~s(</style><span id="escaped")
+      assert html =~ "<\\/style"
+    end
+
+    test "and neither can a shouted one", %{conn: conn, view: view, node: node} do
+      render_click(view, "save_element_css", %{
+        "node_id" => node.id,
+        "css" => ~s|color: red;\n/* </STYLE><span id="shouted">out</span> */|
+      })
+
+      refute canvas_html(conn, view) =~ ~s(</STYLE><span id="shouted")
+    end
+
+    # The escape belongs at the boundary, not in storage: the same body is served as a real
+    # stylesheet, where the sequence is unremarkable and has to survive untouched.
+    test "while what is stored is exactly what was written", %{view: view, node: node} do
+      body = ~s|color: red;\n/* </style> */|
+
+      render_click(view, "save_element_css", %{"node_id" => node.id, "css" => body})
+
+      stored = :sys.get_state(view.pid).socket.assigns.element_css_rules
+
+      assert stored |> Map.values() |> Enum.join() =~ "</style>"
+    end
+  end
+
+  # The advice was computed only when Apply was pressed, so a bad selector saved yesterday was silent
+  # when the panel was opened on it today — the case where an author is most likely to be wondering
+  # why their CSS does nothing.
+  describe "advice about a stored body" do
+    test "shows when the panel is opened on CSS that was already saved", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: ~s(<div id="root"><p>hello</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.tag == "p"))
+
+      render_click(view, "save_element_css", %{
+        "node_id" => node.id,
+        "css" => "main { color: red }"
+      })
+
+      render_click(view, "select", %{"id" => node.id})
+
+      assert :sys.get_state(view.pid).socket.assigns.element_css_advice =~ "INSIDE this element"
+    end
+
+    test "and says nothing about a body that is only declarations", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: ~s(<div id="root"><p>hello</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.tag == "p"))
+
+      render_click(view, "save_element_css", %{"node_id" => node.id, "css" => "color: red;"})
+      render_click(view, "select", %{"id" => node.id})
+
+      assert :sys.get_state(view.pid).socket.assigns.element_css_advice == nil
+    end
+  end
+
   describe "hidden from visitors" do
+    test "the right-click menu hides an element; the layers chip and the Inspector say so and show it",
+         %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      refute has_element?(canvas, "#pb-eltb-visibility"), "the element toolbar has no second eye"
+
+      render_click(view, "ctx", %{"action" => "visibility", "node_id" => h1.id})
+
+      assert Visibility.hidden?(node_with_tag(view, "h1"))
+      assert has_element?(canvas, ~s([data-node-id="#{h1.id}"][data-pb-hidden]))
+
+      view |> element("#pb-layer-hidden-#{h1.id}") |> render_click()
+      refute Visibility.hidden?(node_with_tag(view, "h1"))
+      refute has_element?(view, "#pb-layer-hidden-#{h1.id}")
+
+      render_click(view, "ctx", %{"action" => "visibility", "node_id" => h1.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      assert has_element?(view, "#pb-insp-hidden")
+
+      view |> element("#pb-insp-show") |> render_click()
+
+      refute Visibility.hidden?(node_with_tag(view, "h1"))
+      refute has_element?(view, "#pb-insp-hidden")
+      refute has_element?(canvas, "[data-pb-hidden]")
+    end
+
+    test "an element inside a hidden one points at it, and is not shown on its own",
+         %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<section data-pb-hidden><h1>Contact Us</h1></section>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+
+      assert has_element?(view, "#pb-layer-hidden-#{section.id}")
+      refute has_element?(view, "#pb-layer-hidden-#{h1.id}"), "the chip marks the one hidden"
+
+      view |> element("#pb-lefttab-inspector") |> render_click()
+      assert has_element?(view, "#pb-insp-hidden")
+      refute has_element?(view, "#pb-insp-show")
+
+      render_click(view, "toggle_visibility", %{})
+      assert flashes(view) =~ "It is hidden with the element around it."
+      assert Visibility.hidden_by(editor(view).tree, h1.id).id == section.id
+
+      view |> element("#pb-insp-select-hider") |> render_click()
+      assert editor(view).selection == section.id
+      assert has_element?(view, "#pb-insp-show")
+    end
+
     test "the right-click menu, the keyboard and the palette each toggle it as one undoable step",
          %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)

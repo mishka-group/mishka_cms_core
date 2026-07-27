@@ -37,6 +37,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
+  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
@@ -47,8 +50,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
+  alias MishkaCmsCore.Runtime.PageBuilder.Tokens
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
@@ -268,6 +273,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # identical words. `Section.label/1` is the same wording the flash messages and the back link
     # already use, so the tab, the header and the error text agree.
     |> assign(:page_title, gettext("%{section} builder", section: section_label(section)))
+    # THE SITE'S OWN COLOURS, beside the editor's five neutrals. A swatch row of hardcoded hex is a
+    # palette that has nothing to do with the site being edited, so a rebrand means repainting every
+    # element by hand — while the tokens the whole theme already resolves through sit in the Studio,
+    # one panel away, unreachable from the control that paints things.
+    #
+    # OFF THE MOUNT, for the reason the palette is: `Tokens.list/1` reads every stylesheet row the
+    # site can see and parses them, and an editor that cannot open because a swatch row could not be
+    # filled has traded something it needs for something it would merely like. It is also read once
+    # rather than per render — the Inspector redraws on every selection, and a query and a parse
+    # between clicking an element and seeing its panel is a query and a parse too many.
+    |> assign(:style_tokens, [])
+    |> load_tokens_async(editor)
     |> assign(:section, section)
     # BACK TO WHERE THE AUTHOR CAME FROM. A component opened from a page's Inspector carries that
     # page's builder in `return_to`, so editing what the page uses is a trip rather than a detour
@@ -453,6 +470,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp assign_defaults(socket) do
     socket
     |> assign_new(:left_tab, fn -> :components end)
+    |> assign_new(:group_folds, fn -> %{} end)
     |> assign_new(:right_tab, fn -> :layers end)
     |> assign_new(:left_w, fn -> 344 end)
     |> assign_new(:right_w, fn -> 300 end)
@@ -472,6 +490,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:find_hits, fn -> [] end)
     |> assign_new(:component_presets, fn -> %{} end)
     |> assign_new(:presets_count, fn -> -1 end)
+    |> assign_new(:element_css_rules, fn ->
+      # AND INTO THE SESSION, not only into these assigns. The canvas renders this CSS from
+      # `session.element_css`, and nothing but `save_element_css` ever wrote it — so a document
+      # reopened with element CSS already saved showed the author their rules in the panel while the
+      # frame had no `<style>` for them at all. Written where they are read, so the two cannot part.
+      #
+      # THE ROW PLUS WHAT THE SESSION IS HOLDING. Draft-stage CSS is not in the row — that is the
+      # point of it — so a reconnect that read the row alone would show the author the live page's
+      # rules and paint the canvas with them, over an element they styled ten seconds ago.
+      rules =
+        socket.assigns[:current_user]
+        |> ElementCss.all(socket.assigns.editor.site_id, css_owner(socket))
+        |> ElementCss.merge(socket.assigns.editor.staged_element_css)
+
+      EditorSession.set_element_css(socket.assigns.token, ElementCss.css(rules))
+      rules
+    end)
     # COLLECTED ONCE, not per render. Both libraries are merged with whatever extensions contribute
     # here rather than inside the Blocks panel, because that panel is a render function — a plugin's
     # code was running twice on every debounced keystroke in the search box. A plugin set does not
@@ -492,6 +527,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         MishkaCmsCore.Runtime.PageBuilder.Elements.for_section(section(socket))
       )
     end)
+    |> assign_new(:element_css_error, fn -> nil end)
+    |> assign_new(:element_css_advice, fn -> nil end)
     |> assign_new(:command_open, fn -> false end)
     |> assign_new(:command_query, fn -> "" end)
     |> assign_new(:palette_query, fn -> "" end)
@@ -520,6 +557,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # A PLUGIN'S ENTRY NAMES WHO MAY SEE IT (`MishkaCmsCore.Builder.Descriptor.permitted/2`), and an
     # entry the reader may not see is not drawn, so its events never fire either.
     |> assign_new(:rails, fn -> permitted(Events.collect(:rails, Panels.core_rails()), socket) end)
+    |> assign_new(:inspector_sections, fn ->
+      permitted(Events.collect(:inspector_sections, Panels.core_inspector_sections()), socket)
+    end)
     |> assign_new(:commands, fn ->
       permitted(Events.collect(:commands, Panels.core_commands()), socket)
     end)
@@ -548,8 +588,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> Enum.map(&%{key: &1.key, label: &1.label, path: &1.path, icon: &1.icon})
   end
 
-  defp assign_panel_tab(socket, panel) when panel in [:components],
+  # The mobile bar names a panel, not a tab, so the panel it opens has to be showing the right one.
+  defp assign_panel_tab(socket, panel) when panel in [:components, :inspector],
     do: assign(socket, :left_tab, panel)
+
   defp assign_panel_tab(socket, panel) when panel in [:layers],
     do: assign(socket, :right_tab, panel)
   defp assign_panel_tab(%{assigns: %{rails: rails}} = socket, panel) do
@@ -627,8 +669,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign(:marked, editor.marked)
     |> assign(:picked, editor.picked)
     |> assign(:selected_node, Tree.get(editor.tree, editor.selection))
+    |> then(&assign(&1, :element_css, selected_css(&1, editor)))
+    |> then(&assign(&1, :element_css_advice, ElementCss.advice(&1.assigns.element_css)))
     |> assign(:crumbs, Tree.path(editor.tree, editor.selection))
     |> assign(:breakpoint, editor.breakpoint)
+    |> assign(:pseudo, editor.pseudo)
     |> assign(:dir, editor.dir)
     |> assign(:preview?, editor.preview?)
     |> assign(:dirty?, editor.dirty?)
@@ -921,6 +966,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   @impl true
+  def handle_info({:builder_session, token, {:selection, id, :canvas}}, socket)
+      when is_binary(id) do
+    {:noreply,
+     socket
+     |> sync_session(token)
+     |> assign(left_hidden: false, left_tab: :inspector)}
+  end
+
   def handle_info({:builder_session, token, _message}, socket),
     do: {:noreply, sync_session(socket, token)}
 
@@ -951,6 +1004,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # message; a failure means the canvas compiles on demand exactly as it always did.
   def handle_async(:warm_components, {:ok, _count}, socket), do: {:noreply, socket}
   def handle_async(:warm_components, {:exit, _reason}, socket), do: {:noreply, socket}
+
+  def handle_async(:style_tokens, {:ok, tokens}, socket),
+    do: {:noreply, assign(socket, :style_tokens, tokens)}
+
+  def handle_async(:style_tokens, {:exit, _reason}, socket), do: {:noreply, socket}
 
   # THE PUBLISH BAR WAITS ON THIS, so the flag it hides behind comes down with every answer, good or
   # bad: a draft that was written clears `dirty?` and the bar stays down of its own accord, while one
@@ -1178,7 +1236,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   @impl true
   def handle_event("set_left_tab", %{"tab" => tab}, socket),
-    do: {:noreply, assign(socket, :left_tab, tab_atom(tab, [:components, :blocks]))}
+    do: {:noreply, assign(socket, :left_tab, tab_atom(tab, [:components, :blocks, :inspector]))}
 
   # THE RAILS THAT EXIST, not the three the core ships. A whitelist of atoms rejected a contributed
   # rail before it could open — the tab drew, the click did nothing, and the registry that invited
@@ -1244,6 +1302,56 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     case recover_template(socket, template) do
       :ok -> {:noreply, push_navigate(socket, to: recover_path(socket))}
       {:error, message} -> {:noreply, refused_recovery(socket, template, message)}
+    end
+  end
+
+  # THE PAGE'S OWN ELIXIR, in the window that already holds its markup. `events`, `infos` and
+  # `helpers` have been Page attributes since the resource was written, and
+  # `Compilers.LiveViewCompiler` has always turned them into `handle_event/3`, `handle_info/2` and
+  # plain `def`s — but the only way to reach them was the Pages form, which is not where anyone is
+  # when they need a handler for the button they just placed.
+  # CSS FOR ONE ELEMENT. The element gets a minted class if it has none — that class is what the
+  # rule is keyed on and it goes into the markup, so it survives a save and travels with the node on
+  # copy — and the rule body goes into a stylesheet row the compiler already knows how to build.
+  # Clearing the box takes the class back off, so nothing is left carrying a name for a rule that no
+  # longer exists.
+  def handle_event("save_element_css", %{"node_id" => node_id, "css" => css}, socket) do
+    write_element_css(
+      socket,
+      socket.assigns.editor.tree,
+      node_id,
+      css,
+      gettext("Style applied.")
+    )
+  end
+
+  # ONE HAND-WRITTEN LINE, HANDED TO THE CONTROL THAT OWNS IT. The two never competed for storage —
+  # controls own `meta.styles`, the text owns itself — so nothing here is a merge: the declaration is
+  # read, written as an override, and taken out of the text.
+  #
+  # EXPLICIT AND ONE-WAY, on purpose. A live two-way binding — the control following the text as it
+  # is typed, and the text following the control — is the obvious-looking design and Bricks is the
+  # only builder in the field that ships one, still marked experimental, because keeping them in step
+  # means rewriting the author's text underneath the cursor. A button they press when they mean it
+  # costs one click and never surprises anyone.
+  #
+  # THE OP GOES FIRST, and the order is the whole safety argument. If the write to the stylesheet row
+  # fails afterwards, the control is set and the line is still there: the CSS still wins, the page
+  # looks exactly as it did, and the author is told. The other order loses the declaration the moment
+  # anything downstream refuses.
+  def handle_event("move_css_to_controls", %{"node_id" => node_id, "index" => index}, socket) do
+    css = socket.assigns.element_css
+    index = to_int(index)
+
+    with %{} = declaration <- Enum.at(ElementCss.declarations(css), index),
+         {:ok, {prop, value}} <- Styles.from_declaration(declaration.property, declaration.value),
+         {:ok, editor} <- move_op(socket, node_id, declaration.bucket, prop, value) do
+      focus_bucket(socket, declaration.bucket)
+      write_element_css(socket, editor.tree, node_id, ElementCss.without(css, index), moved(prop))
+    else
+      _gone ->
+        {:noreply,
+         put_flash(socket, :error, gettext("That line is no longer there — reopen the panel."))}
     end
   end
 
@@ -1331,7 +1439,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(canvas components layers) do
+      when panel in ~w(canvas components layers inspector) do
     panel = String.to_existing_atom(panel)
 
     {:noreply,
@@ -1439,6 +1547,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       nil -> {:noreply, open_inspector(socket, id)}
       picked -> place_or_select(picked, id, socket)
     end
+  end
+
+  # Which sections the reader has folded, and only the ones they touched. A group nobody has clicked
+  # is absent from the map and falls back to its own default — open for a component's properties,
+  # closed for the chrome under a component that already has a long panel. The heading sends the
+  # state it is currently in, so the toggle does not have to know which default applied.
+  def handle_event("toggle_prop_group", %{"group" => group} = params, socket) do
+    folded = params["folded"] == "true"
+
+    {:noreply, assign(socket, :group_folds, Map.put(socket.assigns.group_folds, group, !folded))}
   end
 
   # Re-runs the read the `:failed` slot's Retry button offers. Almost every palette failure is
@@ -1560,6 +1678,67 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # The pills are the gervaz table's own filter now — the template renders them and the table handles
   # the event, so the editor no longer keeps a parallel copy of which one is active.
 
+  # A Behavior switch edits the element's `class`, so it goes through the same `set_attr` op every
+  # other property edit uses — one funnel, one history entry, one containment check.
+  #
+  # THE SWITCH EDITS CLASSES, NOT THE TEXT OF THE ATTRIBUTE. Joining what the element wears back
+  # into one string wrote an expression's own source onto it as literal text, so flipping a switch
+  # on a component with a computed class left markup the page could not be compiled from.
+  # `Tree.class_with/2` and `Tree.class_without/2` answer the value in the shape it already has.
+  def handle_event("toggle_behavior", %{"id" => id, "key" => key}, socket) do
+    case Tree.get(socket.assigns.editor.tree, id) do
+      nil ->
+        {:noreply, socket}
+
+      node ->
+        {_key, _label, toggled} =
+          Enum.find(Panels.behavior_toggles(), fn {k, _l, _c} -> k == key end)
+
+        {kind, value} =
+          case Panels.behavior_on?(node, key) do
+            true -> Tree.class_without(node, toggled)
+            false -> Tree.class_with(node, toggled)
+          end
+
+        handle_event(
+          "op",
+          %{
+            "kind" => "set_attr",
+            "node_id" => id,
+            "name" => "class",
+            "value" => value,
+            "value_kind" => to_string(kind)
+          },
+          socket
+        )
+    end
+  end
+
+  # AND THE CANVAS GOES WITH IT. Choosing Tablet in the Inspector says "I am working on tablet", and
+  # leaving the frame at desktop width answers that with a page the override cannot be seen on — the
+  # author sets a value, nothing moves, and the control reads as broken when it is the viewport that
+  # is wrong.
+  #
+  # Only when the frame is showing ONE device. `:frames` is the side-by-side view, where every width
+  # is already on screen and switching it to one would take away what the reader opened it for.
+  def handle_event("set_breakpoint", %{"value" => value}, socket) do
+    breakpoint = tab_atom(value, [:base, :tablet, :mobile])
+
+    {:ok, _editor} = EditorSession.set_breakpoint(socket.assigns.token, breakpoint)
+
+    {:noreply, follow_breakpoint(socket, breakpoint)}
+  end
+
+  def handle_event("set_pseudo", %{"value" => value}, socket) do
+    {:ok, _editor} =
+      EditorSession.set_pseudo(
+        socket.assigns.token,
+        tab_atom(value, [:base, :hover, :focus, :active])
+      )
+
+    {:noreply, socket}
+  end
+
   # Both halves of the hybrid. `drag_start` hands the rail (and the palette, which drags into the
   # canvas across the frame boundary) the whole tree's verdict for this one drag, so its drop line is
   # a lookup rather than a round trip. See `EditorSession.drop_hints/2`.
@@ -1592,6 +1771,44 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     case EditorSession.apply_op(socket.assigns.token, params) do
       {:ok, _editor} -> {:noreply, socket}
       {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  # A SHADOW IS EDITED ONE NUMBER AT A TIME AND STORED AS ONE STRING, so every control here reads
+  # the whole shadow, replaces its own part and writes it back. Six ops for six parts would be six
+  # undo steps for one decision, and five of them would be shadows nobody chose.
+  #
+  # It ends in the same `op` funnel as every other Inspector write — one undo step, one broadcast,
+  # one history entry, the same containment and plugin hooks — rather than reaching for the session
+  # itself. `Shadow.put/3` is what decides the new string, including what to do with one it cannot
+  # read: replace it, rather than keep half.
+  def handle_event(
+        "set_shadow",
+        %{"node_id" => node_id, "bucket" => bucket, "field" => field} = params,
+        socket
+      ) do
+    with part when not is_nil(part) <- shadow_part(field),
+         %Tree.Node{} = node <- Tree.get(socket.assigns.editor.tree, node_id) do
+      value =
+        node.meta
+        |> Map.get(:styles, %{})
+        |> Map.get(String.to_existing_atom(bucket), %{})
+        |> Map.get("shadow")
+        |> Shadow.put(part, shadow_value(part, params["value"]))
+
+      handle_event(
+        "op",
+        %{
+          "kind" => "set_style",
+          "node_id" => node_id,
+          "bucket" => bucket,
+          "prop" => "shadow",
+          "value" => value || ""
+        },
+        socket
+      )
+    else
+      _unknown -> {:noreply, socket}
     end
   end
 
@@ -1975,6 +2192,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
          :ok <- gate(stage, editor, heex),
          {:ok, record} <- persist(socket, heex, going_live(stage)) do
       published_draft_is_spent(socket, stage, editor)
+      css = prune_element_css(socket, editor, record)
       announce(stage, record, editor)
 
       socket
@@ -1987,12 +2205,66 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         :info,
         stage
         |> saved_message(socket.assigns.section)
+        |> saved_flash(css)
         |> hidden_note(stage, editor.tree)
       )
     else
       {:error, reason} -> put_flash(socket, :error, human(reason))
     end
   end
+
+  # DELETING AN ELEMENT DELETES ITS CSS, and until this ran nothing ever noticed. A rule is keyed on
+  # a class in the markup, so removing the element takes the only reference to it away — but the rule
+  # stayed in the row, and kept being compiled into the site's stylesheet and served to every visitor
+  # for as long as the page existed. `ElementCss.live_rules/2` was written and tested for this, and
+  # asking it rather than working the same thing out again here is the point: a second answer to
+  # "which rules is this tree still wearing" diverges from the first in silence, and the tests over
+  # the one nobody calls stay green while the author's CSS goes.
+  #
+  # ON SAVE, not on delete: the tree the author is holding is not the document until they save it, and
+  # pruning against a tree they might still undo would drop the CSS of an element they are about to
+  # bring back.
+  #
+  # A failure here does not refuse the save — the page is already written — but it is reported, which
+  # it was not: the worst case used to be a dead rule left behind and is now the author's brand-new
+  # CSS not reaching the page a flash has just called published.
+  #
+  # THE ROW BELONGS TO THE RECORD, NOT TO THE STATUS. An error page keeps five templates in one
+  # record and all five write into one element-CSS row, so "anything not in this tree belongs to an
+  # element that is gone" — true for a page — deleted every rule the author had written on the other
+  # four statuses the moment one of them was published. Their scopes are counted as live too.
+  #
+  # AND WHAT THE DRAFT HELD IS WRITTEN HERE TOO, which is the other half of the same sentence: a rule
+  # is keyed on a class in the markup, so the save that puts the class on the live page is the save
+  # that puts the rule there. `staged_element_css` is what a draft-stage Apply left in the session.
+  #
+  # READ NOW, NOT AT MOUNT. The row is what this compares against and what it writes, so it is asked
+  # for here: the socket's copy is as old as this LiveView, and an error page's other status, a
+  # second browser on this session, or the Stylesheets page can all have written it since.
+  defp prune_element_css(socket, editor, record) do
+    row = ElementCss.all(socket.assigns.current_user, editor.site_id, css_owner(socket))
+    held = ElementCss.merge(row, editor.staged_element_css)
+
+    live =
+      [editor.tree | sibling_trees(socket, record)]
+      |> Enum.map(&ElementCss.live_rules(&1, held))
+      |> Enum.reduce(%{}, &Map.merge/2)
+
+    socket |> fold_element_css(editor, row, live) |> released(socket)
+  end
+
+  defp fold_element_css(_socket, _editor, row, row), do: {:ok, row}
+
+  defp fold_element_css(socket, editor, _row, live),
+    do: ElementCss.sync(socket.assigns.current_user, editor.site_id, css_owner(socket), live)
+
+  # The hold is released only once the row has it, so a write that failed leaves the author's CSS
+  # where it was rather than nowhere — the next publish carries it again.
+  defp released({:ok, _rules}, socket) do
+    with {:ok, _editor} <- EditorSession.unstage_element_css(socket.assigns.token), do: :ok
+  end
+
+  defp released({:error, reason}, _socket), do: {:error, reason}
 
   # WHAT A PUBLISH LEFT OUT, said once, at the moment it was left out — so an element hidden weeks
   # ago and forgotten is not a mystery on the live page. See `PageBuilder.Visibility`.
@@ -2012,6 +2284,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   defp hidden_note(saved, _stage, _tree), do: saved
+
+  defp saved_flash(saved, :ok), do: saved
+
+  defp saved_flash(saved, {:error, _reason}),
+    do:
+      gettext("%{saved} The element styles were kept, not published — try publishing again.",
+        saved: saved
+      )
+
+  # The statuses that are not open. Their markup is stored rather than in the session, so it is
+  # parsed to ask the same question of it; a template that will not parse contributes nothing rather
+  # than taking the whole prune down.
+  #
+  # THE RECORD THE SAVE JUST WROTE, not the one this LiveView opened with. The other statuses are
+  # edited in their own tabs, and a snapshot taken before one of them was published shows markup
+  # without the class its rule is keyed on — so the prune read that rule as belonging to an element
+  # nobody could see and deleted it.
+  defp sibling_trees(%{assigns: %{section: section}} = socket, %{} = record) do
+    section
+    |> Section.sibling_templates(record, status: socket.assigns[:status])
+    |> Enum.flat_map(fn template ->
+      case Tree.parse(template) do
+        {:ok, tree} -> [tree]
+        _unreadable -> []
+      end
+    end)
+  end
+
+  defp sibling_trees(_socket, _record), do: []
 
   defp next_stage(:published), do: :draft
   defp next_stage(stage), do: stage
@@ -2147,6 +2448,153 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp actor_id(%{assigns: %{current_user: %{id: id}}}), do: id
   defp actor_id(_socket), do: nil
 
+  defp write_element_css(socket, tree, node_id, css, flash) do
+    {_scoped, scope} = Tree.ensure_scope(tree, node_id)
+
+    case Events.before_element_css(%{
+           node_id: node_id,
+           css: css,
+           owner: css_owner(socket),
+           site_id: socket.assigns.editor.site_id,
+           actor_id: actor_id(socket)
+         }) do
+      :ok ->
+        put_element_css(socket, node_id, css, flash, scope)
+
+      # A HANDLER RETURN, not a pair. This answered `{socket, tree}` — which LiveView refuses
+      # outright — so a gate doing exactly what it exists for took the editor down with it, losing
+      # every unsaved edit in the session. The sibling gate at `save_class` already answers this way.
+      {:error, message} ->
+        {:noreply, put_flash(socket, :error, message)}
+    end
+  end
+
+  defp put_element_css(socket, node_id, css, flash, scope) do
+    case place_element_css(socket, scope, css) do
+      {:ok, rules} ->
+        Events.after_element_css(%{
+          node_id: node_id,
+          css: css,
+          owner: css_owner(socket),
+          site_id: socket.assigns.editor.site_id,
+          actor_id: actor_id(socket),
+          # WHICH SAVE THIS WAS. `builder:save:after` and `builder:publish:after` already say so, and
+          # a listener that rebuilds something from this CSS has the same question: draft-stage rules
+          # are held for the publish and are not on the live page yet.
+          stage: socket.assigns.stage
+        })
+
+        EditorSession.update_tree(
+          socket.assigns.token,
+          &scoped(&1, node_id, scope, css),
+          reason: :element_css
+        )
+
+        EditorSession.set_element_css(socket.assigns.token, ElementCss.css(rules))
+
+        {:noreply,
+         socket
+         |> assign(:element_css_rules, rules)
+         |> assign(:element_css_error, nil)
+         |> put_flash(:info, css_flash(socket.assigns.stage, flash))}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :element_css_error, human(reason))}
+    end
+  end
+
+  # THE STAGE SAYS WHERE AN APPLY GOES, which is the promise the markup already makes. The row is the
+  # live site — writing one recompiles the site bundle — and this had no gate at all, so a colour
+  # typed under a chip reading Draft changed the page for every visitor the moment it was applied, on
+  # any element already wearing a scope class. An interaction mints one too, so a first-ever Apply on
+  # a page nobody had styled was enough.
+  #
+  # EITHER WAY THE SESSION IS TOLD, and that is not bookkeeping: the publish folds the hold over the
+  # row, so an element styled in Draft and then restyled under Publish would have the older body put
+  # back over the newer one by its own publish if only the draft half were recorded.
+  defp place_element_css(socket, scope, css) do
+    with {:ok, rules} <- staged_or_written(socket, scope, css),
+         {:ok, _editor} <-
+           EditorSession.stage_element_css(
+             socket.assigns.token,
+             scope,
+             Map.get(rules, scope, "")
+           ) do
+      {:ok, rules}
+    end
+  end
+
+  # Draft stage checks the CSS and keeps it, and `prune_element_css/3` writes it with the markup
+  # carrying the class it is keyed on.
+  defp staged_or_written(%{assigns: %{stage: :draft}} = socket, scope, css),
+    do: ElementCss.place(socket.assigns.element_css_rules, scope, css)
+
+  # Publish stage writes the row — pressing Apply under a chip reading Publish asks for the live page
+  # — and `put/5` reads the row to write it, so the rule lands beside whatever else is in there now
+  # rather than over it.
+  defp staged_or_written(socket, scope, css) do
+    ElementCss.put(
+      socket.assigns.current_user,
+      socket.assigns.editor.site_id,
+      css_owner(socket),
+      scope,
+      css
+    )
+  end
+
+  # WHERE THE STYLE WENT, IN THE SENTENCE THAT SAYS IT WAS SAVED. Both stages said "Style applied."
+  # — the same words for a rule held for the next publish and one already on the live page. The
+  # holding place is named too, because it is an editing session and not a row: nothing else in the
+  # product keeps work there, and an author who is told only "when you publish" would read it as
+  # saved.
+  defp css_flash(:draft, said),
+    do:
+      gettext("%{said} Held in this editing session — it goes live when you publish.",
+        said: said
+      )
+
+  defp css_flash(_published, said), do: said
+
+  # THE CLASS THE RULE WAS JUST WRITTEN UNDER, put on the element as it is stored — or taken off it
+  # when the box was cleared — rather than on the copy the panel was drawn from, which would put back
+  # every edit stored since. An element that has gone from the stored tree, or has come to carry
+  # another scope, is left alone: handing it a class no rule is written for styles nothing.
+  defp scoped(tree, node_id, scope, css) do
+    case {Tree.ensure_scope(tree, node_id), String.trim(css)} do
+      {{tree, ^scope}, ""} -> {:ok, Tree.drop_scope(tree, node_id)}
+      {{tree, ^scope}, _css} -> {:ok, tree}
+      {_gone_or_rescoped, _css} -> :unscoped
+    end
+  end
+
+  defp move_op(socket, node_id, bucket, prop, value) do
+    EditorSession.apply_op(socket.assigns.token, %{
+      "kind" => "set_style",
+      "node_id" => node_id,
+      "bucket" => to_string(bucket),
+      "prop" => prop,
+      "value" => value
+    })
+  end
+
+  # THE PANEL FOLLOWS THE VALUE. A line under `&:hover` becomes a `:hover` override, and a line at
+  # the top of the box becomes a `:base` one whichever device tab happens to be open — so the control
+  # that now holds it can easily be one the author is not looking at. The State section is folded by
+  # default and carries no count, so a hover move showed nothing at all: the line vanished, the flash
+  # said it had moved, and the panel looked untouched.
+  defp focus_bucket(socket, :base) do
+    EditorSession.set_breakpoint(socket.assigns.token, :base)
+    EditorSession.set_pseudo(socket.assigns.token, :base)
+  end
+
+  defp focus_bucket(socket, pseudo), do: EditorSession.set_pseudo(socket.assigns.token, pseudo)
+
+  defp moved(prop),
+    do:
+      gettext("Moved %{property} to the controls.",
+        property: elem(Styles.declaration(prop, ""), 0)
+      )
+
   defp recover_template(socket, template) do
     with {:ok, _tree} <- Tree.parse(template),
          {:ok, _record} <- save_recovered(socket, template) do
@@ -2177,6 +2625,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         record.id,
         Section.editing_status(section, record, status: status)
       )
+
+  # THE RULE FOR THE ELEMENT IN FRONT OF YOU. The rules are held whole because they are one
+  # stylesheet row; the panel only ever shows the one the selection is keyed to.
+  defp selected_css(socket, editor) do
+    with %{} = rules <- socket.assigns[:element_css_rules],
+         scope when is_binary(scope) <- Tree.scope(editor.tree, editor.selection) do
+      Map.get(rules, scope, "")
+    else
+      _none -> ""
+    end
+  end
+
+  # The document this page's element CSS is filed under. A layout and a component get their own, so
+  # a page and the layout it sits in never rewrite each other's row. Named by `ElementScopes`, which
+  # is where every copy flow reads the same row.
+  defp css_owner(%{assigns: %{section: section, editor: editor}}),
+    do: ElementScopes.owner(section, editor.resource_id)
 
   defp saved_message(:published, section),
     do: gettext("%{section} published.", section: section_label(section))
@@ -2290,6 +2755,43 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # Nothing to fill the row with until the socket is live, and nothing lost by waiting: the swatches
+  # beside them are the editor's own and are drawn immediately.
+  #
+  # AND NOT AT ALL FOR AN ID THAT CANNOT NAME A SITE. `nil` is a real answer — a global document reads
+  # the global sheets — but anything else that is not a uuid is a query that can only raise, and
+  # spending a task on it buys a logged exception and one more thing for the editor to wait on.
+  defp load_tokens_async(socket, editor) do
+    case connected?(socket) and site_readable?(editor.site_id) do
+      false ->
+        socket
+
+      true ->
+        MishkaGervaz.Messages.start_async(socket, :style_tokens, fn ->
+          colour_tokens(editor.site_id)
+        end)
+    end
+  end
+
+  defp site_readable?(nil), do: true
+  defp site_readable?(site_id), do: match?({:ok, _uuid}, Ecto.UUID.cast(site_id))
+
+  # Only the ones a colour control can paint with. A site declares spacing and radius tokens too, and
+  # offering `--radius-lg` as a background is a swatch that draws nothing.
+  @colour_token ~r/^(#|rgb|hsl|oklch|color\()/i
+
+  defp colour_tokens(site_id) do
+    site_id
+    |> Tokens.list()
+    |> Enum.filter(&Regex.match?(@colour_token, String.trim(&1.value)))
+    |> Enum.map(&{&1.key, String.trim(&1.value), &1.label})
+  end
+
+  # Only when the frame is showing ONE device: `:frames` is the side-by-side view, where every width
+  # is already on screen and switching it to one would take away what the reader opened it for.
+  defp follow_breakpoint(%{assigns: %{device: :frames}} = socket, _breakpoint), do: socket
+  defp follow_breakpoint(socket, breakpoint), do: assign(socket, :device, frame_for(breakpoint))
+
   # `:frames` is the one frame that is not a breakpoint — it is all three at once — so it moves
   # nothing, which is the same answer `follow_breakpoint/2` gives when it is showing.
   defp follow_device(socket, :frames), do: assign(socket, :device, :frames)
@@ -2312,6 +2814,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp frame_for(:tablet), do: :tablet
   defp frame_for(:mobile), do: :mobile
   defp frame_for(_base_or_unset), do: :desktop
+
+  # NAMED, NOT CONVERTED. `String.to_existing_atom/1` on a field arriving from the browser is one
+  # typo away from an exception in a hot path, and the set is four long.
+  defp shadow_part("x"), do: :x
+  defp shadow_part("y"), do: :y
+  defp shadow_part("blur"), do: :blur
+  defp shadow_part("spread"), do: :spread
+  defp shadow_part("color"), do: :color
+  defp shadow_part("inset"), do: :inset
+  defp shadow_part(_other), do: nil
+
+  # The switch sends the state it wants as its own `value`, because `phx-value-value` is overwritten
+  # by `el.value` before the payload is built and would arrive empty.
+  defp shadow_value(:inset, value), do: value == "true"
+  defp shadow_value(_part, value), do: to_string(value)
 
   defp human(reason) when is_binary(reason), do: reason
   defp human(:unknown_node), do: gettext("That element is no longer on the page.")
@@ -2431,6 +2948,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           left_tab={@left_tab}
           left_w={@left_w}
           mob_panel={@mob_panel}
+          selected_node={@selected_node}
+          breakpoint={@breakpoint}
+          pseudo={@pseudo}
+          group_folds={@group_folds}
+          style_tokens={@style_tokens}
+          element_css={@element_css}
+          element_css_error={@element_css_error}
+          element_css_advice={@element_css_advice}
+          record={@record}
         />
         <Panels.center
           token={@token}
