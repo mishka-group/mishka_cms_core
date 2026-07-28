@@ -26,6 +26,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
+  alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
@@ -37,6 +38,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
+  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
   # enough" is the difference a reader notices first, and several of these are two or three shapes
@@ -404,6 +406,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       )
     ]
   end
+
+  # An extension can add its own interaction — a modal opener, an analytics ping — beside the core's.
+  # COLLECTED ONCE, INSIDE `actions/1`. Collecting again here fired every plugin a second time per
+  # render and handed it a list of `{key, label}` tuples where the first pass had handed it
+  # descriptors, so a plugin could not answer both the same way; what it appended came back in the
+  # wrong shape and the comprehension below dropped it without a word. `offer?/2` runs in `actions/1`
+  # too, so a second pass could put back the verbs a target cannot honour.
+  defp interaction_actions(opener), do: Interactions.actions(opener)
 
   defp descriptor(key, kind, label, priority, opts \\ []) do
     {:ok, built} =
@@ -1108,11 +1118,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:element_css, :string, default: "")
   attr(:element_css_error, :string, default: nil)
   attr(:element_css_advice, :string, default: nil)
+  attr(:js_hooks, :list, default: [])
+
   attr(:section, :string, default: "page", doc: "which of the four documents is being edited")
 
   # The record is here for the Expression section, which offers what THIS document declares — a
   # component's own attributes and slots — rather than a vocabulary written into the editor.
   attr(:record, :any, default: nil)
+
+  attr(:aim_target, :string,
+    default: nil,
+    doc: "the node id in the On-click target select right now, before it is saved"
+  )
+
+  attr(:act_action, :string,
+    default: nil,
+    doc: "the verb in the On-click action select right now, which decides what box sits under it"
+  )
 
   def left_panel(assigns) do
     ~H"""
@@ -1234,8 +1256,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           element_css={@element_css}
           element_css_error={@element_css_error}
           element_css_advice={@element_css_advice}
+          js_hooks={@js_hooks}
           section={@section}
           record={@record}
+          aim_target={@aim_target}
+          act_action={@act_action}
         />
       </aside>
 
@@ -2808,8 +2833,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           advice={@element_css_advice}
         />
 
+        <%!-- NOT ON AN ERROR PAGE. Both of these write a binding the LiveView client attaches —
+              `phx-click` here, `phx-hook` below — and an error page is rendered by a controller, as
+              `MishkaCmsCore.Runtime.Compilers.ErrorCompiler` says in its own words while binding
+              `socket` so the TagEngine output renders "outside a live socket". With no view owning
+              that DOM the binding is never attached, so the panel was offering six verbs, an Apply
+              button and a violet "this element does something when clicked" dot for a click that
+              cannot fire. --%>
+        <.conditions
+          :if={@selected_node.kind in [:tag, :component]}
+          node={@selected_node}
+          state={Conditions.read(Node.attr(@selected_node, Conditions.attribute()))}
+        />
 
+        <.interactions
+          :if={bindable?(@section)}
+          node={@selected_node}
+          entry={component_entry(assigns)}
+          state={Interactions.read(Node.attr(@selected_node, "phx-click"))}
+          aimed={Interactions.target(Node.attr(@selected_node, "phx-click"))}
+          openable={openable(@editor)}
+          opener={aimed_opener(@editor, @aim_target, @selected_node)}
+          aiming={@aim_target}
+          acting={@act_action}
+        />
 
+        <.hook_picker
+          :if={bindable?(@section)}
+          node={@selected_node}
+          entry={component_entry(assigns)}
+          hooks={@js_hooks}
+          attached={attached_hook(@selected_node)}
+        />
       </div>
     </div>
     """
@@ -5920,6 +5975,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     not is_nil(Ash.Resource.Info.attribute(resource, :events))
   end
 
+  # Whether a LiveView owns this document's DOM at all. Three of the four are rendered by one — a
+  # component inside the page that places it — and an error page is not: `ErrorHTML` calls the
+  # compiled module from a controller, so nothing is there to attach a `phx-` binding.
+  defp bindable?(section), do: Section.normalize(section) != "error-page"
+
   # Whatever this document is actually handed, so the empty box stops suggesting `@inner_content` to
   # the three sections that are never handed one.
   defp expression_placeholder([%{token: token} | _rest]), do: token
@@ -7007,6 +7067,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         >
           <.icon name={(@folded? && :eye_off) || :eye} size={12} />
         </button>
+        <%!-- ONLY WHERE THERE IS SOMETHING TO PIN. An overlay opens on the canvas while it is
+              selected and shuts when the selection moves on, which is what an author wants nine
+              times in ten. This is the tenth: keeping a dialog open while working on the page
+              behind it. Every other row has no closed state, so it gets no pin. --%>
+        <button
+          :if={overlay?(@entry)}
+          type="button"
+          phx-click="toggle_pinned"
+          phx-value-id={@id}
+          title={
+            (pinned?(@editor, @id) && gettext("Let it close again")) ||
+              gettext("Keep it open on the canvas")
+          }
+          class={[
+            "size-5 flex-none place-items-center rounded-[6px] hover:bg-[#f2f1ec]",
+            "group-hover:grid group-focus-within:grid",
+            (pinned?(@editor, @id) || @id == @selection) && "grid",
+            !(pinned?(@editor, @id) || @id == @selection) && "hidden",
+            (pinned?(@editor, @id) && "text-[#8580d8]") || "text-[#a8a5a0]"
+          ]}
+        >
+          <.icon name={:pin} size={12} />
+        </button>
         <button
           type="button"
           phx-click="toggle_lock"
@@ -7398,10 +7481,521 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp goto_icon(%{icon: icon}) when is_binary(icon), do: Map.get(@goto_icons, icon, :chevron)
   defp goto_icon(_target), do: :chevron
 
+  attr(:node, :any, required: true)
+  attr(:entry, :any, default: nil)
+  attr(:state, :any, required: true)
+  attr(:aimed, :string, default: nil, doc: "the scope class the saved action points at")
+
+  attr(:opener, :map,
+    default: %{},
+    doc:
+      "what the target being aimed at says it can do — see `MishkaCmsCore.Builder.PaletteEntry.opens/1`"
+  )
+
+  attr(:aiming, :string,
+    default: nil,
+    doc: "the node id picked in the target select but not saved yet, which outranks `aimed`"
+  )
+
+  attr(:openable, :list,
+    default: [],
+    doc: "the nodes in this document that hide their own content — see `openable/1`"
+  )
+
+  attr(:acting, :string,
+    default: nil,
+    doc: "the verb picked in the action select but not saved yet, which outranks the saved one"
+  )
+
+  @doc """
+  What this element does when it is clicked, without anyone writing JavaScript.
+
+  Sits under Custom CSS because the two are one idea: toggle `is-open` here, write `&.is-open { … }`
+  there, and that is an accordion with no code in it. See
+  `MishkaCmsCore.Runtime.PageBuilder.Interactions` for why a `<script>` is the wrong shape under
+  LiveView.
+  """
+  def interactions(assigns) do
+    assigns =
+      assigns
+      |> assign(:targetable?, targetable?(assigns.node, assigns.entry))
+      |> then(&assign(&1, :verb, &1.acting || action_of(&1.state) || ""))
+      |> then(&assign(&1, :fields, Interactions.needs(&1.verb)))
+      |> then(&assign(&1, :hint, hint(&1.verb)))
+
+    ~H"""
+    <section :if={@node.kind in [:tag, :component] and @targetable?}>
+      <button
+        type="button"
+        id="pb-act-toggle"
+        phx-click={
+          JS.toggle(to: "#pb-act-body", display: "flex")
+          |> JS.toggle_class("rotate-90", to: "#pb-act-toggle > svg")
+        }
+        class="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left hover:bg-[#f6f5f2]"
+      >
+        <.icon name={:chevron} size={11} />
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("On click")}
+        </span>
+        <span class="flex-1"></span>
+        <span
+          :if={@state != :none}
+          class="size-[6px] flex-none rounded-full bg-[#8580d8]"
+          title={gettext("This element does something when clicked")}
+        ></span>
+      </button>
+
+      <div id="pb-act-body" class="mt-1.5 hidden flex-col gap-2">
+        <p
+          :if={@state == :custom}
+          id="pb-act-custom"
+          class="rounded-[9px] bg-[#faf9f6] px-2.5 py-2 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]"
+        >
+          <.sentence
+            text={
+              gettext_noop(
+                "This element already has a hand-written %{attribute}. It is left exactly as it is — edit it in Advanced."
+              )
+            }
+            parts={%{attribute: {"code", nil, "phx-click"}}}
+          />
+        </p>
+
+        <form
+          :if={@state != :custom}
+          id={"pb-act-form-#{@node.id}"}
+          phx-submit="save_interaction"
+          class="flex flex-col gap-1.5"
+        >
+          <input type="hidden" name="node_id" value={@node.id} />
+
+          <%!-- WHAT IT ACTS ON. Every interaction before this one landed on the element being
+                clicked, which is right for "toggle a class on myself" and leaves out the commonest
+                thing anybody wants a button for: opening something else. A modal, a drawer and
+                twelve more render their own content closed, so "Show" pointed at one is the whole
+                of "open that dialog" — and the list is the document's own concealing nodes rather
+                than a free-text selector, so a click still cannot reach outside the page. --%>
+          <select
+            :if={@openable != []}
+            id="pb-act-target"
+            name="target"
+            phx-change="aim_interaction"
+            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+          >
+            <%!-- THE AUTHOR'S CHOICE OUTRANKS THE SAVED ONE, because picking a target re-renders this
+                  list — the verbs a click can honour depend on what it points at — and a `selected`
+                  computed only from what is in the document put the select straight back to "This
+                  element" underneath them. Applying then wrote a command aimed at the button. --%>
+            <option value="" selected={@aiming == ""}>{gettext("This element")}</option>
+            <option
+              :for={{id, label, scope} <- @openable}
+              :if={id != @node.id}
+              value={id}
+              selected={
+                (@aiming && id == @aiming) ||
+                  (is_nil(@aiming) and scope != nil and scope == @aimed)
+              }
+            >
+              {label}
+            </option>
+          </select>
+
+          <select
+            id="pb-act-action"
+            name="action"
+            phx-change="pick_interaction"
+            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+          >
+            <option value="">{gettext("Nothing")}</option>
+            <option
+              :for={{value, label} <- interaction_actions(@opener)}
+              value={value}
+              selected={value == @verb}
+            >
+              {translate(label)}
+            </option>
+          </select>
+
+          <%!-- WHATEVER THE CHOSEN VERB ASKS FOR, AND NOTHING ELSE. The class box used to be drawn
+                for all six verbs and does nothing for three of them, which left an author to work
+                out on their own that typing in it changed nothing. It is also what keeps a package
+                out of this file: an action says it wants a line of text called `message` and the
+                box appears here, labelled, remembered and read back. See
+                `MishkaCmsCore.Builder.Action`. --%>
+          <div :for={field <- @fields} class="flex flex-col gap-1">
+            <label
+              for={"pb-act-#{field.name}"}
+              class="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#8a877f]"
+            >
+              {translate(field.label)}
+            </label>
+
+            <input
+              :if={field.type == :text}
+              type="text"
+              id={"pb-act-#{field.name}"}
+              name={field.name}
+              value={typed(@state, @verb, field)}
+              placeholder={translate(field.placeholder)}
+              maxlength="240"
+              spellcheck="false"
+              class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+            />
+
+            <select
+              :if={field.type == :select}
+              id={"pb-act-#{field.name}"}
+              name={field.name}
+              class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+            >
+              <option
+                :for={{value, label} <- field.options}
+                value={value}
+                selected={value == typed(@state, @verb, field)}
+              >
+                {translate(label)}
+              </option>
+            </select>
+          </div>
+
+          <%!-- The action's own words, so core does not hold a note about somebody else's verb. --%>
+          <p :if={@hint} class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+            {translate(@hint)}
+          </p>
+
+          <button
+            type="submit"
+            id="pb-act-save"
+            class="w-full rounded-[9px] border border-[#dcdbf5] bg-[#f2f1fc] py-2 text-[11.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            {gettext("Apply")}
+          </button>
+        </form>
+      </div>
+    </section>
+    """
+  end
+
+  attr(:node, :any, required: true)
+  attr(:state, :any, required: true)
+
+  @doc """
+  When this element is on the page at all — HEEx's own `:if`, chosen from a list.
+
+  Sits above On click because it is the earlier question: whether the element is there, then what it
+  does. See `MishkaCmsCore.Runtime.PageBuilder.Conditions` for what each choice writes.
+  """
+  def conditions(assigns) do
+    ~H"""
+    <section>
+      <button
+        type="button"
+        id="pb-when-toggle"
+        phx-click={
+          JS.toggle(to: "#pb-when-body", display: "flex")
+          |> JS.toggle_class("rotate-90", to: "#pb-when-toggle > svg")
+        }
+        class="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left hover:bg-[#f6f5f2]"
+      >
+        <.icon name={:chevron} size={11} />
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("Show when")}
+        </span>
+        <span class="flex-1"></span>
+        <span
+          :if={@state != :none}
+          class="size-[6px] flex-none rounded-full bg-[#8580d8]"
+          title={gettext("This element is only on the page sometimes")}
+        ></span>
+      </button>
+
+      <div id="pb-when-body" class="mt-1.5 hidden flex-col gap-2">
+        <p
+          :if={@state == :custom}
+          id="pb-when-custom"
+          class="rounded-[9px] bg-[#faf9f6] px-2.5 py-2 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]"
+        >
+          <.sentence
+            text={
+              gettext_noop(
+                "This element already has a hand-written %{attribute}. It is left exactly as it is — edit it in Advanced."
+              )
+            }
+            parts={%{attribute: {"code", nil, ":if"}}}
+          />
+        </p>
+
+        <form
+          :if={@state != :custom}
+          id={"pb-when-form-#{@node.id}"}
+          phx-change="save_condition"
+          class="flex flex-col gap-1.5"
+        >
+          <input type="hidden" name="node_id" value={@node.id} />
+
+          <select
+            id="pb-when-rule"
+            name="rule"
+            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+          >
+            <option value="" selected={@state == :none}>{gettext("Always")}</option>
+            <option
+              :for={{value, label} <- Conditions.rules()}
+              value={value}
+              selected={condition?(@state, value)}
+            >
+              {translate(label)}
+            </option>
+          </select>
+
+          <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+            {gettext(
+              "The canvas always draws it, so it stays editable. The published page is where the condition decides."
+            )}
+          </p>
+        </form>
+      </div>
+    </section>
+    """
+  end
+
+  defp condition?({:ok, rule}, value), do: rule == value
+  defp condition?(_state, _value), do: false
+
+  attr(:node, :any, required: true)
+  attr(:entry, :any, default: nil)
+  attr(:hooks, :list, default: [])
+  attr(:attached, :any, default: nil)
+
+  @doc """
+  Attaches this element to a runtime JS hook.
+
+  A picker, not a code box. Writing a hook stays on Runtime → JS hooks, which is the right amount of
+  friction for shipping executable JavaScript; this only selects from what is already compiled into
+  the site's bundle, and saves someone hand-typing `phx-hook` into Advanced and getting the
+  capitalisation wrong. See `MishkaCmsCore.Runtime.PageBuilder.Hooks`.
+  """
+  def hook_picker(assigns) do
+    assigns = assign(assigns, :targetable?, targetable?(assigns.node, assigns.entry))
+
+    ~H"""
+    <section :if={@node.kind in [:tag, :component] and @targetable?}>
+      <button
+        type="button"
+        id="pb-hook-toggle"
+        phx-click={
+          JS.toggle(to: "#pb-hook-body", display: "flex")
+          |> JS.toggle_class("rotate-90", to: "#pb-hook-toggle > svg")
+        }
+        class="flex w-full items-center gap-2 rounded-[9px] px-1 py-1.5 text-left hover:bg-[#f6f5f2]"
+      >
+        <.icon name={:chevron} size={11} />
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("JS hook")}
+        </span>
+        <span class="flex-1"></span>
+        <span
+          :if={@attached}
+          class="size-[6px] flex-none rounded-full bg-[#8580d8]"
+          title={gettext("This element is attached to a hook")}
+        ></span>
+      </button>
+
+      <div id="pb-hook-body" class="mt-1.5 hidden flex-col gap-2">
+        <p
+          :if={@hooks == []}
+          id="pb-hook-empty"
+          class="rounded-[9px] bg-[#faf9f6] px-2.5 py-2 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]"
+        >
+          {gettext(
+            "This site has no JS hooks yet. Write one under Runtime → JS hooks and it appears here."
+          )}
+        </p>
+
+        <form
+          :if={@hooks != []}
+          id={"pb-hook-form-#{@node.id}"}
+          phx-submit="save_hook"
+          class="flex flex-col gap-1.5"
+        >
+          <input type="hidden" name="node_id" value={@node.id} />
+
+          <select
+            id="pb-hook-select"
+            name="hook"
+            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+          >
+            <option value="">{gettext("None")}</option>
+            <option :for={hook <- @hooks} value={hook.name} selected={hook.name == @attached}>
+              {(hook.global? && gettext("%{hook} (global)", hook: hook.hook)) || hook.hook}
+            </option>
+          </select>
+
+          <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
+            {gettext("A hook needs a unique id, so one is given to this element if it has none.")}
+          </p>
+
+          <button
+            type="submit"
+            id="pb-hook-save"
+            class="w-full rounded-[9px] border border-[#dcdbf5] bg-[#f2f1fc] py-2 text-[11.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            {gettext("Apply")}
+          </button>
+        </form>
+      </div>
+    </section>
+    """
+  end
+
+  defp attached_hook(node) do
+    case Node.attr(node, "phx-hook") do
+      {:string, name} -> name
+      _expression_or_none -> nil
+    end
+  end
+
+  defp action_of({:ok, key, _values}), do: key
+  defp action_of(_state), do: nil
+
+  # WHAT THE AUTHOR TYPED, FOUND BY THE NAME OF THE BOX IT WAS TYPED INTO.
+  #
+  # Keyed on the VERB instead, switching "Toggle a class" to "Add a class" emptied the class box —
+  # both declare a field called `class`, so the author's own word was there a moment ago and gone the
+  # instant they changed their mind about the verb. Pressing Apply then refused the whole thing for
+  # want of a class.
+  #
+  # The name is the identity, which also gives for free the thing the verb check was there for:
+  # "Show a message" names its boxes `message` and `kind`, so switching to it finds no `class` and
+  # starts empty.
+  defp typed({:ok, _key, values}, _verb, field),
+    do: Map.get(values, field.name) || fallback(field)
+
+  defp typed(_state, _verb, field), do: fallback(field)
+
+  defp fallback(%{type: :select, options: [{value, _label} | _rest]}), do: value
+  defp fallback(_field), do: nil
+
+  defp hint(key) do
+    Enum.find_value(Interactions.registry(), fn action ->
+      Descriptor.key(action) == key and Map.get(action, :description)
+    end)
+  end
+
+  # A TAG ALWAYS CARRIES ITS CLASS. A component carries one only if it declares `class` and puts it
+  # somewhere its markup renders — declaring it is the part that can be checked, and a component that
+  # does not is unreachable by a rule keyed on a class.
+  @doc """
+  Every node in this document a click can be pointed AT, as `{id, label, scope}`.
+
+  ## What earns a place here
+
+  A DECLARATION, not a guess. `PaletteEntry.opens/1` — the component's own `data-pb-open` and its
+  two siblings — and nothing else.
+
+  It was `concealed?/1` before, which asks a different question: does this render its own content
+  closed? That is the right question for the layers glyph, where a wrong yes costs a glyph on a row
+  that did not need one. It is the wrong question here, where a wrong yes costs the author a control
+  that saves a flash reading "Click action set." and then does nothing when the page is clicked.
+
+  The five it removes are not oversights: `chelekom-tabs` and `chelekom-carousel` open one of MANY —
+  "open this" is not a whole sentence for them without naming which — and `chelekom-stepper`,
+  `chelekom-rating` and `chelekom-scroll-area` have no open state at all and were only ever caught
+  by a markup scan being deliberately generous. Every one of the eleven that remain was verified to
+  open from a button on a rendered page.
+
+  A third-party component joins this list by saying so, in one attribute on its own root; see
+  `MishkaCmsCore.Builder.PaletteEntry.opens/1`.
+
+  `scope` is the node's `pb-xxxxxxxx` class WHEN IT ALREADY HAS ONE, which is only how a saved
+  action is matched back to the row that wrote it. A node with none is still offered; the scope is
+  minted when the interaction is saved, not before, so browsing the list changes nothing.
+  """
+  @spec openable(map()) :: [{String.t(), String.t(), String.t() | nil}]
+  def openable(%{tree: tree} = editor) do
+    entries = Map.new(editor.components || [], &{&1.name, &1})
+
+    tree
+    |> Tree.walk()
+    |> Enum.filter(&opens?(&1, entries))
+    |> Enum.map(&{&1.id, openable_label(&1), Tree.scope(tree, &1.id)})
+  end
+
+  def openable(_editor), do: []
+
+  @doc """
+  What the target currently being aimed at says it can do, as `%{verb => attribute}`.
+
+  `chosen` is the id in the target select RIGHT NOW — which is not yet the saved one, because the
+  author is picking it. Without that the verb list would describe the previous target and go stale
+  the moment somebody changed their mind, which is the state a form is in for the whole time it is
+  being filled in.
+
+  Falls back to what the saved command points at, so a panel rendered fresh describes the aim the
+  document already holds. `%{}` for "aimed at this element" and for a target that declares nothing —
+  both mean "offer everything", which is what `Interactions.actions/1` does with it.
+  """
+  @spec aimed_opener(map(), String.t() | nil, Node.t() | nil) :: map()
+  def aimed_opener(editor, chosen, selected) do
+    case chosen || saved_aim(editor, selected) do
+      id when is_binary(id) and id != "" -> opener_of(editor, id)
+      _self_or_none -> %{}
+    end
+  end
+
+  defp saved_aim(%{tree: tree}, %Node{} = selected) do
+    case Interactions.target(Node.attr(selected, "phx-click")) do
+      scope when is_binary(scope) ->
+        tree |> Tree.walk() |> Enum.find_value(&(Tree.scope(tree, &1.id) == scope && &1.id))
+
+      _none ->
+        nil
+    end
+  end
+
+  defp saved_aim(_editor, _selected), do: nil
+
+  defp opener_of(%{tree: tree} = editor, id) do
+    with %Node{} = node <- Tree.get(tree, id),
+         name when is_binary(name) <- Node.component_name(node),
+         %{} = entry <- Enum.find(editor.components || [], &(&1.name == name)) do
+      Map.get(entry, :opens) || %{}
+    else
+      _undeclared -> %{}
+    end
+  end
+
+  defp opener_of(_editor, _id), do: %{}
+
+  defp opens?(%Node{kind: :component} = node, entries) do
+    case Map.get(entries, Node.component_name(node)) do
+      nil -> false
+      entry -> (Map.get(entry, :opens) || %{}) != %{}
+    end
+  end
+
+  defp opens?(_node, _entries), do: false
+
+  # THE AUTHOR'S OWN WORDS FIRST. Two dialogs on one page are told apart by what they say, not by the
+  # eight characters of their id — and a `title` is the attribute the kit's own dialogs carry.
+  defp openable_label(%Node{} = node) do
+    name = Node.component_name(node) || node.tag || "component"
+
+    case Node.literal(node, "title") do
+      title when is_binary(title) and title != "" -> "#{name} — #{title}"
+      _untitled -> "#{name} · #{String.slice(node.id, 0, 5)}"
+    end
+  end
+
   @doc "Whether this row's component renders its own content closed — a dialog, a drawer, a dropdown."
   @spec overlay?(map() | nil) :: boolean()
   def overlay?(entry) when is_map(entry), do: Map.get(entry, :concealed?, false) == true
   def overlay?(_entry), do: false
+
+  @doc "Whether this overlay is being held open on the canvas."
+  @spec pinned?(map(), String.t()) :: boolean()
+  defdelegate pinned?(editor, id), to: MishkaCmsCore.Runtime.PageBuilder.EditorSession
 
   defp targetable?(%Node{kind: :tag}, _entry), do: true
 

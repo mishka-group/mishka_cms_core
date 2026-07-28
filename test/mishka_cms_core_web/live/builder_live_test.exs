@@ -15,8 +15,10 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
+  alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
@@ -26,10 +28,12 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.Plugins.BuilderBlockPlugin, as: BlockPlugin
+  alias MishkaCmsCore.Test.Plugins.BuilderJsHookPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderPageStarterPlugin, as: PageStarterPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarInvokedProbe, as: ToolbarInvokedProbe
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarProbe, as: ToolbarProbe
   alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   require Ash.Query
 
@@ -192,6 +196,16 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   end
 
   defp editor(view), do: elem(EditorSession.fetch(token(view)), 1)
+
+  # THE ON-CLICK FORM AND NOTHING ELSE. `render(view)` is the whole editor, where `value="is-open"`
+  # appears in the Attributes list too — an assertion against the whole page passes for the wrong
+  # reason and keeps passing when the box it is about has gone.
+  defp inspector_html(view) do
+    case view |> render() |> String.split(~s(id="pb-act-form-), parts: 2) do
+      [_before, rest] -> rest |> String.split("</form>", parts: 2) |> hd()
+      [_none] -> ""
+    end
+  end
 
   # A component that declares one required property and one required slot, and one optional property
   # beside them — the smallest shape that can tell the marked apart from the unmarked.
@@ -7319,6 +7333,45 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # WHAT THE DOCUMENT CAN ACTUALLY DO. Three of the four are rendered by a LiveView; an error page is
+  # rendered by a controller, and `phx-click` and `phx-hook` are attached by the LiveView client
+  # against a view. With no view owning that DOM the binding never attaches, so the panel was
+  # offering a click that cannot fire.
+  describe "bindings are offered only where a LiveView owns the DOM" do
+    defp select_first_tag(view) do
+      node = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :tag))
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => node.id})
+      node
+    end
+
+    test "a page offers On click and a JS hook", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      select_first_tag(view)
+
+      assert has_element?(view, "#pb-act-toggle")
+      assert has_element?(view, "#pb-hook-toggle")
+    end
+
+    test "and an error page offers neither", %{conn: conn, site: site} do
+      error_page =
+        create_error_page!(
+          name: "bindingless",
+          site_id: site.id,
+          error_pages: [%{"status" => 404, "template" => ~s(<div id="oops">Not found</div>)}]
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      _loaded = render_async(view)
+      select_first_tag(view)
+
+      refute has_element?(view, "#pb-act-toggle"), "a controller renders this, not a LiveView"
+      refute has_element?(view, "#pb-hook-toggle")
+    end
+  end
+
   # The three form blocks ship `phx-change` and `phx-submit` bound to handlers, and only a Page has
   # an `events` column to hold one.
   describe "the blocks a section can use" do
@@ -7410,6 +7463,482 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-device-frames") |> render_click()
       assert has_element?(view, "#pb-frame-1180")
       assert has_element?(view, "#pb-frame-560")
+    end
+
+    # The upper Code menu. What it shows has to be what a save WRITES, which is `to_heex/1`
+    # (serialised, re-parsed, formatted) and not the drawer's raw `serialize/1`.
+    # ATTACHING A HOOK, NOT WRITING ONE. Writing stays on Runtime → JS hooks — the right amount of
+    # friction for shipping executable JavaScript — and this saves someone hand-typing `phx-hook`
+    # into Advanced and getting the compiled name's capitalisation wrong.
+    test "an element can be attached to a runtime hook", %{conn: conn, site: site} do
+      create_js_hook!(site_id: site.id, name: "collapse")
+      page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+      render_click(view, "select", %{"id" => p.id})
+
+      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
+
+      node = Tree.get(editor(view).tree, p.id)
+      assert Node.attr(node, "phx-hook") == {:string, hook.name}
+      assert has_element?(view, "#flash-info", "Hook attached.")
+
+      # LiveView silently never mounts a hook on an element with no id.
+      assert {:string, "el-" <> _rest} = Node.attr(node, "id")
+    end
+
+    test "an id the author already set is left alone", %{conn: conn, site: site} do
+      create_js_hook!(site_id: site.id, name: "collapse")
+      page = create_page!(site_id: site.id, template: ~s(<div><p id="mine">One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
+
+      assert Node.attr(Tree.get(editor(view).tree, p.id), "id") == {:string, "mine"}
+    end
+
+    test "choosing None detaches it, and takes back only the id it minted", %{
+      conn: conn,
+      site: site
+    } do
+      create_js_hook!(site_id: site.id, name: "collapse")
+      page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => ""})
+
+      node = Tree.get(editor(view).tree, p.id)
+      refute Node.attr(node, "phx-hook")
+      refute Node.attr(node, "id"), "the minted id went with the hook"
+      assert has_element?(view, "#flash-info", "Hook removed.")
+    end
+
+    # An id the author wrote may be the target of a link or a stylesheet, so it stays.
+    test "detaching leaves an id the author wrote", %{conn: conn, site: site} do
+      create_js_hook!(site_id: site.id, name: "collapse")
+      page = create_page!(site_id: site.id, template: ~s(<div><p id="mine">One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => ""})
+
+      assert Node.attr(Tree.get(editor(view).tree, p.id), "id") == {:string, "mine"}
+    end
+
+    # A name the site does not have must not be written as though it did — a hook archived in
+    # another tab, or a value posted by hand. AND IT IS SAID OUT LOUD: the refusal used to report
+    # "Hook attached.", which is the sentence an author reads before going to look for the hook.
+    test "a hook this site does not have is refused", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => "NotARealHook"})
+
+      refute Node.attr(Tree.get(editor(view).tree, p.id), "phx-hook")
+      assert has_element?(view, "#flash-error", "no longer available")
+      refute has_element?(view, "#flash-info")
+    end
+
+    # REFUSED MEANS NOTHING CHANGES, and this is the case that cost work. An unknown name fell to
+    # the same branch as None, so Apply took the attached hook off along with the minted id — which
+    # a link or a stylesheet may point at — and reported success. The element had a hook a moment
+    # ago and the author has no reason to check.
+    test "and the hook already on the element survives it, id and all", %{conn: conn, site: site} do
+      create_js_hook!(site_id: site.id, name: "collapse")
+      page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+      [hook] = :sys.get_state(view.pid).socket.assigns.js_hooks
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => hook.name})
+      minted = Node.attr(Tree.get(editor(view).tree, p.id), "id")
+      assert {:string, "el-" <> _rest} = minted
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => "NotARealHook"})
+
+      node = Tree.get(editor(view).tree, p.id)
+      assert Node.attr(node, "phx-hook") == {:string, hook.name}
+      assert Node.attr(node, "id") == minted
+      assert has_element?(view, "#flash-error", "no longer available")
+    end
+
+    # AND A HOOK AN EXTENSION CONTRIBUTES APPLIES LIKE ANY OTHER. The picker read the appended list
+    # and the write read the site's own rows, so a contributed hook was drawn in the select and then
+    # refused by Apply — for every contribution, every time, with nothing archived anywhere.
+    test "a hook an extension contributes is offered and applies", %{conn: conn, site: site} do
+      {:ok, _} =
+        Event.write(%{
+          name: BuilderJsHookPlugin,
+          event: "builder:js_hooks",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("builder:js_hooks", :start, false)
+      on_exit(fn -> Event.unregister(:name, BuilderJsHookPlugin, false) end)
+
+      contributed = BuilderJsHookPlugin.hook()
+      page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      p = node_with_tag(view, "p")
+      offered = :sys.get_state(view.pid).socket.assigns.js_hooks
+
+      assert contributed.name in Enum.map(offered, & &1.name)
+
+      render_click(view, "save_hook", %{"node_id" => p.id, "hook" => contributed.name})
+
+      assert Node.attr(Tree.get(editor(view).tree, p.id), "phx-hook") ==
+               {:string, contributed.name}
+    end
+
+    # `is_global` IS A CALCULATION. Unloaded it is `%Ash.NotLoaded{}`, which is truthy, so
+    # `browser_name/2` named every hook `Global…` — a site's own would have been written into
+    # `phx-hook` under a name nothing registers and would silently never mount.
+    test "a site's own hook is named for the site, not as a global", %{conn: conn, site: site} do
+      create_js_hook!(site_id: site.id, name: "mine")
+      page = create_page!(site_id: site.id, template: ~s(<div><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      hooks = :sys.get_state(view.pid).socket.assigns.js_hooks
+      own = Enum.find(hooks, &(&1.hook == "mine"))
+
+      refute own.global?
+      refute String.starts_with?(own.name, "Global"), "got #{own.name}"
+      assert String.ends_with?(own.name, "Mine")
+    end
+
+    test "a site with no hooks says so instead of showing an empty picker", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      assert render(view) =~ "pb-hook-empty"
+    end
+
+    # WHAT AN ELEMENT DOES WHEN CLICKED, without anyone writing JavaScript. Under LiveView a script
+    # that changes a class is undone by the next patch that touches the element; a declared JS
+    # command is part of what the server rendered and survives.
+    test "an element can be given a click action", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "toggle_class",
+        "class" => "is-open"
+      })
+
+      tree = editor(view).tree
+      scope = Tree.scope(tree, section.id)
+      html = Serializer.serialize(tree)
+
+      assert html =~ ~s|phx-click={JS.toggle_class("is-open", to: ".#{scope}")}|
+    end
+
+    test "the action reads back into the panel", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "hide",
+        "class" => ""
+      })
+
+      node = Tree.get(editor(view).tree, section.id)
+
+      assert {:ok, "hide", %{}} =
+               MishkaCmsCore.Runtime.PageBuilder.Interactions.read(Node.attr(node, "phx-click"))
+    end
+
+    # AIMING SURVIVES EDITING THE THING IT AIMS AT. The scope class is the entire link between a
+    # button and the dialog it opens, and the inspector shows it in the target's own class box —
+    # where it reads as junk and invites being typed over. Doing that used to take the aim with it:
+    # the button kept a command pointing at a class nothing carried, the target `<select>` fell
+    # silently back to "This element", and the next Apply overwrote the aim for good.
+    test "editing the target's class does not un-aim the button", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      button = node_with_tag(view, "h1")
+      dialog = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => button.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "target" => dialog.id,
+        "action" => "show",
+        "class" => ""
+      })
+
+      aim = Tree.scope(editor(view).tree, dialog.id)
+      assert is_binary(aim)
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => dialog.id,
+        "name" => "class",
+        "value" => "shadow-2xl"
+      })
+
+      tree = editor(view).tree
+
+      assert Tree.scope(tree, dialog.id) == aim, "the target lost the class the button names"
+
+      assert Interactions.target(Node.attr(Tree.get(tree, button.id), "phx-click")) == aim
+
+      assert Serializer.serialize(tree) =~ "shadow-2xl",
+             "the author's own class was not written"
+    end
+
+    # A FIELD THAT IS NOT ON THE PAGE POSTS NOTHING, and nothing is not the same answer as "".
+    # The target `<select>` renders only when the document has something to aim at, so while the
+    # palette was still loading — or after it failed — pressing Apply to change the ACTION posted no
+    # target at all, and "no target" meant "aim at yourself". A working "open the dialog" quietly
+    # became "show this button", under a flash reading "Click action set."
+    test "changing the action alone keeps the target it already had", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      button = node_with_tag(view, "h1")
+      dialog = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => button.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "target" => dialog.id,
+        "action" => "show",
+        "class" => ""
+      })
+
+      aim = Tree.scope(editor(view).tree, dialog.id)
+
+      # Exactly what the browser posts when the select is not rendered: no `target` key at all.
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "action" => "hide",
+        "class" => ""
+      })
+
+      written = Node.attr(Tree.get(editor(view).tree, button.id), "phx-click")
+
+      assert Interactions.read(written) == {:ok, "hide", %{}}
+
+      assert Interactions.target(written) == aim,
+             "the aim was silently moved to the button itself"
+    end
+
+    # AND AN EMPTY ONE IS STILL AN ANSWER — the author choosing "This element" from a select that is
+    # on the page. The two must not be read as the same thing.
+    test "choosing This element does re-aim it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      button = node_with_tag(view, "h1")
+      dialog = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => button.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "target" => dialog.id,
+        "action" => "show",
+        "class" => ""
+      })
+
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "target" => "",
+        "action" => "show",
+        "class" => ""
+      })
+
+      tree = editor(view).tree
+      written = Node.attr(Tree.get(tree, button.id), "phx-click")
+
+      assert Interactions.target(written) == Tree.scope(tree, button.id)
+    end
+
+    test "choosing nothing takes the action and the scope back off", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "toggle",
+        "class" => ""
+      })
+
+      assert Tree.scope(editor(view).tree, section.id)
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "",
+        "class" => ""
+      })
+
+      refute Serializer.serialize(editor(view).tree) =~ "phx-click"
+    end
+
+    # SAYING SOMETHING IS THE ONE VERB THE CLIENT CANNOT DO ALONE. The other six move classes and
+    # visibility around with `Phoenix.LiveView.JS`; a message is Phoenix's own flash, so this one
+    # pushes and the page answers with `put_flash/3`.
+    test "a click can say something", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      button = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => button.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "action" => "say",
+        "kind" => "info",
+        "message" => "Thanks — we'll be in touch."
+      })
+
+      written = Node.attr(Tree.get(editor(view).tree, button.id), "phx-click")
+
+      assert Interactions.read(written) ==
+               {:ok, "say", %{"kind" => "info", "message" => "Thanks — we'll be in touch."}}
+
+      assert Serializer.serialize(editor(view).tree) =~ ~s|JS.push("pb:say"|
+    end
+
+    test "with nothing to say it changes nothing", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      button = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => button.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => button.id,
+        "action" => "say",
+        "kind" => "info",
+        "message" => "   "
+      })
+
+      refute Serializer.serialize(editor(view).tree) =~ "phx-click"
+    end
+
+    # A BOX IS IDENTIFIED BY ITS NAME, NOT BY THE VERB IT WAS FILLED IN UNDER. All three class verbs
+    # ask for a field called `class`, so changing your mind between them must not empty it — it did,
+    # and pressing Apply then refused the whole thing for want of a class nobody had removed.
+    test "changing your mind between two class verbs keeps the class", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => heading.id,
+        "action" => "toggle_class",
+        "class" => "is-open"
+      })
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_change(view, "pick_interaction", %{"action" => "add_class"})
+
+      assert inspector_html(view) =~ ~s(id="pb-act-class"),
+             "the class box is not the box the chosen verb asks for"
+
+      assert inspector_html(view) =~ ~s(value="is-open"),
+             "the author's own class was cleared by changing the verb"
+    end
+
+    # And a box the new verb does not have starts empty rather than inheriting a stranger's word.
+    test "but a different box starts empty", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => heading.id,
+        "action" => "toggle_class",
+        "class" => "is-open"
+      })
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_change(view, "pick_interaction", %{"action" => "say"})
+      html = inspector_html(view)
+
+      assert html =~ ~s(id="pb-act-message")
+      refute html =~ ~s(id="pb-act-class"), "the class box is drawn for a verb that wants words"
+      refute html =~ ~s(value="is-open"), "a class ended up in the message box"
+    end
+
+    # THE VERB DECIDES WHICH BOX SITS UNDER IT, and the box for the verb somebody just left is a box
+    # that describes the previous element. Both halves reset when the selection moves.
+    test "the verb mid-pick belongs to the element it was picked on", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      button = node_with_tag(view, "h1")
+      other = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => button.id})
+      render_change(view, "pick_interaction", %{"action" => "say"})
+      assert :sys.get_state(view.pid).socket.assigns.act_action == "say"
+
+      render_click(view, "select", %{"id" => other.id})
+      assert :sys.get_state(view.pid).socket.assigns.act_action == nil
+      assert :sys.get_state(view.pid).socket.assigns.aim_target == nil
+    end
+
+    # WHEN AN ELEMENT IS ON THE PAGE AT ALL. HEEx already has the feature, so the panel writes the
+    # `:if` a developer would have written — and the author who later learns Elixir finds their own
+    # condition in Advanced rather than a setting kept somewhere else.
+    test "an element can be shown only to signed-in visitors", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      render_change(view, "save_condition", %{"node_id" => heading.id, "rule" => "signed_in"})
+
+      node = Tree.get(editor(view).tree, heading.id)
+
+      assert Conditions.read(Node.attr(node, Conditions.attribute())) == {:ok, "signed_in"}
+      assert Serializer.serialize(editor(view).tree) =~ ":if="
+    end
+
+    test "and Always takes it back off", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      render_change(view, "save_condition", %{"node_id" => heading.id, "rule" => "said_ok"})
+      assert Serializer.serialize(editor(view).tree) =~ ":if="
+
+      render_change(view, "save_condition", %{"node_id" => heading.id, "rule" => ""})
+      refute Serializer.serialize(editor(view).tree) =~ ":if="
+    end
+
+    # A CONDITION IS NOT A WAY TO LOSE AN ELEMENT. The canvas renders the document, not the document
+    # running, so an element that is conditionally absent on the published page is still drawn here —
+    # otherwise setting the condition would be the last time its author could reach it.
+    test "the canvas still draws a conditional element", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+
+      render_change(view, "save_condition", %{"node_id" => heading.id, "rule" => "signed_in"})
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ "Contact Us", "the element the condition is on went missing from the canvas"
     end
 
     # CSS FOR ONE ELEMENT — the thing the panel above it cannot offer, because a panel can only
@@ -7975,6 +8504,55 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert html =~ "no longer there"
       scope = Tree.scope(editor(view).tree, section.id)
       assert :sys.get_state(view.pid).socket.assigns.element_css_rules[scope] =~ "gap: 4px"
+    end
+
+    # Moving the last line empties the box, and an empty box takes the scope class back off — but
+    # that class is also what an interaction on the same element points at.
+    test "the name survives when a click action still points at it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 4px;"})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "toggle_class",
+        "class" => "is-open"
+      })
+
+      scope = Tree.scope(editor(view).tree, section.id)
+      render_click(view, "move_css_to_controls", %{"node_id" => section.id, "index" => "0"})
+
+      assert Tree.scope(editor(view).tree, section.id) == scope
+      assert Serializer.serialize(editor(view).tree) =~ scope
+    end
+
+    test "and clearing the click action leaves the name when CSS still uses it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "toggle_class",
+        "class" => "is-open"
+      })
+
+      render_click(view, "save_element_css", %{"node_id" => section.id, "css" => "gap: 4px;"})
+      scope = Tree.scope(editor(view).tree, section.id)
+
+      render_click(view, "save_interaction", %{
+        "node_id" => section.id,
+        "action" => "",
+        "class" => ""
+      })
+
+      assert Tree.scope(editor(view).tree, section.id) == scope,
+             "the rule keyed on this name is still there"
     end
 
     test "the command palette opens and filters", %{conn: conn, page: page} do

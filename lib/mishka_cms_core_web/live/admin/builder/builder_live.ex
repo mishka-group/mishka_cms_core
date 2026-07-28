@@ -41,6 +41,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
+  alias MishkaCmsCore.Runtime.PageBuilder.Hooks
+  alias MishkaCmsCore.Runtime.PageBuilder.Conditions
+  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
@@ -472,6 +475,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     socket
     |> assign_new(:left_tab, fn -> :components end)
     |> assign_new(:icon_picker, fn -> nil end)
+    |> assign_new(:aim_target, fn -> nil end)
+    |> assign_new(:act_action, fn -> nil end)
     |> assign_new(:group_folds, fn -> %{} end)
     |> assign_new(:icon_query, fn -> "" end)
     |> assign_new(:icon_variant, fn -> "" end)
@@ -534,6 +539,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end)
     |> assign_new(:element_css_error, fn -> nil end)
     |> assign_new(:element_css_advice, fn -> nil end)
+    |> assign_new(:js_hooks, fn ->
+      Hooks.registry(
+        socket.assigns[:current_user],
+        socket.assigns.editor.site_id,
+        socket.assigns.editor.site_name
+      )
+    end)
     |> assign_new(:command_open, fn -> false end)
     |> assign_new(:command_query, fn -> "" end)
     |> assign_new(:palette_query, fn -> "" end)
@@ -667,6 +679,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {undone, total} = EditorSession.history_counter(editor)
 
     socket
+    |> release_page_scope(editor.selection)
     |> assign_new(:expanded, fn -> default_expanded(editor.tree) end)
     |> expand_to_selection(editor)
     |> expand_selected(editor)
@@ -1016,6 +1029,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       {:ok, editor} -> assign_editor(socket, editor)
       :error -> socket
     end
+  end
+
+  # CHOOSING AN ELEMENT IS CHOOSING WHAT THE NOTE IS ABOUT. "About the whole page" is a deliberate
+  # override of the selection, so it lasts exactly until the selection changes — otherwise clearing
+  # it once would leave every later note filed against the page, and the composer would look broken
+  # in the opposite direction.
+  # WHAT BELONGED TO THE ELEMENT JUST LEFT. A new selection is a new question, so the half-made
+  # answers to the old one go with it: the note's page scope, and the target and verb sitting in the
+  # On-click form before anyone pressed Apply. Carried over, they described the previous element —
+  # and the verb decides which box the form draws under it.
+  defp release_page_scope(%{assigns: %{selection: selection}} = socket, selection), do: socket
+
+  defp release_page_scope(socket, _selection) do
+    socket
+    |> assign(:aim_target, nil)
+    |> assign(:act_action, nil)
   end
 
   @impl true
@@ -1376,6 +1405,60 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         {:noreply,
          put_flash(socket, :error, gettext("That line is no longer there — reopen the panel."))}
     end
+  end
+
+  # WHAT AN ELEMENT DOES WHEN CLICKED, as a LiveView JS command in the markup rather than a script.
+  # Under LiveView the server owns the DOM, so a script that changes a class is undone by the next
+  # patch that touches the element — a declared command is part of what the server rendered and
+  # survives. The target is the element's own scope class, which is the same handle its custom CSS
+  # is keyed on: toggle `is-open` here, write `&.is-open { … }` there.
+  # WHICH TARGET IS BEING AIMED AT, WHILE IT IS STILL BEING PICKED. The verbs a click can honour
+  # depend on what it is pointed at — a dialog is opened and closed, a navbar is toggled — so the
+  # action list has to follow the select rather than describe whatever was saved last time.
+  # `"target"` is the select's own `name`, which is what a per-input `phx-change` posts — not
+  # `"value"`, which is what the style forms next door post because their input is named that.
+  def handle_event("aim_interaction", %{"target" => target}, socket),
+    do: {:noreply, assign(socket, :aim_target, target)}
+
+  # A CONDITION IS ONE CHOICE, so it saves on change rather than behind an Apply button — there is
+  # nothing to fill in beside it and nothing to get half-right. `""` is "Always", which is the
+  # attribute being taken off rather than an expression that is always true.
+  def handle_event("save_condition", %{"node_id" => node_id, "rule" => rule}, socket) do
+    write_condition(socket, node_id, Conditions.source(String.trim(rule)))
+  end
+
+  def handle_event("save_interaction", %{"node_id" => node_id} = params, socket) do
+    action = String.trim(params["action"] || "")
+
+    written =
+      EditorSession.update_tree(
+        socket.assigns.token,
+        &interaction_tree(socket, &1, node_id, action, params),
+        reason: :interaction
+      )
+
+    socket
+    |> assign(:aim_target, nil)
+    |> assign(:act_action, nil)
+    |> save_interaction(written, action)
+  end
+
+  # WHICH BOX TO SHOW UNDER THE VERB. "Toggle a class" wants a class, "Show a message" wants words,
+  # and "Show" wants neither — the panel used to draw the class box for all of them, which asked an
+  # author to work out for themselves that it did nothing for four of the six. Answered on change
+  # the same way the target select already answers one, because the form is already re-rendered when
+  # the aim moves.
+  def handle_event("pick_interaction", %{"action" => action}, socket),
+    do: {:noreply, assign(socket, :act_action, action)}
+
+  # ATTACHING A HOOK, NOT WRITING ONE. The name written is the one the JavaScript compiler registers
+  # in the browser, asked for rather than rebuilt here. LiveView requires a unique id on any element
+  # carrying `phx-hook` and silently never mounts one without it, so an element that has none is
+  # given one.
+  def handle_event("save_hook", %{"node_id" => node_id} = params, socket) do
+    %{editor: editor, current_user: actor} = socket.assigns
+
+    write_hook(socket, node_id, hook_outcome(actor, editor, String.trim(params["hook"] || "")))
   end
 
   def handle_event("toggle_preview", _params, socket) do
@@ -2196,6 +2279,129 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  defp aimed_scope(tree, target_id, node_id)
+       when is_binary(target_id) and target_id != "" and target_id != node_id do
+    Tree.ensure_scope(tree, target_id)
+  end
+
+  defp aimed_scope(tree, _target_id, _node_id), do: {tree, nil}
+
+  # WHAT THE AUTHOR TYPED, WITHOUT THIS HANDLER KNOWING THE FIELD NAMES. The panel draws the boxes an
+  # action declared and names them after its own fields, so everything posted that is not part of the
+  # click's context is one of those values. Naming them here would be the one place a package still
+  # had to be written into core.
+  defp typed(params, target, opener) do
+    params
+    |> Map.drop(["node_id", "action", "target", "_target", "_csrf_token"])
+    |> Map.merge(%{target: target, opener: opener})
+  end
+
+  # A FORM THAT DOES NOT ASK CANNOT ANSWER. The target `<select>` is rendered only when this document
+  # has something to aim at — `:if={@openable != []}` — and the browser posts nothing for a field
+  # that is not on the page. Reading `params["target"]` therefore answered `nil` in exactly the two
+  # cases where the author had changed nothing about the target: while the palette was still loading,
+  # and after a palette fetch failed. `nil` then fell through to "aim at yourself", and pressing
+  # Apply to change the ACTION quietly re-pointed a working "open the dialog" at the button itself,
+  # under a flash reading "Click action set."
+  #
+  # An absent field means "leave it alone", which is not the same answer as an empty one — that one
+  # is the author choosing "This element" — so the two are read apart here rather than merged.
+  defp aimed(tree, %{"target" => chosen}, node_id), do: aimed_scope(tree, chosen, node_id)
+
+  defp aimed(tree, _unasked, node_id), do: {tree, held_aim(tree, node_id)}
+
+  defp held_aim(tree, node_id) do
+    case Tree.get(tree, node_id) do
+      %Node{} = node -> Interactions.target(Node.attr(node, "phx-click"))
+      _gone -> nil
+    end
+  end
+
+  # WHAT THE TARGET SAYS ABOUT BEING OPENED. `nil` aim is a click on the element itself, which is the
+  # one case there is nothing to look up: the author is toggling a class on the thing they selected.
+  defp opener_for(_socket, _tree, nil), do: %{}
+
+  defp opener_for(socket, tree, aim) do
+    with %Node{} = node <- Enum.find(Tree.walk(tree), &(Tree.scope(tree, &1.id) == aim)),
+         name when is_binary(name) <- Node.component_name(node),
+         %{} = entry <- Enum.find(socket.assigns.editor.components || [], &(&1.name == name)) do
+      Map.get(entry, :opens) || %{}
+    else
+      _undeclared -> %{}
+    end
+  end
+
+  defp write_condition(socket, node_id, source) do
+    case EditorSession.update_tree(
+           socket.assigns.token,
+           &set_condition(&1, node_id, source),
+           reason: :condition
+         ) do
+      {:ok, _editor} ->
+        {:noreply, put_flash(socket, :info, condition_flash(source))}
+
+      # THE NODE MAY HAVE GONE. The editor is shared over a session channel, so a panel can be drawn
+      # against a node another editor has since deleted. Same swallow `save_hook` makes.
+      _gone ->
+        {:noreply, socket}
+    end
+  end
+
+  defp set_condition(tree, node_id, nil),
+    do: Tree.delete_attr(tree, node_id, Conditions.attribute())
+
+  defp set_condition(tree, node_id, source),
+    do: Tree.set_attr(tree, node_id, Conditions.attribute(), {:expr, source})
+
+  defp condition_flash(nil), do: gettext("This element is always on the page.")
+  defp condition_flash(_source), do: gettext("Condition set.")
+
+  # THE SCOPE, THE AIM AND THE COMMAND ARE ALL READ OFF THE STORED TREE, because all three are the
+  # element as it is now: see `EditorSession.update_tree/3`. A scope of `nil` is the one answer
+  # `Tree.ensure_scope/2` gives for an element that is not there, and taking a click action off an
+  # element deleted since the panel was drawn is nothing to write.
+  defp interaction_tree(socket, tree, node_id, action, params) do
+    case Tree.ensure_scope(tree, node_id) do
+      {_tree, nil} ->
+        :gone
+
+      {tree, scope} ->
+        {tree, target} = aimed(tree, params, node_id)
+        opener = opener_for(socket, tree, target)
+        source = Interactions.source(action, scope, typed(params, target, opener))
+
+        interaction_written(tree, node_id, action, source, socket.assigns.element_css)
+    end
+  end
+
+  defp interaction_written(tree, node_id, "", _source, css),
+    do: {:ok, write_interaction(tree, node_id, nil, css)}
+
+  defp interaction_written(_tree, _node_id, _action, nil, _css), do: :unwritable
+
+  defp interaction_written(tree, node_id, _action, source, css),
+    do: {:ok, write_interaction(tree, node_id, source, css)}
+
+  defp save_interaction(socket, {:ok, _editor}, ""),
+    do: {:noreply, put_flash(socket, :info, gettext("Click action removed."))}
+
+  defp save_interaction(socket, {:ok, _editor}, _action),
+    do: {:noreply, put_flash(socket, :info, gettext("Click action set."))}
+
+  defp save_interaction(socket, :unwritable, _action) do
+    {:noreply,
+     put_flash(
+       socket,
+       :error,
+       gettext(
+         "That action needs a class to toggle or words to say, or is one this editor cannot write. Nothing was changed."
+       )
+     )}
+  end
+
+  defp save_interaction(socket, _gone, _action),
+    do: {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
+
   # A NAME THE NODE ALREADY CARRIES IS NOT A SECOND ATTRIBUTE. Both add boxes are free text, and
   # Advanced lists only what the component does not declare, so `color="primary"` is nowhere on
   # screen while it is being typed — and an add has no value to offer that the row it lands on does
@@ -2730,6 +2936,85 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     )
   end
 
+  # THREE ANSWERS, NOT TWO. An unknown name used to fall to the same branch as the empty one, so
+  # Apply took the hook that was there off — and the id minted with it, which a link or a stylesheet
+  # may point at — and said "Hook attached." It reached that branch for a hook archived in another
+  # tab, the picker being assigned once at mount, and for every hook a plugin contributed, back when
+  # the picker and `known?/4` read different lists. Changing nothing is the only answer that cannot
+  # cost the author work they can see.
+  defp hook_outcome(_actor, _editor, ""), do: :detach
+
+  defp hook_outcome(actor, editor, name) do
+    case Hooks.known?(actor, editor.site_id, editor.site_name, name) do
+      true -> {:attach, name}
+      false -> :unavailable
+    end
+  end
+
+  defp write_hook(socket, node_id, {:attach, name}),
+    do: hook_written(socket, &attach_hook(&1, node_id, name), gettext("Hook attached."))
+
+  defp write_hook(socket, node_id, :detach),
+    do: hook_written(socket, &detach_hook(&1, node_id), gettext("Hook removed."))
+
+  defp write_hook(socket, _node_id, :unavailable),
+    do:
+      {:noreply,
+       put_flash(socket, :error, gettext("That hook is no longer available on this site."))}
+
+  # THE NODE MAY HAVE GONE. The editor is shared over a session channel, so a panel can be drawn
+  # before a co-editor's delete and pressed after it — and both helpers matched `{:ok, tree}` on a
+  # write that answers `{:error, _}` for a node that is not there, which raised and took the whole
+  # session down, unsaved edits and all.
+  defp hook_written(socket, change, flash) do
+    case EditorSession.update_tree(socket.assigns.token, change, reason: :js_hook) do
+      {:ok, _editor} ->
+        {:noreply, put_flash(socket, :info, flash)}
+
+      _gone ->
+        {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
+    end
+  end
+
+  defp attach_hook(tree, node_id, name) do
+    case Tree.set_attr(tree, node_id, "phx-hook", {:string, name}) do
+      {:ok, tree} -> {:ok, with_hook_id(tree, node_id)}
+      _gone -> :gone
+    end
+  end
+
+  defp with_hook_id(tree, node_id) do
+    case Node.attr(Tree.get(tree, node_id), "id") do
+      nil -> Tree.set_attr(tree, node_id, "id", {:string, hook_id(node_id)}) |> elem(1)
+      _held -> tree
+    end
+  end
+
+  # TAKE BACK ONLY WHAT WAS GIVEN. Detaching removes the id this module minted — recognisable by its
+  # prefix — and never one the author wrote, which may be the target of a link or a stylesheet.
+  defp detach_hook(tree, node_id) do
+    case Tree.delete_attr(tree, node_id, "phx-hook") do
+      {:ok, tree} -> {:ok, without_minted_id(tree, node_id)}
+      _gone -> :gone
+    end
+  end
+
+  defp without_minted_id(tree, node_id) do
+    case Node.attr(Tree.get(tree, node_id), "id") do
+      {:string, "el-" <> rest} when byte_size(rest) == 8 ->
+        {:ok, tree} = Tree.delete_attr(tree, node_id, "id")
+        tree
+
+      _authors_own_or_none ->
+        tree
+    end
+  end
+
+  # The node id is already unique in the document and is what everything else points at, so hashing
+  # it gives a stable, readable id rather than a counter to keep.
+  defp hook_id(node_id),
+    do: "el-" <> (:erlang.md5(node_id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
+
   # A draft is a write, so an extension gets the same say over it that it has over a save — and hears
   # about it afterwards, which is what a backup or a sync integration needs.
   defp gated_autosave(section, record, heex, actor, editor, label, who) do
@@ -2763,6 +3048,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp actor_id(%{assigns: %{current_user: %{id: id}}}), do: id
   defp actor_id(_socket), do: nil
+
+  defp write_interaction(tree, node_id, nil, css) do
+    {:ok, tree} = Tree.delete_attr(tree, node_id, "phx-click")
+
+    case String.trim(css || "") do
+      "" -> Tree.drop_scope(tree, node_id)
+      _still_styled -> tree
+    end
+  end
+
+  defp write_interaction(tree, node_id, source, _css) do
+    {:ok, tree} = Tree.set_attr(tree, node_id, "phx-click", {:expr, source})
+    tree
+  end
 
   defp write_element_css(socket, tree, node_id, css, flash) do
     {_scoped, scope} = Tree.ensure_scope(tree, node_id)
@@ -3279,7 +3578,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           element_css={@element_css}
           element_css_error={@element_css_error}
           element_css_advice={@element_css_advice}
+          js_hooks={@js_hooks}
           record={@record}
+          aim_target={@aim_target}
+          act_action={@act_action}
         />
         <Panels.center
           token={@token}
