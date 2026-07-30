@@ -14,6 +14,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
@@ -254,6 +255,10 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   # The compiled bundles the frame is served. Read off the LiveView rather than out of its HTML,
   # because the `<link>` is rendered by the root layout — see the canvas tests for why it moved.
   defp css_hrefs(view), do: :sys.get_state(view.pid).socket.assigns.canvas_css_hrefs
+
+  # The page's code fragments live on the LiveView rather than in the editing session: they are Page
+  # attributes, not part of the tree, and they ride the page's own Save.
+  defp fragments(view), do: :sys.get_state(view.pid).socket.assigns.fragments
 
   # The palette stays mounted and hides, so "is the palette showing?" is a class question rather than
   # an existence one — see the `hidden` attr on `Panels.palette/1`.
@@ -1187,6 +1192,32 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert render(view) =~ "Attributes" or editor(view).selection == h1.id
       assert editor(view).selection == h1.id
+    end
+
+    # READING THE SOURCE WHILE AUTHORING IS THE POINT OF THE DRAWER. Selecting another element is not
+    # a change to the document and must not close it — an author checking what a form's markup looks
+    # like had to reopen the drawer after every click.
+    test "the code drawer survives selecting another element", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><p>one</p><span>two</span></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-code-strip") |> render_click()
+      refute has_element?(view, "#pb-code-strip")
+
+      node =
+        view
+        |> then(&:sys.get_state(&1.pid).socket.assigns.editor.tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.tag == "span"))
+
+      render_click(view, "select", %{"id" => node.id})
+
+      refute has_element?(view, "#pb-code-strip")
     end
   end
 
@@ -2404,6 +2435,39 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       end
     end
 
+    # A `<%= for … do %>` owns everything nested inside it, so a text box would rewrite the block and
+    # drop its children. It opens the document's code instead of offering one — on the Template tab,
+    # which is where the block is, whichever tab the window was last left on.
+    test "a block expression is sent to the code rather than given a box", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><%= for post <- @posts do %><p>x</p><% end %></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      block = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex_block))
+      assert block, "the fixture has to contain a block expression"
+
+      render_click(view, "open_source", %{"tab" => "styles"})
+      render_click(view, "close_source", %{})
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => block.id})
+
+      assert has_element?(view, "#pb-expr-block-note")
+      refute has_element?(view, "#pb-expr-input-#{block.id}")
+
+      view |> element("#pb-expr-block-open-code") |> render_click()
+
+      assert has_element?(view, "#pb-source-modal")
+      assert has_element?(view, "#pb-source-copy"), "the Template tab, not the one it was left on"
+    end
+
     # WHAT AN EXPRESSION CAN NAME DEPENDS ON WHAT IS BEING EDITED, and the panel that offers them
     # has to agree: a page is never handed `@inner_content`.
     test "the element library offers the page-content slot only where it exists", %{
@@ -3423,6 +3487,16 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       view |> element("#pb-device-tablet") |> render_click()
       assert has_element?(view, "[data-role='pb-viewnote']", "Tablet · 834px · 100%")
+    end
+
+    test "the code editor shows a collapsed strip until it is opened", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-code-strip")
+      view |> element("#pb-code-strip") |> render_click()
+
+      refute has_element?(view, "#pb-code-strip")
+      assert has_element?(view, "#pb-codetab-html")
     end
 
     test "the canvas floats a per-element toolbar over the selection", %{conn: conn, page: page} do
@@ -7333,6 +7407,83 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # A TAB THE SAVE WILL THROW AWAY IS WORSE THAN NO TAB. `events` and `infos` are Page columns; a
+  # Layout, a Component and an error page have `helpers` and nothing else. `code_keys/1` has always
+  # asked the resource and dropped the rest, so a handler typed on a layout was written nowhere and
+  # then flashed as "Saved to the layout" — the window and the writer disagreed, and the writer won
+  # silently.
+  describe "the code window offers only the tabs the record has a column for" do
+    defp open_code(conn, path) do
+      {:ok, view, _html} = live(conn, path)
+      _loaded = render_async(view)
+      render_click(view, "open_source", %{})
+      {:ok, view}
+    end
+
+    test "a page has handlers and messages", %{conn: conn, page: page} do
+      {:ok, view} = open_code(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      assert has_element?(view, "#pb-sourcetab-events")
+      assert has_element?(view, "#pb-sourcetab-infos")
+      assert has_element?(view, "#pb-sourcetab-helpers")
+    end
+
+    test "a layout has helpers and neither of the other two", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          name: "tabbed-shell",
+          site_id: site.id,
+          template: ~s(<div id="shell">{@inner_content}</div>)
+        )
+
+      {:ok, view} = open_code(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      assert has_element?(view, "#pb-sourcetab-helpers")
+      refute has_element?(view, "#pb-sourcetab-events"), "a layout holds no handlers"
+      refute has_element?(view, "#pb-sourcetab-infos"), "nor any messages"
+    end
+
+    test "and neither does a component", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "tabbed-one",
+          template: ~s|<div>x</div>|,
+          attrs: [],
+          slots: []
+        )
+
+      {:ok, view} = open_code(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      assert has_element?(view, "#pb-sourcetab-helpers")
+      refute has_element?(view, "#pb-sourcetab-events")
+      refute has_element?(view, "#pb-sourcetab-infos")
+    end
+
+    # The columns decide it, so the answer is read off the resource rather than off a list of
+    # section names kept somewhere near the window.
+    test "which is the resource's own answer, not a list kept here", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          name: "tabbed-shell-two",
+          site_id: site.id,
+          template: ~s(<div id="shell">{@inner_content}</div>)
+        )
+
+      {:ok, view} = open_code(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      for key <- [:events, :infos] do
+        assert is_nil(Ash.Resource.Info.attribute(MishkaCmsCore.Runtime.Layout, key)),
+               "the fixture only means something while a Layout has no #{key}"
+
+        refute has_element?(view, "#pb-sourcetab-#{key}")
+      end
+
+      assert Ash.Resource.Info.attribute(MishkaCmsCore.Runtime.Layout, :helpers)
+      assert has_element?(view, "#pb-sourcetab-helpers")
+    end
+  end
+
   # WHAT THE DOCUMENT CAN ACTUALLY DO. Three of the four are rendered by a LiveView; an error page is
   # rendered by a controller, and `phx-click` and `phx-hook` are attached by the LiveView client
   # against a view. With no view owning that DOM the binding never attaches, so the panel was
@@ -7463,6 +7614,296 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-device-frames") |> render_click()
       assert has_element?(view, "#pb-frame-1180")
       assert has_element?(view, "#pb-frame-560")
+    end
+
+    # The drawer is the sliver under the canvas, opened from its own strip or ⌘/. The TOP bar's Code
+    # is a different surface now — see "the page source window" below.
+    test "the code drawer opens and shows the serialized template", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "toggle_code", %{})
+
+      html = render(view)
+      assert html =~ "pb-codetab-html"
+
+      assert html =~ "Contact Us"
+
+      # The panes are inside `phx-no-curly-interpolation`, which is exactly where a `{…}` writes
+      # itself out instead of rendering — so assert the placeholder never reaches the page.
+      refute html =~ "{text}"
+      refute html =~ "{number}"
+    end
+
+    # THE RIGHT PANE FOLLOWS THE SELECTION AND TAKES WHAT YOU TYPE. It used to render every styled
+    # node on the page, ignoring the selection completely — so clicking an element changed the left
+    # pane and left the right one showing a wall of other people's rules, with no way to type in it.
+    test "the drawer's CSS pane shows the selected element's own CSS, and writes it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      assert has_element?(view, "[data-role=pb-drawer-css]"), "the box is there for a plain tag"
+
+      view
+      |> element("#pb-drawer-css-form")
+      |> render_submit(%{"node_id" => heading.id, "css" => "letter-spacing: 3px;"})
+
+      scope = Tree.scope(editor(view).tree, heading.id)
+      assert :sys.get_state(view.pid).socket.assigns.element_css_rules[scope] =~ "letter-spacing"
+    end
+
+    # THE LEFT PANE TAKES WHAT YOU TYPE TOO. It was a picture of the markup: the reader could see
+    # the button's label and the `px-4` beside it and change neither.
+    test "the drawer's HEEx pane holds the selected element's markup, and rewrites it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      assert view |> element("[data-role=pb-drawer-heex]") |> render() =~ "Contact Us"
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{
+        "node_id" => heading.id,
+        "source" => ~s(<h1 class="text-3xl">Talk To Us</h1>)
+      })
+
+      source = view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize()
+      assert source =~ "Talk To Us"
+      assert source =~ "text-3xl"
+      refute source =~ "Contact Us"
+    end
+
+    # THE FIELD'S ID MUST MOVE WITH ITS WRAPPER. `phx-update="ignore"` means a changing wrapper id is
+    # the only way new text reaches the editor — but morphdom matches by `id` first, so a CONSTANT id
+    # on the textarea inside let the re-keyed wrapper adopt the old element and copy the server's
+    # value over whatever had been typed. Invisibly: the textarea is hidden under CodeMirror, so the
+    # screen kept showing the edit while the field that gets submitted had been reverted.
+    test "the editor's field is keyed with its wrapper, not fixed", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      first = view |> element("[data-role=pb-drawer-heex]") |> render()
+
+      paragraph = node_with_tag(view, "p")
+      render_click(view, "select", %{"id" => paragraph.id})
+      second = view |> element("[data-role=pb-drawer-heex]") |> render()
+
+      assert [_, one] = Regex.run(~r/id="([^"]+)"/, first)
+      assert [_, two] = Regex.run(~r/id="([^"]+)"/, second)
+      refute one == two, "a fixed id lets morphdom copy the server's text over what was typed"
+    end
+
+    # AN APPLY THAT CHANGED NOTHING MUST NOT LOOK LIKE ONE THAT WORKED. Re-submitting the markup a
+    # node already carries used to record a history entry, mark the document dirty and broadcast —
+    # so undo had a step in it that undid nothing.
+    test "re-applying the same markup is not an edit", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      before = length(editor(view).past)
+      same = Serializer.serialize_node(editor(view).tree, heading.id)
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => heading.id, "source" => same})
+
+      assert length(editor(view).past) == before
+    end
+
+    # WORDS INSIDE A COMPONENT THAT TAKES NO CHILDREN. `<.link navigate="/">Home</.link>` holds a
+    # text node whose parent declares no slot, so replacing it as an element is rightly refused —
+    # and retyping one word is not replacing an element.
+    test "a text node's words can be rewritten inside a slotless component", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      link = ~s(<nav><.link navigate="/">Home</.link></nav>)
+      render_click(view, "apply_source", %{"source" => link})
+
+      text = node_with_kind(view, :text)
+      render_click(view, "toggle_code", %{})
+      render_click(view, "select", %{"id" => text.id})
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => text.id, "source" => "Start"})
+
+      refute has_element?(view, "#pb-drawer-heex-error")
+      assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "Start"
+    end
+
+    # ONE UNDO STEP, not a delete and an insert the reader has to undo twice.
+    test "rewriting an element is a single change", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      before = length(editor(view).past)
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => heading.id, "source" => "<h1>Talk To Us</h1>"})
+
+      assert length(editor(view).past) == before + 1
+
+      render_click(view, "undo", %{})
+      assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "Contact Us"
+    end
+
+    # WHAT WAS TYPED SURVIVES A REFUSAL. Losing a page of hand-written markup is not a way to report
+    # a missing brace — and the pane is `phx-update="ignore"`, so the text stays in the box while the
+    # error is drawn under it.
+    test "markup that will not parse is refused, and the document is untouched", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => heading.id, "source" => "<h1>{@user.name</h1>"})
+
+      assert view |> element("#pb-drawer-heex-error") |> render() =~ "expected closing"
+      assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "Contact Us"
+    end
+
+    # THE TOKENIZER IS NOT THE COMPILER. This tokenizes perfectly — it is a component tag like any
+    # other — and 500s the first visitor, so the check that catches it is a real compile.
+    @tag :slow
+    test "markup that will not COMPILE is refused, and the document is untouched", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-heex-form")
+      |> render_submit(%{"node_id" => heading.id, "source" => "<h1><.no_such_thing /></h1>"})
+
+      error = view |> element("#pb-drawer-heex-error") |> render()
+      assert error =~ "undefined function no_such_thing/1"
+
+      # The rehearsal module is called `C80201` and nothing else calls the page that.
+      refute error =~ "CodeCheck.C"
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "Contact Us"
+    end
+
+    # ONE VALUE, TWO SURFACES. The Inspector sets a property, the drawer gives room to write a
+    # block — but a second copy of the same CSS is a second thing to keep in step, so there is
+    # only one.
+    test "the drawer's CSS pane holds the same value the Inspector's box does", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "gap: 7px;"})
+
+      assert view |> element("[data-role=pb-drawer-css]") |> render() =~ "gap: 7px"
+      assert view |> element("#pb-css-text") |> render() =~ "gap: 7px"
+
+      # And writing from the drawer reaches the Inspector's box, because there is one value and not
+      # a copy of it in each surface.
+      view
+      |> element("#pb-drawer-css-form")
+      |> render_submit(%{"node_id" => heading.id, "css" => "gap: 9px;"})
+
+      assert view |> element("#pb-css-text") |> render() =~ "gap: 9px"
+      refute view |> element("#pb-css-text") |> render() =~ "gap: 7px"
+    end
+
+    test "the drawer's CSS pane follows the selection", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      paragraph = node_with_tag(view, "p")
+
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "gap: 7px;"})
+      assert render(view) =~ "gap: 7px"
+
+      render_click(view, "select", %{"id" => paragraph.id})
+      refute render(view) =~ "gap: 7px", "the other element's rule is not shown here"
+    end
+
+    test "the drawer's CSS pane says so when nothing is selected", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      refute has_element?(view, "[data-role=pb-drawer-css]")
+      assert render(view) =~ "Select an element to write CSS for it."
+    end
+
+    # The same question the Inspector asks, asked through the same function, so the two surfaces
+    # can never disagree about which elements can hold a rule.
+    test "the drawer's CSS pane refuses a component that takes no class", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(site_id: site.id, name: "classless", template: "<b>x</b>")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><.component component_name="classless" site="#{site.name}" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+      render_click(view, "select", %{"id" => node_with_kind(view, :component).id})
+
+      refute has_element?(view, "[data-role=pb-drawer-css]")
+      assert has_element?(view, "#pb-drawer-css-note")
+    end
+
+    test "the drawer's CSS pane refuses CSS that would escape the element", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "toggle_code", %{})
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      view
+      |> element("#pb-drawer-css-form")
+      |> render_submit(%{"node_id" => heading.id, "css" => "gap: 1px; } body { display: none; "})
+
+      assert has_element?(view, "#pb-drawer-css-error")
+      assert :sys.get_state(view.pid).socket.assigns.element_css_rules == %{}
     end
 
     # The upper Code menu. What it shows has to be what a save WRITES, which is `to_heex/1`
@@ -8555,6 +8996,274 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
              "the rule keyed on this name is still there"
     end
 
+    # THE PAGE'S OWN ELIXIR, in the window that already holds its markup. `events`, `infos` and
+    # `helpers` have been Page attributes since the resource was written and the compiler has always
+    # turned them into `handle_event/3`, `handle_info/2` and plain `def`s — the only way to reach
+    # them was the Pages form, which is not where anyone is when they need a handler for the button
+    # they just placed.
+    test "the code window has a tab for each thing a page can hold", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      html = view |> element("#pb-code") |> render_click()
+
+      for {id, label} <- [
+            {"pb-sourcetab-template", "Template"},
+            {"pb-sourcetab-events", "Handlers"},
+            {"pb-sourcetab-infos", "Messages"},
+            {"pb-sourcetab-helpers", "Helpers"},
+            {"pb-sourcetab-styles", "Styles"}
+          ] do
+        assert has_element?(view, "##{id}")
+        assert html =~ label
+      end
+    end
+
+    # AN INDEX, NOT A FIFTH CODE BOX. An author who styled six elements had six panels to reopen to
+    # find out what they had written; this lists them, and the only thing you can do to one is go to
+    # the element that owns it — which is the one place it can be edited.
+    test "the Styles tab lists this page's element rules", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "gap: 11px;"})
+
+      scope = Tree.scope(editor(view).tree, heading.id)
+      view |> element("#pb-code") |> render_click()
+
+      assert render_click(view, "source_tab", %{"tab" => "styles"}) =~ "gap: 11px"
+      assert has_element?(view, "#pb-style-rule-#{scope}")
+      assert has_element?(view, "#pb-style-rule-go-#{scope}")
+    end
+
+    test "the empty state says where to write one", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      assert render_click(view, "source_tab", %{"tab" => "styles"}) =~ "No element on this page"
+    end
+
+    # A rule whose element has been deleted is still being served. Hiding it would make the prune on
+    # the next save look like the editor losing something.
+    test "a rule whose element is gone is shown, and says what will happen to it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "gap: 11px;"})
+
+      scope = Tree.scope(editor(view).tree, heading.id)
+      render_click(view, "op", %{"kind" => "delete", "node_id" => heading.id})
+
+      view |> element("#pb-code") |> render_click()
+      html = render_click(view, "source_tab", %{"tab" => "styles"})
+
+      assert html =~ "saving drops this rule"
+      assert has_element?(view, "#pb-style-rule-#{scope}")
+      refute has_element?(view, "#pb-style-rule-go-#{scope}"), "there is nothing to select"
+    end
+
+    test "selecting from the index closes the window on the element's inspector", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+      render_click(view, "save_element_css", %{"node_id" => heading.id, "css" => "gap: 11px;"})
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "styles"})
+      render_click(view, "select_from_code", %{"id" => heading.id})
+
+      refute has_element?(view, "#pb-source-modal")
+      assert editor(view).selection == heading.id
+      assert :sys.get_state(view.pid).socket.assigns.left_tab == :inspector
+    end
+
+    test "a handler can be added, written and kept", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      render_click(view, "source_tab", %{"tab" => "events"})
+      assert render(view) =~ "No handlers yet"
+
+      render_click(view, "add_code", %{"tab" => "events"})
+      assert has_element?(view, "#pb-code-entry-events-0")
+
+      html =
+        view
+        |> element("#pb-code-form")
+        |> render_submit(%{
+          "tab" => "events",
+          "entry" => %{"0" => %{"name" => "save", "code" => "{:noreply, socket}"}}
+        })
+
+      assert html =~ "Saved to the page"
+      assert [%{"name" => "save"}] = fragments(view).events
+    end
+
+    # The wrapper is shown and not editable, because the compiler splices what is typed between
+    # those two lines — an author who writes the whole clause gets a definition inside a definition.
+    test "the generated wrapper is shown around the box", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "events"})
+      render_click(view, "add_code", %{"tab" => "events"})
+
+      view
+      |> element("#pb-code-form")
+      |> render_submit(%{
+        "tab" => "events",
+        "entry" => %{"0" => %{"name" => "save", "code" => "{:noreply, socket}"}}
+      })
+
+      html = render(view)
+      assert html =~ "def handle_event(&quot;save&quot;, params, socket) do"
+    end
+
+    test "code that will not compile is refused where it was typed", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "events"})
+      render_click(view, "add_code", %{"tab" => "events"})
+
+      html =
+        view
+        |> element("#pb-code-form")
+        |> render_submit(%{
+          "tab" => "events",
+          "entry" => %{"0" => %{"name" => "save", "code" => "{:noreply, socket"}}
+        })
+
+      assert html =~ "missing terminator"
+      assert [%{"code" => "{:noreply, socket"}] = fragments(view).events, "the text is not lost"
+
+      reloaded =
+        Ash.get!(MishkaCmsCore.Runtime.Page, page.id, authorize?: false, tenant: page.site_id)
+
+      assert reloaded.events == [], "nothing that will not compile reached the page"
+    end
+
+    test "a helper takes a name, an argument list and a body", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+      render_click(view, "add_code", %{"tab" => "helpers"})
+
+      html =
+        view
+        |> element("#pb-code-form")
+        |> render_submit(%{
+          "tab" => "helpers",
+          "entry" => %{"0" => %{"name" => "add", "args" => "a, b", "code" => "a + b"}}
+        })
+
+      assert html =~ "Saved to the page"
+      assert [%{"args" => "a, b"}] = fragments(view).helpers
+    end
+
+    test "an entry can be removed", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "infos"})
+      render_click(view, "add_code", %{"tab" => "infos"})
+
+      assert has_element?(view, "#pb-code-entry-infos-0")
+      render_click(view, "remove_code", %{"tab" => "infos", "index" => "0"})
+      refute has_element?(view, "#pb-code-entry-infos-0")
+    end
+
+    # WRITTEN ON ITS OWN. Code is page configuration rather than document content: the draft stage
+    # writes a Draft holding only the tree, so anything merely held in an assign would be lost when
+    # the tab closed — and restoring an old draft would revert today's handlers.
+    test "saving code writes it to the page immediately", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+      render_click(view, "add_code", %{"tab" => "helpers"})
+
+      view
+      |> element("#pb-code-form")
+      |> render_submit(%{
+        "tab" => "helpers",
+        "entry" => %{"0" => %{"name" => "shout", "args" => "t", "code" => "String.upcase(t)"}}
+      })
+
+      reloaded =
+        Ash.get!(MishkaCmsCore.Runtime.Page, page.id, authorize?: false, tenant: page.site_id)
+
+      assert [%{name: "shout", args: "t"}] = reloaded.helpers
+    end
+
+    test "the page source window shows what would be stored, and can be edited", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      refute has_element?(view, "#pb-source-modal")
+
+      html = view |> element("#pb-code") |> render_click()
+      assert html =~ "pb-source-modal"
+      assert html =~ "Page code"
+
+      {:ok, expected} =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.to_heex()
+
+      assert render(view) =~ Phoenix.HTML.html_escape(expected) |> Phoenix.HTML.safe_to_string()
+
+      # Editing it replaces the whole document, through the same call a draft restore makes.
+      view
+      |> element("#pb-source-form")
+      |> render_submit(%{
+        "source" => ~s(<section class="from-source"><h2>Rewritten</h2></section>)
+      })
+
+      refute has_element?(view, "#pb-source-modal")
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize() =~ "from-source"
+
+      # …and it is one undo away, like any other edit.
+      render_click(view, "undo", %{})
+
+      refute view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer.serialize() =~ "from-source"
+    end
+
+    test "unparseable source is refused without losing what was typed", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      before = editor(view).tree
+
+      view
+      |> element("#pb-source-form")
+      |> render_submit(%{"source" => "<div><span></div>"})
+
+      assert has_element?(view, "#pb-source-modal"), "the window stays open"
+      assert has_element?(view, "#pb-source-error")
+      assert editor(view).tree == before
+    end
+
+    # The lower drawer is explicitly out of scope for this change and must still be there.
+    test "the code drawer is untouched by the source window", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "toggle_code", %{})
+      assert has_element?(view, "#pb-code-minimize")
+      refute has_element?(view, "#pb-source-modal")
+    end
+
     test "the command palette opens and filters", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
@@ -9003,6 +9712,33 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert view |> element("#pb-mobtab-dir") |> render() =~ "RTL"
     end
 
+    test "preview strips the canvas's editor overlays and keeps the panels", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+
+      {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+      assert html =~ "pb-el-toolbar"
+
+      view |> element("#pb-preview") |> render_click()
+
+      assert editor(view).preview?
+      refute render(canvas) =~ "pb-el-toolbar"
+      refute render(canvas) =~ "pb-canvas-tail"
+      assert has_element?(view, "#pb-left")
+      assert has_element?(view, "#pb-right")
+      assert has_element?(view, "#pb-code-strip")
+
+      view |> element("#pb-preview") |> render_click()
+
+      refute editor(view).preview?
+      assert has_element?(view, "#pb-left")
+      assert render(canvas) =~ "pb-el-toolbar"
+    end
+
     test "an open canvas follows the direction without being reloaded", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
       {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
@@ -9011,6 +9747,399 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-dir-rtl") |> render_click()
 
       assert render(canvas) =~ ~s(dir="rtl")
+    end
+  end
+
+  # A FAILED READ IS NOT AN EMPTY SITE. The palette read used to end `_error -> collect_palette([])`,
+  # so a dropped connection under load painted a rail with nothing in it — no flash, no log line,
+  # nothing to act on — and that is indistinguishable from a site with no components installed. In
+  # production it reads as "my components vanished"; in this suite it was an intermittent failure
+  # that never reproduced in isolation, because it needed contention to provoke.
+  #
+  # `assign_async/3` already carried a failure state and the panel already rendered a `:failed` slot
+  # for it. The error simply never got that far.
+  # HIDING A TAB IS A COURTESY, NOT THE SECURITY. `Validations.CodeChange` refuses the write whatever
+  # the editor draws — which is what makes it safe to hide anything here at all, and it is covered
+  # where it belongs, against the resource, in `CodeAccessTest`.
+  #
+  # These drive the editor half through the DEPLOYMENT SWITCH rather than through a permission,
+  # because the switch closes the surface for everybody including the `*` admin this suite signs in.
+  # It is the same `code_allowed?` either way, and this keeps the assertions about the tabs rather
+  # than about the login.
+  describe "when this deployment does not allow author-written Elixir" do
+    setup do
+      Application.put_env(:mishka_cms_core, :page_code, :off)
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :page_code) end)
+      :ok
+    end
+
+    test "the Code window keeps Template and Styles and loses the three that store Elixir", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      assert has_element?(view, "#pb-sourcetab-template"), "markup is what the editor is for"
+      assert has_element?(view, "#pb-sourcetab-styles")
+
+      refute has_element?(view, "#pb-sourcetab-events")
+      refute has_element?(view, "#pb-sourcetab-infos")
+      refute has_element?(view, "#pb-sourcetab-helpers")
+    end
+
+    # A TEMPLATE TYPED BY HAND IS CODE the server runs; what the builder generates is not.
+    test "and a template typed by hand is refused", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      render_click(view, "apply_source", %{"source" => ~s(<div id="typed">typed</div>)})
+      assert flashes(view) =~ CodeAccess.refusal()
+
+      render_click(view, "apply_element_heex", %{"source" => ~s(<p>typed</p>)})
+      refute Serializer.serialize(editor(view).tree) =~ "typed"
+    end
+
+    # A hidden tab is not a closed door: the event can be sent without one.
+    test "and the events behind them are refused, not merely undrawn", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      render_click(view, "add_code", %{"tab" => "events"})
+
+      assert render(view) =~ "turned off on this deployment"
+      refute has_element?(view, "#pb-code-entry-events-0")
+      assert :sys.get_state(view.pid).socket.assigns.fragments[:events] in [nil, []]
+    end
+
+    # The block's source is markup, and markup is what the Template tab keeps for everybody.
+    test "a block expression still opens its code", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><%= for post <- @posts do %><p>x</p><% end %></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      block = Enum.find(Tree.walk(editor(view).tree), &(&1.kind == :eex_block))
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => block.id})
+      view |> element("#pb-expr-block-open-code") |> render_click()
+
+      assert has_element?(view, "#pb-sourcetab-template")
+      refute has_element?(view, "#pb-sourcetab-helpers")
+    end
+
+    test "but the rest of the editor is untouched", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-root")
+
+      heading = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => heading.id})
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => heading.id,
+        "name" => "class",
+        "value" => "headline"
+      })
+
+      assert Serializer.serialize(editor(view).tree) =~ "headline"
+    end
+  end
+
+  test "an author who may write code sees all five tabs", %{conn: conn, page: page} do
+    {:ok, view, _html} = open_builder(conn, page)
+    view |> element("#pb-code") |> render_click()
+
+    for tab <- ~w(template events infos helpers styles) do
+      assert has_element?(view, "#pb-sourcetab-#{tab}")
+    end
+  end
+
+  # ONE BADGE, BESIDE THE CODE IT IS ABOUT — and not a second page listing them, which is what this
+  # replaced. A warning belongs where somebody would fix it.
+  describe "the code flag badge" do
+    test "appears on a helper that calls something worth reading twice", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+      render_click(view, "add_code", %{"tab" => "helpers"})
+
+      html =
+        view
+        |> element("#pb-code-form")
+        |> render_submit(%{
+          "tab" => "helpers",
+          "entry" => %{
+            "0" => %{"name" => "sweep", "args" => "path", "code" => ~s|System.cmd("rm", [path])|}
+          }
+        })
+
+      assert has_element?(view, "#pb-code-flag-helpers-0")
+      assert html =~ "runs a program"
+    end
+
+    test "and stays away from ordinary code", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+      render_click(view, "add_code", %{"tab" => "helpers"})
+
+      view
+      |> element("#pb-code-form")
+      |> render_submit(%{
+        "tab" => "helpers",
+        "entry" => %{"0" => %{"name" => "money", "args" => "c", "code" => "c / 100"}}
+      })
+
+      refute has_element?(view, "#pb-code-flag-helpers-0")
+    end
+
+    # ORDINARY ELIXIR TOOK THE BUILDER DOWN. The badge is rendered inline in the drawer, and reading
+    # the alias chain of `__MODULE__.Helpers.run/1` raised — so the save crashed the LiveView, and
+    # because the fragments are loaded from the record, so did every mount after it.
+    test "and a call it cannot name leaves the window standing, now and on the next mount", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+      render_click(view, "add_code", %{"tab" => "helpers"})
+
+      view
+      |> element("#pb-code-form")
+      |> render_submit(%{
+        "tab" => "helpers",
+        "entry" => %{
+          "0" => %{"name" => "sweep", "args" => "path", "code" => "__MODULE__.Helpers.run(path)"}
+        }
+      })
+
+      refute has_element?(view, "#pb-code-flag-helpers-0")
+
+      {:ok, reopened, _html} = open_builder(conn, page)
+      reopened |> element("#pb-code") |> render_click()
+
+      assert render_click(reopened, "source_tab", %{"tab" => "helpers"}) =~ "sweep"
+      refute has_element?(reopened, "#pb-code-flag-helpers-0")
+    end
+  end
+
+  # THE BOX IS FED FROM THE TREE, and the tree does not change when a parse fails — so the typed text
+  # held out only for as long as nothing else re-rendered. One op from a collaborator, one autosave,
+  # and LiveView patched the textarea back to the document, taking a page of hand-written markup with
+  # it.
+  describe "a refused source edit" do
+    test "keeps what was typed, even after an unrelated edit re-renders the window", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      typed = "<div><p>half written"
+      render_click(view, "apply_source", %{"source" => typed})
+
+      assert has_element?(view, "#pb-source-error")
+      assert render(view) =~ "half written"
+
+      # The unrelated op: it changes the tree, which is what used to overwrite the box.
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => node_with_tag(view, "h1").id,
+        "name" => "class",
+        "value" => "headline"
+      })
+
+      assert render(view) =~ "half written", "the draft outlived a tree change"
+    end
+
+    test "and lets it go once it applies", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      render_click(view, "apply_source", %{"source" => "<div><p>half written"})
+      render_click(view, "apply_source", %{"source" => "<div><p>mended</p></div>"})
+
+      assert :sys.get_state(view.pid).socket.assigns.source_draft == nil
+      assert Serializer.serialize(editor(view).tree) =~ "mended"
+    end
+
+    test "closing the window drops the draft rather than keeping it forever", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-code") |> render_click()
+
+      render_click(view, "apply_source", %{"source" => "<div><p>half written"})
+      render_click(view, "close_source", %{})
+
+      assert :sys.get_state(view.pid).socket.assigns.source_draft == nil
+    end
+  end
+
+  # A STORED TEMPLATE THE BUILDER CANNOT TOKENIZE. The Ash gate checks that a template COMPILES, and
+  # the builder's own tokenizer is a different parser with different rules — `<div><p>x</div>` is
+  # valid enough for HEEx and unbalanced for the tree. A page from a seed, from a hand edit, or from
+  # before the gate existed therefore reaches the editor unparseable, and `mount_section/4`
+  # destructured the result, so the answer was a MatchError and a crash loop on a page nobody could
+  # then open to fix.
+  describe "opening a page the tokenizer refuses" do
+    # STRAIGHT INTO THE COLUMN, on purpose. The Ash actions refuse a template that will not compile,
+    # so this state cannot be created through the front door — which is the point: it is what a seed,
+    # a hand edit, or a page saved before that validation existed leaves behind, and the editor still
+    # has to open it.
+    defp break_template!(page, template) do
+      repo = Application.fetch_env!(:mishka_cms_core, :repo)
+      {:ok, id} = Ecto.UUID.dump(page.id)
+      repo.query!("UPDATE pages SET template = $1 WHERE id = $2", [template, id])
+      page
+    end
+
+    test "shows what is wrong and offers the source, instead of crashing", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: "<div><p>fine</p></div>")
+        |> break_template!("<div><p>unclosed</div>")
+
+      {:ok, view, html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      assert html =~ "could not be opened"
+      assert has_element?(view, "#pb-recover")
+      assert has_element?(view, "#pb-recover-source"), "the stored template is still reachable"
+      assert html =~ "unclosed", "and it is the author's own text, not a summary of it"
+    end
+
+    test "the message names the line and column the tokenizer stopped at", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: "<div><p>fine</p></div>")
+        |> break_template!("<div>\n  <p>one\n</div>")
+
+      {:ok, _view, html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      assert html =~ "Line", "a position is the only thing that makes this actionable"
+    end
+
+    test "a page that parses is unaffected", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      refute has_element?(view, "#pb-recover")
+      assert has_element?(view, "#pb-root")
+    end
+
+    # THE POINT OF THE SCREEN. Showing the problem without a way to fix it would leave the page just
+    # as unopenable as the crash did.
+    test "correcting the markup opens the editor on it", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: "<div><p>fine</p></div>")
+        |> break_template!("<div><p>unclosed</div>")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      assert {:error, {:live_redirect, %{to: to}}} =
+               view
+               |> element("#pb-recover-form")
+               |> render_submit(%{"template" => "<div><p>mended</p></div>"})
+
+      {:ok, opened, _html} = live(conn, to)
+      _ = render_async(opened)
+
+      refute has_element?(opened, "#pb-recover")
+      assert has_element?(opened, "#pb-root")
+
+      # The document itself lives in the canvas iframe, not in this LiveView's markup, so the tree is
+      # what says the correction is the thing that opened.
+      assert Serializer.serialize(editor(opened).tree) =~ "mended"
+    end
+
+    # A correction that is still broken must not throw away what was typed — a minute of somebody's
+    # work — and must not pretend it worked.
+    test "a correction that still does not parse keeps the text and says why", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: "<div><p>fine</p></div>")
+        |> break_template!("<div><p>unclosed</div>")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      html =
+        view
+        |> element("#pb-recover-form")
+        |> render_submit(%{"template" => "<section><p>still wrong</section>"})
+
+      assert has_element?(view, "#pb-recover-error")
+      assert html =~ "still wrong", "what was typed is still in the box"
+    end
+
+    # THE CORRECTION IS CODE AT THE WRITE: a deployment that turns code off while the screen is open
+    # stops it, whoever holds what.
+    test "a correction typed after the deployment turned code off is not stored", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: "<div><p>fine</p></div>")
+        |> break_template!("<div><p>unclosed</div>")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+      assert has_element?(view, "#pb-recover-form")
+
+      Application.put_env(:mishka_cms_core, :page_code, :off)
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :page_code) end)
+
+      view
+      |> element("#pb-recover-form")
+      |> render_submit(%{"template" => "<div><p>mended</p></div>"})
+
+      assert has_element?(view, "#pb-recover-error")
+
+      assert Ash.get!(MishkaCmsCore.Runtime.Page, page.id, authorize?: false, tenant: site.id).template ==
+               "<div><p>unclosed</div>"
+    end
+  end
+
+  describe "when the palette cannot be read" do
+    # An invalid site id is the cheapest real failure to provoke — `for_tenant_with_globals` refuses
+    # to cast it, no mocking and no sandbox tricks.
+    test "the panel says so and offers a retry", %{conn: conn, page: page} do
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          {:ok, view, _html} =
+            live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}?site_id=not-a-uuid")
+
+          html = render_async(view)
+
+          assert html =~ "The component list could not be loaded."
+          assert has_element?(view, "#pb-palette-retry")
+        end)
+
+      assert log =~ "palette read failed",
+             "a failure the reader can see must also leave a trace for whoever has to explain it"
+    end
+
+    # The other half: a working site must never show the failure state, or the message means nothing.
+    test "a site that reads fine shows components and no retry", %{conn: conn, page: page} do
+      create_component!(name: "retryless-card")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-comp-retryless-card")
+      refute has_element?(view, "#pb-palette-retry")
     end
   end
 

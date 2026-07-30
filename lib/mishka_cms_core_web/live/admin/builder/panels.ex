@@ -23,13 +23,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Builder.PaletteEntry
   alias Phoenix.LiveView.JS
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
+  alias MishkaCmsCore.Runtime.PageBuilder.CodeFlags
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
+  alias MishkaCmsCore.Runtime.PageBuilder.Highlight
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.Icons
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
@@ -38,6 +41,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Runtime.PageBuilder.Interactions
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
@@ -80,6 +84,53 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
              "opacity-100 scale-100"}
   @modal_out {"transition-[opacity,transform] ease-in duration-150", "opacity-100 scale-100",
               "opacity-0 scale-95"}
+
+  # The drawer lives at the foot of the canvas column, so it arrives and leaves from below rather
+  # than fading in place.
+  @drawer_in {"transition-[opacity,transform] ease-out duration-200", "opacity-0 translate-y-4",
+              "opacity-100 translate-y-0"}
+  @drawer_out {"transition-[opacity,transform] ease-in duration-150", "opacity-100 translate-y-0",
+               "opacity-0 translate-y-4"}
+
+  # A SCROLLBAR THAT ARRIVES WITH THE POINTER. The rest of the editor's panels hide theirs outright
+  # — `[scrollbar-width:none]` — which is right for a list of components and wrong for code, where
+  # how far down the file you are is worth knowing. So: thin, the panel's own border colour, and
+  # invisible until somebody points at the pane.
+  #
+  # Both spellings every time. Firefox has never implemented the `::-webkit-scrollbar` pseudo-
+  # elements and WebKit has never implemented `scrollbar-color`, so either one alone leaves half the
+  # browsers on the native bar.
+  @quiet_scroll_dark "[scrollbar-width:thin] [scrollbar-color:transparent_transparent] " <>
+                       "hover:[scrollbar-color:#3b3746_transparent] " <>
+                       "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 " <>
+                       "[&::-webkit-scrollbar-corner]:bg-transparent " <>
+                       "[&::-webkit-scrollbar-track]:bg-transparent " <>
+                       "[&::-webkit-scrollbar-thumb]:rounded-full " <>
+                       "[&::-webkit-scrollbar-thumb]:bg-transparent " <>
+                       "hover:[&::-webkit-scrollbar-thumb]:bg-[#3b3746] " <>
+                       "hover:[&::-webkit-scrollbar-thumb:hover]:bg-[#56545e]"
+
+  # The Code window is the light surface, so the same bar in its own greys.
+  @quiet_scroll_light "[scrollbar-width:thin] [scrollbar-color:transparent_transparent] " <>
+                        "hover:[scrollbar-color:#d5d3cb_transparent] " <>
+                        "[&::-webkit-scrollbar]:h-2 [&::-webkit-scrollbar]:w-2 " <>
+                        "[&::-webkit-scrollbar-corner]:bg-transparent " <>
+                        "[&::-webkit-scrollbar-track]:bg-transparent " <>
+                        "[&::-webkit-scrollbar-thumb]:rounded-full " <>
+                        "[&::-webkit-scrollbar-thumb]:bg-transparent " <>
+                        "hover:[&::-webkit-scrollbar-thumb]:bg-[#d5d3cb] " <>
+                        "hover:[&::-webkit-scrollbar-thumb:hover]:bg-[#bdbab1]"
+
+  @doc "The scrollbar treatment for a pane that holds code, on a dark or a light surface."
+  @spec quiet_scroll(:dark | :light) :: String.t()
+  def quiet_scroll(:dark), do: @quiet_scroll_dark
+  def quiet_scroll(:light), do: @quiet_scroll_light
+
+  @doc false
+  def drawer_in, do: JS.transition(@drawer_in, time: 200)
+
+  @doc false
+  def drawer_out, do: JS.hide(transition: @drawer_out, time: 150)
 
   @doc false
   def menu_in, do: JS.transition(@menu_in, time: 100)
@@ -311,6 +362,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # cursor — an autosave tick or another editor's keystroke mid-drag, and the panel jumps.
   defp grip_var(:left), do: "--pb-left-w"
   defp grip_var(:right), do: "--pb-right-w"
+  defp grip_var(:drawer), do: "--pb-drawer-h"
 
   # The two canvas zooms, in percent: `:single` is one device frame, `:frame` the all-breakpoints row.
   @zoom_bounds %{single: {40, 200}, frame: {20, 100}}
@@ -398,6 +450,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         shortcut: "⌫",
         icon: "trash",
         description: gettext_noop("Remove the selected element")
+      ),
+      descriptor("toggle_code", :command, gettext_noop("Toggle code drawer"), 70,
+        shortcut: "⌘/",
+        icon: "code",
+        description: gettext_noop("Show or hide the generated source")
       ),
       descriptor("toggle_preview", :command, gettext_noop("Toggle preview"), 80,
         shortcut: "⌘P",
@@ -507,6 +564,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:dir, :string, default: "ltr")
   attr(:zoom, :integer, default: 100)
   attr(:preview?, :boolean, default: false)
+  attr(:source_modal, :boolean, default: false)
   attr(:dev_mode?, :boolean, default: false)
   attr(:history_position, :integer, default: 0)
   attr(:history_total, :integer, default: 0)
@@ -783,6 +841,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         <span data-role="pb-divider" class="h-5 w-px flex-none bg-[#e6e4de] max-[1000px]:hidden" />
 
 
+        <%!-- THE TOP BAR'S CODE IS THE PAGE'S SOURCE, in a window big enough to read it in. It used
+              to toggle the strip at the bottom of the canvas, which is a different surface with a
+              different job — a glance at what the selection serialises to, in a 300px sliver. That
+              drawer is untouched and still opens from its own strip and from ⌘/. --%>
+        <.bar_button
+          id="pb-code"
+          event="open_source"
+          value={%{}}
+          icon={:code}
+          label={gettext("Code")}
+          active={@source_modal}
+        />
             <.bar_button
               id="pb-preview"
               event="toggle_preview"
@@ -5893,6 +5963,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             "wraps the elements inside it, so its source is edited as code — a box here would rewrite the block and drop what it contains."
           )}
         </p>
+        <%!-- SAYING WHERE IS NOT TAKING THEM THERE. The note named the surface and left the author to
+              find the Code button on their own. Not gated on `code_allowed?`, the same as that
+              button: the Template tab is drawn for everyone in the builder. --%>
+        <button
+          type="button"
+          id="pb-expr-block-open-code"
+          phx-click="open_source"
+          phx-value-tab="template"
+          class="inline-flex h-[26px] items-center gap-1.5 self-start rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+        >
+          <.icon name={:code} size={12} /> {gettext("Open code")}
+        </button>
       </div>
     </section>
     """
@@ -6256,6 +6338,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   end
 
   @doc "The centre column: crumb bar, the canvas frames, and the code drawer under them."
+  # DECLARED, NEVER SPLATTED — see `left_panel/1`. The union of this function's own and what the
+  # three it renders read.
+  attr(:editor, :any, required: true)
+  attr(:tree, :any, required: true)
   attr(:token, :any, default: nil)
   attr(:record, :any, default: nil)
   attr(:crumbs, :list, default: [])
@@ -6269,7 +6355,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:breakpoint, :atom, default: :base)
   attr(:status, :any, default: nil)
   attr(:statuses, :list, default: [])
+  attr(:code_open, :boolean, default: false)
+  attr(:code_tab, :atom, default: :heex)
+  attr(:drawer_h, :integer, default: 300)
   attr(:marked, :any, default: nil)
+
+  # The drawer's CSS pane writes the same value the Inspector's Custom CSS box does, so it needs the
+  # same two assigns — and `component_entry/1`, which decides whether the selection can hold a rule
+  # at all, reads the palette off `@editor`.
+  attr(:element_css, :string, default: "")
+  attr(:element_css_error, :string, default: nil)
+  attr(:element_css_advice, :string, default: nil)
+  attr(:heex_error, :string, default: nil)
 
   def center(assigns) do
     ~H"""
@@ -6502,7 +6599,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         <.single_frame :if={@device != :frames} token={@token} device={@device} />
       </div>
 
+      <.code_drawer
+        :if={@code_open}
+        tree={@tree}
+        code_tab={@code_tab}
+        drawer_h={@drawer_h}
+        selection={@selection}
+        selected_node={@selected_node}
+        element_css={@element_css}
+        element_css_error={@element_css_error}
+        element_css_advice={@element_css_advice}
+        heex_error={@heex_error}
+        entry={component_entry(assigns)}
+      />
 
+      <%!-- The drawer's collapsed state is a strip, not nothing: the demo keeps the code editor
+            permanently in view so it reads as part of the editor rather than a hidden mode. --%>
+      <button
+        :if={!@code_open}
+        id="pb-code-strip"
+        type="button"
+        phx-click="toggle_code"
+        data-accent-panel
+        class="flex h-10 flex-none items-center gap-[11px] border-t border-[#262429] bg-[#17161a] px-4 text-left hover:bg-[#1d1b21] [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)] [[data-theme=dark]_&]:!bg-[#141317] [[data-theme=dark]_&]:!border-[#232228]"
+      >
+        <span class="font-['Space_Grotesk'] text-[12px] font-bold text-[#8ee0b8]">&gt;_</span>
+        <span class="text-[12px] font-bold text-white">{gettext("Code Editor")}</span>
+        <span class="text-[11px] font-medium text-[#9b99a6]">HEEx · CSS · JS</span>
+        <span class="flex-1"></span>
+        <span class="inline-flex items-center gap-1.5 text-[11px] font-semibold text-[#8b8995]">
+          {gettext("Expand")} <.icon name={:chevron_up} size={14} />
+        </span>
+      </button>
     </main>
     """
   end
@@ -6688,6 +6816,394 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp frame_active?(:tablet, "Tablet"), do: true
   defp frame_active?(:mobile, "Mobile"), do: true
   defp frame_active?(_breakpoint, _label), do: false
+
+  # Two panes: what you are looking at on the left, and what you can WRITE on the right.
+  #
+  # THE RIGHT PANE USED TO IGNORE THE SELECTION ENTIRELY. It rendered `override_css(tree)` — every
+  # styled node on the page, every time anything re-rendered — so clicking an element changed the
+  # left pane and left the right one showing the same wall of other people's rules. Three separate
+  # complaints in one control: it always showed CSS whatever tab you were on, it never showed the CSS
+  # of the thing you clicked, and you could not type in it.
+  #
+  # It is now the element's own CSS, editable, over THE SAME VALUE the Inspector's Custom CSS box
+  # holds — one value, two surfaces, which is what the design said from the start and never got.
+  # The Inspector is where you set a property; this is where there is room to write a block.
+  #
+  # The whole-tree walk went with it. It was O(nodes × buckets × props) on every drawer render to
+  # fill a pane nobody could act on.
+  # THE LEFT PANE IS AN EDITOR TOO, on the HEEx tab. Before this it was a picture of the markup: the
+  # reader could see `Log to console` and the `px-4` on the button beside it and change neither, and
+  # the answer to both was to hunt for the control in the Inspector that happened to own it. The two
+  # other tabs stay pictures on purpose — CSS there is a projection of recorded overrides (ADR-8) and
+  # JS belongs to the site's hook rows, not to this document.
+  defp code_drawer(assigns) do
+    editable? = assigns.code_tab == :html
+
+    assigns =
+      assigns
+      |> assign(:heex_editable?, editable?)
+      |> assign(:heex_source, (editable? && drawer_source(assigns)) || "")
+      # Skipped entirely when the pane is an editor: CodeMirror colours its own text, and this is the
+      # 4.5 ms whole-document tokenize that used to run on every drawer render.
+      |> assign(
+        :source_lines,
+        (!editable? && numbered(drawer_source(assigns), assigns.code_tab)) || []
+      )
+      |> assign(:css_targetable?, drawer_css_targetable?(assigns))
+      |> then(
+        &assign(&1, :heex_key, editor_key("pb-drawer-heex", assigns.selection, &1.heex_source))
+      )
+      |> then(
+        &assign(&1, :css_key, editor_key("pb-drawer-css", assigns.selection, &1.element_css))
+      )
+
+    ~H"""
+    <div
+      data-role="pb-grip"
+      id="pb-grip-drawer"
+      phx-hook="PbGrip"
+      data-panel="drawer"
+      data-min={grip_min(:drawer)}
+      data-max={grip_max(:drawer)}
+      data-var={grip_var(:drawer)}
+      title={gettext("Drag to resize")}
+      phx-mounted={drawer_in()}
+      phx-remove={drawer_out()}
+      class="flex h-2 flex-none cursor-row-resize items-center justify-center bg-[#1d1b21] hover:bg-[#262429]"
+    >
+      <span class="h-[3px] w-[34px] rounded-[2px] bg-[#4a4852]"></span>
+    </div>
+    <section
+      data-role="pb-drawer"
+      data-accent-panel
+      phx-mounted={drawer_in()}
+      phx-remove={drawer_out()}
+      style={"height:var(--pb-drawer-h, #{@drawer_h}px)"}
+      class="flex flex-none flex-col overflow-hidden border-t border-[#262429] bg-[#17161a] [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)] [[data-theme=dark]_&]:!bg-[#141317] [[data-theme=dark]_&]:!border-[#232228]"
+    >
+      <div class="flex flex-none items-center gap-3 border-b border-[#262429] px-4 py-[11px]">
+        <span class="text-[12.5px] font-bold text-white">{gettext("Code Editor")}</span>
+        <span class="flex-1"></span>
+        <div class="flex rounded-[9px] bg-[#221f27] p-[3px]">
+          <button
+            :for={{key, label} <- code_tabs()}
+            type="button"
+            id={"pb-codetab-#{key}"}
+            phx-click="set_code_tab"
+            phx-value-tab={key}
+            class={[
+              "h-[26px] rounded-[7px] px-[13px] font-['Space_Grotesk'] text-[11px] font-bold",
+              (@code_tab == key && "bg-[#312d3d] text-white") || "text-[#8b8995] hover:text-white"
+            ]}
+          >
+            {label}
+          </button>
+        </div>
+        <button
+          type="button"
+          id="pb-code-minimize"
+          phx-click="toggle_code"
+          title={gettext("Minimize")}
+          class="grid size-7 flex-none place-items-center rounded-[8px] text-[#7e7c86] hover:bg-[#232128] hover:text-white"
+        >
+          <.icon name={:minus} size={16} />
+        </button>
+      </div>
+
+      <div data-role="pb-code2" class="grid min-h-0 flex-1 grid-cols-2">
+        <div
+          data-pane="heex"
+          class="group/heex flex min-h-0 min-w-0 flex-col border-r border-[#262429]"
+        >
+          <div class="flex flex-none items-center gap-2.5 border-b border-[#262429] px-4 py-2.5">
+            <span class="font-['Space_Grotesk'] text-[11px] font-bold text-[#8ee0b8]">
+              {code_tab_label(@code_tab)}
+            </span>
+            <%!-- THE SCOPE IS ALSO THE WAY OUT OF IT. Selecting an element narrows this pane to that
+                  element, which is what makes the pane useful — but the narrowing announced itself
+                  only by the name changing, and the one way back was Escape, which nothing says.
+                  Dropping a component selects it, so an author's first experience of this pane was
+                  their whole document apparently replaced by the thing they just added; a reload
+                  "fixed" it because a reload starts with nothing selected. --%>
+            <button
+              :if={@code_tab == :html and @selected_node}
+              type="button"
+              phx-click="clear_selection"
+              title={gettext("Showing this element only — click to show the whole document")}
+              class="group/scope flex min-w-0 flex-1 items-center gap-1 truncate rounded px-1 py-0.5 text-left font-['Space_Grotesk'] text-[10.5px] font-medium text-[#a3a1ad] hover:bg-[#262429] hover:text-[#e6e4ed]"
+            >
+              <span class="truncate">{code_scope(@code_tab, @selected_node)}</span>
+              <%!-- The way out of the narrowed pane, so it has to be readable: `#6f6d78` measured
+                    3.6:1 against this panel. This is the colour of the scope label beside it. --%>
+              <span class="flex-none text-[9px] text-[#a3a1ad] group-hover/scope:text-[#8ee0b8]">
+                {gettext("✕ whole document")}
+              </span>
+            </button>
+            <span
+              :if={!(@code_tab == :html and @selected_node)}
+              class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10.5px] font-medium text-[#a3a1ad]"
+            >
+              {code_scope(@code_tab, @selected_node)}
+            </span>
+            <%!-- APPEARS WHEN THE TEXT DIFFERS, and by a data attribute rather than a round trip:
+                  a button that materialises on the first keystroke would otherwise cost one
+                  server render per character typed. `PbCodeEditor` flips `data-dirty` on this
+                  pane; the class is written here, so the JIT compiles the rule. --%>
+            <button
+              :if={@heex_editable?}
+              type="submit"
+              form="pb-drawer-heex-form"
+              id="pb-drawer-heex-save"
+              title={gettext("Apply this markup to the page (⌘↵)")}
+              class="hidden h-[22px] flex-none items-center gap-1.5 rounded-[7px] bg-[#2f7d5b] px-2.5 font-['Space_Grotesk'] text-[10.5px] font-bold text-white hover:bg-[#37916a] group-data-[dirty=true]/heex:inline-flex"
+            >
+              {gettext("Apply")} <span class="text-[9.5px] font-medium opacity-70">⌘↵</span>
+            </button>
+          </div>
+
+          <%!-- The document — or one element of it — as text somebody can rewrite. Editing here is
+                the same capability the Code window's Apply already had; this is that door in the
+                wall the reader is already standing at, with the element they have selected already
+                in it. --%>
+          <form
+            :if={@heex_editable?}
+            id="pb-drawer-heex-form"
+            phx-submit="apply_element_heex"
+            class="flex min-h-0 flex-1 flex-col"
+          >
+            <input type="hidden" name="node_id" value={@selection} />
+            <%!-- Keyed on the text as well as the element — see the CSS pane below for why. It is
+                  also what holds a REFUSAL still: a refused apply leaves the tree alone, so the key
+                  does not move, so the markup somebody just typed is exactly where they left it. --%>
+            <div
+              id={@heex_key}
+              data-fill="true"
+              phx-hook="PbCodeEditor"
+              phx-update="ignore"
+              data-language="heex"
+              class="min-h-0 flex-1 overflow-hidden px-4 py-1"
+            >
+              <textarea
+                id={"#{@heex_key}-field"}
+                data-role="pb-drawer-heex"
+                name="source"
+                spellcheck="false"
+                class="h-full w-full resize-none border-0 bg-transparent py-2.5 font-['Space_Grotesk'] text-[11.5px] leading-[1.75] text-[#c9c7d1] outline-none"
+              >{@heex_source}</textarea>
+            </div>
+            <p
+              :if={@heex_error}
+              id="pb-drawer-heex-error"
+              class="flex-none border-t border-[#3a2a2a] bg-[#2a1f1f] px-4 py-2 font-['Space_Grotesk'] text-[11px] font-bold text-[#e2938a]"
+            >
+              {@heex_error}
+            </p>
+          </form>
+
+          <.code_lines :if={!@heex_editable?} id="pb-code-source" lines={@source_lines} />
+        </div>
+
+        <div data-pane="css" class="group/css flex min-h-0 min-w-0 flex-col">
+          <div class="flex flex-none items-center gap-2.5 border-b border-[#262429] px-4 py-2.5">
+            <span class="font-['Space_Grotesk'] text-[11px] font-bold text-[#a48fe0]">CSS</span>
+            <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10.5px] font-medium text-[#a3a1ad]">
+              {drawer_css_scope(@selected_node, @css_targetable?)}
+            </span>
+            <button
+              :if={@css_targetable?}
+              type="submit"
+              form="pb-drawer-css-form"
+              id="pb-drawer-css-save"
+              title={gettext("Apply this CSS to the selected element (⌘↵)")}
+              class="hidden h-[22px] flex-none items-center gap-1.5 rounded-[7px] bg-[#5b4fb8] px-2.5 font-['Space_Grotesk'] text-[10.5px] font-bold text-white hover:bg-[#6a5ecb] group-data-[dirty=true]/css:inline-flex"
+            >
+              {gettext("Apply")} <span class="text-[9.5px] font-medium opacity-70">⌘↵</span>
+            </button>
+          </div>
+
+          <p
+            :if={!@css_targetable?}
+            id="pb-drawer-css-note"
+            class="px-4 py-3.5 font-['Space_Grotesk'] text-[11.5px] font-medium leading-[1.7] text-[#7e7c86]"
+          >
+            {drawer_css_note(@selected_node)}
+          </p>
+
+          <%!-- `&` means this element, the same as in the Inspector's box and the same as what the
+                compiler wraps. Nothing here is a second dialect to learn. --%>
+          <form
+            :if={@css_targetable?}
+            id="pb-drawer-css-form"
+            phx-submit="save_element_css"
+            class="flex min-h-0 flex-1 flex-col"
+          >
+            <input type="hidden" name="node_id" value={@selected_node.id} />
+            <%!-- THE TEXTAREA IS STILL THE FIELD. `PbCodeEditor` mounts CodeMirror beside it and
+                  writes back on every change, so the form submits the same `css` param it always
+                  did and the server has no idea an editor is involved. `phx-update="ignore"` keeps
+                  LiveView from reconciling away the DOM CodeMirror built. --%>
+            <%!-- KEYED ON THE ELEMENT AND ON THE TEXT, because `phx-update="ignore"` is what stops
+                  LiveView reconciling away the DOM CodeMirror built — and it stops the CONTENT
+                  arriving too. A changed id is a fresh mount, which is the only way new text gets in
+                  here, and both halves of the key earn their place: the node, or selecting a second
+                  element leaves the first one's CSS in the box; the text, or a value written from
+                  the Inspector — or a line taken out by "move to controls" — never shows up.
+
+                  It cannot remount mid-sentence: nothing here posts on change, so this value only
+                  moves when a write lands. --%>
+            <div
+              id={@css_key}
+              data-fill="true"
+              phx-hook="PbCodeEditor"
+              phx-update="ignore"
+              data-language="css"
+              class="min-h-0 flex-1 overflow-hidden px-4 py-1"
+            >
+              <textarea
+                id={"#{@css_key}-field"}
+                data-role="pb-drawer-css"
+                name="css"
+                spellcheck="false"
+                placeholder="padding: 20px;&#10;&#10;&:hover {&#10;  opacity: .8;&#10;}"
+                class="h-full w-full resize-none border-0 bg-transparent py-2.5 font-['Space_Grotesk'] text-[11.5px] leading-[1.75] text-[#c9c7d1] outline-none placeholder:text-[#8b8995]"
+              >{@element_css}</textarea>
+            </div>
+            <p
+              :if={@element_css_error}
+              id="pb-drawer-css-error"
+              class="flex-none border-t border-[#3a2a2a] bg-[#2a1f1f] px-4 py-2 font-['Space_Grotesk'] text-[11px] font-bold text-[#e2938a]"
+            >
+              {@element_css_error}
+            </p>
+            <p
+              :if={!@element_css_error && @element_css_advice}
+              id="pb-drawer-css-advice"
+              class="flex-none border-t border-[#3a3227] bg-[#2a2419] px-4 py-2 font-['Space_Grotesk'] text-[11px] font-medium leading-[1.55] text-[#e0bd80]"
+            >
+              {@element_css_advice}
+            </p>
+          </form>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  attr(:lines, :list, required: true)
+
+  # `phx-no-curly-interpolation` is what lets generated HEEx containing `{…}` be shown as text — and
+  # it applies to the WHOLE subtree, so the lines themselves have to be interpolated the other way.
+  # With `{number}`/`{text}` the drawer faithfully printed the words "{number}" and "{text}" on every
+  # line and never showed a single line of the document.
+  #
+  # `phx-no-format` is load-bearing, not tidiness: the HEEx formatter rewrites `<%= x %>` in a tag
+  # body to `{x}`, which is equivalent everywhere EXCEPT under `phx-no-curly-interpolation`. Without
+  # it, the next `mix format` silently reintroduces the bug above.
+  defp code_lines(assigns) do
+    ~H"""
+    <div
+      id={@id}
+      phx-no-curly-interpolation
+      phx-no-format
+      class={["min-h-0 flex-1 overflow-auto px-4 py-3.5", quiet_scroll(:dark)]}
+    >
+      <div
+        :for={{number, segments} <- @lines}
+        class="flex gap-[14px] font-['Space_Grotesk'] text-[11.5px] font-medium leading-[1.75]"
+      ><span class="w-[18px] flex-none text-right text-[#9b99a6]"><%= number %></span><span class="whitespace-pre-wrap [overflow-wrap:anywhere]"><span
+            :for={{chunk, colour} <- segments}
+            class={code_colour_class(colour)}
+          ><%= chunk %></span></span></div>
+    </div>
+    """
+  end
+
+  # The six colours `MishkaCmsCore.Runtime.PageBuilder.Highlight` hands back, one whole class name
+  # each. The tokenizer keeps owning WHICH colour a chunk takes; this only turns that answer into a
+  # class the compiled stylesheet has a rule for.
+  defp code_colour_class("#8b8995"), do: "[color:#8b8995]"
+  defp code_colour_class("#8ee0b8"), do: "[color:#8ee0b8]"
+  defp code_colour_class("#a3a1ad"), do: "[color:#a3a1ad]"
+  defp code_colour_class("#c8a2ff"), do: "[color:#c8a2ff]"
+  defp code_colour_class("#e6c477"), do: "[color:#e6c477]"
+  defp code_colour_class(_plain), do: "[color:#c9c7d1]"
+
+  defp code_tabs, do: [{:html, "HEEx"}, {:css, "CSS"}, {:js, "JS"}]
+
+  defp code_tab_label(:html), do: "HEEX"
+  defp code_tab_label(:css), do: "CSS"
+  defp code_tab_label(_js), do: "JS"
+
+  defp code_scope(:html, nil), do: gettext("# the whole document")
+  defp code_scope(:html, node), do: "# " <> node_label(node)
+  defp code_scope(:css, _node), do: gettext("# selected element")
+  defp code_scope(_js, _node), do: gettext("# page hooks")
+
+  # Source lines are left in one colour rather than tinted by a guess at what each one is. The one
+  # distinction worth drawing is a comment, which is not code at all.
+  # COLOURED BY THE TOKENIZERS, not by "does this line start with a comment marker" — which is what
+  # this did, and which is wrong about a `#` inside a string, a `<` in a text node and every heredoc.
+  # `MishkaCmsCore.Runtime.PageBuilder.Highlight` explains why it is scoped to the drawer: 64 µs for a
+  # node-sized snippet against 4.5 ms for a whole page, measured, and this pane re-renders on every
+  # selection change.
+  defp numbered(source, language) do
+    source
+    |> highlighted(language)
+    |> Enum.with_index(1)
+    |> Enum.map(fn {segments, number} -> {number, segments} end)
+  end
+
+  # `:html` is the tab's name and `:heex` was the tokenizer's, so the HEEx tab fell past both clauses
+  # and was painted by the ELIXIR tokenizer for as long as it was read-only — every tag name an
+  # identifier, `end` inside a string a keyword. It is CodeMirror's job now; what is left here is CSS
+  # and one sentence of prose.
+  # THE FIELD'S ID MOVES WITH ITS WRAPPER, and this is the whole reason the function exists.
+  #
+  # `phx-update="ignore"` is what stops LiveView reconciling away the DOM CodeMirror builds, and a
+  # changing wrapper id is the only way new text can reach it. But morphdom matches nodes by `id`
+  # BEFORE anything else: a constant `id="pb-drawer-heex"` on the textarea inside meant that when the
+  # wrapper was re-keyed, the new wrapper's textarea adopted the old element and ran
+  # `fromEl.value = toEl.value` — silently replacing whatever the reader had typed with the server's
+  # own text.
+  #
+  # Silently is the operative word. The textarea is `display:none` under CodeMirror, so the screen
+  # went on showing the reader's edit while the field that actually gets submitted had been reverted;
+  # and the dirty flag lives on the `[data-pane]` div, which is never re-created, so Apply stayed
+  # lit. Pressing it then re-inserted the markup that was already there — a successful apply that
+  # changed nothing, which is exactly how this was reported.
+  #
+  # Tests select these by `data-role`, which does not move.
+  defp editor_key(prefix, selection, content),
+    do: "#{prefix}-#{selection || "doc"}-#{:erlang.phash2(content)}"
+
+  defp highlighted(source, :css), do: Highlight.css(source)
+  defp highlighted(source, _js), do: Highlight.prose(source)
+
+  # Whether the drawer may take CSS for what is selected — the SAME question `targetable?/2` answers
+  # for the Inspector, asked through the same function so the two surfaces can never disagree about
+  # which elements can hold a rule.
+  defp drawer_css_targetable?(%{selected_node: %Node{} = node} = assigns),
+    do: targetable?(node, assigns[:entry])
+
+  defp drawer_css_targetable?(_assigns), do: false
+
+  defp drawer_css_scope(%Node{} = node, true),
+    do: gettext("%{label} — this element's own", label: Node.label(node))
+
+  defp drawer_css_scope(%Node{} = node, false), do: Node.label(node)
+  defp drawer_css_scope(_node, _targetable?), do: gettext("nothing selected")
+
+  defp drawer_css_note(%Node{kind: :component}),
+    do:
+      gettext(
+        "This component takes no class of its own, so there is nothing here for a rule to attach to. Put it inside a container and style that instead."
+      )
+
+  defp drawer_css_note(%Node{}),
+    do: gettext("This element holds text only — select the element around it to give it CSS.")
+
+  defp drawer_css_note(_node), do: gettext("Select an element to write CSS for it.")
 
   @doc "The right panel — Layers, Assistant and Audit — as `builder:rails` contributions."
   # DECLARED, NEVER SPLATTED — see `left_panel/1`. The union of this function's own five and what
@@ -7481,6 +7997,530 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp goto_icon(%{icon: icon}) when is_binary(icon), do: Map.get(@goto_icons, icon, :chevron)
   defp goto_icon(_target), do: :chevron
 
+  @doc """
+  The page's real source, in a window big enough to work in.
+
+  ## What it shows
+
+  `Serializer.to_heex/1` — the exact bytes a save writes, formatted — and not the unformatted
+  `serialize/1` output the bottom drawer shows. That difference is the whole point: this answers
+  "what is actually stored", so it has to be the stored string and not something that merely looks
+  like it. When formatting fails, the raw serialisation is shown with the reason above it; a page
+  whose source you cannot see is worse than an ugly one.
+
+  ## Why it is editable
+
+  Reading is the common case, but the fastest way to fix a stray attribute, paste a section from
+  somewhere else, or undo a mess is to edit the markup. Applying re-parses the text and replaces the
+  working tree through `EditorSession.put_tree/3` — the same call a draft restore makes — so it is
+  one undo step and every open frame follows. Nothing reaches the database until Save, exactly as
+  with any other edit.
+
+  Unparseable text is refused with the parser's own message and the window stays open with the text
+  still in it. Losing what someone just typed is not an acceptable way to report a typo.
+
+  This is the TOP bar's Code. The drawer under the canvas is a different surface with a different
+  job and is deliberately left alone.
+  """
+  attr(:source, :string, required: true)
+  attr(:error, :string, default: nil)
+  attr(:label, :string, required: true)
+  attr(:tab, :atom, default: :template)
+  attr(:fragments, :map, default: %{})
+  attr(:fault, :any, default: nil)
+  attr(:rules, :map, default: %{})
+  attr(:tree, :any, default: nil)
+  attr(:code_allowed?, :boolean, default: false)
+  attr(:section, :string, default: "page")
+  attr(:record, :any, default: nil)
+  attr(:code_focus, :any,
+    default: nil,
+    doc:
+      "what the Handlers tab puts in front of the reader: `{:entry, index}` or `{:form, node_id}`"
+  )
+
+  attr(:retagged, :map,
+    default: %{},
+    doc: "the stored handler names a pending rename moves onto its form's tagged names"
+  )
+
+  def source_modal(assigns) do
+    ~H"""
+    <div
+      id="pb-source-modal"
+      class="fixed inset-0 z-[92] flex items-center justify-center bg-[#17161a]/[.42] px-5 py-[4vh]"
+      phx-mounted={modal_in("#pb-source-modal > section")}
+      phx-remove={modal_out("#pb-source-modal > section")}
+      phx-window-keydown="close_source"
+      phx-key="escape"
+    >
+      <%!-- `phx-click-away` goes on the PANEL, not the backdrop: on a full-screen backdrop no click
+            is ever "away" from it, so the overlay would never close. --%>
+      <section
+        phx-click-away="close_source"
+        class="flex h-[min(92vh,860px)] w-full max-w-[1100px] flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_30px_80px_rgba(20,18,26,.4)]"
+      >
+        <header class="flex items-center gap-3 border-b border-[#ecebe6] px-5 py-4">
+          <span class="grid size-[34px] flex-none place-items-center rounded-[10px] bg-[#f2f1fc] text-[#4f4bcc]">
+            <.icon name={:code} size={17} />
+          </span>
+          <div class="min-w-0">
+            <%!-- A window headed "Page code" while it edits a COMPONENT is lying about what it
+                  changes, and the Interface tab makes that worse: those columns belong to the
+                  component and to nothing else. --%>
+            <div class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+              {gettext("%{section} code", section: translate(Section.label(@section)))}
+            </div>
+            <div class="truncate text-[11px] font-medium text-[#6d6a63]">
+              {gettext("%{label} — what is stored when you save", label: @label)}
+            </div>
+          </div>
+          <span class="flex-1"></span>
+          <button
+            :if={@tab == :template}
+            type="button"
+            id="pb-source-copy"
+            phx-hook="PbCopy"
+            data-copy={@source}
+            class="flex-none rounded-[9px] border border-[#ecebe6] bg-white px-3 py-1.5 text-[11.5px] font-bold text-[#5c5a54] hover:border-[#dcdbf5] hover:text-[#4f4bcc]"
+          >
+            {gettext("Copy")}
+          </button>
+          <button
+            type="button"
+            id="pb-source-close"
+            phx-click="close_source"
+            title={gettext("Close")}
+            class="grid size-8 flex-none place-items-center rounded-[9px] text-[#6d6a63] hover:bg-[#f4f3ee]"
+          >
+            <.icon name={:close} size={15} />
+          </button>
+        </header>
+
+        <div class="flex gap-0.5 border-b border-[#ecebe6] bg-white px-5 py-3">
+          <div class="flex flex-1 gap-0.5 rounded-[10px] bg-[#f2f1ec] p-[3px]">
+            <button
+              :for={
+                {key, label, count} <-
+                  source_tabs(@fragments, @rules, @code_allowed?, @section, @record)
+              }
+              id={"pb-sourcetab-#{key}"}
+              {leaving(@tab, key)}
+              class={[
+                "flex h-[30px] min-w-0 flex-1 items-center justify-center gap-1.5 rounded-[8px] px-1.5 text-[11px] font-bold",
+                (@tab == key && "bg-white text-[#1b1a18] shadow-[0_1px_2px_rgba(30,28,24,.1)]") ||
+                  "text-[#6d6a63]"
+              ]}
+            >
+              {label}
+              <span
+                :if={count > 0}
+                class="rounded-full bg-[#f2f1fc] px-1.5 text-[10px] font-bold text-[#4f4bcc]"
+              >
+                {count}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        <p
+          :if={@error}
+          id="pb-source-error"
+          class="border-b border-[#f0dcd8] bg-[#fdf3f1] px-5 py-2.5 text-[11.5px] font-semibold text-[#c0473d]"
+        >
+          {@error}
+        </p>
+
+        <form
+          :if={@tab == :template}
+          id="pb-source-form"
+          phx-submit="apply_source"
+          class="flex min-h-0 flex-1 flex-col"
+        >
+          <%!-- Keyed on the text, like the drawer's two panes: `phx-update="ignore"` keeps LiveView
+                out of the DOM CodeMirror builds, and a changed key is the only way a new document
+                gets in. A refused apply does not move the tree, so it does not move the key, so the
+                markup somebody just typed stays where they typed it. --%>
+          <div
+            id={"pb-source-editor-#{:erlang.phash2(@source)}"}
+            data-fill="true"
+            data-role="pb-source-editor"
+            phx-hook="PbCodeEditor"
+            phx-update="ignore"
+            data-language="heex"
+            data-accent-panel
+            class="min-h-0 flex-1 overflow-hidden bg-[#17161a] px-5 py-2 [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
+          >
+            <textarea
+              id={"pb-source-text-#{:erlang.phash2(@source)}"}
+              data-role="pb-source-text"
+              name="source"
+              spellcheck="false"
+              class="h-full w-full resize-none border-0 bg-transparent font-['Space_Grotesk'] text-[12.5px] leading-[1.7] text-[#c9c7d1] outline-none"
+            >{@source}</textarea>
+          </div>
+
+          <footer class="flex items-center gap-2 border-t border-[#ecebe6] px-5 py-3.5">
+            <span class="min-w-0 flex-1 text-[11px] font-medium text-[#8a877f]">
+              {gettext("Editing here replaces the whole document. It is one undo away.")}
+            </span>
+            <button
+              type="button"
+              phx-click="close_source"
+              class="flex-none rounded-[9px] border border-[#ecebe6] bg-white px-3.5 py-2 text-[12px] font-bold text-[#5c5a54]"
+            >
+              {gettext("Cancel")}
+            </button>
+            <button
+              type="submit"
+              id="pb-source-apply"
+              class="flex-none rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#2a282f]"
+            >
+              {gettext("Apply to the page")}
+            </button>
+          </footer>
+        </form>
+
+        <.style_rules :if={@tab == :styles} rules={@rules} tree={@tree} />
+
+
+        <.code_entries
+          :if={@tab not in [:template, :styles, :interface] and @code_allowed?}
+          tab={@tab}
+          entries={Map.get(@fragments, @tab, [])}
+          fault={@fault}
+          forms={page_handler_forms(@tab, @tree, Map.get(@fragments, @tab, []), @retagged)}
+          focus={@code_focus}
+        />
+      </section>
+    </div>
+    """
+  end
+
+  # The three tabs beside Template are the Page attributes the runtime already compiles — `events`
+  # into `handle_event/3`, `infos` into `handle_info/2`, `helpers` into plain `def`s. They have been
+  # storable since the resource was written and reachable only from the Pages form; the builder is
+  # where someone is when they need them.
+  #
+  # STYLES IS AN INDEX, NOT A FIFTH CODE BOX. Six tabs of editable code in a visual builder is how a
+  # page builder turns into a worse IDE, so this one only READS: the element rules this page owns,
+  # each labelled with the element it belongs to and each a click away from being selected. The box
+  # that edits one of them is in the Inspector, where the element is.
+  #
+  # It is here rather than on Runtime → Stylesheets because these rules are the PAGE's: one row per
+  # document, keyed on classes in this page's markup. The site's own stylesheets are a different
+  # thing with a different scope and they stay where they are.
+  #
+  # AND THERE IS NO SCRIPTS TAB, for the same test read the other way. A `JsHook` is a site-wide
+  # resource, not a page column, so a window headed "Page code" that edited one would be lying about
+  # what it changes. The Inspector's picker attaches an existing hook and its New hook link goes to
+  # Runtime → JS hooks, which is the right amount of friction in front of shipping JavaScript.
+  # WHAT IS TYPED IN A CODE TAB IS NOT ON THE SERVER YET. The boxes are form fields and nothing posts
+  # them until Save, so a tab switch re-rendered the form from the last SAVED state and threw away
+  # whatever was in it — the name, the code, all of it. Watched: fill in a handler, click Messages,
+  # come back, and the handler is empty; Save then answers "this handler has no code" about a box
+  # that was full a moment ago.
+  #
+  # So leaving a code tab submits the form, which is the only thing that carries those values to the
+  # server, and `save_code` stashes them and moves the tab rather than writing anything. Where it is
+  # going travels as the SUBMIT BUTTON'S OWN VALUE — a browser sends that only for the button that
+  # submitted, so Save carries no destination and needs nothing reset afterwards. A hidden field
+  # would: LiveView does not patch an input's value back, so the last tab clicked stayed in it and
+  # the next press of Save switched tabs instead of saving.
+  #
+  # Not `phx-change`: the editor's element id contains a hash of the code — which is how a
+  # server-side change reaches a box that is `phx-update="ignore"` — so feeding every keystroke back
+  # would give the element a new id on every keystroke and remount CodeMirror under the cursor.
+  defp leaving(from, to) when from in [:events, :infos, :helpers],
+    do: [type: "submit", form: "pb-code-form", name: "go", value: to]
+
+  defp leaving(_from, to),
+    do: [type: "button", "phx-click": "source_tab", "phx-value-tab": to]
+
+  defp source_tabs(fragments, rules, code_allowed?, section, record) do
+    # AND ONLY THE ONES THE RECORD HAS A COLUMN FOR. `events` and `infos` are Page attributes; a
+    # Layout, a Component and an error page have `helpers` and no handlers. The writer already knew
+    # — `BuilderLive.code_keys/1` asks the resource and drops the rest — so a handler typed on a
+    # layout was silently discarded and then flashed as "Saved to the layout". Asked of the resource
+    # here too, so the window cannot offer a tab the save will throw away.
+    code =
+      case code_allowed? do
+        true ->
+          Enum.filter(
+            [
+              {:events, gettext("Handlers"), length(Map.get(fragments, :events, []))},
+              {:infos, gettext("Messages"), length(Map.get(fragments, :infos, []))},
+              {:helpers, gettext("Helpers"), length(Map.get(fragments, :helpers, []))}
+            ],
+            fn {key, _label, _count} -> holds_code?(section, record, key) end
+          )
+
+        # HIDDEN, NOT DISABLED. A greyed tab advertises a capability and invites asking for it; the
+        # three that are gone are the ones that store Elixir, and Template and Styles are still here
+        # because markup and CSS are what the editor is FOR.
+        #
+        # This is a courtesy rather than the security. `Validations.CodeChange` refuses the write
+        # whatever this draws, which is what makes hiding safe to do here at all.
+        false ->
+          []
+      end
+
+    [{:template, gettext("Template"), 0}] ++
+      code ++ [{:styles, gettext("Styles"), map_size(rules)}]
+  end
+
+  # Asked of the resource rather than of a list of section names, so one that gains or loses a column
+  # changes the window without anyone coming back here. A document being created has no record yet,
+  # and the section it will be saved to answers the same question.
+  defp holds_code?(section, record, key) do
+    resource =
+      case record do
+        %resource{} -> resource
+        _being_created -> Section.resource(Section.normalize(section))
+      end
+
+    not is_nil(Ash.Resource.Info.attribute(resource, key))
+  end
+
+  attr(:rules, :map, required: true)
+  attr(:tree, :any, required: true)
+
+  # Every element on this page that has CSS of its own, in one place — which nothing offered before:
+  # an author who styled six elements had six panels to reopen to find out what they had written.
+  defp style_rules(assigns) do
+    assigns = assign(assigns, :rows, style_rows(assigns.tree, assigns.rules))
+
+    ~H"""
+    <div
+      id="pb-source-styles"
+      class={["min-h-0 flex-1 overflow-y-auto px-5 py-4", quiet_scroll(:light)]}
+    >
+      <p :if={@rows == []} class="text-[12px] font-medium text-[#6d6a63]">
+        {gettext(
+          "No element on this page has CSS of its own yet. Select one and open Custom CSS in the inspector to give it some."
+        )}
+      </p>
+
+      <div class="flex flex-col gap-3">
+        <section
+          :for={{scope, body, node} <- @rows}
+          id={"pb-style-rule-#{scope}"}
+          class="overflow-hidden rounded-[12px] border border-[#ecebe6]"
+        >
+          <header class="flex items-center gap-2 border-b border-[#ecebe6] bg-[#faf9f6] px-3.5 py-2.5">
+            <span class="font-['Space_Grotesk'] text-[11.5px] font-bold text-[#17161a]">
+              {(node && Node.label(node)) || gettext("a deleted element")}
+            </span>
+            <code class="rounded-[5px] bg-[#f2f1fc] px-1.5 py-0.5 font-['Space_Grotesk'] text-[10px] font-bold text-[#4f4bcc]">
+              .{scope}
+            </code>
+            <span class="flex-1"></span>
+            <%!-- A rule whose element is gone is shown rather than hidden: it is still being served,
+                  and saying so is the only warning before the save that prunes it. --%>
+            <span :if={!node} class="text-[10.5px] font-semibold text-[#c0473d]">
+              {gettext("gone — saving drops this rule")}
+            </span>
+            <button
+              :if={node}
+              type="button"
+              id={"pb-style-rule-go-#{scope}"}
+              phx-click="select_from_code"
+              phx-value-id={node.id}
+              class="flex-none rounded-[7px] border border-[#dcdbf5] bg-white px-2 py-1 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+            >
+              {gettext("Select it")}
+            </button>
+          </header>
+          <pre
+            phx-no-curly-interpolation
+            class="overflow-x-auto bg-[#17161a] px-3.5 py-3 font-['Space_Grotesk'] text-[11.5px] leading-[1.7] text-[#c9c7d1] [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
+          ><%= body %></pre>
+        </section>
+      </div>
+    </div>
+    """
+  end
+
+  # In document order rather than by scope, so the list reads the way the page does. A rule whose
+  # element is no longer in the tree has nowhere to sort to and goes last, still shown.
+  defp style_rows(nil, _rules), do: []
+
+  defp style_rows(tree, rules) do
+    placed =
+      for node <- Tree.walk(tree),
+          scope = Tree.scope(tree, node.id),
+          body = rules[scope],
+          do: {scope, body, node}
+
+    seen = MapSet.new(placed, fn {scope, _body, _node} -> scope end)
+    orphans = for {scope, body} <- rules, !MapSet.member?(seen, scope), do: {scope, body, nil}
+
+    placed ++ Enum.sort(orphans)
+  end
+
+  # The Handlers tab lists every form on the page, from the working tree.
+  defp page_handler_forms(:events, %Tree{} = tree, entries, retagged),
+    do: PageForms.handler_forms(tree, pending_entries(entries, tree, retagged))
+
+  defp page_handler_forms(_tab, _tree, _entries, _retagged), do: []
+
+  # The Handlers tab's entries under the names a Save stores them by (`PageForms.follow/3`).
+  defp pending_entries(entries, tree, retagged),
+    do: PageForms.follow(entries, PageForms.events(tree), retagged)
+
+  attr(:tab, :atom, required: true)
+  attr(:entries, :list, required: true)
+  attr(:fault, :any, default: nil)
+  attr(:forms, :list,
+    default: [],
+    doc: "the page's forms and their handlers, on the Handlers tab"
+  )
+
+  attr(:focus, :any, default: nil, doc: "`{:entry, index}` or `{:form, node_id}` to focus")
+
+  # THE WRAPPER IS SHOWN AND NOT EDITABLE. The compiler splices what is typed here into
+  # `def handle_event(name, params, socket) do … end`, so an author who writes the whole clause gets
+  # a definition inside a definition and a page that will not compile — which is exactly what the
+  # project's own API fixture did for years. Showing the two lines they are writing between is the
+  # cheapest way to never have that conversation.
+  defp code_entries(assigns) do
+    ~H"""
+    <form id="pb-code-form" phx-submit="save_code" class="flex min-h-0 flex-1 flex-col">
+      <input type="hidden" name="tab" value={@tab} />
+
+      <div class={["min-h-0 flex-1 overflow-y-auto px-5 py-4", quiet_scroll(:light)]}>
+
+
+        <div class="flex flex-col gap-3">
+          <section
+            :for={{entry, index} <- Enum.with_index(@entries)}
+            id={"pb-code-entry-#{@tab}-#{index}"}
+            data-focus={@focus == {:entry, index}}
+            class={[
+              "overflow-hidden rounded-[12px] border bg-white",
+              (fault_here?(@fault, @tab, index) && "border-[#f0dcd8]") || "border-[#ecebe6]"
+            ]}
+          >
+            <div class="flex items-center gap-2 border-b border-[#f4f3ee] bg-[#faf9f6] px-3.5 py-2.5">
+              <input
+                type="text"
+                name={"entry[#{index}][name]"}
+                value={entry["name"]}
+                placeholder={name_placeholder(@tab)}
+                spellcheck="false"
+                class="h-8 min-w-0 flex-1 rounded-[8px] border border-[#ecebe6] bg-white px-2.5 font-['Space_Grotesk'] text-[12px] font-bold text-[#17161a] outline-none focus:border-[#c3c1f0]"
+              />
+              <input
+                :if={@tab == :helpers}
+                type="text"
+                name={"entry[#{index}][args]"}
+                value={entry["args"]}
+                placeholder="name, size"
+                spellcheck="false"
+                class="h-8 w-[180px] flex-none rounded-[8px] border border-[#ecebe6] bg-white px-2.5 font-['Space_Grotesk'] text-[12px] text-[#3a382f] outline-none focus:border-[#c3c1f0]"
+              />
+              <%!-- ONE BADGE, BESIDE THE CODE IT IS ABOUT. Read off the parsed snippet, so a mention
+                    in a comment or inside a string does not raise it — see
+                    `MishkaCmsCore.Runtime.PageBuilder.CodeFlags`. It says "read this one first" and
+                    never "the rest are fine": anything it matches can be spelled another way. --%>
+              <span
+                :if={CodeFlags.badge(entry["code"])}
+                id={"pb-code-flag-#{@tab}-#{index}"}
+                title={
+                  gettext("This calls something worth reading twice. It is a hint, not a verdict.")
+                }
+                class="flex-none rounded-[6px] bg-[#fdf3f1] px-2 py-1 text-[10.5px] font-bold text-[#c0473d]"
+              >
+                {CodeFlags.badge(entry["code"])}
+              </span>
+              <button
+                type="button"
+                id={"pb-code-remove-#{@tab}-#{index}"}
+                phx-click="remove_code"
+                phx-value-tab={@tab}
+                phx-value-index={index}
+                title={gettext("Remove")}
+                class="grid size-8 flex-none place-items-center rounded-[8px] border border-[#ecebe6] text-[#6d6a63] hover:border-[#f0dcd8] hover:text-[#c0473d]"
+              >
+                <.icon name={:trash} size={13} />
+              </button>
+            </div>
+
+            <div class="bg-[#17161a] px-4 pt-3">
+              <span class="font-['Space_Grotesk'] text-[11.5px] text-[#a3a1ad]">
+                {wrapper_head(@tab, entry)}
+              </span>
+            </div>
+            <div
+              id={"pb-code-editor-#{@tab}-#{index}-#{:erlang.phash2(entry["code"])}"}
+              phx-hook="PbCodeEditor"
+              phx-update="ignore"
+              data-focus={@focus == {:entry, index}}
+              data-language="elixir"
+              data-accent-panel
+              class="min-h-[9rem] w-full resize-y overflow-hidden bg-[#17161a] px-4 pl-8 [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
+            >
+              <textarea
+                name={"entry[#{index}][code]"}
+                spellcheck="false"
+                rows="6"
+                class="w-full resize-none border-0 bg-transparent py-1 font-['Space_Grotesk'] text-[12.5px] leading-[1.7] text-[#c9c7d1] outline-none"
+              >{entry["code"]}</textarea>
+            </div>
+            <div class="bg-[#17161a] px-4 pb-3">
+              <span class="font-['Space_Grotesk'] text-[11.5px] text-[#a3a1ad]">end</span>
+            </div>
+
+            <p
+              :if={fault_here?(@fault, @tab, index)}
+              class="border-t border-[#f0dcd8] bg-[#fdf3f1] px-3.5 py-2 text-[11.5px] font-semibold text-[#c0473d]"
+            >
+              {@fault.message}
+            </p>
+          </section>
+
+          <p
+            :if={@entries == []}
+            class="rounded-[12px] border border-dashed border-[#d9d7d0] px-4 py-8 text-center text-[12px] font-medium text-[#8a877f]"
+          >
+            {empty_note(@tab, @forms)}
+          </p>
+
+          <button
+            type="button"
+            id={"pb-code-add-#{@tab}"}
+            phx-click="add_code"
+            phx-value-tab={@tab}
+            class="self-start rounded-[9px] border border-[#ecebe6] bg-white px-3 py-2 text-[12px] font-bold text-[#4f4bcc] hover:border-[#c3c1f0]"
+          >
+            {add_label(@tab)}
+          </button>
+        </div>
+      </div>
+
+      <footer class="flex items-center gap-2 border-t border-[#ecebe6] px-5 py-3.5">
+        <span class="min-w-0 flex-1 text-[11px] font-medium text-[#8a877f]">
+          {scope_note(@tab)}
+        </span>
+        <button
+          type="button"
+          phx-click="close_source"
+          class="flex-none rounded-[9px] border border-[#ecebe6] bg-white px-3.5 py-2 text-[12px] font-bold text-[#5c5a54]"
+        >
+          {gettext("Cancel")}
+        </button>
+        <button
+          type="submit"
+          id="pb-code-save"
+          class="flex-none rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white hover:bg-[#2a282f]"
+        >
+          {gettext("Save")}
+        </button>
+      </footer>
+    </form>
+    """
+  end
+
   attr(:node, :any, required: true)
   attr(:entry, :any, default: nil)
   attr(:state, :any, required: true)
@@ -8013,6 +9053,47 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     do: PaletteEntry.optional(entry, :kit) || gettext("this component's own markup")
 
   defp kit_label(_entry), do: gettext("this component's own markup")
+
+  defp wrapper_head(:events, entry),
+    do: ~s|def handle_event("#{entry["name"]}", params, socket) do|
+
+  defp wrapper_head(:infos, entry), do: "def handle_info(#{entry["name"]}, socket) do"
+
+  defp wrapper_head(:helpers, entry),
+    do: "def #{entry["name"]}(#{entry["args"]}) do"
+
+  defp name_placeholder(:events), do: "save"
+  defp name_placeholder(:infos), do: ":tick"
+  defp name_placeholder(:helpers), do: "money"
+
+  defp add_label(:events), do: gettext("+ Handler")
+  defp add_label(:infos), do: gettext("+ Message")
+  defp add_label(:helpers), do: gettext("+ Helper")
+
+  defp empty_note(:events, [_form | _more]),
+    do: gettext("No custom handlers. The forms above run on their own.")
+
+  defp empty_note(tab, _forms), do: empty_note(tab)
+
+  defp empty_note(:events),
+    do: gettext("No handlers yet. One answers a phx-click, a form submit or a key press.")
+
+  defp empty_note(:infos),
+    do:
+      gettext(
+        "No messages yet. One answers something the server sends this page — a tick, a broadcast."
+      )
+
+  defp empty_note(:helpers),
+    do: gettext("No helpers yet. One is a function the template can call.")
+
+  defp scope_note(:helpers),
+    do: gettext("Helpers belong to this page and its template can call them.")
+
+  defp scope_note(_tab), do: gettext("Code is written on its own, not with the document.")
+
+  defp fault_here?(%{tab: tab, index: index}, tab, index) when is_integer(index), do: true
+  defp fault_here?(_fault, _tab, _index), do: false
 
   @doc """
   The centred confirmation shown before reloading the canvas with unsaved work in the session.
@@ -9149,6 +10230,63 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   """
   @spec icon_name(String.t() | nil) :: atom()
   def icon_name(name), do: Map.get(@icon_names, name, :chevron)
+
+  defp drawer_source(%{code_tab: :html, tree: tree, selection: nil}),
+    do: Serializer.serialize(tree)
+
+  defp drawer_source(%{code_tab: :html, tree: tree, selection: id}),
+    do: Serializer.serialize_node(tree, id)
+
+  defp drawer_source(%{code_tab: :css, tree: tree, selection: id}), do: css_projection(tree, id)
+
+  defp drawer_source(_assigns),
+    do: gettext("This site's JavaScript hooks are managed under Runtime → JS hooks.")
+
+  # The CSS pane is a projection of what the inspector has recorded, not a stylesheet: overrides
+  # compile to Tailwind utilities on save (ADR-8), so this exists to be read, not to be applied.
+  defp css_projection(tree, id) do
+    case Tree.get(tree, id) do
+      nil ->
+        gettext("/* Select an element to see its recorded overrides. */")
+
+      node ->
+        node.meta
+        |> Map.get(:styles, %{})
+        |> Enum.map_join("\n\n", fn {bucket, props} -> bucket_rule(node, bucket, props) end)
+        |> blank_to_note()
+    end
+  end
+
+  # REAL CSS, NOT THE MAP WEARING CSS SYNTAX. `align` and `py` are the override map's own shorthand
+  # and an enumerated value is a whole Tailwind class, so printing the map directly produced
+  # `align: items-center` — a property no browser has. `Styles.declaration/2` owns the translation.
+  #
+  # `&` rather than the tag, because the tag was a lie: `header { … }` reads as a rule matching every
+  # header on the page, and these overrides belong to one element. `&` is what the per-element CSS
+  # editor will accept, so the projection and the editor speak the same language from the start.
+  defp bucket_rule(_node, bucket, props) do
+    body =
+      Enum.map_join(props, "\n", fn {prop, value} ->
+        {property, css_value} = Styles.declaration(prop, value)
+        "  #{property}: #{css_value};"
+      end)
+
+    wrap_bucket(bucket, body)
+  end
+
+  defp wrap_bucket(bucket, body) when bucket in [:hover, :focus, :active],
+    do: "&:#{bucket} {\n#{body}\n}"
+
+  defp wrap_bucket(:tablet, body),
+    do: "@media (max-width: 900px) {\n  & {\n  #{body}\n  }\n}"
+
+  defp wrap_bucket(:mobile, body),
+    do: "@media (max-width: 560px) {\n  & {\n  #{body}\n  }\n}"
+
+  defp wrap_bucket(_bucket, body), do: "& {\n#{body}\n}"
+
+  defp blank_to_note(""), do: gettext("/* No overrides recorded for this element. */")
+  defp blank_to_note(css), do: css
 
   # A MODULE, resolved by identity rather than by name. The event carries `inspect(library)` because
   # that is what survives a round trip through the DOM, and turning it back with

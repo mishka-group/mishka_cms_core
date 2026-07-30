@@ -37,6 +37,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   require Logger
 
   alias MishkaCmsCore.Runtime.ErrorAddress
+  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
@@ -74,6 +75,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {gettext_noop("Tablet"), 900},
     {gettext_noop("Mobile"), 560}
   ]
+
+  # EVERY TAB THE CODE WINDOW HAS, in the order it draws them. Two events name a tab — one opens the
+  # window on it, one switches to it while it is open — and both have to agree about which names are
+  # real, because `tab_atom/2` falls back to the head of this list for anything it does not know.
+  @source_tabs [:template, :interface, :events, :infos, :helpers, :styles]
 
   # `layout: false` drops the admin shell — sidebar, topbar and the 1340px content column — so the
   # editor owns the whole viewport the way the prototype does. It is not a preference: the editor is
@@ -271,6 +277,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # LiveSocket alongside them.
     |> assign(:standalone_assets, true)
     |> assign(:suppress_site_js, true)
+    # Publishes WHERE CodeMirror lives, and downloads none of it. The drawer's editor asks for the
+    # bundle the first time somebody opens a code box; a visit that never opens one pays nothing.
+    |> assign(:code_editor, true)
     # THE BUILDER EDITS FOUR THINGS AND CALLED ITSELF THE SAME NAME FOR ALL OF THEM. A tab reading
     # "Page Builder" over a component is wrong twice: it names the wrong noun, and with four editors
     # open — a page, its layout, a component and an error page — the browser's tab strip is four
@@ -484,6 +493,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:right_tab, fn -> :layers end)
     |> assign_new(:left_w, fn -> 344 end)
     |> assign_new(:right_w, fn -> 300 end)
+    |> assign_new(:drawer_h, fn -> 300 end)
     |> assign_new(:left_hidden, fn -> false end)
     |> assign_new(:right_hidden, fn -> false end)
     # WHERE THE SESSION LEFT IT, not always desktop. The breakpoint is restored from the saved
@@ -494,12 +504,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:zoom, fn -> 100 end)
     |> assign_new(:frame_zoom, fn -> 30 end)
     |> assign_new(:frame_row, fn -> true end)
+    |> assign_new(:code_open, fn -> false end)
     |> assign_new(:find_open, fn -> false end)
     |> assign_new(:find, fn -> "" end)
     |> assign_new(:replace, fn -> "" end)
     |> assign_new(:find_hits, fn -> [] end)
     |> assign_new(:component_presets, fn -> %{} end)
     |> assign_new(:presets_count, fn -> -1 end)
+    |> assign_new(:source_modal, fn -> false end)
+    |> assign_new(:source_draft, fn -> nil end)
+    # WHETHER THIS DEPLOYMENT TAKES CODE. Whoever opened this builder may write its document's code
+    # (`Section.permissions/1`); `:page_code` set to `:off` stops it for everyone.
+    |> assign_new(:code_allowed?, fn -> CodeAccess.enabled?() end)
+    |> assign_new(:source_error, fn -> nil end)
+    |> assign_new(:source_tab, fn -> :template end)
+    # What the Handlers tab puts in front of the reader: `{:entry, index}` or `{:form, node_id}`.
+    |> assign_new(:code_focus, fn -> nil end)
     |> assign_new(:element_css_rules, fn ->
       # AND INTO THE SESSION, not only into these assigns. The canvas renders this CSS from
       # `session.element_css`, and nothing but `save_element_css` ever wrote it — so a document
@@ -546,6 +566,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         socket.assigns.editor.site_name
       )
     end)
+    |> assign_new(:code_fault, fn -> nil end)
+    |> assign_new(:fragments, fn -> code_fragments(socket.assigns[:record]) end)
+    |> assign_new(:code_tab, fn -> :html end)
+    |> assign_new(:heex_error, fn -> nil end)
     |> assign_new(:command_open, fn -> false end)
     |> assign_new(:command_query, fn -> "" end)
     |> assign_new(:palette_query, fn -> "" end)
@@ -1311,6 +1335,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("resize", %{"panel" => "right", "value" => value}, socket),
     do: {:noreply, assign(socket, :right_w, clamped(:right, value))}
 
+  def handle_event("resize", %{"panel" => "drawer", "value" => value}, socket),
+    do: {:noreply, assign(socket, :drawer_h, clamped(:drawer, value))}
+
   # THE LINK HAS TO RUN BOTH WAYS OR IT IS A TRAP. Choosing a breakpoint moves the frame; choosing a
   # FRAME left the breakpoint exactly where it was. So the canvas went to 390px while the Inspector's
   # strip still read Desktop — and every control on that strip still carried the `base` bucket, which
@@ -1345,6 +1372,33 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("toggle_frame_row", _params, socket),
     do: {:noreply, update(socket, :frame_row, &(!&1))}
 
+  # THE PAGE'S SOURCE, in a window. `to_heex/1` rather than `serialize/1` because the question
+  # this answers is "what is stored", and those two strings are not the same: the drawer shows the
+  # unformatted serialisation, a save writes the formatted one.
+  #
+  # OPENED ON A NAMED TAB when the click already knew which one it wanted. Everything that opens this
+  # window opens it on whatever tab was last looked at, which is right for a button labelled "Code"
+  # and wrong for a control that is a view of ONE tab's contents — the rail's `.interface` group is
+  # the first of those, and landing on Template and hunting for Interface is not what it asked for.
+  # A code tab opens only where this deployment takes code.
+  def handle_event("open_source", %{"tab" => tab}, %{assigns: %{code_allowed?: false}} = socket)
+      when tab in ~w(events infos helpers),
+      do: {:noreply, put_flash(socket, :error, CodeAccess.refusal())}
+
+  def handle_event("open_source", params, socket) do
+    socket = assign(socket, source_modal: true, source_error: nil)
+
+    case params do
+      %{"tab" => tab} ->
+        {:noreply,
+         socket
+         |> assign(:source_tab, tab_atom(tab, @source_tabs))}
+
+      _wherever_it_was ->
+        {:noreply, socket}
+    end
+  end
+
   # THE WAY OUT OF RECOVERY MODE. Parsed here first, because the point of this screen is that the
   # document does not parse and writing another one that does not would land the author straight back
   # on it. Then written through `Section.save/4` — the same action the editor saves with, so the
@@ -1355,6 +1409,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       :ok -> {:noreply, push_navigate(socket, to: recover_path(socket))}
       {:error, message} -> {:noreply, refused_recovery(socket, template, message)}
     end
+  end
+
+  # CLOSING FORGETS WHAT WAS NOT SAVED. `add_code` puts a blank entry straight into `fragments`, and
+  # closing used to leave it there — so an empty handler somebody added and then cancelled went on
+  # being part of the page for the rest of the session, and `CodeCheck` went on refusing it. Reading
+  # the fragments back off the record is what "cancel" has always meant everywhere else.
+  def handle_event("close_source", _params, socket) do
+    {:noreply,
+     assign(socket,
+       source_modal: false,
+       source_error: nil,
+       code_fault: nil,
+       code_focus: nil,
+       source_draft: nil,
+       fragments: code_fragments(socket.assigns[:record])
+     )}
   end
 
   # THE PAGE'S OWN ELIXIR, in the window that already holds its markup. `events`, `infos` and
@@ -1460,6 +1530,141 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     write_hook(socket, node_id, hook_outcome(actor, editor, String.trim(params["hook"] || "")))
   end
+
+  def handle_event("source_tab", %{"tab" => tab}, %{assigns: %{code_allowed?: false}} = socket)
+      when tab in ~w(events infos helpers),
+      do: {:noreply, put_flash(socket, :error, CodeAccess.refusal())}
+
+  def handle_event("source_tab", %{"tab" => tab}, socket) do
+    {:noreply,
+     socket
+     |> assign(:source_tab, tab_atom(tab, @source_tabs))
+     |> assign(:code_fault, nil)
+     |> assign(:code_focus, nil)}
+  end
+
+  # The Styles tab lists rules, and a rule is only editable where its element is — so the way out of
+  # the index is the same click that would have taken you there: select the element, close the
+  # window, and land in the Inspector with its Custom CSS in front of you.
+  def handle_event("select_from_code", %{"id" => node_id}, socket) do
+    EditorSession.select(socket.assigns.token, node_id)
+
+    {:noreply,
+     socket
+     |> assign(
+       source_modal: false,
+       source_error: nil,
+       code_fault: nil,
+       code_focus: nil,
+       source_draft: nil
+     )
+     |> assign(:left_tab, :inspector)}
+  end
+
+  # THE SAME GATE, ONE STEP EARLIER. `Validations.CodeChange` refuses the Elixir whatever happens
+  # here, so this is the difference between being told now and being told after typing a handler.
+  # The events are refused as well as the tabs being hidden, because a hidden tab is not a closed
+  # door: an event can be sent without one. Markup typed into the Template tab or an element's HEEx
+  # box is code too, and the builder saves it as markup it generated, so it is refused here.
+  #
+  # ABOVE the clauses they guard. Elixir takes the first match, so underneath them they would never
+  # run.
+  def handle_event(event, _params, %{assigns: %{code_allowed?: false}} = socket)
+      when event in ~w(add_code save_code remove_code apply_source apply_element_heex),
+      do: {:noreply, put_flash(socket, :error, CodeAccess.refusal())}
+
+  def handle_event("add_code", %{"tab" => tab}, socket) do
+    key = tab_atom(tab, [:events, :infos, :helpers])
+    entries = Map.get(socket.assigns.fragments, key, []) ++ [blank_entry(key)]
+
+    {:noreply,
+     socket
+     |> assign(:fragments, Map.put(socket.assigns.fragments, key, entries))
+     |> assign(:code_fault, nil)}
+  end
+
+  def handle_event("remove_code", %{"tab" => tab, "index" => index}, socket) do
+    key = tab_atom(tab, [:events, :infos, :helpers])
+    entries = socket.assigns.fragments |> Map.get(key, []) |> List.delete_at(to_int(index))
+
+    {:noreply,
+     socket
+     |> assign(:fragments, Map.put(socket.assigns.fragments, key, entries))
+     |> assign(:code_fault, nil)
+     |> assign(:code_focus, nil)}
+  end
+
+  # WRITTEN HERE, NOT CARRIED. Code is page configuration rather than document content, so it does
+  # not belong in the document's save: the draft stage writes a Draft holding the tree and nothing
+  # else, and anything merely held in an assign would have been lost the moment the tab closed.
+  # Restoring a three-day-old draft reverting today's handlers would be the other half of the same
+  # mistake.
+  #
+  # It is checked first, because the author is looking at the box the fault belongs to and will not
+  # be by the time a flash arrives.
+  # A TAB SWITCH SUBMITS THE FORM RATHER THAN NAVIGATING AWAY FROM IT — see `Panels.leaving/2`. What
+  # was typed reaches the server this way and nowhere else, so this clause keeps it and moves on
+  # without writing anything to the record: leaving a tab is not a save, and running `CodeCheck` over
+  # a half-written handler would report a fault about a sentence somebody is still in the middle of.
+  def handle_event("save_code", %{"tab" => tab, "go" => going} = params, socket)
+      when is_binary(going) and going != "" do
+    key = tab_atom(tab, [:events, :infos, :helpers])
+
+    {:noreply,
+     socket
+     |> assign(:fragments, Map.put(socket.assigns.fragments, key, submitted_entries(params)))
+     |> assign(:source_tab, tab_atom(going, @source_tabs))
+     |> assign(:code_fault, nil)
+     |> assign(:code_focus, nil)}
+  end
+
+  def handle_event("save_code", %{"tab" => tab} = params, socket) do
+    key = tab_atom(tab, [:events, :infos, :helpers])
+    fragments = Map.put(socket.assigns.fragments, key, submitted_entries(params))
+
+    case CodeCheck.check(checkable(socket, fragments)) do
+      :ok -> {:noreply, write_code(socket, fragments)}
+      {:error, [fault | _rest]} -> {:noreply, held(socket, fragments, fault)}
+    end
+  end
+
+  # Applying re-parses and replaces the working tree — the same call a draft restore makes, so it is
+  # one undo step and every open frame follows. Unparseable text keeps the window open with the text
+  # still in it: losing what someone just typed is not a way to report a typo.
+  # WHAT WAS TYPED SURVIVES A REFUSAL. The box is fed from the tree, and the tree does not change
+  # when the parse fails — so the text held out for exactly as long as nothing else re-rendered it.
+  # One `set_attr` from a collaborator, one autosave, and LiveView patched the textarea back to the
+  # document and took a page of hand-written markup with it.
+  #
+  # The draft is held until it applies or the window closes, and it is what the box renders.
+  def handle_event("apply_source", %{"source" => source}, socket) do
+    case Events.before_code_apply(code_payload(socket, source, :document, nil)) do
+      :ok -> apply_source(socket, source)
+      {:error, message} -> {:noreply, assign(socket, :source_error, message)}
+    end
+  end
+
+  # THE DRAWER'S HEEx PANE, applying to whatever it is scoped to. With nothing selected that is the
+  # document and the work is `apply_source`'s; with an element selected it is that element, and
+  # replacing one node in place is a DELETE AND AN INSERT AT THE SAME INDEX, run as one op so it is
+  # one undo step, one broadcast, and passes the same containment and permission checks every other
+  # edit does. Doing it as tree surgery here would have skipped all three.
+  #
+  # Delete first, insert second, and that order is deliberate: `insert` is the op that reports a
+  # focus, so the element the reader ends up holding is the one they just wrote rather than the id of
+  # something that no longer exists.
+  def handle_event("apply_element_heex", %{"source" => source} = params, socket) do
+    case Map.get(params, "node_id") do
+      blank when blank in [nil, ""] -> apply_document_heex(socket, source)
+      node_id -> apply_node_heex(socket, node_id, source)
+    end
+  end
+
+  def handle_event("toggle_code", _params, socket),
+    do: {:noreply, assign(socket, :code_open, !socket.assigns.code_open)}
+
+  def handle_event("set_code_tab", %{"tab" => tab}, socket),
+    do: {:noreply, assign(socket, :code_tab, tab_atom(tab, [:html, :css, :js]))}
 
   def handle_event("toggle_preview", _params, socket) do
     {:ok, _editor} = EditorSession.set_preview(socket.assigns.token, !socket.assigns.preview?)
@@ -1602,6 +1807,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # with nothing picked still just selects.
   def handle_event("select", %{"id" => id}, socket) do
     place_or_select(socket.assigns.editor.picked, id, socket)
+  end
+
+  @doc """
+  Drops the selection, so the code pane goes back to the whole document.
+
+  The same two calls `shortcut("escape", …)` makes, reachable by clicking rather than only by a key
+  nothing advertises — the code pane's scope chip is the button. A picked component is dropped with
+  it: the author asking for the whole document back is not mid-placement.
+  """
+  def handle_event("clear_selection", _params, socket) do
+    {:ok, _editor} = EditorSession.select(socket.assigns.token, nil)
+    {:ok, _editor} = EditorSession.pick(socket.assigns.token, nil)
+    {:noreply, socket}
   end
 
   def handle_event("toggle_expand", %{"id" => id}, socket) do
@@ -2538,6 +2756,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp shortcut("visibility", socket), do: handle_event("toggle_visibility", %{}, socket)
   defp shortcut("command", socket), do: handle_event("toggle_command", %{}, socket)
   defp shortcut("find", socket), do: handle_event("open_find", %{}, socket)
+  defp shortcut("code", socket), do: handle_event("toggle_code", %{}, socket)
   defp shortcut("preview", socket), do: handle_event("toggle_preview", %{}, socket)
   defp shortcut("fit", socket), do: {:noreply, assign(socket, :zoom, 100)}
 
@@ -3015,6 +3234,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp hook_id(node_id),
     do: "el-" <> (:erlang.md5(node_id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
 
+  # WHAT THE CODE DRAWER IS ABOUT TO APPLY. A schema or house-style plugin refuses here, before
+  # hand-written markup replaces the document.
+  # THE SECOND MARKUP PANE, and it was the one that wrote without asking. The drawer's HEEx pane runs
+  # `compiles/2` before it replaces anything — the whole document or one element — and this modal,
+  # which replaces the whole document too, ran the tokenizer and nothing else.
+  defp apply_source(socket, source) do
+    with {:ok, tree} <- Tree.parse(source),
+         :ok <- compiles(socket, tree) do
+      EditorSession.put_tree(socket.assigns.token, tree, reason: :source_edit)
+      {:noreply, assign(socket, source_modal: false, source_error: nil, source_draft: nil)}
+    else
+      {:error, reason} ->
+        {:noreply,
+         socket
+         |> assign(:source_error, source_message(reason))
+         |> assign(:source_draft, source)}
+    end
+  end
+
+  defp code_payload(socket, source, tab, node_id) do
+    editor = socket.assigns.editor
+
+    %{
+      source: source,
+      tab: tab,
+      node_id: node_id,
+      section: editor.section,
+      resource_id: editor.resource_id,
+      site_id: editor.site_id,
+      actor_id: actor_id(socket)
+    }
+  end
+
   # A draft is a write, so an extension gets the same say over it that it has over a save — and hears
   # about it afterwards, which is what a backup or a sync integration needs.
   defp gated_autosave(section, record, heex, actor, editor, label, who) do
@@ -3257,6 +3509,139 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # is where every copy flow reads the same row.
   defp css_owner(%{assigns: %{section: section, editor: editor}}),
     do: ElementScopes.owner(section, editor.resource_id)
+
+  # ONLY A PAGE HAS THEM. `events` and `infos` are Page attributes; a Layout, a Component and an
+  # error page have `helpers` and no handlers, so writing the keys on those sections would be
+  # rejected by the resource rather than ignored.
+  @fragment_keys [:events, :infos, :helpers]
+
+  defp code_keys(resource),
+    do: Enum.filter(@fragment_keys, &(!is_nil(Ash.Resource.Info.attribute(resource, &1))))
+
+  defp code_fragments(record) do
+    Map.new(@fragment_keys, fn key -> {key, entries_of(record, key)} end)
+  end
+
+  defp entries_of(record, key) do
+    record
+    |> fetch(key)
+    |> case do
+      list when is_list(list) -> Enum.map(list, &entry_map(&1, key))
+      _absent -> []
+    end
+  end
+
+  defp fetch(nil, _key), do: nil
+  defp fetch(record, key), do: Map.get(record, key) || Map.get(record, Atom.to_string(key))
+
+  # String keys throughout, because the form posts strings and a map that changed shape on the way
+  # to the template would need two readers.
+  defp entry_map(entry, key) do
+    base = %{"name" => value(entry, :name), "code" => value(entry, :code)}
+
+    case key do
+      :helpers -> Map.put(base, "args", value(entry, :args))
+      _other -> base
+    end
+  end
+
+  defp value(entry, key) when is_map(entry),
+    do: Map.get(entry, key) || Map.get(entry, Atom.to_string(key)) || ""
+
+  defp value(_entry, _key), do: ""
+
+  defp blank_entry(:helpers), do: %{"name" => "", "args" => "", "code" => ""}
+  defp blank_entry(_key), do: %{"name" => "", "code" => ""}
+
+  # The form names its rows `entry[0][name]`, so they arrive as a map keyed by index-as-string and
+  # have to be put back in order.
+  defp submitted_entries(%{"entry" => entries}) when is_map(entries) do
+    entries
+    |> Enum.sort_by(fn {index, _entry} -> to_int(index) end)
+    |> Enum.map(fn {_index, entry} -> entry end)
+    |> Enum.reject(&blank_row?/1)
+  end
+
+  defp submitted_entries(_params), do: []
+
+  defp blank_row?(entry) do
+    ["name", "args", "code"]
+    |> Enum.map(&Map.get(entry, &1, ""))
+    |> Enum.all?(&(String.trim(to_string(&1)) == ""))
+  end
+
+  defp checkable(socket, fragments),
+    do: checkable(socket, fragments, socket.assigns.editor.tree)
+
+  defp checkable(_socket, fragments, tree) do
+    fragments
+    |> Map.new(fn {key, entries} -> {key, entries} end)
+    |> Map.put(:template, page_source(tree))
+  end
+
+  # A REFUSAL THE AUTHOR CANNOT SEE IS A SAVE THAT LOOKED LIKE IT WORKED. `code_fault` is assigned
+  # here and read NOWHERE — no panel renders it — so a helper that will not compile, and a write the
+  # resource refused, both left the drawer looking exactly like one that had saved. The fault is
+  # still recorded for whatever comes to read it; the message is now said out loud as well.
+  defp held(socket, fragments, fault) do
+    socket
+    |> assign(:fragments, fragments)
+    |> assign(:code_fault, fault)
+    |> assign(:code_focus, nil)
+    |> put_flash(:error, code_fault_message(fault))
+  end
+
+  # The name is what the reader is looking at when it happens, so it leads.
+  defp code_fault_message(%{name: name, message: message})
+       when is_binary(name) and name != "" and is_binary(message),
+       do: "#{name}: #{message}"
+
+  defp code_fault_message(%{message: message}) when is_binary(message) and message != "",
+    do: message
+
+  defp code_fault_message(_fault), do: gettext("That code could not be saved.")
+
+  # Handlers stored under a renamed form's old event names are saved under its current ones.
+  defp write_code(socket, fragments) do
+    section = section(socket)
+
+    case store_code(socket, fragments) do
+      {:ok, record} ->
+        socket
+        |> assign(:record, record)
+        |> assign(:fragments, code_fragments(record))
+        |> assign(:code_fault, nil)
+        |> assign(:code_focus, nil)
+        |> put_flash(:info, gettext("Saved to the %{noun}.", noun: noun(section)))
+
+      {:error, reason} ->
+        held(socket, fragments, %{
+          tab: nil,
+          index: nil,
+          name: nil,
+          line: nil,
+          message: human(reason)
+        })
+    end
+  end
+
+  defp store_code(socket, fragments) do
+    %{editor: editor} = socket.assigns
+    resource = Section.resource(section(socket))
+
+    fields =
+      resource
+      |> code_keys()
+      |> Map.new(fn key -> {Atom.to_string(key), Map.get(fragments, key, [])} end)
+      |> Map.merge(%{"id" => editor.resource_id, "site_id" => editor.site_id})
+
+    MishkaCmsCore.Runtime.PageBuilder.Helpers.save_section(
+      resource,
+      &Ash.get(resource, &1, &2),
+      fields,
+      socket.assigns.current_user
+    )
+  end
 
   defp saved_message(:published, section),
     do: gettext("%{section} published.", section: section_label(section))
@@ -3541,6 +3926,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         dir={@dir}
         zoom={@zoom}
         preview?={@preview?}
+        source_modal={@source_modal}
         dev_mode?={@dev_mode?}
         history_position={@history_position}
         history_total={@history_total}
@@ -3584,6 +3970,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           act_action={@act_action}
         />
         <Panels.center
+          editor={@editor}
+          tree={@tree}
           token={@token}
           record={@record}
           crumbs={@crumbs}
@@ -3597,7 +3985,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           breakpoint={@breakpoint}
           status={@status}
           statuses={@statuses}
+          code_open={@code_open}
+          code_tab={@code_tab}
+          drawer_h={@drawer_h}
           marked={@marked}
+          element_css={@element_css}
+          element_css_error={@element_css_error}
+          element_css_advice={@element_css_advice}
+          heex_error={@heex_error}
         />
         <Panels.right_panel
           rails={@rails}
@@ -3616,6 +4011,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       <Panels.command_palette :if={@command_open} {assigns} />
       <Panels.reload_modal :if={@reload_confirm} />
       <Panels.leave_modal :if={@leave_to} />
+      <Panels.source_modal
+        :if={@source_modal}
+        source={@source_draft || page_source(@editor.tree)}
+        error={@source_error}
+        label={source_label(assigns)}
+        tab={@source_tab}
+        fragments={@fragments}
+        fault={@code_fault}
+        rules={@element_css_rules}
+        tree={@editor.tree}
+        code_allowed?={@code_allowed?}
+        section={@section}
+        record={@record}
+        code_focus={@code_focus}
+      />
       <%!-- ONE menu for both surfaces. The layers rail right-clicks into it directly; the canvas is a
             frame with none of this stylesheet, so it forwards its right-clicks here rather than
             drawing a second, inline-styled copy that would drift. --%>
@@ -3623,6 +4033,199 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       <Panels.context_menu id="pb-ctx" target="[data-layer-row]" key="layerRow" />
     </div>
     """
+  end
+
+  # WHAT A SAVE WOULD WRITE. `to_heex/1` serialises, proves the result re-parses, then formats — so
+  # the string on screen is the string in the column. When formatting fails the raw serialisation is
+  # shown anyway: a page whose source you cannot see is worse than an ugly one.
+  defp page_source(tree) do
+    case Serializer.to_heex(tree) do
+      {:ok, heex} -> heex
+      {:error, _reason} -> Serializer.serialize(tree)
+    end
+  end
+
+  # What the window is showing the source OF — the record's own name, or the section when there is
+  # no record yet.
+  defp source_label(%{editor: %{section: section}, record: nil}), do: section_label(section)
+  defp source_label(%{record: %{name: name}}) when is_binary(name), do: name
+  defp source_label(%{editor: %{section: section}}), do: section_label(section)
+
+  defp source_message(reason) when is_binary(reason), do: reason
+
+  # THE DIAGNOSTIC, NOT ITS `inspect`. Both the tokenizer and `CodeCheck` answer a map carrying a
+  # line, a column and the compiler's own words, and printing the map put `%{line: 1, message: "…"}`
+  # and a pile of escaped newlines in a one-line box. What is worth reading is the first line of the
+  # message and where it happened; the rest of what the compiler prints is a caret diagram of the
+  # line the reader can already see, in the editor, directly above.
+  defp source_message(%{message: message} = reason) when is_binary(message) do
+    message
+    |> String.split("\n", parts: 2)
+    |> hd()
+    |> String.replace(~r/^nofile:\d+:\d+:\s*/, "")
+    |> String.trim()
+    |> at(placed(reason), Map.get(reason, :column))
+  end
+
+  defp source_message(reason),
+    do: gettext("That is not markup this editor can read: %{reason}", reason: inspect(reason))
+
+  # A `:page` fault comes from compiling the whole assembled module, so its line counts lines of a
+  # file nobody wrote — "Line 3" against a one-line box sends the reader looking for a line 3.
+  # `CodeCheck` marks those, and the honest thing is to give the sentence without a place.
+  defp placed(%{tab: :page}), do: nil
+  defp placed(reason), do: Map.get(reason, :line)
+
+  defp at(message, line, column) when is_integer(line) and is_integer(column),
+    do:
+      gettext("Line %{line}, column %{column}: %{message}",
+        line: line,
+        column: column,
+        message: message
+      )
+
+  defp at(message, line, _column) when is_integer(line),
+    do: gettext("Line %{line}: %{message}", line: line, message: message)
+
+  defp at(message, _line, _column), do: message
+
+  # SUBMITTING WHAT IS ALREADY THERE IS NOT AN EDIT, and the check belongs here rather than after the
+  # fact: the apply is a delete-and-insert, so a no-op still mints a fresh id for the node, moves the
+  # reader's selection onto it and spends a compile — all to arrive back where it started.
+  defp apply_document_heex(%{assigns: %{editor: %{tree: tree}}} = socket, source) do
+    case page_source(tree) == source do
+      true -> {:noreply, assign(socket, :heex_error, nil)}
+      false -> write_document_heex(socket, source)
+    end
+  end
+
+  defp write_document_heex(socket, source) do
+    with {:ok, tree} <- Tree.parse(source),
+         :ok <- compiles(socket, tree) do
+      EditorSession.put_tree(socket.assigns.token, tree, reason: :source_edit)
+      {:noreply, assign(socket, :heex_error, nil)}
+    else
+      {:error, reason} -> {:noreply, assign(socket, :heex_error, source_message(reason))}
+    end
+  end
+
+  # THE TEXT IS NOT TOUCHED WHEN THIS REFUSES. The pane is `phx-update="ignore"`, so a failed apply
+  # re-renders the error line beneath markup that is still exactly as it was typed — which is the
+  # only useful state to be in while fixing a typo.
+  defp apply_node_heex(socket, node_id, source) do
+    tree = socket.assigns.editor.tree
+
+    with %Node{} = node <- Tree.get(tree, node_id),
+         false <- Serializer.serialize_node(tree, node_id) == source,
+         {:ok, _editor} <- rewrite(socket, tree, node, source) do
+      {:noreply, assign(socket, :heex_error, nil)}
+    else
+      # Unchanged. Nothing to report and nothing to do.
+      true ->
+        {:noreply, assign(socket, :heex_error, nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :heex_error, source_message(reason))}
+
+      nil ->
+        {:noreply, assign(socket, :heex_error, gettext("That element is no longer on the page."))}
+    end
+  end
+
+  # WORDS ARE EDITED AS WORDS. A text node's parent is often a component that declares no slot — a
+  # `<.link>` wrapping the word "Home" is the everyday case — and containment is right to refuse a
+  # child there. But changing "Home" to "Start" is not adding a child, and answering it with
+  # "A `<.link>` does not declare a slot to put content in." was both true and useless: the reader
+  # had retyped one word.
+  #
+  # So a text node whose box still holds text is `set_text`, the op that exists for exactly this.
+  # A text node whose box now holds an ELEMENT still goes the long way round and still gets that
+  # message — because then it really is what the message says.
+  defp rewrite(socket, tree, %Node{kind: :text} = node, source) do
+    case text_only(source) do
+      {:ok, text} -> set_text(socket, node, text)
+      :element -> replace(socket, tree, node, source)
+    end
+  end
+
+  defp rewrite(socket, tree, %Node{} = node, source), do: replace(socket, tree, node, source)
+
+  defp text_only(source) do
+    with {:ok, %Tree{roots: [id]} = parsed} <- Tree.parse(source),
+         %Node{kind: :text, text: text} <- Tree.get(parsed, id) do
+      {:ok, text || ""}
+    else
+      _element -> :element
+    end
+  end
+
+  defp set_text(socket, %Node{} = node, text) do
+    EditorSession.apply_op(
+      socket.assigns.token,
+      %{kind: :set_text, node_id: node.id, text: text}
+    )
+  end
+
+  defp replace(socket, tree, %Node{} = node, source) do
+    with index when is_integer(index) <- Tree.index_of(tree, node.id),
+         {:ok, proposed} <- splice(tree, node, index, source),
+         :ok <- compiles(socket, proposed) do
+      replace_node(socket, node, index, source)
+    end
+  end
+
+  # THE PAGE AS IT WOULD BE, built in memory and thrown away. Checking the fragment on its own would
+  # miss what the fragment does to the document around it, and checking after the write would mean
+  # undoing a change the reader already saw land.
+  defp splice(tree, %Node{} = node, index, source) do
+    with {:ok, without} <- Tree.delete(tree, node.id),
+         {:ok, subtree} <- Tree.parse(source) do
+      Tree.insert(without, Tree.refresh_ids(subtree), node.parent_id || :root, index)
+    end
+  end
+
+  # THE REAL COMPILER, not the tokenizer. `Tree.parse` answers "is this markup" — it is the HTML
+  # tokenizer, and it is happy with `{@user.name` and with a component attribute that no component
+  # takes. Both of those compile to a page that 500s on the first visitor, and `CodeCheck` is what
+  # already runs `LiveViewCompiler`'s own stages to find out. The Code window's Save has asked this
+  # question since it was built; the markup panes were the two that wrote without asking.
+  #
+  # It costs a real compile, which is why it is on Apply and not on a debounce — see `save_code`.
+  # WHAT THE MARKUP PANE IS ANSWERABLE FOR, and nothing else. `CodeCheck.check/1` reports faults in
+  # the page's handlers before it ever reaches the template, so one broken handler refused every
+  # markup edit on the page — and refused it by saying "This handler has no code", which is a true
+  # sentence about something the reader cannot see from the box they are typing in.
+  #
+  # So a fault belonging to an Elixir tab is not this pane's to report: the Code window owns those
+  # and shows them beside the snippet. It is dropped and the template checked again without those
+  # fragments, which still catches the case that matters here — markup calling a helper that is not
+  # there — against the helpers that actually compile.
+  @code_tabs [:events, :infos, :helpers]
+
+  defp compiles(socket, tree) do
+    case CodeCheck.check(checkable(socket, socket.assigns.fragments, tree)) do
+      :ok -> :ok
+      {:error, [%{tab: tab} | _rest]} when tab in @code_tabs -> without_code(socket, tree)
+      {:error, [fault | _rest]} -> {:error, fault}
+    end
+  end
+
+  defp without_code(socket, tree) do
+    case CodeCheck.check(checkable(socket, %{}, tree)) do
+      :ok -> :ok
+      {:error, [fault | _rest]} -> {:error, fault}
+    end
+  end
+
+  defp replace_node(socket, %Node{} = node, index, source) do
+    EditorSession.apply_ops(
+      socket.assigns.token,
+      [
+        %{kind: :delete, node_id: node.id},
+        %{kind: :insert, template: source, parent_id: node.parent_id, index: index}
+      ],
+      gettext("Rewrote %{label}", label: Node.label(node))
+    )
   end
 
 end
