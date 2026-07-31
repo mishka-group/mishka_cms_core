@@ -28,12 +28,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
   alias MishkaCmsCore.Runtime.PageBuilder.Highlight
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
+  alias MishkaCmsCore.Runtime.PageBuilder.Fields
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageBuilder.Icons
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.PageBuilder.Interface
@@ -410,7 +412,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       descriptor("behavior", :inspector_section, gettext_noop("Behavior"), 60),
       descriptor("attributes", :inspector_section, gettext_noop("Attributes"), 70),
       descriptor("props", :inspector_section, gettext_noop("Props"), 80)
-    ]
+    ] ++ Inspector.form_sections()
   end
 
   @doc "The core's ⌘K commands — the seed of `builder:commands`."
@@ -1190,6 +1192,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:element_css_advice, :string, default: nil)
   attr(:js_hooks, :list, default: [])
 
+  attr(:fragments, :map,
+    default: %{},
+    doc: "the page's stored code: `events`, `infos` and `helpers` entries"
+  )
+
+  attr(:rename_origin, :any,
+    default: nil,
+    doc: "the selected form as it was when its rename began, which the rename warning reads"
+  )
+
+  attr(:retagged, :map,
+    default: %{},
+    doc: "the stored handler names a pending rename moves onto its form's tagged names"
+  )
+
+  attr(:code_allowed?, :boolean,
+    default: false,
+    doc: "whether the author may write the page's code"
+  )
+
   attr(:section, :string, default: "page", doc: "which of the four documents is being edited")
 
   # The record is here for the Expression section, which offers what THIS document declares — a
@@ -1327,6 +1349,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           element_css_error={@element_css_error}
           element_css_advice={@element_css_advice}
           js_hooks={@js_hooks}
+          fragments={@fragments}
+          rename_origin={@rename_origin}
+          retagged={@retagged}
+          code_allowed?={@code_allowed?}
           section={@section}
           record={@record}
           aim_target={@aim_target}
@@ -2254,6 +2280,36 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp column_span({:split, count}), do: count
   defp column_span(_part), do: 0
 
+  @form_part_words %{
+    form: gettext_noop("Form"),
+    field: gettext_noop("Field"),
+    submit: gettext_noop("Submit button"),
+    not_submit: gettext_noop("Button · does not send the form"),
+    button: gettext_noop("Button")
+  }
+
+  attr(:part, :atom, default: nil)
+
+  # The selected node's part in a form, in plain words.
+  defp form_part(assigns) do
+    assigns = assign(assigns, :words, Map.get(@form_part_words, assigns.part))
+
+    ~H"""
+    <span
+      :if={@words}
+      id="pb-form-part"
+      data-part={@part}
+      class="mt-1 inline-flex w-fit items-center gap-1.5 rounded-full border border-[#dcdbf5] bg-white px-2 py-[2px] font-['Space_Grotesk'] text-[10px] font-bold text-[#4f4bcc]"
+    >
+      <span class={[
+        "size-1.5 flex-none rounded-full",
+        (@part == :not_submit && "bg-[#a8a5a0]") || "bg-[#4f4bcc]"
+      ]}></span>
+      {translate(@words)}
+    </span>
+    """
+  end
+
   attr(:node, :any, required: true)
   attr(:hider, :any, required: true)
 
@@ -2317,6 +2373,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             <div class="text-[10.5px] font-medium text-[#6d6a63]">
               {selection_meta(@selected_node)}
             </div>
+            <.form_part part={Inspector.form_part(@editor, @selected_node)} />
           </div>
           <%!-- THE KIT ALREADY SAYS WHERE ITS DOCS ARE. Every Chelekom component carries a `doc_url`
                 and nothing read it, so someone stuck on what `variant` means had the answer sitting
@@ -2422,6 +2479,112 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           group_folds={@group_folds}
         />
 
+        <%!-- A FORM IS A THING WITH HANDLERS BEHIND IT. Every control here writes `phx-change`,
+              `phx-submit` or the `for=` they are bound through — `Inspector.rename_ops/3` rewrites
+              all three together — and only a document with an `events` column has anywhere to put
+              the handlers they name. On the other three the section renamed a form into handlers
+              that could not exist. --%>
+        <.rule_section
+          :if={Inspector.form_node?(@selected_node) and handles_events?(@section)}
+          title={gettext_noop("Form")}
+          controls={Inspector.form_controls(@selected_node, @editor)}
+          node={@selected_node}
+          warning={
+            Inspector.rename_warning(
+              renamed_from(@rename_origin, @selected_node),
+              @fragments,
+              @code_allowed?
+            )
+          }
+          group_folds={@group_folds}
+        >
+          <.form_handlers_card
+            node={@selected_node}
+            code_allowed?={@code_allowed?}
+            entries={pending_entries(Map.get(@fragments, :events, []), @editor.tree, @retagged)}
+            record={@record}
+          />
+        </.rule_section>
+
+        <.idle_form
+          :if={FormPlacement.page_forms?(@editor)}
+          node={@selected_node}
+          state={Inspector.form_state(@selected_node, @editor.components)}
+          entries={Map.get(@fragments, :events, [])}
+          components={@editor.components}
+        />
+
+        <.form_phoenix
+          :if={Inspector.form_node?(@selected_node) and handles_events?(@section)}
+          node={@selected_node}
+          editor={@editor}
+          group_folds={@group_folds}
+        />
+
+        <.merge_form_row
+          :if={Inspector.form_node?(@selected_node) and handles_events?(@section)}
+          node={@selected_node}
+          targets={merge_targets(@editor, @selected_node)}
+        />
+
+        <%!-- MOSTLY BROWSER-ENFORCED, AND TWO THAT ARE NOT. `required`, `minlength`, `maxlength`,
+              `min`, `max` and `pattern` are HTML attributes every browser checks on its own, so
+              they belong in all four documents. `format` and `confirms` write `data-format` and
+              `data-confirms`, which nothing checks but `MishkaCmsCore.Runtime.PageForm.Rules` —
+              wired up only by the compiler that also emits the handlers. Offered where that runs. --%>
+        <.rule_section
+          :if={Inspector.validated_node?(@editor.tree, @selected_node)}
+          title={gettext_noop("Validation")}
+          controls={validation_controls(@section)}
+          node={@selected_node}
+          note={validation_note(@editor.tree, @selected_node)}
+          form_id={owning_form_id(@editor, @selected_node)}
+          group_folds={@group_folds}
+        />
+
+        <.in_form_section
+          :if={
+            FormPlacement.page_forms?(@editor) and
+              FormPlacement.field?(@editor.tree, @selected_node, @editor.components)
+          }
+          node={@selected_node}
+          editor={@editor}
+          group_folds={@group_folds}
+        />
+
+        <.rule_section
+          :if={handles_events?(@section) and field_in_form?(@editor, @selected_node)}
+          title={gettext_noop("Field options")}
+          controls={
+            Inspector.field_controls(@selected_node, @editor.components,
+              code_allowed?: @code_allowed?,
+              form: Inspector.owning_form(@editor.tree, @selected_node)
+            )
+          }
+          node={@selected_node}
+          group_folds={@group_folds}
+        >
+          <button
+            :if={@code_allowed?}
+            type="button"
+            id="pb-field-code-link"
+            phx-click="open_source"
+            phx-value-tab="events"
+            class="h-7 w-full rounded-[8px] border border-[#dcdbf5] bg-white text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f7f6ff]"
+          >
+            {gettext("Write their code in Code ›")}
+          </button>
+        </.rule_section>
+
+        <.send_section
+          :if={
+            handles_events?(@section) and
+              Inspector.form_part(@editor, @selected_node) in [:submit, :not_submit]
+          }
+          node={@selected_node}
+          editor={@editor}
+          group_folds={@group_folds}
+        />
 
         <%!-- THE BREAKPOINT IS A TAB, AND WHAT IT GOVERNS SITS INSIDE IT. It used to be a folded
               group of three buttons with State, Layout and Appearance as its SIBLINGS — nothing said
@@ -6049,12 +6212,100 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  attr(:node, :any, required: true)
+  attr(:code_allowed?, :boolean, default: false)
+
+  attr(:entries, :list,
+    default: [],
+    doc: "the Handlers tab's entries, saved or not, under the names a Save stores them by"
+  )
+
+  attr(:record, :any, default: nil)
+
+  # A code author sees the form's two events and opens them in the Code window once the form has a
+  # name; anyone else reads two sentences with no event name in them.
+  defp form_handlers_card(%{code_allowed?: true} = assigns) do
+    assigns = assign(assigns, :rows, PageForms.handlers(assigns.node, assigns.entries))
+
+    ~H"""
+    <section
+      id="pb-form-handlers-card"
+      class="rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2"
+    >
+      <div
+        :for={row <- @rows}
+        id={"pb-form-card-#{row.kind}"}
+        data-custom={to_string(row.custom?)}
+        class="flex items-center gap-2 py-0.5"
+      >
+        <span class="w-[62px] flex-none text-[10.5px] font-bold text-[#3a382f]">
+          {handler_kind(row.kind)}
+        </span>
+        <code class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10.5px] text-[#5c5a54]">
+          {row.event}
+        </code>
+        <span class={[
+          "flex-none rounded-full px-1.5 text-[9.5px] font-bold",
+          (row.custom? && "bg-[#f2f1fc] text-[#4f4bcc]") || "bg-[#e6f6ee] text-[#177a53]"
+        ]}>
+          {handler_state(row.custom?)}
+        </span>
+      </div>
+      <button
+        :if={PageForms.param_name(@node)}
+        type="button"
+        id="pb-form-edit-in-code"
+        phx-click="open_source"
+        phx-value-tab="events"
+        phx-value-form={@node.id}
+        class="mt-1.5 h-7 w-full rounded-[8px] border border-[#dcdbf5] bg-white text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f7f6ff]"
+      >
+        {gettext("Edit in Code")}
+      </button>
+      <p
+        :if={!PageForms.param_name(@node)}
+        id="pb-form-card-unnamed"
+        class="mt-1.5 text-[10.5px] font-medium leading-[1.5] text-[#6d6a63]"
+      >
+        {gettext("Give this form a name above to write code for it.")}
+      </p>
+    </section>
+    """
+  end
+
+  defp form_handlers_card(assigns) do
+    assigns = assign(assigns, :story, Inspector.form_story(assigns.node, assigns.record))
+
+    ~H"""
+    <section
+      id="pb-form-handlers-card"
+      class="flex flex-col gap-1 rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2 text-[10.5px] font-medium leading-[1.5] text-[#5c5a54]"
+    >
+      <p id="pb-form-card-typing">{elem(@story, 0)}</p>
+      <p id="pb-form-card-sending">{elem(@story, 1)}</p>
+    </section>
+    """
+  end
+
+  # The rename warning reads the form as it was when its rename began.
+  defp renamed_from(%Node{id: id} = origin, %Node{id: id}), do: origin
+  defp renamed_from(_origin, node), do: node
+
   # Whether this document holds handlers — asked of the resource, the way the code tabs ask it, so
   # one that gains or loses the column answers differently without a list of section names here.
   defp handles_events?(section) do
     resource = Section.resource(Section.normalize(section))
 
     not is_nil(Ash.Resource.Info.attribute(resource, :events))
+  end
+
+  # The two rules a browser does not enforce are dropped where nothing else would either: they are
+  # read by `PageForm.Rules`, which only the compiler that emits handlers wires up.
+  defp validation_controls(section) do
+    case handles_events?(section) do
+      true -> Inspector.validation_controls()
+      false -> Enum.reject(Inspector.validation_controls(), &(&1.key in ~w(format confirms)))
+    end
   end
 
   # Whether a LiveView owns this document's DOM at all. Three of the four are rendered by one — a
@@ -6168,6 +6419,646 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp expression_node?(%Node{kind: kind}) when kind in [:eex, :eex_block], do: true
   defp expression_node?(_node), do: false
+
+  attr(:node, :any, required: true)
+  attr(:editor, :any, required: true)
+  attr(:group_folds, :map, default: %{})
+
+  # A button in a form: what it says while sending and whether it sends at all, and the way to its
+  # form's settings. Nothing for a button with neither, such as one that renders a link, so a button
+  # that does not send is warned only where Button type is there to change it.
+  defp send_section(assigns) do
+    %{tree: tree, components: components} = assigns.editor
+    node = assigns.node
+    roles = Fields.roles([node | Tree.ancestors(tree, node.id)], components)
+    rules = Fields.submit_rules(roles, components)
+    send? = Fields.submit_node?(node, roles, rules)
+
+    assigns =
+      assigns
+      |> assign(:send?, send?)
+      |> assign(
+        :controls,
+        node
+        |> Inspector.send_controls(components, send?, Fields.type_attr(node, roles, rules))
+        |> Enum.filter(&(send? or &1.key == "button_type"))
+      )
+      |> assign(:form_id, owning_form_id(assigns.editor, node))
+
+    ~H"""
+    <.rule_section
+      :if={@controls != []}
+      title={gettext_noop("Send button")}
+      controls={@controls}
+      node={@node}
+      form_id={@form_id}
+      group_folds={@group_folds}
+    >
+      <p
+        :if={!@send?}
+        id="pb-send-type-warning"
+        class="rounded-[8px] border border-[#f0e3c9] bg-[#fbf1df] px-2.5 py-1.5 text-[10px] font-semibold leading-[1.5] text-[#8a5514]"
+      >
+        {gettext("This button does not send the form. Choose \"Sends the form\" if it should.")}
+      </p>
+    </.rule_section>
+    """
+  end
+
+  # The form a node sits in, any kind of form, for the Form settings link.
+  defp owning_form_id(%{tree: tree, components: components}, node) do
+    case FormPlacement.form_of(tree, node, components) do
+      %Node{id: id} -> id
+      nil -> nil
+    end
+  end
+
+  # A field inside a working form.
+  defp field_in_form?(%{tree: tree, components: components}, %Node{} = node),
+    do:
+      Fields.field_node?(node, Fields.roles([node], components)) and
+        Inspector.owning_form(tree, node) != nil
+
+  defp field_in_form?(_editor, _node), do: false
+
+  attr(:title, :string, required: true)
+  attr(:controls, :list, required: true)
+  attr(:node, :any, required: true)
+  attr(:form_id, :string, default: nil, doc: "the form whose settings the section links to")
+  attr(:note, :string, default: nil, doc: "which field of which form the rules are for")
+  attr(:warning, :string, default: nil, doc: "what a rename would stop calling")
+  attr(:group_folds, :map, default: %{})
+  slot(:inner_block, doc: "drawn under the controls, and folded with them")
+
+  # One of the two sections a form adds, drawn from the controls
+  # `MishkaCmsCore.Runtime.PageBuilder.Inspector.form_sections/0` declares rather than from markup of
+  # its own — a control added there appears here without this function changing.
+  #
+  # OPEN BY DEFAULT, where Behavior and Attributes start closed. Both sections are conditional — Form
+  # only on a form, Validation only on a field bound to one of that form's keys — so a reader who can
+  # see the heading at all came to the panel for what is under it.
+  #
+  # ABOVE THE BREAKPOINT STRIP, with the component properties, for the reason written there: every
+  # control here writes a plain attribute, one value for the whole page. Drawn inside the strip they
+  # sat under "Recorded against 560px and below", which promises a mobile-only `required` that does
+  # not exist.
+  defp rule_section(assigns) do
+    ~H"""
+    <section>
+      <.fold_heading title={@title} group_folds={@group_folds} folded_by_default={false} />
+
+      <div :if={!folded?(@group_folds, "section", @title, false)} class="flex flex-col gap-2.5">
+        <p
+          :if={@note}
+          id="pb-rule-note"
+          class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]"
+        >
+          {@note}
+        </p>
+        <button
+          :if={@form_id}
+          type="button"
+          id="pb-form-settings-link"
+          phx-click="select"
+          phx-value-id={@form_id}
+          class="w-fit text-[10.5px] font-bold text-[#4f4bcc] hover:underline"
+        >
+          {gettext("Form settings ›")}
+        </button>
+        <p
+          :if={@warning}
+          id="pb-rule-warning"
+          class="rounded-[8px] border border-[#f0e3c9] bg-[#fbf1df] px-2.5 py-1.5 text-[10px] font-semibold leading-[1.5] text-[#8a5514]"
+        >
+          {@warning}
+        </p>
+        <.rule_control :for={control <- @controls} control={control} node={@node} />
+        {render_slot(@inner_block)}
+      </div>
+    </section>
+    """
+  end
+
+  attr(:control, :map, required: true)
+  attr(:node, :any, required: true)
+
+  # One rule: its label, the widget its descriptor asks for, and the sentence the descriptor writes
+  # about it. The value is read back off the node's own attribute, so re-selecting the field shows
+  # what is actually set rather than what was last typed.
+  #
+  # A `div` rather than a `label`, for the reason `style_group/1` gives: a text rule's control is a
+  # form, and a form inside a label is not valid HTML.
+  defp rule_control(assigns) do
+    assigns =
+      assigns
+      |> assign(:key, assigns.control.key)
+      |> assign(:event, rule_event(assigns.control))
+      |> assign(:value, Inspector.rule_value(assigns.node, assigns.control))
+
+    ~H"""
+    <div
+      id={@control[:id] || "pb-rule-control-#{@key}"}
+      class="rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2"
+    >
+      <span class="mb-1.5 block truncate text-[10.5px] font-bold text-[#3a382f]">
+        {translate(@control.label)}
+      </span>
+
+      <.rule_widget {assigns} />
+
+      <p class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+        {translate(@control.help)}
+      </p>
+    </div>
+    """
+  end
+
+  # THE SEED IS NOT A ONE-ATTRIBUTE WRITE. It renames all five of the names a form derives, so it
+  # goes to `rename_form` and its batch; `MishkaCmsCore.Runtime.PageBuilder.Inspector.rule_op/3` has
+  # no clause for it and raises rather than quietly writing one of the five.
+  defp rule_event(%{key: "seed"}), do: "rename_form"
+  defp rule_event(%{key: "how"}), do: "form_how"
+  defp rule_event(_control), do: "set_rule"
+
+  # THE SWITCH'S NEXT STATE RIDES THE BUTTON'S OWN `value`, for the reason the breakpoint tabs
+  # already document: `View.extractMeta` overwrites `meta.value` with `el.value`, so a
+  # `phx-value-value` never arrives and the switch could only ever move one way.
+  defp rule_widget(%{control: %{widget: :toggle}} = assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={"pb-rule-#{@key}"}
+      role="switch"
+      aria-checked={to_string(@value == true)}
+      value={to_string(@value != true)}
+      phx-click={@event}
+      phx-value-key={@key}
+      phx-value-node_id={@node.id}
+      class={[
+        "relative h-[23px] w-10 rounded-full transition",
+        (@value == true && "bg-[#4f4bcc]") || "bg-[#e0ded7]"
+      ]}
+    >
+      <span class={[
+        "absolute top-[3px] size-[17px] rounded-full bg-white shadow transition-all",
+        (@value == true && "left-5") || "left-[3px]"
+      ]} />
+    </button>
+    """
+  end
+
+  defp rule_widget(%{control: %{widget: {:number, min, max, step}}} = assigns) do
+    assigns = assigns |> assign(:min, min) |> assign(:max, max) |> assign(:step, step)
+
+    ~H"""
+    <.field_form
+      id={"pb-rule-form-#{@key}"}
+      event={@event}
+      phx-value-key={@key}
+      phx-value-node_id={@node.id}
+    >
+      <input
+        type="number"
+        id={"pb-rule-#{@key}"}
+        name="value"
+        value={@value}
+        min={@min}
+        max={@max}
+        step={@step}
+        phx-debounce="350"
+        class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-semibold text-[#3a382f]"
+      />
+    </.field_form>
+    """
+  end
+
+  # CLICKING THE CHOSEN PILL CLEARS IT. "Neither pill means no format check" is only true while there
+  # is a way back to neither, and an empty value is how this editor spells removing an attribute.
+  defp rule_widget(%{control: %{widget: {:segmented, values}}} = assigns) do
+    assigns = assign(assigns, :values, values)
+
+    ~H"""
+    <div class="flex gap-0.5 rounded-[9px] bg-[#f2f1ec] p-0.5">
+      <button
+        :for={choice <- @values}
+        type="button"
+        id={"pb-rule-#{@key}-#{choice}"}
+        phx-click={@event}
+        phx-value-key={@key}
+        phx-value-node_id={@node.id}
+        value={(@value == choice && "") || choice}
+        class={[
+          "h-7 min-w-0 flex-1 truncate rounded-[7px] px-1 text-[10.5px] font-semibold capitalize",
+          (@value == choice && "bg-white text-[#4f4bcc] shadow-sm") || "text-[#6d6a63]"
+        ]}
+      >
+        {choice}
+      </button>
+    </div>
+    """
+  end
+
+  # Pills with their own words, and a number box for any other value.
+  defp rule_widget(%{control: %{widget: {:choices_or_number, pairs}}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:pairs, pairs)
+      |> assign(:number, other_number(assigns.value, pairs))
+
+    ~H"""
+    <div class="flex flex-col gap-1.5">
+      <.rule_widget
+        control={%{@control | widget: {:choices, @pairs}}}
+        key={@key}
+        event={@event}
+        value={@value}
+        node={@node}
+      />
+      <.field_form
+        id={"pb-rule-form-#{@key}"}
+        event={@event}
+        phx-value-key={@key}
+        phx-value-node_id={@node.id}
+      >
+        <input
+          type="number"
+          id={"pb-rule-#{@key}-number"}
+          name="value"
+          value={@number}
+          min="0"
+          step="50"
+          placeholder={gettext("Or wait this long, like 500")}
+          phx-debounce="350"
+          class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-semibold text-[#3a382f]"
+        />
+      </.field_form>
+    </div>
+    """
+  end
+
+  # Pills, each with its own words; the one the node reads now is pressed. `stacked` puts them one
+  # under another, for words too long to share a row.
+  defp rule_widget(%{control: %{widget: {:choices, pairs}}} = assigns) do
+    assigns =
+      assigns |> assign(:pairs, pairs) |> assign(:stacked?, assigns.control[:stacked] == true)
+
+    ~H"""
+    <div class={[
+      "flex gap-0.5 rounded-[9px] bg-[#f2f1ec] p-0.5",
+      @stacked? && "flex-col"
+    ]}>
+      <button
+        :for={{choice, label} <- @pairs}
+        type="button"
+        id={"pb-rule-#{@key}-#{(choice == "" && "default") || choice}"}
+        phx-click={@event}
+        phx-value-key={@key}
+        phx-value-node_id={@node.id}
+        value={choice}
+        aria-pressed={to_string(@value == choice)}
+        class={[
+          "h-7 min-w-0 truncate rounded-[7px] text-[10.5px] font-semibold",
+          (@stacked? && "px-2 text-left") || "flex-1 px-1",
+          (@value == choice && "bg-white text-[#4f4bcc] shadow-sm") || "text-[#6d6a63]"
+        ]}
+      >
+        {translate(label)}
+      </button>
+    </div>
+    """
+  end
+
+  defp rule_widget(assigns) do
+    ~H"""
+    <.field_form
+      id={"pb-rule-form-#{@key}"}
+      event={@event}
+      phx-value-key={@key}
+      phx-value-node_id={@node.id}
+    >
+      <input
+        type="text"
+        id={"pb-rule-#{@key}"}
+        name="value"
+        value={@value}
+        placeholder={translate(@control[:placeholder])}
+        autocomplete="off"
+        spellcheck="false"
+        phx-debounce="350"
+        class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f]"
+      />
+    </.field_form>
+    """
+  end
+
+  defp other_number(value, pairs) do
+    case List.keymember?(pairs, value, 0) do
+      true -> nil
+      false -> value
+    end
+  end
+
+  attr(:node, :any, required: true)
+  attr(:editor, :any, required: true)
+  attr(:group_folds, :map, default: %{})
+
+  # Which form sends the selected field; choosing another moves the whole field there. Titled
+  # "In form" because fold state is keyed by title and the form's own section is "Form".
+  defp in_form_section(assigns) do
+    %{tree: tree, components: components} = assigns.editor
+
+    current =
+      FormPlacement.form_of(tree, FormPlacement.unit(tree, assigns.node, components), components)
+
+    forms = FormPlacement.forms(tree)
+
+    assigns =
+      assigns
+      |> assign(:forms, forms)
+      |> assign(:current, current && current.id)
+      |> assign(:listed?, current != nil and List.keymember?(forms, current.id, 0))
+      |> assign(
+        :unlisted,
+        (current && gettext("A form that does not work yet")) || gettext("Not in a form")
+      )
+
+    ~H"""
+    <section id="pb-field-form-section">
+      <.fold_heading
+        title={gettext_noop("In form")}
+        group_folds={@group_folds}
+        folded_by_default={false}
+      />
+
+      <div :if={!folded?(@group_folds, "section", "In form", false)} class="flex flex-col gap-1.5">
+        <.field_form id="pb-field-form-form" event="move_to_form" phx-value-node_id={@node.id}>
+          <.form_select id="pb-field-form">
+            <option :if={!@listed?} value="" selected>{@unlisted}</option>
+            <option :for={{id, name} <- @forms} value={id} selected={id == @current}>
+              {name}
+            </option>
+            <option value={FormPlacement.new_target()}>{gettext("A new form")}</option>
+          </.form_select>
+        </.field_form>
+        <p class="text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+          {gettext("Which form sends this field. Choose another to move it there.")}
+        </p>
+      </div>
+    </section>
+    """
+  end
+
+  attr(:node, :any, required: true)
+  attr(:state, :any, required: true)
+  attr(:entries, :list, default: [], doc: "the page's Events-tab entries")
+  attr(:components, :list, default: [])
+
+  # A form that does not work yet, and the way to make it one where there is a safe way. One the
+  # page's own code answers says so instead.
+  defp idle_form(%{state: {:idle, _hands?}} = assigns) do
+    assigns =
+      assigns
+      |> assign(:fixable?, FormPlacement.wirable?(assigns.node, assigns.components))
+      |> assign(
+        :handled?,
+        PageForms.answered?(assigns.entries, Node.attr_text(assigns.node, "phx-submit"))
+      )
+
+    ~H"""
+    <section
+      id="pb-form-idle"
+      class="flex flex-col gap-2 rounded-[10px] border border-[#f0e3c9] bg-[#fbf1df] px-2.5 py-2"
+    >
+      <p
+        id="pb-form-idle-state"
+        data-handled={to_string(@handled?)}
+        class="text-[10.5px] font-semibold leading-[1.5] text-[#8a5514]"
+      >
+        {idle_line(@handled?, Node.attr(@node, "action") != nil)}
+      </p>
+      <button
+        :if={@fixable?}
+        type="button"
+        id="pb-form-wire"
+        phx-click="wire_form"
+        phx-value-node_id={@node.id}
+        class="h-7 w-full rounded-[8px] border border-[#dcdbf5] bg-white text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f7f6ff]"
+      >
+        {gettext("Make it a working form")}
+      </button>
+      <p
+        :if={!@fixable?}
+        id="pb-form-idle-why"
+        class="text-[10px] font-medium leading-[1.5] text-[#8a5514]"
+      >
+        {gettext(
+          "It sends to its own web address, or cannot pass its fields on. To have one that works here, use Form from Blocks › Forms."
+        )}
+      </p>
+    </section>
+    """
+  end
+
+  defp idle_form(assigns), do: ~H""
+
+  defp idle_line(true, _elsewhere?),
+    do:
+      gettext(
+        "Your own code handles this form when they press Send. Making it a working form keeps that code and the names its fields send."
+      )
+
+  defp idle_line(false, true),
+    do:
+      gettext(
+        "This form sends what is typed to its own web address. Its fields are not checked here."
+      )
+
+  defp idle_line(false, false),
+    do: gettext("This is a form, but it does not work yet. Fields in it are not checked or sent.")
+
+  attr(:node, :any, required: true)
+  attr(:editor, :any, required: true)
+  attr(:group_folds, :map, default: %{})
+
+  # A working form's Phoenix side, folded: the names only Form name changes, read-only, then the
+  # form's own options, each where the form forwards it.
+  defp form_phoenix(assigns) do
+    %{tree: tree, components: components} = assigns.editor
+
+    assigns =
+      assigns
+      |> assign(:controls, Inspector.phoenix_form_controls(assigns.node, components))
+      |> assign(:files?, Fields.takes?(assigns.node, "multipart", components))
+      |> assign(:files_on?, Node.attr(assigns.node, "multipart") != nil)
+      |> assign(:holds_file?, Inspector.holds_file_field?(tree, assigns.node, components))
+      |> assign(:address?, Inspector.address_takes?(assigns.node, components))
+      |> assign(:address, PageForms.address(assigns.node))
+
+    ~H"""
+    <section id="pb-form-phoenix">
+      <.fold_heading
+        title={gettext_noop("Form · Phoenix")}
+        group_folds={@group_folds}
+        folded_by_default={true}
+      />
+
+      <div
+        :if={!folded?(@group_folds, "section", "Form · Phoenix", true)}
+        class="flex flex-col gap-2.5"
+      >
+        <div id="pb-form-names" class="rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2">
+          <span class="mb-1.5 block truncate text-[10.5px] font-bold text-[#3a382f]">
+            {gettext("Names it uses")}
+          </span>
+          <div
+            :for={{name, value} <- Inspector.form_names(@node)}
+            data-name={name}
+            class="flex items-center gap-2 py-0.5"
+          >
+            <code class="w-[74px] flex-none font-['Space_Grotesk'] text-[10px] font-bold text-[#7a5bd0]">
+              {name}
+            </code>
+            <code class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10px] text-[#5c5a54]">
+              {value || "—"}
+            </code>
+          </div>
+          <p class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+            {gettext("Form name above changes these, all together.")}
+          </p>
+        </div>
+
+        <.rule_control :for={control <- @controls} control={control} node={@node} />
+
+        <div
+          :if={@files?}
+          id="pb-form-files"
+          data-on={to_string(@files_on?)}
+          class="rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2"
+        >
+          <span class="mb-1 block truncate text-[10.5px] font-bold text-[#3a382f]">
+            {gettext("Can send files")}
+          </span>
+          <p class="text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+            {files_line(@files_on?, @holds_file?)}
+          </p>
+        </div>
+
+        <div
+          :if={@address?}
+          id="pb-form-address"
+          class="rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2"
+        >
+          <span class="mb-1.5 block truncate text-[10.5px] font-bold text-[#3a382f]">
+            {gettext("Send to another address")}
+          </span>
+          <.field_form id="pb-form-address-form" event="form_address" phx-value-node_id={@node.id}>
+            <input
+              type="url"
+              id="pb-form-address-input"
+              name="value"
+              value={@address}
+              placeholder="https://"
+              autocomplete="off"
+              spellcheck="false"
+              phx-debounce="blur"
+              class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f]"
+            />
+          </.field_form>
+          <p class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+            {gettext(
+              "What they type is checked here first, then sent to this address, and what it answers opens in this same tab. Leave it empty to keep them on this page."
+            )}
+          </p>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  defp files_line(true, true), do: gettext("On, because a file field is inside this form.")
+  defp files_line(true, false), do: gettext("On.")
+
+  defp files_line(false, _holds?),
+    do: gettext("Off. It turns on by itself when a file field is put in this form.")
+
+  attr(:node, :any, required: true)
+  attr(:targets, :list, required: true)
+
+  # A selected form's fields, moved into another form in one step.
+  defp merge_form_row(assigns) do
+    ~H"""
+    <div
+      :if={@targets != []}
+      id="pb-form-merge-row"
+      class="rounded-[10px] border border-[#ecebe6] bg-white px-2.5 py-2"
+    >
+      <span class="mb-1.5 block truncate text-[10.5px] font-bold text-[#3a382f]">
+        {gettext("Move its fields into")}
+      </span>
+      <.field_form id="pb-form-merge-form" event="merge_forms" phx-value-node_id={@node.id}>
+        <.form_select id="pb-form-merge">
+          <option value="" selected>{gettext("Choose a form")}</option>
+          <option :for={{id, name} <- @targets} value={id}>{name}</option>
+        </.form_select>
+      </.field_form>
+      <p class="mt-1.5 text-[10px] font-medium leading-[1.5] text-[#8a877f]">
+        {gettext("Its fields go in front of that form's Send button, and this form is removed.")}
+      </p>
+    </div>
+    """
+  end
+
+  attr(:id, :string, required: true)
+  slot(:inner_block, required: true, doc: "the `<option>`s")
+
+  # A `form` select with its chevron, as the In form picker and Move its fields into draw it.
+  defp form_select(assigns) do
+    ~H"""
+    <div class="relative">
+      <select
+        id={@id}
+        name="form"
+        class="h-9 w-full appearance-none rounded-[9px] border border-[#ecebe6] bg-white py-0 pl-2.5 pr-7 text-[11.5px] font-semibold text-[#3a382f] outline-none"
+      >
+        {render_slot(@inner_block)}
+      </select>
+      <.icon
+        name={:chevron}
+        size={11}
+        class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90 text-[#a8a5a0]"
+      />
+    </div>
+    """
+  end
+
+  # The other working forms a form with fields can move them into.
+  defp merge_targets(%{tree: tree, components: components}, node) do
+    case FormPlacement.units(tree, node, components) do
+      [] -> []
+      _fields -> Enum.reject(FormPlacement.forms(tree), fn {id, _name} -> id == node.id end)
+    end
+  end
+
+  # WHICH FIELD OF WHICH FORM. Two forms on one page can both hold an `email`, and the header card
+  # says `<.input>` for either of them — so the section names the binding the rules hang off.
+  defp validation_note(tree, node),
+    do: field_note(Inspector.bound_key(tree, node), form_seed_of(tree, node))
+
+  defp form_seed_of(tree, node), do: tree |> Inspector.owning_form(node) |> seed_of()
+
+  defp seed_of(nil), do: nil
+  defp seed_of(form), do: Inspector.form_seed(form)
+
+  defp field_note(nil, _seed), do: nil
+  defp field_note(_key, nil), do: nil
+
+  # The form by the name Layers, the crumbs and the In form picker give it.
+  defp field_note(key, seed),
+    do:
+      gettext("%{key} in %{form}. Checked in the browser and again on the server.",
+        key: key,
+        form: seed |> Naming.people_name() |> FormPlacement.phrase()
+      )
 
   attr(:title, :string, required: true)
   attr(:group_folds, :map, default: %{})
@@ -7489,6 +8380,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         >
           {(@node.kind == :slot && slot_label(@node, @tree)) || node_label(@node)}
         </button>
+        <span
+          :if={FormPlacement.form_name(@node)}
+          id={"pb-layer-form-#{@id}"}
+          class="flex-none rounded-full bg-[#f2f1fc] px-1.5 py-px font-['Space_Grotesk'] text-[10px] font-bold text-[#4f4bcc]"
+        >
+          {FormPlacement.form_name(@node)}
+        </span>
         <%!-- HIDDEN FROM VISITORS, said where it was done, and pressed to show it again; what is
               inside it is dimmed instead. --%>
         <button
@@ -8368,6 +9266,69 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp pending_entries(entries, tree, retagged),
     do: PageForms.follow(entries, PageForms.events(tree), retagged)
 
+  attr(:forms, :list, required: true)
+  attr(:focus, :any, default: nil)
+
+  # Each form's On change and On submit, Automatic or Custom. Customize submits the code form, so
+  # what was typed is kept, and adds the default code as a new entry.
+  defp form_handlers(assigns) do
+    ~H"""
+    <section
+      id="pb-form-handlers"
+      class="mb-4 rounded-[12px] border border-[#ecebe6] bg-[#faf9f6] px-4 py-3"
+    >
+      <h3 class="mb-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+        {gettext("Forms on this page")}
+      </h3>
+      <div class="flex flex-col gap-2.5">
+        <div
+          :for={form <- @forms}
+          id={"pb-form-handlers-#{form.node_id}"}
+          data-focus={@focus == {:form, form.node_id}}
+          phx-mounted={@focus == {:form, form.node_id} && JS.focus_first()}
+        >
+          <div class="mb-1 text-[12px] font-bold text-[#17161a]">{form.name}</div>
+          <div
+            :for={row <- form.handlers}
+            id={"pb-form-handler-#{row.event}"}
+            data-custom={to_string(row.custom?)}
+            class="flex items-center gap-2.5 py-0.5 pl-2"
+          >
+            <span class="w-[74px] flex-none text-[11px] font-semibold text-[#6d6a63]">
+              {handler_kind(row.kind)}
+            </span>
+            <code class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-bold text-[#3a382f]">
+              {row.event}
+            </code>
+            <span class={[
+              "flex-none rounded-full px-2 py-[1px] text-[10px] font-bold",
+              (row.custom? && "bg-[#f2f1fc] text-[#4f4bcc]") || "bg-[#e6f6ee] text-[#177a53]"
+            ]}>
+              {handler_state(row.custom?)}
+            </span>
+            <button
+              :if={!row.custom?}
+              type="submit"
+              id={"pb-form-customize-#{row.event}"}
+              name="customize"
+              value={row.event}
+              class="flex-none rounded-[8px] border border-[#ecebe6] bg-white px-2.5 py-1 text-[11px] font-bold text-[#4f4bcc] hover:border-[#c3c1f0]"
+            >
+              {gettext("Customize")}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+    """
+  end
+
+  defp handler_kind(:validate), do: gettext("On change")
+  defp handler_kind(:submit), do: gettext("On submit")
+
+  defp handler_state(true), do: gettext("Custom")
+  defp handler_state(false), do: gettext("Automatic")
+
   attr(:tab, :atom, required: true)
   attr(:entries, :list, required: true)
   attr(:fault, :any, default: nil)
@@ -8390,6 +9351,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
       <div class={["min-h-0 flex-1 overflow-y-auto px-5 py-4", quiet_scroll(:light)]}>
 
+        <.form_handlers :if={@forms != []} forms={@forms} focus={@focus} />
 
         <div class="flex flex-col gap-3">
           <section

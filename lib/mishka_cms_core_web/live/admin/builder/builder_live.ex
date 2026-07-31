@@ -50,6 +50,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.States.EditorSessionState
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Presets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
@@ -516,6 +520,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # WHETHER THIS DEPLOYMENT TAKES CODE. Whoever opened this builder may write its document's code
     # (`Section.permissions/1`); `:page_code` set to `:off` stops it for everyone.
     |> assign_new(:code_allowed?, fn -> CodeAccess.enabled?() end)
+    # The selected form as it was when its rename began, and the stored handler names that rename
+    # moves onto a token (`Inspector.retagged/3`).
+    |> assign_new(:rename_origin, fn -> nil end)
+    |> assign_new(:retagged, fn -> %{} end)
     |> assign_new(:source_error, fn -> nil end)
     |> assign_new(:source_tab, fn -> :template end)
     # What the Handlers tab puts in front of the reader: `{:entry, index}` or `{:form, node_id}`.
@@ -704,6 +712,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     socket
     |> release_page_scope(editor.selection)
+    |> follow_left_form(editor)
     |> assign_new(:expanded, fn -> default_expanded(editor.tree) end)
     |> expand_to_selection(editor)
     |> expand_selected(editor)
@@ -765,6 +774,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:expanded, fn -> MapSet.new() end)
     |> update(:expanded, fn expanded -> Enum.reduce(ancestors, expanded, &MapSet.put(&2, &1)) end)
   end
+
+  # The Assets sheet reads the site's real Media library, so it is loaded when the sheet opens
+  # rather than on every mount — an editor that never opens Assets should not pay for it.
+  # A sheet opens NOW and fills in when its query answers. Both of these are database reads, and
+  # doing them inline meant the click that opened the panel held the LiveView until Postgres came
+  # back — on a slow query the whole editor stopped, not just the panel.
+  # The query's inputs are captured, never the socket — closing over the socket copies the whole
+  # thing (tree, history, clipboard) into the new process on every open.
+  # Counting the chips parses the site's stylesheets, so it happens when the Studio opens rather
+  # than when the editor loads — an author who never opens the sheet never pays for it.
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil("__all__"), do: nil
+  defp blank_to_nil(id), do: id
 
   # LiveView's own async assign, so the panel gets `AsyncResult.loading/0` and `<.async_result>`
   # rather than a hand-rolled boolean. The read also writes the palette into the SESSION, because the
@@ -1385,6 +1407,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       when tab in ~w(events infos helpers),
       do: {:noreply, put_flash(socket, :error, CodeAccess.refusal())}
 
+  # `form` names a form whose handler entry, or else its row, the Handlers tab focuses.
   def handle_event("open_source", params, socket) do
     socket = assign(socket, source_modal: true, source_error: nil)
 
@@ -1392,7 +1415,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       %{"tab" => tab} ->
         {:noreply,
          socket
-         |> assign(:source_tab, tab_atom(tab, @source_tabs))}
+         |> assign(:source_tab, tab_atom(tab, @source_tabs))
+         |> focus_form(params["form"])}
 
       _wherever_it_was ->
         {:noreply, socket}
@@ -1592,6 +1616,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      |> assign(:fragments, Map.put(socket.assigns.fragments, key, entries))
      |> assign(:code_fault, nil)
      |> assign(:code_focus, nil)}
+  end
+
+  # Customize: keeps what was typed, then adds the form event's default code as a new entry and
+  # focuses it. Nothing is stored until Save.
+  def handle_event("save_code", %{"tab" => "events", "customize" => event} = params, socket) do
+    {:noreply,
+     socket
+     |> assign(:fragments, Map.put(socket.assigns.fragments, :events, submitted_entries(params)))
+     |> assign(:code_fault, nil)
+     |> customize(event)}
   end
 
   # WRITTEN HERE, NOT CARRIED. Code is page configuration rather than document content, so it does
@@ -2285,6 +2319,92 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # A VALIDATION RULE IS AN ORDINARY ATTRIBUTE EDIT, so it goes down the same funnel every other
+  # Inspector write does: one undo step, one broadcast, one history entry, and the same containment
+  # and plugin hooks. `MishkaCmsCore.Runtime.PageBuilder.Inspector.rule_op/3` decides whether that is
+  # a write or a delete — a rule turned off must not survive as `required=""`, which is still
+  # required to a browser while reading back as no rule on the server.
+  #
+  # Its op is atom-keyed, which is also why a switch turned ON never meets the clause above: it
+  # writes `value: ""` and means it.
+  def handle_event("set_rule", %{"key" => key, "node_id" => node_id} = params, socket) do
+    written_rule(
+      socket,
+      attr_rule(key, socket.assigns[:code_allowed?] == true),
+      Tree.get(socket.assigns.editor.tree, node_id),
+      params["value"]
+    )
+  end
+
+  # ALL FIVE NAMES IN ONE BATCH. Five ops would be five undo steps, and four of them would leave the
+  # form's id, param name, page assign and two event names disagreeing about what this form is.
+  def handle_event("rename_form", %{"node_id" => node_id, "value" => seed}, socket) do
+    renamed(socket, Tree.get(socket.assigns.editor.tree, node_id), seed)
+  end
+
+  # HOW IT WORKS: a form sends when they press Send, or works as they type with no Send button.
+  def handle_event("form_how", %{"node_id" => node_id, "value" => how}, socket)
+      when how in ~w(send typing) do
+    how = Map.fetch!(%{"send" => :send, "typing" => :typing}, how)
+
+    case FormPlacement.how_ops(socket.assigns.editor, node_id, how) do
+      {:ok, ops, told} ->
+        socket.assigns.token
+        |> EditorSession.apply_ops(ops, how_label(how))
+        |> set_form(socket, node_id, {:how, how})
+        |> told_setting(socket, told)
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, reason)}
+    end
+  end
+
+  def handle_event("form_how", _params, socket), do: {:noreply, socket}
+
+  # MAKE IT A WORKING FORM: a kit form is wired where it stands, a raw <form> becomes a <.form>.
+  def handle_event("wire_form", %{"node_id" => node_id}, socket) do
+    editor = socket.assigns.editor
+    events = code_events(socket)
+
+    case Tree.get(editor.tree, node_id) do
+      %Node{kind: :tag} -> FormPlacement.replace_ops(editor, node_id, events: events)
+      %Node{} = node -> FormPlacement.wiring(editor.tree, node, editor.components, events: events)
+      nil -> {:error, gettext("That form is no longer on the page.")}
+    end
+    |> wired(socket)
+  end
+
+  # SEND TO ANOTHER ADDRESS: the four attributes it needs, written or removed together.
+  def handle_event("form_address", %{"node_id" => node_id, "value" => typed}, socket) do
+    %{tree: tree, components: components} = socket.assigns.editor
+
+    with %Node{} = node <- Tree.get(tree, node_id),
+         {:ok, ops} <- Inspector.address_ops(tree, node, typed, components) do
+      socket.assigns.token
+      |> EditorSession.apply_ops(ops, gettext("Changed where a form sends"))
+      |> set_form(socket, node_id, {:address, address_of(typed)})
+      |> addressed(socket)
+    else
+      {:error, reason} -> {:noreply, put_flash(socket, :error, reason)}
+      nil -> {:noreply, socket}
+    end
+  end
+
+  # IN FORM: the whole field moves to the chosen form, or a new one, rebound there as one step.
+  def handle_event("move_to_form", %{"node_id" => node_id, "form" => target}, socket)
+      when is_binary(target) and target != "" do
+    socket.assigns.token |> EditorSession.move_to_form(node_id, target) |> told_form(socket)
+  end
+
+  def handle_event("move_to_form", _params, socket), do: {:noreply, socket}
+
+  def handle_event("merge_forms", %{"node_id" => from_id, "form" => into_id}, socket)
+      when is_binary(into_id) and into_id != "" do
+    socket.assigns.token |> EditorSession.merge_forms(from_id, into_id) |> told_form(socket)
+  end
+
+  def handle_event("merge_forms", _params, socket), do: {:noreply, socket}
+
   def handle_event("undo", _params, socket) do
     {:ok, _editor} = EditorSession.undo(socket.assigns.token)
     {:noreply, socket}
@@ -2620,6 +2740,111 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp save_interaction(socket, _gone, _action),
     do: {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
 
+  # Adds the default code for `event` when no entry answers it, else focuses the one that does,
+  # counting a handler a pending rename moves onto the form. An event no form on the page names any
+  # more changes nothing.
+  defp customize(socket, event) do
+    followed = followed_events(socket)
+
+    case PageForms.handler_for(socket.assigns.editor.tree, followed, event) do
+      nil -> socket
+      %{custom?: true} -> assign(socket, :code_focus, answering(followed, event))
+      row -> customized(socket, code_events(socket), row)
+    end
+  end
+
+  defp customized(socket, entries, row) do
+    entry = %{
+      "name" => row.event,
+      "code" => LiveViewCompiler.form_handler_sample(row.kind, row.event)
+    }
+
+    Events.form_customized(%{
+      node_id: row.node_id,
+      event: row.event,
+      kind: row.kind,
+      section: section(socket),
+      resource_id: socket.assigns.editor.resource_id,
+      site_id: socket.assigns.editor.site_id,
+      actor_id: actor_id(socket)
+    })
+
+    socket
+    |> assign(:fragments, Map.put(socket.assigns.fragments, :events, entries ++ [entry]))
+    |> assign(:code_focus, {:entry, length(entries)})
+  end
+
+  defp code_events(socket), do: socket.assigns |> Map.get(:fragments, %{}) |> Map.get(:events, [])
+
+  # The Handlers tab's entries under the names a Save will store them by, in the same order.
+  defp followed_events(socket),
+    do:
+      socket
+      |> code_events()
+      |> PageForms.follow(PageForms.events(socket.assigns.editor.tree), retagged(socket))
+
+  defp answering(entries, event) do
+    case Enum.find_index(entries, &PageForms.answered?([&1], event)) do
+      nil -> nil
+      index -> {:entry, index}
+    end
+  end
+
+  # The form's entry, On submit first, or else its row in the forms list.
+  defp focus_form(socket, nil), do: assign(socket, :code_focus, nil)
+
+  defp focus_form(socket, node_id) do
+    entries = followed_events(socket)
+
+    focus =
+      case Tree.get(socket.assigns.editor.tree, node_id) do
+        nil ->
+          nil
+
+        form ->
+          form |> form_events() |> Enum.find_value(&answering(entries, &1)) || {:form, node_id}
+      end
+
+    assign(socket, :code_focus, focus)
+  end
+
+  defp form_events(form),
+    do:
+      form
+      |> PageForms.handlers([])
+      |> Enum.sort_by(&(&1.kind != :submit))
+      |> Enum.map(& &1.event)
+
+  # The controls `Inspector.rule_op/3` answers for: the ones that write a single attribute. The Form
+  # section's seed is deliberately not among them — it writes five names at once and takes
+  # `rename_form` instead — so a control key arriving here that no rule owns writes nothing rather
+  # than raising on a document somebody is editing.
+  # The field bindings that name an event are written only by someone who may write their code.
+  defp attr_rule(key, code_allowed?) do
+    Inspector.validation_controls()
+    |> Enum.concat(Inspector.form_controls())
+    |> Enum.concat(Inspector.phoenix_form_controls())
+    |> Enum.concat(Inspector.field_controls(nil))
+    |> Enum.concat(Inspector.send_controls(nil))
+    |> Enum.find(&(&1.key == key and is_binary(&1.attr)))
+    |> allowed_rule(code_allowed?)
+  end
+
+  defp allowed_rule(control, true), do: control
+
+  defp allowed_rule(control, false) do
+    case control in Inspector.field_code_controls() do
+      true -> nil
+      false -> control
+    end
+  end
+
+  defp written_rule(socket, nil, _node, _value), do: {:noreply, socket}
+  defp written_rule(socket, _control, nil, _value), do: {:noreply, socket}
+
+  defp written_rule(socket, control, node, value),
+    do: handle_event("op", Inspector.rule_op(node, control, value), socket)
+
   # A NAME THE NODE ALREADY CARRIES IS NOT A SECOND ATTRIBUTE. Both add boxes are free text, and
   # Advanced lists only what the component does not declare, so `color="primary"` is nowhere on
   # screen while it is being typed — and an add has no value to offer that the row it lands on does
@@ -2660,6 +2885,135 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       blank when blank in [nil, ""] -> op
       typed -> Map.put(op, "value", typed)
     end
+  end
+
+  defp how_label(:typing), do: gettext("Made a form work as they type")
+  defp how_label(:send), do: gettext("Gave a form its Send button")
+
+  defp told_setting({:ok, _editor}, socket, told), do: {:noreply, put_flash(socket, :info, told)}
+
+  defp told_setting({:error, reason}, socket, _told),
+    do: {:noreply, put_flash(socket, :error, human(reason))}
+
+  defp wired({:ok, ops}, socket) do
+    socket.assigns.token
+    |> EditorSession.apply_ops(ops, gettext("Made it a working form"), announce: :wired)
+    |> told_setting(
+      socket,
+      gettext("It is a working form now. Its fields are checked and sent.")
+    )
+  end
+
+  defp wired({:error, reason}, socket), do: {:noreply, put_flash(socket, :error, reason)}
+
+  defp address_of(typed), do: typed |> String.trim() |> blank_to_nil()
+
+  defp addressed({:ok, _editor}, socket), do: {:noreply, socket}
+
+  defp addressed({:error, reason}, socket),
+    do: {:noreply, put_flash(socket, :error, human(reason))}
+
+  # Announces `builder:form:after_setting` once a form's setting was written.
+  defp set_form({:ok, editor} = result, socket, node_id, {setting, value}) do
+    Events.form_setting(%{
+      node_id: node_id,
+      seed: editor.tree |> Tree.get(node_id) |> seed_or_nil(),
+      setting: setting,
+      value: value,
+      section: section(socket),
+      resource_id: editor.resource_id,
+      site_id: editor.site_id,
+      actor_id: actor_id(socket)
+    })
+
+    result
+  end
+
+  defp set_form(result, _socket, _node_id, _setting), do: result
+
+  defp seed_or_nil(%Node{} = node), do: PageForms.param_name(node)
+  defp seed_or_nil(nil), do: nil
+
+  defp told_form({:relocated, _editor, note}, socket),
+    do: {:noreply, put_flash(socket, :info, note)}
+
+  defp told_form({:error, reason}, socket),
+    do: {:noreply, put_flash(socket, :error, human(reason))}
+
+  defp renamed(socket, nil, _seed), do: {:noreply, socket}
+
+  defp renamed(socket, node, seed) do
+    refusal = Inspector.seed_refusal(socket.assigns.editor.tree, node, seed)
+
+    rename_form(socket, node, seed, refusal)
+  end
+
+  # A REFUSED SEED CHANGES NOTHING AND SAYS WHY. Two forms sharing a name is two sets of params, two
+  # assigns and two pairs of handlers colliding, and renumbering the author's typing behind their
+  # back would answer a question they did not ask.
+  defp rename_form(socket, _node, _seed, refusal) when is_binary(refusal),
+    do: {:noreply, put_flash(socket, :error, refusal)}
+
+  defp rename_form(socket, node, seed, nil) do
+    events = socket.assigns |> Map.get(:fragments, %{}) |> Map.get(:events, [])
+    origin = rename_origin(socket.assigns[:rename_origin], node)
+
+    token =
+      Inspector.rename_token(socket.assigns.editor.tree, node, events,
+        origin: origin,
+        code_allowed?: socket.assigns[:code_allowed?] == true
+      )
+
+    ops = Inspector.rename_ops(node, seed, token)
+
+    case EditorSession.apply_ops(socket.assigns.token, ops, gettext("Renamed a form")) do
+      {:ok, _editor} ->
+        {:noreply,
+         socket
+         |> assign(:rename_origin, origin)
+         |> assign(
+           :retagged,
+           Map.merge(retagged(socket), Inspector.retagged(origin, token, events))
+         )
+         |> announce_rename(node, ops)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  # The form as it was when this rename began, kept while the same form stays selected.
+  defp rename_origin(%Node{id: id} = origin, %Node{id: id}), do: origin
+  defp rename_origin(_kept, node), do: node
+
+  defp retagged(socket), do: socket.assigns[:retagged] || %{}
+
+  # Announces `builder:form:after_rename` when the rename changed any of the five names.
+  defp announce_rename(socket, node, ops) do
+    written = Map.new(ops, &{&1.name, &1.value})
+
+    written
+    |> Enum.all?(fn {name, value} -> Node.attr_text(node, name) == value end)
+    |> renamed_form(socket, node, written)
+  end
+
+  defp renamed_form(true = _unchanged?, socket, _node, _written), do: socket
+
+  defp renamed_form(false, socket, node, written) do
+    Events.form_renamed(%{
+      node_id: node.id,
+      from: Inspector.form_seed(node),
+      to: String.trim_leading(written["as"], ":"),
+      token: Naming.token(written["phx-submit"]),
+      change: written["phx-change"],
+      submit: written["phx-submit"],
+      section: section(socket),
+      resource_id: socket.assigns.editor.resource_id,
+      site_id: socket.assigns.editor.site_id,
+      actor_id: actor_id(socket)
+    })
+
+    socket
   end
 
   # WHICH CHOOSER THIS PROPERTY HAS, asked of the same function the Inspector asks when it draws the
@@ -3605,11 +3959,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp write_code(socket, fragments) do
     section = section(socket)
 
-    case store_code(socket, fragments) do
+    case store_code(socket, followed(fragments, socket.assigns.editor.tree, retagged(socket))) do
       {:ok, record} ->
         socket
         |> assign(:record, record)
         |> assign(:fragments, code_fragments(record))
+        |> assign(:retagged, %{})
         |> assign(:code_fault, nil)
         |> assign(:code_focus, nil)
         |> put_flash(:info, gettext("Saved to the %{noun}.", noun: noun(section)))
@@ -3641,6 +3996,60 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       fields,
       socket.assigns.current_user
     )
+  end
+
+  defp followed(fragments, tree, retagged),
+    do:
+      Map.update(fragments, :events, [], &PageForms.follow(&1, PageForms.events(tree), retagged))
+
+  # Leaving a form: a code author's stored handlers take its current event names (spec 0.8), and
+  # the rename that began on it ends.
+  defp follow_left_form(%{assigns: %{selected_node: %Node{id: id} = left}} = socket, editor)
+       when editor.selection != id do
+    (PageForms.form?(left) and socket.assigns[:code_allowed?] == true)
+    |> left_form(socket, editor)
+    |> assign(:rename_origin, nil)
+  end
+
+  defp follow_left_form(socket, _editor), do: socket
+
+  # Read from the row, so a tab holding an older copy of the code never writes it back; a row that
+  # cannot be read again writes nothing.
+  defp left_form(true, %{assigns: %{record: %{id: id}}} = socket, editor),
+    do:
+      follow_stored(
+        load_record(section(socket), id, socket.assigns[:current_user]),
+        socket,
+        editor.tree
+      )
+
+  defp left_form(_follow?, socket, _editor), do: socket
+
+  defp follow_stored({:ok, row}, socket, tree) do
+    stored = code_fragments(row)
+
+    stored
+    |> followed(tree, retagged(socket))
+    |> store_followed(stored, socket, tree)
+  end
+
+  defp follow_stored(_unreadable, socket, _tree), do: socket
+
+  defp store_followed(stored, stored, socket, _tree), do: socket
+
+  # The Code window's unsaved edits in `fragments` are followed too, not replaced by the row.
+  defp store_followed(fragments, _stored, socket, tree) do
+    case store_code(socket, fragments) do
+      {:ok, record} ->
+        socket
+        |> assign(:record, record)
+        |> assign(:fragments, followed(socket.assigns.fragments, tree, retagged(socket)))
+        |> assign(:retagged, %{})
+        |> put_flash(:info, gettext("Its handlers were renamed with the form."))
+
+      {:error, reason} ->
+        put_flash(socket, :error, human(reason))
+    end
   end
 
   defp saved_message(:published, section),
@@ -3965,6 +4374,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           element_css_error={@element_css_error}
           element_css_advice={@element_css_advice}
           js_hooks={@js_hooks}
+          fragments={@fragments}
+          rename_origin={@rename_origin}
+          retagged={@retagged}
+          code_allowed?={@code_allowed?}
           record={@record}
           aim_target={@aim_target}
           act_action={@act_action}
@@ -4025,6 +4438,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         section={@section}
         record={@record}
         code_focus={@code_focus}
+        retagged={@retagged}
       />
       <%!-- ONE menu for both surfaces. The layers rail right-clicks into it directly; the canvas is a
             frame with none of this stylesheet, so it forwards its right-clicks here rather than

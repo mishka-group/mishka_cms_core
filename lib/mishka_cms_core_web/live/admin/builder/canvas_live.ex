@@ -96,6 +96,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
   alias MishkaCmsCore.Runtime.PageBuilder.Icons
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
@@ -402,6 +404,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> assign_new(:icon_defaults, fn -> icons_defaulted_by(session.components) end)
     |> assign(:components, session.components)
     |> assign(:tree, session.tree)
+    |> assign_form_marks(session)
     # WHICH DOCUMENT THIS FRAME IS SHOWING, so the editor's own frame overlay can tell a canvas that
     # has repainted from one that has not. Nothing here reads it — `PbCanvas` posts it up to the
     # parent window on every patch where it changed, and the frame's spinner is dismissed by that.
@@ -451,6 +454,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> assign(:placing, session.picked)
     |> assign_new(:toolbar, fn assigns -> toolbar_actions(assigns[:current_user]) end)
     |> assign_new(:bucket, fn -> "base" end)
+  end
+
+  # Which nodes are forms, and where a field dropped at a form's end lands, for a field drag on a
+  # Page. The roles worked out are kept and grown, not asked again per broadcast.
+  defp assign_form_marks(socket, session) do
+    case FormPlacement.page_forms?(session) do
+      true ->
+        {marks, memo} =
+          FormPlacement.marks(session.tree, session.components, socket.assigns[:form_memo] || %{})
+
+        socket |> assign(:form_marks, marks) |> assign(:form_memo, memo)
+
+      false ->
+        assign(socket, :form_marks, nil)
+    end
   end
 
   # The canvas never links the site's public asset URL. That route is keyed on the site's own name
@@ -510,6 +528,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # `builder:canvas:toolbar` so an extension can add its own, exactly like every other region.
   defp toolbar_actions(user) do
     Events.collect(:canvas_toolbar, [
+      %{key: "form", label: gettext("Form"), glyph: "▦", priority: 2},
       %{key: "layout", label: gettext("Layout"), glyph: "✥", priority: 3},
       %{key: "ask_ai", label: gettext("Ask AI about this element"), glyph: "✦", priority: 5},
       %{key: "comment", label: gettext("Comment on this element"), glyph: "💬", priority: 8},
@@ -532,6 +551,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         |> assign(:media_attrs, media_attrs(session.components))
         |> assign(:conceals, conceals(session.components))
         |> assign(:shapers, shapers(session.components))
+        |> assign(:form_memo, %{})
         |> assign(:icon_defaults, icons_defaulted_by(session.components))
         |> sync_selection(socket.assigns[:selection], session)
         |> then(&{:noreply, &1})
@@ -701,6 +721,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # nothing at all. Answered here anyway so that all five of the core's own keys are answered by the
   # core, which is what lets the clause below treat every key that is left as a plugin's.
   def handle_event("toolbar", %{"action" => "layout"}, socket), do: {:noreply, socket}
+
+  # Selects the form the selection sits in, whatever inside it was clicked.
+  def handle_event("toolbar", %{"action" => "form"}, socket) do
+    case owning_form(socket.assigns.tree, socket.assigns.selection, socket.assigns.components) do
+      %Node{id: id} -> {:ok, _session} = EditorSession.select(socket.assigns.token, id, :canvas)
+      nil -> :none
+    end
+
+    {:noreply, socket}
+  end
 
   # THE TOOLBAR IS AN OPEN REGISTRY, so "anything that is not delete" could not mean "duplicate".
   # It did, and every action an extension contributed pushed a copy of the selected element into the
@@ -884,6 +914,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       [data-pb-hidden] { opacity: .38; filter: grayscale(1); }
       [data-pb-hidden] [data-pb-hidden] { opacity: 1; }
       [data-pb-hidden]:not([data-selected="true"]):not(:hover) { outline: 1px dashed #b4b1c8; outline-offset: 2px; }
+      /* A field is being dragged: every form it could join is outlined until the drag ends. */
+      html[data-pb-field-drag] [data-pb-form] { outline: 2px dashed #8b5cf6; outline-offset: 3px; }
+
       /* AN OVERLAY OPENS WHEN IT IS SELECTED, AND SHUTS WHEN THE SELECTION MOVES ON.
 
          Fourteen kit components render their content closed, and every one of them used to be held
@@ -1310,6 +1343,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         media_attrs={@media_attrs}
         conceals={@conceals}
         shapers={@shapers}
+        form_marks={assigns[:form_marks]}
       />
       <%!-- One floating toolbar, positioned over the selection by the hook from its bounding box.
             Rendering it inside the selected node would need `position:relative` on the author's own
@@ -1635,17 +1669,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # distinction is what makes the primary action findable.
   @toolbar_labelled %{
     "ask_ai" => gettext_noop("Ask AI"),
-    "comment" => gettext_noop("Comment")
+    "comment" => gettext_noop("Comment"),
+    "form" => gettext_noop("Form")
   }
 
   # Layout is for what can be styled; Form is for anything inside a form.
   defp offered?(%{key: "layout"}, tree, selection, _components), do: styleable?(tree, selection)
 
+  defp offered?(%{key: "form"}, tree, selection, components),
+    do: owning_form(tree, selection, components) != nil
+
   defp offered?(_action, _tree, _selection, _components), do: true
 
+  defp owning_form(tree, selection, components) when is_binary(selection),
+    do: FormPlacement.form_of(tree, Tree.get(tree, selection), components)
+
+  defp owning_form(_tree, _selection, _components), do: nil
+
+  defp toolbar_id(%{key: "form"}), do: "pb-toolbar-form"
   defp toolbar_id(action), do: "pb-eltb-#{action.key}"
 
   @toolbar_icons %{
+    "form" => :layers,
     "layout" => :move,
     "ask_ai" => :bolt,
     "comment" => :comment,
@@ -1700,6 +1745,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   attr :media_attrs, :map, default: %{}
   attr :conceals, :any, default: nil
   attr :shapers, :any, default: nil
+  attr :form_marks, :any, default: nil
 
   defp pb_node(assigns) do
     assigns = assign(assigns, :node, Tree.get(assigns.tree, assigns.id))
@@ -1905,13 +1951,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         media_attrs={@media_attrs}
         conceals={@conceals}
         shapers={@shapers}
+        form_marks={@form_marks}
       />
     </div>
     """
   end
 
   defp visible_node(%{node: %Node{meta: %{self_close: true}}} = assigns) do
-    assigns = assign(assigns, :html_attrs, html_attrs(assigns.node, assigns.tree))
+    assigns =
+      assign(
+        assigns,
+        :html_attrs,
+        Map.merge(html_attrs(assigns.node, assigns.tree), form_marks(assigns))
+      )
 
     ~H"""
     <.dynamic_tag
@@ -1927,7 +1979,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   end
 
   defp visible_node(assigns) do
-    assigns = assign(assigns, :html_attrs, html_attrs(assigns.node, assigns.tree))
+    assigns =
+      assign(
+        assigns,
+        :html_attrs,
+        Map.merge(html_attrs(assigns.node, assigns.tree), form_marks(assigns))
+      )
 
     ~H"""
     <.dynamic_tag
@@ -1952,6 +2009,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         media_attrs={@media_attrs}
         conceals={@conceals}
         shapers={@shapers}
+        form_marks={@form_marks}
       />
     </.dynamic_tag>
     """
@@ -2566,9 +2624,58 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> Map.new()
     |> put_globals(node, declared, global)
     |> put_declared_defaults(module, fun)
+    |> put_form_fields(node, tree, declared)
+    |> put_unresolved(node, module, fun)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> tracked()
   end
+
+  # AN EXPRESSION THE CANVAS CANNOT COMPUTE IS STILL SOMETHING THE AUTHOR WROTE.
+  #
+  # `attr_value/1` folds a literal and DROPS everything else, which is right for an optional
+  # attribute — the declared default takes over and the component renders. For a REQUIRED one it is
+  # a raise: `<.focus_wrap id={"#{@id}-container"}>` is every Chelekom modal's own markup, and
+  # opening that component in the builder means rendering it with no page assigns, so `@id` resolves
+  # to nothing and Phoenix meets `focus_wrap` without the one attribute it declares. `key :id not
+  # found`, from inside LiveView's diff.
+  #
+  # Refusing to render it — the `missing_given/2` placeholder below — is the right answer when the
+  # author never wrote the attribute at all, because there is nothing to lose and something to fix.
+  # It is the WRONG answer here: the modal's title, its close button and its body are CHILDREN of
+  # that `focus_wrap`, so refusing hides the entire document the author came to edit behind a note
+  # about an attribute the component's own source fills in.
+  #
+  # So the shape is honoured instead of the value, exactly as `put_form_fields/4` honours `f[:email]`
+  # without evaluating it. The stand-in for a string is derived from the NODE — unique per element,
+  # stable across renders, and shaped like a DOM id, because that is overwhelmingly what a required
+  # string on a function component is for and a value with quotes in it would break the markup it
+  # lands in. Nothing here reaches a published page: the compiled template carries the author's own
+  # expression, and this map exists only to draw the canvas.
+  defp put_unresolved(assigns_map, node, module, fun) do
+    module
+    |> declared_attr_specs(fun)
+    |> Enum.reduce(assigns_map, fn attr, acc ->
+      case Map.get(attr, :required, false) and not Map.has_key?(acc, attr.name) do
+        true -> put_written(acc, node, attr)
+        false -> acc
+      end
+    end)
+  end
+
+  defp put_written(assigns_map, node, attr) do
+    case Node.attr(node, Atom.to_string(attr.name)) do
+      {:expr, _source} -> Map.put(assigns_map, attr.name, stand_in(attr.type, node, attr.name))
+      _unwritten -> assigns_map
+    end
+  end
+
+  defp stand_in(:string, node, name), do: "pb-#{node.id}-#{name}"
+  defp stand_in(:integer, _node, _name), do: 0
+  defp stand_in(:float, _node, _name), do: 0.0
+  defp stand_in(:boolean, _node, _name), do: false
+  defp stand_in(:list, _node, _name), do: []
+  defp stand_in(:map, _node, _name), do: %{}
+  defp stand_in(_type, _node, _name), do: nil
 
   # A FUNCTION COMPONENT CALLED BY `apply/3` GETS NONE OF ITS OWN DECLARATIONS. HEEx fills the
   # defaults and builds the `:global` map at the CALL SITE, and the canvas has no call site — so
@@ -2585,6 +2692,90 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       end
     end)
   end
+
+  # A BOUND FIELD IS BOUND TO NOTHING HERE, and dropping the attribute is not a safe default. The
+  # canvas has no page assigns and no `:let` — slot children are pre-rendered before the wrapper's
+  # slot is ever invoked, so `Phoenix.Component.call_inner_block!/3` discards the argument and no
+  # `f` can reach a child node in this renderer, in any execution order. Left dropped, a kit field
+  # is called with neither `field` nor `name`, and `name` has no default on purpose: it raises
+  # `KeyError` inside LiveView's diff, which is the red box on the surface the form is authored on.
+  #
+  # So the shape is honoured instead of the value. `f[:email]` is PARSED — never evaluated, the same
+  # rule `literal/1` follows — and a blank `%Phoenix.HTML.FormField{}` is built from the nearest
+  # ancestor form's own `as`. The delegating clause of a kit field then derives `name`, `value`,
+  # `id` and an empty `errors` from it exactly as it does on a published page, so the author sees
+  # their field carrying its real input name.
+  #
+  # The candidates are gathered BEFORE the tree is walked, so a node with nothing expression-shaped
+  # on it — most of a document — never pays for the walk to its nearest form.
+  defp put_form_fields(assigns_map, node, tree, declared) do
+    node.attrs
+    |> Enum.flat_map(&binding_candidate(&1, declared))
+    |> bind_fields(assigns_map, node, tree)
+  end
+
+  defp binding_candidate({name, {:expr, source}}, declared) when is_binary(name) do
+    case Map.get(declared, name) do
+      nil -> []
+      key -> [{key, source}]
+    end
+  end
+
+  defp binding_candidate(_attr, _declared), do: []
+
+  defp bind_fields([], assigns_map, _node, _tree), do: assigns_map
+
+  defp bind_fields(candidates, assigns_map, node, tree) do
+    form = binding_form(tree, node)
+    var = let_of(form)
+    blank = Phoenix.Component.to_form(%{}, as: param_of(form))
+
+    Enum.reduce(candidates, assigns_map, fn {key, source}, acc ->
+      put_form_field(acc, key, PageForms.field_access(source, var), blank)
+    end)
+  end
+
+  # WHAT THE AUTHOR WROTE, NOT THE KEY IT REDUCES TO. `f[:email]`, `f[:email].name` and
+  # `f[:email].value` are all the field `:email` — which is why `PageForms.field_key_from/2` answers
+  # the same for the three — but they are three different VALUES, and a renderer needs the one that
+  # was asked for. Handing a kit's `name` assign the whole `%Phoenix.HTML.FormField{}` raised
+  # `protocol Phoenix.HTML.Safe not implemented` and red-boxed the node, on every kit that binds by
+  # name and value rather than by the struct.
+  #
+  # The path is walked with `Map.fetch/2`, so `f[:email].nonsense` puts no assign at all rather than
+  # raising: the author is mid-edit, and a half-typed expression is not a crash.
+  defp put_form_field(assigns_map, _key, nil, _blank), do: assigns_map
+
+  defp put_form_field(assigns_map, key, {field, path}, blank),
+    do: blank |> Access.get(field) |> read(path) |> put_bound(assigns_map, key)
+
+  defp read(value, []), do: {:ok, value}
+
+  defp read(value, [step | rest]) when is_map(value),
+    do: value |> Map.fetch(step) |> stepped(rest)
+
+  defp read(_value, _path), do: :error
+
+  defp stepped({:ok, value}, path), do: read(value, path)
+  defp stepped(:error, _path), do: :error
+
+  defp put_bound({:ok, value}, assigns_map, key), do: Map.put(assigns_map, key, value)
+  defp put_bound(:error, assigns_map, _key), do: assigns_map
+
+  # The nearest ancestor that binds a `:let`, which is the form this node's `f[:key]` names. Both
+  # facts come off that one node so they cannot disagree: a field bound to `f` belongs to the form
+  # that bound `f`, and takes its param name from the same place.
+  defp binding_form(tree, node) do
+    tree
+    |> Tree.ancestors(node.id)
+    |> Enum.find(&(PageForms.let_var(&1) != nil))
+  end
+
+  defp let_of(nil), do: nil
+  defp let_of(node), do: PageForms.let_var(node)
+
+  defp param_of(nil), do: "form"
+  defp param_of(node), do: PageForms.param_name(node) || "form"
 
   defp chip_label(%Node{kind: :eex_block, text: text}), do: "<%= #{text} %>"
   defp chip_label(%Node{kind: :eex_comment, text: text}), do: "<%!-- #{text} --%>"
@@ -2620,7 +2811,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # be read at compile time, so it goes through `Phoenix.HTML.attributes_escape/1` instead, which
   # drops a `nil` value outright. `.dynamic_tag` needs none of this: its attributes already travel as
   # a runtime map.
-  defp wrapper_attrs(assigns), do: %{"style" => wrapper_style(assigns)}
+  defp wrapper_attrs(assigns),
+    do: Map.merge(%{"style" => wrapper_style(assigns)}, form_marks(assigns))
+
+  # `data-pb-form` on a form (its people name, "" when it does not work yet) and `data-pb-send` on
+  # the node a field dropped at a form's end lands in front of. Editing only.
+  defp form_marks(%{preview?: true}), do: %{}
+
+  defp form_marks(%{node: %Node{id: id}, form_marks: %{forms: forms, landings: landings}}),
+    do: %{
+      "data-pb-form" => Map.get(forms, id),
+      "data-pb-send" => (MapSet.member?(landings, id) && "true") || nil
+    }
+
+  defp form_marks(_assigns), do: %{}
+
   # AN EMPTY BOX HAS TO BE VISIBLE OR IT IS NOT A BOX. A `<section>` with nothing in it is zero
   # pixels tall: it cannot be clicked, cannot be dropped into, and reads as a drop that failed —
   # which made every structural element in
@@ -2793,14 +2998,42 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
   defp renderable_attr({name, :boolean}, _node, _tree) when is_binary(name), do: [{name, true}]
 
-  defp renderable_attr({name, {:expr, source}}, _node, _tree) when is_binary(name) do
+  defp renderable_attr({name, {:expr, source}}, node, tree) when is_binary(name) do
     case literal(source) do
       {:ok, value} -> [{name, value}]
-      :error -> []
+      :error -> bound_attr(name, source, node, tree)
     end
   end
 
   defp renderable_attr(_attr, _node, _tree), do: []
+
+  # A RAW TAG'S BINDING IS SHOWN THE WAY THE PUBLISHED PAGE SHOWS IT. A checkbox bound to its form
+  # carries `name={f[:agree].name}`, which reads an assign, so `literal/1` refuses it and the input
+  # rendered with no `name` at all — correct in the stored source, blank on the one surface the
+  # author looks at, and indistinguishable from the unbound field the audit warns about.
+  #
+  # The same blank `%Phoenix.HTML.FormField{}` the component path synthesises answers it: the form
+  # above the node gives the param name, so `f[:agree].name` resolves to `contact[agree]` exactly as
+  # it will once published. A source that resolves to no string — a bare `f[:agree]`, which is the
+  # whole struct — is left out rather than interpolated into markup as a struct.
+  defp bound_attr(name, source, node, tree) do
+    form = binding_form(tree, node)
+
+    case PageForms.field_access(source, let_of(form)) do
+      nil -> []
+      access -> shown(name, access, Phoenix.Component.to_form(%{}, as: param_of(form)))
+    end
+  end
+
+  defp shown(name, {field, path}, blank) do
+    blank
+    |> Access.get(field)
+    |> read(path)
+    |> case do
+      {:ok, value} when is_binary(value) -> [{name, value}]
+      _unshowable -> []
+    end
+  end
 
   # `size={5}`, `open={true}`, `label={"Hi"}` and `kind={:danger}` are literals and can be shown
   # truthfully. Anything referring to an assign or calling a function is left out — the canvas has no
@@ -2905,7 +3138,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # Asking the same question `attr_value/1` answers keeps the two in step: anything it would drop is
   # missing here, and the reader gets the "needs …" placeholder they can act on instead of a canvas
   # that disappears.
-  defp filled?(node, name, _tree) do
+  # A BINDING IS SUPPLIED TOO, since `put_form_fields/4` synthesises one. `field={f[:email]}` is an
+  # expression `literal/1` refuses, so without this clause a kit field that declares `field`
+  # required showed the "needs field" placeholder on a form that renders perfectly well.
+  defp filled?(node, name, tree) do
     case Node.attr(node, name) do
       {:string, value} ->
         String.trim(value) != ""
@@ -2914,7 +3150,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         false
 
       {:expr, source} ->
-        resolvable?(source)
+        resolvable?(source) or bound?(source, node, tree) or page_form?(node, name)
 
       _boolean ->
         true
@@ -2922,6 +3158,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   end
 
   defp resolvable?(source), do: match?({:ok, _value}, literal(source))
+
+  # A WORKING FORM'S `for` IS THE PAGE'S OWN ASSIGN, `assigns[:contact_form]`, which the compiled page
+  # always sets. Chelekom's Simple Form declares `for` required, so every one the editor wired drew
+  # "needs for" on the canvas while the live page rendered it. `put_unresolved_kit/4` hands it the
+  # stand-in.
+  defp page_form?(node, "for"), do: PageForms.form?(node)
+  defp page_form?(_node, _name), do: false
+
+  defp bound?(source, node, tree),
+    do: PageForms.field_key_from(source, tree |> binding_form(node) |> let_of()) != nil
 
   # ADDRESSED TO `.component`, NOT TO THE KIT. These two say which component to render and which
   # site's build of it, and `component_assigns/1` puts the resolved values back under the same keys
@@ -2955,11 +3201,56 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> Enum.flat_map(&component_attr(&1, module))
     |> Map.new()
     |> put_globals(node, Map.merge(declared, @wrapper_attrs), global_key(specs))
+    |> put_form_fields(node, tree, declared)
+    |> put_unresolved_kit(node, specs, declared)
     |> Map.merge(slot_assigns(node, tree, assigns))
     |> put_component_class(node, module)
     |> Map.put(@wrapper_attrs["component_name"], name)
     |> Map.put(@wrapper_attrs["site"], scope)
     |> tracked()
+  end
+
+  # `put_unresolved/4` for a kit component: an attribute the author wrote as an expression the canvas
+  # cannot evaluate, which the kit declares with no default, still reaches the template as a key.
+  # Chelekom's form wrapper declares `for` that way, so a wrapper bound to its page form
+  # (`for={assigns[:contact_form]}`) raised `key :for not found` on every render. A required one only
+  # gets this far when `missing_required/3` counts it as supplied, as a working form's `for`.
+  defp put_unresolved_kit(assigns_map, node, specs, declared) do
+    Enum.reduce(specs, assigns_map, fn attr, acc ->
+      with name when is_binary(name) <- attr_name(attr),
+           atom when not is_nil(atom) <- Map.get(declared, name),
+           false <- Map.has_key?(acc, atom) or defaulted?(attr),
+           {:expr, _source} <- Node.attr(node, name) do
+        Map.put(acc, atom, stand_in(kit_type(attr), node, atom))
+      else
+        _supplied_defaulted_or_unwritten -> acc
+      end
+    end)
+  end
+
+  defp defaulted?(attr) do
+    case attr_field(attr, :opts) do
+      %{} = opts -> Map.has_key?(opts, "default") or Map.has_key?(opts, :default)
+      opts when is_list(opts) -> Keyword.has_key?(opts, :default)
+      _no_opts -> false
+    end
+  end
+
+  @kit_types %{
+    "string" => :string,
+    "integer" => :integer,
+    "float" => :float,
+    "boolean" => :boolean,
+    "list" => :list,
+    "map" => :map
+  }
+
+  defp kit_type(attr) do
+    case attr_field(attr, :type) do
+      type when is_atom(type) -> type
+      type when is_binary(type) -> Map.get(@kit_types, type, :any)
+      _unknown -> :any
+    end
   end
 
   # THE INSPECTOR EDITS COMPONENTS TOO. `Tree.extract_styles/1` lifts a node's utilities out of its
@@ -3155,7 +3446,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       # and a picture-less tile INSIDE a gallery got no well while the same tile beside it did.
       media_attrs: assigns[:media_attrs] || %{},
       conceals: assigns[:conceals],
-      shapers: assigns[:shapers]
+      shapers: assigns[:shapers],
+      form_marks: assigns[:form_marks]
     }
 
     ~H"""
@@ -3172,6 +3464,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       media_attrs={@media_attrs}
       conceals={@conceals}
       shapers={@shapers}
+      form_marks={@form_marks}
     />
     """
   end
