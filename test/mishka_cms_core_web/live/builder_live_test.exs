@@ -21,6 +21,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
   alias MishkaCmsCore.Runtime.PageBuilder.Interactions
+  alias MishkaCmsCore.Runtime.PageBuilder.Interface
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
@@ -7821,6 +7822,250 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # A READER HAS TO BE ABLE TO TELL THE TWO APART. A live component answers clicks and keeps
+  # state between renders; a function component structurally cannot. Two cards, two rows and two
+  # inspector panels that look identical are a choice the author cannot make, and they find out
+  # which they picked by publishing.
+  # AN AUTHOR WRITES THE COMPONENT'S OWN LIFECYCLE, in the editor, and it runs.
+  #
+  # This looks blocked, and the blocker is real for the question a page raises: a PAGE author
+  # cannot target a component, because `@myself` is not in scope in a page template and the canvas
+  # strips every `phx-*` written on a `<.component>` node. But that is not the question a
+  # component's author asks. Inside the COMPONENT's own template `@myself` is in scope — that is what
+  # compiling to a `Phoenix.LiveComponent` bought — so a component's handler has a door, and the
+  # Helpers tab is where it is written.
+  describe "writing a live component's lifecycle in the editor" do
+    defp live_component!(site_id) do
+      create_component!(
+        name: "editable-live",
+        site_id: site_id,
+        stateful: true,
+        template:
+          ~s(<div id={@id} {@rest}><button phx-click="tick" phx-target={@myself}>go</button></div>),
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}]
+      )
+    end
+
+    test "the Helpers tab says which three names are the lifecycle", %{conn: conn, site: site} do
+      {:ok, view} = open_component(conn, live_component!(site.id))
+
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+
+      assert has_element?(view, ~s([data-role="pb-lifecycle-note"])),
+             "a live component's author is not told that handle_event is its own"
+
+      html = render(view)
+      assert html =~ "handle_event(name, params, socket)"
+      assert html =~ "phx-target"
+    end
+
+    # AND A FUNCTION COMPONENT IS NOT TOLD SOMETHING UNTRUE. It has no lifecycle to write: a
+    # `handle_event` on one is a plain function nothing will ever call.
+    test "and a function component is not", %{conn: conn, site: site} do
+      plain = create_component!(name: "editable-plain", site_id: site.id)
+      {:ok, view} = open_component(conn, plain)
+
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+
+      refute has_element?(view, ~s([data-role="pb-lifecycle-note"]))
+    end
+
+    # AND HOW FAR IT REACHES. A component's handler runs in whatever LiveView renders it, so a
+    # global one's runs inside every tenant's page. Nothing scopes that — it is what shared means —
+    # so it is said where the handler is written, and said only where it is true.
+    test "a global one's note says its code runs on every site", %{conn: conn} do
+      {:ok, view} = open_component(conn, live_component!(nil))
+
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+
+      assert has_element?(
+               view,
+               ~s([data-role="pb-lifecycle-note"] [data-role="pb-lifecycle-shared"]),
+               "runs on every site that places it"
+             ),
+             "a global live component's author is not told its handlers run on every site"
+    end
+
+    test "and one site's note does not", %{conn: conn, site: site} do
+      {:ok, view} = open_component(conn, live_component!(site.id))
+
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+
+      assert has_element?(view, ~s([data-role="pb-lifecycle-note"]))
+
+      refute has_element?(view, ~s([data-role="pb-lifecycle-shared"])),
+             "a component of one site was said to run on every site"
+    end
+
+    # THE ROUND TRIP. Written in the editor, stored on the row, and — because `Changes.SignCode` is
+    # on the component's own update action and `Helper` now has somewhere to keep a signature —
+    # stored SIGNED, which is what makes it run rather than compile to an inert clause.
+    test "a handler written here is saved, and saved signed", %{conn: conn, site: site} do
+      Application.put_env(:mishka_cms_core, :code_signing_key, "a-test-signing-key-long-enough")
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :code_signing_key) end)
+
+      component = live_component!(site.id)
+      {:ok, view} = open_component(conn, component)
+
+      render_click(view, "source_tab", %{"tab" => "helpers"})
+      render_click(view, "add_code", %{"tab" => "helpers"})
+
+      view
+      |> form("#pb-code-form", %{
+        "tab" => "helpers",
+        "entry" => %{
+          "0" => %{
+            "name" => "handle_event",
+            "args" => ~s|"tick", _params, socket|,
+            "code" => "{:noreply, socket}"
+          }
+        }
+      })
+      |> render_submit()
+
+      stored = Ash.get!(MishkaCmsCore.Runtime.Component, component.id, authorize?: false)
+
+      assert [helper] = stored.helpers
+      assert helper.name == "handle_event"
+
+      assert is_binary(helper.signature),
+             "the handler was stored unsigned, so it would compile to an inert clause"
+
+      assert MishkaCmsCore.Runtime.PageBuilder.CodeSignature.trusted?(helper)
+    end
+  end
+
+  describe "which kind of component this is" do
+    defp select_placed(view, name) do
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "pick", %{"name" => name})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == name))
+
+      assert placed, "#{name} was not placed"
+      render_click(view, "select", %{"id" => placed.id})
+
+      # THE INSPECTOR IS A TAB, and picking from the palette leaves the palette showing — a click on
+      # the canvas is what swings the rail over. Asserting without this reads a panel that is not on
+      # screen.
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      view
+    end
+
+    test "the palette marks a live one and leaves a plain one unmarked", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      _live = create_component!(name: "live-card", site_id: site.id, stateful: true)
+      _plain = create_component!(name: "plain-card", site_id: site.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, ~s(#pb-comp-live-card [data-role="pb-livedot"])),
+             "a live component's card said nothing about being live"
+
+      refute has_element?(view, ~s(#pb-comp-plain-card [data-role="pb-livedot"]))
+    end
+
+    test "and the inspector says so over the selected one", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      _live = create_component!(name: "live-selected", site_id: site.id, stateful: true)
+      _plain = create_component!(name: "plain-selected", site_id: site.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      select_placed(view, "live-selected")
+
+      assert has_element?(view, ~s([data-role="pb-insp-kind"])),
+             "the inspector did not say the selected component keeps state"
+
+      select_placed(view, "plain-selected")
+
+      refute has_element?(view, ~s([data-role="pb-insp-kind"])),
+             "a function component was labelled as live"
+    end
+  end
+
+  # THE FLAG HAS TO SURVIVE THE PALETTE. The palette's query names its columns explicitly, and
+  # an unselected attribute is not an error and is not `%Ash.NotLoaded{}` — the struct field reads
+  # `nil`, which is falsy. Miss it and every component reads as stateless, no drop is ever given an
+  # id, and a live component placed on a page raises in the visitor's LiveView instead.
+  describe "a stateful component in the palette" do
+    test "the entry carries the flag the row declared", %{conn: conn, page: page, site: site} do
+      _live = create_component!(name: "live-thing", site_id: site.id, stateful: true)
+      _plain = create_component!(name: "plain-thing", site_id: site.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert entry(view, "live-thing").stateful? == true
+      assert entry(view, "plain-thing").stateful? == false
+    end
+
+    # AND A DROP OF ONE CARRIES AN ID. A `Phoenix.LiveComponent` cannot exist without one —
+    # `Phoenix.LiveView.Diff` raises — so this is not a nicety the kit opts into by declaring an
+    # `id` attr, which is the question asked of a function component.
+    test "placing one mints an id even though it declares no id attr", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      _live = create_component!(name: "live-drop", site_id: site.id, stateful: true)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "pick", %{"name" => "live-drop"})
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "live-drop"))
+
+      assert node, "the component was not placed"
+      assert {:string, id} = Node.attr(node, "id")
+      assert String.starts_with?(id, "phx-"), "got #{inspect(id)}"
+    end
+
+    # A FUNCTION COMPONENT IS UNCHANGED. Minting an id for one that declares nothing to read it
+    # would put an attribute in the saved markup that no rule refers to.
+    test "and a plain one that declares no id still gets none", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      _plain = create_component!(name: "plain-drop", site_id: site.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      section = node_with_tag(view, "section")
+      render_click(view, "select", %{"id" => section.id})
+      render_click(view, "pick", %{"name" => "plain-drop"})
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "plain-drop"))
+
+      assert node, "the component was not placed"
+      assert Node.attr(node, "id") == nil
+    end
+  end
+
   # Selecting an element has been the slowest thing in this editor twice: once at 2.2s, when every
   # mouse move pushed a `hover` event, and again at ~0.5s, when the selection ring was a server-
   # rendered inline style so a click re-rendered all ~200 nodes. Both were found in a browser, not
@@ -8097,6 +8342,96 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert view |> element(~s([data-layer-row="#{paragraph.id}"])) |> render() =~
                ~s(data-open="true")
+    end
+
+    # A COMPONENT'S OWN MARKUP IS NOT THE PAGE'S TREE.
+    #
+    # It was drawn loose, at the same indent as the page's own children and directly among them, with
+    # nothing saying what it was — for a `chelekom-footer`, nine rows of somebody else's markup
+    # between the component and the one line of content the page actually put in it. Rows that look
+    # like children, are not, and accept nothing. It now sits behind a heading, like `.properties`
+    # and `.slots`, and costs one row until it is asked for.
+    test "a component's own markup is folded behind a heading of its own", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "deepish",
+        template: ~s|<footer><div><span>a</span></div></footer>|,
+        slots: []
+      )
+
+      page = create_page!(site_id: site.id, template: ~s|<.component component_name="deepish" />|)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+
+      assert has_element?(view, "#pb-markup-#{node.id}")
+
+      heading = view |> element("#pb-markup-#{node.id}") |> render()
+      assert heading =~ ".markup"
+      assert heading =~ "(4)", "footer, div, span and its text — the rows it will draw"
+
+      refute render(view) =~ "read only", "nothing of it is drawn until the heading is opened"
+
+      render_click(view, "toggle_expand", %{"id" => "markup:" <> node.id})
+
+      html = render(view)
+      assert html =~ "read only"
+      assert html =~ "shared by every page using this component"
+    end
+
+    # Reading what is in there and going to edit it are different intents, so the heading carries the
+    # fold and a separate arrow carries the trip — a link inside a button swallows the click, and a
+    # heading that navigated away would take the fold with it.
+    test "the markup heading is also the way to go and edit it", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "openable",
+          template: ~s|<footer><div>a</div></footer>|,
+          slots: []
+        )
+
+      page =
+        create_page!(site_id: site.id, template: ~s|<.component component_name="openable" />|)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      node =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      expand!(view, node.id)
+
+      back =
+        URI.encode_query(%{"return_to" => "/admin/dashboard/runtime/builder/page/#{page.id}"})
+
+      assert has_element?(
+               view,
+               ~s(#pb-markup-open-#{node.id}[href="/admin/dashboard/runtime/builder/component/#{component.id}?#{back}"])
+             )
+
+      # The component's own row carries the same trip, and the same way back.
+      assert has_element?(
+               view,
+               ~s(#pb-layer-open-#{node.id}[href="/admin/dashboard/runtime/builder/component/#{component.id}?#{back}"])
+             )
+
+      # And it is a sibling of the fold, not inside it: a link nested in a button never gets the click.
+      assert view |> element("#pb-markup-#{node.id}") |> render() =~ "toggle_expand"
+      refute view |> element("#pb-markup-#{node.id}") |> render() =~ "href="
     end
 
     # And it stays a window rather than becoming part of the document: no drag handle, no id a drop
@@ -9243,6 +9578,587 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert has_element?(view, "#pb-layers[phx-hook='PbLayers']")
       assert has_element?(view, "[data-layer-id='#{section.id}']")
+    end
+  end
+
+  # A COMPONENT'S INTERFACE, IN THE BUILDER. `attrs` and `slots` are columns on the component and
+  # they drive nearly everything the page builder does with it — the Inspector's controls,
+  # `.properties`, `.slots`, the required badges, the drop rules — and the builder could not edit
+  # them at all. The only way in was the Components table form, where a slot's options are raw JSON.
+  describe "the Interface tab" do
+    defp open_component(conn, component) do
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      render_click(view, "open_source", %{})
+      {:ok, view}
+    end
+
+    defp declarable(site) do
+      create_component!(
+        site_id: site,
+        name: "declarable",
+        template: ~s|<div class={@size}>{render_slot(@inner_block)}{@title}</div>|,
+        attrs: [],
+        slots: []
+      )
+    end
+
+    test "is offered for a component and for nothing else", %{conn: conn, site: site, page: page} do
+      {:ok, view} = open_component(conn, declarable(site.id))
+      assert has_element?(view, "#pb-sourcetab-interface")
+
+      {:ok, pages, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+      _loaded = render_async(pages)
+      render_click(pages, "open_source", %{})
+
+      refute has_element?(pages, "#pb-sourcetab-interface"),
+             "a page takes no attributes and has no slots"
+    end
+
+    # A window headed "Page code" while it edits a component is lying about what it changes.
+    test "and the window says which record it is editing", %{conn: conn, site: site, page: page} do
+      {:ok, view} = open_component(conn, declarable(site.id))
+      assert render(view) =~ "Component code"
+
+      {:ok, pages, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+      _loaded = render_async(pages)
+      render_click(pages, "open_source", %{})
+      assert render(pages) =~ "Page code"
+    end
+
+    # THE CHECK THAT MATTERS MOST. A template reading `@size` with no `attr :size` compiles and then
+    # raises `KeyError` the first time the component renders on somebody's page.
+    test "names what the template reads and the component never declares", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, view} = open_component(conn, declarable(site.id))
+      render_click(view, "source_tab", %{"tab" => "interface"})
+
+      html = render(view)
+      assert html =~ "does not declare them"
+      assert has_element?(view, "#pb-interface-declare-attr-size")
+      assert has_element?(view, "#pb-interface-declare-attr-title")
+      assert has_element?(view, "#pb-interface-declare-slot-inner_block")
+    end
+
+    test "and declaring one writes it to the component", %{conn: conn, site: site} do
+      component = declarable(site.id)
+      {:ok, view} = open_component(conn, component)
+      render_click(view, "source_tab", %{"tab" => "interface"})
+
+      render_click(view, "declare_missing", %{"kind" => "attr", "name" => "size"})
+
+      stored = Ash.get!(MishkaCmsCore.Runtime.Component, component.id, authorize?: false)
+      assert Enum.any?(Interface.attrs(stored), &(&1["name"] == "size"))
+
+      # And it stops being reported, because it is no longer missing.
+      refute has_element?(view, "#pb-interface-declare-attr-size")
+    end
+
+    test "a slot is declared the same way", %{conn: conn, site: site} do
+      component = declarable(site.id)
+      {:ok, view} = open_component(conn, component)
+      render_click(view, "source_tab", %{"tab" => "interface"})
+
+      render_click(view, "declare_missing", %{"kind" => "slot", "name" => "inner_block"})
+
+      stored = Ash.get!(MishkaCmsCore.Runtime.Component, component.id, authorize?: false)
+      assert Enum.any?(Interface.slots(stored), &(&1["name"] == "inner_block"))
+    end
+
+    # THE FORM IS THE RESOURCE'S OWN. The first version of this tab was hand-rolled inputs beside a
+    # `field :attrs, :nested` the resource had declared all along — two editors for one pair of
+    # columns. This is the sixth `MishkaGervaz.Form.Web.Live` mount in the builder.
+    test "the rows are the resource's own form, not a second one", %{conn: conn, site: site} do
+      {:ok, view} = open_component(conn, declarable(site.id))
+      render_click(view, "source_tab", %{"tab" => "interface"})
+
+      # Gervaz names its own wrapper from the id it is mounted with.
+      assert has_element?(view, "#pb-interface-form-form-wrapper")
+      refute has_element?(view, ~s([name^="attr["])), "no hand-rolled rows"
+    end
+
+    # Every field but the two, asked of the form rather than listed — so a field added to the
+    # resource tomorrow is hidden here without anyone remembering to come back.
+    test "and it draws the interface columns and nothing else", %{conn: conn, site: site} do
+      {:ok, view} = open_component(conn, declarable(site.id))
+      render_click(view, "source_tab", %{"tab" => "interface"})
+
+      hidden = Panels.interface_hidden_fields(MishkaCmsCore.Runtime.Component)
+
+      refute :attrs in hidden
+      refute :slots in hidden
+      assert :name in hidden, "the component's own name belongs to the header, not here"
+      assert :template in hidden, "the markup is what the canvas is for"
+    end
+
+    # The whole point of writing it here: the page builder reads it immediately.
+    test "what is declared here is what a page then offers", %{conn: conn, site: site} do
+      component = declarable(site.id)
+
+      {:ok, _updated} =
+        component
+        |> Ash.Changeset.for_update(
+          :update,
+          %{attrs: [%{"name" => "size", "type" => "string", "opts" => %{"required" => true}}]},
+          authorize?: false
+        )
+        |> Ash.update()
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s|<.component component_name="declarable" />|
+        )
+
+      {:ok, builder, _html} = open_builder(conn, page)
+      node = needful_node(builder)
+
+      assert builder |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "1 needed",
+             "the required property it was just given"
+    end
+
+    # THE SAME SAVE AS THE COMPONENTS TABLE'S, and it lost the same things. The tab draws Required,
+    # Default and Doc for an attribute, Required and Doc for a slot, and a flat row for each of a
+    # slot's attributes, whose `required` and `doc` the record keeps under `opts`. Writing one doc
+    # wrote back only what those controls held.
+    test "a save keeps every option the form does not show", %{conn: conn, site: site} do
+      slots = [
+        %{
+          "name" => "item",
+          "opts" => %{"required" => false, "validate_attrs" => false, "doc" => "One entry"},
+          "attrs" => [
+            %{
+              "name" => "title",
+              "type" => "string",
+              "opts" => %{"required" => true, "doc" => "Title of the entry"}
+            },
+            %{"name" => "kind", "type" => "string", "opts" => %{"values" => ["a", "b"]}}
+          ]
+        }
+      ]
+
+      component =
+        create_component!(
+          site_id: site.id,
+          name: "shapes",
+          template: every_option_template(),
+          attrs: every_option_shape(),
+          slots: slots
+        )
+
+      {:ok, view} = open_component(conn, component)
+      render_click(view, "source_tab", %{"tab" => "interface"})
+      render_async(view)
+
+      view
+      |> form("#pb-interface-form-form", %{
+        "form" => %{"attrs" => %{"1" => %{"opts" => %{"doc" => "How big"}}}}
+      })
+      |> render_submit()
+
+      stored = Ash.get!(MishkaCmsCore.Runtime.Component, component.id, authorize?: false)
+
+      expected =
+        Enum.map(every_option_shape(), fn
+          %{"name" => "size"} = row -> put_in(row, ["opts", "doc"], "How big")
+          row -> row
+        end)
+
+      assert Map.new(Interface.attrs(stored), &{&1["name"], &1["opts"]}) ==
+               Map.new(expected, &{&1["name"], &1["opts"]})
+
+      assert MishkaCmsCore.Runtime.Helpers.stringify_keys(stored.slots) == slots
+    end
+  end
+
+  # THE SAME DECLARATION, AS THE FIRST ROW OF THE TREE. The Interface tab is where it is edited; the
+  # rail is where it is SEEN, beside the markup that reads it. Before this the rail opened on a
+  # component's elements with no mention of what the component takes — the one thing everything
+  # below it depends on was the one thing with no row.
+  describe "the .interface group in the layers rail" do
+    defp declared_component(site) do
+      create_component!(
+        site_id: site,
+        name: "declared",
+        template: ~s|<div class={@size}>{render_slot(@inner_block)}</div>|,
+        attrs: [%{"name" => "size", "type" => "string", "opts" => %{"required" => true}}],
+        slots: [%{"name" => "inner_block"}, %{"name" => "actions"}]
+      )
+    end
+
+    defp open_component_rail(conn, component) do
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      {:ok, view}
+    end
+
+    test "is drawn for a component, counting what it declares", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+
+      assert has_element?(view, "#pb-interface-group")
+
+      assert view |> element("#pb-interface-group") |> render() =~ "(3)",
+             "one attribute and two slots"
+    end
+
+    # FIRST, which is what it was asked to be: a component's declaration comes before its markup the
+    # way it does in the source, and reading the rail top to bottom should read the same way.
+    test "before every element in the tree", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+
+      html = render(view)
+      group = :binary.match(html, "pb-interface-group") |> elem(0)
+      first_row = :binary.match(html, "data-layer-row=") |> elem(0)
+
+      assert group < first_row, "the group has to come before the first element row"
+    end
+
+    # A page takes no attributes and has no slots, so there is nothing here for it to be a view of.
+    test "and nowhere else", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      refute has_element?(view, "#pb-interface-group")
+    end
+
+    # Folded until asked for, like `.properties` and `.markup` — it costs one row until then.
+    test "folded, and opening it names what is declared", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+
+      refute has_element?(view, "#pb-interface-attr-size")
+
+      render_click(view, "toggle_expand", %{"id" => "iface:root"})
+
+      assert has_element?(view, "#pb-interface-attr-size")
+      assert has_element?(view, "#pb-interface-slot-inner_block")
+      assert has_element?(view, "#pb-interface-slot-actions")
+    end
+
+    # NAMED THE WAY THE MARKUP NAMES IT. `@size` and `<:actions>` are what somebody would type; the
+    # column's spelling is this editor's business and not the reader's.
+    test "written the way the markup writes them", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+      render_click(view, "toggle_expand", %{"id" => "iface:root"})
+
+      rail = view |> element("#pb-interface-group") |> render()
+      assert rail =~ ".interface"
+
+      html = render(view)
+      assert html =~ "@size"
+      assert html =~ "&lt;:actions&gt;"
+      assert html =~ "inner content", "the unnamed slot is written as what it holds"
+    end
+
+    test "marking the ones the component cannot do without", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+      render_click(view, "toggle_expand", %{"id" => "iface:root"})
+
+      assert view |> element("#pb-interface-attr-size") |> render() =~ "required"
+      refute view |> element("#pb-interface-slot-actions") |> render() =~ "required"
+    end
+
+    # A VIEW, NOT A SECOND EDITOR. Every row is a way into the form that owns these columns, and the
+    # window opens on THAT tab rather than wherever it was last left.
+    test "and every row opens the Interface tab", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+      render_click(view, "toggle_expand", %{"id" => "iface:root"})
+
+      view |> element("#pb-interface-attr-size") |> render_click()
+
+      assert has_element?(view, "#pb-interface-form-form-wrapper"),
+             "the Interface tab, not the Template one"
+    end
+
+    test "as does the pencil on the group itself", %{conn: conn, site: site} do
+      {:ok, view} = open_component_rail(conn, declared_component(site.id))
+
+      view |> element("#pb-interface-edit") |> render_click()
+
+      assert has_element?(view, "#pb-interface-form-form-wrapper")
+    end
+
+    # Silence reads as "not loaded". A component that declares nothing says so.
+    test "a component with nothing declared says so rather than showing an empty fold", %{
+      conn: conn,
+      site: site
+    } do
+      bare =
+        create_component!(
+          site_id: site.id,
+          name: "bare-declaration",
+          template: ~s|<div>hello</div>|,
+          attrs: [],
+          slots: []
+        )
+
+      {:ok, view} = open_component_rail(conn, bare)
+      assert view |> element("#pb-interface-group") |> render() =~ "(0)"
+
+      render_click(view, "toggle_expand", %{"id" => "iface:root"})
+      assert render(view) =~ "nothing declared yet"
+    end
+  end
+
+  # A COMPONENT MADE OUT OF OTHER COMPONENTS, which is what most of the kit is. Three things about
+  # the inner node were wrong, and the first of them destroyed data.
+  describe "a component that nests another" do
+    defp nesting(site) do
+      create_component!(
+        site_id: site,
+        name: "inner-one",
+        template: ~s|<span class={@tone}>x</span>|,
+        attrs: [%{"name" => "tone", "type" => "string"}],
+        slots: []
+      )
+
+      create_component!(
+        site_id: site,
+        name: "outer-one",
+        template:
+          ~s|<div><.component component_name="inner-one" site="Global" tone={@mood} /></div>|,
+        attrs: [%{"name" => "mood", "type" => "string"}],
+        slots: []
+      )
+    end
+
+    defp inner_node(view) do
+      Enum.find(
+        Tree.walk(editor(view).tree),
+        &(&1.kind == :component and
+            MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "inner-one")
+      )
+    end
+
+    defp open_component_builder(conn, component) do
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      {:ok, view}
+    end
+
+    # An attribute the outer component passes DOWN is an expression, and editing it through any
+    # ordinary control posted the source back with no kind — so `tone={@mood}` became
+    # `tone="@mood"`, a literal that looks identical in the panel and is bound to nothing.
+    test "editing an inherited attribute keeps it bound", %{conn: conn, site: site} do
+      outer = nesting(site.id)
+      {:ok, view} = open_component_builder(conn, outer)
+      node = inner_node(view)
+
+      assert node, "the fixture has to nest the inner component"
+      assert Node.attr(node, "tone") == {:expr, "@mood"}
+
+      render_change(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => node.id,
+        "name" => "tone",
+        "value" => "@mood_two"
+      })
+
+      assert Node.attr(inner_node(view), "tone") == {:expr, "@mood_two"}
+      assert {:ok, heex} = Serializer.to_heex(editor(view).tree)
+      assert heex =~ "tone={@mood_two}"
+      refute heex =~ ~s(tone="@mood_two")
+    end
+
+    # And the panel says which boxes are bound, because `name={@icon}` and `name="hero-bolt"` drew
+    # the same box — with a way to stop it being one on purpose.
+    test "and says so, with a way out", %{conn: conn, site: site} do
+      outer = nesting(site.id)
+      {:ok, view} = open_component_builder(conn, outer)
+      node = inner_node(view)
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => node.id})
+
+      assert has_element?(view, "#pb-attr-literal-#{node.id}-tone")
+
+      view |> element("#pb-attr-literal-#{node.id}-tone") |> render_click()
+
+      assert Node.attr(inner_node(view), "tone") == {:string, "@mood"}
+    end
+
+    # A component that renders ITSELF is kept out of its own palette, so it could never be dropped
+    # into itself — and the palette is also where the inspector looks for declarations, so its own
+    # inner node drew a panel with no properties at all.
+    test "a component that renders itself still knows what it declares", %{conn: conn, site: site} do
+      recursive =
+        create_component!(
+          site_id: site.id,
+          name: "recursive-one",
+          template:
+            ~s|<ul><.component component_name="recursive-one" site="Global" depth={@depth} /></ul>|,
+          attrs: [%{"name" => "depth", "type" => "integer"}],
+          slots: []
+        )
+
+      {:ok, view} = open_component_builder(conn, recursive)
+
+      node =
+        Enum.find(
+          Tree.walk(editor(view).tree),
+          &(&1.kind == :component and
+              MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "recursive-one")
+        )
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => node.id})
+
+      assert has_element?(view, "#pb-attr-#{node.id}-depth"),
+             "the declaration is on the record in hand"
+
+      refute has_element?(view, "#pb-insp-edit-component"),
+             "the Inspector offered to open the editor the author is already in"
+
+      # And it is still kept out of the palette, which is what stops it being dropped into itself.
+      refute has_element?(view, "#pb-comp-recursive-one"),
+             "the recursion guard is the palette, and it still holds"
+    end
+
+    # THE RAIL HAS TO AGREE WITH THE PANEL. It counts what a node still needs from the same palette
+    # the inspector reads, so a required property on a self-rendered component was never counted:
+    # the panel said "required, empty" and the row beside it said nothing at all.
+    test "and the rail counts what one of these still needs", %{conn: conn, site: site} do
+      recursive =
+        create_component!(
+          site_id: site.id,
+          name: "needful-self",
+          template: ~s|<ul><.component component_name="needful-self" site="Global" /></ul>|,
+          attrs: [%{"name" => "depth", "type" => "integer", "opts" => %{"required" => true}}],
+          slots: []
+        )
+
+      {:ok, view} = open_component_builder(conn, recursive)
+
+      node =
+        Enum.find(
+          Tree.walk(editor(view).tree),
+          &(&1.kind == :component and
+              MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "needful-self")
+        )
+
+      assert view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ "1 needed"
+    end
+
+    # A private helper — `<.badge_dismiss>` and twenty-two others across the kit — is declared in the
+    # component's own `helpers` column, which the palette deliberately does not carry.
+    test "and a private helper declares its own properties too", %{conn: conn, site: site} do
+      holder =
+        create_component!(
+          site_id: site.id,
+          name: "with-helper",
+          template: ~s|<div><.badge_dismiss tone={@mood} /></div>|,
+          attrs: [%{"name" => "mood", "type" => "string"}],
+          slots: [],
+          helpers: [
+            %{
+              "name" => "badge_dismiss",
+              "args" => "assigns",
+              "code" => "nil",
+              "attrs" => [%{"name" => "tone", "type" => "string"}],
+              "slots" => []
+            }
+          ]
+        )
+
+      {:ok, view} = open_component_builder(conn, holder)
+
+      node =
+        Enum.find(
+          Tree.walk(editor(view).tree),
+          &(&1.kind == :component and
+              MishkaCmsCore.Runtime.PageBuilder.Tree.Node.component_name(&1) == "badge_dismiss")
+        )
+
+      assert node, "a dotted tag is a component node"
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => node.id})
+
+      assert has_element?(view, "#pb-attr-#{node.id}-tone")
+
+      refute has_element?(view, "#pb-insp-edit-component"),
+             "a private helper is the component being edited, not another one to open"
+    end
+
+    test "and the one it nests opens in its own editor, with the way back here", %{
+      conn: conn,
+      site: site
+    } do
+      outer = nesting(site.id)
+      {:ok, view} = open_component_builder(conn, outer)
+      node = inner_node(view)
+
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+      render_click(view, "select", %{"id" => node.id})
+
+      inner = view |> editor() |> Map.fetch!(:components) |> Enum.find(&(&1.name == "inner-one"))
+
+      back =
+        URI.encode_query(%{
+          "return_to" => "/admin/dashboard/runtime/builder/component/#{outer.id}"
+        })
+
+      assert has_element?(
+               view,
+               ~s(#pb-insp-edit-component[href="/admin/dashboard/runtime/builder/component/#{inner.id}?#{back}"])
+             )
+    end
+  end
+
+  # THE ROUND TRIP. A component opened from a page's Inspector carries that page's builder in
+  # `return_to`, and its back link goes there instead of to the component list. The address is
+  # something a URL supplied, so only another builder is honoured — anything that could point the
+  # back link off-site falls back to the list.
+  describe "the way back from a component's editor" do
+    defp back_link(conn, component, query) do
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}?#{query}")
+
+      view
+    end
+
+    test "goes back to the builder it was opened from", %{conn: conn, site: site, page: page} do
+      component = create_component!(site_id: site.id, name: "round-trip")
+      page_builder = "/admin/dashboard/runtime/builder/page/#{page.id}"
+
+      view = back_link(conn, component, URI.encode_query(%{"return_to" => page_builder}))
+
+      assert has_element?(view, ~s(#pb-back[href="#{page_builder}"]))
+    end
+
+    test "and an error page's entry is kept on the way back", %{conn: conn, site: site} do
+      component = create_component!(site_id: site.id, name: "round-trip-status")
+      entry = "/admin/dashboard/runtime/builder/error-page/#{Ecto.UUID.generate()}?status=500"
+
+      view = back_link(conn, component, URI.encode_query(%{"return_to" => entry}))
+
+      assert has_element?(view, ~s(#pb-back[href="#{entry}"]))
+    end
+
+    test "but never anywhere that is not a builder", %{conn: conn, site: site} do
+      component = create_component!(site_id: site.id, name: "round-trip-refused")
+
+      for elsewhere <- [
+            "//evil.example/admin/dashboard/runtime/builder/page/x",
+            "https://evil.example/admin/dashboard/runtime/builder/page/x",
+            "/admin/dashboard/runtime/components/../../../elsewhere",
+            "javascript:alert(1)",
+            ""
+          ] do
+        view = back_link(conn, component, URI.encode_query(%{"return_to" => elsewhere}))
+
+        assert has_element?(view, ~s(#pb-back[href="/admin/dashboard/runtime/components"])),
+               "#{inspect(elsewhere)} was honoured as a way back"
+      end
+
+      view = back_link(conn, component, "")
+      assert has_element?(view, ~s(#pb-back[href="/admin/dashboard/runtime/components"]))
     end
   end
 

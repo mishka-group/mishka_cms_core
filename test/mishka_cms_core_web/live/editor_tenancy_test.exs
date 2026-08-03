@@ -25,6 +25,8 @@ defmodule MishkaCmsCoreWeb.Test.EditorTenancyTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.States.SiteState
 
   require Ash.Query
@@ -258,6 +260,81 @@ defmodule MishkaCmsCoreWeb.Test.EditorTenancyTest do
       html = render_async(view, 5_000)
 
       assert html =~ "Visual Editor"
+    end
+  end
+
+  # THE BUILDER'S OWN WAYS INTO A COMPONENT'S EDITOR — the Inspector's button and the layers rail's
+  # two arrows. They lead to the same address the details modal's Visual Editor does, so they keep the
+  # same rule: a tenant is never offered a shared component's editor that would only turn them away.
+  describe "a component's editor, from a page's builder" do
+    defp placed_components!(site_id) do
+      markup = ~s|<footer><div>a</div></footer>|
+      shared = create_component!(site_id: nil, name: "shared-placed", template: markup)
+      own = create_component!(site_id: site_id, name: "own-placed", template: markup)
+
+      page =
+        create_page!(
+          site_id: site_id,
+          template:
+            ~s|<section id="root"><.component component_name="shared-placed" /><.component component_name="own-placed" /></section>|
+        )
+
+      {page, shared, own}
+    end
+
+    defp ways_in(view, name) do
+      {:ok, editor} = EditorSession.fetch(token(view))
+      node = editor.tree |> Tree.walk() |> Enum.find(&(Node.component_name(&1) == name))
+
+      render_click(view, "select", %{"id" => node.id})
+      render_click(view, "set_left_tab", %{"tab" => "inspector"})
+
+      open? =
+        view |> element(~s([data-layer-row="#{node.id}"])) |> render() =~ ~s(data-open="true")
+
+      unless open?, do: render_click(view, "toggle_expand", %{"id" => node.id})
+
+      for {way, selector} <- [
+            inspector: "#pb-insp-edit-component",
+            row: "#pb-layer-open-#{node.id}",
+            markup: "#pb-markup-open-#{node.id}"
+          ],
+          has_element?(view, selector),
+          do: way
+    end
+
+    test "offers a tenant none of them on a shared component", %{tenant_conn: conn, mine: mine} do
+      {page, _shared, _own} = placed_components!(mine.id)
+      {:ok, view, _html} = open(conn, :page, page)
+      render_async(view)
+
+      assert ways_in(view, "shared-placed") == []
+    end
+
+    test "and every one of them on the tenant's own", %{tenant_conn: conn, mine: mine} do
+      {page, _shared, own} = placed_components!(mine.id)
+      {:ok, view, _html} = open(conn, :page, page)
+      render_async(view)
+
+      assert ways_in(view, "own-placed") == [:inspector, :row, :markup]
+
+      assert has_element?(
+               view,
+               ~s(#pb-insp-edit-component[href^="/admin/dashboard/runtime/builder/component/#{own.id}?"])
+             )
+    end
+
+    test "and a master every one of them on the shared one", %{conn: conn, mine: mine} do
+      {page, shared, _own} = placed_components!(mine.id)
+      {:ok, view, _html} = open(conn, :page, page)
+      render_async(view)
+
+      assert ways_in(view, "shared-placed") == [:inspector, :row, :markup]
+
+      assert has_element?(
+               view,
+               ~s(#pb-insp-edit-component[href^="/admin/dashboard/runtime/builder/component/#{shared.id}?"])
+             )
     end
   end
 

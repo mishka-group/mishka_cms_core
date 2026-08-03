@@ -1075,6 +1075,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         pointer-events: none;
       }
 
+      /* A LIVE COMPONENT SAYS WHAT IT IS, where the pointer is. It is drawn with real data and
+         looks like any other markup, so without this the only place that said it runs on the
+         published page — and nowhere in this frame — was a badge in the Inspector.
+
+         `::after`, because `::before` is the overlay chip's and a component can be both. The two
+         other `::after` labels a wrapper can carry — an empty overlay's and the media well's — win
+         over this one, and `live_label/1` is where: it leaves `data-pb-live` off a wrapper that has
+         either, so the chip never merges into a box already drawing its own sentence.
+
+         `position: relative` always rather than only on hover: switched on under the pointer it
+         would move whatever inside the component is absolutely positioned, every time the pointer
+         crossed it. `data-pb-live` is only ever on the editor's own wrapper — see `live_label/1`. */
+      [data-pb-live] { position: relative; }
+
+      :is([data-pb-live]:hover, [data-pb-live][data-selected="true"])::after {
+        position: absolute;
+        top: 6px;
+        right: 6px;
+        z-index: 2147483646;
+        max-width: calc(100% - 12px);
+        padding: 3px 8px;
+        border-radius: 999px;
+        background: #4f4bcc;
+        color: #fff;
+        font: 700 10.5px ui-sans-serif, system-ui;
+        letter-spacing: .01em;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        pointer-events: none;
+      }
+
       /* THE CHOOSER ON AN EMPTY PAGE. Every selector below is anchored to an id, so it outranks the
          site's own compiled utilities whatever they are — an author's stylesheet shares this
          document, and a `style` attribute used to be what kept the chrome out of its way. */
@@ -1585,6 +1617,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     """
     [data-pb-overlay]::before { content: #{css_content(gettext("%{name} — opens from its trigger", name: @word_marker), "data-pb-overlay")}; }
     #{reveal}[data-pb-hollow]::after { content: #{css_content(gettext("Empty %{name} — drop something in here", name: @word_marker), "data-pb-hollow")}; }
+    :is([data-pb-live]:hover, [data-pb-live][data-selected="true"])::after { content: #{css_content(gettext("Live · %{name} — runs on the published page", name: @word_marker), "data-pb-live")}; }
     """
   end
 
@@ -2076,6 +2109,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     assigns =
       assigns
       |> assign(:component_assigns, component_assigns(assigns))
+      |> assign(:stateful?, stateful_entry?(assigns))
       |> assign(:wants_media, wants_media(assigns))
       |> assign(:overlay, overlay(assigns))
       |> assign(:reveal, reveal(assigns))
@@ -2115,6 +2149,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       false ->
         assigns
         |> assign(:body, Phoenix.HTML.raw(html))
+        |> assign(:live, live_label(assigns))
         |> wrapped_frame()
     end
   end
@@ -2168,9 +2203,34 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
   defp wrapped_frame(assigns) do
     ~H"""
-    <div {marker_attrs(assigns)}>{@body}</div>
+    <div {Map.put(marker_attrs(assigns), "data-pb-live", assigns[:live])}>{@body}</div>
     """
   end
+
+  # A LIVE COMPONENT SAYS SO ON THE CANVAS, which nothing did. `data-stateful` has been on the node
+  # since the canvas learned to draw one, and no rule read it: the list drew real posts, looked like
+  # any other markup, and the author learned it was a different kind of thing from the Inspector or
+  # not at all. The chip the `data-pb-live` rules in `#pb-canvas-chrome` draw is that word, where the
+  # pointer is.
+  #
+  # ON THE WRAPPER ONLY, which is why it is not `data-stateful`. A stamped root carries every marker
+  # the wrapper would have — and it is the component's own `<td>`, or a child its parent joins with
+  # `[&>*]:` — so a `position` and a pseudo-element put there land inside somebody else's layout.
+  #
+  # A placeholder is not given one either: the red box is the editor's own words about a render that
+  # failed, and "live" over it would be describing something that is not on the canvas. Never in
+  # preview, like every other editing affordance on the wrapper.
+  #
+  # NOR A WRAPPER WHOSE `::after` IS ALREADY SPOKEN FOR. An element has one `::after`, and the media
+  # well's and the empty overlay's are keyed on this same wrapper by selectors that outrank the chip's
+  # — so a live component wanting a picture drew the well's sentence in the chip's violet over its
+  # whole box, and never the word "Live". Both of those ask the author to DO something here, which
+  # the chip does not; the Inspector's badge still says what the component is.
+  defp live_label(%{preview?: true}), do: nil
+  defp live_label(%{wants_media: wanted}) when is_binary(wanted), do: nil
+  defp live_label(%{hollow: hollow}) when is_binary(hollow), do: nil
+  defp live_label(%{stateful?: true, component_name: name}), do: name
+  defp live_label(_assigns), do: nil
 
   defp stamped_frame(assigns) do
     ~H"""
@@ -2187,6 +2247,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       "data-node-id" => assigns.node.id,
       "data-kind" => "component",
       "data-component" => assigns[:component_name] || assigns.node.tag,
+      "data-stateful" => assigns[:stateful?] && "true",
       "data-wants-media" => assigns[:wants_media],
       "data-incomplete" => missing != [] && "true",
       "data-pb-overlay" => assigns[:overlay],
@@ -3175,6 +3236,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   # globals, and a field that renders `{@rest}` painted `component_name="chelekom-email-field"` on
   # its own input.
   @wrapper_attrs %{"component_name" => :component_name, "site" => :site}
+
+  # ASKED OF THE COMPILED MODULE, like every other fact the canvas needs about a component. The
+  # session's palette entry carries the flag too, but the module is what actually decides which
+  # shape was emitted — and it is already loaded by the time this runs, because
+  # `component_assigns/1` a few lines down has ensured it.
+  defp stateful_entry?(%{node: node, site_scope: site}) do
+    name = Node.component_name(node)
+    scope = component_site(node, site)
+
+    CompilerHelpers.module_name(name, scope, "Component")
+    |> then(& &1.__component_information__([:private, :stateful]))
+    |> Kernel.==(true)
+  rescue
+    _not_loaded_or_no_such_function -> false
+  end
 
   defp component_assigns(%{node: node, tree: tree, site_scope: site} = assigns) do
     scope = component_site(node, site)

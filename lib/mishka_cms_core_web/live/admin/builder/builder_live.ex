@@ -45,6 +45,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Hooks
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.Interactions
+  alias MishkaCmsCore.Runtime.PageBuilder.Interface
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
@@ -1068,6 +1069,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      )}
   end
 
+  # THE INTERFACE FORM HAS SAVED. It writes the component's own row, which is the row this editor is
+  # showing — `@record` feeds the Interface tab's undeclared advice and the tab's own count, so a
+  # stale one would go on offering to declare an attribute that now exists.
+  def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.Component{} = record}, socket),
+    do: {:noreply, assign(socket, :record, record)}
+
   def handle_info(_message, socket), do: {:noreply, socket}
 
   defp sync_session(socket, token) do
@@ -1660,6 +1667,33 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       :ok -> {:noreply, write_code(socket, fragments)}
       {:error, [fault | _rest]} -> {:noreply, held(socket, fragments, fault)}
     end
+  end
+
+  # A COMPONENT'S INTERFACE — the `attrs` and `slots` columns, which the builder could not edit at
+  # all. They drive the Inspector's controls, `.properties`, `.slots` and every drop rule about the
+  # component, and the only place to write them was the Components table form.
+  #
+  # Written through the same `save_section/4` the code fragments take, because they are the same kind
+  # of thing: columns on this record that are not the document.
+  # ONE CLICK RATHER THAN A SENTENCE TELLING YOU TO. The template already says what it needs; the
+  # only thing left is to write it down, and the type it gets is `string` because that is what a
+  # `{@thing}` in markup almost always is and the select beside it is one click from any other.
+  #
+  # It writes the column directly rather than reaching into the Gervaz form beside it: the form is
+  # the resource's and owns its own state, and a record it did not save is one it re-reads when the
+  # parent hands it a new `record_id`. See `refresh_interface_form/1`.
+  def handle_event("declare_missing", %{"kind" => kind, "name" => name}, socket) do
+    record = socket.assigns.record
+    attrs = Interface.attrs(record)
+    slots = Interface.slots(record)
+
+    {attrs, slots} =
+      case kind do
+        "attr" -> {declared(attrs, "attr", name), slots}
+        _slot -> {attrs, declared(slots, "slot", name)}
+      end
+
+    {:noreply, write_interface(socket, attrs, slots)}
   end
 
   # Applying re-parses and replaces the working tree — the same call a draft restore makes, so it is
@@ -3955,6 +3989,53 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp code_fault_message(_fault), do: gettext("That code could not be saved.")
 
+  # THE DOCUMENT THAT IS OPEN, not always a page. This wrote `MishkaCmsCore.Runtime.Page` whatever the
+  # editor was on, looking the record up by the id of a layout, an error page or a component — which
+  # is a Page that does not exist, so the save failed for three of the four sections and the author
+  # was told nothing. `Section.resource/1` is the same answer `persist/3` already asks for.
+  #
+  # AND ONLY THE FIELDS THAT RESOURCE HAS. A page carries `events`, `infos` and `helpers`; the other
+  # three carry `helpers` alone, and an action refuses an input it does not accept — so the keys are
+  # asked of the resource rather than written down a second time.
+  defp declared(rows, kind, name) do
+    case Enum.any?(rows, &(to_string(&1["name"]) == name)) do
+      true -> rows
+      false -> rows ++ [Map.put(blank_declaration(kind), "name", name)]
+    end
+  end
+
+  defp blank_declaration("attr"), do: %{"name" => "", "type" => "string", "opts" => %{}}
+  defp blank_declaration(_slot), do: %{"name" => "", "opts" => %{}, "attrs" => []}
+
+  defp write_interface(socket, attrs, slots) do
+    %{editor: editor} = socket.assigns
+    resource = Section.resource(section(socket))
+
+    fields = %{
+      "attrs" => attrs,
+      "slots" => slots,
+      "id" => editor.resource_id,
+      "site_id" => editor.site_id
+    }
+
+    case MishkaCmsCore.Runtime.PageBuilder.Helpers.save_section(
+           resource,
+           &Ash.get(resource, &1, &2),
+           fields,
+           socket.assigns.current_user
+         ) do
+      {:ok, record} ->
+        socket
+        |> assign(:record, record)
+        |> put_flash(:info, gettext("Declared — every page using this component reads it."))
+
+      # `Validations.InterfaceDeclaration` is what refuses a declaration that will not compile, so a
+      # refusal here is the resource's sentence and is worth repeating verbatim.
+      {:error, reason} ->
+        put_flash(socket, :error, human(reason))
+    end
+  end
+
   # Handlers stored under a renamed form's old event names are saved under its current ones.
   defp write_code(socket, fragments) do
     section = section(socket)
@@ -4381,6 +4462,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           record={@record}
           aim_target={@aim_target}
           act_action={@act_action}
+          current_user={@current_user}
         />
         <Panels.center
           editor={@editor}
@@ -4418,6 +4500,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           selection={@selection}
           expanded={@expanded}
           record={@record}
+          section={@section}
+          current_user={@current_user}
         />
       </div>
 
@@ -4437,6 +4521,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         code_allowed?={@code_allowed?}
         section={@section}
         record={@record}
+        current_user={@current_user}
         code_focus={@code_focus}
         retagged={@retagged}
       />

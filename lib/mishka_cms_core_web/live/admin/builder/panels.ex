@@ -1218,6 +1218,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # component's own attributes and slots — rather than a vocabulary written into the editor.
   attr(:record, :any, default: nil)
 
+  # Who is looking, for the Inspector's way into a component's own editor — see
+  # `component_editor_path/3`.
+  attr(:current_user, :any, default: nil)
+
   attr(:aim_target, :string,
     default: nil,
     doc: "the node id in the On-click target select right now, before it is saved"
@@ -1357,6 +1361,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           record={@record}
           aim_target={@aim_target}
           act_action={@act_action}
+          current_user={@current_user}
         />
       </aside>
 
@@ -1616,12 +1621,27 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 >
                   {(entry.global? && gettext("G")) || gettext("T")}
                 </span>
+                <%!-- WHICH KIND THIS ONE IS, on the glyph rather than in a corner: both corners of
+                      the card are taken (scope, examples) and the label beneath can run to two
+                      lines. A live component answers clicks and keeps state and a function
+                      component cannot, so two cards that look identical are two cards a reader
+                      cannot choose between. --%>
+                <span class="relative flex-none">
                   <span
                     class="grid size-[30px] place-items-center rounded-[9px]"
                     style={"background:#{category_tint(entry.type)};color:#{category_dot(entry.type)}"}
                   >
                     <.icon name={entry_icon(entry)} size={16} />
                   </span>
+                  <span
+                    :if={PaletteEntry.optional(entry, :stateful?)}
+                    data-role="pb-livedot"
+                    title={gettext("Live component — keeps its own state and answers its own events")}
+                    class="absolute -bottom-[3px] -right-[3px] grid size-[13px] place-items-center rounded-full border border-white bg-[#4f4bcc] text-white"
+                  >
+                    <.icon name={:bolt} size={8} />
+                  </span>
+                </span>
                 <span class="line-clamp-2 w-full text-center text-[10.5px] font-semibold leading-[1.3] text-[#3a382f] [word-break:break-word]">
                   {short_label(entry, @kit_prefixes)}
                 </span>
@@ -2369,11 +2389,65 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               <div class="truncate font-['Space_Grotesk'] text-[12.5px] font-bold text-[#2e2b6b]">
                 {selection_tag(@selected_node)}
               </div>
+              <%!-- SAID ONCE, WHERE THE READER IS LOOKING AT THE THING. A live component answers
+                    clicks and keeps state; a function component cannot, and on the canvas neither
+                    of them does — the frame draws markup, not a running component. Without this the
+                    two are the same panel over two different capabilities, and the author finds out
+                    which by publishing. --%>
+              <span
+                :if={PaletteEntry.optional(component_entry(assigns), :stateful?)}
+                data-role="pb-insp-kind"
+                title={
+                  gettext(
+                    "A Phoenix LiveComponent: on the published page it keeps its own state and answers its own events."
+                  )
+                }
+                class="inline-flex flex-none items-center gap-1 rounded-full bg-[#f2f1fc] px-1.5 py-[1px] font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc]"
+              >
+                <.icon name={:bolt} size={9} /> {gettext("Live")}
+              </span>
+            </div>
+            <%!-- AND WHY NOTHING IN THE FRAME RESPONDS. The canvas draws a live component's own
+                  markup in its cold state — `@myself` is nil, so `phx-target` renders away and no
+                  click reaches anything. Without this line an author presses the component's own
+                  button, nothing happens, and the only available conclusion is that they built it
+                  wrong.
+
+                  IT USED TO SAY PREVIEW WAS WHERE IT RUNS, and that stopped being true when Preview
+                  took the same cold path: an author who believed it toggled Preview, clicked again,
+                  and was told nothing new. The published page is the only place it runs; the
+                  new-tab preview reads its address, so a pager built on the URL pages there too. --%>
+            <div
+              :if={PaletteEntry.optional(component_entry(assigns), :stateful?)}
+              data-role="pb-insp-cold"
+              class="mt-[3px] text-[10px] font-medium leading-[1.45] text-[#6d6a63]"
+            >
+              {gettext(
+                "Drawn with its first page of real data. Its buttons and state run on the published page; paging by URL also works in the new-tab preview."
+              )}
             </div>
             <div class="text-[10.5px] font-medium text-[#6d6a63]">
               {selection_meta(@selected_node)}
             </div>
             <.form_part part={Inspector.form_part(@editor, @selected_node)} />
+            <%!-- WHERE THE AUTHOR IS LOOKING. The only way into a component's own editor was an icon
+                  on its layers row that shows on hover, so someone looking at a live list in the
+                  Inspector had no way to change what it draws. Same tab, with the way back in the
+                  address; the leave guard still stands between this and unsaved work. --%>
+            <.link
+              :if={component_editor_path(component_entry(assigns), @editor, @current_user)}
+              id="pb-insp-edit-component"
+              navigate={component_editor_path(component_entry(assigns), @editor, @current_user)}
+              title={
+                gettext(
+                  "Edit the ORIGINAL %{name} — its markup is shared, so this changes every page using it",
+                  name: component_entry(assigns).name
+                )
+              }
+              class="mt-1.5 inline-flex h-6 items-center gap-1.5 rounded-[7px] border border-[#dcdbf5] bg-white px-2 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#f7f6ff]"
+            >
+              {gettext("Edit component")} <.icon name={:external} size={11} />
+            </.link>
           </div>
           <%!-- THE KIT ALREADY SAYS WHERE ITS DOCS ARE. Every Chelekom component carries a `doc_url`
                 and nothing read it, so someone stuck on what `variant` means had the answer sitting
@@ -8112,6 +8186,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # `.layers`, whose `.interface` group is a view of two of that row's columns. `section` says which
   # kind of document this is, which is the only thing that decides whether that group exists at all.
   attr(:record, :any, default: nil)
+  attr(:section, :string, default: nil)
+  # Read by `.layers`, whose component rows lead into that component's own editor — see
+  # `component_editor_path/3`.
+  attr(:current_user, :any, default: nil)
+
   def right_panel(assigns) do
     ~H"""
     <div
@@ -8173,6 +8252,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         selection={@selection}
         expanded={@expanded}
         record={@record}
+        section={@section}
+        current_user={@current_user}
       />
 
       <%!-- AND WHATEVER AN EXTENSION ADDED. The three above are the core's own rails and stay
@@ -8205,6 +8286,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:selection, :string, default: nil)
   attr(:expanded, :any, required: true)
   attr(:record, :any, default: nil)
+  attr(:section, :string, default: nil)
+  attr(:current_user, :any, default: nil)
+
   defp layers(assigns) do
     assigns = assign(assigns, :unmet, unmet_map(assigns.tree, declarations(assigns)))
 
@@ -8220,6 +8304,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         {gettext("Elements hierarchy")}
       </div>
 
+      <.interface_group section={@section} record={@record} expanded={@expanded} />
 
       <.layer_row
         :for={{id, index} <- Enum.with_index(@tree.roots)}
@@ -8231,6 +8316,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         expanded={@expanded}
         editor={@editor}
         unmet={@unmet}
+        current_user={@current_user}
       />
       <p :if={@tree.roots == []} class="py-8 text-center text-[12px] font-medium text-[#a8a5a0]">
         {gettext("Nothing on this page yet.")}
@@ -8285,6 +8371,170 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     own ++ helpers
   end
 
+  attr(:section, :string, default: nil)
+  attr(:record, :any, default: nil)
+  attr(:expanded, :any, required: true)
+
+  @doc false
+  # WHAT THIS COMPONENT TAKES, and the first thing in the tree because it is the first thing true
+  # about a component: everything below it is markup that reads these names.
+  #
+  # A page's rail opens on the page's own elements and there is nothing else it could open on. A
+  # COMPONENT's rail opened the same way, and the declaration — the attributes and slots that decide
+  # what the markup may say, what the Inspector offers, and whether a drop into a slot is allowed —
+  # was reachable only by knowing that the Code window has a tab for it. The one thing with no row
+  # was the one thing everything else depends on.
+  #
+  # Read only here, and deliberately: this is a VIEW of the Interface tab, drawn at the size of a
+  # tree row. Editing a declaration means the form, with its validation and its save, so every row
+  # is a way into that form rather than a second place to type. Folded, so it costs one row until
+  # asked for, like `.properties` and `.markup`.
+  defp interface_group(assigns) do
+    assigns =
+      assigns
+      |> assign(:attrs, Interface.attrs(assigns.record))
+      |> assign(:slots, Interface.slots(assigns.record))
+      |> assign(:open?, MapSet.member?(assigns.expanded, "iface:root"))
+
+    ~H"""
+    <div :if={Section.normalize(@section) == "component" and @record != nil} class="mb-1">
+      <div class="flex items-center gap-1 pr-[9px]">
+        <button
+          type="button"
+          id="pb-interface-group"
+          phx-click="toggle_expand"
+          phx-value-id="iface:root"
+          title={gettext("What this component takes — its attributes and slots")}
+          class="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] py-[6px] pl-[9px] text-left hover:bg-[#f7f6f3]"
+        >
+          <.icon
+            name={:chevron}
+            size={11}
+            class={"flex-none text-[#a8a5a0] " <> ((@open? && "rotate-90") || "")}
+          />
+          <span class="grid size-[15px] flex-none place-items-center text-[#6d6a63]">
+            <.icon name={:code} size={12} />
+          </span>
+          <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#6d6a63]">
+            {gettext(".interface")}
+          </span>
+          <span class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
+            ({length(@attrs) + length(@slots)})
+          </span>
+        </button>
+
+        <%!-- TWO ACTIONS, TWO CONTROLS — the same split `.markup` makes. The chevron shows what is
+              declared; this opens the form that declares it. --%>
+        <button
+          type="button"
+          id="pb-interface-edit"
+          phx-click="open_source"
+          phx-value-tab="interface"
+          title={gettext("Edit this component's attributes and slots")}
+          class="grid size-5 flex-none place-items-center rounded-[6px] text-[#a8a5a0] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+        >
+          <.icon name={:edit} size={12} />
+        </button>
+      </div>
+
+      <div :if={@open?}>
+        <%!-- Silence reads as "not loaded", the same way it does under `.properties`. A component
+              that declares nothing says so, and says where to add one. --%>
+        <div
+          :if={@attrs == [] and @slots == []}
+          class="py-[5px] pl-[35px] pr-[9px] text-[10.5px] font-medium text-[#a8a5a0]"
+        >
+          {gettext("nothing declared yet — add an attribute or a slot")}
+        </div>
+
+        <.interface_row
+          :for={row <- interface_rows(@attrs, @slots)}
+          name={row.name}
+          label={row.label}
+          detail={row.detail}
+          required?={row.required?}
+          kind={row.kind}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  attr(:name, :string, required: true)
+  attr(:label, :string, required: true)
+  attr(:detail, :string, default: "")
+  attr(:required?, :boolean, default: false)
+  attr(:kind, :atom, required: true)
+
+  # Named the way the MARKUP names it — `@size`, `<:actions>` — rather than as the column stores it,
+  # because the row beside this one is the markup that reads it and the two should read alike. The
+  # DOM id keeps the stored name instead: `@` and `<` are not things a selector can be pointed at.
+  defp interface_row(assigns) do
+    ~H"""
+    <button
+      type="button"
+      id={"pb-interface-#{@kind}-#{@name}"}
+      phx-click="open_source"
+      phx-value-tab="interface"
+      title={gettext("Edit %{label} in the component's interface", label: @label)}
+      class="flex w-full items-center gap-2 rounded-[9px] py-[5px] pl-[35px] pr-[9px] text-left hover:bg-[#f2f1fc]"
+    >
+      <span class={[
+        "size-[6px] flex-none rounded-full",
+        (@kind == :slot && "bg-[#8580d8]") || "bg-[#4f4bcc]"
+      ]} />
+      <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-medium text-[#3a382f]">
+        {@label}
+      </span>
+      <span
+        :if={@required?}
+        class="flex-none rounded-[5px] bg-[#f2f1ec] px-[5px] py-px text-[9px] font-bold uppercase tracking-[0.05em] text-[#a8a5a0]"
+      >
+        {gettext("required")}
+      </span>
+      <span class="max-w-[86px] flex-none truncate font-['Space_Grotesk'] text-[10px] font-medium text-[#6d6a63]">
+        {@detail}
+      </span>
+    </button>
+    """
+  end
+
+  # ATTRIBUTES FIRST, THEN SLOTS, which is the order a declaration is written in and the order
+  # `.properties` and `.slots` already stand in on a page's rail. A slot is marked as one by the way
+  # it is written rather than by a word beside it: `<:actions>` is a slot to anyone who would be
+  # reading this rail at all, and `inner_block` is the one that is written as plain content.
+  defp interface_rows(attrs, slots) do
+    Enum.map(attrs, fn attr ->
+      name = Interface.value(attr, "name")
+
+      %{
+        kind: :attr,
+        name: name,
+        label: "@" <> name,
+        detail: Interface.value(attr, "type"),
+        required?: Interface.required?(attr)
+      }
+    end) ++
+      Enum.map(slots, fn slot ->
+        name = Interface.value(slot, "name")
+
+        %{
+          kind: :slot,
+          name: name,
+          label: (name == "inner_block" && gettext("inner content")) || "<:" <> name <> ">",
+          detail: slot_detail(slot),
+          required?: Interface.required?(slot)
+        }
+      end)
+  end
+
+  defp slot_detail(slot) do
+    case slot |> Interface.attrs() |> length() do
+      0 -> gettext("slot")
+      count -> ngettext("slot · %{count} attr", "slot · %{count} attrs", count)
+    end
+  end
+
   attr(:id, :string, required: true)
   attr(:index, :integer, default: 0)
   attr(:depth, :integer, required: true)
@@ -8293,6 +8543,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:expanded, :any, required: true)
   attr(:editor, :any, required: true)
   attr(:unmet, :map, default: %{})
+  attr(:current_user, :any, default: nil)
+
   defp layer_row(assigns) do
     assigns =
       assigns
@@ -8305,6 +8557,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       |> then(&assign(&1, :holds?, drop_target?(&1.node, &1.entry)))
       |> then(&assign(&1, :needs, Map.get(&1.unmet, &1.id, @no_needs)))
       |> then(&assign(&1, :off, visitor_off(&1.tree, &1.id)))
+      |> then(&assign(&1, :inside, component_inside(&1.node, &1.entry, &1.expanded, &1.id)))
 
     ~H"""
     <div :if={@node && !whitespace?(@node)} data-layer-id={@id}>
@@ -8519,6 +8772,27 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         >
           <.icon name={:lock} size={12} />
         </button>
+        <%!-- A runtime component's markup belongs to the COMPONENT, not to this page: the page only
+              names it and fills its slots. So the tree cannot show a `<footer>` inside it — that
+              footer is the component's own document — and this is the way in to edit it. --%>
+        <.link
+          :if={@node.kind == :component && component_editor_path(@entry, @editor, @current_user)}
+          id={"pb-layer-open-#{@id}"}
+          navigate={component_editor_path(@entry, @editor, @current_user)}
+          title={
+            gettext(
+              "Edit the ORIGINAL %{name} — its markup is shared, so this changes every page using it. The values on this page are the .properties and .slots groups below.",
+              name: @entry.name
+            )
+          }
+          class={[
+            "size-5 flex-none place-items-center rounded-[6px] text-[#a8a5a0] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]",
+            "group-hover:grid group-focus-within:grid",
+            (@id == @selection && "grid") || "hidden"
+          ]}
+        >
+          <.icon name={:external} size={12} />
+        </.link>
         <%!-- Deleting a row deletes the branch under it, which is why the title says how many go with
               it rather than leaving that to be discovered. --%>
         <button
@@ -8738,6 +9012,87 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         </button>
       </div>
 
+      <%!-- WHAT THE COMPONENT IS MADE OF, and the third peer of `.properties` and `.slots`.
+
+            These rows were drawn loose, at the same indent as the page's own children and directly
+            among them, with nothing saying what they were. A `chelekom-footer` put nine rows of
+            somebody else's markup between the component and the one line of content the page
+            actually put in it — rows that look like children of the page, are not, and accept
+            nothing. The report was the plain truth: it makes the tree dirty and confusing, and if it
+            is worth showing at all it belongs behind a heading like the other two.
+
+            Folded, so it costs one row until asked for. Read only, because a component's markup
+            belongs to the COMPONENT and is shared by every page using it: dragging or deleting one
+            of these would rewrite the component under every other page silently. The open icon on
+            the component's own row is where that edit is made deliberately. --%>
+      <div :if={MapSet.member?(@expanded, @id) and @inside != []}>
+        <%!-- TWO ACTIONS, TWO CONTROLS. Reading what is in there and going to edit it are different
+              intents, and one row cannot be both — a link inside a button swallows the click, and a
+              heading that navigated away would take the fold with it. The chevron shows, the arrow
+              leaves. It is the same arrow, going to the same place, as the one on the component's
+              own row: that one appears only while the row is selected, and by the time a reader has
+              opened `.markup` and found the thing they want to change, this is where their eye is. --%>
+        <div
+          class="flex items-center gap-1 pr-[9px]"
+          style={"padding-left:#{9 + (@depth + 1) * 13}px"}
+        >
+          <button
+            type="button"
+            id={"pb-markup-#{@id}"}
+            phx-click="toggle_expand"
+            phx-value-id={"markup:" <> @id}
+            class="flex min-w-0 flex-1 items-center gap-2 rounded-[9px] py-[6px] text-left hover:bg-[#f7f6f3]"
+          >
+            <.icon
+              name={:chevron}
+              size={11}
+              class={
+                "flex-none text-[#a8a5a0] " <>
+                  ((MapSet.member?(@expanded, "markup:" <> @id) && "rotate-90") || "")
+              }
+            />
+            <span class="grid size-[15px] flex-none place-items-center text-[#6d6a63]">
+              <.icon name={:code} size={12} />
+            </span>
+            <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#6d6a63]">
+              {gettext(".markup")}
+            </span>
+            <span class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
+              ({inside_count(@inside)})
+            </span>
+          </button>
+
+          <.link
+            :if={component_editor_path(@entry, @editor, @current_user)}
+            id={"pb-markup-open-#{@id}"}
+            navigate={component_editor_path(@entry, @editor, @current_user)}
+            title={
+              gettext(
+                "Open %{name} and edit this markup — it is shared, so this changes every page using it",
+                name: @entry.name
+              )
+            }
+            class="grid size-5 flex-none place-items-center rounded-[6px] text-[#a8a5a0] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+          >
+            <.icon name={:external} size={12} />
+          </.link>
+        </div>
+
+        <div :if={MapSet.member?(@expanded, "markup:" <> @id)}>
+          <div
+            class="py-[5px] pr-[9px] text-[10.5px] font-medium text-[#a8a5a0]"
+            style={"padding-left:#{9 + (@depth + 2) * 13}px"}
+          >
+            {gettext("read only — shared by every page using this component")}
+          </div>
+          <.inside_row
+            :for={{inner, inner_tree} <- @inside}
+            node={inner}
+            tree={inner_tree}
+            depth={@depth + 2}
+          />
+        </div>
+      </div>
 
       <.layer_row
         :for={
@@ -8751,6 +9106,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         expanded={@expanded}
         editor={@editor}
         unmet={@unmet}
+        current_user={@current_user}
       />
     </div>
     """
@@ -8931,6 +9287,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:code_allowed?, :boolean, default: false)
   attr(:section, :string, default: "page")
   attr(:record, :any, default: nil)
+  attr(:current_user, :any, default: nil)
+
   attr(:code_focus, :any,
     default: nil,
     doc:
@@ -9081,12 +9439,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
         <.style_rules :if={@tab == :styles} rules={@rules} tree={@tree} />
 
+        <.interface_editor
+          :if={@tab == :interface}
+          record={@record}
+          source={@source}
+          resource={Section.resource(@section)}
+          record_id={@record && @record.id}
+          current_user={@current_user}
+        />
 
         <.code_entries
           :if={@tab not in [:template, :styles, :interface] and @code_allowed?}
           tab={@tab}
           entries={Map.get(@fragments, @tab, [])}
           fault={@fault}
+          lifecycle={@tab == :helpers and live_record?(@record)}
+          shared={global_document?(assigns)}
           forms={page_handler_forms(@tab, @tree, Map.get(@fragments, @tab, []), @retagged)}
           focus={@code_focus}
         />
@@ -9136,6 +9504,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     do: [type: "button", "phx-click": "source_tab", "phx-value-tab": to]
 
   defp source_tabs(fragments, rules, code_allowed?, section, record) do
+    # WHAT THIS RECORD IS, not what every record could be. Only a component has an interface to
+    # declare — a page takes no attributes and has no slots — so the tab is not drawn anywhere it
+    # would open onto columns the resource does not have.
+    interface =
+      case section do
+        "component" ->
+          [
+            {:interface, gettext("Interface"),
+             length(Interface.attrs(record)) + length(Interface.slots(record))}
+          ]
+
+        _other ->
+          []
+      end
+
     # AND ONLY THE ONES THE RECORD HAS A COLUMN FOR. `events` and `infos` are Page attributes; a
     # Layout, a Component and an error page have `helpers` and no handlers. The writer already knew
     # — `BuilderLive.code_keys/1` asks the resource and drops the rest — so a handler typed on a
@@ -9164,7 +9547,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       end
 
     [{:template, gettext("Template"), 0}] ++
-      code ++ [{:styles, gettext("Styles"), map_size(rules)}]
+      interface ++ code ++ [{:styles, gettext("Styles"), map_size(rules)}]
   end
 
   # Asked of the resource rather than of a list of section names, so one that gains or loses a column
@@ -9256,6 +9639,118 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     placed ++ Enum.sort(orphans)
   end
 
+  attr(:record, :any, default: nil)
+  attr(:source, :string, default: "")
+  attr(:resource, :any, required: true)
+  attr(:record_id, :string, default: nil)
+  attr(:current_user, :any, default: nil)
+
+  @doc false
+  # A COMPONENT'S INTERFACE, WHICH THE BUILDER COULD NOT EDIT AT ALL.
+  #
+  # `attrs` and `slots` are columns on the component and they drive nearly everything the page
+  # builder does with it — which controls the Inspector offers, what `.properties` and `.slots`
+  # list, which properties are marked required, whether a drop into a slot is allowed. An author
+  # could build the markup here and had to leave for the Components table form to say what the
+  # markup takes.
+  #
+  # THE FORM IS THE RESOURCE'S OWN. `MishkaGervaz.Form.Web.Live` is a LiveComponent and this panel is
+  # its sixth mount in this very file — the Snippet form, the Media upload, the new-document modal,
+  # the folder modal and the review composer are the other five. The first version of this tab was
+  # hand-rolled inputs beside a `field :attrs, :nested` the resource had declared all along, which is
+  # two editors for one pair of columns and exactly the drift this codebase keeps paying for.
+  #
+  # `hidden_fields` is DERIVED rather than listed: every declared field except the two, read off the
+  # form itself, so a field added to the resource tomorrow is hidden here without anyone remembering
+  # to come back. Validation is the resource's too — see `Validations.InterfaceDeclaration`, which
+  # refuses a declaration that will not compile whichever surface wrote it.
+  defp interface_editor(assigns) do
+    assigns =
+      assigns
+      |> assign(:attrs, Interface.attrs(assigns.record))
+      |> assign(:slots, Interface.slots(assigns.record))
+      |> then(&assign(&1, :missing, Interface.undeclared(&1.source, &1.attrs, &1.slots)))
+
+    ~H"""
+    <div class={["min-h-0 flex-1 overflow-y-auto px-5 py-4", quiet_scroll(:light)]}>
+      <%!-- WHAT THE MARKUP ALREADY ASKS FOR, and the one thing here that is not a field. A template
+            reading `@size` with no `attr :size` compiles and then raises `KeyError` the first time
+            the component renders on somebody's page. It is ADVICE — half-finished work has to be
+            storable, so this never refuses a save — which is why it sits above the form rather than
+            inside it, and why each one is a button that writes the declaration rather than a
+            sentence saying you should. --%>
+      <section
+        :if={@missing.attrs != [] or @missing.slots != []}
+        id="pb-interface-missing"
+        class="mb-4 rounded-[12px] border border-[#f0dcd8] bg-[#fdf3f1] px-3.5 py-3"
+      >
+        <div class="mb-2 text-[11.5px] font-bold text-[#c0473d]">
+          {gettext("Your template reads these and the component does not declare them")}
+        </div>
+        <p class="mb-2.5 text-[11px] font-medium text-[#8a877f]">
+          {gettext("Undeclared, each one raises the first time this component renders on a page.")}
+        </p>
+        <div class="flex flex-wrap gap-1.5">
+          <button
+            :for={name <- @missing.attrs}
+            type="button"
+            id={"pb-interface-declare-attr-#{name}"}
+            phx-click="declare_missing"
+            phx-value-kind="attr"
+            phx-value-name={name}
+            class="rounded-[8px] border border-[#f0dcd8] bg-white px-2.5 py-1.5 font-['Space_Grotesk'] text-[11.5px] font-bold text-[#c0473d] hover:border-[#c0473d]"
+          >
+            {gettext("+ attr @%{name}", name: name)}
+          </button>
+          <button
+            :for={name <- @missing.slots}
+            type="button"
+            id={"pb-interface-declare-slot-#{name}"}
+            phx-click="declare_missing"
+            phx-value-kind="slot"
+            phx-value-name={name}
+            class="rounded-[8px] border border-[#f0dcd8] bg-white px-2.5 py-1.5 font-['Space_Grotesk'] text-[11.5px] font-bold text-[#c0473d] hover:border-[#c0473d]"
+          >
+            {gettext("+ slot :%{name}", name: name)}
+          </button>
+        </div>
+      </section>
+
+      <p class="mb-3 text-[11px] font-medium text-[#8a877f]">
+        {gettext(
+          "What a page can set on this component, and where content goes. Saved to the component itself — every page using it reads this."
+        )}
+      </p>
+
+      <.live_component
+        module={MishkaGervaz.Form.Web.Live}
+        id="pb-interface-form"
+        resource={@resource}
+        record_id={@record_id}
+        current_user={@current_user}
+        hidden_fields={interface_hidden_fields(@resource)}
+      />
+    </div>
+    """
+  end
+
+  @doc """
+  Every field of a resource's form except the two that ARE the interface.
+
+  Public because it is the whole contract between this panel and the resource, and a test that reads
+  a hidden-field list from the markup is testing Gervaz rather than the decision made here.
+
+  Asked of the form rather than listed: a list would be a second place to remember when the resource
+  grows a column, and the one that forgets is this one.
+  """
+  @spec interface_hidden_fields(module()) :: [atom()]
+  def interface_hidden_fields(resource) do
+    resource
+    |> MishkaGervaz.Resource.Info.Form.fields()
+    |> Enum.map(& &1.name)
+    |> Enum.reject(&(&1 in [:attrs, :slots]))
+  end
+
   # The Handlers tab lists every form on the page, from the working tree.
   defp page_handler_forms(:events, %Tree{} = tree, entries, retagged),
     do: PageForms.handler_forms(tree, pending_entries(entries, tree, retagged))
@@ -9332,6 +9827,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:tab, :atom, required: true)
   attr(:entries, :list, required: true)
   attr(:fault, :any, default: nil)
+  attr(:lifecycle, :boolean, default: false)
+  attr(:shared, :boolean, default: false)
+
   attr(:forms, :list,
     default: [],
     doc: "the page's forms and their handlers, on the Handlers tab"
@@ -9350,6 +9848,49 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       <input type="hidden" name="tab" value={@tab} />
 
       <div class={["min-h-0 flex-1 overflow-y-auto px-5 py-4", quiet_scroll(:light)]}>
+        <%!-- A LIVE COMPONENT'S LIFECYCLE IS WRITTEN HERE, and nothing said so. Its `mount/1`,
+              `update/2` and `handle_event/3` ride the same `helpers` array as any other function —
+              which is right, because that is the one place a `~H` fragment is also fed to the
+              Tailwind scanner — but an author reading "a function the template can call" has no way
+              to know that naming one `handle_event` is how their component answers a click. --%>
+        <div
+          :if={@lifecycle}
+          data-role="pb-lifecycle-note"
+          class="mb-3 rounded-[12px] border border-[#dcdbf5] bg-[#f6f5ff] px-4 py-3"
+        >
+          <div class="mb-1.5 flex items-center gap-1.5 text-[11.5px] font-bold text-[#4f4bcc]">
+            <.icon name={:bolt} size={11} /> {gettext("This one keeps state")}
+          </div>
+          <p class="text-[11px] font-medium leading-[1.55] text-[#5c5a54]">
+            <.sentence
+              text={
+                gettext_noop(
+                  "Three names are its lifecycle rather than ordinary helpers. %{mount} starts its state, %{update} runs whenever the page passes it something, and %{handle_event} answers its own controls — the ones whose %{target} is %{myself}. Anything else here is a plain function the template can call."
+                )
+              }
+              parts={
+                %{
+                  mount: {"code", nil, "mount(socket)"},
+                  update: {"code", nil, "update(assigns, socket)"},
+                  handle_event: {"code", nil, "handle_event(name, params, socket)"},
+                  target: {"code", nil, "phx-target"},
+                  myself: {"code", nil, "{@myself}"}
+                }
+              }
+            />
+          </p>
+          <%!-- AND HOW FAR IT REACHES. A component's handler runs in whatever LiveView renders it,
+                so a site-less one is one row executing inside every tenant's page process.
+                Nothing can scope where shared code runs — that is what shared means — so the one
+                place left to say it is where the code is written. --%>
+          <p
+            :if={@shared}
+            data-role="pb-lifecycle-shared"
+            class="mt-1.5 text-[11px] font-bold leading-[1.55] text-[#6d4fc0]"
+          >
+            {gettext("Shared with every site — this code runs on every site that places it.")}
+          </p>
+        </div>
 
         <.form_handlers :if={@forms != []} forms={@forms} focus={@focus} />
 
@@ -10049,6 +10590,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp empty_note(:helpers),
     do: gettext("No helpers yet. One is a function the template can call.")
 
+  # Whether the record being edited compiles to a `Phoenix.LiveComponent` — read off the row rather
+  # than the compiled module, because the editor is looking at what will be saved rather than at
+  # what was last built.
+  defp live_record?(%{stateful: true}), do: true
+  defp live_record?(_record), do: false
+
   defp scope_note(:helpers),
     do: gettext("Helpers belong to this page and its template can call them.")
 
@@ -10425,6 +10972,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp docs_url(_entry), do: nil
 
+  # THE COMPONENT'S OWN EDITOR, AND THE WAY BACK TO THIS ONE. `return_to` is this document's builder,
+  # which `Section.back_path/2` turns into the component editor's back link — without it, editing
+  # what a page uses ended on the component list and the page had to be found all over again.
+  #
+  # `nil` where there is nowhere to go: an entry with no row behind it (a slot's declaration, lent by
+  # its parent), or the document already open — a helper in a component's own prelude resolves to
+  # that component, and a link to the editor the author is in would only reload it.
+  #
+  # AND `nil` WHERE THE EDITOR WOULD TURN THIS ACTOR AWAY. A shared component is every site's, so
+  # `BuilderLive` refuses it to a tenant and lands them on the component list — without the page they
+  # came from. A button that leads to a refusal is worse than no button, which is the rule
+  # `PreviewHelpers` already keeps for the Visual Editor on the same rows. An entry that does not say
+  # it is a site's own is treated as shared: only a master is sent to an editor nobody can vouch for.
+  defp component_editor_path(%{id: id} = entry, %{resource_id: here} = editor, actor)
+       when is_binary(id) and id != here do
+    case editable_by?(entry, actor) do
+      true -> Section.builder_path("component", id) <> return_to(editor)
+      false -> nil
+    end
+  end
+
+  defp component_editor_path(_entry, _editor, _actor), do: nil
+
+  defp editable_by?(%{global?: false}, _actor), do: true
+  defp editable_by?(_entry, %{site_id: nil}), do: true
+  defp editable_by?(_entry, _actor), do: false
+
+  # A document not saved yet has no address of its own to come back to, so it asks for none.
+  defp return_to(%{resource_id: id, section: section, status: status}) when is_binary(id),
+    do: "?" <> URI.encode_query(%{"return_to" => Section.builder_path(section, id, status)})
+
+  defp return_to(_editor), do: ""
+
   defp held?(%{marked: %MapSet{} = marked}, id), do: MapSet.member?(marked, id)
   defp held?(_editor, _id), do: false
 
@@ -10735,8 +11315,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # A row opens when it has ANYTHING under it: children, properties, an unfilled slot, or a
   # component's own markup. The last one is checked without parsing — the parse only happens once the
   # row is actually open, and a chevron that depended on it could never appear.
-  defp expandable?(%{kids: kids, ghosts: ghosts, props: props}) do
-    kids != [] or ghosts != [] or props != []
+  defp expandable?(%{kids: kids, node: node, ghosts: ghosts, props: props, entry: entry}) do
+    kids != [] or ghosts != [] or props != [] or has_inside?(node, entry)
   end
 
   # WHAT THE PANEL WILL ACTUALLY DRAW. The indentation between two tags is a child like any other and
@@ -10746,6 +11326,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     do: Enum.reject(children, &whitespace?(Tree.get(tree, &1)))
 
   defp listed_children(_node, _tree), do: []
+
+  defp has_inside?(%Node{kind: :component}, entry) when not is_nil(entry),
+    do: is_binary(Map.get(entry, :template)) and Map.get(entry, :template) != ""
+
+  defp has_inside?(_node, _entry), do: false
+
+  # The component's own markup, parsed, so the tree can show what is in it without leaving the page.
+  # Parsed only for a row that is open, because a page can carry a dozen components and none of their
+  # internals matter until someone looks.
+  defp component_inside(%Node{kind: :component}, entry, expanded, id) when not is_nil(entry) do
+    with true <- MapSet.member?(expanded, id),
+         template when is_binary(template) and template != "" <- Map.get(entry, :template),
+         {:ok, tree} <- Tree.parse(template) do
+      for root <- tree.roots, node = Tree.get(tree, root), node != nil, do: {node, tree}
+    else
+      _nothing -> []
+    end
+  end
+
+  defp component_inside(_node, _entry, _expanded, _id), do: []
+
+  # How many rows `.markup` will draw, so the heading can say so before it is opened — the same
+  # promise `.properties` and `.slots` make. Whitespace between two tags is a node and is not a row,
+  # which is why this counts what will be DRAWN rather than what is in the tree.
+  defp inside_count(inside),
+    do: Enum.reduce(inside, 0, fn {node, tree}, total -> total + drawn_rows(node, tree) end)
+
+  defp drawn_rows(nil, _tree), do: 0
+
+  defp drawn_rows(node, tree) do
+    case whitespace?(node) do
+      true -> 0
+      false -> 1 + Enum.sum(Enum.map(node.children, &drawn_rows(Tree.get(tree, &1), tree)))
+    end
+  end
 
   # WHICH KIND OF SLOT THE GHOST WILL ADD, said before it is added rather than discovered after.
   #
@@ -10818,6 +11433,43 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       true -> gettext("no named slots — what you drop in goes straight inside")
       false -> gettext("this component takes nothing inside")
     end
+  end
+
+  attr(:node, :any, required: true)
+  attr(:tree, :any, required: true)
+  attr(:depth, :integer, required: true)
+
+  # One row of a component's INTERNALS. No drag handle, no delete, no click target: it is a window
+  # into the component, and the ways to change it are on the component itself.
+  defp inside_row(assigns) do
+    ~H"""
+    <div :if={!whitespace?(@node)}>
+      <div
+        class="flex items-center gap-2 rounded-[9px] py-[6px] pr-[9px] opacity-70"
+        style={"padding-left:#{9 + @depth * 13}px"}
+      >
+        <span class="w-3.5 flex-none"></span>
+        <span class="grid size-[15px] flex-none place-items-center text-[#a8a5a0]">
+          <.icon name={layer_icon(@node)} size={12} />
+        </span>
+        <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[11.5px] font-medium text-[#6d6a63]">
+          {node_label(@node)}
+        </span>
+        <span
+          :if={@node.children != []}
+          class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#a8a5a0]"
+        >
+          ({length(@node.children)})
+        </span>
+      </div>
+      <.inside_row
+        :for={child <- @node.children}
+        node={Tree.get(@tree, child)}
+        tree={@tree}
+        depth={@depth + 1}
+      />
+    </div>
+    """
   end
 
   # The palette entry behind a component node — what says which slots and properties it has.
