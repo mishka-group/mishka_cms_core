@@ -37,6 +37,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   require Logger
 
   alias MishkaCmsCore.Runtime.ErrorAddress
+  alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Runtime.MediaCategory
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
@@ -49,6 +51,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
+  alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsCore.Runtime.States.EditorSessionState
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
@@ -217,6 +220,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp section_label("error_page"), do: gettext("Error page")
   defp section_label("component"), do: gettext("Component")
 
+  # THE FOLDER RAIL HAS NO COMPONENT TO SUBSCRIBE FOR IT. The Assets sheet's gallery is a Gervaz
+  # table, and `Table.Web.Live` subscribes to `media:*` on our behalf — a LiveComponent shares this
+  # process, so its `Phoenix.PubSub.subscribe/2` registers US. Nothing does that for categories, so
+  # a folder added anywhere else would never appear here.
+  #
+  # The site-less topics only. Ash publishes `[[nil, :site_id], "created"]`, which is BOTH
+  # `media_category:created` and `media_category:<site>:created`; taking both would hand us every
+  # write twice. The site is checked on arrival instead.
+  @folder_topics ~w(
+    media_category:created
+    media_category:updated
+    media_category:destroyed
+  )
+
+  defp subscribe_folders do
+    Enum.each(@folder_topics, &Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, &1))
+  end
+
   # A STORED TEMPLATE THE TOKENIZER REFUSES USED TO BE A CRASH LOOP. `resume_or_open/5` answers
   # `{:error, %{line:, column:, message:}}` when the document will not parse, and `{opened, editor}`
   # MATCHES that — it is a two-tuple — so the error map became the editor and the mount died on
@@ -264,6 +285,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       Events.session_opened(editor)
       EditorSession.subscribe(editor.token)
       Presence.join(editor.token, actor)
+      subscribe_folders()
     end
 
     socket = load_palette_async(socket, editor, actor, params)
@@ -510,6 +532,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:frame_zoom, fn -> 30 end)
     |> assign_new(:frame_row, fn -> true end)
     |> assign_new(:code_open, fn -> false end)
+    # The top bar's Code. `nil` rather than `false` for the error so an empty string can mean
+    # "there is a message and it is blank" without being mistaken for "no message".
+    |> assign_new(:url_state, fn -> nil end)
     |> assign_new(:find_open, fn -> false end)
     |> assign_new(:find, fn -> "" end)
     |> assign_new(:replace, fn -> "" end)
@@ -525,6 +550,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # moves onto a token (`Inspector.retagged/3`).
     |> assign_new(:rename_origin, fn -> nil end)
     |> assign_new(:retagged, fn -> %{} end)
+    |> assign_new(:folder_form?, fn -> false end)
+    |> assign_new(:preview_media, fn -> nil end)
     |> assign_new(:source_error, fn -> nil end)
     |> assign_new(:source_tab, fn -> :template end)
     # What the Handlers tab puts in front of the reader: `{:entry, index}` or `{:form, node_id}`.
@@ -579,6 +606,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:fragments, fn -> code_fragments(socket.assigns[:record]) end)
     |> assign_new(:code_tab, fn -> :html end)
     |> assign_new(:heex_error, fn -> nil end)
+    |> assign_new(:sheet, fn -> :none end)
     |> assign_new(:command_open, fn -> false end)
     |> assign_new(:command_query, fn -> "" end)
     |> assign_new(:palette_query, fn -> "" end)
@@ -591,6 +619,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:autosave_failed?, fn -> false end)
     # Which property the Inspector should land on, set when a property row in the tree is clicked.
     |> assign_new(:focus_attr, fn -> nil end)
+    # Loading, not `ok([])`. The rail is only ever drawn inside the Assets sheet and opening that
+    # sheet is what reads the folders, so an empty ok here was the editor answering "this site has no
+    # folders" for the length of the query it had not run yet — the one answer the reader cannot tell
+    # apart from the truth.
+    |> assign_new(:media_categories, fn -> Phoenix.LiveView.AsyncResult.loading() end)
+    |> assign_new(:assets_category, fn -> nil end)
+    |> assign_new(:media_target, fn -> nil end)
     |> assign_new(:draft, fn -> nil end)
     |> assign_new(:autosaving?, fn -> false end)
     |> assign_new(:autosaving_revision, fn -> nil end)
@@ -789,6 +824,97 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp blank_to_nil("__all__"), do: nil
   defp blank_to_nil(id), do: id
 
+  # The sheet's own sidebar is the folder list, so what it needs loading is CATEGORIES — the files
+  # themselves are the Gervaz table's business and it fetches its own page.
+  defp load_sheet(socket, :assets) do
+    actor = socket.assigns[:current_user]
+    site_id = socket.assigns.editor.site_id
+
+    MishkaGervaz.Messages.assign_async(socket, :media_categories, fn ->
+      {:ok, %{media_categories: site_categories(actor, site_id)}}
+    end)
+  end
+
+  defp load_sheet(socket, _sheet), do: socket
+
+  # SILENTLY, which is the whole point of not reusing `load_sheet/2`. `assign_async/3` puts the
+  # rail back into its loading state, so every upload would blink the folders away and back for the
+  # length of one query. This replaces the value in place and the reader sees only the count change.
+  #
+  # Nothing to do before the sheet has ever been opened: the assign does not exist yet, and it will
+  # load when it does.
+  # WHOSE UPLOAD THIS PANEL IS SHOWING. A document scoped to a site hears its own site's writes and
+  # nobody else's — an unfiltered forward would drop another site's upload into this site's editor.
+  #
+  # A GLOBAL LAYOUT OR COMPONENT HAS NO SITE, which is the whole point of one: every site uses it and
+  # only a master edits it. `Media` and `MediaCategory` both declare `allow_nil? false` on their site,
+  # so comparing theirs to this editor's nil could never be true — the gallery and the folder rail
+  # went deaf, and an upload landed with a flash saying so while nothing on screen moved until the
+  # page was reloaded. The panel is already showing every site's library there, so every site's write
+  # is one of its own.
+  defp media_in_scope?(%{assigns: %{editor: %{site_id: nil}}}, _row), do: true
+
+  defp media_in_scope?(%{assigns: %{editor: %{site_id: site_id}}}, row),
+    do: row.site_id == site_id
+
+  defp media_in_scope?(_socket, _row), do: false
+
+  defp refresh_folders(socket) do
+    case socket.assigns[:media_categories] do
+      %Phoenix.LiveView.AsyncResult{ok?: true} = async ->
+        categories = site_categories(socket.assigns[:current_user], socket.assigns.editor.site_id)
+
+        assign(socket, :media_categories, Phoenix.LiveView.AsyncResult.ok(async, categories))
+
+      _not_loaded ->
+        socket
+    end
+  end
+
+  # The folders this site has, with how much is in each. `media_count` is the resource's own
+  # calculation, so the number beside a folder is the number the Media page shows for it.
+  defp site_categories(actor, site_id) do
+    require Ash.Query
+
+    {action, tenant} = media_scope(actor, site_id)
+
+    MishkaCmsCore.Runtime.MediaCategory
+    |> Ash.Query.for_read(action, %{}, actor: actor, tenant: tenant)
+    |> narrow_media(action, site_id)
+    |> Ash.Query.load(:media_count)
+    |> Ash.Query.sort(name: :asc)
+    # A LIMIT RATHER THAN `page: false`: pagination is `required?: true` on the master read, and
+    # asking it to skip paging raises rather than returning everything. A folder rail that needs
+    # more than 200 entries has a different problem.
+    |> Ash.read(page: [limit: 200])
+    |> case do
+      {:ok, %{results: categories}} -> categories
+      {:ok, categories} when is_list(categories) -> categories
+      _error -> []
+    end
+  end
+
+  defp media_scope(%{site_id: nil}, _site_id), do: {:master_read, nil}
+  defp media_scope(_actor, site_id), do: {:read, site_id}
+
+  # Media has no site-argument read, so a master's bypass read would offer every site's library at
+  # once. Since the bypass leaves `site_id` filterable, the site being edited is applied by hand.
+  defp narrow_media(query, :master_read, site_id) when is_binary(site_id) do
+    require Ash.Query
+
+    Ash.Query.filter(query, site_id == ^site_id)
+  end
+
+  # A global document is rendered by every site, so its folders are only those of sites that are up.
+  defp narrow_media(query, :master_read, nil) do
+    require Ash.Query
+
+    open = MishkaCmsCore.Runtime.SiteAvailability.open_site_ids()
+    Ash.Query.filter(query, site_id in ^open)
+  end
+
+  defp narrow_media(query, _action, _site_id), do: query
+
   # LiveView's own async assign, so the panel gets `AsyncResult.loading/0` and `<.async_result>`
   # rather than a hand-rolled boolean. The read also writes the palette into the SESSION, because the
   # canvas binds each component to a site from that list — the assign is for this socket's panel, the
@@ -852,6 +978,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     do: tree |> component_refs() |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
 
   defp palette_components(actor, params, editor) do
+    require Ash.Query
+
     {args, tenant} = palette_scope(actor, params)
 
     MishkaCmsCore.Runtime.Component
@@ -1033,6 +1161,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> Enum.map_join(" ", &String.capitalize/1)
   end
 
+  # Clicking an element in the canvas is how you say "this is the one I want to work on", so the
+  # left panel comes back and lands on its form — the same thing a layers row does through
+  # `inspect`. Only a CANVAS selection does this: selecting from the tree is navigation, and swapping
+  # the panel out from under someone who is browsing the tree loses their place.
+  # THE BUILDER READS ITS OWN PARAMS IN MOUNT and has never needed `handle_params`. It needs one now
+  # because the Assets sheet mounts a Gervaz table, and `Runtime.Media`'s table declares
+  # `url_sync do mode :bidirectional end` — it pushes a patch whenever its filters, sort or page
+  # change. Without a `handle_params` that patch raises; with one that ignores it, the patch would
+  # still rewrite the builder's URL to `/`, because a table with no `url_state` has no base path.
+  #
+  # Decoding it properly is what makes both true: the patch stays on the builder's own URL, and the
+  # gallery's filters survive a reload the way they do on the Media page.
+  @impl true
+  def handle_params(params, uri, socket) do
+    {:noreply,
+     assign(socket, :url_state, UrlSync.decode(params, uri, MishkaCmsCore.Runtime.Media))}
+  end
+
   @impl true
   def handle_info({:builder_session, token, {:selection, id, :canvas}}, socket)
       when is_binary(id) do
@@ -1057,6 +1203,51 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, offer_chooser(socket, id, prop)}
   end
 
+  # THE ASSETS GALLERY IS A GERVAZ TABLE, and a LiveComponent has no `handle_info` — its
+  # subscription registered THIS process, so the broadcast lands here and has to be handed back
+  # down. `send_update/2` on a sheet that is shut is a no-op, so there is nothing to guard.
+  #
+  # The site test is not belt-and-braces. A master's table shows every site by design, and the
+  # notification path inserts the row without re-applying this mount's `path_params` — so an
+  # unfiltered forward would drop another site's upload into this site's editor.
+  #
+  # The rail is re-read on a MEDIA event too: every upload and every archive moves a folder's count.
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          payload: %Ash.Notifier.Notification{resource: Media, data: media} = notification
+        },
+        socket
+      ) do
+    case media_in_scope?(socket, media) do
+      true ->
+        send_update(MishkaGervaz.Table.Web.Live,
+          id: "pb-assets-gallery",
+          pubsub_notification: notification
+        )
+
+        {:noreply, refresh_folders(socket)}
+
+      false ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          payload: %Ash.Notifier.Notification{resource: MediaCategory, data: category}
+        },
+        socket
+      ) do
+    case media_in_scope?(socket, category) do
+      true -> {:noreply, refresh_folders(socket)}
+      false -> {:noreply, socket}
+    end
+  end
+
+  # Somebody else's document, or our own write coming back to us.
+  def handle_info(%Phoenix.Socket.Broadcast{payload: %Ash.Notifier.Notification{}}, socket),
+    do: {:noreply, socket}
+
   def handle_info({:builder_session, token, _message}, socket),
     do: {:noreply, sync_session(socket, token)}
 
@@ -1069,11 +1260,85 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      )}
   end
 
+  # The Gervaz form announces a successful create by messaging its parent — there is no callback and
+  # no PubSub. The list has to be told to read again, because nothing else knows a row appeared.
+  # THE GALLERY'S "USE" ARRIVES AS A ROW ACTION, not a click on a tile of ours — the tiles are
+  # Gervaz's now. A row action reaches the page as `{:row_action, event, %{"id" => id}}`, carrying
+  # the record id rather than a URL, so the path is read from the record.
+  def handle_info({:row_action, "use_media", %{"id" => id}}, socket) do
+    {:noreply, place_media(socket, id)}
+  end
+
+  # THE EYE OPENS THE FILE, here as on the Media page. It used to be answered and dropped, on the
+  # grounds that the editor had no overlay to put a file in — which made it a button that did
+  # nothing, and a reader cannot tell that apart from a broken one.
+  def handle_info({:row_action, "preview", %{"id" => id}}, socket) do
+    case read_media(socket, id) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("That file is no longer in the library."))}
+
+      media ->
+        {:noreply,
+         assign(socket, :preview_media, %{
+           name: media.name,
+           url: media_href(media.relative_path),
+           image?: media.type == :images
+         })}
+    end
+  end
+
+  # UPLOADING DURING A PICK IS PICKING. Something asked for a file — that is why the reader opened
+  # the library and why they uploaded at all — and then the sheet stayed open, said "Uploaded", and
+  # left them to find the card they had just made and press Use on it. The two halves were written
+  # separately and the step between them exists for no other reason.
+  #
+  # A file the field cannot show is NOT placed, and says so rather than failing quietly: the gallery
+  # is filtered to what the field accepts, so a PDF uploaded during a picture pick would vanish from
+  # the grid the moment it saved — uploaded successfully, invisible, and apparently lost.
+  def handle_info(
+        {:form_saved, _mode, %MishkaCmsCore.Runtime.Media{} = media},
+        %{assigns: %{media_target: %{} = target}} = socket
+      ) do
+    case usable?(target, media) do
+      true ->
+        {:noreply,
+         socket
+         |> place_media(media.id)
+         |> put_flash(:info, gettext("Uploaded “%{name}” and used it.", name: media.name))}
+
+      false ->
+        {:noreply, put_flash(socket, :error, not_a_picture(media))}
+    end
+  end
+
+  def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.Media{} = media}, socket) do
+    {:noreply, put_flash(socket, :info, gettext("Uploaded “%{name}”.", name: media.name))}
+  end
+
+  # The rail is not touched here. `MediaCategory` publishes the create, and the clause that hears it
+  # re-reads the folders — the same route a folder made in another tab arrives by.
+  def handle_info({:form_saved, _mode, %MediaCategory{} = category}, socket) do
+    {:noreply,
+     socket
+     |> assign(:folder_form?, false)
+     |> put_flash(:info, gettext("Folder “%{name}” added.", name: category.name))}
+  end
+
   # THE INTERFACE FORM HAS SAVED. It writes the component's own row, which is the row this editor is
   # showing — `@record` feeds the Interface tab's undeclared advice and the tab's own count, so a
   # stale one would go on offering to declare an attribute that now exists.
   def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.Component{} = record}, socket),
     do: {:noreply, assign(socket, :record, record)}
+
+  def handle_info({:form_cancelled, MediaCategory}, socket),
+    do: {:noreply, assign(socket, :folder_form?, false)}
+
+  # A GERVAZ BULK ACTION REPORTS BY MESSAGE, not by return value — `BulkActionHandler` sends
+  # `{:put_flash, level, message}` to the LiveView, because the work happens in a LiveComponent and
+  # a component cannot put a flash. Without this clause the catch-all below eats it and archiving
+  # eleven files looks exactly like archiving none.
+  def handle_info({:put_flash, level, message}, socket),
+    do: {:noreply, put_flash(socket, level, message)}
 
   def handle_info(_message, socket), do: {:noreply, socket}
 
@@ -1795,6 +2060,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, socket |> save_draft_now() |> holding_draft() |> flash_drafted()}
   end
 
+  def handle_event("open_sheet", %{"sheet" => sheet}, socket) do
+    sheets = [:none, :assets]
+    opened = tab_atom(sheet, sheets)
+
+    # The Record-history button always lands on Record history. Only the routes that mean "drafts"
+    # — the header chip, the stage menu, the More menu — open the other tab.
+    {:noreply,
+     socket
+     |> assign(sheet: opened, history_tab: :history)
+     |> load_sheet(opened)}
+  end
+
+  # CLICKS ONLY. Escape belongs to `shortcut("escape", …)`, which is the editor's one keyboard
+  # authority; this closes the sheet when its X is pressed or when a click lands outside it. The
+  # folder form needs no guard here, because it is DRAWN inside the sheet — `phx-click-away` reads
+  # the DOM, so a click in the form is not a click away from the sheet.
+  def handle_event("close_sheet", _params, socket),
+    do: {:noreply, socket |> assign(:sheet, :none) |> assign(:media_target, nil)}
+
   def handle_event("toggle_command", _params, socket),
     do: {:noreply, update(socket, :command_open, &(!&1))}
 
@@ -1806,6 +2090,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("palette_cat", %{"cat" => cat}, socket),
     do: {:noreply, assign(socket, :palette_cat, cat)}
+
+  # The pick rides on the SESSION, not on this LiveView: the click that places the component lands
+  # inside the canvas, which is a different LiveView and cannot see these assigns.
+  # Four of the mobile tabs are not panels: they open the overlay the top bar has no room for at that
+  # width, and leave the canvas showing underneath.
+  def handle_event("set_mob_panel", %{"panel" => panel}, socket)
+      when panel in ~w(assets),
+      do: {:noreply, assign(socket, sheet: String.to_existing_atom(panel), mob_panel: :canvas)}
 
   def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
     do: {:noreply, assign(socket, command_open: true, command_query: "", mob_panel: :canvas)}
@@ -1823,7 +2115,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     {:noreply,
      socket
-     |> assign(mob_panel: panel)
+     |> assign(mob_panel: panel, sheet: :none)
      |> assign_panel_tab(panel)}
   end
 
@@ -2150,6 +2442,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # The pills are the gervaz table's own filter now — the template renders them and the table handles
   # the event, so the editor no longer keeps a parallel copy of which one is active.
 
+  # Opening the library ON BEHALF of one attribute. The target rides in an assign rather than in the
+  # sheet's markup because the sheet is a different panel entirely — and it is cleared on close, so
+  # browsing the library later never writes into an attribute nobody was choosing for.
+  def handle_event("pick_media", %{"node_id" => node_id, "name" => name} = params, socket) do
+    {:noreply,
+     socket
+     |> assign(:media_target, %{
+       node_id: node_id,
+       name: name,
+       # ONE PICTURE OUT OF A LIST. A filterable gallery's photographs are items in an attribute, so
+       # the library has to be told which one is being chosen for — the attribute alone addresses
+       # the whole collection. Absent for every ordinary media attribute, and `place_media/2` then
+       # writes the attribute itself exactly as it always did.
+       item: item_target(params),
+       accepts: accepts(socket, node_id, name)
+     })
+     |> assign(:sheet, :assets)}
+  end
+
   # THE WHOLE COLLECTION, REWRITTEN. One `set_attr` per change, so one add, one removal and one edit
   # are each one undo step — and an attribute the editor could not read is left alone rather than
   # replaced with what it made of it.
@@ -2186,6 +2497,46 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   rescue
     ArgumentError -> {:noreply, socket}
   end
+
+  # THE SAME LIBRARY, FOR THE ONE PLACE A PICTURE IS NOT AN ATTRIBUTE. A hero's photograph is a
+  # background, so it has no `src` to point at — which left the site's own library reachable from an
+  # `<img>` and not from the element people most want a picture on, and left the author typing a
+  # path they had to go and read off another page.
+  def handle_event("pick_background", %{"node_id" => node_id, "bucket" => bucket}, socket) do
+    {:noreply,
+     socket
+     |> assign(:media_target, %{
+       node_id: node_id,
+       bucket: bucket,
+       prop: "background",
+       accepts: :images
+     })
+     |> assign(:sheet, :assets)}
+  end
+
+  # THE SHEET'S SIDEBAR IS A FILTER. It rides `path_params` rather than the table's filter event
+  # because `media_category_id` matches a Media attribute, and Gervaz turns such a param into an
+  # equality filter — the same channel `site_id` already uses to scope the sheet to one site. Going
+  # through the filter event would mean the sidebar and the search box overwriting each other, since
+  # a filter push replaces the whole set.
+  def handle_event("select_asset_category", %{"id" => id}, socket),
+    do: {:noreply, assign(socket, :assets_category, blank_to_nil(id))}
+
+  def handle_event("cancel_media_pick", _params, socket),
+    do: {:noreply, assign(socket, :media_target, nil)}
+
+  # A FOLDER IS MADE HERE OR IT IS NOT MADE. `+ Folder` used to navigate to the Media library, which
+  # is a page away from the document being edited and loses the sheet, the selection and the pick
+  # the author came in with — for a control whose whole job is to hold the file they are about to
+  # drop.
+  def handle_event("new_folder", _params, socket),
+    do: {:noreply, assign(socket, :folder_form?, true)}
+
+  def handle_event("close_folder", _params, socket),
+    do: {:noreply, assign(socket, :folder_form?, false)}
+
+  def handle_event("close_media_preview", _params, socket),
+    do: {:noreply, assign(socket, :preview_media, nil)}
 
   # A Behavior switch edits the element's `class`, so it goes through the same `set_attr` op every
   # other property edit uses — one funnel, one history entry, one containment check.
@@ -2606,6 +2957,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   defp icon_op(_params, op, value), do: Map.put(op, "value", value)
+
+  defp item_target(%{"index" => index, "key" => key}) do
+    with {number, ""} <- Integer.parse(to_string(index)),
+         true <- key not in [nil, ""] do
+      %{index: number, key: String.to_existing_atom(to_string(key))}
+    else
+      _not_an_item -> nil
+    end
+  rescue
+    ArgumentError -> nil
+  end
+
+  defp item_target(_params), do: nil
 
   defp to_index(index) do
     case Integer.parse(to_string(index)) do
@@ -3060,6 +3424,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       :icon ->
         socket |> assign(:icon_picker, prop) |> assign(:icon_query, "")
 
+      :media ->
+        socket
+        |> assign(:media_target, %{node_id: id, name: prop})
+        |> assign(:sheet, :assets)
 
       _no_chooser ->
         socket
@@ -3148,10 +3516,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp shortcut("preview", socket), do: handle_event("toggle_preview", %{}, socket)
   defp shortcut("fit", socket), do: {:noreply, assign(socket, :zoom, 100)}
 
+  # ESCAPE HAS ONE OWNER, and it is this. The sheet used to bind `phx-window-keydown="close_sheet"`
+  # as well, so a press arrived twice and whichever landed first cleared the state the other needed:
+  # escape shut the sheet AND the folder form drawn on top of it. The binding is gone; this decides.
+  #
+  # Topmost first. The form is over the sheet, so the first press closes the form and the second
+  # closes the sheet — which is what a reader expects and what one handler can guarantee.
+  defp shortcut("escape", %{assigns: %{preview_media: media}} = socket) when not is_nil(media),
+    do: {:noreply, assign(socket, :preview_media, nil)}
+
+  defp shortcut("escape", %{assigns: %{folder_form?: true}} = socket),
+    do: {:noreply, assign(socket, :folder_form?, false)}
+
   defp shortcut("escape", socket) do
     {:ok, _editor} = EditorSession.select(socket.assigns.token, nil)
     {:ok, _editor} = EditorSession.pick(socket.assigns.token, nil)
-    {:noreply, assign(socket, command_open: false)}
+    {:noreply, assign(socket, command_open: false, sheet: :none)}
   end
 
   defp shortcut(_key, socket), do: {:noreply, socket}
@@ -4530,6 +4910,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
             drawing a second, inline-styled copy that would drift. --%>
       <Panels.find_modal :if={@find_open} find={@find} replace={@replace} hits={@find_hits} />
       <Panels.context_menu id="pb-ctx" target="[data-layer-row]" key="layerRow" />
+      <Panels.sheet :if={@sheet not in [:none, :examples]} {assigns} />
     </div>
     """
   end
@@ -4726,5 +5107,154 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       gettext("Rewrote %{label}", label: Node.label(node))
     )
   end
+
+  # Reads the chosen file and writes its path into the attribute the sheet was opened for. A record
+  # that has vanished between the click and the read is a no-op rather than a crash: the gallery is
+  # a live list and a file can be archived from another tab.
+  # WHAT THE FIELD CAN ACTUALLY SHOW. The sheet listed every file in the library whatever was asking,
+  # so pressing Use on the first card put `/uploads/documents/10.docx` into an `<img src>` — accepted
+  # without complaint, and drawn as a broken picture on the page. A picker that can hand a field
+  # something it cannot render is a picker with a wrong door in it.
+  #
+  # Images unless the element is one that plays: `<video>`, `<audio>`, `<source>` and `<track>` take
+  # files this rule would otherwise hide. `poster` is the exception inside that exception — it is the
+  # still frame, so it is an image even on a video.
+  @plays ~w(video audio source track)
+
+  defp accepts(socket, node_id, name) do
+    tag = socket.assigns.editor.tree |> Tree.get(node_id) |> node_tag()
+
+    cond do
+      name == "poster" -> :images
+      tag in @plays -> :any
+      true -> :images
+    end
+  end
+
+  defp node_tag(%Node{tag: tag}) when is_binary(tag), do: tag
+  defp node_tag(_missing), do: nil
+
+  # The same question `accepts/3` answered when the pick started, asked of the file that just landed.
+  defp usable?(%{accepts: :images}, %{type: type}), do: type == :images
+  defp usable?(_target, _media), do: true
+
+  defp not_a_picture(%{type: :documents, name: name}),
+    do:
+      gettext(
+        "“%{name}” is a document, and this field takes a picture. It is saved in the library.",
+        name: name
+      )
+
+  defp not_a_picture(%{type: :videos, name: name}),
+    do:
+      gettext(
+        "“%{name}” is a video, and this field takes a picture. It is saved in the library.",
+        name: name
+      )
+
+  defp not_a_picture(%{name: name}),
+    do:
+      gettext(
+        "“%{name}” is not a picture, and this field takes a picture. It is saved in the library.",
+        name: name
+      )
+
+  defp place_media(%{assigns: %{media_target: nil}} = socket, _id), do: socket
+
+  # A BACKGROUND IS A STYLE, NOT AN ATTRIBUTE, so it goes down the style funnel and lands in whichever
+  # bucket the panel was writing to — a picture on mobile only is the same one edit as a colour on
+  # mobile only.
+  #
+  # `center/cover no-repeat` comes with it because a background image without them is almost never
+  # what anybody meant: it tiles from the top left at its own size, which reads as a broken picture
+  # rather than as a default. All three are ordinary CSS in the same declaration, so the author can
+  # edit or delete them in the field underneath.
+  defp place_media(
+         %{assigns: %{media_target: %{node_id: node_id, bucket: bucket, prop: prop}}} = socket,
+         id
+       ) do
+    case read_media(socket, id) do
+      nil ->
+        put_flash(socket, :error, gettext("That file is no longer in the library."))
+
+      media ->
+        EditorSession.apply_op(socket.assigns.token, %{
+          kind: :set_style,
+          node_id: node_id,
+          bucket: bucket,
+          prop: prop,
+          value: "url(#{media_href(media.relative_path)}) center/cover no-repeat"
+        })
+
+        socket |> assign(:media_target, nil) |> assign(:sheet, :none)
+    end
+  end
+
+  # ONE PICTURE OUT OF A LIST. A filterable gallery's photographs are items in an attribute rather
+  # than attributes of their own, so the library was reachable for the collection and not for any
+  # picture in it. The target says which item and which of its keys; everything else is the same
+  # write the whole-attribute case makes.
+  defp place_media(
+         %{assigns: %{media_target: %{node_id: node_id, name: name, item: %{} = item}}} = socket,
+         id
+       ) do
+    case read_media(socket, id) do
+      nil ->
+        put_flash(socket, :error, gettext("That file is no longer in the library."))
+
+      media ->
+        href = media_href(media.relative_path)
+
+        {:noreply, socket} =
+          write_collection(
+            socket,
+            node_id,
+            name,
+            &Collection.put_in_item(&1, item.index, item.key, href)
+          )
+
+        socket |> assign(:media_target, nil) |> assign(:sheet, :none)
+    end
+  end
+
+  defp place_media(%{assigns: %{media_target: %{node_id: node_id, name: name}}} = socket, id) do
+    case read_media(socket, id) do
+      nil ->
+        put_flash(socket, :error, gettext("That file is no longer in the library."))
+
+      media ->
+        EditorSession.apply_op(socket.assigns.token, %{
+          kind: :set_attr,
+          node_id: node_id,
+          name: name,
+          value: media_href(media.relative_path)
+        })
+
+        socket |> assign(:media_target, nil) |> assign(:sheet, :none)
+    end
+  end
+
+  defp read_media(socket, id) do
+    require Ash.Query
+    actor = socket.assigns[:current_user]
+    {action, tenant} = media_scope(actor, socket.assigns.editor.site_id)
+
+    MishkaCmsCore.Runtime.Media
+    |> Ash.Query.for_read(action, %{}, actor: actor, tenant: tenant)
+    |> Ash.Query.filter(id == ^id)
+    |> Ash.read_one()
+    |> case do
+      {:ok, media} -> media
+      _missing -> nil
+    end
+  end
+
+  # `relative_path` is already the browser-facing URL; the leading slash is the one thing that can be
+  # missing from a hand-seeded row.
+  defp media_href("/" <> _rest = path), do: path
+  defp media_href("http://" <> _rest = url), do: url
+  defp media_href("https://" <> _rest = url), do: url
+  defp media_href(path) when is_binary(path), do: "/" <> path
+  defp media_href(_path), do: ""
 
 end

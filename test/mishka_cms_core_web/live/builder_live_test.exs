@@ -5943,6 +5943,28 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute has_element?(view, "#pb-section-site-colours")
     end
 
+    # A PICTURE THE AUTHOR PICKS, NOT A PATH THEY REMEMBER. A hero's photograph is a background, so
+    # there is no `src` to point the library at — which left it reachable from an `<img>` and not
+    # from the element people most want a picture on.
+    test "a background can be chosen from the media library", %{view: view} do
+      assert has_element?(view, "#pb-background-pick")
+
+      view |> element("#pb-background-pick") |> render_click()
+
+      assert render(view) =~ "Choosing for"
+    end
+
+    # The gallery answers with a ROW ACTION rather than a click of ours — the tiles are Gervaz's — so
+    # this is the message the sheet really sends.
+    test "and a file that is no longer there writes nothing", %{view: view, node: node} do
+      view |> element("#pb-background-pick") |> render_click()
+
+      send(view.pid, {:row_action, "use_media", %{"id" => Ecto.UUID.generate()}})
+
+      assert render(view) =~ "no longer in the library"
+      assert styles_of(view, node.id) == %{}
+    end
+
     test "the Layout and Appearance groups render", %{view: view} do
       html = render(view)
       assert html =~ "Layout"
@@ -7388,6 +7410,541 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       _rendered = render_async(view)
 
       refute has_element?(view, "#pb-preview-tab")
+    end
+  end
+
+  describe "the Studio, Assets and Review sheets" do
+    # These assert the SHIPPED SAMPLE catalogue, so they name the adapter that provides it rather
+    # than depending on which one happens to be the default. The real default reads the kits on
+    # disk — covered separately below.
+    setup do
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Mock
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+      :ok
+    end
+
+    # THE SHEET IS THE MEDIA SYSTEM. Not a hand-rolled mirror of it: the browse half is
+    # `MishkaGervaz.Table.Web.Live` on `Runtime.Media` with the resource's own MediaGallery template,
+    # and the upload half is `MishkaGervaz.Form.Web.Live`, which registers its own `allow_upload`.
+    test "Assets mounts the Gervaz gallery and the Gervaz upload form", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_media!(site_id: site.id, name: "brochure")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      assert has_element?(view, "#pb-assets-gallery"), "the library is Gervaz's table"
+      assert has_element?(view, "#pb-media-upload"), "uploading happens here, not on another page"
+      assert render(view) =~ "brochure"
+    end
+
+    # The dropzone, the accept list, the size limit, the progress bar and the write all belong to
+    # Gervaz's `uploads do … style :dropzone … end` block on the resource. Registering a second
+    # uploader for the same name here would be a second media system.
+    test "the upload half is Gervaz's, uploader and all", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      assert render(view) =~ "drag and drop", "Gervaz's own dropzone copy"
+
+      refute :sys.get_state(view.pid).socket.assigns[:uploads],
+             "BuilderLive must not register an uploader of its own"
+    end
+
+    # An `image_url` attribute is not a link an author types — it is a file in this site's library. The
+    # library is browsable on its own, so the pick has to say who it is picking FOR, and the answer
+    # has to land on the attribute that asked.
+    test "an image attribute picks from the library and writes what it picked", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      media_id =
+        create_media!(site_id: site.id, name: "hero-shot", relative_path: "/uploads/hero.png").id
+
+      create_component!(
+        site_id: site.id,
+        name: "banner-box",
+        attrs: [%{"name" => "image_url", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-banner-box") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # The library has no Use button until something is choosing.
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+      refute has_element?(view, "#pb-media-target")
+
+      view |> element("#pb-attr-pick-image_url") |> render_click()
+      _loaded = render_async(view)
+
+      html = render(view)
+      assert html =~ "Choosing for"
+      assert html =~ "image_url"
+
+      # AND HOW. Naming the target and stopping there left the reader in front of a grid of files
+      # with a tick box on each, and the tick box is for Archive and Featured — it picks nothing.
+      assert html =~ "press <b>Use</b> on a file below"
+
+      # The Use button is the resource's own row action, rendered by the Gervaz gallery. It reaches
+      # this LiveView as `{:row_action, "use_media", %{"id" => id}}`.
+      html = render(view)
+
+      assert html =~ "editor_pick_node" or html =~ "Use",
+             "the gallery must offer the editor's own action while something is choosing"
+
+      send(view.pid, {:row_action, "use_media", %{"id" => media_id}})
+      _rendered = render(view)
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(placed.id)
+             |> MishkaCmsCore.Runtime.PageBuilder.Tree.Node.attr_text("image_url") ==
+               "/uploads/hero.png"
+
+      # The sheet closes and stops offering to pick, so browsing later writes nothing.
+      refute has_element?(view, "#pb-media-target")
+    end
+
+    # A BROKEN GLYPH IS NOT AN ANSWER. A media field whose path points at nothing drew the browser's
+    # own torn-page icon, which says the same thing about a deleted file, a mistyped name and a URL
+    # that was never right. Reported alongside "can we put an image inside a card?" — the card was
+    # fine; the path in it was not, and nothing on screen said so.
+    test "a media field says when its path loads nothing", %{conn: conn, page: page, site: site} do
+      html = media_field_html(conn, page, site, "shot-a", "/uploads/gone.png")
+
+      assert html =~ "Nothing loads from this path"
+
+      assert html =~ ~s(phx-hook="MediaThumb"),
+             "without the hook the sentence never gets uncovered"
+    end
+
+    # And a half-typed value is not worth a box at all — an empty frame appearing under every
+    # keystroke reads as something failing.
+    test "and draws no preview box for a value that is not a path yet", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      refute media_field_html(conn, page, site, "shot-b", "upl") =~ "Nothing loads from this path"
+    end
+
+    # A WRONG DOOR IS WORSE THAN A LOCKED ONE. The sheet listed every file whatever was asking, so
+    # pressing Use on the first card put `/uploads/documents/10.docx` into an `<img src>` — taken
+    # without complaint and drawn on the page as a broken picture. `type` is a Media attribute, so it
+    # filters the gallery through the same channel `site_id` already rides.
+    test "picking for a picture shows only pictures", %{conn: conn, page: page, site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "shot-c",
+        attrs: [%{"name" => "image_url", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-shot-c") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "pick_media", %{"node_id" => placed.id, "name" => "image_url"})
+      _loaded = render_async(view)
+
+      assert :sys.get_state(view.pid).socket.assigns.media_target.accepts == :images
+      assert media_filter(view)[:type] == :images
+    end
+
+    # `<video src>` is not a picture, and hiding every video from the one field that takes one would
+    # be the same fault pointing the other way.
+    test "and picking for something that plays does not", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><video src="/a.mp4"></video></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      video = node_with_tag(view, "video")
+
+      render_click(view, "pick_media", %{"node_id" => video.id, "name" => "src"})
+      _loaded = render_async(view)
+
+      assert :sys.get_state(view.pid).socket.assigns.media_target.accepts == :any
+      refute Map.has_key?(media_filter(view), :type)
+    end
+
+    # The still frame on a video IS a picture — the exception inside the exception.
+    test "and a video's poster is a picture again", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><video src="/a.mp4"></video></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      video = node_with_tag(view, "video")
+
+      render_click(view, "pick_media", %{"node_id" => video.id, "name" => "poster"})
+      _loaded = render_async(view)
+
+      assert media_filter(view)[:type] == :images
+    end
+
+    # A background is always a picture.
+    test "and a background is a picture too", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      root = view |> editor() |> Map.fetch!(:tree) |> Map.fetch!(:roots) |> List.first()
+
+      render_click(view, "pick_background", %{"node_id" => root, "bucket" => "desktop"})
+      _loaded = render_async(view)
+
+      assert media_filter(view)[:type] == :images
+    end
+
+    # What the gallery is actually scoped by, read where the sheet hands it over.
+    defp media_filter(view) do
+      view
+      |> render()
+      |> then(fn _html -> :sys.get_state(view.pid).socket.assigns end)
+      |> then(&MishkaCmsCoreWeb.Live.Admin.Builder.Panels.media_scope_params/1)
+    end
+
+    # AND THE BOX SAYS WHAT IT TAKES. Every length field said "unset", so an author who typed a bare
+    # number, got pixels, and had no reason to try anything else reported the fields as pixels-only.
+    test "a length field says it takes any length", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      root = view |> editor() |> Map.fetch!(:tree) |> Map.fetch!(:roots) |> List.first()
+
+      render_click(view, "select", %{"id" => root})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      assert view |> element("#pb-style-base-width") |> render() =~ "any length, e.g. 2rem"
+    end
+
+    # Opacity is a NUMBER, not a length — telling somebody to type `2rem` into it would be wrong.
+    test "and a field that is not a length does not", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      root = view |> editor() |> Map.fetch!(:tree) |> Map.fetch!(:roots) |> List.first()
+
+      render_click(view, "select", %{"id" => root})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      refute view |> element("#pb-style-base-opacity") |> render() =~ "any length"
+    end
+
+    # NOTHING VANISHES WITHOUT A REASON. A master's library read excludes files whose site is switched
+    # off, so editing a page that belongs to such a site shows an empty sheet however many files that
+    # site really has. An empty shelf with no notice reads as a bug — or as files somebody deleted.
+    #
+    # The admin itself stays reachable because it is served on the MASTER host, which is active;
+    # `SiteLookupPlug` 503s a disabled site's OWN host, so this case only arises for a master editing
+    # somebody else's site — which is exactly what `?site_id=` exists for.
+    test "the Assets sheet says when the edited site is switched off", %{conn: conn} do
+      n = System.unique_integer([:positive])
+      off = create_site!(name: "off-#{n}", host: "off-#{n}.test", active: false)
+      page = create_page!(site_id: off.id)
+      create_media!(site_id: off.id, name: "kept-while-off")
+
+      MishkaCmsCore.Runtime.States.SiteState.save(%{
+        id: off.id,
+        name: off.name,
+        host: off.host,
+        priority: off.priority,
+        active: false,
+        master: off.master
+      })
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}?site_id=#{off.id}")
+
+      _loaded = render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      assert has_element?(view, "#pb-assets-site-off")
+      assert render(view) =~ "Its files are here for you to work with"
+      assert render(view) =~ "kept-while-off", "the master still works with the site's own files"
+    end
+
+    # A GLOBAL DOCUMENT IS RENDERED BY EVERY SITE, so its gallery offers only files of sites that are
+    # up: an inactive or offline site's file would not load for anyone else.
+    test "a global document offers only files of sites that are up", %{conn: conn, site: site} do
+      n = System.unique_integer([:positive])
+      off = create_site!(name: "off-#{n}", host: "off-#{n}.test", active: false)
+      quiet = create_site!(name: "quiet-#{n}", host: "quiet-#{n}.test", active: true)
+      Enum.each([off, quiet], &cache_site/1)
+      {:ok, _} = MishkaCmsCore.Settings.put("cms.offline", true, site_id: quiet.id)
+
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SettingsState.delete(quiet.id, "cms.offline")
+      end)
+
+      create_media!(site_id: site.id, name: "shared-hero")
+      create_media!(site_id: off.id, name: "switched-off-hero")
+      create_media!(site_id: quiet.id, name: "offline-hero")
+
+      component =
+        create_component!(name: "global-banner-#{n}", site_id: nil, template: "<p>hi</p>")
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      html = render_async(view)
+
+      assert html =~ "shared-hero"
+      refute html =~ "switched-off-hero"
+      refute html =~ "offline-hero"
+    end
+
+    test "and says nothing of the sort while the site is on", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      refute has_element?(view, "#pb-assets-site-off")
+    end
+
+    # UPLOADING DURING A PICK IS PICKING. Something asked for a file, which is the only reason the
+    # reader opened the library and uploaded at all — and then the sheet stayed open, said
+    # "Uploaded", and left them to find the card they had just made and press Use on it.
+    test "a file uploaded while something is picking is used straight away", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "shot-up",
+        attrs: [%{"name" => "image_url", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-shot-up") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "pick_media", %{"node_id" => placed.id, "name" => "image_url"})
+      _loaded = render_async(view)
+
+      picture =
+        create_media!(
+          site_id: site.id,
+          name: "just-uploaded",
+          type: :images,
+          relative_path: "/uploads/new.png"
+        )
+
+      send(view.pid, {:form_saved, :create, picture})
+      html = render(view)
+
+      assert html =~ "and used it"
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(placed.id)
+             |> Node.attr_text("image_url") == "/uploads/new.png"
+
+      refute has_element?(view, "#pb-media-target"), "the sheet stayed open after answering"
+    end
+
+    # A file the field cannot show is NOT placed, and says so: the gallery is filtered to what the
+    # field accepts, so a document uploaded during a picture pick vanishes from the grid the moment
+    # it saves — uploaded, invisible, and apparently lost.
+    test "and one the field cannot show is kept but not used", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "shot-doc",
+        attrs: [%{"name" => "image_url", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-comp-shot-doc") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "pick_media", %{"node_id" => placed.id, "name" => "image_url"})
+      _loaded = render_async(view)
+
+      doc =
+        create_media!(
+          site_id: site.id,
+          name: "a-contract",
+          type: :documents,
+          relative_path: "/uploads/deal.pdf"
+        )
+
+      send(view.pid, {:form_saved, :create, doc})
+      html = render(view)
+
+      assert html =~ "is a document"
+      assert html =~ "saved in the library"
+
+      refute view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(placed.id)
+             |> Node.attr_text("image_url") == "/uploads/deal.pdf"
+    end
+
+    # With nothing picking, an upload is just an upload.
+    test "and an upload with nothing picking only reports itself", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      shot = create_media!(site_id: site.id, name: "idle-upload")
+
+      send(view.pid, {:form_saved, :create, shot})
+      html = render(view)
+
+      assert html =~ "Uploaded"
+      refute html =~ "and used it"
+    end
+
+    # A component with one media attribute: placed, selected, given a value, Inspector rendered.
+    defp media_field_html(conn, page, site, name, value) do
+      create_component!(
+        site_id: site.id,
+        name: name,
+        attrs: [%{"name" => "image_url", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-comp-#{name}") |> render_click()
+      render_click(view, "place", %{"parent_id" => "root", "index" => "1"})
+
+      placed =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(&1.kind == :component))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => placed.id,
+        "name" => "image_url",
+        "value" => value
+      })
+
+      render(view)
+    end
+
+    test "Assets says so plainly when the library is empty", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      html = render(view)
+      assert html =~ "Assets"
+
+      # The sheet's own words, because its empty state is a folder rather than a whole library: the
+      # rail may be sitting on one that happens to have nothing in it.
+      assert html =~ "No files in this folder yet"
+    end
+
+    # THE SHEET IS A FOLDER RAIL AND A GRID, and the rail is what answers the question the library's
+    # Type and Site filters answer on a page — which is why the sheet draws neither.
+    test "Assets has a folder rail and only search above the grid", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      html = render_async(view)
+
+      assert html =~ ~s(data-role="pb-assets-folders")
+      assert html =~ ~s(id="pb-folder-all")
+      assert html =~ ~s(id="pb-assets-search")
+
+      refute html =~ "All types", "the library's Type filter is a page control, not a sheet one"
+    end
+
+    test "choosing a folder scopes the grid to it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      refute :sys.get_state(view.pid).socket.assigns.assets_category
+
+      render_click(view, "select_asset_category", %{
+        "id" => "6c5cf4ee-0000-4000-8000-000000000001"
+      })
+
+      assert :sys.get_state(view.pid).socket.assigns.assets_category ==
+               "6c5cf4ee-0000-4000-8000-000000000001"
+
+      # …and "All files" puts it back, rather than filtering for a folder called "__all__".
+      render_click(view, "select_asset_category", %{"id" => "__all__"})
+      refute :sys.get_state(view.pid).socket.assigns.assets_category
+    end
+
+    # The library's own filters and pagination come with the Gervaz table; the sheet does not
+    # reimplement folders. What it DOES own is the scope: an editor only ever browses its own site.
+    test "Assets shows this site's library and not another's", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      other = create_site!()
+      create_media!(site_id: site.id, name: "ours-hero")
+      create_media!(site_id: other.id, name: "theirs-hero")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      html = render(view)
+      assert html =~ "ours-hero"
+      refute html =~ "theirs-hero"
     end
   end
 
@@ -12514,6 +13071,17 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       view |> element("#pb-mobtab-inspector") |> render_click()
 
       assert has_element?(view, "#pb-lefttab-inspector.bg-white")
+    end
+
+    test "the mobile bar's overlay tabs open overlays, not panels", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-mobtab-assets") |> render_click()
+      assert has_element?(view, "#pb-sheet")
+      refute has_element?(view, "#pb-mobpanel")
+
+      view |> element("#pb-mobtab-palette") |> render_click()
+      assert has_element?(view, "#pb-command")
     end
 
     test "the mobile bar's direction tab flips the canvas", %{conn: conn, page: page} do

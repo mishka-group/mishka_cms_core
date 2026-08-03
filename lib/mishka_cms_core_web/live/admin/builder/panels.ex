@@ -29,6 +29,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Highlight
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
+  alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Runtime.MediaCategory
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
@@ -81,6 +83,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   @scrim_in {"transition-opacity ease-out duration-200", "opacity-0", "opacity-100"}
   @scrim_out {"transition-opacity ease-in duration-150", "opacity-100", "opacity-0"}
+
+  @panel_in {"transition-[opacity,transform] ease-out duration-200", "opacity-0 translate-x-6",
+             "opacity-100 translate-x-0"}
+  @panel_out {"transition-[opacity,transform] ease-in duration-150", "opacity-100 translate-x-0",
+              "opacity-0 translate-x-6"}
 
   @modal_in {"transition-[opacity,transform] ease-out duration-200", "opacity-0 scale-95",
              "opacity-100 scale-100"}
@@ -153,6 +160,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   @doc false
   def menu_close(id), do: JS.hide(to: id, transition: @menu_out, time: 75)
+
+  # The backdrop fades and the panel slides, which is why both halves are named: one command targets
+  # the root, the other reaches the child by selector.
+  @doc false
+  def overlay_in(panel) do
+    @scrim_in
+    |> JS.transition(time: 200)
+    |> JS.transition(@panel_in, to: panel, time: 200)
+  end
+
+  @doc false
+  def overlay_out(panel) do
+    JS.hide(transition: @scrim_out, time: 150)
+    |> JS.hide(to: panel, transition: @panel_out, time: 150)
+  end
 
   @doc false
   def modal_in(panel) do
@@ -733,6 +755,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             label={gettext("Find and replace")}
             badge="⌘F"
           />
+          <.more_item
+            event="open_sheet"
+            value={%{sheet: "assets"}}
+            icon={:image}
+            label={gettext("Assets")}
+          />
           <%!-- The direction toggle has its own pair of buttons in the bar, but that pair is the
                 first thing the collapse ladder drops — so it needs a home that survives. --%>
           <.more_item
@@ -818,6 +846,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <.icon name={:refresh} size={15} />
         </button>
 
+        <button
+          id="pb-assets"
+          type="button"
+          data-role="pb-assets"
+          phx-click="open_sheet"
+          phx-value-sheet="assets"
+          title={gettext("Assets")}
+          class="grid size-8 flex-none place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc] max-[1080px]:hidden"
+        >
+          <.icon name={:image} size={15} />
+        </button>
 
 
         <div
@@ -2876,6 +2915,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                   ]}
                 ></button>
 
+                <button
+                  type="button"
+                  id="pb-background-pick"
+                  phx-click="pick_background"
+                  phx-value-node_id={@selected_node.id}
+                  phx-value-bucket={write_bucket(assigns)}
+                  title={gettext("Use a picture from the media library as this element's background")}
+                  aria-label={gettext("Choose a background picture")}
+                  class="grid size-[34px] place-items-center rounded-[9px] border-2 border-dashed border-[#dcdbf5] bg-[#f7f6ff] text-[#4f4bcc] hover:border-[#c3c1f0]"
+                >
+                  <.icon name={:image} size={14} />
+                </button>
               </div>
 
               <section :if={@style_tokens != []} class="mt-[13px]">
@@ -4370,6 +4421,67 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  # A picture is chosen from the site's own library, not typed. The button hands the Assets sheet the
+  # attribute waiting for an answer; picking there writes straight back here. The field stays
+  # editable underneath, because a CDN URL nobody uploaded is still a legitimate value.
+  defp widget_control(%{widget: :media} = assigns) do
+    ~H"""
+    <div class="flex flex-col gap-1.5">
+      <div class="flex items-center gap-1.5">
+        <.field_form
+          id={"pb-attr-form-#{@node.id}-#{@name}"}
+          phx-value-kind="set_attr"
+          phx-value-node_id={@node.id}
+          phx-value-name={@name}
+          class="min-w-0 flex-1"
+        >
+          <input
+            type="text"
+            id={"pb-attr-#{@name}"}
+            name="value"
+            value={@value}
+            placeholder={default_text(@default) || "/uploads/…"}
+            phx-debounce="350"
+            class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-medium text-[#3a382f]"
+          />
+        </.field_form>
+        <button
+          type="button"
+          id={"pb-attr-pick-#{@name}"}
+          phx-click="pick_media"
+          phx-value-node_id={@node.id}
+          phx-value-name={@name}
+          title={gettext("Choose from the media library")}
+          class="grid size-8 flex-none place-items-center rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc] hover:bg-[#e9e7fb]"
+        >
+          <.icon name={:image} size={13} />
+        </button>
+      </div>
+      <%!-- A BROKEN GLYPH IS NOT AN ANSWER. A path that points at nothing — a file since deleted, a
+            URL typed by hand, a name that never existed — drew the browser's own torn-page icon and
+            left the author to guess which of those it was. `MediaThumb` hides the `<img>` when it
+            fails to load, so the sentence behind it becomes the answer; when it loads, the picture
+            covers the sentence. The hook binds `load`/`error` in JS because an `onerror=` attribute
+            is exactly what this admin's Content-Security-Policy refuses.
+
+            No `phx-update="ignore"` here, unlike the gallery's cards: those are stream items and a
+            new record arrives as a new node, while this one keeps its id and changes `src` under it.
+            The hook re-judges in `updated()`, which is what that callback is for. --%>
+      <div
+        :if={previewable?(@value)}
+        id={"pb-attr-thumb-#{@node.id}-#{@name}"}
+        phx-hook="MediaThumb"
+        data-loaded-background="#fff"
+        class="relative h-[68px] w-full overflow-hidden rounded-[8px] border border-[#f0efea] bg-[#faf9f6]"
+      >
+        <span class="absolute inset-0 grid place-items-center px-2 text-center text-[10.5px] font-semibold text-[#a8a5a0]">
+          {gettext("Nothing loads from this path")}
+        </span>
+        <img src={@value} alt="" class="relative h-full w-full object-contain" />
+      </div>
+    </div>
+    """
+  end
 
   # A BOX WITH A PLUS, which is what was asked for. Thirty-nine attributes across the kit hold a
   # collection — `chelekom-filterable-gallery` keeps its whole content in two of them — and every one
@@ -4489,6 +4601,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         </button>
       </div>
 
+      <div
+        :if={previewable?(picture(@item))}
+        id={"pb-collection-thumb-#{@node.id}-#{@name}-#{@index}"}
+        phx-hook="MediaThumb"
+        data-loaded-background="#fff"
+        class="relative h-[62px] w-full overflow-hidden rounded-[7px] border border-[#f0efea] bg-[#faf9f6]"
+      >
+        <span class="absolute inset-0 grid place-items-center px-2 text-center text-[10px] font-semibold text-[#a8a5a0]">
+          {gettext("Nothing loads from this path")}
+        </span>
+        <img src={picture(@item)} alt="" class="relative h-full w-full object-contain" />
+      </div>
 
       <div :for={key <- @keys} class="flex items-center gap-1.5">
         <span class="w-[58px] flex-none truncate text-[10px] font-semibold text-[#8a877f]">
@@ -4504,6 +4628,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           options={options_for(@name, key, @options)}
         />
 
+        <button
+          :if={picture_key?(key)}
+          type="button"
+          id={"pb-collection-pick-#{@node.id}-#{@name}-#{@index}"}
+          phx-click="pick_media"
+          phx-value-node_id={@node.id}
+          phx-value-name={@name}
+          phx-value-index={@index}
+          phx-value-key={key}
+          title={gettext("Choose from the media library")}
+          class="grid size-[26px] flex-none place-items-center rounded-[7px] border border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc] hover:bg-[#e9e7fb]"
+        >
+          <.icon name={:image} size={12} />
+        </button>
       </div>
     </div>
     """
@@ -4626,6 +4764,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp printable(value) when is_binary(value), do: value
   defp printable(value) when is_number(value) or is_atom(value), do: to_string(value)
   defp printable(value), do: inspect(value)
+
+  # A picture is the one field in a card that has a library behind it. Read off the key's name, the
+  # same question `Inspector.widget/3` asks of an attribute.
+  defp picture_key?(key), do: Inspector.element_widget("img", to_string(key)) == :media
+
+  defp picture(%{} = item) do
+    Enum.find_value(item, fn {key, value} ->
+      (picture_key?(key) and is_binary(value) and value) || nil
+    end)
+  end
+
+  defp picture(_item), do: nil
 
   # The picture first, then the words, then whatever else the kit put there.
   defp key_rank(key) do
@@ -5111,6 +5261,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # `Inspector.element_widget/2` reads the TAG as well as the name, which is what separates a
   # picture's `src` from an `<iframe>`'s. Ids are `pb-attr-row-*` and not `pb-attr-*`: a component
   # node draws its declared properties above this list and both would answer to the same id.
+  defp attr_row_control(%{widget: :media} = assigns) do
+    ~H"""
+    <.attr_row_field node={@node} name={@name} kind={@kind} value={@value} />
+    <button
+      type="button"
+      id={"pb-attr-row-pick-#{@name}"}
+      phx-click="pick_media"
+      phx-value-node_id={@node.id}
+      phx-value-name={@name}
+      title={gettext("Choose from the media library")}
+      class="grid size-[18px] flex-none place-items-center rounded-[5px] text-[#4f4bcc] hover:bg-[#f2f1fc]"
+    >
+      <.icon name={:image} size={11} />
+    </button>
+    """
+  end
 
   defp attr_row_control(%{widget: :url} = assigns) do
     ~H"""
@@ -10751,12 +10917,536 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  @doc "The overlay sheets — Studio, Assets, Review and Record history."
+  def sheet(assigns) do
+    ~H"""
+    <div
+      id="pb-sheet"
+      data-role="pb-sheet"
+      class="fixed inset-0 z-[80] flex justify-end bg-[#17161a]/30"
+      phx-mounted={overlay_in("#pb-sheet > section")}
+      phx-remove={overlay_out("#pb-sheet > section")}
+    >
+      <section
+        phx-click-away="close_sheet"
+        class={[
+          "flex h-full max-w-[94vw] flex-col border-l border-[#e6e4de] bg-white shadow-[-18px_0_50px_rgba(20,18,26,.18)]",
+          sheet_width_class(@sheet)
+        ]}
+      >
+        <header class="flex flex-none items-center gap-3 border-b border-[#f0efea] px-[18px] py-4">
+          <h2 class="flex-1 font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+            {sheet_title(@sheet)}
+          </h2>
+          <button
+            type="button"
+            phx-click="close_sheet"
+            title={gettext("Close")}
+            class="grid size-[30px] flex-none place-items-center rounded-[9px] text-[#6d6a63] hover:bg-[#f7f6f3] hover:text-[#1b1a18]"
+          >
+            <.icon name={:close} size={18} />
+          </button>
+        </header>
+        <div class="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[18px] pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <.assets_sheet :if={@sheet == :assets} {assigns} />
+        </div>
+      </section>
+    </div>
+    """
+  end
+
+  # THE ASSETS SHEET IS THE MEDIA SYSTEM, not a second one.
+  #
+  # It used to be a read-only mirror: sixty records fetched by hand, tiles with a format badge and no
+  # thumbnail, and a box that looked like a dropzone but was a link to the Media page. Anything an
+  # author actually wanted to do here — upload, rename, delete, browse past sixty — meant leaving the
+  # editor and losing the selection they came in with.
+  #
+  # Both halves are Gervaz components now, the same two the Media page mounts:
+  #
+  #   * `MishkaGervaz.Form.Web.Live` — the resource's own `uploads do … style :dropzone … end` block,
+  #     so `allow_upload/3`, the drop target, per-entry progress, cancel, accept and size validation,
+  #     and the write through `:form_upload` / `:master_form_upload` are all Gervaz's, not ours.
+  #   * `MishkaGervaz.Table.Web.Live` — the `MediaGallery` template, with real thumbnails, the
+  #     resource's filters, its row actions and its pagination.
+  #
+  # `editor_pick` is a PREFIXED path param on purpose: Gervaz turns any path param whose name matches
+  # a resource attribute into an equality filter, so a key called `site_id` would silently drop every
+  # row. It carries the node and attribute being filled, which is what makes the gallery's "Use"
+  # action able to write straight back into the document.
+  #
+  # THE FORM HERE IS SHORTER THAN THE LIBRARY'S, and deliberately so. A page belongs to a site, so
+  # the sheet must not ask which one — `hidden_fields` drops the Site field and `defaults` carries
+  # the page's own `site_id` into the save, for a master exactly as for a tenant. And with no Site to
+  # pick, Category has nothing to wait for.
+  #
+  # `submit false` removes the Create button for the same reason: in 620px of overlay the dropzone IS
+  # the action, so `UploadSubmitsItself` submits the moment a file is staged. Gervaz still allows the
+  # `save` event — see `MishkaGervaz.Form.Web.State.apply_presentation/2` — and still draws the
+  # button when the form is EDITING a record, because an edit has no dropzone to submit it.
+  #
+  # THE ID IS THE RESOURCE'S OWN, not one of ours. A card's Edit action does
+  # `send_update(Form.Web.Live, id: Info.Form.component_id(resource), record_id: id)` — the id is
+  # derived, not passed — so a form mounted under any other id simply never hears it. Prefixing this
+  # one is what made Edit work on the Media page and do nothing here.
+  defp assets_sheet(assigns) do
+    ~H"""
+    <div class="flex min-h-0 flex-1">
+      <.assets_folders
+        categories={@media_categories}
+        selected={@assets_category}
+        editor={@editor}
+      />
+
+      <div class="flex min-h-0 flex-1 flex-col">
+        <div
+          :if={@media_target}
+          id="pb-media-target"
+          class="mx-[18px] mt-3 flex flex-none items-center gap-2 rounded-[11px] border border-[#dcdbf5] bg-[#f2f1fc] px-3 py-2.5"
+        >
+          <span class="grid size-6 flex-none place-items-center rounded-[8px] bg-[#e4e2f7] text-[#4f4bcc]">
+            <.icon name={:image} size={13} />
+          </span>
+          <%!-- AND HOW. The banner used to name the target and stop there, which left the reader
+                looking at a grid of files with a tick box on each and no way to tell that ticking
+                one does nothing here — the tick is for Archive and Featured. The answer is the
+                card's own wide button, so the banner points at it by name. --%>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#2e2b6b]">
+            <.sentence
+              text={gettext_noop("Choosing for %{target}")}
+              parts={
+                %{
+                  target:
+                    {"span", "font-['Space_Grotesk'] font-bold",
+                     @media_target[:name] || @media_target[:prop]}
+                }
+              }
+            />
+            <span class="font-normal text-[#4f4bcc]">
+              <.sentence
+                text={gettext_noop("— press %{use} on a file below")}
+                parts={%{use: {"b", nil, gettext("Use")}}}
+              />
+            </span>
+          </span>
+          <button
+            type="button"
+            id="pb-media-target-cancel"
+            phx-click="cancel_media_pick"
+            class="flex-none rounded-[7px] px-2 py-1 text-[10.5px] font-bold text-[#6d6a63] hover:bg-white"
+          >
+            {gettext("Cancel")}
+          </button>
+        </div>
+
+        <%!-- A SWITCHED-OFF SITE'S FILES ARE HERE FOR THE MASTER TO WORK WITH, but nobody else sees
+              them, or its pages, until the site is back on. Said here so a file that works in the
+              editor is not taken for one that works on the site. --%>
+        <div
+          :if={site_off?(@editor)}
+          id="pb-assets-site-off"
+          class="mx-[18px] mt-3 flex flex-none items-center gap-2 rounded-[11px] border border-[#f0e3c9] bg-[#fbf1df] px-3 py-2.5"
+        >
+          <span class="grid size-6 flex-none place-items-center rounded-[8px] bg-[#f6e5c6] text-[#8a5514]">
+            <.icon name={:alert} size={13} />
+          </span>
+          <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
+            {gettext(
+              "This site is switched off. Its files are here for you to work with, but visitors see none of its pages or files until it is turned back on."
+            )}
+          </span>
+        </div>
+
+        <div
+          id="pb-media-upload"
+          phx-hook="UploadSubmitsItself"
+          class="flex-none px-[18px] pt-3.5"
+        >
+          <.live_component
+            module={MishkaGervaz.Form.Web.Live}
+            id={MishkaGervaz.Resource.Info.Form.component_id(Media)}
+            resource={Media}
+            current_user={@current_user}
+            hidden_fields={(@editor.site_id && [:site_id]) || []}
+            submit={false}
+            defaults={%{site_id: @editor.site_id}}
+          />
+        </div>
+
+        <div class="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[18px] pt-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <.live_component
+            module={MishkaGervaz.Table.Web.Live}
+            id="pb-assets-gallery"
+            resource={Media}
+            current_user={@current_user}
+            template={MishkaCmsCoreWeb.Templates.AssetsGrid}
+            switchable_templates={[
+              MishkaCmsCoreWeb.Templates.AssetsGrid,
+              MishkaCmsCoreWeb.Templates.AssetsList
+            ]}
+            url_state={media_url_state(assigns)}
+          />
+        </div>
+      </div>
+
+      <.folder_modal
+        :if={@folder_form?}
+        site_id={@editor.site_id}
+        current_user={@current_user}
+      />
+
+      <.media_preview :if={@preview_media} media={@preview_media} />
+    </div>
+    """
+  end
+
+  @doc """
+  A new folder, without leaving the page you are building.
+
+  The same Gervaz form the Media library's Categories panel mounts —
+  `MishkaCmsCore.Runtime.MediaCategory`'s own — so a folder made here is a folder made there, with
+  the same actions, the same validation and the same `master_create` / `create` pair. Shorter by one
+  field for the reason the upload form is: the page belongs to a site, so `hidden_fields` drops Site
+  and `defaults` carries the answer.
+
+  Nothing here puts the new folder in the rail. `MediaCategory` publishes on `media_category:created`
+  and `BuilderLive` re-reads the rail when it hears it — the same route a folder added in another tab
+  arrives by, so there is one path to be right rather than two.
+
+  ## It is drawn INSIDE the sheet, and that is load-bearing
+
+  `fixed inset-0` puts it over everything regardless of where it sits in the DOM, but `phx-click-away`
+  reads the DOM, not the screen. The sheet closes on click-away, so while this was a sibling of the
+  sheet every click in it — including its own Close button — was a click AWAY from the sheet, and
+  shutting the form shut the sheet behind it. Rendered inside, those clicks are contained.
+
+  Escape needs the other half, and two handlers reach it: this one, and the editor's keyboard hook
+  through `shortcut("escape", …)`. That is fine BECAUSE THEY AGREE — both close this form and
+  neither touches the sheet. It was not fine when they disagreed: the sheet used to bind escape too,
+  so one press pushed two events, the form's landed first and cleared the flag, and the sheet's
+  arrived to find nothing stopping it. Escape shut both.
+
+  Two are needed because neither covers the other's case. The hook stays quiet while the caret is in
+  a field — correct for ⌘Z, wrong for escape in this form's Name box — and `phx-window-keydown` here
+  answers wherever the caret is.
+
+  And it is drawn LAST. Inserted as the sheet's first child it shifted every sibling by one, and
+  morphdom pairs children by position — so opening the form destroyed and rebuilt the upload
+  component and the gallery beside it, losing anything staged and re-running the query. Appended,
+  the siblings keep their places and the new node is simply added.
+  """
+  attr(:site_id, :string, default: nil)
+  attr(:current_user, :map, required: true)
+
+  def folder_modal(assigns) do
+    ~H"""
+    <div
+      id="pb-folder-modal"
+      class="fixed inset-0 z-[97] flex items-center justify-center bg-[#17161a]/40 p-6"
+      phx-mounted={modal_in("#pb-folder-modal > section")}
+      phx-remove={modal_out("#pb-folder-modal > section")}
+      phx-window-keydown="close_folder"
+      phx-key="escape"
+    >
+      <section
+        phx-click-away="close_folder"
+        class="w-[440px] max-w-[94vw] overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]"
+      >
+        <div class="flex items-center gap-3 border-b border-[#f0efea] px-5 py-[14px]">
+          <span class="grid size-9 flex-none place-items-center rounded-[11px] bg-[#f2f1fc] text-[#4f4bcc]">
+            <.icon name={:folder} size={16} />
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+              {gettext("New folder")}
+            </h2>
+            <p class="mt-0.5 text-[11px] font-medium text-[#6d6a63]">
+              {gettext("Files you upload here can be filed into it straight away.")}
+            </p>
+          </div>
+          <button
+            type="button"
+            id="pb-folder-close"
+            phx-click="close_folder"
+            title={gettext("Close")}
+            class="grid size-[30px] flex-none place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#8a877f] hover:border-[#dcdbf5] hover:text-[#4f4bcc]"
+          >
+            <.icon name={:close} size={13} />
+          </button>
+        </div>
+
+        <div class="px-5 py-[18px]">
+          <.live_component
+            module={MishkaGervaz.Form.Web.Live}
+            id={MishkaGervaz.Resource.Info.Form.component_id(MediaCategory)}
+            resource={MediaCategory}
+            current_user={@current_user}
+            hidden_fields={(@site_id && [:site_id]) || []}
+            defaults={%{site_id: @site_id}}
+          />
+        </div>
+      </section>
+    </div>
+    """
+  end
+
+  @doc """
+  The file, full size, without leaving the page you are building.
+
+  The Media library's eye opens a preview there; here it used to open nothing — `BuilderLive`
+  answered the row action and dropped it, because the editor had no overlay to put a file in. An
+  action that is drawn and does nothing is worse than one that is not drawn.
+
+  Escape is not bound here. `shortcut("escape", …)` closes this first, and one owner is what keeps
+  the sheet from leaving with it.
+  """
+  attr(:media, :map, required: true)
+
+  def media_preview(assigns) do
+    ~H"""
+    <div
+      id="pb-media-preview"
+      class="fixed inset-0 z-[98] flex items-center justify-center bg-[#17161a]/80 p-8"
+      phx-click="close_media_preview"
+      phx-mounted={modal_in("#pb-media-preview > div")}
+      phx-remove={modal_out("#pb-media-preview > div")}
+    >
+      <div class="relative max-h-full max-w-3xl">
+        <button
+          type="button"
+          id="pb-media-preview-close"
+          phx-click="close_media_preview"
+          title={gettext("Close")}
+          class="absolute -top-9 right-0 grid size-8 place-items-center rounded-[9px] text-white hover:bg-white/10"
+        >
+          <.icon name={:close} size={16} />
+        </button>
+
+        <img
+          :if={@media.image?}
+          src={@media.url}
+          alt={@media.name}
+          class="max-h-[80vh] max-w-full rounded-[14px] object-contain"
+        />
+
+        <div
+          :if={!@media.image?}
+          class="grid h-[220px] w-[340px] place-items-center rounded-[14px] bg-white/10 text-white"
+        >
+          <.icon name={:page} size={40} />
+        </div>
+
+        <p class="mt-3 text-center text-[12px] font-semibold text-white">{@media.name}</p>
+      </div>
+    </div>
+    """
+  end
+
+  attr(:categories, :any, required: true)
+  attr(:selected, :string, default: nil)
+  attr(:editor, :map, required: true)
+
+  defp assets_folders(assigns) do
+    ~H"""
+    <nav
+      data-role="pb-assets-folders"
+      class="flex w-[168px] flex-none flex-col gap-2 overflow-y-auto border-r border-[#f0efea] p-[10px] max-[560px]:w-[54px]"
+    >
+      <span class="px-1.5 text-[9.5px] font-bold uppercase tracking-[0.11em] text-[#6d6a63] max-[560px]:hidden">
+        {gettext("Folders")}
+      </span>
+
+      <div class="flex flex-col gap-[3px]">
+        <button
+          type="button"
+          id="pb-folder-all"
+          phx-click="select_asset_category"
+          phx-value-id="__all__"
+          title={gettext("All files")}
+          class={[
+            "flex items-center gap-2 rounded-[9px] border px-[9px] py-2 text-left max-[560px]:justify-center max-[560px]:px-0",
+            (is_nil(@selected) && "border-[#dcdbf5] bg-[#f2f1fc]") ||
+              "border-transparent hover:bg-[#f7f6f3]"
+          ]}
+        >
+          <span class={[
+            "grid size-5 flex-none place-items-center rounded-[6px]",
+            (is_nil(@selected) && "bg-[#e4e2f7] text-[#4f4bcc]") || "bg-[#f4f3ee] text-[#6d6a63]"
+          ]}>
+            <.icon name={:folder} size={11} />
+          </span>
+          <span class={[
+            "min-w-0 flex-1 truncate text-[10.5px] font-semibold max-[560px]:hidden",
+            (is_nil(@selected) && "text-[#4f4bcc]") || "text-[#5c5a54]"
+          ]}>
+            {gettext("All files")}
+          </span>
+        </button>
+
+        <.async_result :let={categories} assign={@categories}>
+          <%!-- The rail is the sheet's sidebar and the gallery beside it is already drawing its own
+                skeleton, so a word here would be the one thing in the sheet still saying it in
+                prose. Three rows the shape of a folder, tile and all. --%>
+          <:loading>
+            <div
+              :for={_row <- 1..3//1}
+              data-role="pb-folder-skeleton"
+              aria-hidden="true"
+              class="flex items-center gap-2 rounded-[9px] border border-transparent px-[9px] py-2 max-[560px]:justify-center max-[560px]:px-0"
+            >
+              <span class="size-5 flex-none animate-pulse rounded-[6px] bg-[#f2f1ec]"></span>
+              <span class="h-[8px] min-w-0 flex-1 animate-pulse rounded-full bg-[#f4f3ee] max-[560px]:hidden"></span>
+            </div>
+          </:loading>
+          <:failed :let={_reason}>
+            <span class="px-1.5 text-[10px] font-medium text-[#c0473d] max-[560px]:hidden">
+              {gettext("Could not load folders")}
+            </span>
+          </:failed>
+
+          <button
+            :for={category <- categories}
+            type="button"
+            id={"pb-folder-#{category.id}"}
+            phx-click="select_asset_category"
+            phx-value-id={category.id}
+            title={category.name}
+            class={[
+              "flex items-center gap-2 rounded-[9px] border px-[9px] py-2 text-left max-[560px]:justify-center max-[560px]:px-0",
+              (@selected == category.id && "border-[#dcdbf5] bg-[#f2f1fc]") ||
+                "border-transparent hover:bg-[#f7f6f3]"
+            ]}
+          >
+            <span class={[
+              "grid size-5 flex-none place-items-center rounded-[6px]",
+              (@selected == category.id && "bg-[#e4e2f7] text-[#4f4bcc]") ||
+                "bg-[#f4f3ee] text-[#6d6a63]"
+            ]}>
+              <.icon name={:folder} size={11} />
+            </span>
+            <span class={[
+              "min-w-0 flex-1 truncate text-[10.5px] font-semibold max-[560px]:hidden",
+              (@selected == category.id && "text-[#4f4bcc]") || "text-[#5c5a54]"
+            ]}>
+              {category.name}
+            </span>
+            <span class="flex-none font-['Space_Grotesk'] text-[9px] font-semibold text-[#6d6a63] max-[560px]:hidden">
+              {category.media_count}
+            </span>
+          </button>
+        </.async_result>
+
+        <button
+          type="button"
+          id="pb-folder-new"
+          phx-click="new_folder"
+          title={gettext("New folder")}
+          class="mt-[3px] flex h-[30px] flex-none items-center justify-center rounded-[9px] border border-dashed border-[#d9d7d0] bg-white text-[10px] font-semibold text-[#5c5a54] hover:border-[#5b57d6] hover:text-[#4f4bcc]"
+        >
+          <span class="max-[560px]:hidden">{gettext("+ Folder")}</span>
+          <span class="hidden max-[560px]:inline">+</span>
+        </button>
+      </div>
+    </nav>
+    """
+  end
+
+  # PATH PARAMS ARE THE ONLY CHANNEL INTO A GERVAZ TABLE that both filters the query and reaches a
+  # row action's `visible` callback, and they arrive through `url_state`, not through an assign of
+  # their own — `Table.Web.Live.update/2` reads `url_state[:path_params]`.
+  #
+  # Two different things ride in on it, and the difference matters:
+  #
+  #   * `site_id` MATCHES a Media attribute, so Gervaz turns it into an equality filter. That is the
+  #     point: `:master_read` has no site argument, so a master editing one site would otherwise
+  #     browse every site's library from inside that site's editor.
+  #   * `editor_pick_*` do NOT match any attribute, so they filter nothing and are simply carried —
+  #     which is what lets the "Use" action know whether there is anywhere to put the file, and
+  #     where. Prefixed for exactly that reason: a key that collided with an attribute name would
+  #     silently drop rows.
+  #
+  # Keys are ATOMS. Gervaz builds path params from the route pattern with `to_existing_atom`, and
+  # the filter step tests membership against `Ash.Resource.Info.attributes/1`, whose names are atoms
+  # — a string key matches nothing and is silently ignored.
+  defp media_url_state(assigns),
+    do: (assigns[:url_state] || %{}) |> Map.put(:path_params, media_scope_params(assigns))
+
+  @doc """
+  What the Assets gallery is scoped by: the site, the chosen folder, and — while something is waiting
+  for a file — which node asked and what it can accept.
+
+  Public because it is the whole contract between the editor and the gallery, and a test that reads
+  it is asking the same question the table is.
+  """
+  @spec media_scope_params(map()) :: map()
+  def media_scope_params(assigns) do
+    %{
+      site_id: assigns.editor.site_id,
+      media_category_id: assigns[:assets_category],
+      editor_open_only: is_nil(assigns.editor.site_id) || nil
+    }
+    |> Map.merge(media_pick_params(assigns[:media_target]))
+    |> Map.reject(fn {_key, value} -> is_nil(value) end)
+  end
+
   # A length takes any CSS length; everything else here is its own kind of value and says nothing.
   defp length_hint(prop) do
     case prop in Styles.lengths() do
       true -> gettext("any length, e.g. 2rem")
       false -> gettext("unset")
     end
+  end
+
+  # Read from `SiteState` rather than the database: the sheet renders on every keystroke in its search
+  # box, and this is an ETS lookup. A global document has no site and is never off.
+  defp site_off?(%{site_id: site_id}) when is_binary(site_id) do
+    match?({:ok, %{active: false}}, MishkaCmsCore.Runtime.States.SiteState.get(site_id))
+  end
+
+  defp site_off?(_no_site), do: false
+
+  # Worth drawing a box for: an absolute path into this site, or a URL. Anything else is half-typed.
+  defp previewable?(value),
+    do: openable?(value) or String.starts_with?(to_string(value), "/")
+
+  defp media_pick_params(nil), do: %{}
+
+  defp media_pick_params(%{node_id: node_id, name: name} = target),
+    do: %{editor_pick_node: node_id, editor_pick_attr: name} |> Map.merge(only(target))
+
+  # A background carries a bucket and a style property rather than an attribute name. The gallery
+  # only needs to know that SOMETHING is waiting for an answer — it shows its "Use" action on the
+  # node param — so the property rides the attribute slot and `place_media/2` reads the real target
+  # off the assign.
+  defp media_pick_params(%{node_id: node_id, prop: prop} = target),
+    do: %{editor_pick_node: node_id, editor_pick_attr: prop} |> Map.merge(only(target))
+
+  # `type` IS a Media attribute, so this one becomes a real filter on the gallery — the same channel
+  # `site_id` and `media_category_id` already ride. A field that can only show a picture is shown
+  # only pictures, which is a door that cannot be walked through wrongly rather than a mistake
+  # explained afterwards. `:any` adds nothing and the whole library stays listed.
+  defp only(%{accepts: :images}), do: %{type: :images}
+  defp only(_anything), do: %{}
+
+  # An empty thread shows the sample notes when the demo flag is on; the first real note replaces
+  # them, exactly like the history and the assistant.
+  attr(:tiles, :integer, default: 4)
+
+  @doc "The assets grid's own waiting shape — the tile, not a row."
+  def loading_tiles(assigns) do
+    ~H"""
+    <div class="grid grid-cols-2 gap-2.5" aria-hidden="true">
+      <div
+        :for={_tile <- 1..@tiles}
+        class="overflow-hidden rounded-[10px] border border-[#f0efea] bg-white"
+      >
+        <div class="h-[72px] animate-pulse bg-[#f6f5f2]"></div>
+        <div class="px-2.5 py-2">
+          <span class="block h-[8px] w-3/5 animate-pulse rounded-full bg-[#f2f1ec]"></span>
+        </div>
+      </div>
+    </div>
+    """
   end
 
   defp devices,
@@ -10862,10 +11552,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       {"components", gettext("Components")},
       {"layers", gettext("Layers")},
       {"inspector", gettext("Inspector")},
+      {"assets", gettext("Assets")},
       {"palette", gettext("Search")},
       {"dir", String.upcase(assigns.dir)}
     ]
   end
+
+  defp sheet_width_class(:assets), do: "w-[620px]"
+  defp sheet_width_class(_sheet), do: "w-[470px]"
+
+  defp sheet_title(:assets), do: gettext("Assets")
+  defp sheet_title(_sheet), do: ""
 
   # The prototype names the document being edited beside its state — "contact.heex · saved" reads as
   # a file, which is what a template is.
