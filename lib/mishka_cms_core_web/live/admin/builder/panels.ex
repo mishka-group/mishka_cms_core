@@ -19,6 +19,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Builder.Collection
+  alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.PaletteEntry
   alias Phoenix.LiveView.JS
@@ -35,6 +36,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
@@ -46,6 +48,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
+  alias MishkaCmsCore.Runtime.PageBuilder.Tokens
   alias MishkaCmsCore.Runtime.PageBuilder.Interactions
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
@@ -590,6 +593,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:preview?, :boolean, default: false)
   attr(:source_modal, :boolean, default: false)
   attr(:dev_mode?, :boolean, default: false)
+  attr(:studio_badge, :integer, default: 0)
   attr(:history_position, :integer, default: 0)
   attr(:history_total, :integer, default: 0)
 
@@ -858,6 +862,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <.icon name={:image} size={15} />
         </button>
 
+        <button
+          id="pb-studio"
+          type="button"
+          phx-click="open_sheet"
+          phx-value-sheet="studio"
+          title={gettext("Studio — tokens, presets, snippets, packages")}
+          class="inline-flex h-8 items-center gap-2.5 rounded-[10px] bg-[#17161a] px-1.5 text-[12px] font-bold text-white shadow-[0_2px_8px_rgba(20,18,26,.24)] hover:bg-[#221f27]"
+        >
+          <span class="grid size-[22px] flex-none grid-cols-2 grid-rows-2 gap-[1.5px] rounded-[7px] bg-white/10 p-[3px]">
+            <span class="rounded-[1.5px] bg-[#8580d8]" />
+            <span class="rounded-[1.5px] bg-[#4ec08d]" />
+            <span class="rounded-[1.5px] bg-[#e0a52e]" />
+            <span class="rounded-[1.5px] bg-[#f0f0f2]" />
+          </span>
+          <span data-role="pb-studiolbl" class="-tracking-[.01em] max-[820px]:hidden">{gettext(
+            "Studio"
+          )}</span>
+          <span
+            :if={@studio_badge > 0}
+            title={gettext("Design tokens your team added")}
+            class="ml-0.5 mr-0.5 flex h-6 min-w-5 items-center justify-center gap-1 rounded-[7px] bg-[#2e2c33] px-1.5 font-['Space_Grotesk'] text-[10px] font-bold text-[#8ee0b8]"
+          >
+            <span class="size-[5px] rounded-full bg-[#4ec08d]" />{@studio_badge}
+          </span>
+          <span :if={@studio_badge == 0} class="pr-1.5" />
+        </button>
 
         <div
           data-role="pb-dir"
@@ -10948,9 +10978,1057 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           </button>
         </header>
         <div class="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[18px] pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <.studio_sheet :if={@sheet == :studio} {assigns} />
           <.assets_sheet :if={@sheet == :assets} {assigns} />
         </div>
       </section>
+    </div>
+    """
+  end
+
+  # The token export is a real generated file, not a preview of one — Copy gives you something you
+  # can paste into a build.
+  defp studio_sheet(assigns) do
+    loaded = assigns[:studio_data]
+
+    assigns =
+      assigns
+      |> assign(:loaded?, is_map(loaded))
+      |> assign(:tokens, studio_list(loaded, :tokens))
+      |> assign(:formats, Marketplace.formats())
+      |> assign(:presets, studio_list(loaded, :presets))
+      |> assign(
+        :packages,
+        matching_packages(studio_list(loaded, :packages), assigns.studio_query)
+      )
+      |> assign(:package_categories, ["all" | studio_list(loaded, :package_categories)])
+
+    ~H"""
+    <div class="flex flex-col gap-1 border-b border-[#f0efea] pb-3">
+      <div class="flex gap-0.5 rounded-[10px] bg-[#f2f1ec] p-[3px]">
+        <button
+          :for={%{key: key, label: label} <- studio_tabs(@current_user)}
+          type="button"
+          id={"pb-studio-#{key}"}
+          phx-click="studio_tab"
+          phx-value-tab={key}
+          class={[
+            "h-[30px] min-w-0 flex-1 rounded-[8px] px-1.5 text-[11px] font-bold",
+            (@studio_tab == key && "bg-white text-[#1b1a18] shadow-[0_1px_2px_rgba(30,28,24,.1)]") ||
+              "text-[#6d6a63]"
+          ]}
+        >
+          {label}
+        </button>
+      </div>
+
+      <%!-- Everything the Studio lists is either already here or comes from a registry, so the same
+            scope filter sits above all of them. --%>
+      <div :if={@studio_tab in [:presets, :registry]} class="mt-2 flex items-center gap-1.5">
+        <button
+          :for={
+            {key, label} <- [
+              {:all, gettext("All")},
+              {:downloaded, gettext("Downloaded")},
+              {:shop, gettext("Shop")}
+            ]
+          }
+          type="button"
+          id={"pb-studio-scope-#{key}"}
+          phx-click="studio_scope"
+          phx-value-scope={key}
+          class={[
+            "h-7 rounded-[8px] border px-3 text-[11px] font-bold",
+            (@studio_scope == key && "border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc]") ||
+              "border-[#ecebe6] bg-white text-[#6d6a63]"
+          ]}
+        >
+          {label}
+        </button>
+        <span class="flex-1"></span>
+        <span class="text-[10.5px] font-semibold text-[#6d6a63]">
+          {gettext("%{count} installed", count: installed_count(@packages))}
+        </span>
+      </div>
+    </div>
+
+    <%!-- WHAT IS COMING, AT THE SIZE IT WILL BE. The sheet used to read everything it shows before
+          anything could paint — a stylesheet parse and a 10.8 MB bundle parse — so the Studio button
+          did nothing at all until they finished. The tabs and the filters above are real and
+          clickable from the first frame; only the list waits, and it waits as a shape rather than as
+          an empty column that then jumps. --%>
+    <div :if={!@loaded?} data-role="pb-studio-skeleton" class="pt-3">
+      <div class="mb-3 h-[11px] w-[108px] animate-pulse rounded-[3px] bg-[#ecebe6]"></div>
+      <div class="flex flex-col gap-[9px]">
+        <div
+          :for={row <- 1..6}
+          id={"pb-studio-skel-#{row}"}
+          class="h-[52px] animate-pulse rounded-[11px] border border-[#f0efea] bg-[#faf9f6]"
+        >
+        </div>
+      </div>
+    </div>
+
+    <div :if={@loaded?}>
+      <.studio_tokens :if={@studio_tab == :tokens} {assigns} />
+      <.studio_classes :if={@studio_tab == :classes} {assigns} />
+      <.studio_presets :if={@studio_tab == :presets} {assigns} />
+      <.studio_snippets :if={@studio_tab == :snippets} {assigns} />
+      <.studio_registry :if={@studio_tab == :registry} {assigns} />
+      <.studio_settings :if={@studio_tab == :settings} {assigns} />
+    </div>
+    """
+  end
+
+  @doc """
+  What the Studio shows before its data has arrived, and when the read fails.
+
+  One definition so the two cannot drift: a key added to the loader and forgotten here is a `KeyError`
+  in a render, which takes the whole editor down rather than one sheet.
+  """
+  @spec empty_studio_data() :: map()
+  def empty_studio_data,
+    do: %{tokens: [], token_categories: [], presets: [], packages: [], package_categories: []}
+
+  # Read rather than matched, for the same reason: a partial map is an empty tab, never a crash.
+  defp studio_list(nil, _key), do: []
+  defp studio_list(loaded, key), do: Map.get(loaded, key) || []
+
+  @doc "The Studio's tabs `user` may see, in the prototype's order — Classes sits beside Tokens
+  because both are things a site defines once and every page then resolves through."
+  def studio_tabs(user) do
+    Events.collect(:studio_tabs, [
+      %{key: :tokens, label: gettext("Tokens"), priority: 10},
+      %{key: :classes, label: gettext("Classes"), priority: 20},
+      %{key: :presets, label: gettext("Presets"), priority: 30},
+      %{key: :snippets, label: gettext("Snippets"), priority: 40},
+      %{key: :registry, label: gettext("Registry"), priority: 50},
+      %{key: :settings, label: gettext("Settings"), priority: 60}
+    ])
+    |> Descriptor.permitted(user)
+  end
+
+  defp installed_count(packages), do: Enum.count(packages, &Map.get(&1, :installed?))
+
+  # "All" plus every category that actually has a token, each with its own count.
+  # The prototype's own groups, in its order, with its labels and dot colours. `screen` is shown as
+  # "Breakpoints" because that is what a screen token is to the person reading the list, and `custom`
+  # is a filter across the others rather than a group of its own.
+  # `{key, chip label, group label, dot}`. The chip and the group heading differ on purpose, exactly
+  # as they do in the prototype: a filter reads better short, a section heading reads better spelled
+  # out.
+  @token_groups [
+    {"color", gettext_noop("Color"), gettext_noop("Color"), "#5b57d6"},
+    {"type", gettext_noop("Type"), gettext_noop("Typography"), "#1f9d6b"},
+    {"space", gettext_noop("Space"), gettext_noop("Spacing"), "#3a6cb5"},
+    {"radius", gettext_noop("Radius"), gettext_noop("Radius"), "#7a5bd0"},
+    {"shadow", gettext_noop("Shadow"), gettext_noop("Shadow"), "#c07a2a"},
+    {"motion", gettext_noop("Motion"), gettext_noop("Motion"), "#0f8f86"},
+    {"screen", gettext_noop("Breakpoints"), gettext_noop("Breakpoints"), "#b03a76"}
+  ]
+
+  def token_categories(tokens) do
+    groups =
+      for {key, chip, _label, _dot} <- @token_groups,
+          count = Enum.count(tokens, &(&1.category == key)),
+          count > 0,
+          do: {key, chip, count}
+
+    custom = Enum.count(tokens, &custom_token?/1)
+
+    [{"all", gettext_noop("All"), length(tokens)}] ++
+      groups ++ if(custom > 0, do: [{"custom", gettext_noop("Custom"), custom}], else: [])
+  end
+
+  def grouped_tokens(tokens, category) do
+    selected = select_tokens(tokens, category)
+
+    for {key, _chip, label, dot} <- @token_groups,
+        items = Enum.filter(selected, &(&1.category == key)),
+        items != [],
+        do: {label, dot, items}
+  end
+
+  defp select_tokens(tokens, "all"), do: tokens
+  defp select_tokens(tokens, "custom"), do: Enum.filter(tokens, &custom_token?/1)
+  defp select_tokens(tokens, category), do: Enum.filter(tokens, &(&1.category == category))
+
+  # Two shapes reach here: `Marketplace.Token`, which spells it `custom?`, and the Gervaz table's
+  # `DesignToken`, which cannot — an Ash attribute may not end in `?`.
+  defp custom_token?(%{custom?: custom}), do: custom == true
+  defp custom_token?(%{custom: custom}), do: custom == true
+  defp custom_token?(_token), do: false
+
+  # The export is a real generated file, not a preview of one — Copy gives you something you can
+  # paste into a build.
+  # A collapsed row, like the prototype's: the generated file is the answer to a question most people
+  # are not asking while they read the token list, so it opens on demand and names itself when shut.
+  defp token_export(assigns) do
+    assigns =
+      assigns
+      |> assign(:source, Marketplace.generate(assigns.token_format, assigns.tokens))
+      |> assign(:file, token_file(assigns.formats, assigns.token_format))
+      |> assign(:note, token_export_note(assigns.token_format))
+
+    ~H"""
+    <div class="-mx-3.5 border-t border-[#f0efea]">
+      <button
+        type="button"
+        id="pb-token-export"
+        phx-click={
+          JS.toggle(to: "#pb-token-export-body")
+          |> JS.toggle_class("is-open", to: "#pb-token-export")
+        }
+        class="flex w-full items-center gap-[9px] px-[18px] py-[11px] text-left hover:bg-[#faf9f6]"
+      >
+        <span class="text-[10px] font-bold uppercase tracking-[0.09em] text-[#6d6a63]">
+          {gettext("Generated output")}
+        </span>
+        <span class="flex-1"></span>
+        <span class="font-['Space_Grotesk'] text-[10px] font-semibold text-[#4f4bcc]">{@file}</span>
+        <.icon
+          name={:chevron_down}
+          size={13}
+          class="text-[#6d6a63] [.is-open_&]:rotate-180"
+        />
+      </button>
+
+      <div id="pb-token-export-body" class="hidden px-[18px] pb-4">
+        <pre
+          data-accent-panel
+          class="max-h-[190px] overflow-auto rounded-[11px] bg-[#17161a] px-[13px] py-3 font-['Space_Grotesk'] text-[10.5px] leading-[1.7] text-[#c9c7d1] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)] [[data-theme=dark]_&]:!bg-[#141317] [[data-theme=dark]_&]:!border-[#232228]"
+        >{@source}</pre>
+        <div class="mt-[9px] flex items-center gap-2">
+          <span class="min-w-0 flex-1 text-[10px] font-medium text-[#6d6a63]">{@note}</span>
+          <button
+            type="button"
+            id="pb-token-copy"
+            phx-hook="PbCopy"
+            data-copy={@source}
+            class="h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-[11px] text-[10px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            {gettext("Copy")}
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  defp token_export_note(:tw), do: gettext("Merged into theme.extend on build.")
+  defp token_export_note(:css), do: gettext("Injected into :root for every page.")
+  defp token_export_note(:json), do: gettext("W3C format — import into Figma or another tool.")
+  defp token_export_note(_ex), do: gettext("Compiled into your theme module.")
+
+  defp token_file(formats, format) do
+    case Enum.find(formats, fn {key, _label, _file, _hint} -> key == format end) do
+      {_key, _label, file, _hint} -> file
+      nil -> ""
+    end
+  end
+
+  # STYLE ONCE, APPLY TO TWENTY, CHANGE IN ONE PLACE. The style panel writes utilities onto ONE
+  # element, which is right for the card that needs to be a little wider and wrong for the twenty
+  # that are meant to match — see `MishkaCmsCore.Runtime.PageBuilder.Classes`.
+  defp studio_classes(assigns) do
+    ~H"""
+    <div class="pt-3">
+      <form
+        id="pb-class-form"
+        phx-submit="save_class"
+        class="mb-3 flex gap-2 rounded-[12px] border border-[#ecebe6] bg-[#faf9f6] p-2.5"
+      >
+        <input
+          type="text"
+          name="name"
+          id="pb-class-name"
+          value={@class_draft[:name]}
+          placeholder="card-shell"
+          autocomplete="off"
+          class="h-[34px] w-[150px] flex-none rounded-[9px] border border-[#ecebe6] bg-white px-2.5 font-['Space_Grotesk'] text-[11.5px] font-semibold text-[#1b1a18] outline-none focus:border-[#c3c1f0]"
+        />
+        <input
+          type="text"
+          name="utilities"
+          id="pb-class-utilities"
+          value={@class_draft[:utilities]}
+          placeholder="rounded-xl bg-white p-6"
+          autocomplete="off"
+          class="h-[34px] min-w-0 flex-1 rounded-[9px] border border-[#ecebe6] bg-white px-2.5 text-[11.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0]"
+        />
+        <button
+          type="submit"
+          id="pb-class-save"
+          class="h-[34px] flex-none rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-3 font-['Space_Grotesk'] text-[11px] font-bold text-white"
+        >
+          {gettext("Save")}
+        </button>
+      </form>
+
+      <%!-- Tailwind's own sentence about the utility it could not resolve, under the box that holds
+            it. A class is refused before it is stored, because a stored one that does not compile
+            takes the site's whole stylesheet with it. --%>
+      <p
+        :if={@class_error}
+        id="pb-class-error"
+        class="mb-3 rounded-[10px] border border-[#f0dcd8] bg-[#fdf3f1] px-[13px] py-2.5 text-[11px] font-bold leading-[1.55] text-[#c0473d]"
+      >
+        {@class_error}
+      </p>
+
+      <p
+        :if={@classes == []}
+        id="pb-classes-empty"
+        class="px-2.5 py-9 text-center text-[12px] font-medium text-[#6d6a63]"
+      >
+        {gettext(
+          "No reusable classes yet. Name one above, and it can go on as many elements as you like."
+        )}
+      </p>
+
+      <div class="flex flex-col gap-[9px]">
+        <%!-- Pressing a row loads it back into the form, which is the whole point of the feature:
+              editing the class is how twenty elements change at once. --%>
+        <article
+          :for={class <- @classes}
+          id={"pb-class-#{class.name}"}
+          class="rounded-[12px] border border-[#ecebe6] bg-white px-[13px] py-2.5"
+        >
+          <div class="flex items-center gap-2.5">
+            <button
+              type="button"
+              phx-click="edit_class"
+              phx-value-name={class.name}
+              class="min-w-0 flex-1 text-left"
+            >
+              <span class="block truncate font-['Space_Grotesk'] text-[12px] font-bold text-[#4f4bcc]">
+                .{class.name}
+              </span>
+              <span class="mt-0.5 block truncate text-[10.5px] font-medium text-[#6d6a63]">
+                {class.utilities}
+              </span>
+            </button>
+            <button
+              :if={@selection}
+              type="button"
+              id={"pb-class-apply-#{class.name}"}
+              phx-click="apply_class"
+              phx-value-name={class.name}
+              title={gettext("Put this class on the selected element")}
+              class="h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+            >
+              {gettext("Apply")}
+            </button>
+            <button
+              type="button"
+              id={"pb-class-delete-#{class.name}"}
+              phx-click="delete_class"
+              phx-value-name={class.name}
+              title={gettext("Delete this class")}
+              class="grid size-7 flex-none place-items-center rounded-[8px] border border-[#f0dcd8] bg-[#fdf3f1] text-[#c0473d] hover:bg-[#fbe9e7]"
+            >
+              <.icon name={:trash} size={13} />
+            </button>
+          </div>
+        </article>
+      </div>
+    </div>
+    """
+  end
+
+  defp studio_presets(assigns) do
+    ~H"""
+    <div class="pt-3">
+      <.sample_catalogue_note :if={sample_catalogue?()} />
+      <div class="mb-3 flex items-center gap-2">
+        <span class="text-[11.5px] font-medium text-[#6d6a63]">
+          {gettext("Applying a preset rewrites layout and tokens.")}
+        </span>
+        <span class="flex-1"></span>
+        <%!-- Paid presets need a licence, and the tier says so once rather than on every card. --%>
+        <span class="inline-flex flex-none items-center gap-[5px] rounded-full bg-[#fbf1df] px-[9px] py-[3px] text-[9.5px] font-bold text-[#8a5514]">
+          {gettext("Free tier")}
+        </span>
+      </div>
+
+      <div class="mb-3 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          :for={
+            {category, label} <- [
+              {"all", gettext("All")},
+              {"marketing", gettext("Marketing")},
+              {"docs", gettext("Docs")},
+              {"commerce", gettext("Commerce")},
+              {"editorial", gettext("Editorial")}
+            ]
+          }
+          type="button"
+          id={"pb-preset-cat-#{category}"}
+          phx-click="studio_cat"
+          phx-value-cat={category}
+          class={[
+            "h-[27px] flex-none whitespace-nowrap rounded-full border px-[11px] text-[10.5px] font-semibold capitalize",
+            (@studio_cat == category && "border-[#17161a] bg-[#17161a] text-white") ||
+              "border-[#ecebe6] bg-[#f6f5f2] text-[#6d6a63]"
+          ]}
+        >
+          {label}
+        </button>
+      </div>
+
+      <%!-- Empty for a reason worth stating: a preset rewrites a page's layout AND its tokens
+            together, and nothing on this server supplies one. The kits on disk answer the Registry
+            tab, not this one. --%>
+      <div
+        :if={@presets == []}
+        id="pb-presets-empty"
+        class="px-4 py-9 text-center text-[12px] font-medium leading-[1.6] text-[#6d6a63]"
+      >
+        {gettext("No presets available.")}
+        <span class="mt-1 block text-[11px] text-[#a8a5a0]">
+          <.sentence
+            text={
+              gettext_noop(
+                "A preset carries a whole layout and a token set. Connect a registry under %{setting} to install one."
+              )
+            }
+            parts={%{setting: {"span", "font-bold", gettext("Settings → Registry source")}}}
+          />
+        </span>
+      </div>
+
+      <div data-role="preset-grid" class="grid grid-cols-2 gap-[11px] max-[620px]:grid-cols-1">
+        <article
+          :for={preset <- @presets}
+          id={"pb-preset-#{preset.id}"}
+          class={[
+            "overflow-hidden rounded-[14px] border",
+            (@applied_preset == preset.id && "border-[#dcdbf5] bg-[#faf9ff]") ||
+              "border-[#ecebe6] bg-white"
+          ]}
+        >
+          <%!-- The thumbnail is drawn from the preset's own palette rather than shipped as an image:
+                a screenshot would be stale the moment the preset changed, and this says the one thing
+                a thumbnail is for at this size — what the layout and the colours are. --%>
+          <div
+            class="relative flex h-[82px] items-center justify-center gap-1.5 p-3"
+            style={"background:#{preset.thumb}"}
+          >
+            <span class="h-full w-[26%] rounded-[6px]" style={"background:#{bar(preset, 0)}"} />
+            <span class="flex h-full flex-1 flex-col gap-[5px]">
+              <span class="flex-1 rounded-[6px]" style={"background:#{bar(preset, 1)}"} />
+              <span class="h-[36%] rounded-[6px]" style={"background:#{bar(preset, 2)}"} />
+            </span>
+            <span
+              :if={preset.price}
+              title={gettext("Needs a licence")}
+              class="absolute right-[9px] top-[9px] grid size-6 place-items-center rounded-[8px] bg-[#14121a]/[.62] text-white"
+            >
+              <.icon name={:lock} size={12} />
+            </span>
+          </div>
+
+          <div class="px-3.5 py-[13px]">
+            <div class="flex items-center gap-2">
+              <span class="min-w-0 font-['Space_Grotesk'] text-[12.5px] font-bold text-[#17161a]">
+                {preset.name}
+              </span>
+              <span class={[
+                "flex-none rounded-[5px] px-[7px] py-0.5 font-['Space_Grotesk'] text-[10px] font-bold",
+                (preset.price && "bg-[#fbf1df] text-[#8a5514]") || "bg-[#e6f6ee] text-[#177a53]"
+              ]}>
+                {preset.price || gettext("Free")}
+              </span>
+              <span class="flex-1"></span>
+              <span class="flex-none font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
+                {gettext("%{count} sections", count: preset.sections)}
+              </span>
+              <span
+                :if={preset[:installed?]}
+                title={gettext("Downloaded")}
+                class="grid size-[19px] flex-none place-items-center rounded-full bg-[#177a53] text-white"
+              >
+                <.icon name={:check} size={11} />
+              </span>
+              <span
+                :if={!preset[:installed?]}
+                title={gettext("Not downloaded")}
+                class="grid size-[19px] flex-none place-items-center rounded-full border-[1.5px] border-dashed border-[#d5d3cc] text-[#b7b4ad]"
+              >
+                <.icon name={:download} size={10} />
+              </span>
+            </div>
+
+            <p class="mt-1.5 text-[11.5px] font-medium leading-[1.5] text-[#6d6a63]">
+              {preset.description}
+            </p>
+
+            <div class="mt-[9px] flex flex-wrap items-center gap-[9px] border-t border-[#f4f3ee] pt-[9px] text-[10px] font-semibold text-[#6d6a63]">
+              <span class="inline-flex items-center gap-1">
+                <span class="text-[#e6b422]">★</span>{preset.rating}
+              </span>
+              <span>{gettext("%{count} blocks", count: preset.blocks)}</span>
+              <span>{preset.size}</span>
+              <span>{preset.updated}</span>
+            </div>
+            <div class="mt-[5px] text-[10px] font-medium text-[#6d6a63]">
+              {gettext("by %{author}", author: preset.author)}
+            </div>
+
+            <div class="mt-3 flex items-center gap-2">
+              <span class="flex flex-none gap-1">
+                <span
+                  :for={colour <- preset[:palette] || []}
+                  class="size-[15px] rounded-[5px] border border-[#14121a]/[.08]"
+                  style={"background:#{colour}"}
+                />
+              </span>
+              <span class="flex-1"></span>
+              <span
+                :if={@applied_preset == preset.id}
+                class="flex-none rounded-[7px] bg-[#e6f6ee] px-[11px] py-[5px] text-[10.5px] font-bold text-[#177a53]"
+              >
+                {gettext("Applied")}
+              </span>
+              <button
+                :if={!preset.price && @applied_preset != preset.id}
+                type="button"
+                id={"pb-preset-apply-#{preset.id}"}
+                phx-click="apply_preset"
+                phx-value-preset={preset.id}
+                class="h-[31px] flex-none rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-[13px] text-[11px] font-bold text-white"
+              >
+                {gettext("Apply")}
+              </button>
+              <button
+                :if={preset.price}
+                type="button"
+                id={"pb-preset-unlock-#{preset.id}"}
+                phx-click="studio_tab"
+                phx-value-tab="settings"
+                class="inline-flex h-[31px] flex-none items-center gap-1.5 rounded-[9px] border border-[#f0e3c9] bg-[#fdf7ea] px-3 text-[11px] font-bold text-[#8a5514] hover:bg-[#faf0d9]"
+              >
+                <.icon name={:lock} size={12} /> {gettext("Unlock")}
+              </button>
+            </div>
+          </div>
+        </article>
+      </div>
+    </div>
+    """
+  end
+
+  defp bar(preset, index),
+    do: preset |> Map.get(:bars, []) |> Enum.at(index) || preset.thumb
+
+  # The save box is a Gervaz FORM and the list below it a Gervaz TABLE, each with its own custom
+  # template so the markup is the one that shipped. What stays here is the pair of them and the one
+  # value neither can carry: `source`, the serialised subtree, which changes on every canvas edit.
+  # It rides on a hidden input associated with the form by id rather than through the component's
+  # `defaults`, because changing `defaults` rebuilds the form and would wipe a half-typed name.
+  defp studio_snippets(assigns) do
+    ~H"""
+    <div class="pt-3">
+      <input
+        type="hidden"
+        form="pb-snippet-form"
+        name="form[source]"
+        value={@snippet_source}
+      />
+
+      <.live_component
+        module={MishkaGervaz.Form.Web.Live}
+        id="pb-snippet-form-component"
+        resource={MishkaCmsCore.Runtime.Snippet}
+        current_user={@current_user}
+        defaults={@snippet_defaults}
+      />
+
+      <.live_component
+        module={MishkaGervaz.Table.Web.Live}
+        id="pb-snippets-table"
+        resource={MishkaCmsCore.Runtime.Snippet}
+        current_user={@current_user}
+        url_state={@snippets_url_state}
+      />
+    </div>
+    """
+  end
+
+  # Whichever of version and install-count the adapter supplied, and nothing where it supplied
+  # neither.
+  defp package_meta(package) do
+    [
+      package[:version],
+      package[:installs] && gettext("%{count} installs", count: package[:installs])
+    ]
+    |> Enum.reject(&is_nil/1)
+  end
+
+  # The registry search is a plain substring over what the card already shows, so what someone reads
+  # is what they can search for.
+  defp matching_packages(packages, query) when is_binary(query) do
+    case String.trim(query) do
+      "" -> packages
+      needle -> Enum.filter(packages, &package_matches?(&1, String.downcase(needle)))
+    end
+  end
+
+  defp matching_packages(packages, _query), do: packages
+
+  defp package_matches?(package, needle) do
+    [package[:name], package[:description], package[:author], package[:category]]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.any?(&String.contains?(String.downcase(&1), needle))
+  end
+
+  defp studio_registry(assigns) do
+    ~H"""
+    <div class="pt-3">
+      <.sample_catalogue_note :if={sample_catalogue?()} />
+      <div class="relative">
+        <.icon
+          name={:search}
+          size={14}
+          class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[#a8a5a0]"
+        />
+        <input
+          type="text"
+          id="pb-registry-search"
+          name="value"
+          value={@studio_query}
+          phx-keyup="studio_query"
+          phx-debounce="120"
+          placeholder={gettext("Search the component registry…")}
+          autocomplete="off"
+          class="peer h-10 w-full rounded-[11px] border border-[#ecebe6] bg-[#faf9f6] pl-[35px] pr-[30px] text-[12px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white focus:shadow-[0_0_0_3px_rgba(91,87,214,.1)]"
+        />
+        <.clear_field field="pb-registry-search" event="studio_query" params={%{"value" => ""}} />
+      </div>
+
+      <div class="mt-2.5 flex gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <button
+          :for={category <- @package_categories}
+          type="button"
+          id={"pb-pkg-cat-#{category}"}
+          phx-click="studio_cat"
+          phx-value-cat={category}
+          class={[
+            "h-[27px] flex-none whitespace-nowrap rounded-full border px-[11px] text-[10.5px] font-semibold capitalize",
+            (@studio_cat == category && "border-[#17161a] bg-[#17161a] text-white") ||
+              "border-[#ecebe6] bg-[#f6f5f2] text-[#6d6a63]"
+          ]}
+        >
+          {(category == "all" && gettext("All")) || category}
+        </button>
+      </div>
+
+      <div class="mb-2.5 mt-2.5 flex items-center gap-2">
+        <span class="font-['Space_Grotesk'] text-[11px] font-medium text-[#6d6a63]">
+          registry.mishka.tools
+        </span>
+        <span class="flex-1"></span>
+        <span class="text-[10.5px] font-semibold text-[#6d6a63]">
+          {ngettext("%{count} package", "%{count} packages", length(@packages))}
+        </span>
+      </div>
+
+      <p
+        :if={!@registry_master? && @packages != []}
+        class="mb-2.5 text-[10.5px] font-medium text-[#6d6a63]"
+      >
+        {gettext("Installs land on this site only.")}
+      </p>
+
+      <%!-- With the on-disk kits answering this tab, an empty list has a second meaning worth
+            separating from "your search found nothing": every component the installed kits ship is
+            already on this site. --%>
+      <p
+        :if={@packages == []}
+        id="pb-registry-empty"
+        class="px-4 py-10 text-center text-[12px] font-medium leading-[1.6] text-[#6d6a63]"
+      >
+        {(String.trim(@studio_query) != "" &&
+            gettext("No packages match “%{query}”.", query: @studio_query)) ||
+          gettext("Every component from the installed kits is already on this site.")}
+      </p>
+
+      <div class="flex flex-col gap-[9px]">
+        <article
+          :for={package <- @packages}
+          id={"pb-pkg-#{package.id}"}
+          class={[
+            "rounded-[12px] border px-[13px] py-3",
+            (package[:installed?] && "border-[#d7eddf] bg-[#fbfdfc]") || "border-[#ecebe6] bg-white"
+          ]}
+        >
+          <div class="flex items-center gap-[9px]">
+            <span class={[
+              "grid size-7 flex-none place-items-center rounded-[9px]",
+              (package[:installed?] && "bg-[#e6f6ee] text-[#177a53]") || "bg-[#f2f1fc] text-[#4f4bcc]"
+            ]}>
+              <.icon name={:box} size={15} />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block truncate font-['Space_Grotesk'] text-[12px] font-bold text-[#17161a]">
+                {package.name}
+              </span>
+              <%!-- A registry supplies download counts and versions; the kits on disk do not, and a
+                    bare "· installs" beside an empty star reads as data that failed to load. Each
+                    figure is drawn only if there is one. --%>
+              <span
+                :if={package_meta(package) != []}
+                class="mt-0.5 block truncate font-['Space_Grotesk'] text-[10px] font-medium text-[#6d6a63]"
+              >
+                {Enum.join(package_meta(package), " · ")}
+              </span>
+            </span>
+            <span
+              :if={package[:installed?]}
+              title={gettext("Downloaded")}
+              class="grid size-5 flex-none place-items-center rounded-full bg-[#177a53] text-white"
+            >
+              <.icon name={:check} size={12} />
+            </span>
+            <span
+              :if={!package[:installed?]}
+              title={gettext("Not downloaded")}
+              class="grid size-5 flex-none place-items-center rounded-full border-[1.5px] border-dashed border-[#d5d3cc] text-[#b7b4ad]"
+            >
+              <.icon name={:download} size={11} />
+            </span>
+          </div>
+
+          <p class="mt-2 text-[11.5px] font-medium leading-[1.5] text-[#6d6a63]">
+            {package[:description]}
+          </p>
+
+          <div class="mt-[9px] flex flex-wrap items-center gap-[9px] border-t border-[#f4f3ee] pt-[9px] text-[10px] font-semibold text-[#6d6a63]">
+            <span :if={package[:rating]} class="inline-flex items-center gap-1">
+              <span class="text-[#e6b422]">★</span>{package[:rating]}
+            </span>
+            <span :if={package[:size]}>{package[:size]}</span>
+            <span>{ngettext("%{count} dependency", "%{count} dependencies", package[:deps] || 0)}</span>
+            <span :if={package[:updated]}>{package[:updated]}</span>
+            <span class="flex-1"></span>
+            <span class="font-medium">{gettext("by %{author}", author: package[:author])}</span>
+          </div>
+
+          <div class="mt-2.5 flex items-center gap-2">
+            <span class="font-['Space_Grotesk'] text-[10px] font-semibold text-[#6d6a63]">
+              {package[:category]}
+            </span>
+            <span class="flex-1"></span>
+            <span
+              :if={package[:installed?]}
+              class="inline-flex flex-none items-center gap-[5px] rounded-[7px] bg-[#e6f6ee] px-2.5 py-[5px] text-[10.5px] font-bold text-[#177a53]"
+            >
+              <.icon name={:check} size={11} /> {gettext("Installed")}
+            </span>
+            <%!-- WHERE THIS INSTALL LANDS, asked at the moment of installing. A master can share a
+                  package with every site or keep it to the one they are editing, and the two
+                  outcomes are far enough apart to be worth a deliberate click rather than a mode set
+                  earlier in the panel and half-remembered. A tenant has one answer, so they get a
+                  button and no question. `UiKitHandler.install_scope/2` reconciles either against
+                  the actor — this is the affordance, never the guard. --%>
+            <div
+              :if={!package[:installed?] && @registry_master?}
+              class="relative flex-none"
+              phx-click-away={menu_close("#pb-pkg-install-menu-#{package.id}")}
+            >
+              <button
+                type="button"
+                id={"pb-pkg-install-#{package.id}"}
+                phx-click={menu_toggle("#pb-pkg-install-menu-#{package.id}")}
+                aria-haspopup="menu"
+                class="inline-flex h-[29px] items-center gap-1.5 rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] pl-3 pr-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+              >
+                <.icon name={:download} size={11} /> {gettext("Install")}
+                <.icon name={:chevron_down} size={11} />
+              </button>
+              <div
+                id={"pb-pkg-install-menu-#{package.id}"}
+                role="menu"
+                class="absolute right-0 top-[34px] z-[70] hidden w-[210px] rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
+              >
+                <div class="px-2 pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-[0.09em] text-[#6d6a63]">
+                  {gettext("Install into")}
+                </div>
+                <button
+                  :for={
+                    {value, label, hint, glyph} <- [
+                      {"site", gettext("This site"), gettext("Only the site you are editing"),
+                       :window},
+                      {"global", gettext("All sites"), gettext("Shared across every site"), :shield}
+                    ]
+                  }
+                  type="button"
+                  role="menuitem"
+                  id={"pb-pkg-install-#{value}-#{package.id}"}
+                  phx-click={
+                    menu_close("#pb-pkg-install-menu-#{package.id}") |> JS.push("install_package")
+                  }
+                  phx-value-package={package.id}
+                  phx-value-scope={value}
+                  class="flex w-full items-start gap-2 rounded-[9px] px-2 py-[7px] text-left hover:bg-[#f7f6fd]"
+                >
+                  <span class="mt-[1px] grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f2f1fc] text-[#4f4bcc]">
+                    <.icon name={glyph} size={12} />
+                  </span>
+                  <span class="min-w-0">
+                    <span class="block text-[11.5px] font-bold text-[#3a382f]">{label}</span>
+                    <span class="mt-[1px] block text-[10px] font-medium leading-[1.45] text-[#6d6a63]">
+                      {hint}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <button
+              :if={!package[:installed?] && !@registry_master?}
+              type="button"
+              id={"pb-pkg-install-#{package.id}"}
+              phx-click="install_package"
+              phx-value-package={package.id}
+              phx-value-scope="site"
+              class="inline-flex h-[29px] flex-none items-center gap-1.5 rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-3 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+            >
+              <.icon name={:download} size={11} /> {gettext("Install")}
+            </button>
+          </div>
+        </article>
+      </div>
+    </div>
+    """
+  end
+
+  defp studio_settings(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-4 pt-3">
+      <div class="rounded-[13px] border border-[#e8e6f8] bg-[#f7f6fd] p-[13px]">
+        <div class="flex items-center gap-[9px]">
+          <span class="grid size-7 flex-none place-items-center rounded-[9px] bg-[#e4e2f7] text-[#4f4bcc]">
+            <.icon name={:key} size={15} />
+          </span>
+          <div class="min-w-0">
+            <div class="text-[12.5px] font-bold text-[#2e2b6b]">{gettext("License token")}</div>
+            <div class="mt-0.5 text-[10.5px] font-medium text-[#7d79c4]">
+              {gettext("Unlocks Pro presets and packages")}
+            </div>
+          </div>
+        </div>
+
+        <%!-- Read-only on purpose. A licence token is a credential, and a field that takes one here
+              would be a field that throws it away: the token lives in Settings, which is where it is
+              stored, scoped and audited. --%>
+        <input
+          type="text"
+          id="pb-license-token"
+          value={@license_token}
+          readonly
+          placeholder="mk_live_••••••••••••"
+          class="mt-3 h-10 w-full cursor-default rounded-[10px] border border-[#dcdbf5] bg-white px-3 font-['Space_Grotesk'] text-[12px] font-medium text-[#1b1a18] outline-none"
+        />
+
+        <div class="mt-2.5 flex items-center gap-2">
+          <span
+            :if={@license_token != ""}
+            class="inline-flex items-center gap-[5px] text-[10px] font-bold text-[#177a53]"
+          >
+            <span class="size-1.5 rounded-full bg-[#1f9d6b]"></span>{gettext(
+              "Verified · Pro unlocked"
+            )}
+          </span>
+          <span :if={@license_token == ""} class="text-[10px] font-semibold text-[#6d6a63]">
+            {gettext("Not connected")}
+          </span>
+          <span class="flex-1"></span>
+          <.link
+            navigate="/admin/dashboard/settings"
+            class="inline-flex h-[31px] flex-none items-center rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-3.5 text-[11px] font-bold text-white"
+          >
+            {(@license_token == "" && gettext("Connect")) || gettext("Change")}
+          </.link>
+        </div>
+      </div>
+
+      <div>
+        <div class="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("Registry source")}
+        </div>
+        <.form for={%{}} as={:registry} id="pb-registry-source-form" phx-change="registry_source">
+          <div class="relative">
+            <select
+              name="registry[source]"
+              class="h-10 w-full appearance-none rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-3 pr-[30px] font-['Space_Grotesk'] text-[12px] font-semibold text-[#3a382f] outline-none"
+            >
+              <option
+                :for={source <- registry_sources()}
+                value={source}
+                selected={@registry_source == source}
+              >
+                {(source == "self-hosted" && gettext("self-hosted")) || source}
+              </option>
+            </select>
+            <.icon
+              name={:chevron_down}
+              size={13}
+              class="pointer-events-none absolute right-[11px] top-1/2 -translate-y-1/2 text-[#a8a5a0]"
+            />
+          </div>
+        </.form>
+      </div>
+
+      <div>
+        <div class="mb-2.5 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+          {gettext("Options")}
+        </div>
+        <div class="flex flex-col">
+          <%!-- Real switches over the site's own settings, not decoration: each one is read back
+                through `MishkaCmsCore.Settings` on the next render. --%>
+          <div
+            :for={{key, label, note} <- studio_options()}
+            class="flex items-center gap-2.5 border-b border-[#f4f3ee] py-2.5 last:border-b-0"
+          >
+            <span class="min-w-0 flex-1">
+              <span class="block text-[11.5px] font-semibold text-[#3a382f]">{label}</span>
+              <span class="mt-0.5 block text-[10px] font-medium text-[#6d6a63]">{note}</span>
+            </span>
+            <button
+              type="button"
+              id={"pb-studio-opt-#{key}"}
+              phx-click="studio_option"
+              phx-value-key={key}
+              role="switch"
+              aria-checked={to_string(@studio_options[key])}
+              class={[
+                "flex h-[23px] w-10 flex-none items-center rounded-full px-[3px] transition-colors",
+                (@studio_options[key] && "justify-end bg-[#5b57d6]") || "justify-start bg-[#d9d7d0]"
+              ]}
+            >
+              <span class="size-[17px] rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,.22)]"></span>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  @doc false
+  # Presets and packages come from whatever `Marketplace` adapter is configured. Until a host
+  # configures a real one, the cards below are the shipped SAMPLE catalogue — and Install answers
+  # truthfully that it cannot fetch them. Saying so above the cards is the difference between a demo
+  # and a lie; the tokens and snippets tabs need no such note because they are this site's own data.
+  defp sample_catalogue?,
+    do: Marketplace.adapter() == MishkaCmsCore.Runtime.PageBuilder.Marketplace.Mock
+
+  defp sample_catalogue_note(assigns) do
+    ~H"""
+    <MishkaCmsCore.CoreComponents.tip id="pb-sample-catalogue" class="mb-3">
+      <span class="font-bold">{gettext("Sample catalogue.")}</span>
+      <.sentence
+        text={
+          gettext_noop(
+            "No registry is connected, so these are examples of what a registry would offer — Install and Apply have nothing to fetch. Point the Studio at a real one under %{setting}."
+          )
+        }
+        parts={%{setting: {"span", "font-bold", gettext("Settings → Registry source")}}}
+      />
+    </MishkaCmsCore.CoreComponents.tip>
+    """
+  end
+
+  defp registry_sources, do: ~w(registry.mishka.tools hex.pm/chelekom self-hosted)
+
+  # Described rather than switched: each of these changes how tokens are compiled for every site, so
+  # it belongs to the theme's own settings, not to a page being edited.
+  @doc """
+  The Studio's three theme options: setting key, label and the sentence under it.
+
+  Public because `BuilderLive` writes them through `MishkaCmsCore.Settings` and has to know the same
+  keys this draws — one list, two readers.
+  """
+  @spec studio_options() :: [{String.t(), String.t(), String.t()}]
+  def studio_options do
+    [
+      {"studio.dark_pair", gettext("Generate dark pair"),
+       gettext("Auto-derive a dark value for every color token")},
+      {"studio.sync_tokens", gettext("Sync tokens across sites"),
+       gettext("Push token edits to every site using this theme")},
+      {"studio.lock_tokens", gettext("Lock tokens"),
+       gettext("Prevent per-element color overrides")}
+    ]
+  end
+
+  # The site's OWN tokens — declarations in its theme stylesheet, which `Tokens.put/4` writes back to
+  # — and the marketplace's sample set only when it declares none. A site with no theme installed
+  # then sees a demonstration of the panel rather than an empty one; a site with a theme sees itself.
+  @doc """
+  The site's own design tokens, falling back to whatever the marketplace adapter offers.
+
+  Public because `BuilderLive` reads it off the click that opens the Studio rather than during the
+  sheet's render — parsing every stylesheet the site has is not something to do while painting.
+  """
+  @spec studio_token_list(String.t() | nil) :: [
+          MishkaCmsCore.Runtime.PageBuilder.Marketplace.Token.t()
+        ]
+  def studio_token_list(site_id) do
+    case Tokens.list(site_id) do
+      [] -> Marketplace.tokens(site_id)
+      tokens -> tokens
+    end
+  end
+
+  defp studio_tokens(assigns) do
+    ~H"""
+    <div class="pt-3">
+      <div class="mb-3 flex items-start gap-2">
+        <div class="min-w-0 flex-1">
+          <div class="text-[12.5px] font-bold text-[#17161a]">{gettext("Design tokens")}</div>
+          <div class="mt-0.5 text-[10.5px] font-medium text-[#6d6a63]">
+            {gettext("One source of truth — every component reads from these.")}
+          </div>
+        </div>
+        <.link
+          navigate="/admin/dashboard/runtime/stylesheets"
+          class="inline-flex h-7 flex-none items-center gap-[5px] rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-[11px] text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+        >
+          <.icon name={:plus} size={12} /> {gettext("New token")}
+        </.link>
+      </div>
+
+      <div class="mb-2.5 flex gap-0.5 rounded-[9px] bg-[#f2f1ec] p-[3px]">
+        <button
+          :for={{key, label, _file, hint} <- @formats}
+          type="button"
+          id={"pb-tokfmt-#{key}"}
+          phx-click="token_format"
+          phx-value-format={key}
+          title={translate(hint)}
+          class={[
+            "h-7 min-w-0 flex-1 truncate rounded-[7px] px-1.5 text-[10px] font-bold",
+            (@token_format == key && "bg-white text-[#17161a] shadow-[0_1px_2px_rgba(30,28,24,.12)]") ||
+              "text-[#6d6a63]"
+          ]}
+        >
+          {translate(label)}
+        </button>
+      </div>
+
+      <%!-- The list, its category chips and its load-more are a Gervaz table now — same markup,
+            drawn by `MishkaCmsCoreWeb.Templates.StudioTokens`, which owns the whole of it. The
+            heading and the export block above and below stay here: neither is a table. --%>
+      <.live_component
+        module={MishkaGervaz.Table.Web.Live}
+        id="pb-tokens-table"
+        resource={MishkaCmsCore.Runtime.PageBuilder.DesignToken}
+        current_user={@current_user}
+        url_state={@tokens_url_state}
+      />
+
+      <.token_export {assigns} />
     </div>
     """
   end
@@ -11553,14 +12631,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       {"layers", gettext("Layers")},
       {"inspector", gettext("Inspector")},
       {"assets", gettext("Assets")},
+      {"studio", gettext("Studio")},
       {"palette", gettext("Search")},
       {"dir", String.upcase(assigns.dir)}
     ]
   end
 
   defp sheet_width_class(:assets), do: "w-[620px]"
+  defp sheet_width_class(:studio), do: "w-[520px]"
   defp sheet_width_class(_sheet), do: "w-[470px]"
 
+  defp sheet_title(:studio), do: gettext("Studio")
   defp sheet_title(:assets), do: gettext("Assets")
   defp sheet_title(_sheet), do: ""
 

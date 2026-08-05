@@ -39,6 +39,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.MediaCategory
+  alias MishkaCmsCore.Runtime.PageBuilder.Classes
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
@@ -54,16 +55,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsCore.Runtime.States.EditorSessionState
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
+  alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Runtime.PageBuilder.DesignToken
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Presets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
   alias MishkaCmsCore.Runtime.PageBuilder.Tokens
+  alias MishkaCmsCore.Runtime.PageBuilder.Snippets
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
@@ -408,6 +414,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp own_session_or_open(section, params, record, actor, connected?),
     do: open_session(section, params, record, actor, connected?)
 
+  # The palette is read once when the session opens, so a component installed FROM the Studio would
+  # not appear in it until a reload. Re-reading it here is what makes Install mean "you can place
+  # this now".
+  defp reload_palette(socket) do
+    params = %{"site_id" => socket.assigns.editor.site_id}
+
+    case palette_components(socket.assigns[:current_user], params, socket.assigns.editor) do
+      {:ok, components} ->
+        {:ok, _editor} = EditorSession.put_components(socket.assigns.token, components)
+        sync_session(socket, socket.assigns.token)
+
+      # Already logged. The palette the author is looking at is the one they had a moment ago, which
+      # is a better answer than emptying it because a re-read after an install did not land.
+      {:error, _reason} ->
+        put_flash(
+          socket,
+          :error,
+          gettext("Could not refresh the component list — try again in a moment.")
+        )
+    end
+  end
+
   # The palette is 183 rows carrying every component's template, attrs, slots, helpers AND its
   # examples — 3.4 MB and 1.6 seconds of it, measured. It used to be read HERE, synchronously, on
   # both the dead render and the connected mount: three seconds before the editor drew anything, for
@@ -539,8 +567,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:find, fn -> "" end)
     |> assign_new(:replace, fn -> "" end)
     |> assign_new(:find_hits, fn -> [] end)
+    |> assign_new(:class_draft, fn -> %{} end)
+    |> assign_new(:class_error, fn -> nil end)
     |> assign_new(:component_presets, fn -> %{} end)
     |> assign_new(:presets_count, fn -> -1 end)
+    |> assign_new(:classes, fn ->
+      Classes.all(socket.assigns[:current_user], socket.assigns.editor.site_id)
+    end)
     |> assign_new(:source_modal, fn -> false end)
     |> assign_new(:source_draft, fn -> nil end)
     # WHETHER THIS DEPLOYMENT TAKES CODE. Whoever opened this builder may write its document's code
@@ -612,6 +645,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:palette_query, fn -> "" end)
     |> assign_new(:palette_cat, fn -> "all" end)
     |> assign_new(:attr_form, fn -> false end)
+    |> assign_new(:tokens_revision, fn -> 0 end)
+    |> assign_new(:snippets_revision, fn -> 0 end)
+    |> assign_new(:studio_tab, fn -> :tokens end)
+    |> assign_new(:studio_scope, fn -> :all end)
+    |> assign_new(:studio_cat, fn -> "all" end)
+    |> assign_new(:studio_query, fn -> "" end)
     |> assign_new(:reload_confirm, fn -> false end)
     # Where the author was going when the editor stopped them, and the only thing that renders the
     # question. Nil is the ordinary state: nothing to lose, or nobody leaving.
@@ -619,6 +658,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:autosave_failed?, fn -> false end)
     # Which property the Inspector should land on, set when a property row in the tree is clicked.
     |> assign_new(:focus_attr, fn -> nil end)
+    |> assign_studio_settings()
+    |> assign_new(:token_format, fn -> :tw end)
     # Loading, not `ok([])`. The rail is only ever drawn inside the Assets sheet and opening that
     # sheet is what reads the folders, so an empty ok here was the editor answering "this site has no
     # folders" for the length of the query it had not run yet — the one answer the reader cannot tell
@@ -640,6 +681,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:draft_label, fn -> session_draft_label() end)
     |> assign_new(:dev_mode?, fn -> false end)
     |> assign_new(:theme, fn -> "light" end)
+    # The Studio chip counts the tokens this site added on top of the theme's own. It asked with no
+    # site at all, which reads the GLOBAL sheets — the one place a site's own token can never be —
+    # and `assign_new` meant it was answered once at mount and never again, so editing a token left
+    # the count behind. Counted off the sheet load the Studio already does, in `handle_async`.
+    |> assign_new(:studio_badge, fn -> 0 end)
     |> assign_new(:stage, fn -> :draft end)
     |> assign_new(:mob_panel, fn -> :canvas end)
     # A PLUGIN'S ENTRY NAMES WHO MAY SEE IT (`MishkaCmsCore.Builder.Descriptor.permitted/2`), and an
@@ -656,11 +702,54 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # nothing and fires every plugin a second time, with a seed that disagrees with the one on
     # screen — which is what it used to do.
     |> assign_new(:goto, fn -> goto_targets(socket.assigns[:current_user]) end)
+    # A MASTER has no `site_id` of their own, which is exactly what lets them install for every
+    # site. A tenant is scoped by the same field, so the two questions share one answer.
+    |> assign_new(:registry_master?, fn -> master?(socket.assigns[:current_user]) end)
     # This site by default, even for a master: the editor is open on one site, and sharing a
     # package with every site on the server should be a thing someone chose.
     |> assign_new(:block_cat, fn -> "all" end)
     |> assign_new(:block_query, fn -> "" end)
   end
+
+  # THE ACTOR IS THE SESSION'S, as it is everywhere else that writes runtime rows. The scope this
+  # site_id came from is already the actor's own — `UiKitHandler.install_scope/2`, above — and now
+  # the WRITE is theirs too, so the component's policy answers for them and its history says who
+  # installed it instead of nobody.
+  defp install_package(socket, id, site_id) do
+    case Marketplace.install(:package, id, site_id, socket.assigns[:current_user]) do
+      {:ok, %{installed: [_only]}} ->
+        {:noreply,
+         socket |> put_flash(:info, gettext("%{id} installed.", id: id)) |> reload_palette()}
+
+      {:ok, %{installed: installed}} ->
+        extra = length(installed) - 1
+
+        {:noreply,
+         socket
+         |> put_flash(
+           :info,
+           gettext("%{id} installed, with %{extra} it depends on.", id: id, extra: extra)
+         )
+         |> reload_palette()}
+
+      {:ok, _other} ->
+        {:noreply,
+         socket |> put_flash(:info, gettext("%{id} installed.", id: id)) |> reload_palette()}
+
+      :ok ->
+        {:noreply,
+         socket |> put_flash(:info, gettext("%{id} installed.", id: id)) |> reload_palette()}
+
+      {:error, {:not_available, message}} ->
+        {:noreply, put_flash(socket, :error, message)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  defp master?(%{site_id: nil}), do: true
+  defp master?(_actor), do: false
 
   # The palette's "Go to" group is the admin's real menu, already permission-filtered by
   # `MishkaCmsCore.Sidebar.menu/1` — so it can never offer a page this user would be refused, and it
@@ -695,6 +784,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     socket
     |> assign(:reload_confirm, false)
     |> push_event("pb:reload-canvas", %{})
+  end
+
+  defp assign_studio_settings(socket) do
+    site_id = socket.assigns.editor.site_id
+
+    options =
+      Map.new(Panels.studio_options(), fn {key, _label, _note} ->
+        {key, Settings.get(key, false, site_id) == true}
+      end)
+
+    socket
+    |> assign(:studio_options, options)
+    |> assign(:license_token, Settings.get("studio.license_token", "", site_id))
+    |> assign(
+      :registry_source,
+      Settings.get("studio.registry_source", "registry.mishka.tools", site_id)
+    )
+    |> assign(:applied_preset, Settings.get("studio.applied_preset", nil, site_id))
   end
 
   # Two levels open on arrival — the roots and their children — because a tree that starts fully
@@ -774,6 +881,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign(:can_undo?, editor.past != [])
     |> assign(:can_redo?, editor.future != [])
     |> assign(:clipboard_label, editor.clipboard_label)
+    |> assign_tokens_url_state()
+    |> assign_snippets_url_state()
+    |> assign_snippet_defaults()
+    |> assign_snippet_source()
     |> draft_the_change(editor)
   end
 
@@ -796,6 +907,106 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       false ->
         socket |> assign(:drafted_revision, editor.revision) |> autosave()
     end
+  end
+
+  # The Studio's tokens table, scoped the same way the draft picker is: everything it needs travels
+  # in `path_params`. `revision` is what makes an edited token reappear — the table reads again when
+  # the state it was handed changes, and a token write changes nothing it is subscribed to.
+  # Read with defaults rather than destructured: this runs alongside the drafts state, before
+  # `assign_defaults/1` has put `token_format` and `tokens_revision` on the socket.
+  defp assign_tokens_url_state(socket) do
+    editor = socket.assigns.editor
+    format = Map.get(socket.assigns, :token_format, :tw)
+    revision = Map.get(socket.assigns, :tokens_revision, 0)
+
+    # `path_params` and nothing else. The category chips are the TABLE's own filters, the sort is
+    # its `default_sort`, and its depth is whatever the reader built with "load more" — claiming any
+    # of the three here would reset it on every revision bump, which is what sent a 92-row list back
+    # to 30 and un-selected the chip each time a token was edited.
+    assign(socket, :tokens_url_state, %{
+      path_params: %{
+        site_id: editor.site_id,
+        token_format: format,
+        revision: revision,
+        # The chips count every token, not the loaded page — so they cannot be counted from the
+        # table's own rows. Counting them means parsing the site's stylesheets, which is 33 ms, so
+        # it happens here once per revision rather than on each of the table's renders.
+        token_categories: Map.get(socket.assigns, :token_categories, [])
+      }
+    })
+  end
+
+  defp assign_token_categories(socket) do
+    categories =
+      %{path_params: %{site_id: socket.assigns.editor.site_id}}
+      |> DesignToken.rows()
+      |> Panels.token_categories()
+
+    assign(socket, :token_categories, categories)
+  end
+
+  # The snippet list is a Gervaz table, so only `path_params` travels — the scope chips are the
+  # table's own filter and its depth is whatever the reader built. The keys are PREFIXED because
+  # Gervaz turns a path param named after an attribute into an equality filter, and `site_id == X`
+  # would drop exactly the global snippets this list exists to include.
+  defp assign_snippets_url_state(socket) do
+    %{editor: editor, record: record} = socket.assigns
+
+    assign(socket, :snippets_url_state, %{
+      path_params: %{
+        editor_section: editor.section,
+        editor_document_id: record && record.id,
+        revision: Map.get(socket.assigns, :snippets_revision, 0)
+      }
+    })
+  end
+
+  # What the save box needs that the author does not type. Deliberately NOT the markup: `defaults`
+  # rebuilds the form when it changes, and the markup changes on every canvas edit.
+  defp assign_snippet_defaults(socket) do
+    %{editor: editor, record: record} = socket.assigns
+    selected = socket.assigns[:selected_node]
+
+    assign(socket, :snippet_defaults, %{
+      section: editor.section,
+      # NOT `site_id` or `document_id`. Every default key is merged into the submit params,
+      # replacing anything blank — so a deliberate "no site", which is what "All sites" means, would
+      # be refilled with this site and the global snippet would quietly become a local one, and the
+      # "no document" a snippet for every site keeps would be refilled with this site's page.
+      editor_document_id: record && record.id,
+      editor_site_id: editor.site_id,
+      # The old implicit rule, kept as the PRESELECTED choice rather than the only one: a selection
+      # belongs to its own page, a whole page has nowhere else to go but shared.
+      visibility: (selected && record && "page") || "shared",
+      selection_tag: (selected && Panels.selection_tag(selected)) || gettext("whole page"),
+      save_label:
+        (selected && gettext("Save selection as snippet")) ||
+          gettext("Save this page as a snippet")
+    })
+  end
+
+  # The markup itself, recomputed whenever the tree or the selection moves. It reaches the form
+  # through a hidden input rather than through `defaults`, so it can change freely without
+  # rebuilding the form under a half-typed name.
+  defp assign_snippet_source(socket) do
+    assign(
+      socket,
+      :snippet_source,
+      snippet_source(socket.assigns.editor, socket.assigns[:selected_node])
+    )
+  end
+
+  defp refresh_snippets(socket) do
+    socket
+    |> update(:snippets_revision, &(&1 + 1))
+    |> assign_snippets_url_state()
+  end
+
+  defp refresh_tokens(socket) do
+    socket
+    |> update(:tokens_revision, &(&1 + 1))
+    |> assign_token_categories()
+    |> assign_tokens_url_state()
   end
 
   # Selecting on the canvas has to reveal the node in the layers tree, or the two panels disagree
@@ -824,6 +1035,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp blank_to_nil("__all__"), do: nil
   defp blank_to_nil(id), do: id
 
+  # THE SHEET OPENS, AND THEN ITS CONTENTS ARRIVE. Everything the Studio shows was read on the way
+  # in: `assign_token_categories/1` parses every stylesheet the site has, and the render itself
+  # called `Marketplace.packages/1`, which parses the kit bundles — 10.8 MB of JSON for Chelekom
+  # alone. Both ran before anything could paint, so pressing Studio did nothing at all for as long
+  # as they took and then the finished sheet appeared.
+  #
+  # Off the click now, the way the Assets sheet's folders already are. The sheet opens at once and
+  # draws a skeleton the shape of what is coming; `handle_async(:studio_data, …)` fills it in.
+  defp load_sheet(socket, :studio) do
+    socket
+    |> assign(:studio_data, nil)
+    |> assign_tokens_url_state()
+    |> load_studio_async()
+  end
+
   # The sheet's own sidebar is the folder list, so what it needs loading is CATEGORIES — the files
   # themselves are the Gervaz table's business and it fetches its own page.
   defp load_sheet(socket, :assets) do
@@ -836,6 +1062,37 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   defp load_sheet(socket, _sheet), do: socket
+
+  # Only while the sheet is open. Every other route into these handlers — a deep link, a restored
+  # session — leaves the assigns alone, and asking for a catalogue nobody is looking at is a
+  # stylesheet parse and a bundle parse for nothing.
+  defp reload_studio_if_filtered(socket) do
+    case socket.assigns[:sheet] do
+      :studio -> load_studio_async(socket)
+      _elsewhere -> socket
+    end
+  end
+
+  # Read together because they are drawn together, and a sheet that filled in one tab at a time
+  # would flicker four times instead of once. The category is part of the question for two of them,
+  # so changing it asks again.
+  defp load_studio_async(socket) do
+    site_id = socket.assigns.editor.site_id
+    category = Map.get(socket.assigns, :studio_cat, "all")
+
+    MishkaGervaz.Messages.start_async(socket, :studio_data, fn ->
+      tokens = Panels.studio_token_list(site_id)
+
+      %{
+        tokens: tokens,
+        token_categories:
+          %{path_params: %{site_id: site_id}} |> DesignToken.rows() |> Panels.token_categories(),
+        presets: Marketplace.presets(%{category: category}),
+        packages: Marketplace.packages(%{category: category, site_id: site_id}),
+        package_categories: Marketplace.package_categories(%{site_id: site_id})
+      }
+    end)
+  end
 
   # SILENTLY, which is the whole point of not reusing `load_sheet/2`. `assign_async/3` puts the
   # rail back into its loading state, so every upload would blink the folders away and back for the
@@ -1333,6 +1590,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_info({:form_cancelled, MediaCategory}, socket),
     do: {:noreply, assign(socket, :folder_form?, false)}
 
+  def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.Snippet{} = snippet}, socket) do
+    {:noreply,
+     socket
+     |> put_flash(:info, gettext("Saved “%{name}”.", name: snippet.name))
+     |> refresh_snippets()}
+  end
+
+  # The save box has no error slot, so a refused save says so the way it always has.
+  def handle_info({:snippet_error, message}, socket),
+    do: {:noreply, put_flash(socket, :error, message)}
+
   # A GERVAZ BULK ACTION REPORTS BY MESSAGE, not by return value — `BulkActionHandler` sends
   # `{:put_flash, level, message}` to the LiveView, because the work happens in a LiveComponent and
   # a component cannot put a flash. Without this clause the catch-all below eats it and archiving
@@ -1374,6 +1642,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # message; a failure means the canvas compiles on demand exactly as it always did.
   def handle_async(:warm_components, {:ok, _count}, socket), do: {:noreply, socket}
   def handle_async(:warm_components, {:exit, _reason}, socket), do: {:noreply, socket}
+
+  # `assign_tokens_url_state/1` again because the chips' counts are read off the categories, and on
+  # the first open there were none to read when it last ran.
+  def handle_async(:studio_data, {:ok, data}, socket) do
+    {:noreply,
+     socket
+     |> assign(:studio_data, data)
+     |> assign(:token_categories, data.token_categories)
+     |> assign(:studio_badge, Enum.count(data.tokens, & &1.custom?))
+     |> assign_tokens_url_state()}
+  end
+
+  # An empty Studio is survivable and a crashed editor is not — the same trade `Marketplace.Kits`
+  # makes when a bundle will not resolve.
+  def handle_async(:studio_data, {:exit, _reason}, socket),
+    do: {:noreply, assign(socket, :studio_data, Panels.empty_studio_data())}
 
   def handle_async(:style_tokens, {:ok, tokens}, socket),
     do: {:noreply, assign(socket, :style_tokens, tokens)}
@@ -2061,7 +2345,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("open_sheet", %{"sheet" => sheet}, socket) do
-    sheets = [:none, :assets]
+    sheets = [:none, :studio, :assets]
     opened = tab_atom(sheet, sheets)
 
     # The Record-history button always lands on Record history. Only the routes that mean "drafts"
@@ -2070,6 +2354,61 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      socket
      |> assign(sheet: opened, history_tab: :history)
      |> load_sheet(opened)}
+  end
+
+  # Switching tab resets the category: "media" means something different to a package than it does to
+  # a token, so carrying the filter across would silently hide most of the next catalogue.
+  # ASKED OF THE SAME LIST THE BUTTONS ARE DRAWN FROM. `Panels.studio_tabs/0` is
+  # `Events.collect(:studio_tabs, …)`, so an extension can add one — and this list was written out
+  # again by hand. `tab_atom/2` falls back to the head of what it is given, so a plugin's tab drew a
+  # button that silently landed on Tokens, with no error to notice.
+  def handle_event("studio_tab", %{"tab" => tab}, socket) do
+    tabs = Enum.map(Panels.studio_tabs(socket.assigns[:current_user]), & &1.key)
+
+    {:noreply,
+     socket
+     |> assign(studio_tab: tab_atom(tab, tabs), studio_cat: "all")
+     |> reload_studio_if_filtered()}
+  end
+
+  def handle_event("insert_snippet", %{"id" => id}, socket) do
+    case Snippets.source(id, snippet_actor(socket)) do
+      nil -> {:noreply, put_flash(socket, :error, gettext("That snippet no longer exists."))}
+      source -> place_template(socket, source)
+    end
+  end
+
+  # Deleting is scoped by who is asking, not by the id in the click: a tenant may delete its own
+  # site's snippets and nothing else — not a global one, and not another site's.
+  def handle_event("delete_snippet", %{"id" => id}, socket) do
+    case Snippets.delete(id, snippet_actor(socket)) do
+      :ok ->
+        {:noreply, socket |> put_flash(:info, gettext("Snippet deleted.")) |> refresh_snippets()}
+
+      {:error, :shared_with_every_site} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("That snippet is shared with every site — only a master can delete it.")
+         )}
+
+      {:error, :forbidden} ->
+        {:noreply, put_flash(socket, :error, gettext("That snippet belongs to another site."))}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, gettext("That snippet is no longer there."))}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  def handle_event("token_format", %{"format" => format}, socket) do
+    socket = assign(socket, :token_format, tab_atom(format, [:tw, :css, :json, :ex]))
+
+    # Each row shows its reference in the selected format, so the table has to be told.
+    {:noreply, assign_tokens_url_state(socket)}
   end
 
   # CLICKS ONLY. Escape belongs to `shortcut("escape", …)`, which is the editor's one keyboard
@@ -2096,7 +2435,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # Four of the mobile tabs are not panels: they open the overlay the top bar has no room for at that
   # width, and leave the canvas showing underneath.
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(assets),
+      when panel in ~w(assets studio),
       do: {:noreply, assign(socket, sheet: String.to_existing_atom(panel), mob_panel: :canvas)}
 
   def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
@@ -2117,6 +2456,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      socket
      |> assign(mob_panel: panel, sheet: :none)
      |> assign_panel_tab(panel)}
+  end
+
+  # The button is real and so is the answer: presets arrive through `Marketplace`, and the adapter
+  # this install has configured is the mock one, which has nothing to apply. Saying so beats a button
+  # that looks live and does nothing.
+  def handle_event("apply_preset", %{"preset" => preset}, socket) do
+    {:noreply,
+     put_flash(
+       socket,
+       :info,
+       gettext(
+         "%{preset} is a marketplace preset. Connect a registry under Studio → Settings to apply it.",
+         preset: preset
+       )
+     )}
   end
 
   def handle_event("pick", %{"name" => name}, socket), do: arm_or_place(socket, name)
@@ -2209,6 +2563,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, socket}
   end
 
+  def handle_event("studio_scope", %{"scope" => scope}, socket),
+    do: {:noreply, assign(socket, :studio_scope, tab_atom(scope, [:all, :downloaded, :shop]))}
+
+  # One category filter serves all four catalogues — switching tab resets it, because "media" means
+  # something different to a package than it does to a token.
+  def handle_event("studio_cat", %{"cat" => cat}, socket),
+    do: {:noreply, socket |> assign(:studio_cat, cat) |> reload_studio_if_filtered()}
+
+  def handle_event("studio_query", %{"value" => value}, socket),
+    do: {:noreply, assign(socket, :studio_query, value)}
+
   # Reloading the frame is safe for the document — the canvas re-reads the same session — but not for
   # whatever is mid-edit in the browser, so unsaved work earns a question first.
   def handle_event("reload_canvas", _params, %{assigns: %{dirty?: true}} = socket),
@@ -2230,6 +2595,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     case socket.assigns.editor.picked do
       nil -> {:noreply, open_inspector(socket, id, params["prop"])}
       picked -> place_or_select(picked, id, socket)
+    end
+  end
+
+  # A design token is a declaration in the site's own theme stylesheet, so setting one rewrites that
+  # row and recompiles the site's CSS. Every component that resolves through the token changes at
+  # once — which is the whole reason this lives in the Studio rather than on an element.
+  def handle_event("set_token", %{"key" => key, "value" => value}, socket) do
+    editor = socket.assigns.editor
+
+    with {:ok, value} <-
+           Events.before_token_set(%{
+             key: key,
+             value: value,
+             site_id: editor.site_id,
+             site_name: editor.site_name,
+             actor_id: actor_id(socket)
+           }) do
+      set_token(socket, editor, key, value)
+    else
+      {:error, message} -> {:noreply, put_flash(socket, :error, message)}
     end
   end
 
@@ -2423,6 +2808,51 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("save_and_reload", params, socket) do
     {:noreply, saved} = handle_event("save", params, socket)
     {:noreply, reload_canvas(saved)}
+  end
+
+  # The Studio's switches are real settings, written through the same actor-aware façade the settings
+  # page uses — so a tenant cannot write another site's row and a master's write is audited.
+  def handle_event("studio_option", %{"key" => key}, socket) do
+    site_id = socket.assigns.editor.site_id
+    value = !Map.get(socket.assigns.studio_options, key, false)
+
+    case Settings.put_as(socket.assigns[:current_user], key, value, site_id: site_id) do
+      {:ok, _value} -> {:noreply, assign_studio_settings(socket)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  def handle_event("registry_source", %{"registry" => %{"source" => source}}, socket) do
+    site_id = socket.assigns.editor.site_id
+
+    case Settings.put_as(socket.assigns[:current_user], "studio.registry_source", source,
+           site_id: site_id
+         ) do
+      {:ok, _value} -> {:noreply, assign_studio_settings(socket)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
+  # Installing brings the component's dependency closure with it, so the flash names what actually
+  # arrived rather than only what was clicked — picking `card` installs `icon` too, and a count that
+  # does not match the button is the kind of surprise that reads as a bug.
+  # THE SCOPE COMES FROM THE ACTOR, not from the event. A tenant who never sees the control can still
+  # emit this click with `scope: "global"`, and `install_kit!/2` writes `site_id` straight through —
+  # their components would land on every site on the server, removable only by a master.
+  def handle_event("install_package", %{"package" => id} = params, socket) do
+    requested =
+      case Map.get(params, "scope") do
+        "global" -> :global
+        _this_site -> socket.assigns.editor.site_id
+      end
+
+    case UiKitHandler.install_scope(socket.assigns[:current_user], requested) do
+      {:ok, site_id} ->
+        install_package(socket, id, site_id)
+
+      {:error, :forbidden} ->
+        {:noreply, put_flash(socket, :error, gettext("You cannot install for that site."))}
+    end
   end
 
   # SAME FLOW AS A COMPONENT, THROUGH THE SAME FIELD. The pick lives in the SESSION so the canvas
@@ -2832,6 +3262,62 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("clear_marks", _params, socket) do
     {:ok, _editor} = EditorSession.clear_marks(socket.assigns.token)
     {:noreply, socket}
+  end
+
+  # REUSABLE CLASSES. Style once, apply to twenty, change in one place — the half the per-element
+  # style panel cannot do. See `MishkaCmsCore.Runtime.PageBuilder.Classes`.
+  def handle_event("save_class", %{"name" => name, "utilities" => utilities}, socket) do
+    case Events.before_class_save(%{
+           name: name,
+           utilities: utilities,
+           site_id: site_id(socket),
+           actor_id: actor_id(socket)
+         }) do
+      :ok -> save_class(socket, name, utilities)
+      {:error, message} -> {:noreply, assign(socket, :class_error, message)}
+    end
+  end
+
+  def handle_event("edit_class", %{"name" => name}, socket) do
+    {:noreply,
+     assign(socket,
+       class_draft: Enum.find(socket.assigns.classes, &(&1.name == name)),
+       class_error: nil
+     )}
+  end
+
+  def handle_event("delete_class", %{"name" => name}, socket) do
+    case Classes.delete(socket.assigns.current_user, site_id(socket), name) do
+      {:ok, classes} ->
+        {:noreply, assign(socket, classes: classes, class_draft: %{}, class_error: nil)}
+
+      {:error, reason} ->
+        {:noreply, assign(socket, :class_error, human(reason))}
+    end
+  end
+
+  # APPENDED, never replacing. An element's own utilities are the exceptions to the shared class and
+  # have to survive it — and putting the same class on twice would be noise in the markup.
+  def handle_event("apply_class", %{"name" => name}, socket) do
+    node = Tree.get(socket.assigns.editor.tree, socket.assigns.selection)
+
+    case node && with_class(node, name) do
+      nil ->
+        {:noreply, socket}
+
+      {kind, value} ->
+        handle_event(
+          "op",
+          %{
+            "kind" => "set_attr",
+            "node_id" => node.id,
+            "name" => "class",
+            "value" => value,
+            "value_kind" => to_string(kind)
+          },
+          socket
+        )
+    end
   end
 
   # FIND AND REPLACE, over the page's words rather than its markup — see
@@ -3564,6 +4050,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp needs_selection(socket),
     do: put_flash(socket, :info, gettext("Select an element on the page first."))
 
+  # Placement follows the same rule as the palette: into the selection when it can hold children,
+  # otherwise beside it, otherwise at the end of the document.
+  # No selection means the whole document, which is what the button says it will do.
+  # Who is asking, for the paths where an id alone is not authority: the snippet is read and deleted
+  # as the signed-in user, whose site and names the snippet's policies hold it to.
+  defp snippet_actor(socket), do: socket.assigns[:current_user]
+
+  defp snippet_source(editor, nil), do: Serializer.serialize(editor.tree)
+
+  defp snippet_source(editor, node) do
+    editor.tree |> Tree.subtree(node.id) |> Serializer.serialize()
+  end
+
+  # THE SAME RULE AS THE PALETTE, because it is the same gesture. A snippet, an example and a
+  # composed component all mean "put this where I am looking", and this path used to answer that by
+  # always dropping the template beside the selection — so a `<section>` snippet inserted while a
+  # heading inside a hero was selected landed inside that hero.
+  defp place_template(socket, template) do
+    case EditorSession.place_template(
+           socket.assigns.token,
+           template,
+           socket.assigns.editor.selection
+         ) do
+      {:ok, _editor} -> {:noreply, socket}
+      {:relocated, _editor, note} -> {:noreply, put_flash(socket, :info, note)}
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+    end
+  end
+
   defp save(socket, stage) do
     case missing_required(socket) ++ missing_slots(socket) do
       [] -> save_whole(socket, stage)
@@ -4001,6 +4516,43 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # it gives a stable, readable id rather than a counter to keep.
   defp hook_id(node_id),
     do: "el-" <> (:erlang.md5(node_id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
+
+  # A design-system plugin gets a say before a token changes: it can normalise the value — snap a
+  # colour to the palette, a length to the scale — or refuse it outright.
+  defp set_token(socket, editor, key, value) do
+    case Tokens.put(
+           socket.assigns.current_user,
+           editor.site_id,
+           "--" <> key,
+           value,
+           editor.site_name
+         ) do
+      {:ok, _token} ->
+        # The table has nothing to subscribe to — a token lives in a stylesheet's CSS text — so the
+        # write bumps the revision and the table reads again.
+        {:noreply, refresh_tokens(socket)}
+
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, token_error(reason))}
+    end
+  end
+
+  # UNDER THE FIELD, AND THE DRAFT STAYS PUT. A refusal here names the utility Tailwind could not
+  # resolve, which is only useful next to the box holding it — and only actionable if the box still
+  # holds what was typed.
+  defp save_class(socket, name, utilities) do
+    case Classes.put(socket.assigns.current_user, site_id(socket), name, utilities) do
+      {:ok, classes} ->
+        {:noreply, assign(socket, classes: classes, class_draft: %{}, class_error: nil)}
+
+      {:error, reason} ->
+        {:noreply,
+         assign(socket,
+           class_draft: %{name: name, utilities: utilities},
+           class_error: human(reason)
+         )}
+    end
+  end
 
   # WHAT THE CODE DRAWER IS ABOUT TO APPLY. A schema or house-style plugin refuses here, before
   # hand-written markup replaces the document.
@@ -4538,6 +5090,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp tab_atom(value, allowed) when is_atom(value),
     do: if(value in allowed, do: value, else: hd(allowed))
 
+  defp token_error(:blank), do: gettext("A token needs a value.")
+  defp token_error(:invalid_value), do: gettext("That is not a value a stylesheet can hold.")
+  defp token_error(:too_long), do: gettext("That value is too long for a token.")
+  defp token_error(:unknown_token), do: gettext("This site does not declare that token.")
+
+  defp token_error(:forbidden),
+    do: gettext("You do not have permission to change design tokens here.")
+
+  defp token_error(%Ash.Error.Forbidden{}),
+    do: gettext("You do not have permission to change design tokens here.")
+
+  defp token_error(_other), do: gettext("The token could not be saved.")
+
   defp clamped(panel, value) do
     {min, max} = Panels.resize_bounds(panel)
     clamp(value, min, max)
@@ -4579,6 +5144,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp to_int(_value), do: 0
 
+  defp site_id(socket), do: socket.assigns.editor.site_id
+
   # THE PALETTE ARRIVES LATE. It is read asynchronously, so the first `assign_editor/2` sees no
   # components and the presets map would stay empty for the whole session — every card dragging the
   # kit's default while a click placed the site's. Keyed on the COUNT rather than the list: keeping
@@ -4599,6 +5166,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
             %{site_id: editor.site_id}
           )
         )
+    end
+  end
+
+  # THE CLASSES THE ELEMENT WEARS, not the text of its class attribute: `class={@variant}` reads as
+  # the literal `@variant` that way, so applying a reusable class wrote that text onto the element
+  # and lost the value the component works out at render time.
+  defp with_class(node, name) do
+    case name in Tree.classes(node) do
+      true -> nil
+      false -> Tree.class_with(node, [name])
     end
   end
 
@@ -4798,6 +5375,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         preview?={@preview?}
         source_modal={@source_modal}
         dev_mode?={@dev_mode?}
+        studio_badge={@studio_badge}
         history_position={@history_position}
         history_total={@history_total}
       />

@@ -142,6 +142,7 @@ defmodule MishkaCmsCore.Runtime.Snippet do
       end
 
       presentation do
+        template MishkaCmsCoreWeb.Templates.StudioSnippets
         ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
 
         # Saving or deleting reloads this table at whatever depth the reader had reached. Without
@@ -178,6 +179,10 @@ defmodule MishkaCmsCore.Runtime.Snippet do
         end
       end
 
+      events do
+        submit MishkaCmsCoreWeb.Forms.SnippetSubmit
+      end
+
       hooks do
         # Two failures are the author's rather than the database's, and both have had their own
         # wording in this panel since it shipped: a snippet with no name is unfindable, and markup
@@ -189,6 +194,10 @@ defmodule MishkaCmsCore.Runtime.Snippet do
             message -> {:halt, tell_editor(message)}
           end
         end
+      end
+
+      presentation do
+        template MishkaCmsCoreWeb.Templates.SnippetForm
       end
     end
   end

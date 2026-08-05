@@ -129,6 +129,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.DesignToken do
       end
 
       presentation do
+        template MishkaCmsCoreWeb.Templates.StudioTokens
         ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
 
         # The design groups tokens under category headings, and a LiveView stream is one flat

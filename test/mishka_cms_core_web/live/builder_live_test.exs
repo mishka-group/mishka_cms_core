@@ -26,6 +26,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
+  alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
@@ -119,6 +120,21 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     user
   end
 
+  # A REAL USER WITH NOTHING GRANTED. `create_admin/2` assigns `*`, which passes every policy in
+  # the CMS; what is wanted here is an actor the resource has no reason to allow.
+  defp create_user_without_permissions(email) do
+    {:ok, user} =
+      User
+      |> Ash.Changeset.for_create(
+        :register_with_password,
+        %{email: email, password: @password, password_confirmation: @password},
+        authorize?: false
+      )
+      |> Ash.create()
+
+    user
+  end
+
   # A fresh conn on a site's own address, the test host unless told — the setup's conn is already
   # signed in as the master.
   defp build_conn_for_host(host \\ "localhost") do
@@ -158,6 +174,18 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   defp open_builder(conn, page) do
     {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
     {:ok, view, render_async(view)}
+  end
+
+  # THE STUDIO'S OWN ASYNC STARTS WHEN THE SHEET OPENS, which is after `open_builder/2` has already
+  # awaited the editor's. The token list is a Gervaz table and the generated export is built from an
+  # assign that lands with it, so a test that reads either of them straight after the click is
+  # reading a skeleton — and whether it passes depends on how warm the run is. Three of the tests
+  # below passed in a full run of this file and failed on their own.
+  defp open_studio(conn, page) do
+    {:ok, view, _html} = open_builder(conn, page)
+    view |> element("#pb-studio") |> render_click()
+    _settled = render_async(view)
+    view
   end
 
   # THE ROW AS IT REALLY IS, read back through the same actor the editor writes with. Reading it
@@ -274,6 +302,48 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     has_element?(view, ~s(#pb-palette[data-showing="false"]))
   end
 
+  # The document is rendered by the canvas LiveView inside the iframe, so the chrome's HTML never
+  # contains it. Serializing the session tree is how a test sees what is being edited.
+  # Scoped the way the Studio panel scopes it: this site's snippets plus the global ones, for this
+  # editor and the document it has open.
+  # JOINED THROUGH THE COMPONENT, not filtered on the version's own `site_id`: a master action is
+  # required to carry no tenant, and the version row takes its site from the tenant, so a master's
+  # version has none. Which component it is about is never in doubt.
+  defp component_versions(site) do
+    %{rows: rows} =
+      MishkaCmsCore.Repo.query!(
+        """
+        SELECT v.id::text, v.user_id::text
+        FROM component_versions v
+        JOIN components c ON c.id = v.version_source_id
+        WHERE c.site_id = $1
+        """,
+        [Ecto.UUID.dump!(site.id)]
+      )
+
+    Enum.map(rows, fn [id, user_id] -> %{id: id, user_id: user_id} end)
+  end
+
+  defp site_component_names(site) do
+    site_id = site.id
+
+    MishkaCmsCore.Runtime.Component
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(site_id == ^site_id)
+    |> Ash.read!(page: [limit: 500])
+    |> Map.fetch!(:results)
+    |> Enum.map(& &1.name)
+  end
+
+  defp saved_snippets(site, record) do
+    MishkaCmsCore.Runtime.PageBuilder.Snippets.list(%{
+      site_id: site.id,
+      section: :page,
+      document_id: record.id,
+      actor: create_user_with_permissions!(["*"])
+    })
+  end
+
   defp editor_html(view) do
     view
     |> editor()
@@ -370,6 +440,9 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   defp node_with_kind(view, kind) do
     view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.kind == kind))
   end
+
+  # One per row in the Studio's token list: every row has an editable value field, and only rows do.
+  defp token_rows(html), do: length(String.split(html, ~s(id="pb-token-value-))) - 1
 
   describe "mount" do
     test "renders the editor shell", %{conn: conn, page: page} do
@@ -2576,6 +2649,217 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert html =~ ".hero-rocket-launch{"
     end
 
+    # Committing on blur meant a change only landed when you clicked somewhere else: typing a title
+    # and watching the canvas showed nothing until you clicked away. Every field is a debounced form
+    # now — which is also the only shape LiveView delivers `phx-value-*` through.
+    test "a text property applies as you type, without leaving the field", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "typey",
+        attrs: [%{"name" => "title", "type" => "string", "opts" => %{}}]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "drop", %{
+        "template" => ~s(<.component component_name="typey" site="#{site.name}"/>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      node = component_node(view, "typey")
+      render_click(view, "select", %{"id" => node.id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      # The field is a form with a debounce, not a bare input that waits for blur.
+      assert has_element?(view, ~s(form[phx-value-name="title"] input[phx-debounce]))
+
+      view
+      |> element(~s(form[phx-value-name="title"]))
+      |> render_change(%{"value" => "Heads up"})
+
+      assert Node.attr_text(component_node(view, "typey"), "title") == "Heads up"
+
+      # Clearing it removes the property rather than writing an empty string.
+      view
+      |> element(~s(form[phx-value-name="title"]))
+      |> render_change(%{"value" => ""})
+
+      assert is_nil(Node.attr(component_node(view, "typey"), "title"))
+    end
+
+    # A design token is a declaration in the site's own theme stylesheet — `--danger-light: #de1135`
+    # — and every component that resolves through it changes at once. That is the one thing the
+    # Studio can do that no per-element control can, and it was sample data until now.
+    test "the Studio lists the site's real tokens and writes one back", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, _sheet} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "studio-theme-#{System.unique_integer([:positive])}",
+            kind: :theme,
+            content: ":root {\n  --danger-light: #de1135;\n}\n",
+            site_id: nil,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      html = render(view)
+
+      # The site's OWN token, not the sample set.
+      assert html =~ "Danger light"
+      assert has_element?(view, "#pb-token-value-danger-light")
+
+      view
+      |> element("#pb-token-form-danger-light")
+      |> render_change(%{"value" => "#ff0000"})
+
+      assert MishkaCmsCore.Runtime.PageBuilder.Tokens.list(site.id)
+             |> Enum.find(&(&1.key == "danger-light"))
+             |> Map.fetch!(:value) == "#ff0000"
+    end
+
+    test "the swatch is a colour picker, and writing through it sets the token", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, _sheet} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "studio-theme-#{System.unique_integer([:positive])}",
+            kind: :theme,
+            content:
+              ":root {\n  --pick-full: #de1135;\n  --pick-short: #abc;\n  --pick-oklch: oklch(0.7 0.1 200);\n}\n",
+            site_id: nil,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+
+      # The token table loads in a Task, so the click returns before the rows exist — same reason
+      # `open_builder/2` awaits after `live/2`.
+      _loaded = render_async(view)
+
+      assert has_element?(
+               view,
+               ~s(input#pb-token-swatch-pick-full[type="color"][value="#de1135"])
+             )
+
+      # `#abc` is `#aabbcc` — a colour input accepts only the six-digit form.
+      assert has_element?(
+               view,
+               ~s(input#pb-token-swatch-pick-short[type="color"][value="#aabbcc"])
+             )
+
+      # `oklch(…)` IS a colour token, and a colour input cannot hold one: handing it a value it
+      # cannot parse would show black and write black back on the first click. It keeps the plain
+      # swatch, and its text field stays the way to edit it.
+      refute has_element?(view, "#pb-token-swatch-pick-oklch")
+      assert has_element?(view, "#pb-token-value-pick-oklch")
+
+      view
+      |> element("#pb-token-swatch-form-pick-full")
+      |> render_change(%{"value" => "#00ff00"})
+
+      assert MishkaCmsCore.Runtime.PageBuilder.Tokens.list(site.id)
+             |> Enum.find(&(&1.key == "pick-full"))
+             |> Map.fetch!(:value) == "#00ff00"
+    end
+
+    test "load more grows the list, and editing a token keeps what was loaded", %{
+      conn: conn,
+      page: page
+    } do
+      declarations =
+        Enum.map_join(1..40, "\n", fn n ->
+          "  --bulk-#{String.pad_leading(to_string(n), 2, "0")}: #de11#{String.pad_leading(to_string(n), 2, "0")};"
+        end)
+
+      {:ok, _sheet} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "studio-theme-#{System.unique_integer([:positive])}",
+            kind: :theme,
+            content: ":root {\n#{declarations}\n}\n",
+            site_id: nil,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+
+      assert token_rows(render(view)) == 30
+
+      view |> element("#pb-token-more") |> render_click()
+      assert token_rows(render(view)) == 40
+
+      # The reader built that depth by clicking. Writing a token reloads the list — and the reload
+      # has to return everything they had, not drop them back to the first page.
+      view
+      |> element("#pb-token-swatch-form-bulk-01")
+      |> render_change(%{"value" => "#00ff00"})
+
+      assert token_rows(render(view)) == 40
+    end
+
+    test "a value a stylesheet cannot hold is refused with a reason", %{conn: conn, page: page} do
+      {:ok, _sheet} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "studio-theme-#{System.unique_integer([:positive])}",
+            kind: :theme,
+            content: ":root {\n  --brand: #0b6f68;\n}\n",
+            site_id: nil,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+
+      html =
+        view
+        |> element("#pb-token-form-brand")
+        |> render_change(%{"value" => "red; } body { display: none"})
+
+      assert html =~ "not a value a stylesheet can hold"
+    end
+
     test "the inspector shows the selected element", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
       section = node_with_tag(view, "section")
@@ -4465,6 +4749,28 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert html =~ "Tenant only"
     end
 
+    test "the Studio chip counts the team's own tokens", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      studio = view |> element("#pb-studio") |> render()
+
+      # The Mock seeds two custom tokens (brand-teal, screen-xl) — the demo's "+2".
+      assert studio =~ "2"
+    end
+
+    # Every overlay had its click-away on the full-screen backdrop, where no click is ever "away".
+    test "overlays carry click-away on the panel, not the backdrop", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+
+      backdrop = view |> element("#pb-sheet") |> render()
+
+      refute backdrop =~
+               ~s(<div id="pb-sheet" data-role="pb-sheet" class="fixed inset-0 z-[80] flex justify-end bg-[#17161a]/30" phx-click-away)
+
+      assert backdrop =~ "phx-click-away=\"close_sheet\""
+    end
+
     # The stage control is the prototype's split button and it has two distinct looks. Publishing is
     # outward-facing, so this is the one place the published styling is checked.
     test "the stage button is violet-tinted as a draft and solid once published", %{
@@ -5120,6 +5426,18 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
              |> then(& &1.styles.base) == %{"padding" => "8"}
     end
 
+    # SAVING A SELECTION IS A FORM, and the form already exists. The menu opens it rather than
+    # growing a second one beside it.
+    test "save as snippet opens the studio on its snippets tab", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "ctx", %{"action" => "snippet", "node_id" => h1.id})
+
+      assert :sys.get_state(view.pid).socket.assigns.sheet == :studio
+      assert :sys.get_state(view.pid).socket.assigns.studio_tab == :snippets
+    end
+
     # The action is a word off the wire. Anything the menu does not offer is dropped rather than
     # being handed to the session to interpret.
     test "an action the menu never offers is ignored", %{conn: conn, page: page} do
@@ -5220,6 +5538,108 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert has_element?(view, "#pb-find-replace-all[disabled]")
     end
 
+    # BESIDE TOKENS, because both are things a site defines once and every page then resolves
+    # through. A class is only useful if it can reach an element, so Apply appears when something is
+    # selected and appends rather than replacing — an element's own utilities are the exceptions to
+    # the shared class and have to survive it.
+    test "the studio carries a Classes tab that can reach the selection", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      render_click(view, "studio_tab", %{"tab" => "classes"})
+
+      assert has_element?(view, "#pb-class-form")
+      assert has_element?(view, "#pb-classes-empty")
+
+      render_submit(view, "save_class", %{"name" => "card-shell", "utilities" => "rounded-xl p-6"})
+
+      assert has_element?(view, "#pb-class-card-shell")
+      refute has_element?(view, "#pb-classes-empty")
+
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "apply_class", %{"name" => "card-shell"})
+
+      assert view
+             |> editor()
+             |> Map.fetch!(:tree)
+             |> Tree.get(h1.id)
+             |> Tree.Node.attr_text("class") =~ "card-shell"
+    end
+
+    # AND A CLASS IS NOT ALWAYS A STRING TO APPEND TO. Apply read the attribute as text and wrote
+    # the whole row back as one — so on `class={[@variant, "lead"]}` it put the expression's own
+    # source on the element as literal words, which is not Elixir: the page stopped compiling and
+    # could not be saved. The class joins the expression instead, and the computed value stays so.
+    test "and a class applied over a computed one joins it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      render_click(view, "studio_tab", %{"tab" => "classes"})
+      render_submit(view, "save_class", %{"name" => "brand-card", "utilities" => "rounded-xl"})
+
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "op", %{
+        "kind" => "set_attr",
+        "node_id" => h1.id,
+        "name" => "class",
+        "value" => ~S|[@variant, "lead"]|,
+        "value_kind" => "expr"
+      })
+
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "apply_class", %{"name" => "brand-card"})
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+
+      assert Tree.classes(Tree.get(tree, h1.id)) == ["lead", "brand-card"]
+      assert attr_of(view, h1.id, "class") == {:expr, ~S|[@variant, "lead", "brand-card"]|}
+      assert CodeCheck.template(Serializer.serialize(tree)) == :ok
+    end
+
+    test "a name that is not a CSS class is refused with a message", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      render_click(view, "studio_tab", %{"tab" => "classes"})
+      render_submit(view, "save_class", %{"name" => "Not A Class", "utilities" => "p-6"})
+
+      assert has_element?(view, "#pb-class-error")
+      assert render(view) =~ "lowercase letters, digits and dashes"
+      refute has_element?(view, "#pb-class-Not A Class")
+    end
+
+    # A TYPO IN THIS BOX USED TO FREEZE THE SITE'S STYLESHEET. `@apply rounde-xl` is a non-zero exit
+    # from Tailwind, and every later compile reads the same stored row again — so the row is proved
+    # before it is stored, and what comes back is Tailwind's own sentence about it, under the field
+    # that still holds what was typed.
+    test "a utility Tailwind does not know is refused under the field", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      render_click(view, "studio_tab", %{"tab" => "classes"})
+      render_submit(view, "save_class", %{"name" => "card", "utilities" => "rounde-xl"})
+
+      assert has_element?(view, "#pb-class-error")
+      assert render(view) =~ "rounde-xl"
+      refute has_element?(view, "#pb-class-card")
+      assert has_element?(view, "#pb-classes-empty")
+      assert has_element?(view, ~s|#pb-class-utilities[value="rounde-xl"]|)
+
+      render_submit(view, "save_class", %{"name" => "card", "utilities" => "rounded-xl"})
+
+      assert has_element?(view, "#pb-class-card")
+      refute has_element?(view, "#pb-class-error")
+    end
+
     # THE KIT ALREADY SAYS WHERE ITS DOCS ARE. All 136 Chelekom components carry a `doc_url` and
     # nothing read it, so someone stuck on what `variant` means had the answer in the database with
     # no way to reach it.
@@ -5307,6 +5727,56 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert_push_event(canvas, "pb:selected", %{id: id})
       assert id == h1.id
+    end
+
+    # The prototype uses THREE active treatments and they are not interchangeable: a scope filter is
+    # violet-tinted, a category pill is solid dark, a segmented tab is white-on-track. Getting one
+    # wrong looks like a typo and reads as a different control, so each is pinned here.
+    # OUT OF THE BOX THE STUDIO ANSWERS FROM THIS SERVER. It used to default to the design
+    # prototype's sample catalogue, which meant invented packages with prices beside an Install that
+    # refuses, and invented presets beside an Apply that only flashes. `Kits` is real: its tokens are
+    # the site's own stylesheet declarations and its packages are the kit components on disk this
+    # site has not installed.
+    test "the marketplace answers from this server unless a host swaps it", %{
+      conn: conn,
+      page: page
+    } do
+      assert MishkaCmsCore.Runtime.PageBuilder.Marketplace.adapter() ==
+               MishkaCmsCore.Runtime.PageBuilder.Marketplace.Kits
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+
+      # The sample-catalogue banner is keyed on the adapter, so it goes with it.
+      refute has_element?(view, "#pb-sample-catalogue")
+
+      render_click(view, "studio_tab", %{"tab" => "presets"})
+      assert has_element?(view, "#pb-presets-empty")
+      refute render(view) =~ "SaaS Landing", "the prototype's invented presets must not ship"
+    end
+
+    test "active chips use the prototype's own three treatments", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-studio") |> render_click()
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-presets") |> render_click()
+      _presets = render_async(view, 5_000)
+
+      # Scope filter — violet tint.
+      scope = view |> element("#pb-studio-scope-all") |> render()
+      assert scope =~ "bg-[#f2f1fc]"
+      assert scope =~ "text-[#4f4bcc]"
+
+      # Category pill — solid dark.
+      category = view |> element("#pb-preset-cat-all") |> render()
+      assert category =~ "bg-[#17161a]"
+      assert category =~ "text-white"
+
+      # Segmented tab — white on its track.
+      tab = view |> element("#pb-studio-presets") |> render()
+      assert tab =~ "bg-white"
+      assert tab =~ "text-[#1b1a18]"
     end
 
     # The theme is client state — `<html data-theme>` plus localStorage — so the button carries a hook
@@ -7426,6 +7896,452 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
       :ok
+    end
+
+    test "Studio opens on Tokens and shows a real generated export", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+
+      html = render(view)
+      assert html =~ "Studio"
+      assert html =~ "Iris"
+      assert html =~ "theme.colors.iris"
+
+      # The generated file names itself on the shut drawer, and the drawer holds the real thing —
+      # the fold is a JS toggle, so the source is rendered whether or not it is on screen.
+      assert html =~ "tailwind.config.js"
+      assert has_element?(view, "#pb-token-export-body.hidden")
+      assert html =~ "module.exports = {"
+    end
+
+    test "switching the export format regenerates the file", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+
+      view |> element("#pb-tokfmt-css") |> render_click()
+      html = render(view)
+      assert html =~ ":root {"
+      assert html =~ "--iris: #5b57d6;"
+      assert html =~ "tokens.css"
+
+      view |> element("#pb-tokfmt-ex") |> render_click()
+      assert render(view) =~ "defmodule MishkaWeb.Theme do"
+    end
+
+    test "the Studio has all five tabs and a scope filter", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+
+      for tab <- ~w(tokens presets snippets registry settings) do
+        assert has_element?(view, "#pb-studio-#{tab}")
+      end
+
+      html = render(view)
+      assert html =~ "Design tokens"
+      assert html =~ "One source of truth"
+
+      # The scope filter belongs to the two tabs that list things you can own — asking "Downloaded"
+      # of the site's own tokens means nothing.
+      refute has_element?(view, "#pb-studio-scope-downloaded")
+
+      view |> element("#pb-studio-registry") |> render_click()
+      assert has_element?(view, "#pb-studio-scope-downloaded")
+      assert render(view) =~ "1 installed"
+    end
+
+    # Custom tokens are the ones this site added on top of the kit, and the row says so.
+    # The prototype's switches are decoration; these are the site's own settings, so a flick has to
+    # survive the next read.
+    test "a Studio option toggle writes the site's setting", %{conn: conn, page: page, site: site} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-settings") |> render_click()
+
+      refute MishkaCmsCore.Settings.get("studio.dark_pair", false, site.id) == true
+
+      view |> element("#pb-studio-opt-studio\\.dark_pair") |> render_click()
+
+      assert MishkaCmsCore.Settings.get("studio.dark_pair", false, site.id) == true
+
+      assert view |> element("#pb-studio-opt-studio\\.dark_pair") |> render() =~
+               "aria-checked=\"true\""
+    end
+
+    test "the registry source is stored, not just displayed", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-settings") |> render_click()
+
+      view
+      |> form("#pb-registry-source-form", %{"registry" => %{"source" => "hex.pm/chelekom"}})
+      |> render_change()
+
+      assert MishkaCmsCore.Settings.get("studio.registry_source", nil, site.id) ==
+               "hex.pm/chelekom"
+    end
+
+    # A licence token is a credential: the field shows what is stored and refuses to take a new one
+    # here, because this editor is not where a secret should be typed.
+    test "the licence field is read-only and points at Settings", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-settings") |> render_click()
+
+      html = view |> element("#pb-license-token") |> render()
+      assert html =~ "readonly"
+      assert render(view) =~ "Not connected"
+    end
+
+    # WHICHEVER TOKENS THIS SITE IS BEING SHOWN, read through the same function the sheet reads.
+    # `Marketplace.tokens(nil)` is a different list: it asks the adapter for the GLOBAL set, while
+    # the Studio asks `studio_token_list/1` for the site's own and falls back to the adapter only
+    # when the site declares none. They agree today because this block forces the sample adapter,
+    # and they stop agreeing the moment the fixture grows a stylesheet.
+    test "a custom token is marked and an unused one is called out", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+      shown = Panels.studio_token_list(page.site_id)
+
+      # The list pages at 30, so a token is reached by narrowing rather than by scrolling — which is
+      # what the Custom chip is for.
+      view |> element("#pb-tokcat-custom") |> render_click()
+
+      custom = Enum.find(shown, & &1.custom?)
+
+      assert custom, "the sheet is showing no custom token, so there is nothing to mark"
+      assert view |> element("#pb-token-#{custom.key}") |> render() =~ "Custom"
+
+      unused = Enum.find(shown, &(&1.usage == 0))
+
+      if unused do
+        # Narrow to its own category for the same reason: one page is 30 rows.
+        view |> element("#pb-tokcat-#{unused.category}") |> render_click()
+        assert view |> element("#pb-token-#{unused.key}") |> render() =~ "Unused"
+      end
+    end
+
+    # The row shows what Copy would actually give you, so it follows the selected format.
+    #
+    # WHICH TOKENS EXIST IS NOT THIS TEST'S BUSINESS. It named `iris` from the sample set, which the
+    # Studio shows only while the site declares none of its own — so it passed or failed on whether
+    # some earlier test had left a theme stylesheet behind, and reported that as a formatting bug.
+    # The subject is the FORMAT, so it reads whichever token is listed and follows that one.
+    test "a token's reference follows the export format", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+
+      assert [_match, key] = Regex.run(~r/theme\.colors\.([a-z0-9-]+)/, render(view))
+
+      view |> element("#pb-tokfmt-css") |> render_click()
+      html = render(view)
+
+      assert html =~ "--#{key}"
+      refute html =~ "theme.colors."
+    end
+
+    # ONLY THE LIST WAITS. The sheet's own skeleton note promises that "the tabs and the filters
+    # above are real and clickable from the first frame" — and the chips ARE filters. They used to
+    # be drawn only in the table's LOADED state, so every first read blinked the whole row out and
+    # put it back: a jump in the one part of the sheet that was meant not to move.
+    #
+    # ASKED OF THE LOADING STATE DIRECTLY, because it cannot be caught from the outside. Two waits
+    # are stacked here — the sheet's own `:studio_data`, then the table's first read — so the frame
+    # `render_click` returns is the sheet's skeleton with no table in it at all, and the one frame
+    # that matters is gone by the time any assertion can look at it.
+    test "the loading state draws the chips beside the shape of the list" do
+      skeleton =
+        %{
+          state: %{path_params: %{token_categories: [{"all", "All", 3}, {"color", "Color", 2}]}},
+          myself: nil,
+          __changed__: nil
+        }
+        |> MishkaCmsCoreWeb.Templates.StudioTokens.render_loading()
+        |> rendered_to_string()
+
+      assert skeleton =~ "pb-token-skel-1", "the list still waits as a shape"
+      assert skeleton =~ ~s(id="pb-tokcat-all")
+      assert skeleton =~ ~s(id="pb-tokcat-color")
+    end
+
+    # A TABLE WITH NO STATE AT ALL is what the renderer draws on the very first paint, before it has
+    # one to hand over. Nothing to count is not a crash.
+    test "and draws none when there is no state to read them from" do
+      skeleton =
+        %{state: nil, myself: nil, __changed__: nil}
+        |> MishkaCmsCoreWeb.Templates.StudioTokens.render_loading()
+        |> rendered_to_string()
+
+      assert skeleton =~ "pb-token-skel-1"
+      refute skeleton =~ "pb-tokcat-"
+    end
+
+    test "tokens group under category headings with counts", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+
+      assert has_element?(view, "#pb-tokcat-all")
+      assert has_element?(view, "#pb-tokcat-color")
+
+      view |> element("#pb-tokcat-color") |> render_click()
+      html = render(view)
+      assert html =~ "Ink"
+      # Narrowed to one category, the others are gone.
+      refute html =~ "Tight"
+    end
+
+    test "Settings names the licence, the source and the theme options", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-settings") |> render_click()
+
+      html = render(view)
+      assert html =~ "License token"
+      assert html =~ "Not connected"
+      assert html =~ "registry.mishka.tools"
+      assert html =~ "Generate dark pair"
+      assert html =~ "Lock tokens"
+      # The scope filter belongs to the catalogues, not to settings.
+      refute has_element?(view, "#pb-studio-scope-all")
+    end
+
+    # WHERE AN INSTALL LANDS. The Registry is the only surface in the admin that installs a package,
+    # and it passed the editor's `site_id` unconditionally — a master could not share one across
+    # sites, and nothing stopped a tenant's event asking for every site.
+    test "a master is asked where, on the package they are installing", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-registry") |> render_click()
+      _loaded = render_async(view)
+
+      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      assert is_nil(actor.site_id), "this suite logs in a master"
+
+      package = first_uninstalled_package(view)
+
+      # The question is asked at the moment of installing: the menu ships folded, and Install is a
+      # JS toggle of it — the choice is one click away and no round trip away.
+      assert has_element?(view, "#pb-pkg-install-menu-#{package}.hidden")
+
+      assert view |> element("#pb-pkg-install-#{package}") |> render() =~
+               "#pb-pkg-install-menu-#{package}"
+
+      assert has_element?(view, "#pb-pkg-install-site-#{package}")
+      assert has_element?(view, "#pb-pkg-install-global-#{package}")
+    end
+
+    test "the menu belongs to one package, not the panel", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-registry") |> render_click()
+      _loaded = render_async(view)
+
+      package = first_uninstalled_package(view)
+
+      # EACH PACKAGE OWNS ITS MENU. The button carries its own package's id, so one row's Install
+      # cannot unfold another's — which is the whole reason the id is built from the package.
+      assert has_element?(view, "#pb-pkg-install-menu-#{package}")
+
+      assert view |> element("#pb-pkg-install-#{package}") |> render() =~
+               "#pb-pkg-install-menu-#{package}"
+    end
+
+    # THE GUARD, not the control. A tenant never sees the buttons, so the only way to exercise this
+    # is the way an attacker would: send the event anyway. A REAL tenant session, because the actor
+    # is what the guard reads — standing the assign down in the process is not the same thing, and
+    # an earlier version of this test did that and passed while proving nothing.
+    test "a tenant's forged global install is refused", %{conn: conn, page: page, site: site} do
+      tenant = create_admin("tenant@example.com", site.id)
+      assert tenant.site_id == site.id
+
+      {:ok, view, _html} = conn |> log_in(tenant) |> open_builder(page)
+      view |> element("#pb-studio") |> render_click()
+      view |> element("#pb-studio-registry") |> render_click()
+
+      assert has_element?(view, "#pb-studio-registry"), "the Registry tab is open"
+
+      refute has_element?(view, "#pb-pkg-install-menu-chelekom-alert"),
+             "a tenant is not offered the choice in the first place"
+
+      render_click(view, "install_package", %{"package" => "chelekom-alert", "scope" => "global"})
+
+      assert render(view) =~ "cannot install for that site"
+    end
+
+    # The registry lists whatever the kits on disk have not installed yet, so the fixture cannot name
+    # a package — it reads the first one the panel actually drew an Install button for.
+    defp first_uninstalled_package(view) do
+      view
+      |> render()
+      |> then(&Regex.run(~r/id="pb-pkg-install-([a-z0-9-]+)"/, &1))
+      |> case do
+        [_full, id] -> id
+        nil -> flunk("the Registry drew no Install button to click")
+      end
+    end
+
+    test "switching tab resets the category filter", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+      view |> element("#pb-tokcat-color") |> render_click()
+
+      # "color" means nothing to a package, so carrying it across would hide the catalogue.
+      view |> element("#pb-studio-registry") |> render_click()
+      assert render(view) =~ "Chelekom Datatable"
+    end
+
+    # Save → list → insert → delete, through the panel's own controls. The snippet store is the one
+    # place in the Studio holding THIS install's content rather than a registry's, so the round trip
+    # is what proves it: a saved snippet has to come back as an ordinary insert.
+    test "a snippet saves what is selected and inserts it back", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "parent_id" => "root",
+        "index" => "0",
+        "template" => "<section id=\"kept\">Say hello</section>"
+      })
+
+      placed =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.find(&(&1.tag == "section"))
+
+      render_click(view, "select", %{"id" => placed.id})
+      view |> element("#pb-studio") |> render_click()
+      view |> element("#pb-studio-snippets") |> render_click()
+
+      # The markup rides in on a hidden input that `Panels` associates with the form by id, so it
+      # stays fresh as the canvas changes without rebuilding the form under a half-typed name.
+      assert render(view) =~ ~s(form="pb-snippet-form")
+
+      view
+      |> element("#pb-snippet-form")
+      |> render_submit(%{
+        "form" => %{
+          "name" => "Greeting block",
+          "source" => ~s(<section id="kept">Say hello</section>),
+          "visibility" => "page"
+        }
+      })
+
+      html = render(view)
+      assert html =~ "Greeting block"
+      # Blocks and size are read off the markup, not stored beside it.
+      assert html =~ "1 block ·"
+
+      [snippet] = saved_snippets(site, page)
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => placed.id})
+      view |> element("#pb-snippet-insert-#{snippet.id}") |> render_click()
+
+      assert editor_html(view) =~ "Say hello"
+      # It went through history, so it is undoable like any other insert.
+      refute editor(view).past == []
+
+      view |> element("#pb-snippet-delete-#{snippet.id}") |> render_click()
+      assert saved_snippets(site, page) == []
+    end
+
+    # The scope used to be decided FOR the author — a selection saved `:page`, a whole page saved
+    # `:shared`, and there was no way to say otherwise. Now the radio decides, and "All sites" is a
+    # `site_id` choice rather than a third `scope`.
+    test "the author chooses who a snippet is for", %{conn: conn, page: page, site: site} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-snippets") |> render_click()
+
+      save = fn name, visibility ->
+        view
+        |> element("#pb-snippet-form")
+        |> render_submit(%{
+          "form" => %{
+            "name" => name,
+            "source" => "<section>#{name}</section>",
+            "visibility" => visibility
+          }
+        })
+      end
+
+      save.("Beside this page", "page")
+      save.("Across this site", "shared")
+      save.("Everywhere", "global")
+
+      stored =
+        site
+        |> saved_snippets(page)
+        |> Map.new(&{&1.name, &1.scope})
+
+      assert stored["Beside this page"] == "This page"
+      assert stored["Across this site"] == "Shared"
+
+      # "All sites" is the one choice that is not a `scope` at all: it writes a nil `site_id`, which
+      # `scope_label/1` reads back as "All sites". Every default is merged over a blank param, so
+      # the editor's site deliberately does NOT travel under that name — see `editor_site_id`.
+      assert stored["Everywhere"] == "All sites"
+      assert has_element?(view, "#pb-snippet-scope-global")
+    end
+
+    # A `:page` snippet with no document to sit beside is unreachable forever, so the choice is not
+    # offered rather than offered and quietly ignored.
+    test "there is no This page choice until there is a page", %{conn: conn, page: page} do
+      {:ok, new_view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
+      new_view |> element("#pb-studio") |> render_click()
+      new_view |> element("#pb-studio-snippets") |> render_click()
+
+      refute has_element?(new_view, "#pb-snippet-scope-page")
+      assert has_element?(new_view, "#pb-snippet-scope-shared")
+
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-snippets") |> render_click()
+
+      assert has_element?(view, "#pb-snippet-scope-page")
+    end
+
+    # A name is the only thing the author supplies, so an empty one has to say so rather than write a
+    # row nobody can find again.
+    test "saving a snippet without a name says so", %{conn: conn, page: page, site: site} do
+      view = open_studio(conn, page)
+      view |> element("#pb-studio-snippets") |> render_click()
+
+      view
+      |> element("#pb-snippet-form")
+      |> render_submit(%{"form" => %{"name" => "  ", "source" => "<section>x</section>"}})
+
+      assert render(view) =~ "Give the snippet a name first."
+      assert saved_snippets(site, page) == []
+    end
+
+    test "the Studio tabs show presets, the registry and snippets", %{conn: conn, page: page} do
+      view = open_studio(conn, page)
+
+      view |> element("#pb-studio-presets") |> render_click()
+      assert render(view) =~ "Commerce Pro"
+
+      view |> element("#pb-studio-registry") |> render_click()
+      html = render(view)
+      assert html =~ "Chelekom Datatable"
+      assert html =~ "Installed"
+
+      view |> element("#pb-studio-snippets") |> render_click()
+      # The list is a Gervaz table now, so its empty state appears once the read has actually come
+      # back — not as markup that was always there and merely hidden.
+      assert render_async(view) =~ "No snippets saved yet."
+    end
+
+    # Presets and packages come from the configured adapter, and the shipped one is a SAMPLE. A card
+    # that looks installable next to an Install button that refuses is the demo lying about itself,
+    # so the two tabs that show adapter data say where it comes from. Tokens and snippets do not —
+    # they are this site's own.
+    test "the sample catalogue says it is one, on the tabs that show it", %{
+      conn: conn,
+      page: page
+    } do
+      view = open_studio(conn, page)
+
+      view |> element("#pb-studio-presets") |> render_click()
+      assert has_element?(view, "#pb-sample-catalogue")
+
+      view |> element("#pb-studio-registry") |> render_click()
+      assert has_element?(view, "#pb-sample-catalogue")
+
+      view |> element("#pb-studio-tokens") |> render_click()
+      refute has_element?(view, "#pb-sample-catalogue")
+
+      view |> element("#pb-studio-snippets") |> render_click()
+      refute has_element?(view, "#pb-sample-catalogue")
     end
 
     # THE SHEET IS THE MEDIA SYSTEM. Not a hand-rolled mirror of it: the browse half is
@@ -10929,6 +11845,87 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # THE STUDIO OPENS, AND THEN ITS CONTENTS ARRIVE. Everything the sheet shows was read before
+  # anything could paint — a stylesheet parse and a kit-bundle parse, 10.8 MB of JSON for Chelekom
+  # alone — so pressing Studio did nothing at all until they finished. The tests here needed
+  # `render_async` the moment that changed, which is the clearest statement of what the reader was
+  # waiting for.
+  describe "the Studio loads off the click that opens it" do
+    test "the sheet is there before its data is", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      opened = render_click(view, "open_sheet", %{"sheet" => "studio"})
+
+      assert opened =~ "pb-studio-skeleton", "the shape of what is coming"
+      assert has_element?(view, "#pb-studio-tokens"), "and the tabs are live already"
+      refute opened =~ "pb-token-export", "while the contents are not here yet"
+    end
+
+    test "and the skeleton gives way to the real thing", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+
+      loaded = render_async(view, 5_000)
+
+      refute loaded =~ "pb-studio-skeleton"
+      assert has_element?(view, "#pb-token-export")
+    end
+
+    # A read that fails is an empty Studio, not a dead editor — so the shape it falls back to has to
+    # carry every key the sheet reads. One key added to the loader and forgotten there is a KeyError
+    # in a render, which takes the whole editor down rather than one sheet.
+    test "and the shape it falls back to answers everything the sheet asks" do
+      empty = Panels.empty_studio_data()
+
+      for key <- [:tokens, :token_categories, :presets, :packages, :package_categories] do
+        assert Map.fetch(empty, key) == {:ok, []}, "the failed read still has to answer #{key}"
+      end
+    end
+  end
+
+  # NOT A LIST WRITTEN OUT BY HAND. The Registry's chips named `data`, `input`, `layout` and
+  # `marketing`; the kit's components are typed `general`, `forms`, `navigations`, `media`,
+  # `feedback` and `overlays`. Four of six chips matched nothing, and picking one showed an empty
+  # registry under the words "everything is already installed".
+  describe "the Registry's categories come from the catalogue" do
+    test "they are the kit's own types, not an invented list" do
+      categories = Marketplace.package_categories(%{})
+
+      refute "data" in categories, "no component has ever had this type"
+      refute "input" in categories
+      refute "layout" in categories
+      refute "marketing" in categories
+    end
+
+    # Whatever the adapter is, the chips describe the packages it actually returns.
+    test "and every category offered is one some package really has" do
+      offered = MapSet.new(Marketplace.package_categories(%{}))
+
+      real =
+        %{category: "all"}
+        |> Marketplace.packages()
+        |> Enum.map(& &1.category)
+        |> MapSet.new()
+
+      assert MapSet.subset?(real, offered),
+             "a package whose category has no chip cannot be filtered to"
+    end
+
+    # An adapter written before `package_categories/1` existed still gets chips that match its data.
+    test "an adapter that cannot answer is asked its packages instead" do
+      Application.put_env(:mishka_cms_core, :builder_marketplace, Marketplace.Mock)
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      refute MishkaGervaz.Helpers.exports?(Marketplace.Mock, :package_categories, 1),
+             "the fallback only means something while Mock has no answer of its own"
+
+      derived = Marketplace.package_categories(%{})
+      from_packages = %{} |> Marketplace.packages() |> Enum.map(& &1.category) |> Enum.uniq()
+
+      assert Enum.sort(derived) == Enum.sort(from_packages)
+    end
+  end
+
   describe "saving" do
     test "save writes the serialized tree back to the page", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
@@ -13046,6 +14043,213 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       view |> element("#pb-dir-ltr") |> render_click()
       assert editor(view).dir == "ltr"
+    end
+
+    # Preview has to reach the CANVAS — that is where the outlines, chips and floating toolbar are
+    # drawn. Held in the chrome, the button lit up and the page looked exactly the same.
+    # Preview cleans the CANVAS — outlines, chips, the floating toolbar, the drop tail — and leaves
+    # the editor around it alone, which is what the prototype does. Folding the panels away as well
+    # made "see the page without chrome" mean "leave the editor", and there is a full-page preview
+    # for that already.
+    # Under 900px both panels are gone, so the bar is the only way to reach them. Four of its tabs
+    # are overlays rather than panels, and one is the direction toggle.
+    # Searching and filtering the library belong to the Gervaz table now — they are declared on
+    # `Runtime.Media` and work the same here as on the Media page. What this pins is that the sheet
+    # did not quietly lose them by mounting the component without its chrome.
+    test "the library keeps the resource's own search and filters", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_media!(site_id: site.id, name: "hero-bg", type: :images)
+      create_media!(site_id: site.id, name: "team-photo", type: :images)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      _loaded = render_async(view)
+
+      html = render(view)
+      assert html =~ "hero-bg"
+      assert html =~ "team-photo"
+
+      state = :sys.get_state(view.pid).socket.assigns
+      refute state[:media_query], "the sheet no longer keeps a search of its own"
+    end
+
+    test "the registry search narrows the package list", %{conn: conn, page: page} do
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Mock
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-registry") |> render_click()
+
+      assert has_element?(view, "#pb-pkg-chelekom-datatable")
+
+      render_keyup(view, "studio_query", %{"value" => "charts"})
+
+      refute has_element?(view, "#pb-pkg-chelekom-datatable")
+      assert has_element?(view, "#pb-pkg-chelekom-charts")
+    end
+
+    # The mock adapter cannot install anything and says so; the button must surface that rather than
+    # looking like it worked.
+    # The default adapter is the kits on disk, so Install is a real operation: it adds the component
+    # AND what it depends on, and the palette has to notice — a component you cannot then place is
+    # not installed as far as the author is concerned.
+    test "Install adds the component, its dependencies, and the palette entry", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      # The on-disk kits adapter, named explicitly: the shipped default is the prototype's sample
+      # catalogue, which by design has nothing real to install.
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Kits
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      refute has_element?(view, "#pb-comp-chelekom-card")
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-registry") |> render_click()
+
+      # A master is asked where it lands; "This site" is the answer this test is about.
+      view |> element("#pb-pkg-install-site-chelekom-card") |> render_click()
+
+      html = render(view)
+      assert html =~ "chelekom-card installed"
+
+      # `card` draws an icon, so the flash says what came with it rather than only what was clicked.
+      assert html =~ "it depends on"
+
+      names = site_component_names(site)
+      assert "chelekom-card" in names
+      assert "chelekom-icon" in names
+
+      # …and it is placeable now, without a reload.
+      assert has_element?(view, "#pb-comp-chelekom-card")
+    end
+
+    # WHO INSTALLED IT. Every row the Registry writes went in with `authorize?: false`, so the
+    # Component policy never ran on the one surface in the admin that installs a package, and its
+    # version history recorded nobody. The site it lands on was already derived from the actor —
+    # `UiKitHandler.install_scope/2` — and now the write is theirs too.
+    test "Install is written as the admin who pressed it", %{conn: conn, page: page, site: site} do
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Kits
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      assert is_nil(actor.site_id), "this suite logs in a master"
+
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-registry") |> render_click()
+
+      # WHAT THIS CLICK WROTE, and not what the fixture did: everything already on this site was
+      # written by a seed or a fixture with no actor, which is correct and is not what is on trial.
+      before = MapSet.new(component_versions(site), & &1.id)
+
+      view |> element("#pb-pkg-install-site-chelekom-card") |> render_click()
+
+      written = Enum.reject(component_versions(site), &MapSet.member?(before, &1.id))
+
+      refute written == [], "the install wrote no component versions at all"
+
+      assert Enum.all?(written, &(&1.user_id == actor.id)),
+             "a component this admin installed is attributed to nobody in its own history"
+    end
+
+    # AND THE SECOND GATE IS THE RESOURCE'S OWN. `install_scope/2` decides WHICH site a package may
+    # land on; whether this actor may write a component there at all is `Component`'s policy, and
+    # with the write unauthorized it was never asked. Driven below the LiveView because nobody who
+    # fails that policy can open the builder in the first place — which is exactly why the write
+    # had never been tested against it.
+    test "Install is refused to an actor the component resource refuses", %{site: site} do
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Kits
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      nobody = create_user_without_permissions("registry-nobody@example.com")
+
+      assert_raise Ash.Error.Forbidden, fn ->
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.install(
+          :package,
+          "chelekom-card",
+          site.id,
+          nobody
+        )
+      end
+
+      refute "chelekom-card" in site_component_names(site),
+             "a refused install left components behind"
+    end
+
+    test "Install reports what the configured registry can actually do", %{conn: conn, page: page} do
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Mock
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-registry") |> render_click()
+
+      view |> element("#pb-pkg-install-site-chelekom-charts") |> render_click()
+
+      assert render(view) =~ "cannot be installed from the mock registry"
+    end
+
+    test "a preset card offers Apply for free presets and Unlock for paid ones", %{
+      conn: conn,
+      page: page
+    } do
+      Application.put_env(
+        :mishka_cms_core,
+        :builder_marketplace,
+        MishkaCmsCore.Runtime.PageBuilder.Marketplace.Mock
+      )
+
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_marketplace) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "studio"})
+      _studio = render_async(view, 5_000)
+      view |> element("#pb-studio-presets") |> render_click()
+
+      assert has_element?(view, "#pb-preset-apply-editorial")
+      assert has_element?(view, "#pb-preset-unlock-docs-portal")
+      # Paid presets are the ones that carry the lock, so the two must agree.
+      refute has_element?(view, "#pb-preset-apply-docs-portal")
+
+      # The button is honest about the adapter rather than silently doing nothing.
+      view |> element("#pb-preset-apply-editorial") |> render_click()
+      assert render(view) =~ "Connect a registry"
     end
 
     test "the mobile bar swaps the body for the panel it names", %{conn: conn, page: page} do
