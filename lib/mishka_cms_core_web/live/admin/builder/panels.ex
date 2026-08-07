@@ -34,8 +34,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.MediaCategory
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
+  alias MishkaCmsCore.Runtime.PageBuilder.Review
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.PageComment
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
@@ -593,6 +595,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:preview?, :boolean, default: false)
   attr(:source_modal, :boolean, default: false)
   attr(:dev_mode?, :boolean, default: false)
+  attr(:open_bugs, :integer, default: 0)
   attr(:studio_badge, :integer, default: 0)
   attr(:history_position, :integer, default: 0)
   attr(:history_total, :integer, default: 0)
@@ -911,6 +914,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
         <span data-role="pb-divider" class="h-5 w-px flex-none bg-[#e6e4de] max-[1000px]:hidden" />
 
+        <%!-- THE NUMBER IS UNRESOLVED BUGS, counted in the database rather than measured off
+              whatever the sheet happens to have loaded. It moves when a bug is raised, resolved,
+              reopened or deleted, because those are the only four things that change the count. --%>
+        <.bar_button
+          id="pb-review"
+          event="open_sheet"
+          value={%{sheet: "review"}}
+          icon={:comment}
+          label={gettext("Review")}
+          count={@open_bugs}
+        />
 
         <%!-- THE TOP BAR'S CODE IS THE PAGE'S SOURCE, in a window big enough to read it in. It used
               to toggle the strip at the bottom of the canvas, which is a different surface with a
@@ -10977,9 +10991,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             <.icon name={:close} size={18} />
           </button>
         </header>
-        <div class="min-h-0 flex-1 overflow-y-auto px-[18px] pb-[18px] pt-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <%!-- REVIEW OWNS ITS OWN HEIGHT. Every other sheet is one scrolling column; Review is a
+              thread that scrolls with a composer pinned under it, which cannot be done from inside
+              a parent that already scrolls and pads. --%>
+        <div class={[
+          "min-h-0 flex-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+          (@sheet == :review && "flex flex-col") ||
+            "overflow-y-auto px-[18px] pb-[18px] pt-3.5"
+        ]}>
           <.studio_sheet :if={@sheet == :studio} {assigns} />
           <.assets_sheet :if={@sheet == :assets} {assigns} />
+          <.review_sheet :if={@sheet == :review} {assigns} />
         </div>
       </section>
     </div>
@@ -12506,6 +12528,179 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp only(%{accepts: :images}), do: %{type: :images}
   defp only(_anything), do: %{}
 
+  # A stable colour per author, from the prototype's own three. Deterministic rather than random so
+  # the same person keeps the same dot between renders and between sessions.
+  @avatar_colours ~w(#5b57d6 #1f9d6b #c07a2a #b5495f #2f7fb5)
+
+  @doc """
+  A stable colour for a name, for the Review thread's avatar discs.
+
+  Public because `MishkaCmsCoreWeb.Templates.ReviewComments` draws the same discs — one answer, so
+  the same person is the same colour in the sheet and anywhere else that shows them.
+  """
+  @spec avatar_tint(String.t() | nil) :: String.t()
+  def avatar_tint(author), do: avatar_colour(author)
+
+  @doc """
+  The same disc colour as a whole Tailwind class, for a surface that paints it without a `style`.
+
+  A class assembled around `avatar_tint/1` would be source text no Tailwind build can match, so the
+  five colours are written out one clause each and the hash still chooses between them.
+  """
+  @spec avatar_tint_class(String.t() | nil) :: String.t()
+  def avatar_tint_class(author), do: author |> avatar_colour() |> avatar_colour_class()
+
+  defp avatar_colour(author) when is_binary(author),
+    do: Enum.at(@avatar_colours, :erlang.phash2(author, length(@avatar_colours)))
+
+  defp avatar_colour(_author), do: hd(@avatar_colours)
+
+  defp avatar_colour_class("#1f9d6b"), do: "[background:#1f9d6b]"
+  defp avatar_colour_class("#c07a2a"), do: "[background:#c07a2a]"
+  defp avatar_colour_class("#b5495f"), do: "[background:#b5495f]"
+  defp avatar_colour_class("#2f7fb5"), do: "[background:#2f7fb5]"
+  defp avatar_colour_class(_violet), do: "[background:#5b57d6]"
+
+  # THE REVIEW SHEET IS TWO GERVAZ COMPONENTS.
+  #
+  # It used to be hand-rolled markup over a list on the editing session — notes in ETS, swept after a
+  # day idle, and three sample notes standing in whenever the list was empty, which meant the badge
+  # read 3 on a page nobody had reviewed. Both halves are Gervaz now, over a real table:
+  #
+  #   * `Form.Web.Live` — the composer. Two fields, because the editor already knows which document,
+  #     which element and who is writing; `Review.compose_defaults/1` hands it all of that.
+  #   * `Table.Web.Live` — the thread, scoped by `Review.thread_params/1`.
+  #
+  # `defaults` is load-bearing and destructive: the form component rebuilds itself whenever
+  # `defaults` changes, wiping anything half-typed. That is exactly right here — changing which
+  # element you are commenting on SHOULD start a fresh note — but it is why nothing that changes
+  # per keystroke may ever go through it.
+  defp review_sheet(assigns) do
+    ~H"""
+    <div class="flex min-h-0 flex-1 flex-col">
+      <div class="min-h-0 flex-1 overflow-y-auto px-[18px] pb-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <.live_component
+          module={MishkaGervaz.Table.Web.Live}
+          id="pb-review-thread"
+          resource={PageComment}
+          current_user={@current_user}
+          url_state={
+            %{
+              path_params:
+                Map.put(
+                  Review.thread_params(review_scope(assigns)),
+                  :revision,
+                  @review_revision
+                )
+            }
+          }
+        />
+      </div>
+
+      <%!-- THE COMPOSER SITS AT THE BOTTOM, where a thread is written from. It used to be the first
+            thing in the sheet, which put the newest note below a box nobody was using yet and made
+            reading the thread mean scrolling past the form every time.
+
+            `defaults` is load-bearing and destructive: the form component rebuilds itself whenever
+            `defaults` changes, wiping anything half-typed. That is right here — changing which
+            element you are commenting on SHOULD start a fresh note — but it is why nothing that
+            changes per keystroke may ever go through it. --%>
+      <div class="relative flex-none border-t border-[#f0efea] px-[18px] py-3">
+        <.live_component
+          module={MishkaGervaz.Form.Web.Live}
+          id="pb-review-composer"
+          resource={PageComment}
+          current_user={@current_user}
+          defaults={Review.compose_defaults(review_scope(assigns))}
+        />
+
+        <%!-- WHO `@` COULD MEAN.
+              It lives out here rather than in the form template because the candidates change per
+              keystroke, and `defaults` — the only way into a Gervaz form — is destructive: routing
+              them through it would wipe the half-typed note that asked.
+
+              AFTER THE COMPOSER IN THE DOM, ABOVE IT ON SCREEN. Inserting a node BEFORE a keyed
+              sibling makes morphdom MOVE that sibling, and moving a focused element blurs it — so
+              the list appeared and the blur that closed it fired in the same breath, about 200ms
+              apart. Nothing before the form changes now, so the caret stays where it was typing. --%>
+        <div
+          :if={@mentions != []}
+          id="pb-mention-list"
+          phx-mounted={menu_in()}
+          phx-remove={menu_out()}
+          class="absolute bottom-full left-[18px] right-[18px] z-20 mb-1 overflow-hidden rounded-[10px] border border-[#e6e4de] bg-white shadow-[0_8px_24px_rgba(0,0,0,.10)]"
+        >
+          <%!-- PICKED BY THE HOOK, not by a round trip. `data-handle` is what it reads and
+                `data-active` is what it paints — the class is in the markup, so the compiled
+                stylesheet has a rule for it; only the attribute moves at runtime. `mousedown` with
+                `preventDefault` is what keeps the caret in the note while the mouse is down.
+
+                The id is the account's, not the handle's: two sites can hold a `@sara` each, and an
+                id built from the handle would put two elements on one id. --%>
+          <button
+            :for={{person, index} <- Enum.with_index(@mentions)}
+            type="button"
+            id={"pb-mention-#{person.id}"}
+            data-handle={person.handle}
+            data-index={index}
+            data-active={to_string(index == 0)}
+            class="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-[#f7f6fd] data-[active=true]:bg-[#f2f1fc]"
+          >
+            <span class={[
+              "grid size-[20px] flex-none place-items-center rounded-full text-[9px] font-bold text-white",
+              avatar_tint_class(person.handle)
+            ]}>
+              {String.upcase(String.first(person.handle))}
+            </span>
+            <%!-- THE WHOLE ADDRESS, read in two weights. A list of four `master@` rows is told apart
+                  by its domains, so the domain is the part that must not be dropped — the local part
+                  leads because it is what is being looked for. --%>
+            <span class="min-w-0 flex-1 truncate text-[11.5px]">
+              <span class="font-bold text-[#17161a]">@{person.local}</span><span class="font-medium text-[#8a877f]">{person.domain}</span>
+            </span>
+          </button>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # WHAT THE EDITOR KNOWS, in the shape `Review` asks for. One place, so the composer's defaults, the
+  # thread's scope and the top bar's counter can never disagree about which document is open or which
+  # element is selected.
+  @doc false
+  def review_scope(assigns) do
+    %{
+      actor: assigns[:current_user],
+      site_id: assigns.editor.site_id,
+      section: section_atom(assigns.editor.section),
+      document_id: assigns.editor.resource_id,
+      author_id: assigns[:current_user] && assigns.current_user.id,
+      node_id: assigns[:selected_node] && assigns.selected_node.id,
+      # WHERE IT SITS, computed against the tree this session parsed. The id beside it is only good
+      # here; this is what another session resolves the note with.
+      node_path:
+        assigns[:selected_node] &&
+          MishkaCmsCore.Runtime.PageBuilder.Tree.address(
+            assigns.editor.tree,
+            assigns.selected_node.id
+          ),
+      node_label: assigns[:selected_node] && node_label(assigns.selected_node),
+      revision: assigns[:review_revision],
+      reply_to: assigns[:reply_to],
+      on_page?: assigns[:note_on_page?] == true
+    }
+  end
+
+  # ONE OWNER FOR THE THREE SPELLINGS. This did the conversion by hand, with a bare
+  # `String.to_existing_atom/1` on a value that may not be a section at all.
+  defp section_atom(section) do
+    case Section.to_atom(section) do
+      {:ok, atom} -> atom
+      :error -> :page
+    end
+  end
+
   # An empty thread shows the sample notes when the demo flag is on; the first real note replaces
   # them, exactly like the history and the assistant.
   attr(:tiles, :integer, default: 4)
@@ -12639,10 +12834,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp sheet_width_class(:assets), do: "w-[620px]"
   defp sheet_width_class(:studio), do: "w-[520px]"
+  defp sheet_width_class(:review), do: "w-[420px]"
   defp sheet_width_class(_sheet), do: "w-[470px]"
 
   defp sheet_title(:studio), do: gettext("Studio")
   defp sheet_title(:assets), do: gettext("Assets")
+  defp sheet_title(:review), do: gettext("Review")
   defp sheet_title(_sheet), do: ""
 
   # The prototype names the document being edited beside its state — "contact.heex · saved" reads as

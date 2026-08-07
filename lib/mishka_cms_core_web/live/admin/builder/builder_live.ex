@@ -52,6 +52,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
+  alias MishkaCmsCore.Runtime.PageBuilder.Review
   alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsCore.Runtime.States.EditorSessionState
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
@@ -61,6 +62,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Runtime.PageBuilder.Mentions
+  alias MishkaCmsCore.Runtime.PageComment
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Runtime.PageBuilder.DesignToken
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
@@ -226,6 +229,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp section_label("error_page"), do: gettext("Error page")
   defp section_label("component"), do: gettext("Component")
 
+  # A LiveView mounts twice. The static render builds the session WITHOUT registering it, so nothing
+  # is left behind and no canvas URL is published; the connected mount is the one that opens a real
+  # session. Registering on both minted two tokens per page load, so the canvas iframe was pointed at
+  # one URL and then at another — it loaded twice, and the first session was orphaned in ETS.
+  # A THREAD IS ROWS, AND ROWS ARE SEEN BY EVERYONE. Two people who each opened this page from the
+  # list have two SESSIONS and two session topics, so the session channel cannot tell them about
+  # each other's notes — the notes themselves are the only thing they share. These are
+  # `MishkaCmsCore.Runtime.PageComment`'s own `pub_sub` topics.
+  #
+  # THE UNSCOPED FOUR ARE THE WHOLE FEED. `publish :create, [[nil, :site_id], "created"]` emits the
+  # `nil` alternative for every row, so `page_comment:created` already carries every site's notes
+  # and the global ones; `page_comment:<site>:created` is a strict subset, and subscribing to both
+  # would deliver a tenant's own writes twice — the same thing
+  # `MishkaCmsCoreWeb.Live.Admin.Runtime.SettingsLive` records about the identical shape.
+  #
+  # The suffixes are the resource's own words rather than Gervaz's `created/updated/destroyed`:
+  # resolving is an `:update` action that publishes `…:resolved`, so a generic realtime helper would
+  # sit on `page_comment:updated` and never hear a thing.
+  @review_topics ~w(
+    page_comment:created
+    page_comment:resolved
+    page_comment:reopened
+    page_comment:destroyed
+  )
+
+  defp subscribe_review do
+    Enum.each(@review_topics, &Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, &1))
+  end
+
   # THE FOLDER RAIL HAS NO COMPONENT TO SUBSCRIBE FOR IT. The Assets sheet's gallery is a Gervaz
   # table, and `Table.Web.Live` subscribes to `media:*` on our behalf — a LiveComponent shares this
   # process, so its `Phoenix.PubSub.subscribe/2` registers US. Nothing does that for categories, so
@@ -291,6 +323,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       Events.session_opened(editor)
       EditorSession.subscribe(editor.token)
       Presence.join(editor.token, actor)
+      subscribe_review()
       subscribe_folders()
     end
 
@@ -563,6 +596,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # The top bar's Code. `nil` rather than `false` for the error so an empty string can mean
     # "there is a message and it is blank" without being mistaken for "no message".
     |> assign_new(:url_state, fn -> nil end)
+    # COUNTED ONCE, THEN MAINTAINED. It used to be recomputed at the end of `assign_editor/2`,
+    # which meant a `SELECT count(*)` on every selection, every breakpoint switch and every undo — in
+    # both LiveViews — for a number only four things can change. All four already say so:
+    # `{:review, :changed}` from a co-editor's session, `PageComment`'s own notification from someone
+    # who never shared one, and `refresh_review/1` for a write made here. So it is seeded here and
+    # left alone until one of them arrives.
+    |> assign_new(:open_bugs, fn -> Review.open_bugs(Panels.review_scope(socket.assigns)) end)
+    |> assign_new(:review_revision, fn -> 0 end)
+    |> assign_new(:reply_to, fn -> nil end)
     |> assign_new(:find_open, fn -> false end)
     |> assign_new(:find, fn -> "" end)
     |> assign_new(:replace, fn -> "" end)
@@ -574,6 +616,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:classes, fn ->
       Classes.all(socket.assigns[:current_user], socket.assigns.editor.site_id)
     end)
+    |> assign_new(:mentions, fn -> [] end)
+    |> assign_new(:note_on_page?, fn -> false end)
     |> assign_new(:source_modal, fn -> false end)
     |> assign_new(:source_draft, fn -> nil end)
     # WHETHER THIS DEPLOYMENT TAKES CODE. Whoever opened this builder may write its document's code
@@ -1460,6 +1504,37 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, offer_chooser(socket, id, prop)}
   end
 
+  # A NOTE IS NOT SESSION STATE, so this is not a `sync_session`: the rows changed, not the session.
+  # Kept for a co-editor who joined through `?session=`; the row broadcast below is what reaches
+  # everybody else.
+  def handle_info({:builder_session, _token, {:review, :changed}}, socket),
+    do: {:noreply, reread_review(socket)}
+
+  # THE THREAD FOLLOWS THE ROWS. `PageComment`'s own `pub_sub` reaches every editor with this
+  # document open — including the two people who each opened it from the list and therefore share
+  # no session — which is what makes a note appear at the top of the thread as it is written rather
+  # than when somebody next reloads.
+  #
+  # `notification.data` is the note itself, so the document can be tested without a read: the topic
+  # only knows the site. `from` is the pid that ran the action, stamped by `Ash.Notifier.notify/1`,
+  # and skipping our own is what stops the author paying for the write twice — `refresh_review/1`
+  # has already re-read, synchronously, so the badge and the thread are right in the same render as
+  # the flash.
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          payload: %Ash.Notifier.Notification{resource: PageComment, data: note, from: from}
+        },
+        socket
+      )
+      when from != self() do
+    scope = Panels.review_scope(socket.assigns)
+
+    case note.section == scope.section and note.document_id == scope.document_id do
+      true -> {:noreply, reread_review(socket)}
+      false -> {:noreply, socket}
+    end
+  end
+
   # THE ASSETS GALLERY IS A GERVAZ TABLE, and a LiveComponent has no `handle_info` — its
   # subscription registered THIS process, so the broadcast lands here and has to be handed back
   # down. `send_update/2` on a sheet that is shut is a no-op, so there is nothing to guard.
@@ -1542,6 +1617,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
            image?: media.type == :images
          })}
     end
+  end
+
+  # The composer is a Gervaz form, so a saved note arrives the way every Gervaz save does. Refreshing
+  # the badge here is what makes it derived rather than remembered.
+  def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.PageComment{} = note}, socket) do
+    Events.after_comment(%{
+      id: note.id,
+      body: note.body,
+      type: note.type,
+      node_id: note.node_id,
+      reply?: !is_nil(note.parent_comment_id),
+      section: socket.assigns.editor.section,
+      source_id: socket.assigns.editor.resource_id,
+      site_id: socket.assigns.editor.site_id,
+      actor_id: actor_id(socket)
+    })
+
+    {:noreply,
+     socket
+     |> assign(:reply_to, nil)
+     |> assign(:mentions, [])
+     |> refresh_review()
+     |> put_flash(
+       :info,
+       (note.parent_comment_id && gettext("Reply posted.")) || gettext("Note posted.")
+     )}
+  end
+
+  # `PageComment.refuse/1` rejects a blank note before the submit, because this composer has no
+  # error slot and Gervaz reports a refusal by assigning errors for the TEMPLATE to draw — which a
+  # template with nowhere to draw them swallows silently.
+  def handle_info({:review_error, message}, socket) do
+    {:noreply, put_flash(socket, :error, message)}
   end
 
   # UPLOADING DURING A PICK IS PICKING. Something asked for a file — that is why the reader opened
@@ -1629,6 +1737,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp release_page_scope(socket, _selection) do
     socket
+    |> assign(:note_on_page?, false)
     |> assign(:aim_target, nil)
     |> assign(:act_action, nil)
   end
@@ -2345,7 +2454,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("open_sheet", %{"sheet" => sheet}, socket) do
-    sheets = [:none, :studio, :assets]
+    sheets = [:none, :studio, :assets, :review]
     opened = tab_atom(sheet, sheets)
 
     # The Record-history button always lands on Record history. Only the routes that mean "drafts"
@@ -2418,6 +2527,96 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("close_sheet", _params, socket),
     do: {:noreply, socket |> assign(:sheet, :none) |> assign(:media_target, nil)}
 
+  # RESOLVING RECORDS WHO DID IT. The action sets the resolver from the actor, together with the
+  # timestamp, so nothing here names one.
+  def handle_event("resolve_comment", %{"id" => id}, socket) do
+    {:noreply, update_comment(socket, id, :resolve, gettext("Resolved."))}
+  end
+
+  def handle_event("reopen_comment", %{"id" => id}, socket) do
+    {:noreply, update_comment(socket, id, :reopen, gettext("Reopened."))}
+  end
+
+  # REPLYING IS SEEDING THE COMPOSER, not opening a second one — the same move
+  # `MishkaBlog.Comment`'s admin makes, where a Reply row action loads the parent and hands its ids
+  # to the create form as `defaults`. Here the composer is already on screen, so there is nothing to
+  # open: the parent goes on `defaults`, the form rebuilds, and the box is a reply box.
+  def handle_event("reply_to_comment", %{"id" => id}, socket) do
+    case Review.fetch(id, Panels.review_scope(socket.assigns)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("That note is no longer here."))}
+
+      comment ->
+        {:noreply,
+         socket
+         |> assign(:reply_to, %{
+           id: comment.id,
+           node_id: comment.node_id,
+           node_path: comment.node_path,
+           node_label: comment.node_label
+         })
+         |> focus_composer()}
+    end
+  end
+
+  def handle_event("cancel_reply", _params, socket),
+    do: {:noreply, socket |> assign(:reply_to, nil) |> focus_composer()}
+
+  # A NOTE ABOUT THE PAGE, WITH SOMETHING SELECTED. The composer anchors to whatever the canvas has,
+  # which is right nearly always and wrong exactly when the thing you want to say is about the page
+  # rather than the div you happen to have clicked. Deselecting in the canvas to say it is a detour;
+  # this is the one click. It lasts until the selection changes, and then the composer goes back to
+  # following it.
+  def handle_event("comment_on_page", _params, socket),
+    do: {:noreply, socket |> assign(:note_on_page?, true) |> focus_composer()}
+
+  # NAMING SOMEBODY. The list is the server's because the candidates are — who a note may reach is a
+  # tenancy question, and shipping every account to the browser to filter there would answer it in
+  # the one place that cannot be trusted with it. The typing that drives it is the client's: the
+  # `MentionBox` hook decides when a `@word` is being written and only then asks.
+  def handle_event("mention_search", %{"q" => query}, socket) do
+    {:noreply,
+     assign(socket, :mentions, Mentions.candidates(Panels.review_scope(socket.assigns), query))}
+  end
+
+  # PICKING IS THE BROWSER'S ENTIRELY — it owns the caret, the arrow keys and the list's highlight,
+  # and it tells the server only that the list is finished with. The server's whole part is answering
+  # WHO can be named, which is the one question a browser must not be trusted with.
+  def handle_event("mention_close", _params, socket),
+    do: {:noreply, assign(socket, :mentions, [])}
+
+  def handle_event("delete_comment", %{"id" => id}, socket) do
+    {:noreply, update_comment(socket, id, :destroy, gettext("Note deleted."))}
+  end
+
+  # A NOTE POINTS AT AN ELEMENT, and clicking it goes there. `node_id` is the editor's own
+  # handle, minted fresh by every parse, so it can point at nothing; `Review.locate/2` is the whole
+  # of what to do about that, and the three answers get three different sentences rather than a
+  # selection of nil.
+  def handle_event("goto_comment", %{"id" => id}, socket) do
+    scope = Panels.review_scope(socket.assigns)
+
+    case id |> Review.fetch(scope) |> Review.locate(socket.assigns.editor.tree) do
+      {:ok, node_id} ->
+        EditorSession.select(socket.assigns.token, node_id, :panel)
+
+        {:noreply,
+         socket
+         |> assign(sheet: :none, left_hidden: false, left_tab: :inspector)}
+
+      :page ->
+        {:noreply, put_flash(socket, :info, gettext("That note is about the whole page."))}
+
+      :gone ->
+        {:noreply,
+         put_flash(
+           socket,
+           :error,
+           gettext("The element that note was on is no longer on this page.")
+         )}
+    end
+  end
+
   def handle_event("toggle_command", _params, socket),
     do: {:noreply, update(socket, :command_open, &(!&1))}
 
@@ -2435,7 +2634,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # Four of the mobile tabs are not panels: they open the overlay the top bar has no room for at that
   # width, and leave the canvas showing underneath.
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(assets studio),
+      when panel in ~w(assets studio review),
       do: {:noreply, assign(socket, sheet: String.to_existing_atom(panel), mob_panel: :canvas)}
 
   def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
@@ -3403,7 +3602,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     do: {:noreply, put_flash(socket, :info, message)}
 
   def handle_event("open_rail", %{"action" => "ask_ai"}, socket), do: {:noreply, socket}
-  def handle_event("open_rail", %{"action" => "comment"}, socket), do: {:noreply, socket}
+  def handle_event("open_rail", %{"action" => "comment"}, socket),
+    do: {:noreply, assign(socket, sheet: :review)}
+
   # A CONTROL THAT NOBODY HANDLES IS A CONTROL THAT DOES NOTHING, and this clause is what made that
   # invisible: every unmatched event returned the socket unchanged, so a button wired to a typo, or
   # to an event whose handler was later renamed, kept looking exactly like a working one.
@@ -5291,6 +5492,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp human(:not_siblings),
     do: gettext("Only elements sitting side by side can be wrapped together.")
 
+  defp human(:note_belongs_elsewhere), do: gettext("That note belongs to another site.")
+
   defp human(:document_root),
     do: gettext("That is the document itself — put content inside it rather than around it.")
 
@@ -5375,6 +5578,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         preview?={@preview?}
         source_modal={@source_modal}
         dev_mode?={@dev_mode?}
+        open_bugs={@open_bugs}
         studio_badge={@studio_badge}
         history_position={@history_position}
         history_total={@history_total}
@@ -5835,4 +6039,101 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp media_href(path) when is_binary(path), do: "/" <> path
   defp media_href(_path), do: ""
 
+  # ONE PATH FOR EVERY WRITE TO A NOTE, so the badge is refreshed by construction rather than by
+  # each caller remembering to. A note that has gone — deleted from another tab, or by someone else
+  # — is a message, not a crash.
+  defp update_comment(socket, id, action, done) do
+    scope = Panels.review_scope(socket.assigns)
+
+    case Review.fetch(id, scope) do
+      nil ->
+        put_flash(socket, :error, gettext("That note is no longer here."))
+
+      comment ->
+        comment
+        |> apply_comment_action(action, socket.assigns[:current_user])
+        |> case do
+          # `Ash.destroy/2` answers `:ok`, not `{:ok, record}` — there is nothing left to hand back.
+          :ok -> socket |> refresh_review() |> put_flash(:info, done)
+          {:ok, _record} -> socket |> refresh_review() |> put_flash(:info, done)
+          {:error, reason} -> put_flash(socket, :error, human(reason))
+        end
+    end
+  end
+
+  # Master and tenant take different actions on every runtime resource, and passing a tenant to a
+  # master action is refused outright — the same trap recorded on the media reads.
+  #
+  # THE WRITE IS SCOPED BY WHO IS ASKING, not by the id in the click — the rule `delete_snippet`
+  # states above. Taking the tenant off the NOTE handed a site-scoped admin every other site's: the
+  # victim's own `site_id` satisfies both `TenantContext` and the policy, so nothing downstream
+  # could tell, and `authorize?: false` meant nothing was asked. Both go: the actor names the
+  # tenant, and the domain's own default decides authorization.
+  defp apply_comment_action(comment, action, actor) do
+    case comment_action(action, actor, comment.site_id) do
+      {:ok, {name, tenant}} when action == :destroy ->
+        comment
+        |> Ash.Changeset.for_destroy(name, %{}, actor: actor, tenant: tenant)
+        |> Ash.destroy()
+
+      {:ok, {name, tenant}} ->
+        comment
+        |> Ash.Changeset.for_update(name, %{}, actor: actor, tenant: tenant)
+        |> Ash.update()
+
+      {:error, _reason} = refusal ->
+        refusal
+    end
+  end
+
+  # A master writes any note under no tenant; everyone else writes only their own site's, under
+  # their own. An id naming anywhere else is refused rather than written under the tenant it names.
+  defp comment_action(action, %{site_id: nil}, _site_id), do: {:ok, {master_action(action), nil}}
+
+  defp comment_action(action, %{site_id: site_id}, site_id) when is_binary(site_id),
+    do: {:ok, {action, site_id}}
+
+  defp comment_action(_action, _actor, _site_id), do: {:error, :note_belongs_elsewhere}
+
+  defp master_action(:resolve), do: :master_resolve
+  defp master_action(:reopen), do: :master_reopen
+  defp master_action(:destroy), do: :master_destroy
+
+  # THE BADGE AND THE THREAD BOTH RE-READ; neither keeps a copy of the other's state.
+  #
+  # Nothing pushes rows into a Gervaz table — it reads again when the state it was handed changes.
+  # So the revision is bumped and rides in the thread's `path_params`, exactly the way the Studio's
+  # snippet list is refreshed after a save. `send_update` is not the tool here: the table's
+  # `update/2` needs the full assign set it was mounted with, and a partial one raises.
+  # THE CARET FOLLOWS THE MODE. The composer says "Replying to" from here, so the cursor has to move
+  # from here too — a box that announces what it is for and then waits to be clicked is asking for a
+  # click it should not need.
+  #
+  # `gervaz:exec-js` is the bridge every admin page already uses to run a `JS` command after an
+  # event, and it is the only one that is safe against this particular patch: changing `defaults`
+  # rebuilds the form, and a PUSHED event is dispatched AFTER the DOM is patched — so the bridge
+  # focuses the textarea reply mode has just drawn, not the one it replaced. Composing `JS.focus/1`
+  # onto the Reply button instead would resolve the target before the diff and hand the caret to a
+  # detached node.
+  defp focus_composer(socket) do
+    push_event(socket, "gervaz:exec-js", %{
+      target: "pb-comment-body",
+      js: Jason.encode!(JS.focus().ops)
+    })
+  end
+
+  # ONE CHANNEL FOR A NOTE. The session topic used to carry this as well, which was a second way of
+  # saying what `PageComment`'s own `pub_sub` now says to every editor with the document open —
+  # including, since a broadcast reaches its own sender, this one: the author re-read the thread
+  # twice for every note they wrote.
+  #
+  # The local re-read stays because it is synchronous. The badge and the thread are right in the same
+  # render as the flash, rather than a message later.
+  defp refresh_review(socket), do: reread_review(socket)
+
+  defp reread_review(socket) do
+    socket
+    |> update(:review_revision, &(&1 + 1))
+    |> then(&assign(&1, :open_bugs, Review.open_bugs(Panels.review_scope(&1.assigns))))
+  end
 end

@@ -194,6 +194,8 @@ defmodule MishkaCmsCore.Runtime.PageComment do
       end
 
       presentation do
+        template MishkaCmsCoreWeb.Templates.ReviewComments
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Review
         keep_loaded_records true
       end
 
@@ -248,6 +250,11 @@ defmodule MishkaCmsCore.Runtime.PageComment do
             message -> {:halt, __MODULE__.tell_editor(message)}
           end
         end
+      end
+
+      presentation do
+        template MishkaCmsCoreWeb.Templates.ReviewCommentForm
+        ui_adapter MishkaCmsCoreWeb.UIAdapters.Review
       end
     end
   end

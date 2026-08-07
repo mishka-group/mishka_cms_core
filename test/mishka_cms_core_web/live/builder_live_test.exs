@@ -171,6 +171,18 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     view |> element(id) |> render_click()
   end
 
+  # The palette is read asynchronously so the editor paints before 183 components arrive. Every test
+  # that looks at a palette card, or at anything the components feed (the inspector's property list,
+  # the canvas's site binding), needs them to have landed — so the helper awaits them once, here,
+  # rather than each test remembering to.
+  # A SECOND PERSON, not a second tab. Two tabs of one account resume the SAME editing session and
+  # share its topic, so they would prove nothing about the thread reaching somebody it has no session
+  # with. `System.unique_integer/1` keeps the address unique across a run.
+  defp colleague(conn) do
+    email = "colleague#{System.unique_integer([:positive])}@example.com"
+    log_in(conn, create_admin(email))
+  end
+
   defp open_builder(conn, page) do
     {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
     {:ok, view, render_async(view)}
@@ -863,6 +875,85 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
              |> Map.fetch!(:tree)
              |> Tree.get(node.id)
              |> then(& &1.meta.styles) == %{base: %{"display" => "grid"}}
+    end
+
+    # The composer is a Gervaz form: `phx-submit="save"` on the component, params under "form".
+    #
+    # The trailing `render/1` is not decoration. Saving sends `{:form_saved, …}` to the LiveView, and
+    # the badge is recomputed when THAT is handled — one message after the submit's own reply. Without
+    # a render in between, the test client is still holding the HTML from before the note existed.
+    # THE THREAD RE-READS ASYNCHRONOUSLY. Gervaz loads through `start_async`, so the note is in the
+    # database before it is in the HTML; `render_async/1` is the wait, and the only alternative is a
+    # sleep that is either flaky or slow.
+    defp post_note(view, body, type) do
+      view
+      |> element("#pb-comment-form")
+      |> render_submit(%{"form" => %{"body" => body, "type" => type}})
+
+      render_async(view)
+    end
+
+    # A REPLY IS POSTED WITH ONLY A BODY, on purpose. In reply mode the composer has no type select
+    # — it has a hidden `information` — so passing a type here would test the test's opinion rather
+    # than the form's.
+    defp post_reply(view, body) do
+      view
+      |> element("#pb-comment-form")
+      |> render_submit(%{"form" => %{"body" => body}})
+
+      render_async(view)
+    end
+
+    # THE BADGE, READ OFF A FRESH RENDER. `element/2` renders from the HTML the test client last
+    # applied a diff to, and the count changes when `{:form_saved, …}` is HANDLED — one message after
+    # the event's own reply — so the element path reads the value from before the note existed.
+    defp review_badge(view) do
+      case Regex.run(~r/pb-review-count[^>]*>\s*(\d+)\s*</s, render(view)) do
+        [_all, count] -> count
+        nil -> nil
+      end
+    end
+
+    # The avatar letters and the name on a note's first line.
+    defp byline(view, note) do
+      [avatar, name | _rest] =
+        view
+        |> element("#pb-comment-#{note.id} > div:first-child")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("span")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      {avatar, name}
+    end
+
+    defp note_mentions(view, note),
+      do:
+        view
+        |> element("#pb-comment-#{note.id} > p")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s([data-role="pb-mention"]))
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+    defp resolver_line(view, note),
+      do:
+        view
+        |> element("#pb-comment-resolver-#{note.id}")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.text()
+        |> String.split()
+        |> Enum.join(" ")
+
+    # What actually landed in the database, newest first — the only thing that can prove a note
+    # outlives the session that wrote it.
+    defp notes(site, document) do
+      MishkaCmsCore.Runtime.PageBuilder.Review.list(%{
+        site_id: site.id,
+        section: :page,
+        document_id: document.id
+      })
     end
 
     # The builder SHELL is admin chrome and keeps all three.
@@ -8862,6 +8953,1110 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert html =~ "ours-hero"
       refute html =~ "theirs-hero"
     end
+
+    test "Review names what a comment would be anchored to", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      html = render(view)
+      assert html =~ "Commenting on"
+      assert html =~ "h1"
+    end
+
+    # A NOTE IS A ROW NOW, not a list on the editing session. What is pinned here is what
+    # gets STORED, because that is what has to survive the session: the element it was anchored to,
+    # the label captured beside it, its type, and who wrote it.
+    test "posting a note anchors it to the selection and stores what it was about", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      post_note(view, "Tighten this heading", "bug")
+
+      [comment] = notes(site, page)
+      assert comment.body == "Tighten this heading"
+      assert comment.node_id == h1.id
+      assert comment.node_label == "h1"
+      assert comment.type == :bug
+      assert comment.status == :open
+      assert comment.author_type == :human
+      assert comment.author_id, "a human note records who wrote it"
+    end
+
+    # A COMPOSER THAT KEEPS THE NOTE YOU JUST POSTED IS BROKEN. The form has no `phx-change`, so
+    # LiveView does not own its inputs and cannot clear them; changing `defaults` rebuilds it, and
+    # the revision on `defaults` is what changes after a write.
+    test "the composer resets after a note is posted", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      before = :sys.get_state(view.pid).socket.assigns.review_revision
+      post_note(view, "First note", "bug")
+
+      assert :sys.get_state(view.pid).socket.assigns.review_revision > before,
+             "the revision is what rebuilds the composer"
+    end
+
+    # The same code path with nothing selected. One nullable column is the whole difference.
+    test "a note left with nothing selected is about the whole page", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      post_note(view, "Needs a meta description", "task")
+
+      [comment] = notes(site, page)
+      assert comment.node_id == nil
+      assert comment.node_label == nil
+      assert comment.type == :task
+    end
+
+    test "the composer offers every note type, in the order a note's types are named", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      render_async(view)
+
+      offered =
+        view
+        |> element("#pb-comment-type")
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("option")
+        |> LazyHTML.attribute("value")
+
+      assert offered == Enum.map(MishkaCmsCore.Runtime.PageComment.types(), &to_string/1)
+    end
+
+    test "an empty note posts nothing and says so", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      post_note(view, "   ", "information")
+
+      assert notes(site, page) == []
+      assert render(view) =~ "Write something first."
+    end
+
+    # Resolving records WHO and WHEN, together or not at all.
+    test "resolving a note records the resolver, and reopening clears them", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Fix the spacing", "bug")
+
+      [comment] = notes(site, page)
+
+      # The event, not the button: one button carries BOTH, swapping its `phx-click` when the note's
+      # status changes, and `element/2` renders from the HTML the client last applied a diff to — so
+      # clicking it twice in a row sends "resolve" twice.
+      assert has_element?(view, "#pb-comment-resolve-#{comment.id}")
+      render_click(view, "resolve_comment", %{"id" => comment.id})
+
+      [resolved] = notes(site, page)
+      assert resolved.status == :resolved
+      assert resolved.resolved_at
+      assert resolved.resolved_by_id, "who closed it is the thing a thread is asked a week later"
+
+      render_click(view, "reopen_comment", %{"id" => comment.id})
+
+      [reopened] = notes(site, page)
+      assert reopened.status == :open
+      refute reopened.resolved_at
+
+      refute reopened.resolved_by_id,
+             "'resolved by X' on an open note is a claim that is not true"
+    end
+
+    test "a note can be deleted", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Never mind", "other")
+
+      [comment] = notes(site, page)
+      assert has_element?(view, "#pb-comment-delete-#{comment.id}")
+      render_click(view, "delete_comment", %{"id" => comment.id})
+
+      assert notes(site, page) == []
+    end
+
+    # THE OPEN / ALL CHIPS ARE A REAL FILTER, not decoration. They used to push Gervaz's `filter`
+    # event at a resource that declared no filters, so the handler reduced over an empty list and
+    # returned the map it started with — a silent no-op that looked exactly like a working control.
+    test "the Open and All chips actually narrow the thread", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      post_note(view, "Still needs doing", "task")
+      post_note(view, "Already handled", "bug")
+
+      handled = Enum.find(notes(site, page), &(&1.body == "Already handled"))
+      render_click(view, "resolve_comment", %{"id" => handled.id})
+      _flushed = render(view)
+
+      # All — nothing filtered, both notes.
+      view |> element("#pb-review-all") |> render_click()
+      _loaded = render_async(view)
+      all = render(view)
+      assert all =~ "Still needs doing"
+      assert all =~ "Already handled"
+
+      # Open — the resolved one goes.
+      view |> element("#pb-review-open") |> render_click()
+      _loaded = render_async(view)
+      open = render(view)
+      assert open =~ "Still needs doing"
+      refute open =~ "Already handled"
+    end
+
+    # FIFTY AT A TIME, then more on demand. `keep_loaded_records true` is what makes "more" ACCUMULATE
+    # — it re-reads pages 1..N in one query rather than replacing the list with page N — and the
+    # button is gated on `has_more?`, which is the only field that is right during a load.
+    test "the thread pages fifty at a time and loads more on demand", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      for n <- 1..62 do
+        MishkaCmsCore.Runtime.PageComment
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            body: "Note number #{n}",
+            type: :information,
+            section: :page,
+            document_id: page.id
+          },
+          tenant: site.id,
+          authorize?: false
+        )
+        |> Ash.create!()
+      end
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      _loaded = render_async(view)
+
+      cards = fn html ->
+        html |> String.split(~s(<article id="pb-comment-)) |> length() |> Kernel.-(1)
+      end
+
+      first = render(view)
+      assert cards.(first) == 50, "one page is fifty"
+      assert first =~ "pb-review-more", "there is more, so it has to be offered"
+
+      view |> element("#pb-review-more") |> render_click()
+      _loaded = render_async(view)
+
+      second = render(view)
+      assert cards.(second) == 62, "load-more accumulates rather than replacing the page"
+      refute second =~ "pb-review-more", "and stops offering once there is nothing left"
+    end
+
+    # THE COUNTER IS UNRESOLVED BUGS AND IT IS DERIVED. Every one of the four things that can
+    # change it is exercised here, because a hard-coded counter passes any test that only creates.
+    test "the Review badge counts unresolved bugs, and only those", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      assert review_badge(view) == nil
+
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      # A note that is not a bug does not move it.
+      post_note(view, "Looks good", "information")
+      assert review_badge(view) == nil
+
+      post_note(view, "Broken on mobile", "bug")
+      post_note(view, "Overlaps the footer", "bug")
+      assert review_badge(view) == "2"
+
+      bug = Enum.find(notes(site, page), &(&1.type == :bug))
+
+      render_click(view, "resolve_comment", %{"id" => bug.id})
+      assert review_badge(view) == "1"
+
+      render_click(view, "reopen_comment", %{"id" => bug.id})
+      assert review_badge(view) == "2"
+
+      render_click(view, "delete_comment", %{"id" => bug.id})
+      assert review_badge(view) == "1"
+    end
+
+    # WHO MAY CLOSE A NOTE, and — since a shared document became a master's to open — who may reach
+    # the thread at all. `PageComment` will only accept a site-less note on a section that can BE
+    # site-less, so a shared note lives on a shared component or a shared layout and nowhere else;
+    # and those are the two documents a tenant is now turned away from. The thread is a master's,
+    # entirely, and the door is where that is decided rather than the button inside it.
+    #
+    # The reader who is refused is told what happened, which is the part worth pinning: silence here
+    # reads as a broken link. `MishkaCmsCoreWeb.Test.EditorTenancyTest` covers the rule in full.
+    test "a shared component's review thread is not a tenant's to reach", %{
+      conn: conn,
+      site: site
+    } do
+      component = create_component!(name: "shared-box", template: ~s(<div>shared</div>))
+
+      {:ok, note} =
+        MishkaCmsCore.Runtime.PageComment
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            body: "Broken for everyone",
+            type: :bug,
+            section: :component,
+            document_id: component.id
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      assert is_nil(note.site_id), "the note under test has to be the shared kind"
+
+      tenant_conn = log_in(build_conn_for_host(), create_admin("tenant@example.com", site.id))
+
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(tenant_conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      assert to == "/admin/dashboard/runtime/components"
+      assert flash["error"] =~ "shared with every site"
+
+      # And the master, who does open it, is offered the button the tenant was not.
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _loaded = render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      _thread = render_async(view)
+
+      html = render(view)
+      assert html =~ "Broken for everyone"
+      assert html =~ "pb-comment-resolve-#{note.id}"
+      refute html =~ "Master closes this"
+    end
+
+    # A NOTE'S ID IS NOT AUTHORITY. The three note handlers take `phx-value-id` straight from the
+    # client, and the write behind them read the TENANT off the note it was handed — so a
+    # site-scoped admin's Delete ran under the VICTIM's tenant, which satisfied `TenantContext`, the
+    # multitenancy filter and the policy alike. Nothing downstream could tell. Scoped by who is
+    # asking now, the way `delete_snippet` has always been.
+    test "a tenant cannot reach another site's note by typing its id", %{conn: conn, site: site} do
+      other_site = create_site!(name: "elsewhere", host: "elsewhere.test")
+      foreign_page = create_page!(site_id: other_site.id, name: "their-page", path: "/their-page")
+
+      {:ok, foreign_note} =
+        MishkaCmsCore.Runtime.PageComment
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            body: "A private note on another site",
+            type: :bug,
+            section: :page,
+            document_id: foreign_page.id,
+            site_id: other_site.id
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      own_page = create_page!(site_id: site.id, name: "our-page", path: "/our-page")
+      tenant = create_admin("tenant-notes@example.com", site.id)
+      {:ok, view, _html} = open_builder(log_in(build_conn_for_host(), tenant), own_page)
+
+      for event <- ~w(resolve_comment reopen_comment delete_comment) do
+        render_click(view, event, %{"id" => foreign_note.id})
+      end
+
+      assert {:ok, survivor} =
+               Ash.get(MishkaCmsCore.Runtime.PageComment, foreign_note.id,
+                 action: :get_any,
+                 authorize?: false
+               )
+
+      assert survivor.status == :open, "#{survivor.status}: another site's note was resolved"
+      refute survivor.resolved_by_id
+
+      # Their OWN site's notes are still theirs to resolve and delete — the writes run under the
+      # domain's authorization now rather than with it turned off, so this is what says the policy
+      # lets a site admin through.
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Ours to close", "task")
+      [mine] = notes(site, own_page)
+
+      render_click(view, "resolve_comment", %{"id" => mine.id})
+      assert [%{status: :resolved}] = notes(site, own_page)
+
+      render_click(view, "delete_comment", %{"id" => mine.id})
+      assert notes(site, own_page) == []
+
+      # And the master, whose notes these are to manage, still deletes it.
+      {:ok, master_view, _html} = open_builder(conn, foreign_page)
+      render_click(master_view, "delete_comment", %{"id" => foreign_note.id})
+
+      assert {:error, _gone} =
+               Ash.get(MishkaCmsCore.Runtime.PageComment, foreign_note.id,
+                 action: :get_any,
+                 authorize?: false
+               )
+    end
+
+    # WHICH EDITOR AM I IN, AND WHOSE DOCUMENT IS THIS. Four sections share one address shape, one
+    # chrome and — until this — one title. A tab strip with a page, its layout and a component open
+    # read "Page Builder" three times, and nothing anywhere on the component editor said whether the
+    # row being changed belonged to this site or to every site.
+    test "the header names the section it is editing, not always the page", %{conn: conn} do
+      component = create_component!(name: "shared-box", template: ~s(<div>shared</div>))
+
+      {:ok, _view, html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      assert html =~ "Component builder"
+      refute html =~ "Page Builder"
+      assert html =~ "shared-box.heex"
+    end
+
+    test "a site-less component is badged Global, a site's own is badged by name", %{
+      conn: conn,
+      site: site
+    } do
+      shared = create_component!(name: "shared-box", template: ~s(<div>shared</div>))
+      owned = create_component!(name: "own-box", site_id: site.id, template: ~s(<div>own</div>))
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{shared.id}")
+
+      assert has_element?(view, "[data-role=pb-scope]", "Global")
+
+      {:ok, mine, _html} = live(conn, "/admin/dashboard/runtime/builder/component/#{owned.id}")
+
+      assert has_element?(mine, "[data-role=pb-scope]", site.name)
+      refute has_element?(mine, "[data-role=pb-scope]", "Global")
+    end
+
+    test "a layout editor says layout and a page editor still says page", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      layout = create_layout!(name: "shell", site_id: site.id, template: ~s(<div>{@inner}</div>))
+
+      {:ok, _layout_view, layout_html} =
+        live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      assert layout_html =~ "Layout builder"
+
+      {:ok, _page_view, page_html} =
+        live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      assert page_html =~ "Page builder"
+    end
+
+    # THE HANDOVER. The ring is client state, so a frame that has just mounted has none — even when
+    # the session it mounted from has had something selected all along. The server has to say what
+    # is selected, once, on the root; without it the toolbar renders (the server knows) and the hook
+    # hides it again (no node carries the ring), which reads as "selected, but no toolbar".
+    test "the canvas is told what is already selected when it mounts", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert html =~ ~s(data-selection="#{h1.id}")
+      assert html =~ "pb-el-toolbar", "the bar the ring is drawn for"
+    end
+
+    # …and re-asking for the selection the session already holds must still tell the client. That is
+    # exactly what a review note about the selected element does.
+    test "selecting the already-selected element still announces it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      render_click(view, "select", %{"id" => h1.id})
+
+      assert_push_event(canvas, "pb:selected", %{id: id})
+      assert id == h1.id
+    end
+
+    # MOVING AN IFRAME RELOADS IT — a browser rule, not a LiveView one. The flash used to be two
+    # top-level `:if` divs, so showing one INSERTED a sibling before the page, LiveView shifted the
+    # tree under it, and the canvas was thrown away and fetched again on every "Saved" and every
+    # "Note posted". A wrapper that is always there means notices come and go INSIDE it.
+    test "the flash wrapper is present even with nothing to say", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+      assert html =~ ~s(id="mishka-flash")
+      refute html =~ ~s(id="flash-info"), "nothing to show yet"
+
+      # …and it is the same wrapper once there is something in it.
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Something to say", "information")
+
+      posted = render(view)
+      assert posted =~ ~s(id="mishka-flash")
+      assert posted =~ ~s(id="flash-info")
+
+      # The notice dismisses itself, client-side — the hook is what carries the clock.
+      assert posted =~ ~s(phx-hook="FlashAutoDismiss")
+      assert posted =~ ~s(data-dismiss-after)
+    end
+
+    # A NOTE IS NOT A DOCUMENT CHANGE. Notes ride the session topic so both editors' sheets follow
+    # each other, but re-reading the session in the canvas rebuilds the whole document — which the
+    # author sees as the page flashing every time anyone types a comment.
+    # The canvas must not so much as LOOK at the session for a review message. Comparing the tree
+    # afterwards proves nothing — re-reading gives an equal tree — so this proves it by making the
+    # read impossible: with the session gone, anything that re-reads it flips the frame to
+    # "expired", and ignoring the message leaves the canvas exactly as it was.
+    test "a review message does not make the canvas re-read the session", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      token = token(view)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token}")
+
+      refute :sys.get_state(canvas.pid).socket.assigns.missing?
+
+      MishkaCmsCore.Runtime.States.EditorSessionState.delete(token)
+
+      send(canvas.pid, {:builder_session, token, {:review, :changed}})
+      _rendered = render(canvas)
+      refute :sys.get_state(canvas.pid).socket.assigns.missing?, "a note is not a document change"
+
+      # …and anything that IS a document change still is.
+      send(canvas.pid, {:builder_session, token, {:op_applied, :insert}})
+      _rendered = render(canvas)
+      assert :sys.get_state(canvas.pid).socket.assigns.missing?
+    end
+
+    # REPLIES. The shape is `MishkaBlog.Comment`'s — a nullable self-reference and its reverse — and
+    # so is the move: Reply seeds the composer's `defaults` with the parent rather than opening a
+    # second form.
+    test "replying threads the answer under the question", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      post_note(view, "Is this heading final?", "question")
+      [question] = notes(site, page)
+
+      # MOVE THE SELECTION FIRST. A reply anchored to whatever happens to be selected when Reply is
+      # pressed would file the answer against a different element than the question — and with the
+      # selection left on the h1 the two answers are the same string, so the test could not tell.
+      elsewhere = node_with_tag(view, "p")
+      render_click(view, "select", %{"id" => elsewhere.id})
+
+      # Arming a reply changes what the composer says it is doing.
+      armed = render_click(view, "reply_to_comment", %{"id" => question.id})
+      assert armed =~ "Replying to"
+      assert armed =~ "Post reply"
+      assert armed =~ "pb-comment-cancel-reply"
+
+      post_note(view, "Yes, signed off yesterday", "information")
+
+      # The thread still holds ONE note: the answer is under the question, not beside it.
+      assert [threaded] = notes(site, page)
+      assert threaded.id == question.id
+      assert [reply] = threaded.replies
+      assert reply.body == "Yes, signed off yesterday"
+      assert reply.parent_comment_id == question.id
+
+      # …and it inherited what the question was about, not whatever is selected now.
+      assert reply.node_id == h1.id
+      assert reply.node_label == "h1"
+
+      # Posting it ends reply mode.
+      assert render(view) =~ "Commenting on"
+    end
+
+    test "cancelling a reply goes back to writing a new note", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "A question", "question")
+
+      [question] = notes(site, page)
+      assert render_click(view, "reply_to_comment", %{"id" => question.id}) =~ "Replying to"
+      assert render_click(view, "cancel_reply", %{}) =~ "Commenting on"
+    end
+
+    # A reply answers a note that already has a type; letting it carry its own would double-count it
+    # in the badge.
+    test "a reply is not a bug of its own", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Broken here", "bug")
+
+      [bug] = notes(site, page)
+      assert review_badge(view) == "1"
+
+      render_click(view, "reply_to_comment", %{"id" => bug.id})
+      post_reply(view, "Fixing it now")
+
+      assert review_badge(view) == "1", "a reply must not add to the count"
+      assert [%{replies: [reply]}] = notes(site, page)
+      assert reply.type == :information
+    end
+
+    test "the answers are drawn under the question", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "The question", "question")
+
+      [question] = notes(site, page)
+      render_click(view, "reply_to_comment", %{"id" => question.id})
+      post_note(view, "The answer", "information")
+
+      html = render_async(view)
+      assert html =~ "The question"
+      assert html =~ "The answer"
+      assert [%{replies: [reply]}] = notes(site, page)
+      assert html =~ "pb-comment-#{reply.id}"
+    end
+
+    # NAMING SOMEBODY. The browser decides WHEN — it is the only thing that knows where the caret
+    # is — so the search arrives as a hook push rather than a click.
+    test "typing @ offers the people who can be named", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      assert render_hook(view, "mention_search", %{"q" => "bo"}) =~
+               ~s(data-handle="boss@example.com")
+
+      refute render_hook(view, "mention_search", %{"q" => "zz"}) =~ "pb-mention-list"
+    end
+
+    # PICKING IS THE BROWSER'S — it owns the caret, the arrow keys and the highlight. What the server
+    # has to put in the markup is what the hook reads: the handle, and a row that starts highlighted.
+    test "the list carries what the keyboard picks with", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      html = render_hook(view, "mention_search", %{"q" => "bo"})
+
+      assert html =~ ~s(data-handle="boss@example.com")
+      assert html =~ ~s(data-index="0")
+      assert html =~ ~s(data-active="true")
+    end
+
+    test "leaving the word closes the list", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      assert render_hook(view, "mention_search", %{"q" => ""}) =~
+               ~s(data-handle="boss@example.com")
+
+      refute render_hook(view, "mention_close", %{}) =~ ~s(data-handle="boss@example.com")
+    end
+
+    # BEING NAMED IS ADDRESSED TO YOU, so your own chip is the filled one. The handle is the email's
+    # local part, so the reader of this test IS `@boss`.
+    test "your own name is drawn differently from anybody else's", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      html = post_note(view, "@boss@example.com and @someone@else.test", "information")
+
+      assert html =~ ~s(data-role="pb-mention-self")
+      assert html =~ "boss@example.com — this is you"
+      assert html =~ ~s(data-role="pb-mention")
+    end
+
+    # A NAME IN A NOTE IS DRAWN AS ONE. Segments rather than injected markup, so this also pins that
+    # a body is still text: the chip is a span the template made, not something the body said.
+    test "a name in a note is drawn as a chip", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      html = post_note(view, "@boss@example.com please look at <b>this</b>", "question")
+
+      assert html =~ ">@boss@example.com</span>"
+      refute html =~ "<b>this</b>", "a body is text, not markup"
+    end
+
+    # THE ANCHOR HAS TO SURVIVE THE PARSE THAT WROTE IT. Node ids are minted per parse, so a
+    # colleague reading the note in their own session computes a different id for the same element —
+    # and the note used to tell them the element was gone. The stored path is what both of them agree
+    # on.
+    test "a note's element can be found from another session", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "About this heading", "question")
+
+      [note] = notes(site, page)
+      assert note.node_path, "an element note has to record where the element sits"
+
+      {:ok, other, _html} = open_builder(colleague(conn), page)
+      their_h1 = node_with_tag(other, "h1")
+
+      assert their_h1.id != note.node_id,
+             "two sessions mint different ids; without that this proves nothing"
+
+      render_click(other, "open_sheet", %{"sheet" => "review"})
+      render_click(other, "goto_comment", %{"id" => note.id})
+
+      assert editor(other).selection == their_h1.id
+      refute render(other) =~ "no longer on this page"
+    end
+
+    # The path is a position, and a position is only right if what sits there is still the same kind
+    # of thing. Deleting an element slides its neighbour into that index.
+    test "a note does not select whatever slid into its place", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "About this heading", "question")
+
+      [note] = notes(site, page)
+
+      {:ok, other, _html} = open_builder(colleague(conn), page)
+      render_click(other, "op", %{"kind" => "delete", "node_id" => node_with_tag(other, "h1").id})
+      render_click(other, "open_sheet", %{"sheet" => "review"})
+      render_click(other, "goto_comment", %{"id" => note.id})
+
+      assert render(other) =~ "no longer on this page"
+    end
+
+    # A NOTE ABOUT THE PAGE, WITH SOMETHING SELECTED. The composer follows the canvas, which is right
+    # nearly always and wrong exactly when the thing to be said is about the page rather than the
+    # element under the cursor. Deselecting to say it would lose the place you were working in.
+    test "the scope can be cleared to the whole page without deselecting", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      assert render(view) =~ "pb-comment-whole-page"
+
+      cleared = render_click(view, "comment_on_page", %{})
+      refute cleared =~ "pb-comment-whole-page", "there is nothing left to clear"
+
+      post_note(view, "About the page as a whole", "information")
+
+      assert [note] = notes(site, page)
+      refute note.node_id, "the note is about the page, not the element still selected"
+      refute note.node_path
+      assert editor(view).selection == h1.id, "clearing the scope must not clear the canvas"
+    end
+
+    # …and choosing another element is choosing what the next note is about, so the override ends.
+    test "selecting an element takes the composer back off the page", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      render_click(view, "comment_on_page", %{})
+
+      refute render(view) =~ "pb-comment-whole-page"
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "p").id})
+
+      # The composer REBUILDS when what it is about changes, and a rebuilt Gervaz form draws its
+      # skeleton until it has loaded.
+      html = render_async(view)
+
+      assert html =~ "pb-comment-whole-page"
+      assert html =~ "&lt;p&gt;"
+    end
+
+    # A LOCAL PART IS NOT A NAME. Two people called `master` are two people, and a byline reading
+    # "master" says which of them wrote this to nobody.
+    test "the byline is the whole address", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      html = post_note(view, "Mine", "information")
+
+      assert html =~ ">boss@example.com<"
+      refute html =~ ">boss<"
+    end
+
+    # A MASTER'S ADDRESS IS NOT A TENANT'S TO HAVE. The masters work across every site on the
+    # deployment, so putting one's email in a customer's sidebar hands them the platform's own
+    # contact details. The activity feed already draws this line; the thread draws it too.
+    test "a tenant sees a master's note without seeing the master", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Written by a master", "information")
+
+      tenant_conn = log_in(build_conn_for_host(), create_admin("tenant@example.com", site.id))
+      {:ok, theirs, _html} = open_builder(tenant_conn, page)
+      render_click(theirs, "open_sheet", %{"sheet" => "review"})
+
+      theirs_html = render_async(theirs)
+      [note] = notes(site, page)
+
+      assert theirs_html =~ "Written by a master", "the note itself is theirs to read"
+      assert byline(theirs, note) == {"M", "Master"}
+      refute theirs_html =~ "boss@example.com"
+      refute theirs_html =~ ">boss<", "not even the local part"
+
+      # …and a master reading the same note sees the whole address.
+      assert byline(view, note) == {"B", "boss@example.com"}
+    end
+
+    test "a site admin reads a master named in a note as @Master", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_admin("other.master@platform.test")
+      create_admin("named-tenant@example.com", site.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "@other.master@platform.test and @named-tenant@example.com look", "task")
+      [note] = notes(site, page)
+
+      tenant_conn = log_in(build_conn_for_host(), create_admin("reader@example.com", site.id))
+      {:ok, theirs, _html} = open_builder(tenant_conn, page)
+      render_click(theirs, "open_sheet", %{"sheet" => "review"})
+      render_async(theirs)
+
+      assert note_mentions(theirs, note) == ["@Master", "@named-tenant@example.com"]
+      refute render(theirs) =~ "other.master"
+
+      assert note_mentions(view, note) == [
+               "@other.master@platform.test",
+               "@named-tenant@example.com"
+             ]
+    end
+
+    test "a site admin sees who resolved a note, and a master only as Master", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      tenant = create_admin("resolver-tenant@example.com", site.id)
+      tenant_conn = log_in(build_conn_for_host(), tenant)
+
+      {:ok, theirs, _html} = open_builder(tenant_conn, page)
+      render_click(theirs, "open_sheet", %{"sheet" => "review"})
+      post_note(theirs, "Raised by the site", "bug")
+      [note] = notes(site, page)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      render_click(view, "resolve_comment", %{"id" => note.id})
+      render_async(view)
+
+      assert byline(view, note) == {"RT", "resolver-tenant@example.com"}
+      assert resolver_line(view, note) =~ "Resolved by boss@example.com"
+
+      {:ok, theirs, _html} = open_builder(tenant_conn, page)
+      render_click(theirs, "open_sheet", %{"sheet" => "review"})
+      render_async(theirs)
+
+      assert byline(theirs, note) == {"RT", "resolver-tenant@example.com"}
+      assert resolver_line(theirs, note) =~ "Resolved by Master"
+      refute render(theirs) =~ "boss@example.com"
+      refute render(theirs) =~ ">boss<"
+    end
+
+    # MOTION IN BOTH DIRECTIONS. An overlay gated by `:if` is gone from the DOM the instant the assign
+    # flips, so a CSS leave transition never gets a frame — `phx-remove` is what makes LiveView hold
+    # the node back and run the commands first. Without it the close is the one that snaps, and it is
+    # the one nobody notices is missing until it is there.
+    test "the sheet arrives and leaves with motion", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      assert html =~ ~s(id="pb-sheet")
+      assert html =~ "phx-mounted"
+      assert html =~ "phx-remove"
+      assert html =~ "duration-200", "the enter"
+      assert html =~ "duration-150", "and the leave"
+    end
+
+    # PREVIEW IS A TOGGLE, and the caret only exists where there is a second way. A page with no
+    # draft has none, and a caret with nothing behind it turns one click into a choice.
+    test "preview has no caret without a draft to share", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      html = render(view)
+
+      assert html =~ ~s(id="pb-preview")
+      refute html =~ ~s(id="pb-preview-menu")
+      refute html =~ ~s(id="pb-preview-tab")
+    end
+
+    test "preview still toggles between the editor and the page", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      refute editor(view).preview?
+
+      render_click(view, "toggle_preview", %{})
+      assert editor(view).preview?
+
+      render_click(view, "toggle_preview", %{})
+      refute editor(view).preview?
+    end
+
+    # A DESCRIPTION GOES UNDER THE TITLE. Beside it the two ran together into one line that read as
+    # neither, so the markup has to put the label in a block of its own.
+    test "a menu item's description sits under its title", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      html = render(view)
+
+      assert [_all, between] = Regex.run(~r/Draft history(.*?)Open a saved draft/s, html)
+      assert between =~ "</span>", "the title closes before the description starts"
+      assert between =~ "block", "and the description is its own block"
+    end
+
+    # A note is only actionable if the reader can get to what it is about.
+    test "a note's chip selects the element it was written about", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "Here", "suggestion")
+
+      render_click(view, "select", %{"id" => nil})
+      refute editor(view).selection
+
+      [comment] = notes(site, page)
+      render_click(view, "goto_comment", %{"id" => comment.id})
+
+      assert editor(view).selection == h1.id
+    end
+
+    # And when it is not, that is a sentence rather than a crash. The id is the editor's own
+    # handle, minted fresh by every parse, so it goes stale by construction.
+    test "a note pointing at a deleted element says so instead of failing", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "About this heading", "question")
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+
+      [comment] = notes(site, page)
+      html = render_click(view, "goto_comment", %{"id" => comment.id})
+
+      assert html =~ "no longer on this page"
+    end
+
+    test "a page-level note says it is about the page rather than going nowhere", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "About the page", "information")
+
+      [comment] = notes(site, page)
+      assert render_click(view, "goto_comment", %{"id" => comment.id}) =~ "the whole page"
+    end
+
+    # Nothing here implements AI review. What is pinned is that when something does, it is a
+    # value in an existing column rather than a second comment system beside this one. The system
+    # writes it through `:master_create`; the tenant `:create` takes no author from input.
+    test "a note can be written by an AI or by the system", %{page: page, site: site} do
+      for author_type <- [:ai, :system] do
+        assert {:ok, comment} =
+                 MishkaCmsCore.Runtime.PageComment
+                 |> Ash.Changeset.for_create(
+                   :master_create,
+                   %{
+                     body: "Contrast is below AA here",
+                     type: :bug,
+                     section: :page,
+                     document_id: page.id,
+                     site_id: site.id,
+                     author_type: author_type
+                   },
+                   authorize?: false
+                 )
+                 |> Ash.create()
+
+        assert comment.author_type == author_type
+        assert comment.author_id == nil, "an AI or system note has no user row"
+      end
+
+      assert length(notes(site, page)) == 2
+    end
+
+    # Both browsers in a session share one document, so they share one thread — which is now true
+    # because the thread is a table, not a copy of a list.
+    test "a note posted in one session is visible to the other editor", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      token = token(view)
+
+      {:ok, second, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}?session=#{token}")
+
+      render_click(second, "open_sheet", %{"sheet" => "review"})
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      post_note(view, "Seen by both", "information")
+
+      [comment] = notes(site, page)
+      assert comment.body == "Seen by both"
+
+      # The second editor reads the same rows, so re-opening its sheet shows the note.
+      render_click(second, "open_sheet", %{"sheet" => "review"})
+      _loaded = render_async(second)
+      assert render(second) =~ "Seen by both"
+    end
+
+    # TWO PEOPLE WHO EACH OPENED THIS PAGE FROM THE LIST share no session and no session topic — the
+    # rows are the only thing they have in common. The thread follows them, on the resource's own
+    # `pub_sub`, so a note arrives while the other editor is looking at it.
+    test "a note reaches an editor in a session of their own", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, other, _html} = open_builder(colleague(conn), page)
+
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      render_click(other, "open_sheet", %{"sheet" => "review"})
+
+      assert token(view) != token(other),
+             "two people editing one page have two sessions; without that this proves nothing"
+
+      post_note(view, "Written next door", "information")
+
+      # No click, no reload: the other editor's thread re-read on the broadcast alone.
+      assert render_async(other) =~ "Written next door"
+    end
+
+    # The badge is a count of rows, so it has to move for the same reason the thread does.
+    test "the bug counter follows somebody else's note", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, other, _html} = open_builder(colleague(conn), page)
+
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      assert review_badge(other) == nil
+
+      post_note(view, "Broken next door", "bug")
+
+      _settled = render_async(other)
+      assert review_badge(other) == "1"
+    end
+
+    # A note about ANOTHER page arrives on the same topic — the topic knows only the site. The thread
+    # would never SHOW it, because the read is scoped by document either way; what the check buys is
+    # that a busy site does not make every open editor re-read for every note in it. So the thing to
+    # assert is the work, not the words.
+    test "a note about another page does not disturb this thread", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      elsewhere = create_page!(site_id: site.id)
+      {:ok, view, _html} = open_builder(conn, elsewhere)
+      {:ok, other, _html} = open_builder(colleague(conn), page)
+
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      render_click(other, "open_sheet", %{"sheet" => "review"})
+
+      before = revision(other)
+      post_note(view, "About the other page", "information")
+      _settled = render_async(other)
+
+      refute render(other) =~ "About the other page"
+
+      assert revision(other) == before,
+             "a note about another document must not cost this thread a read"
+    end
+
+    # OUR OWN NOTE COMES BACK TO US on the same topic everybody else hears it on. `refresh_review/1`
+    # has already re-read, synchronously, so handling the echo as well would make the author pay for
+    # every note twice — a second `:for_editor` read and a second `COUNT` for nothing.
+    test "the author does not re-read their own note twice", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+
+      before = revision(view)
+      post_note(view, "Mine", "information")
+
+      assert revision(view) == before + 1,
+             "the write re-read the thread once; the broadcast must not re-read it again"
+    end
+
+    defp revision(view), do: :sys.get_state(view.pid).socket.assigns.review_revision
+
+    # §Reply — the composer announces what it is for, so the caret has to be in it.
+    test "replying puts the caret in the composer", %{conn: conn, page: page, site: site} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "review"})
+      post_note(view, "A question", "question")
+
+      [question] = notes(site, page)
+      render_click(view, "reply_to_comment", %{"id" => question.id})
+
+      assert_push_event(view, "gervaz:exec-js", %{target: "pb-comment-body", js: js})
+      assert js =~ "focus"
+
+      render_click(view, "cancel_reply", %{})
+      assert_push_event(view, "gervaz:exec-js", %{target: "pb-comment-body"})
+    end
   end
 
   describe "a layout, which is not a page with a header on it" do
@@ -14323,6 +15518,102 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute editor(view).preview?
       assert has_element?(view, "#pb-left")
       assert render(canvas) =~ "pb-el-toolbar"
+    end
+
+    # A comment renders nothing on the live page, so preview must not show one — not even one the
+    # author unfolded. An expression is the opposite: something real will be there, and hiding its
+    # chip would show a gap the page lacks.
+    test "preview hides comment chips but keeps expression chips", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><%!-- EDITORNOTE --%><p><%= @title %></p><!-- HTMLNOTE --></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      for kind <- [:eex_comment, :html_comment] do
+        render_click(view, "toggle_hidden", %{"id" => node_with_kind(view, kind).id})
+      end
+
+      unfolded = render(canvas)
+      assert unfolded =~ "EDITORNOTE"
+      assert unfolded =~ "HTMLNOTE"
+
+      view |> element("#pb-preview") |> render_click()
+
+      previewed = render(canvas)
+      refute previewed =~ "EDITORNOTE"
+      refute previewed =~ "HTMLNOTE"
+      assert previewed =~ "@title"
+    end
+
+    # A COMMENT IS A NOTE TO THE AUTHOR, not a thing on the page, so its chip starts folded and the
+    # eye on its layers row is what unfolds it. An expression is the opposite — something real WILL
+    # render there — so its chip is drawn from the first paint.
+    test "comment chips start folded and the eye unfolds one", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div><%!-- EDITORNOTE --%><p><%= @title %></p><!-- HTMLNOTE --></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      refute html =~ "EDITORNOTE"
+      refute html =~ "HTMLNOTE"
+      assert html =~ "@title", "an expression is not a comment"
+
+      render_click(view, "toggle_hidden", %{"id" => node_with_kind(view, :eex_comment).id})
+
+      unfolded = render(canvas)
+      assert unfolded =~ "EDITORNOTE"
+      refute unfolded =~ "HTMLNOTE", "the other note was not asked for"
+    end
+
+    # A FOLDED NODE IS STILL A DOM CHILD. The canvas drop resolver reads an insertion index by
+    # counting `[data-node-id]` children in order, so a folded note that left no trace would land the
+    # next drop one position early — and `data-ws` is what stops it counting as content, or the `div`
+    # holding nothing but a note would never get its drop floor.
+    test "a folded comment keeps its place among the canvas children", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<div><!-- HTMLNOTE --><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, _canvas, html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      note = node_with_kind(view, :html_comment)
+
+      assert html =~ ~s(data-node-id="#{note.id}"), "the slot is still a DOM child"
+      assert html =~ ~s(data-ws="true" data-folded="true")
+      assert html =~ ~s([data-folded="true"] { display: none; })
+      refute html =~ "HTMLNOTE", "but nothing of it is drawn"
+      refute html =~ ~s(phx-value-id="#{note.id}"), "and it cannot be clicked on the canvas"
+    end
+
+    # THE ROW IS THE WAY BACK. Fold the chip and the tree must still say the note is there, or the
+    # only thing left pointing at it is the saved source.
+    test "a comment's layers row is listed with its eye already off", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: ~s(<div><%!-- EDITORNOTE --%><p>One</p></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+      note = node_with_kind(view, :eex_comment)
+
+      row = view |> element(~s([data-layer-row="#{note.id}"])) |> render()
+      assert row =~ "Show on canvas"
+      refute row =~ "Fold away on canvas"
+
+      sibling = view |> element(~s([data-layer-row="#{node_with_tag(view, "p").id}"])) |> render()
+
+      assert sibling =~ "Fold away on canvas",
+             "nothing changed for anything that is not a comment"
+
+      render_click(view, "toggle_hidden", %{"id" => note.id})
+
+      assert view |> element(~s([data-layer-row="#{note.id}"])) |> render() =~
+               "Fold away on canvas"
     end
 
     test "an open canvas follows the direction without being reloaded", %{conn: conn, page: page} do

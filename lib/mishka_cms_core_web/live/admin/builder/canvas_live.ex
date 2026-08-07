@@ -539,6 +539,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   end
 
   @impl true
+  # A REVIEW NOTE IS NOT A DOCUMENT CHANGE. Notes ride the session topic so both editors' sheets
+  # follow each other, but the canvas has nothing to redraw for one — and re-reading the session
+  # rebuilds the whole document, which the author sees as the page flashing every time anyone types
+  # a comment. It is answered and ignored.
+  def handle_info({:builder_session, _token, {:review, _what}}, socket), do: {:noreply, socket}
+
   # THE ONE MESSAGE THAT INVALIDATES THE PALETTE-DERIVED CACHES. `required_attrs` and the icon
   # defaults are read out of every component's every attribute, so they are computed once and kept;
   # this is the only event that can make them wrong, and it arrives exactly when `put_components/2`
