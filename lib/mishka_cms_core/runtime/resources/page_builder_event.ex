@@ -47,6 +47,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilderEvent do
     authorizers: [Ash.Policy.Authorizer]
 
   alias MishkaCmsCore.Runtime.Resources.Validations.{AnchorSiteRequired, SameSiteReference}
+  alias MishkaCmsCoreWeb.Templates.HistoryTimeline
 
   require Ash.Query
 
@@ -180,6 +181,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilderEvent do
       end
 
       presentation do
+        template HistoryTimeline
         features [:filter, :paginate]
       end
 

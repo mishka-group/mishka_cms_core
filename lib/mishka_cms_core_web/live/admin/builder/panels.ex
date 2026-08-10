@@ -30,6 +30,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Highlight
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
+  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.MediaCategory
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
@@ -580,11 +581,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  attr(:editor, :any, required: true)
   attr(:record, :any, default: nil)
   attr(:section, :string, required: true)
   attr(:back_path, :string, required: true)
   attr(:current_user, :any, default: nil)
   attr(:editors, :list, default: [])
+  attr(:draft, :any, default: nil)
+  attr(:drafts_enabled?, :boolean, default: false)
   attr(:dirty?, :boolean, default: false)
   attr(:saved_at, :any, default: nil)
   attr(:stage, :atom, default: :draft)
@@ -602,6 +606,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   @doc "The 56px top bar: identity and save status on the left, every global control on the right."
   def top_bar(assigns) do
+    assigns = assign(assigns, :shareable_draft?, shareable_draft?(assigns[:draft]))
+
     ~H"""
     <header class="flex h-14 flex-none items-center gap-3.5 border-b border-[#e6e4de] bg-white px-4 max-[1060px]:gap-2 max-[1060px]:px-2.5">
       <span
@@ -653,6 +659,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             <span class="flex-none text-[10px] font-medium text-[#6d6a63]">
               · {status_label(assigns)}
             </span>
+            <%!-- Which of this document's versions the editor is writing to. Absent means the live
+                  one. A save that lands somewhere the author did not choose is the failure this
+                  names away. --%>
+            <%!-- The one control that answers "where am I saving, and when did it last save?" — and
+                  the way to a different draft. It replaces a toolbar icon that said neither. --%>
+            <button
+              :if={@drafts_enabled?}
+              type="button"
+              id="pb-draft-target"
+              phx-click="draft_sheet"
+              title={gettext("Choose a draft")}
+              class="inline-flex max-w-[190px] flex-none items-center gap-1 rounded-full border border-[#dcdbf5] bg-[#f2f1fc] px-2 py-[1px] font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+            >
+              <span class="truncate">
+                {(@editor.draft_label &&
+                    MishkaCmsCore.Runtime.PageBuilder.Drafts.display_label(@editor.draft_label)) ||
+                  live_label(@section)}
+              </span>
+              <span :if={@editor.saved_at} class="flex-none font-medium text-[#8580d8]">
+                · {ago(@editor.saved_at)}
+              </span>
+              <.icon name={:chevron} size={9} class="flex-none rotate-90" />
+            </button>
           </div>
         </div>
       </div>
@@ -723,6 +752,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             </button>
           </div>
           <span class="mx-1.5 my-1 block h-px bg-[#f0efea]" />
+          <.more_item
+            :if={@drafts_enabled?}
+            id="pb-more-drafts"
+            event="draft_sheet"
+            value={%{}}
+            icon={:layers}
+            label={gettext("Draft history")}
+            description={gettext("Open a saved draft, or save this one under a name")}
+          />
           <%!-- The draft saves itself on a timer, so this is the "now, please" — kept off the top bar
                 because the prototype has no Save there and an autosaving editor does not need one. --%>
           <%!-- Undo and redo lost their buttons when the bar went down to one circular icon — three
@@ -809,6 +847,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             icon={:frames}
             label={gettext("Fit to screen")}
             badge="⇧1"
+          />
+          <.more_item
+            event="open_sheet"
+            value={%{sheet: "history"}}
+            icon={:history}
+            label={gettext("Record history")}
           />
         </div>
       </div>
@@ -925,6 +969,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           label={gettext("Review")}
           count={@open_bugs}
         />
+        <button
+          id="pb-history"
+          type="button"
+          data-role="pb-hist"
+          phx-click="open_sheet"
+          phx-value-sheet="history"
+          title={gettext("Record history")}
+          class="grid size-8 flex-none place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+        >
+          <.icon name={:history} size={15} />
+        </button>
 
         <%!-- THE TOP BAR'S CODE IS THE PAGE'S SOURCE, in a window big enough to read it in. It used
               to toggle the strip at the bottom of the canvas, which is a different surface with a
@@ -938,8 +993,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           label={gettext("Code")}
           active={@source_modal}
         />
+        <%!-- PREVIEW IS A TOGGLE, and on most pages that is all it is: press it to see the page
+              itself, press it again to come back. The caret used to be there always, holding two
+              more ways to preview — which made a one-click control look like a three-way choice and
+              put a menu in front of the thing it was hiding.
+              
+              It appears only when there IS a second way: a draft has a shareable URL and nothing
+              else does. Opening that link never touches the toggle — it is a different surface, in
+              a different tab. --%>
+        <div
+          data-role="pb-preview"
+          class="relative flex-none"
+          phx-click-away={menu_close("#pb-preview-ways")}
+        >
+          <span class="flex">
             <.bar_button
               id="pb-preview"
+              joined={@shareable_draft?}
               event="toggle_preview"
               value={%{}}
               icon={:eye}
@@ -947,6 +1017,48 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               active={@preview?}
               tone={:green}
             />
+            <%!-- Joined to the button, the way the stage control is: one control that acts on the
+                  left and offers its other way on the right, not two squares that happen to be
+                  adjacent. --%>
+            <button
+              :if={@shareable_draft?}
+              id="pb-preview-menu"
+              type="button"
+              phx-click={menu_toggle("#pb-preview-ways")}
+              title={gettext("More ways to preview")}
+              class="grid h-8 w-7 flex-none place-items-center rounded-r-[9px] border border-l-[#ecebe6] border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            >
+              <.icon name={:chevron} size={12} class="rotate-90" />
+            </button>
+          </span>
+          <div
+            :if={@shareable_draft?}
+            id="pb-preview-ways"
+            phx-window-keydown={menu_close("#pb-preview-ways")}
+            phx-key="escape"
+            class="absolute right-0 top-[38px] z-[70] hidden w-[248px] rounded-[13px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_18px_46px_rgba(20,18,26,.22)]"
+          >
+            <.link
+              id="pb-preview-tab"
+              phx-click={menu_close("#pb-preview-ways")}
+              href={preview_href(@section, @draft, @editor)}
+              target="_blank"
+              class="flex w-full items-start gap-2.5 rounded-[9px] p-[9px] text-left hover:bg-[#f6f5f2]"
+            >
+              <.icon name={:rocket} size={15} class="mt-[1px] flex-none text-[#6d6a63]" />
+              <span class="min-w-0 flex-1">
+                <span class="block text-[12px] font-semibold text-[#1b1a18]">
+                  {gettext("Open in a new tab")}
+                </span>
+                <span class="mt-0.5 block text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
+                  {gettext("The shareable link for “%{label}”",
+                    label: MishkaCmsCore.Runtime.PageBuilder.Drafts.display_label(@draft.label)
+                  )}
+                </span>
+              </span>
+            </.link>
+          </div>
+        </div>
         <%!-- The toggle is CLIENT state. The theme lives on `<html data-theme>` and in localStorage,
               written by the root layout's own script, so a server assign would be a second copy of it
               that is wrong the moment another tab, or the console's own switch, changes it — which is
@@ -994,6 +1106,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             id="pb-stage-menu"
             type="button"
             phx-click={menu_toggle("#pb-stage-ways")}
+            title={autosave_title(@draft)}
             class={[
               "grid h-8 w-7 place-items-center rounded-r-[9px]",
               ((@stage == :published or @stage != @applied_stage) &&
@@ -1018,6 +1131,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             phx-key="escape"
             class="absolute right-0 top-[38px] z-[70] hidden w-56 rounded-xl border border-[#ecebe6] bg-white p-[5px] shadow-[0_16px_44px_rgba(20,18,26,.2)]"
           >
+            <button
+              :if={@drafts_enabled?}
+              type="button"
+              id="pb-stage-drafts"
+              phx-click={menu_close("#pb-stage-ways") |> JS.push("draft_sheet")}
+              class="flex w-full items-start gap-[9px] rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
+            >
+              <span class="grid size-[26px] flex-none place-items-center rounded-[8px] bg-[#f2f1ec] text-[#6d6a63]">
+                <.icon name={:layers} size={13} />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block font-['Space_Grotesk'] text-[12px] font-bold text-[#1b1a18]">
+                  {gettext("Draft history")}
+                </span>
+                <span class="mt-0.5 block text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
+                  {gettext("Every saved draft of this page — open one, or save this as a new one.")}
+                </span>
+              </span>
+            </button>
+            <span :if={@drafts_enabled?} class="my-[3px] block h-px bg-[#f0efea]"></span>
             <button
               :for={{key, label, hint} <- stages()}
               type="button"
@@ -1121,6 +1254,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     </button>
     """
   end
+
+  # A DRAFT IS THE ONLY THING WITH A SECOND WAY TO PREVIEW IT: a URL somebody who is not editing can
+  # open. Without one there is nothing behind the caret, and a caret with nothing behind it turns a
+  # one-click toggle into a choice.
+  defp shareable_draft?(%{preview_token: token}) when is_binary(token) and token != "", do: true
+  defp shareable_draft?(_none), do: false
 
   # Preview is the one control whose "on" is not an editor mode but a state of the page, so the
   # prototype gives it the green the rest of the console uses for live/published.
@@ -7530,6 +7669,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:breakpoint, :atom, default: :base)
   attr(:status, :any, default: nil)
   attr(:statuses, :list, default: [])
+  attr(:resumable, :any, default: nil)
+  attr(:inherited_draft, :any, default: nil)
+
+  attr(:original_changed?, :boolean,
+    default: false,
+    doc: "whether the document the open draft was made from has changed since"
+  )
+
+  attr(:stage, :atom, default: :draft)
+  attr(:dirty?, :boolean, default: false)
+  attr(:keeping_draft?, :boolean, default: false)
   attr(:code_open, :boolean, default: false)
   attr(:code_tab, :atom, default: :heex)
   attr(:drawer_h, :integer, default: 300)
@@ -7639,9 +7789,123 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         </details>
       </div>
 
+      <%!-- Work a previous session left behind. OFFERED, never loaded: opening a page and silently
+            being handed something else is exactly the surprise this feature exists to remove.
 
+            It has nothing to say once the editor is pointed at a draft. Every word of it is then
+            wrong — you are not looking at the live page, and "Resume" would swap the draft you
+            chose for a different one. The condition is the editor's target rather than a flag
+            cleared per route, so opening a draft, forking one, and the first change of a session
+            all put the bar away without each having to remember to. --%>
+      <%!-- YOU WALKED BACK INTO A DRAFT. The editing session outlives a reload — which is what stops
+            a refresh throwing work away — so reopening the page put you inside whatever draft was
+            open, showing something other than the live page, and said nothing about it. This asks,
+            once per visit: keep going in it, or leave it alone and start again from the live page.
+            Either way the draft survives; neither button throws anything away. --%>
+      <div
+        :if={@inherited_draft}
+        id="pb-inherited-bar"
+        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#dcdbf5] bg-[#f2f1fc] px-4 py-[9px]"
+      >
+        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#e4e2f7] text-[#4f4bcc]">
+          <.icon name={:draft} size={12} />
+        </span>
+        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#2e2b6b]">
+          {inherited_question(@inherited_draft)}
+        </span>
+        <button
+          type="button"
+          id="pb-inherited-continue"
+          phx-click="continue_draft"
+          class="h-7 flex-none rounded-[8px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white"
+        >
+          {inherited_action(@inherited_draft)}
+        </button>
+        <button
+          type="button"
+          id="pb-inherited-fresh"
+          phx-click="start_fresh"
+          class="h-7 flex-none rounded-[8px] border border-[#dcdbf5] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#4f4bcc] hover:bg-[#faf9fe]"
+        >
+          {inherited_decline(@inherited_draft)}
+        </button>
+      </div>
 
+      <div
+        :if={@resumable && is_nil(@editor.draft_id) && is_nil(@inherited_draft)}
+        id="pb-resume-bar"
+        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0e3c9] bg-[#fbf1df] px-4 py-[9px]"
+      >
+        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f6e5c6] text-[#8a5514]">
+          <.icon name={:history} size={12} />
+        </span>
+        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
+          {gettext("“%{label}” — %{ago}, never published. You are looking at the live page.",
+            label: @resumable.label,
+            ago: ago(@resumable.updated_at)
+          )}
+        </span>
+        <button
+          type="button"
+          id="pb-resume"
+          phx-click="resume_autosave"
+          class="h-7 flex-none rounded-[8px] bg-[#17161a] px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-white hover:bg-[#2e2c33]"
+        >
+          {gettext("Resume")}
+        </button>
+        <button
+          type="button"
+          id="pb-resume-discard"
+          phx-click="discard_autosave"
+          class="h-7 flex-none rounded-[8px] border border-[#e8d9bb] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#8a5514] hover:bg-[#fdf7ec]"
+        >
+          {gettext("Discard")}
+        </button>
+      </div>
 
+      <div
+        :if={@original_changed?}
+        id="pb-original-changed"
+        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0e3c9] bg-[#fbf1df] px-4 py-[9px]"
+      >
+        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f6e5c6] text-[#8a5514]">
+          <.icon name={:tip} size={12} />
+        </span>
+        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a5514]">
+          {gettext(
+            "The original was changed after this draft was made. Publishing the draft writes it over those changes."
+          )}
+        </span>
+      </div>
+
+      <%!-- PUBLISH MODE KEEPS NOTHING, AND HAS TO SAY SO. Every other mode writes as you work; this
+            one deliberately does not, because a publish is meant to be a deliberate act. Silence
+            about that is indistinguishable from a save that is failing — so this appears the moment
+            there is unsaved work and offers the way to keep it.
+            `keeping_draft?` is the one thing that takes it down early: the draft it offered is
+            being written, and it comes back if that write fails. --%>
+      <div
+        :if={@stage == :published and @dirty? and not @keeping_draft?}
+        id="pb-publish-bar"
+        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0d9d9] bg-[#fdf1f1] px-4 py-[9px]"
+      >
+        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f9e2e2] text-[#a33a3a]">
+          <.icon name={:alert} size={12} />
+        </span>
+        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
+          {gettext(
+            "Publish mode — these changes are not being saved. Publish to make them live, or keep them as a draft."
+          )}
+        </span>
+        <button
+          type="button"
+          id="pb-publish-keep"
+          phx-click="keep_as_draft"
+          class="h-7 flex-none rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
+        >
+          {gettext("Keep as a draft")}
+        </button>
+      </div>
 
       <div class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#e6e4de] bg-[#faf9f6] px-4 py-[9px]">
         <div
@@ -10852,6 +11116,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         </div>
 
         <div class="flex items-center gap-2 border-t border-[#f0efea] px-5 py-3.5">
+          <button
+            type="button"
+            id="pb-reload-save"
+            phx-click="save_and_reload"
+            class="h-8 flex-none rounded-[9px] border border-[#dcdbf5] bg-[#f2f1fc] px-3 text-[11.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            {gettext("Save draft first")}
+          </button>
           <span class="flex-1"></span>
           <button
             type="button"
@@ -10918,6 +11190,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         </div>
 
         <div class="flex flex-col gap-2 px-5 py-4">
+          <button
+            type="button"
+            id="pb-leave-save"
+            phx-click="draft_and_leave"
+            class="flex w-full items-start gap-3 rounded-[11px] border border-[#dcdbf5] bg-[#f7f6fd] p-3 text-left hover:bg-[#f2f1fc]"
+          >
+            <span class="grid size-7 flex-none place-items-center rounded-[9px] bg-[#e4e2f7] text-[#4f4bcc]">
+              <.icon name={:draft} size={14} />
+            </span>
+            <span class="min-w-0 flex-1">
+              <span class="block text-[12.5px] font-bold text-[#2e2b6b]">{gettext(
+                "Keep it as a draft"
+              )}</span>
+              <span class="mt-0.5 block text-[11px] font-medium leading-[1.5] text-[#6d6a63]">
+                {gettext(
+                  "Saved under this sitting's name. Visitors see nothing until you publish it."
+                )}
+              </span>
+            </span>
+          </button>
 
           <button
             type="button"
@@ -10999,6 +11291,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           (@sheet == :review && "flex flex-col") ||
             "overflow-y-auto px-[18px] pb-[18px] pt-3.5"
         ]}>
+          <.history_tabs :if={@sheet == :history} {assigns} />
+          <.history_sheet :if={@sheet == :history and @history_tab == :history} {assigns} />
+          <.drafts_sheet :if={@sheet == :history and @history_tab == :drafts} {assigns} />
           <.studio_sheet :if={@sheet == :studio} {assigns} />
           <.assets_sheet :if={@sheet == :assets} {assigns} />
           <.review_sheet :if={@sheet == :review} {assigns} />
@@ -12722,6 +13017,264 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  attr(:rows, :integer, default: 3)
+
+  @doc """
+  The shape of the answer while the answer is still coming — a panel that opens instantly and fills
+  in beats one that opens when the database is ready.
+  """
+  def loading_rows(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-1.5" aria-hidden="true">
+      <div
+        :for={_row <- 1..@rows}
+        class="flex items-center gap-2.5 rounded-[10px] border border-[#f0efea] bg-white px-3 py-2.5"
+      >
+        <span class="size-[26px] flex-none animate-pulse rounded-[8px] bg-[#f2f1ec]"></span>
+        <span class="min-w-0 flex-1">
+          <span class="block h-[9px] w-2/5 animate-pulse rounded-full bg-[#f2f1ec]"></span>
+          <span class="mt-1.5 block h-[7px] w-3/5 animate-pulse rounded-full bg-[#f6f5f2]"></span>
+        </span>
+      </div>
+    </div>
+    """
+  end
+
+  # Two views of "what other versions of this exist" — the edits made in this session, and the drafts
+  # saved from it. Same segmented control the Studio sheet uses for its five.
+  defp history_tabs(assigns) do
+    ~H"""
+    <div class="mb-3.5 flex gap-1 rounded-[9px] bg-[#f2f1ec] p-[3px]">
+      <button
+        :for={{key, label} <- [{:history, gettext("Record history")}, {:drafts, gettext("Drafts")}]}
+        type="button"
+        id={"pb-histtab-#{key}"}
+        phx-click="history_tab"
+        phx-value-tab={key}
+        class={[
+          "h-7 flex-1 rounded-[7px] font-['Space_Grotesk'] text-[11.5px] font-bold",
+          (@history_tab == key && "bg-white text-[#1b1a18] shadow-[0_1px_2px_rgba(30,28,24,.1)]") ||
+            "text-[#6d6a63]"
+        ]}
+      >
+        {label}
+      </button>
+    </div>
+    """
+  end
+
+  # Every draft of this document, plus the one being edited. The rule the whole sheet exists to make
+  # visible: the editor writes to ONE target, and that target is named here and in the top bar. A
+  # name already taken is never silently overwritten — it asks.
+  #
+  # The list itself is a Gervaz table drawn by `MishkaCmsCoreWeb.Templates.DraftList`; the naming
+  # form and the collision banner are not a table and stay here.
+  defp drafts_sheet(assigns) do
+    ~H"""
+    <div class="flex flex-col gap-4">
+      <form phx-submit="save_as_draft" class="flex items-center gap-2">
+        <input
+          id="pb-draft-name"
+          name="label"
+          value={@editor.draft_label}
+          placeholder={gettext("Name this draft")}
+          autocomplete="off"
+          class="h-8 min-w-0 flex-1 rounded-[9px] border border-[#e6e4de] bg-white px-2.5 font-['Space_Grotesk'] text-[12px] font-medium text-[#1b1a18] placeholder:text-[#a8a5a0] focus:border-[#c3c1f0] focus:outline-none"
+        />
+        <button
+          type="submit"
+          id="pb-draft-save-as"
+          class="h-8 flex-none rounded-[9px] bg-[#17161a] px-3 font-['Space_Grotesk'] text-[11.5px] font-bold text-white hover:bg-[#2e2c33]"
+        >
+          {gettext("Save as")}
+        </button>
+      </form>
+
+      <div
+        :if={@draft_conflict}
+        id="pb-draft-conflict"
+        class="rounded-[10px] border border-[#f0e3c9] bg-[#fbf1df] px-3 py-2.5"
+      >
+        <p class="text-[11.5px] font-semibold leading-[1.5] text-[#8a5514]">
+          {gettext("A draft called “%{label}” already exists, saved %{ago}.",
+            label: @draft_conflict.label,
+            ago: ago(@draft_conflict.draft.updated_at)
+          )}
+        </p>
+        <div class="mt-2 flex items-center gap-2">
+          <button
+            type="button"
+            id="pb-draft-overwrite"
+            phx-click="save_as_draft"
+            phx-value-label={@draft_conflict.label}
+            phx-value-draft_id={@draft_conflict.draft.id}
+            class="h-7 rounded-[8px] bg-[#17161a] px-2.5 text-[11px] font-bold text-white hover:bg-[#2e2c33]"
+          >
+            {gettext("Update it")}
+          </button>
+          <button
+            type="button"
+            id="pb-draft-keep-both"
+            phx-click="save_as_draft"
+            phx-value-label={gettext("%{label} copy", label: @draft_conflict.label)}
+            class="h-7 rounded-[8px] border border-[#e6e4de] bg-white px-2.5 text-[11px] font-bold text-[#5c5a54] hover:bg-[#f7f6f3]"
+          >
+            {gettext("Save as a copy")}
+          </button>
+        </div>
+      </div>
+
+      <.live_component
+        :if={@drafts_enabled?}
+        module={MishkaGervaz.Table.Web.Live}
+        id="pb-drafts-table"
+        resource={@drafts_resource}
+        current_user={@current_user}
+        url_state={@drafts_url_state}
+      />
+
+      <%!-- A component keeps no drafts, and a document that was never saved has none to keep — the
+            tab is still reachable, and it says so rather than drawing a table over nothing. --%>
+      <p
+        :if={!@drafts_enabled?}
+        class="py-8 text-center text-[12px] font-medium text-[#a8a5a0]"
+      >
+        {gettext("No drafts yet. “Save as” keeps one you can come back to.")}
+      </p>
+    </div>
+    """
+  end
+
+  # THE DURABLE LOG, not the session's undo stack. This used to be a hand-rolled `<ol>` over
+  # `editor.past`: one session's ops, every author rendered "You", and everything gone on reload.
+  # It is a gervaz table over `MishkaCmsCore.Runtime.PageBuilderEvent` now, scoped by `url_state` to
+  # whatever the editor is on — this record, this branch — exactly as the draft picker beside it is.
+  #
+  # Undo and redo did NOT move: they still walk `editor.past` in memory and stay instant, because
+  # they never touch the database. The two lists answer different questions — what can I redo right
+  # now, and what happened to this document.
+  defp history_sheet(assigns) do
+    ~H"""
+    <p class="-mt-1 mb-3 text-[11px] font-medium text-[#6d6a63]">
+      {gettext("Every change to this page")}
+    </p>
+
+    <%!-- A change is written when it settles, so one just made appears a moment later rather than
+          instantly. Saying so beats a reader wondering whether it was recorded at all. --%>
+    <div
+      :if={!@history_recording?}
+      class="mb-3 flex items-start gap-2 rounded-[10px] border border-[#f0e2c8] bg-[#fdfaf3] px-2.5 py-2"
+    >
+      <.icon name={:warning} size={12} class="mt-0.5 flex-none text-[#a5691a]" />
+      <span class="min-w-0 text-[10.5px] font-medium leading-[1.5] text-[#3a382f]">
+        {gettext(
+          "Your document is fine and still being saved. Its history is not being recorded just now — it will catch up on its own."
+        )}
+      </span>
+    </div>
+
+    <.live_component
+      module={MishkaGervaz.Table.Web.Live}
+      id="pb-history-table"
+      resource={MishkaCmsCore.Runtime.PageBuilderEvent}
+      current_user={@current_user}
+      url_state={@history_url_state}
+    />
+
+    <%!-- THE ONLY DELETE OFFERED, and it takes a whole document's history at once. Removing one
+          entry and leaving its neighbours is the operation that lets somebody quietly delete the
+          evidence of one change, which is what a record of what happened exists to prevent.
+          The confirm says both halves: what goes, and that the page itself does not. --%>
+    <div :if={@history_clearable?} class="mt-3 border-t border-[#f0efea] pt-3">
+      <button
+        type="button"
+        id="pb-history-clear"
+        phx-click="history_clear"
+        data-confirm={
+          gettext(
+            "Deletes every recorded change for this page, including what can be restored from them. The page itself is untouched. This cannot be undone."
+          )
+        }
+        class="h-[26px] rounded-[8px] border border-[#f0dcd8] bg-white px-2.5 text-[10px] font-bold text-[#a3554f] hover:bg-[#fdf2f1]"
+      >
+        {gettext("Clear this page’s editing history")}
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
+  How long ago, in the words the rest of the editor uses — "2h ago", "yesterday 18:04".
+
+  A draft picker is a list of moments, and a bare timestamp makes the reader do the arithmetic.
+  Anything that is not a `DateTime` answers `""`, so a row with no timestamp shortens rather than
+  raising. Shared with `MishkaCmsCoreWeb.Templates.DraftList`, which stamps the same rows.
+  """
+  @spec ago(DateTime.t() | term()) :: String.t()
+  def ago(%DateTime{} = at) do
+    case DateTime.diff(DateTime.utc_now(), at, :second) do
+      seconds when seconds < 60 ->
+        gettext("just now")
+
+      seconds when seconds < 3600 ->
+        gettext("%{minutes}m ago", minutes: div(seconds, 60))
+
+      seconds when seconds < 86_400 ->
+        gettext("%{hours}h ago", hours: div(seconds, 3600))
+
+      seconds when seconds < 172_800 ->
+        gettext("yesterday %{time}", time: Calendar.strftime(at, "%H:%M"))
+
+      _older ->
+        Calendar.strftime(at, "%d %b %H:%M", abbreviated_month_names: &short_month_name/1)
+    end
+  end
+
+  def ago(_missing), do: ""
+
+  defp short_month_name(1), do: gettext("Jan")
+  defp short_month_name(2), do: gettext("Feb")
+  defp short_month_name(3), do: gettext("Mar")
+  defp short_month_name(4), do: gettext("Apr")
+  defp short_month_name(5), do: gettext("May")
+  defp short_month_name(6), do: gettext("Jun")
+  defp short_month_name(7), do: gettext("Jul")
+  defp short_month_name(8), do: gettext("Aug")
+  defp short_month_name(9), do: gettext("Sep")
+  defp short_month_name(10), do: gettext("Oct")
+  defp short_month_name(11), do: gettext("Nov")
+  defp short_month_name(12), do: gettext("Dec")
+
+  # ONE BAR, TWO ARRIVALS, and the live page is underneath both of them — reopening a document
+  # DETACHES the session from whatever draft it was in (`detach_draft/4` in `BuilderLive`), so the
+  # canvas is the live page in either case and both sentences can say so.
+  #
+  # `:session` is news: the last sitting was in a draft and this visit did not ask for it.
+  # `:chosen` is not news at all — the draft was picked in the preview modal's strip a click ago and
+  # its id came in on the URL, so the bar's job is to open it, not to explain it. Telling somebody
+  # they "were working in" a draft they chose ten seconds ago reads like the editor misunderstood
+  # the click.
+  defp inherited_question(%{source: :chosen, label: label}),
+    do:
+      gettext("You picked “%{label}” in the drafts list. Open it here, or stay on the live page?",
+        label: label
+      )
+
+  defp inherited_question(%{label: label}),
+    do:
+      gettext(
+        "You were working in “%{label}”. Carry on where you left off, or start again from the live page?",
+        label: label
+      )
+
+  defp inherited_action(%{source: :chosen}), do: gettext("Open it")
+  defp inherited_action(_inherited), do: gettext("Carry on")
+
+  # "Start again from" is a MOVE — it re-reads the live template and reloads the frames. Declining a
+  # draft that was only ever offered is not a move, and this does not say it is.
+  defp inherited_decline(%{source: :chosen}), do: gettext("Stay on the live page")
+  defp inherited_decline(_inherited), do: gettext("Start from the live page")
+
   defp devices,
     do: [
       {:frames, gettext("All breakpoints"), gettext("side by side")},
@@ -12805,6 +13358,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp stage_title(:published), do: gettext("Published — visitors can see this page")
   defp stage_title(_draft), do: gettext("Draft — kept aside, not in front of visitors")
 
+  # The dot is the draft light, so its tooltip is what the last write did.
+  defp autosave_title(%{updated_at: %DateTime{} = at}),
+    do:
+      gettext("Saving as you work — kept %{time} · click to change status",
+        time: Calendar.strftime(at, "%H:%M")
+      )
+
+  defp autosave_title(_draft),
+    do: gettext("Saving as you work — nothing changed yet · click to change status")
+
   # The prototype's own order and set. The last four are not panels at all — they open the overlays
   # that the top bar has no room for at this width — and the direction toggle reports its own state
   # in its label rather than needing a second control.
@@ -12828,6 +13391,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       {"assets", gettext("Assets")},
       {"studio", gettext("Studio")},
       {"palette", gettext("Search")},
+      {"history", gettext("History")},
       {"dir", String.upcase(assigns.dir)}
     ]
   end
@@ -12835,11 +13399,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp sheet_width_class(:assets), do: "w-[620px]"
   defp sheet_width_class(:studio), do: "w-[520px]"
   defp sheet_width_class(:review), do: "w-[420px]"
+  defp sheet_width_class(:history), do: "w-[420px]"
   defp sheet_width_class(_sheet), do: "w-[470px]"
 
   defp sheet_title(:studio), do: gettext("Studio")
   defp sheet_title(:assets), do: gettext("Assets")
   defp sheet_title(:review), do: gettext("Review")
+  defp sheet_title(:history), do: gettext("Versions")
   defp sheet_title(_sheet), do: ""
 
   # The prototype names the document being edited beside its state — "contact.heex · saved" reads as
@@ -12868,6 +13434,34 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp unstyleable_note(_comment),
     do: gettext("A comment renders nothing, so there is nothing to style.")
+
+  # THE STATUS TRAVELS WITH THE LINK. An error page holds one template per status and the editor is
+  # looking at exactly one of them, but the shareable URL carried no `?status=` — so
+  # `MishkaCmsWeb.DraftPreviewLive` fell back to its default and the author previewing the 500 they
+  # were editing was shown the 404. The offline page is an entry too, carried as `?status=offline`.
+  # Every other section has one template and needs nothing.
+  defp preview_href(section, draft, editor) do
+    base = "/_preview/#{Drafts.preview_segment(section)}/#{draft.preview_token}"
+
+    case editor_status(editor) do
+      nil -> base
+      status -> base <> "?status=#{status}"
+    end
+  end
+
+  defp editor_status(%{status: status}) when is_integer(status) or status == :offline,
+    do: status
+
+  defp editor_status(_editor), do: nil
+
+  # WHAT THE CHIP IS OFFERING TO LEAVE. "Live page" was written into the markup, so a layout, a
+  # component and an error page all called their live record a page — in the one control whose whole
+  # job is to say which document a save lands on. The section already names itself.
+  defp live_label(section),
+    do:
+      gettext("Live %{section}",
+        section: String.downcase(translate(Section.label(Section.normalize(section))))
+      )
 
   # "Page builder" over a page, "Component builder" over a component. The noun comes from the same
   # table the back link and the flash messages read, so there is one place to change a name.

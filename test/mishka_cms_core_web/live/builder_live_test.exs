@@ -17,6 +17,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
+  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.Elements
@@ -208,6 +209,45 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     ElementCss.all(actor, page.site_id, "page-#{page.id}")
   end
 
+  # Autosave is a no-op while nothing has changed, so there has to be an edit for it to write.
+  defp autosave!(view) do
+    render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+    _written = render_async(view)
+    editor(view).draft_id
+  end
+
+  # A DRAFT WRITE HELD OPEN, so a test can put an edit between the write starting and its answer and
+  # have that order every run rather than on a slow machine. The plugin passes every write through
+  # until this process is the one registered to be told about them.
+  defp pause_draft_writes do
+    Process.register(self(), MishkaCmsCore.Test.Plugins.BuilderDraftPausePlugin.waiter())
+
+    register_plugin(
+      MishkaCmsCore.Test.Plugins.BuilderDraftPausePlugin,
+      "builder:draft:before_save"
+    )
+  end
+
+  # EVERY DRAFT WRITE REFUSED AT THE GATE, which is the state the tests using this are about: what
+  # the editor does with a draft an extension would not let it write.
+  defp refuse_draft_writes,
+    do:
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.BuilderDraftGatePlugin,
+        "builder:draft:before_save"
+      )
+
+  # And the announcement on the other side of the write, sent here because it is made in the
+  # LiveView's process rather than this one.
+  defp watch_draft_announcements do
+    Process.register(self(), MishkaCmsCore.Test.Plugins.BuilderDraftAnnounceProbe.waiter())
+
+    register_plugin(
+      MishkaCmsCore.Test.Plugins.BuilderDraftAnnounceProbe,
+      "builder:draft:after_save"
+    )
+  end
+
   # A plugin registered for the length of one test, exactly as an extension registers one.
   defp register_plugin(module, event) do
     {:ok, _} =
@@ -223,6 +263,76 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     on_exit(fn -> MishkaInstaller.Event.Event.unregister(:name, module, false) end)
   end
 
+  # The resume bar is computed once, at mount, and only for a session that has no draft of its own —
+  # so the work has to be left behind by a session that is then closed.
+  defp resumable_session(conn, page) do
+    {:ok, first, _html} = open_builder(conn, page)
+    autosave_id = autosave!(first)
+    EditorSession.close(token(first))
+
+    {:ok, view, _html} = open_builder(conn, page)
+    {autosave_id, view}
+  end
+
+  # The canvas renders a runtime component by resolving the module the compilers WOULD have built for
+  # it — a name hashed from the component name plus its site. Putting a module at that hashed name by
+  # hand keeps these tests about the resolution itself, without booting the whole compile pipeline.
+  defp history_rows(page) do
+    MishkaCmsCore.Runtime.PageBuilderEvent
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(source_id == ^page.id)
+    |> Ash.Query.sort(inserted_at: :desc)
+    |> Ash.read!(authorize?: false)
+  end
+
+  # A change on the live page's own branch, written as `actor` the way the editor writes one.
+  defp record_change(page, actor, label) do
+    MishkaCmsCore.Runtime.PageBuilderEvent
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        id: Ecto.UUID.generate(),
+        source_type: :page,
+        source_id: page.id,
+        site_id: page.site_id,
+        label: label,
+        kind: :content,
+        op: :set_text,
+        target: "<h1>",
+        author_type: :human
+      },
+      tenant: page.site_id,
+      actor: actor,
+      authorize?: false
+    )
+    |> Ash.create!(actor: actor, authorize?: false)
+  end
+
+  # An assistant's change on the live page's own branch, asked for by `actor`.
+  defp record_assistant_change(page, actor, label) do
+    MishkaCmsCore.Runtime.PageBuilderEvent
+    |> Ash.Changeset.for_create(
+      :create,
+      %{
+        id: Ecto.UUID.generate(),
+        source_type: :page,
+        source_id: page.id,
+        site_id: page.site_id,
+        label: label,
+        kind: :content,
+        op: :set_text,
+        target: "<h1>",
+        author_type: :ai,
+        prompt: "add social proof",
+        backend: "claude"
+      },
+      tenant: page.site_id,
+      actor: actor,
+      authorize?: false
+    )
+    |> Ash.create!(actor: actor, authorize?: false)
+  end
+
   # The avatar row's letters: yours first, then everyone else's.
   defp avatars(view),
     do:
@@ -232,6 +342,21 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       |> LazyHTML.from_fragment()
       |> LazyHTML.query("#pb-avatars > span")
       |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+  defp history_author(view, row),
+    do:
+      view
+      |> element("#pb-history-author-#{row.id}")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.text()
+      |> String.trim()
+
+  defp snapshots do
+    MishkaCmsCore.Runtime.PageBuilderSnapshot
+    |> Ash.Query.for_read(:read, %{}, authorize?: false)
+    |> Ash.read!(authorize?: false)
+  end
 
   defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
 
@@ -303,6 +428,26 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   # because the `<link>` is rendered by the root layout — see the canvas tests for why it moved.
   defp css_hrefs(view), do: :sys.get_state(view.pid).socket.assigns.canvas_css_hrefs
 
+  defp newest_history_row(page) do
+    MishkaCmsCore.Runtime.PageBuilderEvent
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(source_id == ^page.id)
+    |> Ash.Query.sort(inserted_at: :desc)
+    |> Ash.read!(authorize?: false)
+    |> List.first()
+  end
+
+  # The sheet's kind pills are Gervaz's own filter form, so they are driven as a form change rather
+  # than as bespoke clicks — the table owns what a filter means.
+  # The table re-reads on a filter change, so the answer arrives after the change rather than in it.
+  defp filter_history(view, kind) do
+    view
+    |> element("#pb-history-table_page_builder_events-filter")
+    |> render_change(%{"kind" => kind})
+
+    render_async(view)
+  end
+
   # The page's code fragments live on the LiveView rather than in the editing session: they are Page
   # attributes, not part of the tree, and they ride the page's own Save.
   defp fragments(view), do: :sys.get_state(view.pid).socket.assigns.fragments
@@ -312,6 +457,23 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   defp palette_hidden?(view) do
     assert has_element?(view, "#pb-palette"), "the palette stays mounted"
     has_element?(view, ~s(#pb-palette[data-showing="false"]))
+  end
+
+  # The signed-in user as the LiveView holds it — what `Drafts` needs to read the same rows the
+  # editor does. Read BEFORE an action that navigates away, because the process goes with it.
+  defp actor(view), do: :sys.get_state(view.pid).socket.assigns.current_user
+
+  # A REFRESH, not a second tab. The editing session lives in ETS and deliberately outlives the
+  # LiveView, so reopening while the first one is still mounted models TWO editors on one document —
+  # both of them autosaving — rather than one person pressing reload. Stopping the process first is
+  # what a closed tab does: `terminate/2` announces the close and leaves the session alone.
+  defp reopen(view, conn, page) do
+    ref = Process.monitor(view.pid)
+    GenServer.stop(view.pid)
+    assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2_000
+
+    {:ok, again, _html} = open_builder(conn, page)
+    again
   end
 
   # The document is rendered by the canvas LiveView inside the iframe, so the chrome's HTML never
@@ -1966,6 +2128,223 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert has_element?(view, "#pb-blockcat-social-proof")
       assert has_element?(view, "#pb-blockcat-all")
+    end
+
+    # PUBLISH MODE KEEPS NOTHING, AND HAS TO SAY SO. Every other mode writes as you work; this one
+    # deliberately does not. Silence about that is indistinguishable from a save that is failing.
+    test "publish mode says out loud that changes are not being saved", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      refute has_element?(view, "#pb-publish-bar")
+
+      render_click(view, "set_stage", %{"stage" => "published"})
+      node = node_with_tag(view, "h1")
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node.id})
+
+      assert has_element?(view, "#pb-publish-bar")
+      assert has_element?(view, "#pb-publish-keep")
+    end
+
+    test "and offers a way to keep the work without publishing it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      node = node_with_tag(view, "h1")
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node.id})
+
+      view |> element("#pb-publish-keep") |> render_click()
+
+      refute has_element?(view, "#pb-publish-bar")
+    end
+
+    # AND THE OFFER IS KEPT. The bar above is satisfied by a button that only takes the bar down, so
+    # it green-lit a handler which cleared the session's `dirty?` first and left `autosave/1` —
+    # which returns untouched on a clean session — nothing to write. The draft row is what says the
+    # work survived, so the draft row is what this asserts.
+    test "and the draft that button offers is really written", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      view |> element("#pb-publish-keep") |> render_click()
+      _written = render_async(view)
+
+      [kept] = Drafts.list("page", page, recorded)
+      assert String.starts_with?(kept.label, "Draft · ")
+      refute kept.template =~ "<h1", "the draft carries the edit, not the document as it was"
+
+      refute view |> editor() |> Map.fetch!(:dirty?),
+             "and the session is clean because the write happened, not before it"
+    end
+
+    # THE BAR IS DOWN FOR ONE WRITE, NOT FOR GOOD. It hides behind a flag of its own while the draft
+    # it offered is being written; a flag that stayed up would leave every later change in publish
+    # mode unannounced, which is the warning this bar exists to make.
+    test "and the bar comes back for the next change made in publish mode", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+
+      view |> element("#pb-publish-keep") |> render_click()
+      _written = render_async(view)
+      refute has_element?(view, "#pb-publish-bar")
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+
+      assert has_element?(view, "#pb-publish-bar")
+    end
+
+    # A PRESS WITH NOTHING TO KEEP MUST NOT SILENCE THE NEXT WARNING. The button is only drawn while
+    # there is work, but what is drawn is one patch behind a change made in the same breath as the
+    # click — so the press can arrive with a clean session, and no write starts for the flag to wait
+    # on. It is armed off the write it really started, and there was none.
+    test "and a press with nothing to keep leaves the warning able to appear", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      render_click(view, "keep_as_draft", %{})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+
+      assert has_element?(view, "#pb-publish-bar")
+    end
+
+    # A REFUSED WRITE PUTS THE BAR BACK. Taking it down is a claim that the work is kept, so it may
+    # only outlive the press if the draft really was written. The editor says so in words too, but
+    # the bar is the thing on screen for the rest of the sitting.
+    test "and a draft write that fails leaves the bar saying so", %{conn: conn, page: page} do
+      refuse_draft_writes()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      view |> element("#pb-publish-keep") |> render_click()
+      settled = render_async(view)
+
+      assert Drafts.list("page", page, recorded) == [], "the gate refused, so nothing was written"
+      assert has_element?(view, "#pb-publish-bar")
+      assert settled =~ "Autosave is failing"
+    end
+
+    # AND NOTHING IS CALLED KEPT THAT WAS NOT WRITTEN. The canvas stays live for the whole round
+    # trip — serialize, parse back, format, then the write — so an edit can land while the draft is
+    # away being written, and it is not in that draft. Clearing `dirty?` for it anyway left work in
+    # no draft at all, with the bar down and the leave prompt silent: the state this button exists
+    # to abolish, reached by the button itself.
+    test "and an edit made while that draft is being written is not called kept", %{
+      conn: conn,
+      page: page
+    } do
+      pause_draft_writes()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      view |> element("#pb-publish-keep") |> render_click()
+      assert_receive {:draft_write_paused, writing}, 2_000
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+      send(writing, :release)
+      _written = render_async(view)
+
+      [kept] = Drafts.list("page", page, recorded)
+      assert kept.template =~ "<p", "the write carried the document it serialized, and only that"
+
+      assert view |> editor() |> Map.fetch!(:dirty?),
+             "the edit it could not carry is still unkept work"
+
+      assert has_element?(view, "#pb-publish-bar")
+    end
+
+    # AND A SECOND PRESS IS NOT SWALLOWED. A press arriving while the first write runs is queued
+    # rather than overlapped, and the queue was replayed through `autosave/1` — which refuses
+    # publish mode outright, so the retry died where it stood and the ••• menu's "Save draft now"
+    # could be pressed all afternoon in publish mode for one row that never moved.
+    test "and a press made during that write is written when it finishes", %{
+      conn: conn,
+      page: page
+    } do
+      pause_draft_writes()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      view |> element("#pb-publish-keep") |> render_click()
+      assert_receive {:draft_write_paused, first}, 2_000
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+      render_click(view, "save", %{})
+      send(first, :release)
+
+      assert_receive {:draft_write_paused, queued}, 2_000
+      send(queued, :release)
+      _written = render_async(view)
+
+      [kept] = Drafts.list("page", page, recorded)
+      refute kept.template =~ "<h1"
+      refute kept.template =~ "<p", "the queued write carried the document as it had become"
+
+      refute view |> editor() |> Map.fetch!(:dirty?)
+      refute has_element?(view, "#pb-publish-bar")
+    end
+
+    # ONE SITTING, ONE ROW. The retry reads the draft to update off the socket's copy of the
+    # session, and `mark_saved/2` only puts the new `draft_id` on the stored one — so a retry that
+    # ran before that copy caught up saw no draft at all and made a second row for the same work.
+    test "and a queued write updates the draft the first one made", %{conn: conn, page: page} do
+      pause_draft_writes()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      assert_receive {:draft_write_paused, first}, 2_000
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+      send(first, :release)
+
+      assert_receive {:draft_write_paused, queued}, 2_000
+      send(queued, :release)
+      _written = render_async(view)
+
+      assert [_one] = Drafts.list("page", page, recorded)
+    end
+
+    # A COMPONENT IS TOLD THE TRUTH TOO. It has no draft resource, so the write this button starts
+    # answers `:unsupported` and writes nothing — and the publish-mode sentence, matching first,
+    # said the work had been kept anyway.
+    test "and a component in publish mode is not told it was kept", %{conn: conn, site: site} do
+      component =
+        create_component!(
+          name: "keepless",
+          site_id: site.id,
+          template: ~s(<div id="wrap"><h1>Hello</h1></div>)
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _settled = render_async(view)
+
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+
+      told = view |> element("#pb-publish-keep") |> render_click()
+      assert told =~ "A component has no drafts"
+      refute told =~ "Kept as a draft"
+
+      _settled = render_async(view)
+      assert has_element?(view, "#pb-publish-bar")
     end
 
     test "the hover preview panel is there for the hook to drive", %{conn: conn, page: page} do
@@ -5870,6 +6249,283 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert tab =~ "text-[#1b1a18]"
     end
 
+    # Reloading the frame is how you pick up a component recompiled in another tab. It must not reload
+    # the EDITOR, and it must ask first when there is work that is not in a draft yet.
+    test "reloading the canvas is silent with nothing unsaved", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-reload") |> render_click()
+
+      refute has_element?(view, "#pb-reload-modal")
+    end
+
+    test "reloading with unsaved work asks first", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      # In DRAFT mode the change is written as it is made, so a reload has nothing to lose.
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+      _written = render_async(view)
+      view |> element("#pb-reload") |> render_click()
+      refute has_element?(view, "#pb-reload-modal")
+
+      # Publish mode writes nothing, which is exactly when the question is worth asking.
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      render_click(view, "op", %{
+        "kind" => "delete",
+        "node_id" => node_with_tag(view, "p").id
+      })
+
+      view |> element("#pb-reload") |> render_click()
+      assert has_element?(view, "#pb-reload-modal")
+
+      view |> element("#pb-reload-cancel") |> render_click()
+      refute has_element?(view, "#pb-reload-modal")
+
+      # And the confirm goes through, leaving the document exactly as it was.
+      view |> element("#pb-reload") |> render_click()
+      view |> element("#pb-reload-confirm") |> render_click()
+
+      refute has_element?(view, "#pb-reload-modal")
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.all?(&(&1.tag != "h1"))
+    end
+
+    # PRESSING SAVE IS NOT THE AUTOMATIC WRITE. The automatic one stays out of publish mode; asking
+    # for the work to be kept is honoured wherever the stage happens to be pointing.
+    test "Save keeps a draft even in publish mode", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      render_click(view, "op", %{
+        "kind" => "delete",
+        "node_id" => node_with_tag(view, "h1").id
+      })
+
+      assert view |> editor() |> Map.fetch!(:dirty?), "publish mode writes nothing on its own"
+
+      save!(view)
+      _written = render_async(view)
+
+      refute view |> editor() |> Map.fetch!(:dirty?)
+      assert is_binary(editor(view).draft_id)
+    end
+
+    test "Save draft first saves, then reloads", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      # The modal only appears when there IS unsaved work, which is publish mode.
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+
+      view |> element("#pb-reload") |> render_click()
+      view |> element("#pb-reload-save") |> render_click()
+      _written = render_async(view)
+
+      refute has_element?(view, "#pb-reload-modal")
+      refute view |> editor() |> Map.fetch!(:dirty?)
+    end
+
+    # LEAVING IS THE OTHER WAY TO LOSE PUBLISH-MODE WORK, and the only one that cannot be asked
+    # about twice — a closed tab is final. The chrome carries a flag the browser reads to decide
+    # whether to object at all; the server decides again when the click arrives, because the
+    # attribute is one patch behind a change made in the same breath.
+    test "the leave guard is armed only by unsaved work in publish mode", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, ~s(#pb-leave-guard[data-armed="false"]))
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      _written = render_async(view)
+
+      assert has_element?(view, ~s(#pb-leave-guard[data-armed="false"])),
+             "draft mode writes as you work, so there is nothing to lose by leaving"
+
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
+
+      assert has_element?(view, ~s(#pb-leave-guard[data-armed="true"]))
+    end
+
+    test "leaving with nothing at stake just goes", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+
+      # Nothing to ask about, so the editor is already gone rather than holding a modal.
+      assert_redirect(view, "/admin/dashboard/runtime/pages")
+    end
+
+    test "leaving publish mode with changes asks, and Stay keeps you here", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      assert has_element?(view, "#pb-leave-modal")
+
+      view |> element("#pb-leave-stay") |> render_click()
+
+      refute has_element?(view, "#pb-leave-modal")
+      assert view |> editor() |> Map.fetch!(:dirty?), "staying keeps the work in the session"
+      assert Drafts.list("page", page, actor(view)) == [], "and writes nothing behind your back"
+    end
+
+    test "Leave anyway goes without writing anything", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      view |> element("#pb-leave-go") |> render_click()
+
+      assert_redirect(view, "/admin/dashboard/runtime/pages")
+      assert Drafts.list("page", page, recorded) == []
+    end
+
+    # CHOOSING PUBLISH IS NOT PUBLISHING, and the difference is invisible until something is typed —
+    # from that moment the editor silently stops keeping work. It says so once, when the choice is
+    # made, rather than leaving the author to discover it by losing something.
+    test "choosing a stage says what it just changed", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      # Publish mode saves nothing to the page, but it is no longer true that nothing is kept: the
+      # change still reaches the record of who did what, which is the whole point of having one.
+      published = render_click(view, "set_stage", %{"stage" => "published"})
+      assert published =~ "recorded but not saved to the page"
+      assert published =~ "when you press Publish"
+
+      drafted = render_click(view, "set_stage", %{"stage" => "draft"})
+      assert drafted =~ "every change is kept as you make it"
+    end
+
+    # AND CHOOSING IT LEAVES THE DRAFT ALONE. Publish mode stops writing; it does not undo what was
+    # written before the author switched.
+    test "choosing publish mode keeps the draft already written", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+      recorded = actor(view)
+
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      assert Enum.any?(Drafts.list("page", page, recorded), &(&1.id == draft_id)),
+             "switching mode is not a discard"
+    end
+
+    test "the leave question offers both ways to keep the work", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+
+      assert has_element?(view, "#pb-leave-save")
+      assert has_element?(view, "#pb-leave-publish")
+      assert has_element?(view, "#pb-leave-stay")
+      assert has_element?(view, "#pb-leave-go")
+    end
+
+    test "Publish it now puts the page live and then goes", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      view |> element("#pb-leave-publish") |> render_click()
+
+      assert_redirect(view, "/admin/dashboard/runtime/pages")
+
+      live_now =
+        MishkaCmsCore.Runtime.Page
+        |> Ash.get!(page.id, action: :master_get, authorize?: false)
+
+      refute live_now.template =~ "<h1", "the change is on the live page, not in a drawer"
+    end
+
+    test "Keep as a draft writes it before going", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      view |> element("#pb-leave-save") |> render_click()
+
+      assert_redirect(view, "/admin/dashboard/runtime/pages")
+
+      # AND IT IS THE WORK, not an empty row: the h1 that was deleted is gone from what was kept.
+      [kept] = Drafts.list("page", page, recorded)
+      assert String.starts_with?(kept.label, "Draft · ")
+      refute kept.template =~ "<h1"
+    end
+
+    # AND IT IS AN ORDINARY DRAFT WRITE, which means an extension gets the same say over it as over
+    # every other one. This handler called `Drafts` itself, so the gate never ran for it: a plugin
+    # that refuses draft writes was overruled by the one button that writes on the way out, and the
+    # author was sent away believing the work was kept.
+    test "and a plugin that refuses the write keeps you here with the work", %{
+      conn: conn,
+      page: page
+    } do
+      refuse_draft_writes()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      refused = view |> element("#pb-leave-save") |> render_click()
+
+      assert Drafts.list("page", page, recorded) == [], "the gate refused, so nothing was written"
+      assert refused =~ "still here with your changes"
+      assert view |> editor() |> Map.fetch!(:dirty?), "the work is still the session's to lose"
+    end
+
+    # AND THE WRITE IS ANNOUNCED LIKE EVERY OTHER. `builder:draft:after_save` is what a backup or a
+    # sync integration hears a draft through; the one made on the way out was never announced, so
+    # the drafts nothing downstream knew about were exactly the ones written to rescue work.
+    test "and the draft it wrote is announced to the extensions", %{conn: conn, page: page} do
+      watch_draft_announcements()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      recorded = actor(view)
+
+      render_click(view, "leaving", %{"to" => "/admin/dashboard/runtime/pages"})
+      view |> element("#pb-leave-save") |> render_click()
+
+      assert_redirect(view, "/admin/dashboard/runtime/pages")
+      [kept] = Drafts.list("page", page, recorded)
+
+      assert_receive {MishkaCmsCore.Test.Plugins.BuilderDraftAnnounceProbe, announced}, 2_000
+      assert announced.section == "page"
+
+      assert announced.draft_id == kept.id,
+             "the announcement named a row other than the one written"
+    end
+
+    # The destination arrives from the browser, so it is checked rather than trusted. A
+    # protocol-relative URL is another origin wearing a path's clothes.
+    test "a destination that is not a path of this app is refused", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "leaving", %{"to" => "//evil.example.com/admin"})
+      render_click(view, "leaving", %{"to" => "https://evil.example.com/admin"})
+
+      refute has_element?(view, "#pb-leave-modal")
+      assert render(view) =~ "pb-root"
+    end
+
     # The theme is client state — `<html data-theme>` plus localStorage — so the button carries a hook
     # and BOTH icons, with CSS choosing. A server-rendered icon lagged the real theme and the toggle
     # only ever turned dark on.
@@ -6144,6 +6800,25 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert chip =~ "Draft"
       refute chip =~ "Save draft"
       assert view |> element("#pb-stage-menu") |> render() =~ "animate-pulse"
+    end
+
+    # THE ORDINARY PUBLISH IS A PUBLISH FROM A DRAFT — autosave mints one before the author ever
+    # reaches the button — and its cleanup used to collect nothing at all: the spent draft is
+    # discarded first, which moves its rows onto the live branch before the collect asks for them.
+    # Every payload stayed, and the released rows read on the page's own timeline still offering a
+    # Restore, under the summary row saying they are no longer restorable.
+    test "and a publish from a draft drops the payloads behind it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert autosave!(view), "no draft was minted; this would prove nothing"
+      assert snapshots() != [], "nothing was recorded; this would prove nothing"
+
+      publish!(view)
+      _collected = render_async(view)
+
+      assert snapshots() == []
+      assert Enum.all?(history_rows(page), &is_nil(&1.snapshot_id))
+      assert Enum.any?(history_rows(page), &(&1.op == :publish))
     end
   end
 
@@ -7914,6 +8589,25 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       undo!(view)
       assert view |> element("#pb-undo") |> render() =~ "0/1"
+    end
+
+    test "revert restores the document to a history entry", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+      refute node_with_tag(view, "h1")
+
+      _flushed = render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      render_async(view)
+
+      # By the row's own id, not by its position: the sheet pages and filters, so an index would be
+      # a different change on a different screen.
+      render_click(view, "history_revert", %{"id" => newest_history_row(page).id})
+      _recorded = render_async(view)
+
+      assert node_with_tag(view, "h1")
     end
 
     # A CHANGE IS THE TRIGGER, not a clock. It writes a DRAFT and never the live row: a live write
@@ -9842,6 +10536,24 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert editor(view).preview?
 
       render_click(view, "toggle_preview", %{})
+      refute editor(view).preview?
+    end
+
+    # A draft has a URL somebody who is not editing can open, so it — and only it — gets the caret.
+    test "a shareable draft gets a caret with the link behind it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      autosave!(view)
+
+      html = render(view)
+      assert html =~ ~s(id="pb-preview-menu")
+
+      opened = render(view)
+      assert opened =~ ~s(id="pb-preview-tab")
+      assert opened =~ "Open in a new tab"
+      assert opened =~ "The shareable link"
+      assert opened =~ ~s(target="_blank")
+
+      # …and the link is a link, not a way of changing what the button does.
       refute editor(view).preview?
     end
 
@@ -13121,6 +13833,866 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  describe "durability" do
+    # Reopening the same document used to mint a new token and rebuild from the database. The session
+    # outlives a reload — that is what stops a refresh throwing the sitting away — and this is the
+    # lookup that finds it. What the session is POINTED AT is a separate question, answered by the
+    # two tests below.
+    test "reopening the page resumes the session instead of starting a new one", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      h1 = node_with_tag(first, "h1")
+      render_click(first, "op", %{"kind" => "delete", "node_id" => h1.id})
+      token = token(first)
+
+      {:ok, second, _html} = open_builder(conn, page)
+
+      assert token(second) == token
+    end
+
+    # OPENING IS THE LIVE PAGE, ALWAYS. Once autosave has put the work in a draft, reopening lands on
+    # the live record and OFFERS that draft by name — walking back in and silently being somewhere
+    # other than the live page is what the draft model exists to avoid. The session itself is still
+    # the same one; only what it is pointed at changed.
+    test "reopening a session that was in a draft lands on the live page", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      h1 = node_with_tag(first, "h1")
+      render_click(first, "op", %{"kind" => "delete", "node_id" => h1.id})
+      render_click(first, "apply_stage", %{})
+
+      {:ok, second, _html} = open_builder(conn, page)
+
+      assert node_with_tag(second, "h1"), "the live page came back"
+      assert has_element?(second, "#pb-inherited-bar")
+      assert has_element?(second, "#pb-inherited-continue")
+    end
+
+    # AND CARRY ON ACTUALLY CARRIES ON. It used to only dismiss the bar — the session had already
+    # been resumed into the draft before the bar rendered, so the button had nothing left to do and
+    # looked broken.
+    test "and Carry on opens the draft it named", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      h1 = node_with_tag(first, "h1")
+      render_click(first, "op", %{"kind" => "delete", "node_id" => h1.id})
+      render_click(first, "apply_stage", %{})
+
+      {:ok, second, _html} = open_builder(conn, page)
+      assert node_with_tag(second, "h1")
+
+      second |> element("#pb-inherited-continue") |> render_click()
+
+      assert is_nil(node_with_tag(second, "h1")), "the draft's own work is back"
+      refute has_element?(second, "#pb-inherited-bar")
+    end
+
+    test "a different document still opens its own session", %{conn: conn, page: page, site: site} do
+      other = create_page!(site_id: site.id, template: "<section><h2>Other</h2></section>")
+      {:ok, first, _html} = open_builder(conn, page)
+      {:ok, second, _html} = open_builder(conn, other)
+
+      refute token(second) == token(first)
+    end
+  end
+
+  describe "drafts" do
+    test "save as writes a NAMED draft and the editor switches to it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "save_as_draft", %{"label" => "  Black Friday  "})
+
+      editor = editor(view)
+      assert editor.draft_label == "Black Friday"
+      assert is_binary(editor.draft_id)
+
+      # And it is listed, so it can be reopened.
+      render_click(view, "draft_sheet", %{})
+      _listed = render_async(view)
+      assert has_element?(view, "#pb-draft-#{editor.draft_id}")
+    end
+
+    # Arriving at the tab is a route to the list like any other. It used to only switch the view, so a
+    # page whose resume bar was offering unsaved work showed "No drafts yet" one click away.
+    test "reaching the Drafts tab by the tab loads them", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "By tab"})
+      draft_id = editor(view).draft_id
+
+      # Open the sheet on Record history, the way the toolbar button does, then switch.
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      refute has_element?(view, "#pb-draft-#{draft_id}")
+
+      render_click(view, "history_tab", %{"tab" => "drafts"})
+      _listed = render_async(view)
+      assert has_element?(view, "#pb-draft-#{draft_id}")
+    end
+
+    # Full access: a draft can be opened, copied, or thrown away.
+    test "a draft can be forked into a new one", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Promo"})
+      original = editor(view).draft_id
+
+      render_click(view, "history_tab", %{"tab" => "drafts"})
+      render_click(view, "fork_draft", %{"id" => original})
+
+      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      labels = "page" |> Drafts.list(page, actor) |> Enum.map(& &1.label)
+
+      assert "Promo" in labels
+      assert "Promo copy" in labels
+      # The copy is a NEW row; the original is untouched and still the target.
+      assert editor(view).draft_id == original
+
+      # A second fork does not collide with the first copy.
+      render_click(view, "fork_draft", %{"id" => original})
+      labels = "page" |> Drafts.list(page, actor) |> Enum.map(& &1.label)
+      assert "Promo copy 2" in labels
+    end
+
+    test "a draft can be deleted, and stops being the save target", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Throwaway"})
+      draft_id = editor(view).draft_id
+
+      render_click(view, "history_tab", %{"tab" => "drafts"})
+      render_click(view, "delete_draft", %{"id" => draft_id})
+      _refreshed = render_async(view)
+
+      refute has_element?(view, "#pb-draft-#{draft_id}")
+      assert is_nil(editor(view).draft_id), "the deleted draft is no longer the save target"
+      assert is_nil(editor(view).draft_label)
+
+      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      refute Enum.any?(Drafts.list("page", page, actor), &(&1.id == draft_id))
+    end
+
+    # Opening a panel must never wait on a database read — it opens with its own shape and fills in.
+    test "the drafts list loads asynchronously behind a skeleton", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Async"})
+      draft_id = editor(view).draft_id
+
+      html = render_click(view, "draft_sheet", %{})
+
+      # The panel is open immediately, and never claims "no drafts" while it does not yet know.
+      assert html =~ "Name this draft"
+      refute html =~ "No drafts yet"
+      refute html =~ "pb-draft-#{draft_id}"
+
+      # The read happens off the click — awaiting it is what makes the rows appear.
+      assert render_async(view) =~ "pb-draft-#{draft_id}"
+    end
+
+    # A name already taken is never silently overwritten.
+    test "a repeated name asks before overwriting", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Promo"})
+      first_id = editor(view).draft_id
+
+      render_click(view, "draft_sheet", %{})
+      html = render_click(view, "save_as_draft", %{"label" => "Promo"})
+
+      assert html =~ "already exists"
+      # Nothing was written until the author chooses.
+      assert editor(view).draft_id == first_id
+
+      render_click(view, "save_as_draft", %{"label" => "Promo", "draft_id" => first_id})
+      assert editor(view).draft_id == first_id
+    end
+
+    test "an empty name is refused", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      html = render_click(view, "save_as_draft", %{"label" => "   "})
+
+      assert html =~ "Give the draft a name"
+      assert is_nil(editor(view).draft_label)
+    end
+
+    # Opening a draft replaces the working tree AND moves the save target, together — a target that
+    # moved without the content, or content without the target, is how work lands in the wrong row.
+    test "opening a draft loads its content and retargets saves", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      # The first change makes this session's own draft, and it is the one being written.
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+      _written = render_async(view)
+      without_h1 = editor(view).draft_id
+      assert is_binary(without_h1)
+
+      # "Save as" forks a SECOND draft and points the session at it, so the undo below lands there.
+      render_click(view, "save_as_draft", %{"label" => "Alt"})
+      assert editor(view).draft_id != without_h1
+      undo!(view)
+      _written = render_async(view)
+      assert node_with_tag(view, "h1")
+
+      render_click(view, "draft_sheet", %{})
+      render_click(view, "open_draft", %{"id" => without_h1})
+
+      refute node_with_tag(view, "h1"), "the other draft's own content came back"
+      assert editor(view).draft_id == without_h1
+    end
+
+    # One autosave row per document, reused across sessions. Every session that opened without a
+    # draft id used to create another, and the picker filled with a column of "Autosave".
+    test "autosave reuses its own row instead of adding one per session", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      h1 = node_with_tag(first, "h1")
+      render_click(first, "op", %{"kind" => "delete", "node_id" => h1.id})
+      _written = render_async(first)
+      first_id = editor(first).draft_id
+      assert is_binary(first_id), "the first change wrote a draft"
+
+      # A brand new session on the same page — no draft id of its own.
+      EditorSession.close(token(first))
+      {:ok, second, _html} = open_builder(conn, page)
+
+      # A draft is written by a CHANGE, so the second session has to make one.
+      render_click(second, "op", %{
+        "kind" => "delete",
+        "node_id" => node_with_tag(second, "h1").id
+      })
+
+      _written = render_async(second)
+
+      assert is_binary(editor(second).draft_id)
+      assert editor(second).draft_id != first_id, "a sitting keeps its own row"
+
+      actor = :sys.get_state(second.pid).socket.assigns.current_user
+      labels = "page" |> Drafts.list(page, actor) |> Enum.map(& &1.label)
+
+      assert length(labels) == 2
+      assert Enum.all?(labels, &String.starts_with?(&1, "Draft · ")), inspect(labels)
+    end
+
+    # THE DRAFT SAYS WHEN ITS ORIGINAL MOVED ON. A notice, not a block: publishing still writes the
+    # draft over what changed, and the author is the one to decide.
+    test "a draft whose page was changed after it was made says so when it is opened again", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      draft_id = autosave!(first)
+      refute has_element?(first, "#pb-original-changed")
+      EditorSession.close(token(first))
+
+      page
+      |> Ash.Changeset.for_update(:update, %{title: "Changed elsewhere"},
+        tenant: page.site_id,
+        authorize?: false
+      )
+      |> Ash.update!(authorize?: false)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      refute has_element?(view, "#pb-original-changed")
+
+      render_click(view, "open_draft", %{"id" => draft_id})
+      assert has_element?(view, "#pb-original-changed")
+    end
+
+    # A save shares the row with whatever draft is open, so it must not rename it.
+    test "autosave keeps the name of the draft being edited", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Keep me"})
+
+      send(view.pid, :autosave)
+      _rendered = render_async(view)
+
+      assert editor(view).draft_label == "Keep me"
+    end
+
+    test "drafts of another document are not listed", %{conn: conn, page: page, site: site} do
+      other = create_page!(site_id: site.id, template: @template)
+
+      {:ok, elsewhere, _html} = open_builder(conn, other)
+      render_click(elsewhere, "save_as_draft", %{"label" => "Somewhere else"})
+      elsewhere_id = editor(elsewhere).draft_id
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Right here"})
+      own_id = editor(view).draft_id
+
+      render_click(view, "draft_sheet", %{})
+      html = render_async(view)
+
+      assert html =~ "pb-draft-#{own_id}"
+      refute html =~ "pb-draft-#{elsewhere_id}"
+    end
+
+    # The four selected/unselected treatments are the sheet's visual contract, and a restyle that
+    # keeps the ids can still lose them. Each pairs the row's base classes with the branch, so the
+    # assertion cannot be satisfied by the top-bar chip, which shares the selected palette.
+    test "a row keeps both of its treatments and the list keeps its spacing", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "save_as_draft", %{"label" => "Older"})
+      render_click(view, "save_as_draft", %{"label" => "Being edited"})
+
+      render_click(view, "draft_sheet", %{})
+      html = render_async(view)
+
+      assert html =~ "border px-3 py-2.5 border-[#dcdbf5] bg-[#f2f1fc]"
+      assert html =~ "rounded-[8px] bg-[#e4e2f7] text-[#4f4bcc]"
+      assert html =~ "text-[12px] font-bold text-[#2e2b6b]"
+      assert html =~ "tracking-[0.08em] text-[#4f4bcc]"
+
+      assert html =~ "border px-3 py-2.5 border-[#ecebe6] bg-white hover:bg-[#f7f6f3]"
+      assert html =~ "rounded-[8px] bg-[#f2f1ec] text-[#6d6a63]"
+      assert html =~ "text-[12px] font-semibold text-[#1b1a18]"
+
+      assert html =~ "rounded-[7px] text-[#a8a5a0] hover:bg-white hover:text-[#4f4bcc]"
+      assert html =~ "rounded-[7px] text-[#a8a5a0] hover:bg-white hover:text-[#c0392b]"
+      assert html =~ "Delete the draft “Being edited”? This cannot be undone."
+      assert html =~ "flex flex-col gap-1.5"
+    end
+
+    test "an empty list says so, in its own words", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "draft_sheet", %{})
+      html = render_async(view)
+
+      # The empty state is the shared card scaffold's now, not hand-written markup, so the contract
+      # is the SENTENCE — the classes belong to the scaffold and are its to change.
+      assert html =~ "No drafts yet. “Save as” keeps one you can come back to."
+    end
+  end
+
+  # Work a previous session left behind, offered rather than loaded. The bar reads the same rows the
+  # drafts list does, and had no coverage at all.
+  describe "resume bar" do
+    test "an autosave newer than the page offers a resume bar", %{conn: conn, page: page} do
+      {_autosave_id, view} = resumable_session(conn, page)
+
+      assert has_element?(view, "#pb-resume-bar")
+      assert has_element?(view, "#pb-resume")
+      assert has_element?(view, "#pb-resume-discard")
+    end
+
+    # TWO BANNERS IN A ROW FOR ONE SITUATION. A disconnected mount BUILDS a session rather than
+    # resuming one, so it cannot know it walked back into a draft: `inherited_draft` is nil, this
+    # bar's guard passes, and the amber bar paints for one frame before the connected mount replaces
+    # it with the violet one. The static render has no business answering this question at all — it
+    # does not know the answer — so it does not ask it, and skips the drafts query with it.
+    test "the static render offers neither bar", %{conn: conn, page: page} do
+      resumable_session(conn, page)
+
+      html = conn |> get("/admin/dashboard/runtime/builder/page/#{page.id}") |> html_response(200)
+
+      refute html =~ "pb-resume-bar"
+      refute html =~ "pb-inherited-bar"
+    end
+
+    test "resuming opens that draft and retargets saves", %{conn: conn, page: page} do
+      {autosave_id, view} = resumable_session(conn, page)
+
+      render_click(view, "resume_autosave", %{})
+
+      assert editor(view).draft_id == autosave_id
+      refute has_element?(view, "#pb-resume-bar")
+    end
+
+    test "discarding deletes the row, not just the bar", %{conn: conn, page: page} do
+      {_autosave_id, view} = resumable_session(conn, page)
+
+      render_click(view, "discard_autosave", %{})
+      actor = :sys.get_state(view.pid).socket.assigns.current_user
+
+      refute has_element?(view, "#pb-resume-bar")
+      assert Drafts.list("page", page, actor) == []
+    end
+
+    test "deleting the resumable draft clears the bar", %{conn: conn, page: page} do
+      {autosave_id, view} = resumable_session(conn, page)
+
+      render_click(view, "delete_draft", %{"id" => autosave_id})
+      _refreshed = render_async(view)
+
+      refute has_element?(view, "#pb-resume-bar")
+    end
+
+    # THE BAR IS ABOUT THE LIVE PAGE, so it has nothing to say once a draft is the target. Every word
+    # of it is wrong then — you are not looking at the live page — and Resume would swap the draft
+    # you deliberately chose for a different one.
+    # WALKING BACK INTO A DRAFT. The session outlives a reload, so reopening the page used to put you
+    # silently inside whatever draft was open — showing something other than the live page and saying
+    # nothing. It asks once per visit instead.
+    test "reopening a page that had a draft open asks before carrying on", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      draft_id = autosave!(first)
+      assert is_binary(draft_id)
+
+      again = reopen(first, conn, page)
+
+      assert has_element?(again, "#pb-inherited-bar")
+      assert has_element?(again, "#pb-inherited-continue")
+      assert has_element?(again, "#pb-inherited-fresh")
+      assert render(again) =~ "You were working in"
+    end
+
+    test "carrying on keeps writing to the same draft", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      draft_id = autosave!(first)
+
+      again = reopen(first, conn, page)
+      again |> element("#pb-inherited-continue") |> render_click()
+
+      refute has_element?(again, "#pb-inherited-bar")
+      assert editor(again).draft_id == draft_id
+    end
+
+    # THE BAR ASKS "WHICH DOCUMENT DO YOU WANT?", and opening any draft answers it — however it was
+    # answered. Only the Carry-on BUTTON used to clear it, so choosing a different draft from the
+    # drafts sheet left the offer standing over a document the author had just moved past, still
+    # pointing at the one they had navigated away from. Clicking it then took them backwards.
+    test "choosing a different draft puts the carry-on bar away", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      inherited = autosave!(first)
+
+      # A second, deliberately named draft to pick instead.
+      render_click(first, "save_as_draft", %{"label" => "The other one"})
+      _written = render_async(first)
+
+      actor = actor(first)
+      other = Drafts.list("page", page, actor) |> Enum.find(&(&1.label == "The other one"))
+      assert other && other.id != inherited
+
+      again = reopen(first, conn, page)
+
+      assert has_element?(again, "#pb-inherited-bar"),
+             "the fixture has to start with the offer up"
+
+      # Not the button — the drafts sheet, which is the route that was broken.
+      render_click(again, "open_draft", %{"id" => other.id})
+
+      refute has_element?(again, "#pb-inherited-bar"),
+             "the offer outlived the choice it was asking about"
+
+      assert editor(again).draft_id == other.id
+    end
+
+    # START AGAIN means "not that one", never "throw that away" — the draft stays in the list, and
+    # the document comes back from the live record.
+    test "starting fresh detaches from the draft without deleting it", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      draft_id = autosave!(first)
+      refute node_with_tag(first, "h1"), "the draft has the h1 deleted"
+
+      again = reopen(first, conn, page)
+      recorded = actor(again)
+      again |> element("#pb-inherited-fresh") |> render_click()
+
+      refute has_element?(again, "#pb-inherited-bar")
+      assert editor(again).draft_id == nil, "the next change starts a new one"
+      assert node_with_tag(again, "h1"), "the live page is back"
+
+      assert Enum.any?(Drafts.list("page", page, recorded), &(&1.id == draft_id)),
+             "and the old draft is still there"
+    end
+
+    test "a change after starting fresh writes a NEW draft", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      old = autosave!(first)
+
+      again = reopen(first, conn, page)
+      recorded = actor(again)
+      again |> element("#pb-inherited-fresh") |> render_click()
+
+      render_click(again, "op", %{"kind" => "delete", "node_id" => node_with_tag(again, "p").id})
+      _written = render_async(again)
+
+      assert editor(again).draft_id != old
+
+      labels = "page" |> Drafts.list(page, recorded) |> Enum.map(& &1.label)
+      assert length(labels) == 2, "drafts: #{inspect(labels)}"
+    end
+
+    # A session with nothing written to it has nothing to ask about.
+    test "reopening an untouched page asks nothing", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      again = reopen(first, conn, page)
+
+      refute has_element?(again, "#pb-inherited-bar")
+    end
+
+    test "choosing a draft from the list puts the bar away", %{conn: conn, page: page} do
+      {_autosave_id, view} = resumable_session(conn, page)
+      assert has_element?(view, "#pb-resume-bar")
+
+      render_click(view, "save_as_draft", %{"label" => "Tuesday's attempt"})
+      _written = render_async(view)
+      chosen = editor(view).draft_id
+
+      assert is_binary(chosen)
+      refute has_element?(view, "#pb-resume-bar")
+    end
+
+    # AND THE CHIP FOLLOWS THE TARGET. Choosing a draft is choosing where the work goes; a chip left
+    # on Publish would sit above a draft it refuses to write to.
+    test "choosing a draft puts the chip back on Draft", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+
+      render_click(view, "set_stage", %{"stage" => "published"})
+      assert :sys.get_state(view.pid).socket.assigns.stage == :published
+
+      render_click(view, "open_draft", %{"id" => draft_id})
+
+      assert :sys.get_state(view.pid).socket.assigns.stage == :draft
+      assert view |> element("#pb-stage-menu") |> render() =~ "animate-pulse"
+
+      # ONE WRITE, NOT TWO. The stage used to be a second `set_stage/2` call — a second ETS read
+      # copying the whole tree out, a second write, and a second broadcast to every canvas frame for
+      # one click, on the path already reported as slow.
+      assert editor(view).stage == :draft
+    end
+
+    # THE FRAME NEVER NAVIGATES ON A SWAP, so its own loading state can never come back. `FrameLoader`
+    # hides the spinner on the iframe's `load`, which fires exactly once; opening a draft replaces
+    # the whole document inside a frame that stays where it is, and the author looked at the OLD page
+    # for as long as the new one took to render. Reported as "the page stuck until it loads".
+    test "opening a draft raises the canvas busy overlay, carrying the revision to settle it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+
+      render_click(view, "open_draft", %{"id" => draft_id})
+
+      assert_push_event(view, "pb:frame-busy", %{label: label, revision: revision})
+      assert label =~ "Opening"
+      assert is_integer(revision)
+
+      # The revision travels so the overlay is settled by the canvas painting THAT document — the
+      # editor's own re-render answers first otherwise, and the spinner would blink out before
+      # anything had changed.
+      assert revision == editor(view).revision
+    end
+
+    test "reverting a step raises it too, because that is a document swap as well", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "template" => ~s(<p>a step to revert</p>),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      render_click(view, "revert", %{"index" => "0"})
+
+      assert_push_event(view, "pb:frame-busy", %{label: label})
+      assert label =~ "Reverting"
+    end
+
+    # THE FIFTEEN SECONDS, AND IT WAS A TIMEOUT RATHER THAN A RENDER.
+    #
+    # `revision` is how anything downstream tells one document from the next. The canvas publishes
+    # the revision it has painted; the editor's frame overlay raises on the click and waits to hear
+    # that number back. `edit_draft/3` replaced the entire tree without counting it as a move, so
+    # the canvas had nothing to announce, the overlay was never told the swap had landed, and it sat
+    # until its own fifteen-second failsafe gave up — on a 1918-byte draft whose every measured
+    # server stage is under a second.
+    test "opening a draft counts as a move, so the canvas can say it has painted it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+
+      before = editor(view).revision
+
+      render_click(view, "open_draft", %{"id" => draft_id})
+
+      after_open = editor(view).revision
+
+      assert after_open > before,
+             "the tree was replaced and the revision did not move — the canvas cannot announce it"
+
+      # And the overlay is told to wait for exactly that number.
+      assert_push_event(view, "pb:frame-busy", %{revision: revision})
+      assert revision == after_open
+    end
+
+    # A PUBLISHED DRAFT IS SPENT. Its content IS the live page now, so leaving the row behind fills
+    # the list with copies of things already finished — and the bar would keep offering work that has
+    # nowhere left to go.
+    test "publishing deletes the draft it published", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+      assert is_binary(draft_id)
+
+      actor = :sys.get_state(view.pid).socket.assigns.current_user
+      assert Enum.any?(Drafts.list("page", page, actor), &(&1.id == draft_id))
+
+      publish!(view)
+
+      refute Enum.any?(Drafts.list("page", page, actor), &(&1.id == draft_id))
+      refute editor(view).draft_id
+      refute has_element?(view, "#pb-resume-bar")
+    end
+
+    # AND THE NEXT CHANGE STARTS A NEW ONE, rather than reviving what was just published. Publishing
+    # is an act, not a mode to stay in: the chip falls back to Draft, so the work that follows is
+    # kept the way all unpublished work is.
+    test "editing after a publish opens a fresh draft", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      first = autosave!(view)
+      publish!(view)
+
+      assert render(view) =~ "Draft", "the chip goes back to Draft once the page is live"
+
+      render_click(view, "op", %{
+        "kind" => "delete",
+        "node_id" => node_with_tag(view, "p").id
+      })
+
+      _written = render_async(view)
+
+      assert is_binary(editor(view).draft_id)
+      assert editor(view).draft_id != first
+    end
+
+    # Published or superseded work is no longer news, and a bar that keeps offering it is one people
+    # learn to click past.
+    test "a draft older than the page is not offered", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      autosave!(first)
+      publish!(first)
+      EditorSession.close(token(first))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      refute has_element?(view, "#pb-resume-bar")
+    end
+  end
+
+  # ARRIVING WITH THE ANSWER ALREADY GIVEN. The preview modal's drafts strip is a picker, and its
+  # Visual Editor button leaves for the builder — but the choice used to stay behind on the modal.
+  # The editor read the drafts table for itself and offered whichever was newest, so picking the
+  # second badge and clicking through landed on an offer to carry on with the first.
+  describe "a draft named in the URL" do
+    defp open_with_draft(conn, page, draft_id) do
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/page/#{page.id}?draft_id=#{draft_id}")
+
+      _loaded = render_async(view)
+      view
+    end
+
+    # Two drafts of one page, deliberately named, so "the newest" and "the one I picked" are
+    # different rows and a test cannot pass by accident.
+    defp two_drafts(conn, page) do
+      {:ok, first, _html} = open_builder(conn, page)
+      render_click(first, "save_as_draft", %{"label" => "The older one"})
+      _written = render_async(first)
+
+      render_click(first, "save_as_draft", %{"label" => "The newer one"})
+      _written = render_async(first)
+
+      actor = actor(first)
+      EditorSession.close(token(first))
+
+      by_label =
+        "page" |> Drafts.list(page, actor) |> Map.new(&{&1.label, &1})
+
+      {first, Map.fetch!(by_label, "The older one"), Map.fetch!(by_label, "The newer one")}
+    end
+
+    test "is the one the bar offers, even when it is not the newest", %{conn: conn, page: page} do
+      {first, older, newer} = two_drafts(conn, page)
+      GenServer.stop(first.pid)
+
+      view = open_with_draft(conn, page, older.id)
+
+      assert has_element?(view, "#pb-inherited-bar")
+      html = render(view)
+      assert html =~ "You picked “The older one”"
+      refute html =~ newer.label
+    end
+
+    # The sentence has to change with the arrival. "You were working in" is news about the last
+    # sitting; said about a draft chosen ten seconds ago on the previous screen it reads like the
+    # editor misunderstood the click.
+    test "asks in the words of the click that got here", %{conn: conn, page: page} do
+      {first, older, _newer} = two_drafts(conn, page)
+      GenServer.stop(first.pid)
+
+      view = open_with_draft(conn, page, older.id)
+      html = render(view)
+
+      refute html =~ "You were working in"
+      assert html =~ "Open it"
+      assert html =~ "Stay on the live page"
+    end
+
+    test "and opening it points the editor at THAT draft", %{conn: conn, page: page} do
+      {first, older, _newer} = two_drafts(conn, page)
+      GenServer.stop(first.pid)
+
+      view = open_with_draft(conn, page, older.id)
+      view |> element("#pb-inherited-continue") |> render_click()
+
+      assert editor(view).draft_id == older.id
+      refute has_element?(view, "#pb-inherited-bar")
+    end
+
+    # THE OFFER IS OVER THE LIVE PAGE, always — the URL names a draft, it does not open one. Landing
+    # inside it would be the surprise this whole feature exists to remove.
+    test "but arriving does not open it", %{conn: conn, page: page} do
+      {first, older, _newer} = two_drafts(conn, page)
+      GenServer.stop(first.pid)
+
+      view = open_with_draft(conn, page, older.id)
+
+      assert editor(view).draft_id == nil
+      assert node_with_tag(view, "h1"), "the live page is what is on screen"
+    end
+
+    # The resume bar's sentence — "never published, you are looking at the live page" — is about work
+    # nobody asked for, and its Discard DELETES. Neither belongs over a draft just chosen by hand.
+    test "takes the amber bar's place rather than sitting beside it", %{conn: conn, page: page} do
+      {_autosave_id, view} = resumable_session(conn, page)
+      actor = actor(view)
+      chosen = "page" |> Drafts.list(page, actor) |> List.first()
+      GenServer.stop(view.pid)
+
+      again = open_with_draft(conn, page, chosen.id)
+
+      assert has_element?(again, "#pb-inherited-bar")
+      refute has_element?(again, "#pb-resume-bar")
+    end
+
+    # A SESSION SITTING IN ONE DRAFT, ARRIVING WITH ANOTHER NAMED. `save_as_draft` retargets the
+    # session to what it just wrote, so the fixture points it back at the first draft — otherwise
+    # the session and the URL name the same row and there is no contest to test.
+    defp session_in_one_and_url_naming_another(conn, page) do
+      {:ok, first, _html} = open_builder(conn, page)
+      open = autosave!(first)
+
+      render_click(first, "save_as_draft", %{"label" => "The one I picked"})
+      _written = render_async(first)
+
+      actor = actor(first)
+      picked = "page" |> Drafts.list(page, actor) |> Enum.find(&(&1.label == "The one I picked"))
+      assert picked && picked.id != open
+
+      render_click(first, "open_draft", %{"id" => open})
+      assert editor(first).draft_id == open, "the session has to be sitting in the OTHER draft"
+
+      ref = Process.monitor(first.pid)
+      GenServer.stop(first.pid)
+      assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2_000
+
+      {open, picked}
+    end
+
+    # THE SESSION'S OWN DRAFT LOSES TO THE CLICK. A resumed session used to win outright, so the
+    # carry-on bar named whatever the last sitting was in and the URL was read by nobody.
+    test "beats the draft the last sitting was in", %{conn: conn, page: page} do
+      {_open, picked} = session_in_one_and_url_naming_another(conn, page)
+
+      again = open_with_draft(conn, page, picked.id)
+
+      assert render(again) =~ "You picked “The one I picked”"
+      again |> element("#pb-inherited-continue") |> render_click()
+      assert editor(again).draft_id == picked.id
+    end
+
+    # AND THE DRAFT IT WAS SITTING IN IS STILL THERE TO GO BACK TO. Reopening detaches the session
+    # from it — the canvas is the live page — so the only thing the URL's ask displaces is the offer,
+    # never the row.
+    test "without touching the draft the last sitting was in", %{conn: conn, page: page} do
+      {open, picked} = session_in_one_and_url_naming_another(conn, page)
+
+      again = open_with_draft(conn, page, picked.id)
+      recorded = actor(again)
+
+      assert editor(again).draft_id == nil, "reopening puts the live page on the canvas"
+      assert Enum.any?(Drafts.list("page", page, recorded), &(&1.id == open))
+    end
+
+    # A URL naming the draft the session is already in has asked for nothing. The ordinary carry-on
+    # bar is what says which draft that is, and it keeps its own words.
+    test "a draft the editor is already in is left to the ordinary bar", %{conn: conn, page: page} do
+      {:ok, first, _html} = open_builder(conn, page)
+      open = autosave!(first)
+
+      ref = Process.monitor(first.pid)
+      GenServer.stop(first.pid)
+      assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2_000
+
+      html = conn |> open_with_draft(page, open) |> render()
+
+      assert html =~ "You were working in"
+      refute html =~ "You picked"
+    end
+
+    # An id from a stale tab, another document, or another site's row. It is read against the list
+    # this actor can see, so it resolves to nothing and the URL is simply ignored.
+    test "an id that names nothing is ignored, not obeyed", %{conn: conn, page: page} do
+      {_autosave_id, view} = resumable_session(conn, page)
+      GenServer.stop(view.pid)
+
+      again = open_with_draft(conn, page, Ecto.UUID.generate())
+
+      refute has_element?(again, "#pb-inherited-bar")
+      assert has_element?(again, "#pb-resume-bar"), "the ordinary offer is still made"
+    end
+
+    # DECLINING AN OFFER YOU NEVER ACCEPTED IS NOT A MOVE. Reparsing the template and reloading the
+    # frames to arrive where the reader already is would be a loading overlay for no movement.
+    test "staying on the live page just puts the bar away", %{conn: conn, page: page} do
+      {first, older, _newer} = two_drafts(conn, page)
+      GenServer.stop(first.pid)
+
+      view = open_with_draft(conn, page, older.id)
+      recorded = actor(view)
+      view |> element("#pb-inherited-fresh") |> render_click()
+
+      refute has_element?(view, "#pb-inherited-bar")
+      refute render(view) =~ "Back on the live page"
+      assert editor(view).draft_id == nil
+
+      assert Enum.any?(Drafts.list("page", page, recorded), &(&1.id == older.id)),
+             "declining an offer never deletes what was offered"
+    end
+
+    # The static render answers no draft question at all — see the resume bar's own note on why two
+    # banners in a row for one situation is worse than a frame of neither.
+    test "the static render still offers neither bar", %{conn: conn, page: page} do
+      {first, older, _newer} = two_drafts(conn, page)
+      GenServer.stop(first.pid)
+
+      html =
+        conn
+        |> get("/admin/dashboard/runtime/builder/page/#{page.id}?draft_id=#{older.id}")
+        |> html_response(200)
+
+      refute html =~ "pb-inherited-bar"
+      refute html =~ "pb-resume-bar"
+    end
+  end
+
   describe "saving" do
     test "save writes the serialized tree back to the page", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
@@ -15625,6 +17197,88 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert render(canvas) =~ ~s(dir="rtl")
     end
+
+    # Filtering the view must not change which point in history a Revert button restores — the index
+    # stays the one from the full list.
+    test "the history sheet filters by kind without moving the revert points", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+
+      # THE ROW IS WRITTEN ASYNCHRONOUSLY, so the delete has to be flushed before the next op or the
+      # sheet opens over a list this one has not reached yet — which is what made this test pass in
+      # file order and fail on its own. Its neighbour below already flushes for the same reason.
+      _flushed = render_async(view)
+
+      p = node_with_tag(view, "p")
+
+      render_click(view, "op", %{
+        "kind" => "set_style",
+        "node_id" => p.id,
+        "bucket" => "base",
+        "prop" => "gap",
+        "value" => "8px"
+      })
+
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+
+      html = render_async(view)
+      assert html =~ "Every change to this page"
+      assert html =~ "Deleted element"
+      assert html =~ "Set gap (base)"
+
+      # The pills are the resource's own filter, so they are driven the way Gervaz drives it rather
+      # than by a bespoke event — and a row keeps its own id, so nothing depends on its position.
+      styled = filter_history(view, "style")
+      assert styled =~ "Set gap (base)"
+      refute styled =~ "Deleted element"
+
+      content = filter_history(view, "content")
+      assert content =~ "Deleted element"
+      refute content =~ "Set gap (base)"
+    end
+
+    test "a filter that matches nothing offers nothing", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+      _flushed = render_async(view)
+
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      assert render_async(view) =~ "Deleted element"
+
+      # One content change and no style change: the style pill has to come back with nothing to
+      # restore, rather than with the content row it was asked to exclude.
+      styled = filter_history(view, "style")
+
+      assert styled =~ "No changes recorded yet"
+      refute styled =~ "Deleted element"
+      refute styled =~ "history_revert"
+    end
+
+    test "the history sheet lists the session's edits", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => h1.id})
+      _flushed = render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+
+      assert render_async(view) =~ "Deleted element"
+    end
+
+    test "collapsing a panel hides it and leaves a rail", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "toggle_left", %{})
+      refute has_element?(view, "#pb-left")
+      assert render(view) =~ "Components"
+    end
   end
 
   # A FAILED READ IS NOT AN EMPTY SITE. The palette read used to end `_error -> collect_palette([])`,
@@ -16573,6 +18227,264 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert reloaded.template =~ ~s(component_name="hero-card")
       assert reloaded.template =~ "<.component"
+    end
+  end
+
+  # THE SHEET, through the LiveView that opens it. The template's own suite proves what a row looks
+  # like; this proves the sheet is wired to the log at all — which is the part that was broken in
+  # three different ways, each of them silent.
+  describe "the editing history sheet" do
+    test "a site admin sees its own people's edits by email and a master's as Master", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      master =
+        User |> Ash.Query.filter(email == "boss@example.com") |> Ash.read_one!(authorize?: false)
+
+      tenant = create_admin("history-tenant@example.com", site.id)
+      by_master = record_change(page, master, "By the master")
+      by_tenant = record_change(page, tenant, "By the site")
+
+      {:ok, theirs, _html} = open_builder(log_in(build_conn_for_host(), tenant), page)
+      render_click(theirs, "open_sheet", %{"sheet" => "history"})
+      render_async(theirs)
+
+      assert history_author(theirs, by_master) == "Master"
+      assert history_author(theirs, by_tenant) == "history-tenant@example.com"
+      refute render(theirs) =~ "boss@example.com"
+      refute render(theirs) =~ ">boss<"
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      render_async(view)
+
+      assert history_author(view, by_master) == "boss@example.com"
+      assert history_author(view, by_tenant) == "history-tenant@example.com"
+    end
+
+    test "a site admin sees an assistant's change a master annotated as annotated by Master", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      master =
+        User |> Ash.Query.filter(email == "boss@example.com") |> Ash.read_one!(authorize?: false)
+
+      tenant = create_admin("history-annotated@example.com", site.id)
+
+      row =
+        page
+        |> record_assistant_change(tenant, "Added social proof")
+        |> Ash.Changeset.for_update(:annotate, %{note: "Checked on a phone."},
+          tenant: site.id,
+          actor: master,
+          authorize?: false
+        )
+        |> Ash.update!()
+
+      {:ok, theirs, _html} = open_builder(log_in(build_conn_for_host(), tenant), page)
+      render_click(theirs, "open_sheet", %{"sheet" => "history"})
+      render_async(theirs)
+
+      assert history_author(theirs, row) == "Assistant · annotated by Master"
+      refute render(theirs) =~ "boss@example.com"
+      refute render(theirs) =~ ">boss<"
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      render_async(view)
+
+      assert history_author(view, row) == "Assistant · annotated by boss@example.com"
+    end
+
+    test "an edit reaches the log, with the person who made it", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => node_with_tag(view, "h1").id,
+        "text" => "Talk to us"
+      })
+
+      _flushed = render_async(view)
+
+      assert [row | _] = history_rows(page)
+      assert row.op == :set_text
+      assert row.source_type == :page
+      assert row.site_id == page.site_id
+      assert row.author_id == :sys.get_state(view.pid).socket.assigns.current_user.id
+    end
+
+    test "the sheet lists what the log holds", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => node_with_tag(view, "h1").id,
+        "text" => "Talk to us"
+      })
+
+      _flushed = render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      html = render_async(view)
+
+      assert html =~ "Edited text"
+      assert html =~ "history_revert"
+    end
+
+    # The empty-state line is always in the markup — it is shown by CSS when it is the only child —
+    # so its presence proves nothing. What proves the list is empty is that no row is offering to
+    # restore anything.
+    # THE URL SAYS "error-page", THE LOG SAYS `:error_page`. Converting the address form crashed
+    # mount for that one section, so the editor would not open on an error page at all — and it did
+    # so before anything was rendered, which is why it read as a dead route rather than a bad sheet.
+    test "the sheet opens on every section, including the one spelled two ways", %{
+      conn: conn,
+      site: site
+    } do
+      error_page = create_error_page!(site_id: site.id, status: 404)
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+
+      assert render_async(view) =~ "No changes recorded yet"
+    end
+
+    test "a page with no history offers nothing to restore", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      html = render_async(view)
+
+      assert html =~ "No changes recorded yet"
+      refute html =~ "history_revert"
+    end
+
+    test "reverting puts the document back and records that it did", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => node_with_tag(view, "h1").id,
+        "text" => "Talk to us"
+      })
+
+      _flushed = render_async(view)
+      [row] = history_rows(page)
+
+      render_click(view, "history_revert", %{"id" => row.id})
+      _flushed = render_async(view)
+
+      assert Serializer.serialize(editor(view).tree) =~ "Contact Us"
+      assert Enum.any?(history_rows(page), &(&1.op == :restore))
+    end
+
+    # THE CHROME USED TO DECIDE "did the document move?" by measuring the undo stack, which was capped
+    # at fifty — so from the fifty-first change of a sitting the measurement never moved again and
+    # this stopped writing rows, and stopped autosaving the draft, for the rest of the afternoon.
+    #
+    # Both halves of that are gone now: the chrome counts revisions, and the stack is bounded by
+    # memory rather than by fifty. Fifty-five changes is past where the old cap sat, so it still
+    # exercises the case that broke.
+    test "a long sitting keeps being recorded, and keeps every step", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+
+      for n <- 1..55 do
+        render_click(view, "op", %{
+          "kind" => "set_attr",
+          "node_id" => h1.id,
+          "name" => "data-n#{n}",
+          "value" => to_string(n)
+        })
+      end
+
+      _flushed = render_async(view)
+
+      assert length(editor(view).past) == 55,
+             "a step was dropped; the budget should be nowhere near"
+
+      assert length(history_rows(page)) == 55
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => h1.id,
+        "text" => "still recorded"
+      })
+
+      _flushed = render_async(view)
+
+      assert Enum.any?(history_rows(page), &(&1.op == :set_text)),
+             "the change after the cap was not recorded"
+    end
+
+    test "a restore clears its own in-flight flag", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => node_with_tag(view, "h1").id,
+        "text" => "Talk to us"
+      })
+
+      _flushed = render_async(view)
+      [row] = history_rows(page)
+
+      render_click(view, "history_revert", %{"id" => row.id})
+      _restored = render_async(view)
+
+      refute :sys.get_state(view.pid).socket.assigns.history_reverting?
+    end
+
+    test "clearing takes the whole page's history", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => node_with_tag(view, "h1").id,
+        "text" => "Talk to us"
+      })
+
+      _flushed = render_async(view)
+      refute history_rows(page) == []
+
+      render_click(view, "history_clear", %{})
+      _cleared = render_async(view)
+
+      assert history_rows(page) == []
+    end
+
+    # THE SHEET DOES NOT RE-READ ITSELF. A publish takes the payload out from under every row below
+    # it, and a sheet left open across one kept drawing Restore buttons over documents that were
+    # already gone — the press fails safe, but the offer should never have been on screen.
+    #
+    # The published stage, so the sitting holds no draft: with one, the branch the sheet is reading
+    # changes at the publish and the table re-reads for that reason instead of this one.
+    test "a sheet open across a publish stops offering what the publish swept", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      render_click(view, "op", %{
+        "kind" => "set_text",
+        "node_id" => node_with_tag(view, "h1").id,
+        "text" => "Talk to us"
+      })
+
+      _flushed = render_async(view)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+      assert render_async(view) =~ "history_revert"
+
+      render_click(view, "apply_stage", %{})
+      _collected = render_async(view)
+
+      refute render_async(view) =~ "history_revert"
     end
   end
 

@@ -127,6 +127,19 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
       # the row. Deleting the draft being edited must also clear the save target and the resume bar,
       # and opening one replaces the working tree — none of which the table can do for itself.
       row_actions do
+        # No built-in copies a record, so this is a TYPE the table understands rather than a custom
+        # event routed around it — see `MishkaCmsCoreWeb.TableActions.Fork`.
+        action :fork_draft do
+          type MishkaCmsCoreWeb.TableActions.Fork
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Copy") end
+            icon "hero-document-duplicate"
+
+            class "grid size-[22px] flex-none place-items-center rounded-[7px] text-[#a8a5a0] hover:bg-white hover:text-[#4f4bcc] [&_.lbl]:hidden"
+          end
+        end
+
         # The BUILT-IN destroy — the table already knows how to delete a row, and now that these
         # resources no longer archive, destroying one is a real delete. `after_row_action` is what
         # tells the editor, because the row it removed may be the one being saved to.
@@ -162,6 +175,13 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
           {:ok, state}
         end
 
+        # Forking has no built-in to defer to, so the whole of it happens in the editor, which is
+        # where the working document and the free-name rule already live.
+        override_row_action :fork, fn payload, state ->
+          send(self(), {:draft_row_action, "fork_draft", payload["id"]})
+          {:ok, state}
+        end
+
         on_load fn
           query, %{path_params: %{source_error_page_id: id}} when not is_nil(id) ->
             {:cont, Ash.Query.filter(query, is_nil(applied_at) and source_error_page_id == ^id)}
@@ -172,6 +192,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
       end
 
       presentation do
+        template MishkaCmsCoreWeb.Templates.DraftList
         ui_adapter MishkaCmsCoreWeb.UIAdapters.Admin
       end
     end

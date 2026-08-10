@@ -51,6 +51,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Interface
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.PageBuilder.History
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.Review
   alias MishkaGervaz.Table.Web.UrlSync
@@ -290,7 +291,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     case resume_or_open(section, params, record, actor, connected?(socket)) do
       {:error, %{} = fault} -> mount_recovery(socket, section, params, record, fault)
-      {_opened, editor} -> mount_editor(socket, section, params, record, actor, editor)
+      {opened, editor} -> mount_editor(socket, section, params, record, actor, opened, editor)
     end
   end
 
@@ -318,7 +319,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign(:recover_error, nil)
   end
 
-  defp mount_editor(socket, section, params, record, actor, editor) do
+  defp mount_editor(socket, section, params, record, actor, opened, editor) do
     if connected?(socket) do
       Events.session_opened(editor)
       EditorSession.subscribe(editor.token)
@@ -383,9 +384,112 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # state instead of an iframe pointing at a session that is about to be replaced.
     |> assign(:token, connected?(socket) && editor.token)
     |> assign(:editors, Presence.others(editor.token, actor))
+    |> assign_offers(section, params, record, actor, editor, opened, connected?(socket))
+    |> assign_session_draft(section, record, actor, editor, connected?(socket))
+    |> assign(:drafts_enabled?, Drafts.supported?(section) and not is_nil(record))
+    |> assign(:drafts_resource, Drafts.resource(section))
+    |> assign(:drafts_revision, 0)
     |> assign_editor(editor)
     |> assign_defaults()
   end
+
+  # Work the last session left behind and never published — OFFERED, never loaded. Opening a page and
+  # silently getting something other than the page is the behaviour this whole feature exists to
+  # avoid; the bar says when it was left and lets the author take it or throw it away.
+  #
+  # Skipped when the session was resumed from memory (the work is already on screen), when the editor
+  # is already pointed at a draft, and when the autosave is older than the live record — which means
+  # it was published or superseded and is no longer news.
+  #
+  # AND SKIPPED ENTIRELY ON THE STATIC RENDER, which is a different bar's business. A disconnected
+  # mount BUILDS a session rather than resuming one (`session/2`), so it can never know it walked
+  # back into a draft — `inherited_draft` is nil, this bar's guard passes, and the amber bar paints
+  # for one frame before the connected mount replaces it with the violet one. Two banners in a row
+  # for one situation. It also saves the drafts query whose answer that render threw away.
+  defp resumable(connected?, section, record, actor, editor)
+
+  defp resumable(true, section, record, actor, %{draft_id: nil} = _editor)
+       when not is_nil(record) do
+    section
+    |> Drafts.list(record, actor)
+    |> Enum.find(&newer?(&1, record))
+  end
+
+  defp resumable(_connected?, _section, _record, _actor, _editor), do: nil
+
+  # THE TWO BARS ANSWER ONE QUESTION — "which document did you mean?" — so they are decided together
+  # and only ever one of them is filled.
+  #
+  # `?draft_id=` is that question already answered, out loud, by somebody who picked a draft in the
+  # preview modal and clicked through to the editor. It used to be answered again here, from the
+  # table: the editor read the drafts for itself and offered whichever was newest, so choosing the
+  # second badge and clicking Visual Editor arrived at an offer to carry on with the FIRST — and if
+  # the session happened to be resumed, at an offer to carry on with whatever the last sitting was
+  # in, which had nothing to do with the click at all.
+  #
+  # A named draft therefore takes the carry-on bar and empties the other one: the resume bar's
+  # sentence ("you are looking at the live page", never published) is about work nobody asked for,
+  # and its Discard DELETES — neither belongs over a draft that was just deliberately chosen.
+  defp assign_offers(socket, section, params, record, actor, editor, opened, connected?) do
+    case chosen_draft(connected?, section, record, actor, params["draft_id"]) do
+      # ALREADY THERE. A URL naming the draft the session is ALREADY in has asked for nothing —
+      # there is no other document to offer, and a bar reading "you picked X, and this editor is
+      # still in X" is a question with one answer. The ordinary carry-on bar below is the one that
+      # says which draft you are in; this hands the visit back to it.
+      %{id: id} = chosen when id != editor.draft_id ->
+        socket
+        |> assign(:resumable, nil)
+        |> assign(:inherited_draft, inherited_draft(opened, editor, chosen))
+
+      _nothing_new ->
+        socket
+        |> assign(:resumable, resumable(connected?, section, record, actor, editor))
+        # ARRIVING BACK INTO SOMEONE ELSE'S SENTENCE. The session outlives a reload, which is what
+        # stops a refresh throwing work away — but it also meant walking into the editor and
+        # silently being somewhere other than the live page, with a draft already open and no word
+        # about it. Whether a draft is CHOSEN or INHERITED is the difference: choosing one
+        # mid-session needs no announcement, inheriting one on the way in does. Set only here, so it
+        # asks once per visit.
+        |> assign(:inherited_draft, inherited_draft(opened, editor, nil))
+    end
+  end
+
+  # The id is read against the LIST rather than fetched, so a draft that belongs to another document
+  # — or to a site this actor cannot see — resolves to nothing and the URL is simply ignored. Read on
+  # the connected mount only, like every other draft question here: the static render has no bar to
+  # paint and would only throw the answer away.
+  defp chosen_draft(true, section, record, actor, id)
+       when is_binary(id) and id != "" and not is_nil(record),
+       do: section |> Drafts.list(record, actor) |> Enum.find(&(&1.id == id))
+
+  defp chosen_draft(_connected?, _section, _record, _actor, _id), do: nil
+
+  defp newer?(%{updated_at: draft_at}, %{updated_at: record_at})
+       when not is_nil(draft_at) and not is_nil(record_at),
+       do: DateTime.compare(draft_at, record_at) == :gt
+
+  defp newer?(_draft, _record), do: false
+
+  # THE DRAFT THE LAST SITTING WAS IN, as an OFFER rather than a state the reader was put back into.
+  #
+  # A reload used to land inside that draft and then ask whether to carry on with it — a question
+  # already answered before it was shown, which is why Carry on appeared to do nothing. Opening is
+  # the live page, always; the draft is a row in the list and this bar is the way back to it.
+  #
+  # Carries the id as well as the label, because Carry on now has to be able to OPEN it. `nil` when
+  # nothing was inherited — never `false`, because the banner and the resume bar both test with
+  # `is_nil/1` and `false` is not nil.
+  #
+  # `source` is what the bar's sentence turns on: one of these is news about the last sitting, the
+  # other is the click that got here, and telling somebody they "were working in" a draft they chose
+  # ten seconds ago on the previous screen is a bar that reads like it misunderstood.
+  defp inherited_draft(_opened, _editor, %{id: id, label: label}),
+    do: %{id: id, label: label || gettext("that draft"), source: :chosen}
+
+  defp inherited_draft(:resumed, %{draft_id: id, draft_label: label}, nil) when is_binary(id),
+    do: %{id: id, label: label || gettext("your last draft"), source: :session}
+
+  defp inherited_draft(_opened, _editor, nil), do: nil
 
   # `?session=<token>` JOINS an open session instead of starting a fresh one. That is what makes
   # co-editing real: without it two admins on the same URL each get their own private tree, presence
@@ -435,6 +539,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       {:ok, %{stage: :published}} ->
         open_session(section, params, record, actor, connected?)
 
+      # A SESSION THAT WAS IN A DRAFT REOPENS ON THE LIVE PAGE. The draft is not lost — it is a saved
+      # row, and the bar above the canvas offers it by name — but walking back in and being silently
+      # somewhere other than the live page is the thing the whole draft model exists to avoid.
+      # `inherited_draft/2` reads the draft off this same session to build that offer, so nothing is
+      # forgotten by detaching here.
+      {:ok, %{draft_id: id} = editor} when is_binary(id) ->
+        {:resumed, detach_draft(editor, section, record, params)}
 
       {:ok, editor} ->
         {:resumed, editor}
@@ -446,6 +557,27 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp own_session_or_open(section, params, record, actor, connected?),
     do: open_session(section, params, record, actor, connected?)
+
+  # Back to what the live record says, with the draft's name kept only long enough for the bar to
+  # offer it. A failure to re-read the live template leaves the session exactly as it was, which is
+  # the safe half of the trade: still in the draft, and the bar still says so.
+  #
+  # THE HELD ELEMENT CSS STAYS HELD. The markup of this sitting survives detaching — it is a Drafts
+  # row, and the bar offers it by name — and the CSS typed beside it has no row anywhere, so dropping
+  # it here would make an ordinary reload the one gesture that deletes an author's work outright. The
+  # publish prunes it against the markup that is actually being written, so holding it costs nothing.
+  defp detach_draft(editor, section, record, params) do
+    with false <- is_nil(record),
+         {:ok, tree} <- Tree.parse(Section.template(section, record, status: params["status"])),
+         {:ok, _editor} <-
+           EditorSession.put_tree(editor.token, tree, reason: :restore, dirty?: false),
+         {:ok, detached} <-
+           EditorSession.mark_saved(editor.token, stage: :draft, draft_id: nil, draft_label: nil) do
+      %{detached | draft_id: editor.draft_id, draft_label: editor.draft_label}
+    else
+      _unavailable -> editor
+    end
+  end
 
   # The palette is read once when the session opens, so a component installed FROM the Studio would
   # not appear in it until a reload. Re-reading it here is what makes Install mean "you can place
@@ -521,6 +653,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
        do: "?" <> URI.encode_query(session: token, status: status)
 
   defp invitation(token, _assigns), do: "?" <> URI.encode_query(session: token)
+
+  # The freshly written row, read back the way the mount reads it — or the one the save answered
+  # with, when that read cannot be made. A record with a thin `site` is still the right name and the
+  # right path; refusing to show them because a badge would read "This site" would be the worse
+  # trade.
+  # A SESSION RESUMED INSIDE A DRAFT IS STILL WRITING IT, before anyone answers the carry-on bar, so
+  # `@draft` is that row from the first render — the settings and the original's notice read it.
+  defp assign_session_draft(socket, section, record, actor, %{draft_id: id}, true)
+       when is_binary(id) and not is_nil(record) do
+    case section |> Drafts.list(record, actor) |> Enum.find(&(&1.id == id)) do
+      nil -> socket
+      draft -> assign(socket, :draft, draft)
+    end
+  end
+
+  defp assign_session_draft(socket, _section, _record, _actor, _editor, _connected?), do: socket
 
   defp load_record(_section, nil, _actor), do: :none
 
@@ -711,7 +859,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:media_categories, fn -> Phoenix.LiveView.AsyncResult.loading() end)
     |> assign_new(:assets_category, fn -> nil end)
     |> assign_new(:media_target, fn -> nil end)
+    |> assign_new(:history_revision, fn -> 0 end)
+    |> assign_new(:history_clearable?, fn -> false end)
+    |> assign_new(:history_flushing?, fn -> false end)
+    |> assign_new(:history_reverting?, fn -> false end)
+    |> assign_new(:history_flush_again?, fn -> false end)
+    |> assign_new(:history_recording?, fn -> true end)
     |> assign_new(:draft, fn -> nil end)
+    # WHETHER THAT ROW IS ONE THE AUTHOR CHOSE. Autosave attaches a row of its own on the first
+    # change, so `@draft` is set on the live page too — and it is the live page's working copy, its
+    # fields frozen at that first keystroke. Only a draft that was OPENED is another document, and
+    # only another document is something to copy from; see `write_draft/3`.
+    |> assign_new(:draft_opened?, fn -> false end)
+    |> assign_new(:history_tab, fn -> :history end)
     |> assign_new(:autosaving?, fn -> false end)
     |> assign_new(:autosaving_revision, fn -> nil end)
     |> assign_new(:draft_again?, fn -> false end)
@@ -724,6 +884,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # were the same row.
     |> assign_new(:draft_label, fn -> session_draft_label() end)
     |> assign_new(:dev_mode?, fn -> false end)
+    |> assign_new(:drafts_enabled?, fn -> false end)
+    |> assign_new(:draft_conflict, fn -> nil end)
     |> assign_new(:theme, fn -> "light" end)
     # The Studio chip counts the tokens this site added on top of the theme's own. It asked with no
     # site at all, which reads the GLOBAL sheets — the one place a site's own token can never be —
@@ -925,6 +1087,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign(:can_undo?, editor.past != [])
     |> assign(:can_redo?, editor.future != [])
     |> assign(:clipboard_label, editor.clipboard_label)
+    |> assign_drafts_url_state()
+    |> assign_history_url_state()
+    |> assign_history_clearable()
     |> assign_tokens_url_state()
     |> assign_snippets_url_state()
     |> assign_snippet_defaults()
@@ -949,8 +1114,98 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         socket
 
       false ->
-        socket |> assign(:drafted_revision, editor.revision) |> autosave()
+        socket |> assign(:drafted_revision, editor.revision) |> autosave() |> flush_history()
     end
+  end
+
+  # THE HISTORY IS WRITTEN IN PUBLISHED STAGE TOO, which is the one thing autosave above does not do
+  # — `autosave/1` returns untouched there on purpose, because nothing may be written to the page.
+  # The page still is not; the record of what somebody did is. That is what stopped "leave in publish
+  # mode" meaning "lose it".
+  #
+  # Off the LiveView process, like the draft write beside it, and idempotent: entries carry ids
+  # minted when they settled, so a flush that overlaps another upserts rather than duplicating.
+  defp cancel_running_revert(%{assigns: %{history_reverting?: true}} = socket),
+    do: cancel_async(socket, :history_revert)
+
+  defp cancel_running_revert(socket), do: socket
+
+  defp flush_history(%{assigns: %{history_flushing?: true}} = socket),
+    do: assign(socket, :history_flush_again?, true)
+
+  defp flush_history(socket) do
+    %{token: token, current_user: actor} = socket.assigns
+
+    socket
+    |> assign(:history_flushing?, true)
+    |> assign(:history_flush_again?, false)
+    |> MishkaGervaz.Messages.start_async(:history_flush, fn -> History.flush(token, actor) end)
+  end
+
+  # Everything the drafts table needs travels in `url_state`, because it is a LiveComponent: the
+  # document whose drafts these are, the draft the editor is pointed at (which the rows mark
+  # "Editing"), and a revision this LiveView bumps when the list must be read again. Gervaz reloads
+  # exactly when this map stops matching the component's own state, so a map that is unchanged costs
+  # nothing on an unrelated re-render, and a changed one costs precisely one read.
+  defp assign_drafts_url_state(%{assigns: %{drafts_enabled?: false}} = socket),
+    do: assign(socket, :drafts_url_state, nil)
+
+  defp assign_drafts_url_state(socket) do
+    %{record: record, editor: editor, drafts_revision: revision} = socket.assigns
+
+    assign(socket, :drafts_url_state, %{
+      filters: %{},
+      sort: [updated_at: :desc],
+      page: 1,
+      page_size: nil,
+      path_params: %{
+        Drafts.source_key(section(socket)) => record.id,
+        :editing_draft_id => editor.draft_id,
+        :revision => revision
+      }
+    })
+  end
+
+  # Who may clear a document's whole history: a master, or an admin of the site that owns it. Read
+  # off the actor rather than a permission of its own — this is the same boundary every other
+  # destructive act in the editor uses.
+  defp assign_history_clearable(socket) do
+    assign(
+      socket,
+      :history_clearable?,
+      clearable?(socket.assigns[:current_user], socket.assigns.editor.site_id)
+    )
+  end
+
+  defp clearable?(%{site_id: nil}, _site_id), do: true
+  defp clearable?(%{site_id: site_id}, site_id) when is_binary(site_id), do: true
+  defp clearable?(_actor, _site_id), do: false
+
+  # WHAT THE EDITOR IS ON, which is what the timeline shows: this record, on this branch. `draft_id`
+  # is part of the scope, so switching between the live document and a draft changes which history
+  # you are reading rather than filtering one list. `revision` is what makes a freshly written row
+  # appear — the table re-reads when the state it was handed stops matching.
+  defp assign_history_url_state(socket) do
+    %{record: record, editor: editor} = socket.assigns
+
+    assign(socket, :history_url_state, %{
+      filters: %{},
+      sort: [inserted_at: :desc],
+      page: 1,
+      page_size: nil,
+      # `branch_id`, not `draft_id`: a path param whose name matches an attribute is filtered on
+      # exactly by Gervaz, and this one is not an exact match — a draft's timeline includes the page's
+      # own history, which the resource's `on_load` expresses.
+      # `editor.section`, NOT the URL's: the address says "error-page" and the log files it under
+      # `:error_page`, so converting the URL form raised on the one section whose two spellings
+      # differ — and it raised inside mount, which took the whole editor down with it.
+      path_params: %{
+        source_type: Section.to_atom!(editor.section),
+        source_id: record && record.id,
+        branch_id: editor.draft_id,
+        revision: socket.assigns[:history_revision] || 0
+      }
+    })
   end
 
   # The Studio's tokens table, scoped the same way the draft picker is: everything it needs travels
@@ -1051,6 +1306,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> update(:tokens_revision, &(&1 + 1))
     |> assign_token_categories()
     |> assign_tokens_url_state()
+  end
+
+  # Nothing pushes rows into the table; the table reads again when the state it was handed changes.
+  defp refresh_drafts(socket) do
+    socket
+    |> update(:drafts_revision, &(&1 + 1))
+    |> assign_drafts_url_state()
   end
 
   # Selecting on the canvas has to reveal the node in the layers tree, or the two panels disagree
@@ -1592,6 +1854,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      )}
   end
 
+  # A row action from the drafts table. Gervaz dispatches it to the table component, whose `self()`
+  # is this LiveView — so the action arrives as a message and is answered by the same handlers the
+  # rest of the editor uses. One implementation, whichever control was clicked.
+  def handle_info({:draft_row_action, event, id}, socket) when is_binary(id) do
+    case event do
+      "fork_draft" -> handle_event("fork_draft", %{"id" => id}, socket)
+      "delete_draft" -> {:noreply, socket |> refresh_drafts() |> forget_deleted(id)}
+      _unknown -> {:noreply, socket}
+    end
+  end
+
   # The Gervaz form announces a successful create by messaging its parent — there is no callback and
   # no PubSub. The list has to be told to read again, because nothing else knows a row appeared.
   # THE GALLERY'S "USE" ARRIVES AS A ROW ACTION, not a click on a tile of ours — the tiles are
@@ -1792,6 +2065,84 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_async(:autosave, {:exit, _reason}, socket),
     do: {:noreply, socket |> assign(:autosaving?, false) |> holding_draft() |> autosave_failed()}
 
+  # A FLUSH THAT FAILS IS NOT SILENT. `History.flush/2` puts the entries back, so the next change
+  # retries them; what must not happen is the editor carrying on as though the history were being
+  # kept. `builder_live` already says a page that quietly stopped keeping work is the worst thing
+  # this editor could do without mentioning it — the same applies to its record of what happened.
+  def handle_async(:history_flush, {:ok, result}, socket) do
+    socket =
+      socket
+      |> assign(:history_flushing?, false)
+      |> assign(:history_recording?, match?({:ok, _}, result))
+      |> bump_history_revision(result)
+
+    case socket.assigns[:history_flush_again?] do
+      true -> {:noreply, flush_history(socket)}
+      _settled -> {:noreply, socket}
+    end
+  end
+
+  def handle_async(:history_flush, {:exit, _reason}, socket),
+    do:
+      {:noreply,
+       socket |> assign(:history_flushing?, false) |> assign(:history_recording?, false)}
+
+  # NOTHING IS TOLD, because nothing was lost: the page is published, the rows are written, and all
+  # this job drops is weight. It is also self-healing — `History.collect/5` takes the whole branch,
+  # so the next publish collects whatever this one left behind.
+  #
+  # THE SHEET IS RE-READ ALL THE SAME. The rows it is drawing have just lost their payloads, and a
+  # Restore button over a payload that is gone is an offer the editor cannot keep — the press fails
+  # safe, but the button should not have been there to press.
+  def handle_async(:history_collect, {:ok, {:ok, _swept}}, socket),
+    do: {:noreply, bump_history_revision(socket)}
+
+  # A CLEANUP THE POLICIES REFUSED IS NOT A PUBLISH THAT FAILED, so nothing changes on screen — but
+  # it is the difference between the payloads being gone and still being there, and the only way
+  # anyone learns that this stopped working is that it says so. It was silent for exactly that long.
+  def handle_async(:history_collect, {:ok, {:error, reason}}, socket) do
+    Logger.warning("[PageBuilder] the publish cleanup was refused: #{inspect(reason)}")
+    {:noreply, socket}
+  end
+
+  def handle_async(:history_collect, {:exit, reason}, socket) do
+    Logger.warning("[PageBuilder] the publish cleanup did not finish: #{inspect(reason)}")
+    {:noreply, socket}
+  end
+
+  def handle_async(:history_revert, {:ok, {:ok, _editor}}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(:history_reverting?, false)
+       |> put_flash(
+         :info,
+         gettext("Restored in the editor. The live page does not change until you publish.")
+       )}
+
+  def handle_async(:history_revert, {:ok, {:error, :gone}}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(:history_reverting?, false)
+       |> put_flash(:error, gettext("That step's document is no longer kept."))}
+
+  # `:error` bare, as well as `{:error, reason}`: `History.revert/3` threads a `with` over
+  # `decompress/1`, which answers `:error` on a payload that will not inflate.
+  def handle_async(:history_revert, {:ok, _refused}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(:history_reverting?, false)
+       |> put_flash(:error, gettext("That step could not be restored."))}
+
+  def handle_async(:history_revert, {:exit, _reason}, socket),
+    do:
+      {:noreply,
+       socket
+       |> assign(:history_reverting?, false)
+       |> put_flash(:error, gettext("That step could not be restored."))}
+
   # WHAT THE CARD WILL PUT ON THE PAGE, rendered while the pointer rests on it.
   #
   # The client owns everything about showing it — when to ask, where to put it, when to take it away
@@ -1817,6 +2168,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
          template: nil,
          note: gettext("This component could not be drawn.")
        })}
+
+  # The sheet is a gervaz table, and it re-reads when the state it was handed stops matching — so a
+  # written row is how the timeline learns there is something new to show.
+  defp bump_history_revision(socket, {:ok, n}) when n > 0,
+    do: bump_history_revision(socket)
+
+  defp bump_history_revision(socket, _nothing_written), do: socket
+
+  # AND HANDED OVER AGAIN, like every other table here refreshes. The number alone sits in an assign
+  # the sheet never sees: `history_url_state` is rebuilt by `assign_editor/2`, so a bump with no edit
+  # behind it reached the timeline whenever the author next happened to change something — which is
+  # how a sheet open across a publish kept offering Restore over payloads that were already gone.
+  defp bump_history_revision(socket),
+    do: socket |> update(:history_revision, &((&1 || 0) + 1)) |> assign_history_url_state()
 
   # NOTHING IS SAVED WHILE PUBLISHING. The stage says where the next press goes, and on Publish the
   # answer is the live page — so a draft written behind it would be a second copy nobody asked for.
@@ -1938,6 +2303,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       )
 
     socket
+    |> adopt_history(draft)
     |> assign(:editor, editor)
     |> assign(:draft, draft)
     |> assign(:autosave_failed?, false)
@@ -1948,6 +2314,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp autosaved(socket, :unsupported), do: socket
 
   defp autosaved(socket, _unsaved), do: autosave_failed(socket)
+
+  # THE DRAFT IS MADE ON THE FIRST SAVE, not when the editor opens — so the first changes of a
+  # sitting are recorded before there is a draft to attach them to, and would otherwise stay on the
+  # live record's timeline while everything after them sat on the draft's. One afternoon, two lists,
+  # for a reason no reader could infer. Only ever adopts what THIS sitting wrote.
+  defp adopt_history(%{assigns: %{draft: %{id: id}}} = socket, %{id: id}), do: socket
+
+  defp adopt_history(socket, draft) do
+    %{token: token, current_user: actor} = socket.assigns
+    History.adopt_draft(token, draft.id, actor)
+    bump_history_revision(socket)
+  end
 
   defp autosave_failed(%{assigns: %{autosave_failed?: true}} = socket), do: socket
 
@@ -2454,7 +2832,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("open_sheet", %{"sheet" => sheet}, socket) do
-    sheets = [:none, :studio, :assets, :review]
+    sheets = [:none, :studio, :assets, :review, :history]
     opened = tab_atom(sheet, sheets)
 
     # The Record-history button always lands on Record history. Only the routes that mean "drafts"
@@ -2634,7 +3012,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # Four of the mobile tabs are not panels: they open the overlay the top bar has no room for at that
   # width, and leave the canvas showing underneath.
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(assets studio review),
+      when panel in ~w(assets studio review history),
       do: {:noreply, assign(socket, sheet: String.to_existing_atom(panel), mob_panel: :canvas)}
 
   def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
@@ -3419,6 +3797,91 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("merge_forms", _params, socket), do: {:noreply, socket}
 
+  # RANDOM ACCESS, which is why the history keeps whole documents rather than a log of inverse ops:
+  # this jumps straight to any entry in the rail. The entry itself carries only a reference now, so
+  # the tree is asked for — and a step whose tree is no longer held says so instead of reverting to
+  # nothing.
+  # REVERT KEYS ON THE ROW, not a position. The sheet is a filtered, paginated table now, so
+  # "the nth entry of the undo stack" stopped being a thing a button could mean. The snapshot on the
+  # row is self-sufficient — which is why this works for a row written by a colleague, by the
+  # assistant, or last week, none of which has an in-memory tree here to point at.
+  # Master, or the record's own site admin — the same people who may delete anything else here.
+  def handle_event("history_clear", _params, %{assigns: %{history_clearable?: true}} = socket) do
+    %{record: record, editor: editor, current_user: actor} = socket.assigns
+    section = Section.to_atom!(editor.section)
+
+    case History.clear(section, record.id, actor) do
+      {:ok, n} ->
+        {:noreply,
+         socket
+         |> bump_history_revision()
+         |> put_flash(
+           :info,
+           ngettext(
+             "Cleared %{count} recorded change.",
+             "Cleared %{count} recorded changes.",
+             n
+           )
+         )}
+
+      _error ->
+        {:noreply, put_flash(socket, :error, gettext("That history could not be cleared."))}
+    end
+  end
+
+  def handle_event("history_clear", _params, socket), do: {:noreply, socket}
+
+  # OFF THE LIVEVIEW, because restoring is the slow half of this feature: the payload has to be
+  # un-gzipped and the document re-parsed, measured at roughly a second per megabyte. Run here, that
+  # is a second per megabyte during which the editor answers nothing at all — no typing, no
+  # selection, no canvas — and the assistant's rows are allowed a document four times the size.
+  #
+  # The document arrives by the session's own broadcast, exactly as it does when a colleague changes
+  # something, so there is nothing to assign back.
+  # AND THE LAST CLICK WINS. `start_async/3` does not stop a task already running under the same
+  # name — it replaces the tracking entry and lets the old one finish, so a slow restore and a fast
+  # one both reach `put_tree/3` and the slower one lands second, replacing a document the editor has
+  # already said it restored. Its result is discarded by then, so nothing is even shown.
+  #
+  # Cancelling first kills that task before it writes, which is the whole reason the write is the
+  # last thing `History.revert/3` does. Re-arming under the same name then drops the dead task's exit
+  # rather than reporting it as a failed restore.
+  def handle_event("history_revert", %{"id" => id}, socket) do
+    %{token: token, current_user: actor} = socket.assigns
+
+    {:noreply,
+     socket
+     |> cancel_running_revert()
+     |> assign(:history_reverting?, true)
+     |> put_flash(:info, gettext("Restoring…"))
+     |> MishkaGervaz.Messages.start_async(:history_revert, fn ->
+       History.revert(token, id, actor)
+     end)}
+  end
+
+  def handle_event("revert", %{"index" => index}, socket) do
+    entry = Enum.at(socket.assigns.editor.past, to_int(index))
+
+    with false <- is_nil(entry),
+         {:ok, tree} <- EditorSession.entry_tree(socket.assigns.editor, entry),
+         {:ok, editor} <-
+           EditorSession.put_tree(socket.assigns.token, tree, reason: :revert) do
+      {:noreply,
+       socket
+       |> busy_frames(gettext("Reverting to “%{label}”…", label: entry.label), editor)
+       |> put_flash(:info, gettext("Reverted to \"%{label}\"", label: entry.label))}
+    else
+      true ->
+        {:noreply, socket}
+
+      :error ->
+        {:noreply, put_flash(socket, :error, gettext("That step is no longer available."))}
+
+      _failed ->
+        {:noreply, socket}
+    end
+  end
+
   def handle_event("undo", _params, socket) do
     {:ok, _editor} = EditorSession.undo(socket.assigns.token)
     {:noreply, socket}
@@ -3588,6 +4051,204 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # ---- drafts ------------------------------------------------------------------------------
   # The editor edits ONE target and the top bar names it: the live document, the autosave, or a draft
   # someone named. Nothing here changes the target without being asked to.
+
+  # Every route to the drafts list — the header chip, the stage menu, the More menu — lands on the
+  # same tab of the same sheet. One place to look, however you got there.
+  def handle_event("draft_sheet", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:draft_conflict, nil)
+     |> assign(history_tab: :drafts, sheet: :history)
+     |> refresh_drafts()}
+  end
+
+  # Switching to Drafts has to LOAD them. Only the routes that open the sheet did, so arriving by the
+  # tab showed "No drafts yet" on a page whose own resume bar was offering one — the two read the
+  # same table, so the empty list could only ever be a list nobody had asked for.
+  def handle_event("history_tab", %{"tab" => tab}, socket),
+    do: {:noreply, show_history_tab(socket, tab_atom(tab, [:history, :drafts]))}
+
+  def handle_event("open_draft", %{"id" => id}, socket) do
+    case Enum.find(draft_list(socket), &(&1.id == id)) do
+      nil ->
+        {:noreply, put_flash(socket, :error, gettext("That draft is no longer there."))}
+
+      draft ->
+        # `edit_draft/3` sets the stage itself, in the same write — see the note there on what two
+        # calls cost on this path.
+        {:ok, editor} =
+          EditorSession.edit_draft(socket.assigns.token, draft, draft_template(socket, draft))
+
+        # The tree is a DIFFERENT tree now — its nodes have their own ids, so the ids the old one was
+        # expanded by mean nothing to it and the rail collapsed to a row of closed roots. Opening a
+        # draft should leave you looking at its structure, the same way opening the page does.
+        #
+        # AND THE CHIP FOLLOWS THE TARGET. Choosing a draft is choosing where the work goes, so a
+        # chip left on Publish would sit above a draft it refuses to write to — the editor would
+        # say "editing “Tuesday”" and then keep nothing.
+        {:noreply,
+         socket
+         |> assign(
+           sheet: :none,
+           draft: draft,
+           draft_opened?: true,
+           expanded: default_expanded(editor.tree)
+         )
+         # BOTH OFFERS ARE ANSWERED BY OPENING ONE. `resumable` is the autosave bar and
+         # `inherited_draft` is the "carry on where you left off" bar; only the first was cleared
+         # here, and the second was cleared by the CARRY-ON BUTTON rather than by opening. So every
+         # other route in — choosing a different draft from the drafts sheet, the stage menu, the
+         # header chip — left the amber bar standing, still offering a draft the author had just
+         # moved past, and clicking it re-opened the one they had navigated away from.
+         #
+         # The question the bar asks is "which document do you want?", and opening any draft is an
+         # answer to it however it was given. That belongs here, where every route passes, not on
+         # one button.
+         |> assign(stage: :draft, resumable: nil, inherited_draft: nil)
+         |> busy_frames(
+           gettext("Opening “%{label}”…", label: Drafts.display_label(draft.label)),
+           editor
+         )
+         |> put_flash(
+           :info,
+           gettext("Editing draft “%{label}”. Saves go here as you work.",
+             label: Drafts.display_label(draft.label)
+           )
+         )}
+    end
+  end
+
+  # A name already in use is never silently overwritten: the author is told which one and when it was
+  # last saved, and chooses. `save_as_draft` with a `draft_id` is that choice made.
+  def handle_event("save_as_draft", %{"label" => label} = params, socket) do
+    case {String.trim(label), params["draft_id"]} do
+      {"", _id} ->
+        {:noreply, put_flash(socket, :error, gettext("Give the draft a name."))}
+
+      {name, nil} ->
+        confirm_or_write(
+          socket,
+          name,
+          Drafts.named(section(socket), socket.assigns.record, socket.assigns.current_user, name)
+        )
+
+      {name, id} ->
+        {:noreply, write_draft(socket, name, id)}
+    end
+  end
+
+  # A draft is the author's, so they can take a copy of it or throw it away. Forking answers "start
+  # from this one without losing it", which is the whole reason someone keeps a draft they are not
+  # currently editing.
+  def handle_event("fork_draft", %{"id" => id}, socket) do
+    case Enum.find(draft_list(socket), &(&1.id == id)) do
+      nil -> {:noreply, put_flash(socket, :error, gettext("That draft is no longer there."))}
+      draft -> {:noreply, fork(socket, draft)}
+    end
+  end
+
+  def handle_event("delete_draft", %{"id" => id}, socket) do
+    case Drafts.discard(section(socket), id, socket.assigns.current_user) do
+      {:error, reason} ->
+        {:noreply, put_flash(socket, :error, human(reason))}
+
+      _deleted ->
+        {:noreply,
+         socket
+         |> refresh_drafts()
+         |> forget_deleted(id)
+         |> put_flash(:info, gettext("Draft deleted."))}
+    end
+  end
+
+  # KEEP GOING. Nothing to do but stop asking — the session is already pointed at that draft, which
+  # is exactly the state the banner appeared to explain.
+  # CARRY ON OPENS THE DRAFT. It used to only dismiss the bar, which was honest about nothing: the
+  # session had already been resumed into that draft before the bar rendered, so the button appeared
+  # to do nothing because there was nothing left for it to do. Opening starts on the live page now,
+  # so this is the step that actually moves.
+  def handle_event("continue_draft", _params, socket) do
+    case socket.assigns.inherited_draft do
+      # `open_draft` clears the bar itself now, for every route that reaches it.
+      %{id: id} when is_binary(id) -> handle_event("open_draft", %{"id" => id}, socket)
+      _gone -> {:noreply, assign(socket, :inherited_draft, nil)}
+    end
+  end
+
+  # NOTHING TO LEAVE. A draft named in the URL is an OFFER over the live page — reopening a document
+  # detaches the session from whatever draft it was in, so the canvas is the live page already. The
+  # full clause below re-reads the template and reloads the frames, which here is a loading overlay
+  # for no movement and a flash reading "Back on the live page" about a page nobody left.
+  #
+  # Guarded on the OFFER rather than on the session's target, because the offer is what this button
+  # is answering; the two agree on every route in, and the offer is the one that says so.
+  def handle_event(
+        "start_fresh",
+        _params,
+        %{assigns: %{inherited_draft: %{source: :chosen}}} = socket
+      ),
+      do: {:noreply, assign(socket, :inherited_draft, nil)}
+
+  # START AGAIN FROM THE LIVE PAGE. The draft is LEFT ALONE — it stays in the list and can be opened
+  # from there — so this is "not that one", never "throw that away"; Discard on the other bar is the
+  # button that deletes, and it says so.
+  #
+  # Both halves are needed. Detaching without reloading would write the draft's content into a new
+  # draft, which is a fork; reloading without detaching would put the live page back into the draft
+  # you just said you did not want.
+  #
+  # The element CSS applied in this sitting is NOT thrown away with the markup, for the reason the
+  # draft is not: it is still the author's, and unlike the markup it has no row to be still in. It
+  # keeps showing in the box and on the canvas, and the flash says so rather than letting it look
+  # like the live page's own styling.
+  def handle_event("start_fresh", _params, socket) do
+    %{token: token, record: record} = socket.assigns
+
+    with {:ok, tree} <-
+           Tree.parse(Section.template(section(socket), record, status: socket.assigns.status)),
+         {:ok, _editor} <- EditorSession.put_tree(token, tree, reason: :restore, dirty?: false),
+         {:ok, editor} <-
+           EditorSession.mark_saved(token, stage: :draft, draft_id: nil, draft_label: nil) do
+      {:noreply,
+       socket
+       |> busy_frames(gettext("Reloading the live page…"), editor)
+       |> assign(:inherited_draft, nil)
+       |> assign(draft: nil, draft_opened?: false)
+       |> assign(:draft_label, session_draft_label())
+       |> assign(:drafted_revision, nil)
+       |> sync_session(token)
+       |> refresh_drafts()
+       |> put_flash(:info, back_on_live_page(editor))}
+    else
+      _unavailable ->
+        {:noreply,
+         socket
+         |> assign(:inherited_draft, nil)
+         |> put_flash(
+           :error,
+           gettext("Could not reload the live page — you are still in the draft.")
+         )}
+    end
+  end
+
+  def handle_event("resume_autosave", _params, socket) do
+    case socket.assigns.resumable do
+      nil -> {:noreply, assign(socket, :resumable, nil)}
+      draft -> handle_event("open_draft", %{"id" => draft.id}, assign(socket, :resumable, nil))
+    end
+  end
+
+  # Deleted rather than dismissed. A bar offering to restore work you have already refused, every
+  # time you open the page, is one people learn to click past without reading.
+  def handle_event("discard_autosave", _params, socket) do
+    with %{id: id} <- socket.assigns.resumable,
+         :ok <- discarded(Drafts.discard(section(socket), id, socket.assigns.current_user)) do
+      {:noreply,
+       socket |> assign(:resumable, nil) |> put_flash(:info, gettext("Unsaved work discarded."))}
+    else
+      _kept -> {:noreply, assign(socket, :resumable, nil)}
+    end
+  end
 
   def handle_event("shortcut", %{"key" => key}, socket), do: shortcut(key, socket)
 
@@ -4188,6 +4849,160 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp section(%{assigns: %{section: section}}), do: section
 
+  # A fork copies the CONTENT, not the name — two drafts called the same thing is the confusion the
+  # name-collision guard exists to prevent, so the copy says what it is and can be renamed.
+  #
+  # AND IT COPIES THE DRAFT, not the page underneath it: the draft is the source every field but the
+  # open template is taken from, or the copy carries today's published layout, SEO tags, language and
+  # section — and, for an error page, the published markup of every status the author is not looking
+  # at. See `Drafts.save_as/8`.
+  defp fork(socket, draft) do
+    %{record: record, current_user: actor} = socket.assigns
+    name = copy_name(section(socket), record, actor, draft.label)
+
+    case Drafts.save_as(
+           section(socket),
+           record,
+           draft,
+           draft_template(socket, draft),
+           actor,
+           nil,
+           name,
+           socket.assigns[:status]
+         ) do
+      {:ok, copy} ->
+        socket
+        |> refresh_drafts()
+        |> put_flash(:info, gettext("Copied to “%{label}”.", label: copy.label))
+
+      :unsupported ->
+        put_flash(socket, :error, gettext("This section does not keep drafts."))
+
+      {:error, reason} ->
+        put_flash(socket, :error, human(reason))
+    end
+  end
+
+  # "Promo copy", then "Promo copy 2" — a name that is free, without asking, because the author asked
+  # for a copy and not for a conversation about what to call it.
+  defp copy_name(section, record, actor, label) do
+    base = gettext("%{label} copy", label: label || gettext("Draft"))
+
+    Enum.find_value(1..50, base, fn
+      1 -> is_nil(Drafts.named(section, record, actor, base)) && base
+      n -> is_nil(Drafts.named(section, record, actor, "#{base} #{n}")) && "#{base} #{n}"
+    end)
+  end
+
+  # A DRAFT'S MARKUP IS READ THE SECTION'S WAY. Three of them keep a `template`; an error page's
+  # draft keeps `error_pages` and the editor is looking at one status of it — the same question
+  # `Section.template/3` answers for the live record, asked of the draft.
+  # A DOCUMENT SWAP IS NOT A NAVIGATION, and the frame's own loading state only ever knew about one.
+  # `FrameLoader` hides its spinner on the iframe's `load`, which fires exactly once; opening a
+  # draft, reverting a version or dropping back to the live page replaces the whole document inside a
+  # frame that never navigates, so what the author saw was the OLD page, unchanged, for as long as
+  # the new one took to render. Reported as "the page stuck until it loads".
+  #
+  # The revision travels with the label so the overlay is settled by the canvas actually painting
+  # THAT document rather than by the next patch to arrive — the editor's own re-render answers first
+  # otherwise, and the spinner would blink out before anything had changed.
+  defp busy_frames(socket, label, %{revision: revision}),
+    do: push_event(socket, "pb:frame-busy", %{label: label, revision: revision})
+
+  defp busy_frames(socket, _label, _editor), do: socket
+
+  defp draft_template(socket, draft),
+    do: Section.template(section(socket), draft, status: socket.assigns[:status])
+
+  # A deleted draft cannot go on being the save target or the thing the resume bar offers.
+  defp forget_deleted(%{assigns: %{editor: %{draft_id: id}}} = socket, id) do
+    {:ok, _editor} =
+      EditorSession.mark_saved(socket.assigns.token, draft_id: nil, draft_label: nil)
+
+    assign(socket, :resumable, nil)
+  end
+
+  defp forget_deleted(socket, id) do
+    case socket.assigns.resumable do
+      %{id: ^id} -> assign(socket, :resumable, nil)
+      _other -> socket
+    end
+  end
+
+  defp back_on_live_page(%{staged_element_css: nil}),
+    do: gettext("Back on the live page. Your draft is still in the list.")
+
+  defp back_on_live_page(_editor),
+    do:
+      gettext(
+        "Back on the live page. Your draft is still in the list. The element styles you applied are still held for your next publish."
+      )
+
+  defp show_history_tab(socket, :drafts),
+    do: socket |> assign(history_tab: :drafts, draft_conflict: nil) |> refresh_drafts()
+
+  defp show_history_tab(socket, tab), do: assign(socket, :history_tab, tab)
+
+  defp draft_list(socket),
+    do: Drafts.list(section(socket), socket.assigns.record, socket.assigns.current_user)
+
+  defp confirm_or_write(socket, name, nil), do: {:noreply, write_draft(socket, name, nil)}
+
+  defp confirm_or_write(socket, name, %{} = existing),
+    do: {:noreply, assign(socket, :draft_conflict, %{label: name, draft: existing})}
+
+  # SAVING UNDER A NEW NAME COPIES THE OPEN DRAFT, for the reason `fork/2` gives — it is the same
+  # create, reached from inside the document instead of from the drafts table.
+  #
+  # THE OPEN DRAFT, NOT `@draft`. Autosave puts its own row there on the first change, so on the
+  # live page `@draft` is a snapshot of the page taken at that keystroke — copying it filed the
+  # section, layout, SEO tags and language as they were before a Configuration save the author made
+  # a minute earlier, and publishing the copy put them back. With no draft opened the live record is
+  # the document, and it is the source.
+  defp write_draft(socket, name, draft_id) do
+    %{editor: editor, record: record, current_user: actor} = socket.assigns
+
+    section(socket)
+    |> Drafts.save_as(
+      record,
+      opened_draft(socket),
+      editor_html(editor),
+      actor,
+      draft_id,
+      name,
+      editor.status
+    )
+    |> case do
+      {:ok, draft} ->
+        {:ok, _editor} =
+          EditorSession.mark_saved(editor.token,
+            stage: :draft,
+            draft_id: draft.id,
+            draft_label: draft.label
+          )
+
+        socket
+        |> assign(draft: draft, draft_conflict: nil)
+        |> refresh_drafts()
+        |> put_flash(:info, gettext("Saved as “%{label}”.", label: draft.label))
+
+      :unsupported ->
+        put_flash(socket, :error, gettext("This section does not keep drafts."))
+
+      {:error, reason} ->
+        put_flash(socket, :error, human(reason))
+    end
+  end
+
+  defp opened_draft(%{assigns: %{draft_opened?: true, draft: draft}}), do: draft
+  defp opened_draft(_live_page), do: nil
+
+  defp editor_html(editor), do: Tree.Serializer.serialize(editor.tree)
+
+  defp discarded({:ok, _draft}), do: :ok
+  defp discarded(:ok), do: :ok
+  defp discarded(_error), do: :error
+
   defp shortcut("undo", socket), do: handle_event("undo", %{}, socket)
   defp shortcut("redo", socket), do: handle_event("redo", %{}, socket)
   defp shortcut("save", socket), do: handle_event("save", %{}, socket)
@@ -4421,11 +5236,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       announce(stage, record, editor)
 
       socket
+      |> collect_history(stage, editor, record)
       |> assign(:record, record)
       |> assign(:stage, next_stage(stage))
       |> assign(:applied, {stage, editor.revision})
       |> assign(:applied_stage, stage)
+      |> assign(:resumable, nil)
       |> assign(:drafted_revision, nil)
+      |> refresh_drafts()
       |> put_flash(
         :info,
         stage
@@ -4436,6 +5254,50 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     else
       {:error, reason} -> put_flash(socket, :error, human(reason))
     end
+  end
+
+  # A PUBLISH DROPS WEIGHT, NOT RECORD. The snapshots behind this branch go — they are 91% of what
+  # history costs, and reverting into the middle of a shipped draft is not a thing anyone wants — and
+  # the rows stay, because they are the record of who did what. One summary row is written in their
+  # place, carrying the published document, so the page's own timeline has a revert point per publish.
+  #
+  # Off the LiveView, because publishing already compiles, rebuilds CSS and broadcasts; and after the
+  # write rather than inside it, so cleanup can never fail a publish. `start_async` rather than a
+  # bare task, like the flush beside it: a job nothing awaits is one whose failure nobody hears, and
+  # one no test can assert on either — so the collect's own answer is what the job returns, not the
+  # sweep's, and a refusal is reported below.
+  #
+  # It is linked to this LiveView and dies with it, which is why `History.collect/5` writes the
+  # summary row before it sweeps anything: leaving the builder mid-cleanup costs weight, never the
+  # row that says the page was published.
+  #
+  # `editor.draft_id` is read here rather than by the task, because `published_draft_is_spent/3` has
+  # already spent the session's copy by now — what this collects is the branch the publish shipped.
+  defp collect_history(socket, :published, editor, record) do
+    actor = socket.assigns.current_user
+    section = Section.to_atom!(editor.section)
+    draft_id = editor.draft_id
+
+    summary = %{
+      site_id: editor.site_id,
+      label: gettext("Published %{name}", name: record.name),
+      detail: publish_detail(editor),
+      note:
+        gettext(
+          "Published to the live page. The changes behind this are recorded but no longer restorable."
+        )
+    }
+
+    MishkaGervaz.Messages.start_async(socket, :history_collect, fn ->
+      with {:ok, _collected} <- History.collect(section, record.id, draft_id, summary, actor),
+           do: History.sweep_orphan_snapshots()
+    end)
+  end
+
+  defp collect_history(socket, _draft, _editor, _record), do: socket
+
+  defp publish_detail(%{tree: tree}) do
+    ngettext("1 element live", "%{count} elements live", length(Tree.walk(tree)))
   end
 
   # DELETING AN ELEMENT DELETES ITS CSS, and until this ran nothing ever noticed. A rule is keyed on
@@ -5563,11 +6425,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       class="flex h-screen flex-col overflow-hidden bg-[#f6f5f2] font-[Manrope,ui-sans-serif,system-ui,sans-serif] text-[#1b1a18] antialiased [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed [[data-theme=dark]_&]:[filter:invert(0.92)_hue-rotate(180deg)] [[data-theme=dark]_&]:[transition:filter_.3s_ease]"
     >
       <Panels.top_bar
+        editor={@editor}
         record={@record}
         section={@section}
         back_path={@back_path}
         current_user={@current_user}
         editors={@editors}
+        draft={@draft}
+        drafts_enabled?={@drafts_enabled?}
         dirty?={@dirty?}
         saved_at={@saved_at}
         stage={@stage}
@@ -5631,6 +6496,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           tree={@tree}
           token={@token}
           record={@record}
+          stage={@stage}
+          dirty?={@dirty?}
+          keeping_draft?={@keeping_draft?}
           crumbs={@crumbs}
           selection={@selection}
           selected_node={@selected_node}
@@ -5642,6 +6510,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           breakpoint={@breakpoint}
           status={@status}
           statuses={@statuses}
+          resumable={@resumable}
+          inherited_draft={@inherited_draft}
+          original_changed?={
+            is_binary(@editor.draft_id) and Drafts.original_changed?(@section, @record, @draft)
+          }
           code_open={@code_open}
           code_tab={@code_tab}
           drawer_h={@drawer_h}
