@@ -14,6 +14,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
   alias MishkaCmsCore.Runtime.PageBuilder.Conditions
@@ -26,6 +27,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
+  alias MishkaCmsCore.Runtime.PageBuilder.SeoSettings
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
@@ -11443,6 +11445,1579 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert node, "the component was not placed"
       assert Node.attr(node, "id") == nil
+    end
+  end
+
+  # §1 — THE TWO FIELDS A DOCUMENT IS MOST LIKELY TO HAVE WRONG on a first draft, changeable from
+  # the one screen the author is actually on. Everything past the click is the resource's own Gervaz
+  # form, so what is pinned here is which fields survive, that a save reaches the record, and that
+  # the design the editor is holding does not move.
+  describe "document settings" do
+    defp settings_form(section), do: "#pb-settings-" <> section <> "-form"
+
+    # Picks, in `form`, the kind of record each address of the page shows: `"__nil__"` for none.
+    defp pick_kind(view, form, kind) do
+      view |> element("#{form} input[name='_search_record']") |> render_focus()
+
+      view
+      |> element("#{form} [phx-click='relation_select'][phx-value-id='#{kind}']")
+      |> render_click()
+
+      view
+    end
+
+    # THE FORM LOADS ASYNCHRONOUSLY IN EDIT MODE and synchronously in create mode — Gervaz's
+    # `DataLoader.load_record/3` is a `start_async`, `new_record/2` is not. So the essentials step
+    # can be filled in the frame it opens on and this cannot: the frame `render_click` returns is a
+    # spinner with no form in it, and a test that submitted straight into it passed or failed on how
+    # warm the run was.
+    defp open_settings(view) do
+      view |> element("#pb-settings-open") |> render_click()
+      _settled = render_async(view)
+      view
+    end
+
+    defp reread!(resource, id) do
+      resource
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(id == ^id)
+      |> Ash.read_one!()
+    end
+
+    test "the header opens it, and General asks for the title and path; the description is on SEO",
+         %{
+           conn: conn,
+           page: page
+         } do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, "#pb-settings-open")
+      refute has_element?(view, "#pb-settings-modal")
+
+      open_settings(view)
+
+      form = settings_form("page")
+      assert has_element?(view, "#pb-settings-modal")
+      assert has_element?(view, "#{form} input[name='form[path]']")
+      assert has_element?(view, "#{form} [name='form[title]']")
+      refute has_element?(view, "#{form} [name='form[description]']")
+
+      # THE SITE IS NOT ON OFFER. `update` accepts no `site_id` on any of these resources, so a
+      # picker here would be a control that cannot do the thing it appears to.
+      refute has_element?(view, "#{form} input[name='_search_site_id']")
+
+      for absent <- ~w(template content extra schema seo_tags priority format active) do
+        refute has_element?(view, "#{form} [name='form[#{absent}]']"),
+               "#{absent} is not one of the document's settings"
+      end
+    end
+
+    # WHO MAY OPEN THE PAGE is a page's alone among the documents a builder edits, and it is picked
+    # from the permission names that exist rather than typed.
+    test "a page picks who may open it; the other documents do not", %{conn: conn, page: page} do
+      refute :permissions in Panels.settings_hidden_fields("page")
+      assert :permissions in Panels.settings_hidden_fields("layout")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      assert has_element?(view, "#{settings_form("page")} [name='_search_permissions']")
+    end
+
+    test "a picked permission name is written to the page", %{conn: conn, page: page} do
+      permission = create_permission!(name: "admin:dashboard:runtime:page")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      picker = "#multi-select-pb-settings-page-permissions"
+      view |> element("#{picker} input[name='_search_permissions']") |> render_focus()
+      view |> element("#{picker} [phx-value-id='#{permission.name}']") |> render_click()
+
+      view |> form(settings_form("page")) |> render_submit()
+
+      refute has_element?(view, "#pb-settings-modal")
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).permissions == [permission.name]
+    end
+
+    test "un-picking the last permission name makes the page public again", %{
+      conn: conn,
+      site: site
+    } do
+      permission = create_permission!(name: "admin:dashboard:runtime:page")
+
+      page =
+        create_page!(site_id: site.id, template: @template, permissions: [permission.name])
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      chips = "#multi-select-pb-settings-page-permissions [data-role='gervaz-multi-selected']"
+      assert has_element?(view, chips, permission.name), "a page's permission is not shown"
+
+      view |> element("#{chips} [aria-label='Remove #{permission.name}']") |> render_click()
+      view |> form(settings_form("page")) |> render_submit()
+
+      refute has_element?(view, "#pb-settings-modal")
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).permissions == []
+    end
+
+    # THE LAYOUT A PAGE IS DRAWN IN is picked here, from the layouts its site may use, and the canvas
+    # draws the page inside it — the layout's markup inert around it, the page's own nodes editable.
+    test "the canvas draws the page inside the layout picked in its settings", %{
+      conn: conn,
+      site: site
+    } do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          name: "probe-shell",
+          path: "/layouts/probe-shell",
+          template: ~S|<header id="layout-probe">Shell</header><main>{@inner_content}</main>|
+        )
+
+      page = create_page!(site_id: site.id, template: @template, layout_id: layout.id)
+
+      refute :layout_id in Panels.settings_hidden_fields("page")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+      assert has_element?(canvas, "#pb-layout-shell #layout-probe", "Shell")
+      assert has_element?(canvas, "#pb-layout-shell main #pb-layout-slot [data-node-id]")
+
+      open_settings(view)
+      form = settings_form("page")
+      view |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+
+      view
+      |> element("#{form} [phx-click='relation_select'][phx-value-id='__nil__']")
+      |> render_click()
+
+      view |> form(form) |> render_submit()
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).layout_id == nil
+      refute has_element?(canvas, "#pb-layout-shell")
+      assert has_element?(canvas, "#pb-canvas-root [data-node-id]")
+    end
+
+    # WHILE A DRAFT IS BEING WRITTEN, ITS SETTINGS ARE THE DRAFT'S. Publishing a draft writes every
+    # field it carries over the page, so a setting saved to the page beside an open draft came back
+    # undone when that draft was published.
+    test "while a draft is being written, the settings are the draft's and the page keeps its own",
+         %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+      assert is_binary(draft_id)
+
+      open_settings(view)
+
+      assert has_element?(view, "#pb-settings-draft-note")
+      refute has_element?(view, settings_form("page"))
+
+      view
+      |> form(settings_form("page-draft"), %{"form" => %{"path" => "/drafted"}})
+      |> render_submit()
+
+      refute has_element?(view, "#pb-settings-modal")
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == "/drafted"
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).path == page.path
+    end
+
+    test "while a draft is being written, the kind its addresses show is the draft's", %{
+      conn: conn,
+      page: page
+    } do
+      register_plugin(MishkaCmsCoreWeb.Test.BuilderLiveTest.TestKinds, "runtime:page:records")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+
+      open_settings(view)
+
+      form = settings_form("page-draft")
+      view |> pick_kind(form, "test:post") |> form(form) |> render_submit()
+
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).extra["record"] == "test:post"
+      refute Map.has_key?(reread!(MishkaCmsCore.Runtime.Page, page.id).extra || %{}, "record")
+    end
+
+    test "a session resumed inside its draft edits the draft's settings straight away", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, first, _html} = open_builder(conn, page)
+      _draft_id = autosave!(first)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      assert has_element?(view, "#pb-settings-draft-note")
+      assert has_element?(view, settings_form("page-draft"))
+    end
+
+    test "in Publish mode the settings are the page's, even with a draft beside it", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+      render_click(view, "set_stage", %{"stage" => "published"})
+
+      open_settings(view)
+      refute has_element?(view, "#pb-settings-draft-note")
+
+      view
+      |> form(settings_form("page"), %{"form" => %{"path" => "/published-path"}})
+      |> render_submit()
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).path == "/published-path"
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).path == page.path
+    end
+
+    test "while a draft is being written, the canvas draws the draft's layout", %{
+      conn: conn,
+      site: site
+    } do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          name: "draft-shell",
+          path: "/layouts/draft-shell",
+          template: ~S|<header id="layout-probe">Shell</header>{@inner_content}|
+        )
+
+      page = create_page!(site_id: site.id, template: @template, layout_id: layout.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+
+      open_settings(view)
+      form = settings_form("page-draft")
+      view |> element("#{form} input[name='_search_layout_id']") |> render_focus()
+
+      view
+      |> element("#{form} [phx-click='relation_select'][phx-value-id='__nil__']")
+      |> render_click()
+
+      view |> form(form) |> render_submit()
+
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).layout_id == nil
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).layout_id == layout.id
+
+      {:ok, canvas, _html} = live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+      refute has_element?(canvas, "#pb-layout-shell")
+
+      render_click(view, "set_stage", %{"stage" => "published"})
+      assert has_element?(canvas, "#pb-layout-shell #layout-probe")
+    end
+
+    test "a new path is written to the page, and the header follows", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      view
+      |> form(settings_form("page"), %{"form" => %{"path" => "/renamed"}})
+      |> render_submit()
+
+      refute has_element?(view, "#pb-settings-modal"),
+             "the modal stayed open over a save that worked"
+
+      saved = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert saved.path == "/renamed"
+      assert saved.title == page.title
+      assert saved.name == page.name
+      assert render(view) =~ "#{page.name}.heex"
+    end
+
+    # THE DESIGN IS NOT ON THIS RECORD as far as the modal is concerned — the working tree lives in
+    # the editing session and is written by a draft save. A rename mid-edit that quietly published,
+    # reverted or emptied the markup would be the worst possible shape for this feature.
+    test "saving settings leaves the document alone", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = editor(view).tree
+
+      open_settings(view)
+
+      view
+      |> form(settings_form("page"), %{"form" => %{"path" => "/still"}})
+      |> render_submit()
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).template == page.template
+      assert editor(view).tree == before
+    end
+
+    # THE RESOURCE SAYS WHAT IS LEGAL. This adds no rules of its own, so a path the resource's
+    # `PathFormat` refuses is refused here in the resource's own words and nothing is written.
+    test "a path the resource refuses is refused", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      html =
+        view
+        |> form(settings_form("page"), %{"form" => %{"path" => "not-a-path"}})
+        |> render_submit()
+
+      assert html =~ "pb-settings-modal", "a refusal closed the modal and lost what was typed"
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).path == page.path
+    end
+
+    # THE BADGE BESIDE THE TITLE READS `record.site.name`, and a Gervaz save answers with the row it
+    # wrote and nothing loaded onto it — so assigning that record straight turned "localhost" into
+    # "This site" on every save. Not a change of scope: the badge falling through to its last clause.
+    test "the site the document belongs to is still named after a save", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      badge = "[data-role='pb-scope']"
+      assert has_element?(view, badge, site.name)
+
+      open_settings(view)
+
+      view
+      |> form(settings_form("page"), %{"form" => %{"path" => "/still-localhost"}})
+      |> render_submit()
+
+      assert has_element?(view, badge, site.name),
+             "the scope badge stopped naming the site after a settings save"
+    end
+
+    test "closing it leaves the editor where it was", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      open_settings(view)
+      assert has_element?(view, "#pb-settings-modal")
+
+      view |> element("#pb-settings-close") |> render_click()
+      refute has_element?(view, "#pb-settings-modal")
+      assert has_element?(view, "#pb-settings-open")
+    end
+
+    # §2 — A LAYOUT IS THE SAME DOCUMENT WITH A DIFFERENT NOUN. The gate is asked of the resource's
+    # own form, so nothing here is a second implementation — what is pinned is that the layout's
+    # address really is reachable and really is written, and that a shared layout says so.
+    test "a layout's path is changed the same way", %{conn: conn, site: site} do
+      layout = create_layout!(site_id: site.id, path: "/layouts/first")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      _settled = render_async(view)
+
+      open_settings(view)
+
+      form = settings_form("layout")
+      assert has_element?(view, "#{form} input[name='form[name]']")
+      assert has_element?(view, "#{form} input[name='form[path]']")
+
+      view
+      |> form(form, %{"form" => %{"path" => "/layouts/second"}})
+      |> render_submit()
+
+      refute has_element?(view, "#pb-settings-modal")
+      assert reread!(MishkaCmsCore.Runtime.Layout, layout.id).path == "/layouts/second"
+    end
+
+    # A SITE-LESS LAYOUT IS EVERY SITE'S, and the badge beside the title says so. Renaming one is a
+    # rename for thirty sites, so the thing worth pinning is that the badge still reads "Global"
+    # afterwards — the same last-clause fallthrough the site badge had.
+    test "a shared layout still says it is shared after a save", %{conn: conn} do
+      layout = create_layout!(site_id: nil, path: "/layouts/shared")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      _settled = render_async(view)
+
+      badge = "[data-role='pb-scope']"
+      assert has_element?(view, badge, "Global")
+
+      open_settings(view)
+
+      view
+      |> form(settings_form("layout"), %{"form" => %{"path" => "/layouts/shared-still"}})
+      |> render_submit()
+
+      assert has_element?(view, badge, "Global")
+      assert reread!(MishkaCmsCore.Runtime.Layout, layout.id).path == "/layouts/shared-still"
+    end
+
+    # AN ERROR PAGE OPENS THE SAME MODAL AND ITS PATH IS NOT ITS OWN — the address is written from
+    # the site, so what is changeable here is the name. The address itself is pinned in "an error
+    # page's address" below, which is where the rule lives.
+    test "an error page's name is changed the same way", %{conn: conn, site: site} do
+      error_page = create_error_page!(site_id: site.id)
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      _settled = render_async(view)
+
+      open_settings(view)
+
+      view
+      |> form(settings_form("error-page"), %{"form" => %{"name" => "second-errors"}})
+      |> render_submit()
+
+      refute has_element?(view, "#pb-settings-modal")
+      assert reread!(MishkaCmsCore.Runtime.ErrorPage, error_page.id).name == "second-errors"
+    end
+
+    # A COMPONENT IS REACHED BY NAME FROM THE MARKUP THAT CALLS IT, and that name is what its
+    # compiled module is hashed from — so it has no address to change here, and renaming one is not
+    # a settings change but a rename of every call site. `settings?/1` asks the resource's own form
+    # whether it declares a path rather than naming the section.
+    test "a component has no address, so there is nothing to open", %{conn: conn, site: site} do
+      component = create_component!(site_id: site.id)
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      _settled = render_async(view)
+
+      refute Panels.settings?("component")
+      refute has_element?(view, "#pb-settings-open")
+    end
+
+    # A DOCUMENT THAT DOES NOT EXIST YET HAS NOTHING TO CHANGE, and the essentials step in front of
+    # it is asking for these same two fields.
+    test "there is nothing to open before the document exists", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
+
+      refute has_element?(view, "#pb-settings-open")
+      assert has_element?(view, "#pb-new-document")
+    end
+  end
+
+  # THE SEO TAB of the same modal: the page's description, tags and schema, saved together, with
+  # previews drawn from the head the page would render — see `MishkaCmsCore.Runtime.Seo`.
+  describe "the SEO tab" do
+    test "a page edits its description on the SEO tab alone; its title, which names it, on General" do
+      page_hidden = Panels.settings_hidden_fields("page")
+
+      refute :title in page_hidden
+      assert :description in page_hidden
+      refute :name in page_hidden
+      refute :path in page_hidden
+
+      refute :description in Panels.settings_hidden_fields("layout")
+    end
+
+    defmodule PostSeo do
+      @moduledoc false
+      use MishkaInstaller.Event.Hook, event: "runtime:page:seo"
+
+      @impl true
+      def call(%{page: %{path: "/:lang/post-" <> _}} = seo),
+        do: {:reply, %{seo | var_docs: [%{key: "post.title", label: "Post title"}]}}
+
+      def call(seo), do: {:reply, seo}
+    end
+
+    # The tab is a Gervaz form, which reads its record asynchronously.
+    defmodule TestKinds do
+      @moduledoc false
+      use MishkaInstaller.Event.Hook, event: "runtime:page:records"
+
+      @impl true
+      def call(%{records: records} = state) do
+        kinds = [
+          %{
+            id: "test:post",
+            group: "Journal",
+            label: "Entry",
+            captures: ["slug"],
+            samples: [%{label: "First entry · en", params: %{"slug" => "first", "lang" => "en"}}]
+          },
+          %{id: "test:tag", group: "Journal", label: "Topic", captures: ["slug"]},
+          %{id: "other:issue", group: "Tracker", label: "Issue", captures: ["number"]}
+        ]
+
+        {:reply, %{state | records: records ++ kinds}}
+      end
+    end
+
+    defmodule TestEntrySeo do
+      @moduledoc false
+      use MishkaInstaller.Event.Hook, event: "runtime:page:seo"
+
+      @impl true
+      def call(%{record: "test:post", params: %{"slug" => slug}} = seo) do
+        {:reply, :halt,
+         %{
+           seo
+           | title: "Entry #{slug}",
+             vars: %{"entry.title" => "Entry #{slug}"},
+             var_docs: [%{key: "entry.title", label: "Entry title"}]
+         }}
+      end
+
+      def call(%{record: "test:post"} = seo),
+        do: {:reply, :halt, %{seo | var_docs: [%{key: "entry.title", label: "Entry title"}]}}
+
+      def call(seo), do: {:reply, seo}
+    end
+
+    defp open_seo(view) do
+      open_settings(view)
+      view |> element("#pb-settings-tab-seo") |> render_click()
+      _settled = render_async(view)
+      view
+    end
+
+    # What the form sends when one field changes: every field as drawn, `_target` naming the one.
+    defp seo_change(view, seo, target) do
+      view
+      |> form("#pb-seo-form", %{"seo" => seo})
+      |> render_change(%{"_target" => ["seo" | target]})
+    end
+
+    defp seo_save(view), do: view |> form("#pb-seo-form") |> render_submit()
+
+    defp seo_text(view, selector),
+      do: view |> element(selector) |> render() |> LazyHTML.from_fragment() |> LazyHTML.text()
+
+    defp stored_tag(record, attr, name) do
+      Enum.find(record.seo_tags, &(Map.get(&1.attrs, attr) == name))
+    end
+
+    test "opens on a page beside General, its previews drawn from the page", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, title: "Our studio", template: @template)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      open_settings(view)
+      assert has_element?(view, "#pb-settings-tab-general[aria-selected='true']")
+      refute has_element?(view, "#pb-seo-form")
+
+      open_seo(view)
+
+      assert has_element?(view, "#pb-settings-tab-seo[aria-selected='true']")
+      assert has_element?(view, "#pb-seo-previews")
+      assert has_element?(view, "#pb-seo-basics")
+      assert has_element?(view, "#pb-seo-tags")
+      assert has_element?(view, "#pb-seo-schema")
+      assert seo_text(view, "#pb-seo-search-title") =~ "Our studio"
+      assert seo_text(view, "#pb-seo-search-url") =~ site.host
+      assert seo_text(view, "#pb-seo-share-title") =~ "Our studio"
+
+      # General is hidden rather than removed, so what was typed in it is still there.
+      assert has_element?(view, "#pb-settings-page-form")
+    end
+
+    test "the ••• menu opens the same settings straight on the SEO tab", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, title: "Our studio", template: @template)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      more!(view, "#pb-more-seo")
+      _settled = render_async(view)
+
+      assert has_element?(view, "#pb-settings-modal")
+      assert has_element?(view, "#pb-settings-tab-seo[aria-selected='true']")
+      assert seo_text(view, "#pb-seo-search-title") =~ "Our studio"
+
+      # The name still opens it on General.
+      view |> element("#pb-settings-close") |> render_click()
+      open_settings(view)
+      assert has_element?(view, "#pb-settings-tab-general[aria-selected='true']")
+    end
+
+    test "while a draft is being written, the SEO is the draft's", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      draft_id = autosave!(view)
+      open_seo(view)
+
+      seo_change(view, %{"description" => "Written to the draft, not the page."}, ["description"])
+      seo_save(view)
+
+      assert reread!(MishkaCmsCore.Runtime.PageDraft, draft_id).description ==
+               "Written to the draft, not the page."
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).description == page.description
+    end
+
+    test "the previews follow the title and description as they are typed", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"title" => "A title typed just now"}, ["title"])
+      assert seo_text(view, "#pb-seo-search-title") =~ "A title typed just now"
+      assert has_element?(view, "#pb-seo-meter-title[data-state='short']")
+
+      seo_change(view, %{"title" => "{{page.title}} | Studio"}, ["title"])
+      assert seo_text(view, "#pb-seo-search-title") =~ "#{page.title} | Studio"
+
+      # A variable nothing fills leaves the title as it was.
+      seo_change(view, %{"title" => "{{post.title}} | Studio"}, ["title"])
+      assert seo_text(view, "#pb-seo-search-title") =~ page.title
+
+      description = String.duplicate("A sentence about the studio. ", 4)
+      seo_change(view, %{"description" => description}, ["description"])
+
+      assert seo_text(view, "#pb-seo-search-description") =~ "A sentence about the studio."
+      assert seo_text(view, "#pb-seo-share-description") =~ "A sentence about the studio."
+      assert has_element?(view, "#pb-seo-meter-description[data-state='good']")
+    end
+
+    test "a known tag is added with its default, and a custom one by its name", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"add" => "og:title"}, ["add"])
+      assert has_element?(view, "#pb-seo-add-value[value='{{page.title}}']")
+
+      view |> element("#pb-seo-add-confirm") |> render_click()
+      assert has_element?(view, "#pb-seo-tag-0", "Open Graph title")
+      refute has_element?(view, "#pb-seo-add-confirm")
+
+      seo_change(view, %{"add" => "custom"}, ["add"])
+      assert has_element?(view, "#pb-seo-add-confirm[disabled]")
+
+      seo_change(
+        view,
+        %{"custom_kind" => "property", "custom_key" => "fb:app_id", "add_value" => "123"},
+        ["add_value"]
+      )
+
+      view |> element("#pb-seo-add-confirm") |> render_click()
+      assert has_element?(view, "#pb-seo-tag-1", "fb:app_id")
+
+      seo_save(view)
+
+      saved = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert stored_tag(saved, "property", "og:title").content == "{{page.title}}"
+      assert stored_tag(saved, "property", "fb:app_id").content == "123"
+    end
+
+    test "an enumerated tag offers its values, and robots its directives", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"add" => "twitter:card"}, ["add"])
+      assert has_element?(view, "select#pb-seo-add-value option[value='summary']")
+
+      seo_change(view, %{"add" => "robots"}, ["add"])
+      assert has_element?(view, "#pb-seo-add-values input[value='noarchive']")
+
+      seo_change(view, %{"add_values" => ["noindex", "noarchive"]}, ["add_values"])
+      view |> element("#pb-seo-add-confirm") |> render_click()
+
+      assert has_element?(view, "#pb-seo-tag-0", "noindex, noarchive")
+
+      view |> element("#pb-seo-tag-remove-0") |> render_click()
+      assert has_element?(view, "#pb-seo-tags-empty")
+    end
+
+    test "the switch hides the page from search engines, and turning it off shows it again", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"noindex" => "true"}, ["noindex"])
+      assert has_element?(view, "#pb-seo-noindex[checked]")
+      assert has_element?(view, "#pb-seo-tag-0", "noindex, nofollow")
+
+      seo_change(view, %{"noindex" => "false"}, ["noindex"])
+      refute has_element?(view, "#pb-seo-noindex[checked]")
+      assert has_element?(view, "#pb-seo-tags-empty")
+    end
+
+    test "a sign-in page says it is hidden already", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: @template, extra: %{"visitors_only" => true})
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert seo_text(view, "#pb-seo-basics") =~ "Hidden already"
+    end
+
+    test "a schema type writes one JSON-LD object and keeps the page's others", %{
+      conn: conn,
+      site: site
+    } do
+      crumbs = %{"@context" => "https://schema.org", "@type" => "BreadcrumbList"}
+      page = create_page!(site_id: site.id, template: @template, schema: [crumbs])
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"type" => "Article"}, ["type"])
+      assert has_element?(view, "#pb-seo-field-headline[value='{{page.title}}']")
+
+      seo_change(view, %{"fields" => %{"datePublished" => "2026-10-01"}}, [
+        "fields",
+        "datePublished"
+      ])
+
+      seo_save(view)
+
+      assert [^crumbs, article] = reread!(MishkaCmsCore.Runtime.Page, page.id).schema
+
+      assert %{
+               "@type" => "Article",
+               "headline" => "{{page.title}}",
+               "datePublished" => "2026-10-01",
+               "author" => %{"@type" => "Person", "name" => "{{site.name}}"}
+             } = article
+    end
+
+    test "questions and answers are added and removed in pairs", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"type" => "FAQPage"}, ["type"])
+      assert has_element?(view, "#pb-seo-faq-0")
+
+      view |> element("#pb-seo-faq-add") |> render_click()
+      assert has_element?(view, "#pb-seo-faq-1")
+
+      seo_change(
+        view,
+        %{"faq" => %{"0" => %{"question" => "Open on Sunday?", "answer" => "No."}}},
+        ["faq", "0", "question"]
+      )
+
+      view |> element("#pb-seo-faq-remove-1") |> render_click()
+      refute has_element?(view, "#pb-seo-faq-1")
+
+      seo_save(view)
+
+      assert [%{"@type" => "FAQPage", "mainEntity" => [question]}] =
+               reread!(MishkaCmsCore.Runtime.Page, page.id).schema
+
+      assert question["name"] == "Open on Sunday?"
+      assert question["acceptedAnswer"]["text"] == "No."
+    end
+
+    test "the advanced JSON-LD is checked before it is saved", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+      view |> element("#pb-seo-advanced") |> render_click()
+
+      seo_change(view, %{"json" => "[{not json"}, ["json"])
+      assert seo_text(view, "#pb-seo-json-error") =~ "not valid JSON"
+
+      seo_change(view, %{"json" => ~s([{"name": "untyped"}])}, ["json"])
+      assert seo_text(view, "#pb-seo-json-error") =~ "@type"
+
+      seo_save(view)
+      assert render(view) =~ "The JSON-LD has a mistake"
+      assert has_element?(view, "#pb-seo-form")
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).schema == []
+
+      seo_change(view, %{"json" => ~s([{"@type": "AboutPage", "name": "{{page.title}}"}])}, [
+        "json"
+      ])
+
+      refute has_element?(view, "#pb-seo-json-error")
+      seo_save(view)
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).schema == [
+               %{"@type" => "AboutPage", "name" => "{{page.title}}"}
+             ]
+    end
+
+    test "the variable chips list the core variables", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      for key <- ~w(page.title page.description page.url page.image site.name) do
+        assert has_element?(view, ~s([data-seo-var="{{#{key}}}"])), key
+      end
+
+      refute has_element?(view, "#pb-seo-record-note")
+    end
+
+    test "a page whose plugin fills its SEO lists the plugin's variables and says so", %{
+      conn: conn,
+      site: site
+    } do
+      register_plugin(PostSeo, "runtime:page:seo")
+      n = System.unique_integer([:positive])
+      page = create_page!(site_id: site.id, template: @template, path: "/:lang/post-#{n}/:slug")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert has_element?(view, ~s([data-seo-var="{{post.title}}"]))
+      assert has_element?(view, "#pb-seo-record-note")
+    end
+
+    test "the share image is chosen from Media", %{conn: conn, page: page, site: site} do
+      media =
+        create_media!(site_id: site.id, name: "cover", relative_path: "/uploads/cover.png")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      view |> element("#pb-seo-image-pick") |> render_click()
+      assert has_element?(view, "#pb-sheet")
+      assert has_element?(view, "#pb-settings-modal.hidden")
+
+      send(view.pid, {:row_action, "use_media", %{"id" => media.id}})
+      _rendered = render(view)
+
+      refute has_element?(view, "#pb-sheet")
+      refute has_element?(view, "#pb-settings-modal.hidden")
+
+      # The address is put into the field by the `PbSeoFields` hook, whose change writes it — the
+      # field is hidden until the author asks for an address, so the hook's change is sent as is.
+      assert_push_event(view, "pb-seo-set", %{id: "pb-seo-image", value: "/uploads/cover.png"})
+
+      view
+      |> element("#pb-seo-form")
+      |> render_change(%{
+        "seo" => %{"image" => "/uploads/cover.png"},
+        "_target" => ["seo", "image"]
+      })
+
+      assert has_element?(view, "#pb-seo-image[value='/uploads/cover.png']")
+      assert has_element?(view, "#pb-seo-image-thumb[src='/uploads/cover.png']")
+      assert has_element?(view, "#pb-seo-image-clear")
+      assert has_element?(view, "#pb-seo-share-image[src='/uploads/cover.png']")
+
+      view |> element("#pb-seo-image-clear") |> render_click()
+      refute has_element?(view, "#pb-seo-image-thumb")
+      refute has_element?(view, "#pb-seo-share-image")
+    end
+
+    test "Save writes the description, tags and schema and leaves the design alone", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = editor(view).tree
+      open_seo(view)
+      view |> element("#pb-seo-image-manual") |> render_click()
+
+      seo_change(
+        view,
+        %{
+          "description" => "What the studio does.",
+          "image" => "/uploads/cover.png",
+          "canonical" => "https://example.com/about"
+        },
+        ["canonical"]
+      )
+
+      seo_save(view)
+
+      refute has_element?(view, "#pb-settings-modal")
+      assert render(view) =~ "Saved."
+
+      saved = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert saved.description == "What the studio does."
+      assert stored_tag(saved, "property", "og:image").content == "/uploads/cover.png"
+      assert stored_tag(saved, "rel", "canonical").attrs["href"] == "https://example.com/about"
+      assert saved.template == page.template
+      assert editor(view).tree == before
+    end
+
+    test "the title is a stored tag over the page's own, and any field takes a variable", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, title: "Our studio", template: @template)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert has_element?(view, "#pb-seo-title[placeholder='Our studio'][data-seo-vars]")
+      assert has_element?(view, "#pb-seo-description[data-seo-vars]")
+      refute has_element?(view, "#pb-seo-title[value]")
+
+      seo_change(view, %{"title" => "{{page.title}} | Studio"}, ["title"])
+      seo_save(view)
+
+      saved = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert saved.title == "Our studio"
+
+      assert %{content: "{{page.title}} | Studio"} =
+               Enum.find(saved.seo_tags, &(&1.tag == "title"))
+    end
+
+    test "a page that serves records says each fills what is left empty, and names its variables",
+         %{conn: conn, site: site} do
+      register_plugin(PostSeo, "runtime:page:seo")
+      n = System.unique_integer([:positive])
+      page = create_page!(site_id: site.id, template: @template, path: "/:lang/post-#{n}/:slug")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert seo_text(view, "#pb-seo-record-note") =~ "Each record fills what you leave empty"
+      assert seo_text(view, "#pb-seo-type") =~ "Default (from each record)"
+
+      assert has_element?(
+               view,
+               "#pb-seo-description[placeholder='Empty: each record\\'s own description.']"
+             )
+
+      # There is no post in the editor, so the preview shows where its title goes.
+      seo_change(view, %{"title" => "{{post.title}} | Blog"}, ["title"])
+      assert seo_text(view, "#pb-seo-search-title") =~ "{post.title} | Blog"
+      seo_save(view)
+
+      saved = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert %{content: "{{post.title}} | Blog"} = Enum.find(saved.seo_tags, &(&1.tag == "title"))
+    end
+
+    # WHAT EACH ADDRESS SHOWS IS WHAT KIND OF PAGE IT IS, so it is picked on General beside who may open
+    # it, out of the kinds the installed extensions name; SEO only reads it.
+    test "General picks which kind of record each address shows; a custom page shows none",
+         %{conn: conn, site: site} do
+      register_plugin(TestKinds, "runtime:page:records")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: @template,
+          path: "/:lang/journal/:slug",
+          extra: %{"keep" => "me"}
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_settings(view)
+
+      form = settings_form("page")
+      view |> element("#{form} input[name='_search_record']") |> render_focus()
+      assert has_element?(view, "#{form} [phx-value-id='__nil__']", "Custom page")
+
+      # Each extension's kinds under its name, and a kind says its extension once picked.
+      assert has_element?(view, "#{form} div", "Journal")
+
+      assert has_element?(
+               view,
+               "#{form} [phx-value-id='test:post'][phx-value-label='Journal · Entry']",
+               "Entry"
+             )
+
+      assert has_element?(
+               view,
+               "#{form} [phx-value-id='other:issue'][phx-value-label='Tracker · Issue']",
+               "Issue"
+             )
+
+      view |> pick_kind(form, "test:post") |> form(form) |> render_submit()
+
+      saved = reread!(MishkaCmsCore.Runtime.Page, page.id)
+      assert saved.extra["record"] == "test:post"
+      assert saved.extra["keep"] == "me"
+
+      # The SEO tab no longer offers it, and reads what General saved.
+      open_seo(view)
+      refute has_element?(view, "#pb-seo-record-open")
+      assert has_element?(view, "#pb-seo-record-note")
+      view |> element("#pb-settings-close") |> render_click()
+
+      open_settings(view)
+      assert has_element?(view, "#{form} input[type='hidden'][name='record'][value='test:post']")
+
+      view |> pick_kind(form, "__nil__") |> form(form) |> render_submit()
+
+      assert reread!(MishkaCmsCore.Runtime.Page, page.id).extra == %{"keep" => "me"}
+    end
+
+    test "the preview draws a sample record, or placeholders where its address shows the capture",
+         %{conn: conn, site: site} do
+      register_plugin(TestKinds, "runtime:page:records")
+      register_plugin(TestEntrySeo, "runtime:page:seo")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: @template,
+          path: "/:lang/journal/:slug",
+          extra: %{"record" => "test:post"}
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert seo_text(view, "#pb-seo-search-url") =~ "journal › {slug}"
+      seo_change(view, %{"title" => "{{entry.title}} - Mishka Group"}, ["title"])
+      assert seo_text(view, "#pb-seo-search-title") =~ "{entry.title} - Mishka Group"
+
+      seo_change(view, %{"sample" => "0"}, ["sample"])
+      assert seo_text(view, "#pb-seo-search-title") =~ "Entry first - Mishka Group"
+      assert seo_text(view, "#pb-seo-search-url") =~ "journal › first"
+
+      seo_change(view, %{"sample" => ""}, ["sample"])
+      assert seo_text(view, "#pb-seo-search-title") =~ "{entry.title} - Mishka Group"
+    end
+
+    test "the previews switch between Google, X and Facebook", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert has_element?(view, "#pb-seo-x.hidden")
+      refute has_element?(view, "#pb-seo-google.hidden")
+
+      view |> element("#pb-seo-view-x") |> render_click()
+      refute has_element?(view, "#pb-seo-x.hidden")
+      assert has_element?(view, "#pb-seo-google.hidden")
+      assert has_element?(view, "#pb-seo-view-x[aria-selected='true']")
+
+      view |> element("#pb-seo-view-facebook") |> render_click()
+      refute has_element?(view, "#pb-seo-share.hidden")
+    end
+
+    test "a rating on a type search engines may star is drawn as stars", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      seo_change(view, %{"type" => "BlogPosting"}, ["type"])
+      refute has_element?(view, "#pb-seo-stars-note")
+
+      seo_change(view, %{"type" => "Product"}, ["type"])
+      assert has_element?(view, "#pb-seo-stars-note")
+      refute has_element?(view, "#pb-seo-stars")
+
+      seo_change(
+        view,
+        %{
+          "fields" => %{
+            "aggregateRating.ratingValue" => "4.5",
+            "aggregateRating.ratingCount" => "12"
+          }
+        },
+        ["fields", "aggregateRating.ratingValue"]
+      )
+
+      assert seo_text(view, "#pb-seo-stars") =~ "★★★★★"
+      assert seo_text(view, "#pb-seo-stars") =~ "4.5"
+      assert seo_text(view, "#pb-seo-stars") =~ "12"
+    end
+
+    test "the canonical address, the tags and the JSON-LD are folded under Advanced", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+
+      assert has_element?(view, "#pb-seo-advanced[aria-expanded='false']")
+      assert has_element?(view, "#pb-seo-advanced-section .hidden #pb-seo-canonical")
+      assert has_element?(view, "#pb-seo-advanced-section .hidden #pb-seo-tags")
+      assert has_element?(view, "#pb-seo-advanced-section .hidden #pb-seo-json")
+
+      view |> element("#pb-seo-advanced") |> render_click()
+      assert has_element?(view, "#pb-seo-advanced[aria-expanded='true']")
+      refute has_element?(view, "#pb-seo-advanced-section .hidden #pb-seo-canonical")
+    end
+
+    test "a layout's SEO tab is its tags alone", %{conn: conn, site: site} do
+      layout = create_layout!(site_id: site.id, path: "/layouts/seo")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      _settled = render_async(view)
+      assert seo_text(view, "#pb-more-seo") =~ "The tags every page on this layout carries"
+      open_seo(view)
+
+      assert has_element?(view, "#pb-seo-tags")
+      assert has_element?(view, "#pb-seo-vars")
+      refute has_element?(view, "#pb-seo-previews")
+      refute has_element?(view, "#pb-seo-basics")
+      refute has_element?(view, "#pb-seo-schema")
+
+      seo_change(view, %{"add" => "og:site_name"}, ["add"])
+      view |> element("#pb-seo-add-confirm") |> render_click()
+      seo_save(view)
+
+      saved = reread!(MishkaCmsCore.Runtime.Layout, layout.id)
+      assert stored_tag(saved, "property", "og:site_name").content == "{{site.name}}"
+    end
+
+    test "an error page has no SEO tab", %{conn: conn, site: site} do
+      error_page = create_error_page!(site_id: site.id)
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      _settled = render_async(view)
+      open_settings(view)
+
+      assert has_element?(view, "#pb-settings-modal")
+      refute has_element?(view, "#pb-settings-tab-seo")
+      refute has_element?(view, "#pb-more-seo")
+      refute SeoSettings.mode("error-page")
+      assert SeoSettings.mode("page") == :page
+      assert SeoSettings.mode("layout") == :tags
+    end
+  end
+
+  # §3 — AN ERROR PAGE HAS NO PATH ANYBODY CHOOSES. The renderer derives the address it looks a row
+  # up by from the site, so a path somebody typed produced an error page nothing could ever render.
+  # `MishkaCmsCore.Runtime.ErrorAddress` is the rule; these are the two surfaces it reaches.
+  describe "an error page's address" do
+    test "the essentials step does not ask for a path", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page")
+
+      form = "#pb-new-error-page-form"
+      assert has_element?(view, "#{form} input[name='form[name]']")
+
+      # SHOWN, NOT TYPED. Gervaz renders a `readonly` field and drops it from what is submitted, so
+      # the reader sees where the address comes from and the action writes it.
+      assert has_element?(view, "#{form} input[name='form[path]'][readonly]")
+    end
+
+    test "a created error page is addressed at its site", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page")
+
+      view
+      |> element("#pb-new-error-page-form input[name='_search_site_id']")
+      |> render_focus()
+
+      view
+      |> element("#search-select-pb-new-error-page-site_id button", site.name)
+      |> render_click()
+
+      view
+      |> form("#pb-new-error-page-form", %{"form" => %{"name" => "addressed-errors"}})
+      |> render_submit()
+
+      record =
+        MishkaCmsCore.Runtime.ErrorPage
+        |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+        |> Ash.Query.filter(name == "addressed-errors")
+        |> Ash.read_one!()
+
+      assert record.path == ErrorAddress.for_site(site.id)
+      assert record.path == "/mishka-cms/errors/#{site.name}"
+    end
+
+    # INSIDE THE EDITOR TOO. The settings modal is the same Gervaz form in edit mode, so the same
+    # `readonly` keeps the address out of the reader's hands there — and shows them what it is.
+    test "the settings modal shows the address and will not take a new one", %{
+      conn: conn,
+      site: site
+    } do
+      error_page = create_error_page!(site_id: site.id)
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      _settled = render_async(view)
+      open_settings(view)
+
+      form = settings_form("error-page")
+      assert has_element?(view, "#{form} input[name='form[path]'][readonly]")
+
+      view
+      |> form(form, %{"form" => %{"name" => "renamed-errors", "path" => "/somewhere-else"}})
+      |> render_submit()
+
+      saved = reread!(MishkaCmsCore.Runtime.ErrorPage, error_page.id)
+      assert saved.name == "renamed-errors"
+      assert saved.path == ErrorAddress.for_site(site.id)
+    end
+
+    # A TENANT'S SITE IS KNOWN BEFORE ANYTHING IS TYPED, so "make an error page" for a site that has
+    # one opens the one it has rather than asking for a name and refusing the answer afterwards.
+    test "a tenant asking for a new one lands on the one their site has", %{site: site} do
+      error_page = create_error_page!(site_id: site.id)
+      tenant = create_admin("tenant-errors@example.com", site.id)
+      conn = log_in(build_conn_for_host(), tenant)
+
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, "/admin/dashboard/runtime/builder/error-page")
+
+      assert to == "/admin/dashboard/runtime/builder/error-page/#{error_page.id}"
+      assert flash["info"] =~ "already has an error page"
+    end
+
+    # AND A TENANT WHOSE SITE HAS NONE STILL GETS THE STEP. The redirect is about the one that
+    # exists, not about tenants.
+    test "a tenant whose site has none is asked to name one", %{conn: conn} do
+      fresh = create_site!(name: "no-errors-yet", host: "no-errors-yet.test")
+      cache_site(fresh)
+      tenant = create_admin("tenant-no-errors@example.com", fresh.id)
+      tenant_conn = log_in(build_conn_for_host(fresh.host), tenant)
+      _unused = conn
+
+      {:ok, view, _html} = live(tenant_conn, "/admin/dashboard/runtime/builder/error-page")
+
+      assert has_element?(view, "#pb-new-document")
+    end
+
+    # A MASTER HAS NOT SAID WHICH SITE YET, so nothing can be looked up for them — what answers is
+    # the identity, in words a reader can act on rather than ones naming a field they never saw.
+    test "a master picking a site that is taken is told which one it is", %{
+      conn: conn,
+      site: site
+    } do
+      _existing = create_error_page!(site_id: site.id)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page")
+
+      view
+      |> element("#pb-new-error-page-form input[name='_search_site_id']")
+      |> render_focus()
+
+      view
+      |> element("#search-select-pb-new-error-page-site_id button", site.name)
+      |> render_click()
+
+      html =
+        view
+        |> form("#pb-new-error-page-form", %{"form" => %{"name" => "second-errors"}})
+        |> render_submit()
+
+      assert html =~ "already has an error page"
+    end
+  end
+
+  # §A — WHAT THE EDITOR NEEDS BEFORE THERE IS A DOCUMENT. Reached by "Create empty & open editor",
+  # which is a link: it leaves the list page's form unsubmitted precisely so none of its validations
+  # fire, and the record is made here instead — through the resource's OWN Gervaz form, with
+  # everything but the essentials hidden.
+  describe "the essentials step" do
+    defp essentials_form(section), do: "#pb-new-" <> section <> "-form"
+
+    defp created!(resource, name) do
+      resource
+      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+      |> Ash.Query.filter(name == ^name)
+      |> Ash.read!(page: [limit: 2])
+      |> then(fn
+        %{results: [record]} -> record
+        [record] -> record
+        _none -> nil
+      end)
+    end
+
+    defp start_document(view, section, fields, site) do
+      view
+      |> pick_essentials_site(section, site)
+      |> form(essentials_form(section), %{"form" => fields})
+      |> render_submit()
+    end
+
+    defp pick_essentials_site(view, section, site) do
+      view
+      |> element("#{essentials_form(section)} input[name='_search_site_id']")
+      |> render_focus()
+
+      view
+      |> element("#search-select-pb-new-#{section}-site_id button", site.name)
+      |> render_click()
+
+      view
+    end
+
+    # THE FIELDS ARE THE RESOURCE'S, NOT A COPY OF THEM. What is pinned is which ones survive: a
+    # title, a path, and the site relation — and that the rest of the resource's twenty are not on
+    # screen.
+    test "a page is asked for a title, a path, what it shows and a site, and nothing else", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
+
+      form = essentials_form("page")
+      assert has_element?(view, "#{form} input[name='form[title]']")
+      assert has_element?(view, "#{form} input[name='form[path]']")
+
+      # What each address shows follows the site, as a layout does, so a master picks that first.
+      pick_essentials_site(view, "page", site)
+      assert has_element?(view, "#{form} input[name='_search_record']")
+
+      # The site is a SEARCHABLE relation, not a select — a list of every site is not a control.
+      assert has_element?(view, "#{form} input[name='_search_site_id']")
+      refute has_element?(view, "#{form} select[name='form[site_id]']")
+
+      for absent <- ~w(template content extra schema description priority format) do
+        refute has_element?(view, "#{form} [name='form[#{absent}]']"),
+               "#{absent} is not one of the essentials"
+      end
+    end
+
+    test "naming a page creates it and the editor reopens on it", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
+
+      start_document(
+        view,
+        "page",
+        %{"title" => "Essentials Page", "path" => "/essentials-page"},
+        site
+      )
+
+      record = created!(MishkaCmsCore.Runtime.Page, "essentials-page")
+      assert record
+      assert_redirect(view, "/admin/dashboard/runtime/builder/page/#{record.id}")
+
+      # AND IT IS AN EMPTY DOCUMENT, not a record with a hole in it: the starter chooser only offers
+      # itself over markup `PageStarter.empty?/1` recognises.
+      {:ok, tree} = Tree.parse(record.template)
+      assert PageStarter.empty?(tree)
+    end
+
+    test "a page named with the kind it shows is created showing it", %{conn: conn, site: site} do
+      register_plugin(MishkaCmsCoreWeb.Test.BuilderLiveTest.TestKinds, "runtime:page:records")
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
+      form = essentials_form("page")
+
+      view
+      |> pick_essentials_site("page", site)
+      |> pick_kind(form, "test:post")
+      |> form(form, %{
+        "form" => %{"title" => "Essentials Kind", "path" => "/essentials-kind/:slug"}
+      })
+      |> render_submit()
+
+      assert created!(MishkaCmsCore.Runtime.Page, "essentials-kind").extra["record"] ==
+               "test:post"
+    end
+
+    # A COMPONENT IS REACHED BY NAME. It has no `path` attribute at all, so the resource's form never
+    # declared one and there is nothing here to hide.
+    test "a component is not asked for a path", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/component")
+
+      refute has_element?(view, "#{essentials_form("component")} input[name='form[path]']")
+
+      start_document(view, "component", %{"name" => "essentials-component"}, site)
+
+      assert created!(MishkaCmsCore.Runtime.Component, "essentials-component")
+    end
+
+    # A LAYOUT DEMANDED REAL MARKUP until now — its create action grew the same blank-template change
+    # a page and a component already had, or hiding the field would have made it unsaveable.
+    test "a layout is created with the starter template", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout")
+
+      start_document(
+        view,
+        "layout",
+        %{"name" => "essentials-layout", "path" => "/essentials-layout"},
+        site
+      )
+
+      record = created!(MishkaCmsCore.Runtime.Layout, "essentials-layout")
+      assert record
+
+      # AND IT WRAPS SOMETHING. A layout renders the page inside it through `@inner_content`; one
+      # without it would swallow every page that used it, which is a broken site rather than an
+      # empty one.
+      assert record.template == PageStarter.blank(:layout)
+      assert record.template =~ "@inner_content"
+    end
+
+    test "an error page is created and opened", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page")
+
+      start_document(
+        view,
+        "error-page",
+        %{"name" => "essentials-error-page", "path" => "/essentials-error-page"},
+        site
+      )
+
+      record = created!(MishkaCmsCore.Runtime.ErrorPage, "essentials-error-page")
+      assert record
+      assert_redirect(view, "/admin/dashboard/runtime/builder/error-page/#{record.id}")
+    end
+
+    # THE RESOURCE SAYS WHAT IS REQUIRED, and it is the resource that answers — this step adds no
+    # rules of its own, so an empty title is refused by the same validation the list page uses.
+    test "an empty title is refused", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/page")
+
+      html =
+        view |> form(essentials_form("page"), %{"form" => %{"title" => ""}}) |> render_submit()
+
+      assert html =~ "must be present" or html =~ "required"
+      refute_redirected(view, "/admin/dashboard/runtime/builder/page")
+    end
+
+    # AN ID THAT RESOLVES TO NOTHING IS NOT AN INVITATION TO CREATE — AND NOT AN EDITOR EITHER. It
+    # used to open the whole thing over a nil record, where every save was a silent no-op, so the
+    # work went nowhere and said so nowhere. The link is turned away at the door instead.
+    test "a link carrying an id that resolves to nothing is turned away", %{conn: conn} do
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, "/admin/dashboard/runtime/builder/page/#{Ash.UUID.generate()}")
+
+      assert to == "/admin/dashboard/runtime/pages"
+      assert flash["error"] =~ "could not be opened"
+    end
+
+    test "a malformed id is turned away the same way", %{conn: conn} do
+      assert {:error, {:redirect, %{to: to}}} =
+               live(conn, "/admin/dashboard/runtime/builder/layout/not-a-uuid")
+
+      assert to == "/admin/dashboard/runtime/layouts"
+    end
+
+    # A SHARED DOCUMENT IS NOT A MISSING ONE. A tenant reads a site-less component perfectly well —
+    # they place it on their pages — and the editor is still not theirs to open, because a save here
+    # rewrites what every other site is rendering. The words are the whole point of the case: told
+    # "may have been deleted", a reader goes looking for something that is sitting in their list.
+    # `MishkaCmsCoreWeb.Test.EditorTenancyTest` asks this of all four sections and both actors.
+    test "a tenant is turned away from a global component, and told why", %{
+      conn: conn,
+      site: site
+    } do
+      component = create_component!(site_id: nil, name: "pb-shared-card")
+      tenant = create_admin("tenant-global@example.com", site.id)
+
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               conn
+               |> log_in(tenant)
+               |> live("/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      assert to == "/admin/dashboard/runtime/components"
+      assert flash["error"] =~ "shared with every site"
+      refute flash["error"] =~ "deleted"
+    end
+
+    test "and a master opens the same one", %{conn: conn} do
+      component = create_component!(site_id: nil, name: "pb-shared-card-master")
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/component/#{component.id}")
+
+      assert has_element?(view, "#pb-root")
+      assert editor(view).section == "component"
+    end
+  end
+
+  # §A — THE OTHER WAY IN. Choosing, on the "+ Add" button, to keep going into the editor instead of
+  # landing back on the list. The choice is made BEFORE the form is filled, which is where the reader
+  # is deciding how to make one.
+  describe "create and open the editor" do
+    # A RELATION FIELD IS PICKED, NOT TYPED. Its value lives on a hidden input the form only writes
+    # through `relation_select`, so `form/3` refuses to set it directly — the way in is the way a
+    # reader takes: focus the search box, then choose from what it offers.
+    defp pick_site(view, form_id, site) do
+      scope = String.replace_suffix(form_id, "-form", "")
+
+      view |> element("##{form_id} input[name='_search_site_id']") |> render_focus()
+      view |> element("#search-select-#{scope}-site_id button", site.name) |> render_click()
+      view
+    end
+
+    test "a page created after choosing it lands in the editor", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/pages")
+
+      view |> element("#pb-create-open-page") |> render_click()
+
+      view
+      |> pick_site("page_form-form", site)
+      |> form("#page_form-form", %{
+        "form" => %{"title" => "Carry On Page", "path" => "/carry-on-page"}
+      })
+      |> render_submit()
+
+      record = created!(MishkaCmsCore.Runtime.Page, "carry-on-page")
+      assert record
+      assert_redirect(view, "/admin/dashboard/runtime/builder/page/#{record.id}")
+    end
+
+    # NON-VACUITY: the same form, saved without choosing it first, stays on the list. The redirect
+    # above is the menu item's doing and nothing else's.
+    #
+    # The form is reached through the menu's ordinary way, because it lives on the inspector modal's
+    # Configuration tab now and nothing mounts it until somebody asks — which is the point of that
+    # change, and does not alter what this test is about.
+    test "an ordinary Create stays where it is", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/pages")
+
+      view |> element("#pb-create-form-page") |> render_click()
+
+      view
+      |> pick_site("page_form-form", site)
+      |> form("#page_form-form", %{
+        "form" => %{"title" => "Stay Put Page", "path" => "/stay-put-page"}
+      })
+      |> render_submit()
+
+      assert created!(MishkaCmsCore.Runtime.Page, "stay-put-page")
+      assert render(view) =~ "Page created successfully"
+    end
+
+    # AND FORGOTTEN IF THE FORM IS ABANDONED. The intent outlives the click, so a cancelled modal
+    # must clear it or the NEXT ordinary Create would carry it into the editor.
+    test "cancelling forgets the choice", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/pages")
+
+      view |> element("#pb-create-open-page") |> render_click()
+      send(view.pid, {:form_cancelled, MishkaCmsCore.Runtime.Page})
+
+      # Cancelling closes the inspector, so the next create starts the way any create starts.
+      view |> element("#pb-create-form-page") |> render_click()
+
+      view
+      |> pick_site("page_form-form", site)
+      |> form("#page_form-form", %{
+        "form" => %{"title" => "After Cancel Page", "path" => "/after-cancel-page"}
+      })
+      |> render_submit()
+
+      assert created!(MishkaCmsCore.Runtime.Page, "after-cancel-page")
+      assert render(view) =~ "Page created successfully"
+    end
+
+    test "a component created after choosing it lands in the editor", %{conn: conn, site: site} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/components")
+
+      view |> element("#pb-create-open-component") |> render_click()
+
+      view
+      |> pick_site("component_form-form", site)
+      |> form("#component_form-form", %{"form" => %{"name" => "carry-on-component"}})
+      |> render_submit()
+
+      record = created!(MishkaCmsCore.Runtime.Component, "carry-on-component")
+      assert record
+      assert_redirect(view, "/admin/dashboard/runtime/builder/component/#{record.id}")
+    end
+
+    # THE BUTTON IS THE EDITOR, THE FORM IS UNDER THE CARET — on every section's list page, and the
+    # menu is markup the browser unfolds rather than anything this process has to be asked for.
+    test "every section's + Add button opens the editor, with the form under the caret", %{
+      conn: conn
+    } do
+      for {path, slug, section} <- [
+            {"/admin/dashboard/runtime/pages", "page", "page"},
+            {"/admin/dashboard/runtime/components", "component", "component"},
+            {"/admin/dashboard/runtime/layouts", "layout", "layout"},
+            {"/admin/dashboard/runtime/error-pages", "error_page", "error-page"}
+          ] do
+        {:ok, view, _html} = live(conn, path)
+
+        assert view
+               |> element("#add-#{slug}-ways")
+               |> render()
+               |> Kernel.=~("pb-create-form-#{slug}"),
+               "#{path} does not offer the full form"
+
+        assert has_element?(view, "#pb-create-open-#{slug}"),
+               "#{path} does not offer 'fill it in, then open the editor'"
+
+        assert has_element?(view, "#add-#{slug}-ways.hidden"),
+               "#{path}'s menu should ship folded away"
+
+        assert view
+               |> element("a", "+ Add")
+               |> render()
+               |> Kernel.=~("/admin/dashboard/runtime/builder/#{section}"),
+               "#{path}'s main half must go straight to the editor"
+      end
     end
   end
 

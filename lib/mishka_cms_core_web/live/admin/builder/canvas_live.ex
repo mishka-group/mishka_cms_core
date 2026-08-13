@@ -83,6 +83,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   """
   use MishkaCmsCore.ExtensionLiveView
 
+  require Ash.Query
   require Logger
 
   alias MishkaCmsCore.Builder.Descriptor
@@ -104,6 +105,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.DraftPreviewAssets
+  alias MishkaCmsCore.Runtime.Layout
+  alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.PageDraft
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
@@ -130,7 +135,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         if connected?(socket), do: EditorSession.subscribe(token)
         bound_heap()
 
-        {:ok, socket |> assign_session(session) |> assign(:missing?, false), layout: false}
+        {:ok,
+         socket |> assign_session(session) |> assign_layout(session) |> assign(:missing?, false),
+         layout: false}
 
       :forbidden ->
         {:ok, assign(socket, missing?: :forbidden, token: token, page_title: gettext("Canvas")),
@@ -454,6 +461,80 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> assign(:placing, session.picked)
     |> assign_new(:toolbar, fn assigns -> toolbar_actions(assigns[:current_user]) end)
     |> assign_new(:bucket, fn -> "base" end)
+    |> assign_new(:layout_shell, fn -> {"", ""} end)
+  end
+
+  # A PAGE IS DRAWN INSIDE ITS LAYOUT, so an author edits what a visitor will see. The layout is
+  # rendered once, by the module `MishkaCmsCore.Runtime.DraftPreviewAssets.ensure_module/2` compiles
+  # for it, around a marker where `@inner_content` goes, and kept as the markup before and after
+  # it: the document between them is still the canvas's own, diffed and editable, and the layout
+  # is sent once. It is drawn but not used — `#pb-layout-shell` takes no pointer — and a layout
+  # that does not render leaves the page alone.
+  @layout_slot "<!--pb-layout-slot-->"
+
+  defp assign_layout(socket, %{section: "page", resource_id: page_id} = session)
+       when is_binary(page_id) do
+    shell =
+      with {:ok, page} <- read_document(session),
+           %Layout{} = layout <- document_layout(page),
+           {:ok, module} <- DraftPreviewAssets.ensure_module(layout, canvas_site(session)),
+           {:html, html} <-
+             contained(layout.name, socket.assigns.preview?, fn ->
+               module.render(layout_assigns(page, session), Phoenix.HTML.raw(@layout_slot))
+             end),
+           [before, rest] <- String.split(html, @layout_slot, parts: 2) do
+        {~s(<div id="pb-layout-shell">) <> before <> ~s(<div id="pb-layout-slot">),
+         "</div>" <> rest <> "</div>"}
+      else
+        _no_layout -> {"", ""}
+      end
+
+    assign(socket, :layout_shell, shell)
+  end
+
+  defp assign_layout(socket, _session), do: socket
+
+  # THE DRAFT BEING WRITTEN WHEN THERE IS ONE, since its settings — the layout among them — are the
+  # ones the builder edits then; the page otherwise.
+  defp read_document(%{stage: :draft, draft_id: draft_id}) when is_binary(draft_id),
+    do: read_any(PageDraft, draft_id, layout: [:site])
+
+  defp read_document(%{resource_id: page_id}), do: read_any(Page, page_id, [:loaded_layout])
+
+  defp read_any(resource, id, load) do
+    resource
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(id == ^id)
+    |> Ash.Query.load(load)
+    |> Ash.read_one(authorize?: false)
+  end
+
+  defp document_layout(%Page{loaded_layout: layout}), do: layout
+  defp document_layout(%PageDraft{layout: layout}), do: layout
+  defp document_layout(_none), do: nil
+
+  defp canvas_site(%{site_id: site_id, site_name: site_name}) when is_binary(site_id),
+    do: %{id: site_id, name: site_name}
+
+  defp canvas_site(_session), do: nil
+
+  # What a layout reads around a published page — see `MishkaCmsWeb.RuntimeLive` — with nobody
+  # signed in.
+  defp layout_assigns(page, session) do
+    %{
+      page: %{
+        title: page.title,
+        path: page.path,
+        section: page.section,
+        language: page.language
+      },
+      private: %{site: session.site_name, site_id: session.site_id},
+      current_site: canvas_site(session),
+      current_user: nil,
+      flash: %{},
+      query_params: %{},
+      page_languages: []
+    }
   end
 
   # Which nodes are forms, and where a field dropped at a form's end lands, for a field drag on a
@@ -564,6 +645,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
       :error ->
         {:noreply, assign(socket, :missing?, true)}
+    end
+  end
+
+  # THE PAGE WAS GIVEN ANOTHER LAYOUT in its settings, which are saved to the page and not to this
+  # session — so the layout is read again rather than the document.
+  def handle_info({:builder_session, token, {:layout, _layout_id}}, socket) do
+    case EditorSession.fetch(token) do
+      {:ok, session} -> {:noreply, assign_layout(socket, session)}
+      :error -> {:noreply, assign(socket, :missing?, true)}
     end
   end
 
@@ -1223,6 +1313,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
           cannot live in a block that disappears. --%>
     <style id="pb-canvas-ui" nonce={assigns[:csp_nonce]}>
       #pb-canvas-root { box-sizing: border-box; min-height: 100vh; margin: 0; padding: 16px; }
+      /* The page's layout is drawn, not used: only the page inside it answers the pointer. */
+      #pb-layout-shell { pointer-events: none; }
+      #pb-layout-slot { pointer-events: auto; }
       /* Indentation is a tree node: it stays in the DOM because the drop resolver counts DOM children
          to work out an insertion index, and `display: contents` is what keeps a grid or flex parent
          skipping it exactly as the published page does. A folded node keeps its place the same way
@@ -1360,6 +1453,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         </button>
       </div>
 
+      {raw(elem(@layout_shell, 0))}
       <.page_starter :if={PageStarter.empty?(@tree) and !@preview?} section={@section} />
       <%!-- Preview shows the plain dashed well: a chooser is an editing control, and Preview is
             supposed to be the page as a visitor gets it. --%>
@@ -1383,6 +1477,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
         shapers={@shapers}
         form_marks={assigns[:form_marks]}
       />
+      {raw(elem(@layout_shell, 1))}
+
       <%!-- One floating toolbar, positioned over the selection by the hook from its bounding box.
             Rendering it inside the selected node would need `position:relative` on the author's own
             element, which can silently change their layout.

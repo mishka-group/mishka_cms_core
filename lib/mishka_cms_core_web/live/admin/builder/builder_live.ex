@@ -70,6 +70,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Presets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.PageBuilder.SeoSettings
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
   alias MishkaCmsCore.Runtime.PageBuilder.Tokens
@@ -371,6 +372,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # through the component list. See `Section.back_path/2` for why it is matched, not trusted.
     |> assign(:back_path, Section.back_path(section, params["return_to"]))
     |> assign(:record, record)
+    # ASKED OF THE URL, not of the record. The two agree by the time this runs — `mount_document/3`
+    # turns an id that resolves to nothing away — and the URL is the one that says what was MEANT: an
+    # editor opened with no id is someone making a document, which is the only case that earns the
+    # essentials step.
+    |> assign(:new_document?, is_nil(params["id"]))
     # WHICH STATUS IS THE SESSION'S ANSWER, not the URL's. The two agree on every ordinary route —
     # both read `?status=` — but `?session=` JOINS a canvas someone else opened and carries nothing
     # else, so asking the URL there answered the default while the canvas showed the 500. Everything
@@ -670,6 +676,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp assign_session_draft(socket, _section, _record, _actor, _editor, _connected?), do: socket
 
+  # WHILE THE EDITOR WRITES A DRAFT, ITS SETTINGS ARE THE DRAFT'S. The draft carries the whole
+  # document and publishing it writes all of it over the page, so a setting saved to the page while
+  # a draft is open came back undone at its publish. In Publish mode, and before a change has made a
+  # draft, they are the page's.
+  defp settings_draft(:draft, %{} = draft), do: draft
+  defp settings_draft(_stage, _draft), do: nil
+
+  # A page's layout is drawn around its canvas, and it is one of the settings — so the canvas is told
+  # to read it again.
+  defp settings_saved(socket, record) do
+    if is_binary(socket.assigns[:token]),
+      do: EditorSession.announce(socket.assigns.token, {:layout, Map.get(record, :layout_id)})
+
+    socket
+    |> assign(settings_open?: false, seo_form?: false)
+    |> saved_settings(record)
+    |> put_flash(:info, gettext("Saved."))
+  end
+
+  defp saved_settings(socket, %resource{} = record) do
+    if resource == Drafts.resource(section(socket)),
+      do: assign(socket, :draft, record),
+      else: assign(socket, :record, reloaded(socket, record))
+  end
+
+  defp reloaded(socket, record) do
+    case load_record(section(socket), record.id, socket.assigns[:current_user]) do
+      {:ok, loaded} -> loaded
+      _unreadable -> record
+    end
+  end
+
   defp load_record(_section, nil, _actor), do: :none
 
   defp load_record(section, id, actor) do
@@ -832,6 +870,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:code_tab, fn -> :html end)
     |> assign_new(:heex_error, fn -> nil end)
     |> assign_new(:sheet, fn -> :none end)
+    |> assign_new(:settings_open?, fn -> false end)
+    |> assign_new(:settings_tab, fn -> :general end)
+    # The SEO tab's draft, read from the record when the tab first opens; nil while it is closed.
+    |> assign_new(:seo_form?, fn -> false end)
     |> assign_new(:command_open, fn -> false end)
     |> assign_new(:command_query, fn -> "" end)
     |> assign_new(:palette_query, fn -> "" end)
@@ -1457,6 +1499,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # `:master_read` bypasses multitenancy, and the resources' `TenantContext` validation refuses a
+  # non-nil tenant on a bypass action — the same trap that made every master save fail. A master
+  # therefore reads with no tenant at all; a tenant admin reads scoped to its own site.
+  # THE FEW FIELDS THIS STEP ASKS FOR. Everything else the resource's form declares is hidden rather
+  # than removed, so what is left is the resource's OWN field — its label, its validation, its
+  # relation picker — and not a second copy of it that can drift.
+  #
+  # `:site_id` is on the list for every section: Gervaz already decides that a tenant never sees it,
+  # because the tenant create action does not accept one.
+  # BOTH WORDS FOR WHAT A THING IS CALLED, because the four sections do not agree on which one
+  # they have. A page asks for `:title` and derives its `:name`; a layout, a component, a snippet and
+  # an error page still ask for `:name` and have no title. This is a KEEP-list — a field missing from
+  # it is hidden — so a section whose own word is absent here renders a form with no way to name
+  # anything, and for a page that means a required field it cannot fill.
+  #
+  # A page also picks here what each of its addresses shows (`:record`), because that is what kind
+  # of page it is; the other sections have no such field, so it hides nothing of theirs.
+  @essentials [:name, :title, :path, :record, :site_id]
+
+  defp hidden_fields(resource) do
+    resource
+    |> MishkaGervaz.Resource.Info.Form.fields()
+    |> Enum.map(& &1.name)
+    |> Enum.reject(&(&1 in @essentials))
+  end
+
   defp media_scope(%{site_id: nil}, _site_id), do: {:master_read, nil}
   defp media_scope(_actor, site_id), do: {:read, site_id}
 
@@ -1742,7 +1810,54 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      assign(socket, :url_state, UrlSync.decode(params, uri, MishkaCmsCore.Runtime.Media))}
   end
 
+  # THE FORM ANNOUNCES; THIS PAGE ACTS. The essentials step is the resource's own Gervaz form, so it
+  # creates through the resource's own action and says so exactly as every list page hears it — the
+  # editor's only job is to reopen on what was just made, and to leave if the reader backs out.
   @impl true
+  def handle_info(
+        {:form_saved, :create, record},
+        %{assigns: %{new_document?: true, record: nil, section: section}} = socket
+      ) do
+    {:noreply, push_navigate(socket, to: Section.builder_path(section, record.id))}
+  end
+
+  def handle_info(
+        {:form_cancelled, _resource},
+        %{assigns: %{new_document?: true, record: nil, section: section}} = socket
+      ) do
+    {:noreply, push_navigate(socket, to: Section.list_path(section))}
+  end
+
+  # THE SETTINGS MODAL SAVED, and the editor takes the new name and path.
+  #
+  # RE-READ RATHER THAN TAKEN FROM THE FORM. What a Gervaz save answers with is the row the action
+  # wrote, with nothing loaded onto it — and the header reads `record.site.name` for its scope badge.
+  # Assigning the form's record directly turned "localhost" into "This site" on every save, which is
+  # the badge falling through to its last clause rather than any change of scope. `load_record/3` is
+  # the read the mount makes, so what lands here is the shape the rest of the editor was written
+  # against instead of a second, thinner one.
+  #
+  # `@record` is the only thing that moves. The working tree is not on this record and the modal
+  # never had it: a rename while a design is half-finished leaves the design exactly where it was.
+  # A file edited in the Media sheet while the SEO tab is choosing a picture is not the document.
+  #
+  # The SEO tab saves the same way, and the document it wrote comes back on its record.
+  def handle_info(
+        {:form_saved, :update, %SeoSettings{document: record}},
+        %{assigns: %{settings_open?: true}} = socket
+      ),
+      do: {:noreply, settings_saved(socket, record)}
+
+  def handle_info(
+        {:form_saved, :update, %resource{} = record},
+        %{assigns: %{settings_open?: true}} = socket
+      )
+      when resource not in [Media, MediaCategory],
+      do: {:noreply, settings_saved(socket, record)}
+
+  def handle_info({:form_cancelled, _resource}, %{assigns: %{settings_open?: true}} = socket),
+    do: {:noreply, assign(socket, settings_open?: false, seo_form?: false)}
+
   def handle_info({:builder_session, token, {:selection, id, :canvas}}, socket)
       when is_binary(id) do
     {:noreply,
@@ -2904,6 +3019,44 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # the DOM, so a click in the form is not a click away from the sheet.
   def handle_event("close_sheet", _params, socket),
     do: {:noreply, socket |> assign(:sheet, :none) |> assign(:media_target, nil)}
+
+  # THE NAME AND THE PATH, over the editor rather than back on the list. The modal is the resource's
+  # own Gervaz form, so everything after the click belongs to the resource — see
+  # `MishkaCmsCoreWeb.Live.Admin.Builder.Panels.settings_modal/1`.
+  # The ••• menu's SEO entry opens the same modal on its SEO tab, and on General where there is none.
+  def handle_event("open_settings", params, socket) do
+    socket = assign(socket, settings_open?: true, settings_tab: :general, seo_form?: false)
+    handle_event("settings_tab", params, socket)
+  end
+
+  def handle_event("close_settings", _params, socket),
+    do: {:noreply, assign(socket, settings_open?: false, seo_form?: false)}
+
+  # THE SETTINGS MODAL'S TABS. The SEO tab's form mounts the first time the tab opens and stays,
+  # hidden, until the modal closes, so moving between the tabs loses nothing typed in either.
+  def handle_event("settings_tab", %{"tab" => "seo"}, %{assigns: %{section: section}} = socket) do
+    case SeoSettings.mode(section) do
+      nil -> {:noreply, socket}
+      _mode -> {:noreply, assign(socket, settings_tab: :seo, seo_form?: true)}
+    end
+  end
+
+  def handle_event("settings_tab", _params, socket),
+    do: {:noreply, assign(socket, :settings_tab, :general)}
+
+  # The share image is chosen from the site's Media library, in the same sheet and with the same Use
+  # button an image on the canvas is. The modal steps aside while the sheet is open.
+  def handle_event("seo_pick_image", _params, socket) do
+    {:noreply,
+     socket
+     |> assign(:media_target, %{
+       node_id: "seo",
+       name: gettext("Share image"),
+       seo: :image,
+       accepts: :images
+     })
+     |> assign(:sheet, :assets)}
+  end
 
   # RESOLVING RECORDS WHO DID IT. The action sets the resolver from the actor, together with the
   # timestamp, so nothing here names one.
@@ -6566,6 +6719,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       <Panels.find_modal :if={@find_open} find={@find} replace={@replace} hits={@find_hits} />
       <Panels.context_menu id="pb-ctx" target="[data-layer-row]" key="layerRow" />
       <Panels.sheet :if={@sheet not in [:none, :examples]} {assigns} />
+      <Panels.new_document
+        :if={@new_document? and is_nil(@record)}
+        section={@section}
+        current_user={@current_user}
+        hidden_fields={hidden_fields(Section.resource(@section))}
+      />
+      <Panels.settings_modal
+        :if={@settings_open? and not is_nil(@record)}
+        section={@section}
+        record={@record}
+        draft={settings_draft(@stage, @draft)}
+        current_user={@current_user}
+        tab={@settings_tab}
+        seo_form?={@seo_form?}
+        hidden?={@sheet != :none}
+      />
     </div>
     """
   end
@@ -6815,6 +6984,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       )
 
   defp place_media(%{assigns: %{media_target: nil}} = socket, _id), do: socket
+
+  # The SEO tab's share image. Its draft is the SEO form's, so the address goes into the field it
+  # types into, and the field's own change writes it — see the `PbSeoFields` hook.
+  defp place_media(%{assigns: %{media_target: %{seo: :image}}} = socket, id) do
+    case read_media(socket, id) do
+      nil ->
+        put_flash(socket, :error, gettext("That file is no longer in the library."))
+
+      media ->
+        socket
+        |> push_event("pb-seo-set", %{id: "pb-seo-image", value: media_href(media.relative_path)})
+        |> assign(media_target: nil, sheet: :none)
+    end
+  end
 
   # A BACKGROUND IS A STYLE, NOT AN ATTRIBUTE, so it goes down the style funnel and lands in whichever
   # bucket the panel was writing to — a picture on mobile only is the same one edit as a colour on

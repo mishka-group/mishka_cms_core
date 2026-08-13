@@ -38,6 +38,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Review
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
+  alias MishkaCmsCore.Runtime.PageBuilder.SeoSettings
   alias MishkaCmsCore.Runtime.PageComment
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
@@ -653,7 +654,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               "size-[5px] rounded-full",
               (@dirty? && "bg-[#cf8a24]") || "bg-[#1f9d6b]"
             ]} />
-            <span class="truncate text-[10px] font-medium text-[#6d6a63]">
+            <%!-- THE NAME IS THE WAY IN, which is where a reader already looks for it — and it is a
+                  button only when there is a record to change and an address to change about it.
+                  Before that, the essentials step is asking for exactly these fields one layer up. --%>
+            <button
+              :if={settable?(assigns)}
+              type="button"
+              id="pb-settings-open"
+              phx-click="open_settings"
+              title={gettext("Name and path")}
+              class="inline-flex min-w-0 items-center gap-1 rounded-[6px] px-1 py-px text-[10px] font-medium text-[#6d6a63] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            >
+              <span class="truncate">{document_label(assigns)}</span>
+              <.icon name={:sliders} size={10} class="flex-none opacity-70" />
+            </button>
+            <span
+              :if={not settable?(assigns)}
+              class="truncate text-[10px] font-medium text-[#6d6a63]"
+            >
               {document_label(assigns)}
             </span>
             <span class="flex-none text-[10px] font-medium text-[#6d6a63]">
@@ -805,6 +823,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             value={%{sheet: "assets"}}
             icon={:image}
             label={gettext("Assets")}
+          />
+          <%!-- The same settings the name opens, landing on their SEO tab. --%>
+          <.more_item
+            :if={settable?(assigns) and SeoSettings.mode(@section)}
+            id="pb-more-seo"
+            event="open_settings"
+            value={%{tab: "seo"}}
+            icon={:sliders}
+            label={gettext("SEO")}
+            description={seo_menu_description(SeoSettings.mode(@section))}
           />
           <%!-- The direction toggle has its own pair of buttons in the bar, but that pair is the
                 first thing the collapse ladder drops — so it needs a home that survives. --%>
@@ -12495,6 +12523,315 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     """
   end
 
+  defp section_glyph("layout"), do: :frame
+  defp section_glyph("error-page"), do: :shield
+  defp section_glyph("component"), do: :box
+  defp section_glyph(_page), do: :page
+
+  @doc """
+  THE ESSENTIALS, BEFORE THE STRUCTURE. What the editor needs before there is a document to edit.
+
+  "Create empty & open editor" is a link, so a reader who takes it has said they do not want the list
+  page's form — and answering them with that form's validation would be answering a question they
+  declined. This asks for the few things a record cannot exist without, and nothing else.
+
+  IT IS THE RESOURCE'S OWN FORM, with everything but those few fields hidden. That is what makes the
+  Site field a searchable relation picker rather than a `<select>` nobody could use against a hundred
+  thousand sites, and what makes "required" mean what the resource says it means — a second little
+  form of our own would have been a second set of rules to keep in step.
+
+  A TENANT IS NEVER ASKED WHICH SITE, and this does nothing to arrange that: the resource declares
+  the field `restricted true`, so Gervaz draws it for a master and for nobody else. Whether a site is
+  REQUIRED is the resource's answer too — a page may be global, and its picker says so.
+
+  IT ARRIVES INACTIVE. A document made here has nothing on it yet, and `active` is what puts it in
+  front of visitors — a page that goes live the moment it is named is live while it is empty. The
+  flag is one of the hidden fields, so `defaults` is what carries it: `hidden_fields` drops a field
+  from the form but `merge_defaults/2` still fills the param it would have sent.
+
+  On save the resource announces `{:form_saved, :create, record}` like any other Gervaz form, and the
+  editor reopens on it — which is when the starter chooser appears, because from then on this is an
+  ordinary empty document.
+  """
+  attr(:section, :string, required: true)
+  attr(:current_user, :any, required: true)
+  attr(:hidden_fields, :list, default: [])
+
+  def new_document(assigns) do
+    assigns =
+      assigns
+      |> assign(:label, Section.label(assigns.section))
+      |> assign(:glyph, section_glyph(assigns.section))
+      |> assign(:resource, Section.resource(assigns.section))
+
+    ~H"""
+    <div
+      id="pb-new-document"
+      class="fixed inset-0 z-[95] flex items-start justify-center overflow-y-auto bg-[#17161a]/45 p-6 py-[8vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      phx-mounted={modal_in("#pb-new-document > section")}
+    >
+      <section class="w-[680px] max-w-[94vw] rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]">
+        <div class="flex items-start gap-3 border-b border-[#f0efea] px-5 py-[15px]">
+          <span class="grid size-9 flex-none place-items-center rounded-[11px] bg-[#f2f1fc] text-[#4f4bcc]">
+            <.icon name={@glyph} size={16} />
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+              {gettext("Name your %{label}", label: String.downcase(translate(@label)))}
+            </h2>
+            <p class="mt-1 text-[11.5px] font-medium text-[#6d6a63]">
+              {gettext("Just enough to save it. You pick the structure next.")}
+            </p>
+          </div>
+          <.link
+            navigate={Section.list_path(@section)}
+            title={gettext("Back to the list")}
+            class="grid size-7 flex-none place-items-center rounded-[9px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+          >
+            <.icon name={:close} size={14} />
+          </.link>
+        </div>
+
+        <div class="px-6 py-5">
+          <.live_component
+            module={MishkaGervaz.Form.Web.Live}
+            id={"pb-new-" <> @section}
+            resource={@resource}
+            current_user={@current_user}
+            hidden_fields={@hidden_fields}
+            defaults={%{"active" => false}}
+          />
+        </div>
+      </section>
+    </div>
+    """
+  end
+
+  @doc """
+  A document's own name, address and description, changed without leaving the editor. A page's
+  description is the one search engines and link previews show; a page also picks here what each of
+  its addresses shows, its layout and which permission names may open it.
+
+  ## Why it exists
+
+  A page is named and given a path once, on the way in — on the list page's form, or on the
+  essentials step — and until now that was the only time. Changing either afterwards meant leaving
+  the editor for the list, finding the row and opening its modal: a long way round for the two
+  fields most likely to be wrong on a first draft, and one that costs the reader the editor they
+  were working in.
+
+  ## It is the resource's own form
+
+  The same `MishkaGervaz.Form.Web.Live` the essentials step mounts, in edit mode over this record,
+  with every other field hidden. The label, the validation, the uniqueness message and the action it
+  saves through are the resource's — a small form of our own would be a second set of rules to keep
+  in step with the list page's, and the one that drifts is always the second.
+
+  ## Only where there is an address
+
+  `settings?/1` is the gate, and it asks the resource rather than naming sections: a section has
+  settings when its form declares a `path`. A component has none — it is reached by name from the
+  markup that calls it, and its name is the key its compiled module is hashed from, so renaming one
+  is not a settings change but a rename of every call site.
+
+  ## What it does not offer
+
+  The site. `update` accepts no `site_id` on any of these resources, so this could not move a
+  document between sites even if it drew the field — and an editor left open on one that had just
+  moved would be holding another site's palette, tokens and media.
+
+  ## The SEO tab
+
+  A section that stores SEO gets a second tab (`MishkaCmsCore.Runtime.PageBuilder.SeoSettings.mode/1`):
+  a Gervaz form over `SeoSettings`, drawn by `MishkaCmsCoreWeb.Templates.SeoForm`. It mounts the
+  first time the tab opens and stays, hidden, until the modal closes, so moving between the tabs
+  loses nothing typed in either; it saves with its own Save. While the Media sheet is open for its
+  share image the modal is `hidden?`.
+  """
+  attr(:section, :string, required: true)
+  attr(:record, :map, required: true)
+
+  attr(:draft, :map,
+    default: nil,
+    doc: "the draft the editor is writing, whose settings these are instead of the record's"
+  )
+
+  attr(:current_user, :any, required: true)
+  attr(:tab, :atom, default: :general, doc: "`:general` or `:seo`")
+  attr(:seo_form?, :boolean, default: false, doc: "whether the SEO tab's form is mounted")
+  attr(:hidden?, :boolean, default: false, doc: "whether a sheet the SEO tab opened is over it")
+
+  def settings_modal(assigns) do
+    resource =
+      (assigns.draft && Drafts.resource(assigns.section)) || Section.resource(assigns.section)
+
+    assigns =
+      assigns
+      |> assign(:resource, resource)
+      |> assign(:target, assigns.draft || assigns.record)
+      |> assign(
+        :form_id,
+        "pb-settings-" <> assigns.section <> ((assigns.draft && "-draft") || "")
+      )
+      |> assign(:label, Section.label(assigns.section))
+      |> assign(:seo_mode, SeoSettings.mode(assigns.section))
+
+    ~H"""
+    <div
+      id="pb-settings-modal"
+      class={[
+        "fixed inset-0 z-[96] flex items-start justify-center overflow-y-auto bg-[#17161a]/40 p-6 py-[10vh] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
+        @hidden? && "hidden"
+      ]}
+      phx-mounted={modal_in("#pb-settings-modal > section")}
+      phx-remove={modal_out("#pb-settings-modal > section")}
+      phx-window-keydown={!@hidden? && "close_settings"}
+      phx-key="escape"
+    >
+      <section
+        phx-click-away={!@hidden? && "close_settings"}
+        class={[
+          "max-w-[94vw] rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_30px_80px_rgba(20,18,26,.3)]",
+          settings_width(@tab, @seo_mode)
+        ]}
+      >
+        <div class="flex items-start gap-3 border-b border-[#f0efea] px-5 py-[15px]">
+          <span class="grid size-9 flex-none place-items-center rounded-[11px] bg-[#f2f1fc] text-[#4f4bcc]">
+            <.icon name={:sliders} size={16} />
+          </span>
+          <div class="min-w-0 flex-1">
+            <h2 class="font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+              {gettext("%{label} settings", label: translate(@label))}
+            </h2>
+            <p :if={!@draft} class="mt-1 text-[11.5px] font-medium text-[#6d6a63]">
+              {gettext("Saved to the %{label} itself. The design you have open is untouched.",
+                label: String.downcase(translate(@label))
+              )}
+            </p>
+            <p
+              :if={@draft}
+              id="pb-settings-draft-note"
+              class="mt-1 text-[11.5px] font-medium text-[#6d6a63]"
+            >
+              {gettext(
+                "Saved to the draft “%{draft}”. The %{label} takes them when the draft is published.",
+                draft: Drafts.display_label(@draft.label),
+                label: String.downcase(translate(@label))
+              )}
+            </p>
+          </div>
+          <button
+            type="button"
+            id="pb-settings-close"
+            phx-click="close_settings"
+            title={gettext("Close")}
+            class="grid size-7 flex-none place-items-center rounded-[9px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+          >
+            <.icon name={:close} size={14} />
+          </button>
+        </div>
+
+        <div :if={@seo_mode} class="px-6 pt-4">
+          <div role="tablist" class="flex gap-1 rounded-[9px] bg-[#f2f1ec] p-[3px]">
+            <button
+              :for={{key, label} <- [{:general, gettext("General")}, {:seo, gettext("SEO")}]}
+              type="button"
+              role="tab"
+              id={"pb-settings-tab-#{key}"}
+              aria-selected={to_string(@tab == key)}
+              phx-click="settings_tab"
+              phx-value-tab={key}
+              class={[
+                "h-7 flex-1 rounded-[7px] font-['Space_Grotesk'] text-[11.5px] font-bold",
+                (@tab == key && "bg-white text-[#1b1a18] shadow-[0_1px_2px_rgba(30,28,24,.1)]") ||
+                  "text-[#6d6a63]"
+              ]}
+            >
+              {label}
+            </button>
+          </div>
+        </div>
+
+        <%!-- Hidden rather than removed on the SEO tab, so what was typed here is still here. --%>
+        <div class={["px-6 py-5", @tab != :general && "hidden"]}>
+          <.live_component
+            module={MishkaGervaz.Form.Web.Live}
+            id={@form_id}
+            resource={@resource}
+            record_id={@target.id}
+            current_user={@current_user}
+            hidden_fields={settings_hidden_fields(@section, @resource)}
+          />
+        </div>
+
+        <div :if={@seo_mode && @seo_form?} class={[@tab != :seo && "hidden"]}>
+          <.live_component
+            module={MishkaGervaz.Form.Web.Live}
+            id="pb-seo-settings"
+            resource={SeoSettings}
+            record_id={SeoSettings.id(@section, @target)}
+            current_user={@current_user}
+          />
+        </div>
+      </section>
+    </div>
+    """
+  end
+
+  # A page's SEO tab is two columns, its previews beside its fields; its General tab puts the title,
+  # the path and the layout side by side. The other sections have a name and a path.
+  defp settings_width(:seo, :page), do: "w-[1000px]"
+  defp settings_width(_general, :page), do: "w-[760px]"
+  defp settings_width(_tab, _not_a_page), do: "w-[520px]"
+
+  # A page carries `:title`, the other sections carry `:name` — see `@essentials` in
+  # `MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive`, which keeps the same two for the same reason.
+  # A page's `:description` is its meta description — see `MishkaCmsCore.Runtime.Seo`.
+  @settings_fields [:name, :title, :path, :description]
+
+  @doc """
+  Whether this section has an address to change — which is what the settings modal is for.
+
+  Asked of the resource's own form rather than of a list of section names, so a fifth section
+  arrives with the right answer and no list to remember.
+  """
+  @spec settings?(String.t()) :: boolean()
+  def settings?(section), do: :path in form_fields(Section.resource(section))
+
+  # A page edits its description on the SEO tab, beside the previews it feeds; the General tab showing
+  # it too would be a second Save that writes back what the first one changed. The title stays on
+  # General: it names the page, and the SEO tab's title is a stored tag over it.
+  @seo_tab_fields [:description]
+
+  # A page alone also picks, here, what each of its addresses shows, the layout it is drawn in and
+  # who may open it — the other documents are not opened by visitors.
+  @page_fields [:record, :layout_id, :permissions]
+
+  @doc """
+  Every field of the section's form except its name, its address and its description — and, for a
+  page, its description, which its SEO tab edits, what each of its addresses shows, its layout and
+  who may open it.
+
+  Public because it is the whole contract between the modal and the resource: a test that read the
+  hidden list out of the rendered markup would be testing Gervaz rather than the decision made here.
+  """
+  @spec settings_hidden_fields(String.t(), module() | nil) :: [atom()]
+  def settings_hidden_fields(section, resource \\ nil) do
+    shown =
+      case SeoSettings.mode(section) do
+        :page -> (@settings_fields -- @seo_tab_fields) ++ @page_fields
+        _other -> @settings_fields
+      end
+
+    (resource || Section.resource(section)) |> form_fields() |> Enum.reject(&(&1 in shown))
+  end
+
+  defp form_fields(resource) do
+    resource
+    |> MishkaGervaz.Resource.Info.Form.fields()
+    |> Enum.map(& &1.name)
+  end
+
   @doc """
   A new folder, without leaving the page you are building.
 
@@ -13491,6 +13828,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       name -> gettext("Belongs to %{name}", name: name)
     end
   end
+
+  # A RECORD AND AN ADDRESS. Without the first there is nothing to save to — the essentials step is
+  # asking for these same two fields one layer up — and without the second there is nothing to ask.
+  defp settable?(%{record: %{id: id}, section: section}) when is_binary(id),
+    do: settings?(Section.normalize(section))
+
+  defp settable?(_assigns), do: false
+
+  defp seo_menu_description(:page),
+    do: gettext("Search and share previews, tags and structured data")
+
+  defp seo_menu_description(_tags_only), do: gettext("The tags every page on this layout carries")
 
   defp document_label(%{record: %{name: name}, section: section}) when is_binary(name),
     do: name <> "." <> section_extension(section)

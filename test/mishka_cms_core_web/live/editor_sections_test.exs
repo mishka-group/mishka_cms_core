@@ -1730,6 +1730,45 @@ defmodule MishkaCmsCoreWeb.Test.EditorSectionsTest do
              "saving under a new name put the published 404 back over the draft's"
     end
 
+    # AND THE LIVE PAGE IS NOT A DRAFT TO COPY. The sitting holds a draft row of its own from the
+    # first save on, so "save under a new name" was copying THAT — the page's fields as they stood
+    # when it was written — and a Configuration save made since was missing from the new draft and
+    # put back the moment anyone published it. Only a draft the author OPENED is another document.
+    test "and saving a page under a new name keeps settings changed since the last one", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, template: @body, section: "blog")
+      view = open_record(conn, :page, page)
+
+      render_click(view, "save_as_draft", %{"label" => "Before the move"})
+      assert editor(view) |> Map.fetch!(:draft_id), "the sitting holds no draft to be copied from"
+
+      moved =
+        page
+        |> Ash.Changeset.for_update(:master_update, %{section: "company"},
+          actor: actor(view),
+          authorize?: false
+        )
+        |> Ash.update!(authorize?: false)
+
+      render_click(view, "open_settings", %{})
+      send(view.pid, {:form_saved, :update, moved})
+      render(view)
+
+      render_click(view, "save_as_draft", %{"label" => "After the move"})
+
+      copy =
+        "page"
+        |> MishkaCmsCore.Runtime.PageBuilder.Drafts.list(moved, actor(view))
+        |> Enum.find(&(&1.label == "After the move"))
+
+      assert copy, "the new name wrote no row"
+
+      assert copy.section == "company",
+             "the new draft carried the section from before the Configuration save"
+    end
+
     # ONE ROW, FIVE DOCUMENTS. An error page's element CSS is keyed by the record, not by the status,
     # so all five statuses write into one stylesheet row — and the prune that runs on publish keeps
     # only the scopes present in the tree that happens to be OPEN. Publishing the 500 therefore
