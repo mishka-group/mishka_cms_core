@@ -51,7 +51,15 @@ defmodule MishkaCmsCoreWeb.Routes do
        :edit},
       {:live, "/runtime/builder/:section", MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive, :new},
       {:live, "/runtime/builder-canvas/:token", MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive,
-       :canvas}
+       :canvas},
+      # One example of one component, rendered alone for the examples modal's preview pane — the same
+      # canvas in preview mode, addressed by the editing session's token.
+      {:live, "/runtime/builder-canvas/:token/example/:name/:index",
+       MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive, :example},
+      # The wizard's preview — the component composed from the reader's own choices, which live in
+      # the editing session so this canvas can read them.
+      {:live, "/runtime/builder-canvas/:token/wizard/:wizard",
+       MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive, :wizard}
     ]
   end
 

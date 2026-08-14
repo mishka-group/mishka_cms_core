@@ -97,6 +97,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
   alias MishkaCmsCore.Runtime.PageBuilder.Icons
+  alias MishkaCmsCore.Runtime.PageBuilder.Wizard
+  alias MishkaCmsCore.Runtime.PageBuilder.Examples
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
@@ -129,6 +131,77 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
                        "background:#faf9f6;"
 
   @impl true
+  # The palette's examples modal previews one variant. It renders here, through this same canvas in
+  # preview mode, rather than through a renderer of its own: a second renderer would answer "what
+  # does this example look like" with a different picture than the one inserting it produces, which
+  # is the only question the modal exists to answer. The tree is ephemeral — nothing is subscribed
+  # to, nothing is written back — and the site rewrite is the same one `insert_example` performs, so
+  # a global component previews as global.
+  #
+  # Must precede the token-only clause: a params map with three keys matches that pattern too.
+  # The wizard's preview. Same canvas, same preview mode, same site rewrite as the example clause
+  # below — the difference is only where the markup comes from: the reader's own choices, held in the
+  # editing session so this second LiveView can read them, rather than a snippet the kit shipped.
+  def mount(%{"token" => token, "wizard" => name}, _session, socket) do
+    with {:ok, session} <- visible_session(token, socket.assigns[:current_user]),
+         entry when not is_nil(entry) <- Enum.find(session.components, &(&1.name == name)),
+         source =
+           Wizard.compose(
+             entry,
+             session.wizard || %{},
+             session.site_name,
+             :preview,
+             session.components
+           ),
+         {:ok, tree} <- Tree.parse(Fields.stage(source, entry)) do
+      # It SUBSCRIBES, like the editing canvas does. Picking an option used to change the iframe's
+      # DOM id, which made LiveView throw the element away and mount this again — a reload the
+      # reader saw as a flash of empty frame on every click. Staying subscribed means the same
+      # mounted preview re-renders in place.
+      if connected?(socket), do: EditorSession.subscribe(token)
+
+      {:ok,
+       socket
+       |> assign(:wizard_name, name)
+       |> assign_session(session)
+       |> assign_example(tree, session), layout: false}
+    else
+      :forbidden ->
+        {:ok, assign(socket, missing?: :forbidden, token: token, page_title: gettext("Preview")),
+         layout: false}
+
+      :no_builder ->
+        {:ok, assign(socket, missing?: :no_builder, token: token, page_title: gettext("Preview")),
+         layout: false}
+
+      _missing ->
+        {:ok, assign(socket, missing?: :example, token: token, page_title: gettext("Preview")),
+         layout: false}
+    end
+  end
+
+  def mount(%{"token" => token, "name" => name, "index" => index}, _session, socket) do
+    with {:ok, session} <- visible_session(token, socket.assigns[:current_user]),
+         examples = Examples.for_name(name, session.site_id),
+         example when not is_nil(example) <- Enum.at(examples, to_index(index)),
+         entry = Enum.find(session.components, &(&1.name == name)),
+         {:ok, tree} <- Tree.parse(Fields.stage(example.source, entry)) do
+      {:ok, socket |> assign_session(session) |> assign_example(tree, session), layout: false}
+    else
+      :forbidden ->
+        {:ok, assign(socket, missing?: :forbidden, token: token, page_title: gettext("Example")),
+         layout: false}
+
+      :no_builder ->
+        {:ok, assign(socket, missing?: :no_builder, token: token, page_title: gettext("Example")),
+         layout: false}
+
+      _missing ->
+        {:ok, assign(socket, missing?: :example, token: token, page_title: gettext("Example")),
+         layout: false}
+    end
+  end
+
   def mount(%{"token" => token}, _session, socket) do
     case visible_session(token, socket.assigns[:current_user]) do
       {:ok, session} ->
@@ -205,6 +278,31 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     })
   end
 
+  defp assign_example(socket, tree, session) do
+    rewritten = Tree.rewrite_site(tree, session.site_name, session.components)
+
+    socket
+    |> assign(:tree, rewritten)
+    # RECOMPUTED for the tree being previewed, not the one being edited. `assign_session/2` derived
+    # `icon_css` from `session.tree` — the page open in the editor — and a preview then replaced the
+    # tree without replacing the rules, so an example's icon rendered only when the page underneath
+    # happened to use the same one. `chelekom-alert`'s maintenance example asks for
+    # `hero-wrench-screwdriver`, no page used it, and the reader saw a heading with a blank space
+    # where the icon belongs — the class was in the code pane and had no rule behind it.
+    |> assign(
+      :icon_css,
+      Icons.css(Enum.uniq(icons_set_by(rewritten) ++ icons_defaulted_by(session.components)))
+    )
+    |> assign(:missing?, false)
+    |> assign(:selection, nil)
+    |> assign(:preview?, true)
+    |> assign(:example?, true)
+    |> assign(:page_title, gettext("Example"))
+  end
+
+  # An example is one component on an empty sheet, so it sits in the middle of the stage rather than
+  # pinned to the top — the prototype centres its mock the same way. Children keep their own width;
+  # only the group is centred, or a full-bleed nav would shrink to its content.
   # A PAGE BORN EMPTY ALREADY HAS ONE CONTAINER IN IT — the database will not take a blank template
   # — so inserting beside it would leave an empty div above every structure anyone picks. Replacing
   # the document is the right move there, and it is still one undo step because it is replaced the
@@ -338,6 +436,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     end
   end
 
+  defp to_index(index) do
+    case Integer.parse(to_string(index)) do
+      {number, _rest} -> number
+      :error -> -1
+    end
+  end
+
   # Every heroicon class this document could render: the ones its nodes SET, and the default of every
   # icon-typed attribute on every component it uses — a component renders its default when the page
   # says nothing, and that value appears nowhere in the tree.
@@ -461,6 +566,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> assign(:placing, session.picked)
     |> assign_new(:toolbar, fn assigns -> toolbar_actions(assigns[:current_user]) end)
     |> assign_new(:bucket, fn -> "base" end)
+    |> assign_new(:example?, fn -> false end)
     |> assign_new(:layout_shell, fn -> {"", ""} end)
   end
 
@@ -620,6 +726,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   end
 
   @impl true
+  # The wizard preview answers to one thing only: the options the reader has chosen. Recomposing
+  # from the session is the whole update — there is no selection to sync in a preview.
+  def handle_info({:builder_session, token, _message}, %{assigns: %{wizard_name: name}} = socket) do
+    with {:ok, session} <- EditorSession.fetch(token),
+         entry when not is_nil(entry) <- Enum.find(session.components, &(&1.name == name)),
+         source =
+           Wizard.compose(
+             entry,
+             session.wizard || %{},
+             session.site_name,
+             :preview,
+             session.components
+           ),
+         {:ok, tree} <- Tree.parse(Fields.stage(source, entry)) do
+      {:noreply, assign_example(socket, tree, session)}
+    else
+      _missing -> {:noreply, socket}
+    end
+  end
+
   # A REVIEW NOTE IS NOT A DOCUMENT CHANGE. Notes ride the session topic so both editors' sheets
   # follow each other, but the canvas has nothing to redraw for one — and re-reading the session
   # rebuilds the whole document, which the author sees as the page flashing every time anyone types
@@ -957,6 +1083,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   defp message(_reason), do: gettext("That change could not be applied.")
 
   @impl true
+  def render(%{missing?: :example} = assigns) do
+    ~H"""
+    <.canvas_notice
+      nonce={assigns[:csp_nonce]}
+      message={gettext("This example is no longer available.")}
+    />
+    """
+  end
+
   def render(%{missing?: :forbidden} = assigns) do
     ~H"""
     <.canvas_notice
@@ -1313,6 +1448,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
           cannot live in a block that disappears. --%>
     <style id="pb-canvas-ui" nonce={assigns[:csp_nonce]}>
       #pb-canvas-root { box-sizing: border-box; min-height: 100vh; margin: 0; padding: 16px; }
+      /* An example is one component on an empty sheet, so it sits in the middle of the stage rather
+         than pinned to the top — the prototype centres its mock the same way. */
+      #pb-canvas-root[data-example="true"] { display: flex; flex-direction: column; justify-content: center; }
       /* The page's layout is drawn, not used: only the page inside it answers the pointer. */
       #pb-layout-shell { pointer-events: none; }
       #pb-layout-slot { pointer-events: auto; }
@@ -1421,6 +1559,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       data-token={@token}
       {%{"data-selection" => @selection}}
       data-preview={to_string(@preview?)}
+      data-example={to_string(@example?)}
       data-revision={@revision}
     >
       <%!-- WHAT MODE THIS IS, SAID OUT LOUD. Preview looks exactly like the page — that is the whole
@@ -1440,7 +1579,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
             Not over an example or the wizard's options: neither is the author's page, and "Back to
             editing" there would toggle the editor's own preview from inside a modal. --%>
-      <div :if={@preview?} id="pb-preview-bar">
+      <div :if={@preview? and !@example?} id="pb-preview-bar">
         <span id="pb-preview-bar-text">
           {gettext(
             "Preview — your unsaved %{section} as it looks. Links, paging and live components don't run here; %{hint}",

@@ -52,6 +52,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
   alias MishkaCmsCore.Runtime.PageBuilder.History
+  alias MishkaCmsCore.Runtime.PageBuilder.Examples
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.Review
   alias MishkaGervaz.Table.Web.UrlSync
@@ -761,6 +762,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:aim_target, fn -> nil end)
     |> assign_new(:act_action, fn -> nil end)
     |> assign_new(:group_folds, fn -> %{} end)
+    |> assign_new(:example_tab, fn -> :examples end)
+    |> assign_new(:wizard, fn -> %{} end)
     |> assign_new(:icon_query, fn -> "" end)
     |> assign_new(:icon_variant, fn -> "" end)
     |> assign_new(:icon_library, fn -> nil end)
@@ -881,6 +884,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:attr_form, fn -> false end)
     |> assign_new(:tokens_revision, fn -> 0 end)
     |> assign_new(:snippets_revision, fn -> 0 end)
+    |> assign_new(:examples_for, fn -> nil end)
+    |> assign_new(:examples, fn -> Phoenix.LiveView.AsyncResult.ok([]) end)
+    |> assign_new(:example_index, fn -> 0 end)
+    |> assign_new(:example_device, fn -> "desktop" end)
     |> assign_new(:studio_tab, fn -> :tokens end)
     |> assign_new(:studio_scope, fn -> :all end)
     |> assign_new(:studio_cat, fn -> "all" end)
@@ -1777,6 +1784,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # Curated rather than passed through: a bundle ships the kit's exhaustive catalogue AND every real
   # usage from its documentation site, and the modal used to show only the first — twelve previews
   # whose body reads "Base". `Examples` merges, dedups and describes them.
+
+  defp opening_tab(socket, name) do
+    entry = Enum.find(socket.assigns.editor.components, &(&1.name == name))
+
+    case entry &&
+           {PaletteEntry.optional(entry, :has_examples?),
+            PaletteEntry.optional(entry, :offers_options?)} do
+      {false, true} -> :wizard
+      _examples_or_nothing -> :examples
+    end
+  end
 
   defp offers_options?(component) do
     component
@@ -2947,7 +2965,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("open_sheet", %{"sheet" => sheet}, socket) do
-    sheets = [:none, :studio, :assets, :review, :history]
+    sheets = [:none, :studio, :assets, :review, :history, :examples]
     opened = tab_atom(sheet, sheets)
 
     # The Record-history button always lands on Record history. Only the routes that mean "drafts"
@@ -2972,6 +2990,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
      |> assign(studio_tab: tab_atom(tab, tabs), studio_cat: "all")
      |> reload_studio_if_filtered()}
   end
+
+  # Inserting a snippet is the ordinary insert op, so it is undoable and containment-checked.
+  def handle_event("pick_example", %{"index" => index}, socket),
+    do: {:noreply, assign(socket, :example_index, to_int(index))}
+
+  def handle_event("example_device", %{"device" => device}, socket)
+      when device in ~w(desktop mobile),
+      do: {:noreply, assign(socket, :example_device, device)}
 
   def handle_event("insert_snippet", %{"id" => id}, socket) do
     case Snippets.source(id, snippet_actor(socket)) do
@@ -3244,6 +3270,60 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("preview_card", _params, socket), do: {:noreply, socket}
 
+  # Opening the modal starts on the first variant and on the preview, not on the code — the question
+  # a reader has about a variant is what it looks like.
+  # AND IT OPENS ON THIS SITE'S PRESET. A preset is what a DRAG of this component places, and the
+  # wizard used to open on the kit's defaults instead — so the preview showed one thing while the
+  # card beside it placed another, and "make this the default" saved only what the reader had
+  # re-picked, quietly dropping the rest of a preset they never meant to change.
+  def handle_event("show_examples", %{"name" => name}, socket) do
+    site_id = socket.assigns.editor.site_id
+
+    {:noreply,
+     socket
+     |> set_wizard(Presets.get(site_id, name))
+     |> assign(
+       examples_for: name,
+       sheet: :examples,
+       example_index: 0,
+       example_device: "desktop",
+       # OPEN ON WHAT THERE IS. The badge now fires for a component with option lists and no example
+       # markup, and landing such a reader on an empty Examples tab would be a worse door than the
+       # one they could not open before.
+       example_tab: opening_tab(socket, name)
+     )
+     # Curated for THIS component only, and only now. The palette carries no examples at all — see
+     # `palette_entry/1` — because parsing every component's took 7.8 seconds at open.
+     |> MishkaGervaz.Messages.assign_async(:examples, fn ->
+       {:ok, %{examples: curated_examples(name, site_id)}}
+     end)}
+  end
+
+  def handle_event("close_examples", _params, socket),
+    do: {:noreply, socket |> set_wizard(%{}) |> assign(examples_for: nil, sheet: :none)}
+
+  # An example is inserted as its PARSED SUBTREE — every attribute and child the example
+  # demonstrates, not just its outermost tag — with each component's `site` bound to the scope that
+  # component actually lives in, which for a global component is "Global" even on a tenant's page.
+  def handle_event("insert_example", %{"index" => index}, socket) do
+    with %{} = entry <- examples_entry(socket),
+         example when not is_nil(example) <- Enum.at(entry.examples, to_int(index)),
+         {:ok, subtree} <- Tree.parse(example.source) do
+      template =
+        subtree
+        |> Tree.rewrite_site(socket.assigns.editor.site_name, socket.assigns.editor.components)
+        |> Serializer.serialize()
+
+      socket
+      |> set_wizard(%{})
+      |> assign(examples_for: nil, sheet: :none)
+      |> then(&place_template(&1, template))
+    else
+      {:error, reason} -> {:noreply, put_flash(socket, :error, human(reason))}
+      _missing -> {:noreply, assign(socket, examples_for: nil, sheet: :none)}
+    end
+  end
+
   # A pick is placed by CLICKING, and the layers tree is somewhere you can click. Clicking a row
   # while something is picked means "put it in here" — the same gesture the canvas offers, through
   # the same `place_at/2`, which puts it inside the row when the row can hold it, immediately after
@@ -3325,6 +3405,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     case socket.assigns.editor.picked do
       nil -> {:noreply, open_inspector(socket, id, params["prop"])}
       picked -> place_or_select(picked, id, socket)
+    end
+  end
+
+  # The icon picker is opened per PROPERTY, not globally: a component can declare `icon`, `start_icon`
+  # and `end_icon`, and one shared "is the picker open" flag would open all three at once.
+  # The modal's two tabs. A component with no option lists has no Wizard tab at all, so landing on
+  # it is impossible rather than empty.
+  def handle_event("example_tab", %{"tab" => tab}, socket),
+    do: {:noreply, assign(socket, :example_tab, tab_atom(tab, [:examples, :wizard]))}
+
+  # Each pick goes through the SESSION as well as the socket: the preview is a second LiveView in an
+  # iframe, and the session is how the two share anything.
+  def handle_event("wizard_pick", %{"name" => name, "value" => value}, socket),
+    do: {:noreply, set_wizard(socket, Map.put(socket.assigns.wizard, name, value))}
+
+  # Back to the KIT'S defaults, not to this site's preset — "reset" has meant the component as it
+  # ships since there was a wizard, and forgetting the preset is the button next to it.
+  def handle_event("wizard_reset", _params, socket), do: {:noreply, set_wizard(socket, %{})}
+
+  # Composed from the reader's choices and placed through the same op pipeline an example uses, so
+  # it lands as an ordinary node: containment-checked, undoable, editable afterwards.
+  def handle_event("insert_wizard", _params, socket) do
+    entry = examples_entry(socket.assigns)
+
+    %{wizard: wizard, editor: editor} = socket.assigns
+
+    case entry && Wizard.compose(entry, wizard, editor.site_name, :blank, editor.components) do
+      nil ->
+        {:noreply, socket}
+
+      source ->
+        socket
+        |> set_wizard(%{})
+        |> assign(examples_for: nil, sheet: :none)
+        |> place_template(source)
     end
   end
 
@@ -4134,6 +4249,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         )
     end
   end
+
+  # THIS SITE'S DEFAULT FOR A COMPONENT. The wizard is the one screen where the choices are already
+  # made, so it is where they can be kept — see `MishkaCmsCore.Runtime.PageBuilder.Presets`.
+  def handle_event("save_preset", _params, socket) do
+    {:noreply, store_preset(socket, socket.assigns.wizard || %{})}
+  end
+
+  def handle_event("clear_preset", _params, socket), do: {:noreply, store_preset(socket, %{})}
 
   # FIND AND REPLACE, over the page's words rather than its markup — see
   # `EditorSession.find_text/2` for why the two are not the same search.
@@ -5219,6 +5342,37 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp needs_selection(socket),
     do: put_flash(socket, :info, gettext("Select an element on the page first."))
 
+  # Runtime components are placed in their wrapper form, which is what every stored template uses
+  # and what the compilers emit: the name is data, and a hyphenated one could not be a tag at all.
+  # `site` is written as the page's own scope rather than the example's hardcoded "Global".
+  @doc """
+  The palette entry the examples modal is open for, or `nil`.
+
+  Exposed so the panel components can read it without threading another assign through every render.
+  """
+  def examples_entry(%{assigns: assigns}), do: examples_entry(assigns)
+
+  def examples_entry(%{examples_for: name, editor: editor} = assigns) when is_binary(name) do
+    case Enum.find(editor.components, &(&1.name == name)) do
+      nil -> nil
+      entry -> Map.put(entry, :examples, loaded_examples(assigns))
+    end
+  end
+
+  def examples_entry(_assigns), do: nil
+
+  # The modal is opened before its examples are curated, so an empty list here means "still coming",
+  # which is what its own empty state already says.
+  defp loaded_examples(%{examples: %Phoenix.LiveView.AsyncResult{ok?: true, result: examples}})
+       when is_list(examples),
+       do: examples
+
+  defp loaded_examples(_assigns), do: []
+
+  # An extension that ships a component can ship its examples too, or reorder the ones a kit provides.
+  defp curated_examples(name, site_id),
+    do: Events.examples(Examples.for_name(name, site_id), %{entry: name, site_id: site_id})
+
   # Placement follows the same rule as the palette: into the selection when it can hold children,
   # otherwise beside it, otherwise at the end of the document.
   # No selection means the whole document, which is what the button says it will do.
@@ -5732,6 +5886,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # it gives a stable, readable id rather than a counter to keep.
   defp hook_id(node_id),
     do: "el-" <> (:erlang.md5(node_id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
+
+  # THE CHOICES LIVE IN TWO PLACES, because the preview is a second LiveView: the socket renders the
+  # controls and the SESSION is what the iframe can read. They are written together here, always.
+  # Every point that cleared one of them used to leave the other, so a variant picked for one
+  # component survived the modal that made it — into the next component's wizard, and into a preview
+  # still composing from choices nobody could see any more.
+  defp set_wizard(socket, choices) do
+    {:ok, _session} = EditorSession.put_wizard(socket.assigns.token, choices)
+    assign(socket, :wizard, choices)
+  end
 
   # A design-system plugin gets a say before a token changes: it can normalise the value — snap a
   # colour to the palette, a length to the scale — or refuse it outright.
@@ -6385,6 +6549,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # A card's `data-template` is what a DRAG carries, and LiveView only recomputes it when an assign
+  # it reads has changed — so saving a preset has to hand the palette a new map, or dragging would
+  # keep placing the old default while clicking placed the new one.
+  defp refresh_presets(socket) do
+    assign(
+      socket,
+      :component_presets,
+      Presets.for_entries(socket.assigns.editor.components, socket.assigns.editor.site_id)
+    )
+  end
+
   # THE CLASSES THE ELEMENT WEARS, not the text of its class attribute: `class={@variant}` reads as
   # the literal `@variant` that way, so applying a reusable class wrote that text onto the element
   # and lost the value the component works out at render time.
@@ -6392,6 +6567,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     case name in Tree.classes(node) do
       true -> nil
       false -> Tree.class_with(node, [name])
+    end
+  end
+
+  defp store_preset(socket, choices) do
+    entry = examples_entry(socket.assigns)
+    site_id = socket.assigns.editor.site_id
+
+    case entry && Presets.put(socket.assigns.current_user, site_id, entry.name, choices) do
+      {:ok, _value} when map_size(choices) == 0 ->
+        socket
+        |> refresh_presets()
+        |> put_flash(:info, gettext("%{name} goes back to the kit's default.", name: entry.name))
+
+      {:ok, _value} ->
+        socket
+        |> refresh_presets()
+        |> put_flash(
+          :info,
+          gettext("Every %{name} placed here will start this way.", name: entry.name)
+        )
+
+      {:error, reason} ->
+        put_flash(socket, :error, human(reason))
+
+      nil ->
+        socket
     end
   end
 
@@ -6712,6 +6913,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         current_user={@current_user}
         code_focus={@code_focus}
         retagged={@retagged}
+      />
+      <Panels.examples_modal
+        :if={examples_entry(assigns)}
+        entry={examples_entry(assigns)}
+        token={@token}
+        example_index={@example_index}
+        example_device={@example_device}
+        example_tab={@example_tab}
+        wizard={@wizard}
+        site_name={@editor.site_name}
+        components={@editor.components}
+        preset?={Presets.get(@editor.site_id, examples_entry(assigns).name) != %{}}
       />
       <%!-- ONE menu for both surfaces. The layers rail right-clicks into it directly; the canvas is a
             frame with none of this stylesheet, so it forwards its right-clicks here rather than

@@ -164,6 +164,15 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     render_click(view, "apply_stage", %{})
   end
 
+  # THE MODAL OPENS BEFORE ITS EXAMPLES ARE CURATED (`assign_async(:examples, …)` in
+  # `show_examples`), so a test that inserts, picks or reads a variant straight after the click is
+  # racing that read — and on a busy run loses it: `insert_example` finds no example at its index and
+  # quietly inserts nothing. Awaited once, here.
+  defp show_examples!(view, name) do
+    render_click(view, "show_examples", %{"name" => name})
+    render_async(view)
+  end
+
   defp undo!(view), do: more!(view, "#pb-undo")
   defp redo!(view), do: more!(view, "#pb-redo")
 
@@ -361,6 +370,9 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   end
 
   defp token(view), do: :sys.get_state(view.pid).socket.assigns.token
+
+  defp example_path(token, name, index),
+    do: "/admin/dashboard/runtime/builder-canvas/#{token}/example/#{name}/#{index}"
 
   # An element's own opening tag, for asserting on ITS classes rather than its children's.
   defp opening_tag(html), do: html |> String.split(">", parts: 2) |> hd()
@@ -1128,6 +1140,50 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert assigns[:admin_css]
       assert assigns[:admin_fonts]
       assert assigns[:live_tailwind]
+    end
+
+    # A heroicon is a CLASS with no glyph in the markup — `<span class="hero-wrench-screwdriver">`
+    # and a CSS mask. The canvas emits the rules for the icons it is about to render, and it derived
+    # them from the tree in the EDITING session, then let the preview swap the tree without swapping
+    # the rules. So an example's icon appeared only when the page underneath happened to use the
+    # same one: `chelekom-alert`'s maintenance example asks for `hero-wrench-screwdriver`, the page
+    # did not, and the reader saw a blank space beside the heading with the class sitting there in
+    # the code pane.
+    test "an example's own icons get their rules, not the edited page's", %{
+      conn: conn,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "iconic",
+        template: "<div><span class={@icon}></span>{render_slot(@inner_block)}</div>",
+        attrs: [%{"name" => "icon", "type" => "string", "opts" => %{}}],
+        slots: [%{"name" => "inner_block", "opts" => %{}, "attrs" => []}],
+        extra: %{
+          "examples" => [
+            %{
+              "source" =>
+                ~s(<.component component_name="iconic" site="#{site.name}" icon="hero-wrench-screwdriver">Hi</.component>)
+            }
+          ]
+        }
+      )
+
+      # The page uses a DIFFERENT icon, so nothing about it can supply the example's rule.
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.component component_name="iconic" site="#{site.name}" icon="hero-bell">Page</.component></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, _canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}?name=iconic&index=0")
+
+      assert html =~ "hero-wrench-screwdriver{",
+             "the example's icon class was rendered with no rule behind it"
     end
 
     # The icon control is a COMBOBOX: the catalogue suggests, it does not gate. It can only ever hold
@@ -2818,6 +2874,328 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert is_nil(:sys.get_state(view.pid).socket.assigns.icon_library)
     end
 
+    # The examples modal answers "show me one the kit already wrote". The wizard answers the other
+    # question — "give me THIS one" — from the component's own option lists.
+    test "the wizard composes a component from its options and inserts it", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "wizardly",
+        template: "<div class={color_variant(@variant, @kind)}>{render_slot(@inner_block)}</div>",
+        attrs: [
+          %{"name" => "variant", "type" => "string", "opts" => %{"default" => "default"}},
+          %{"name" => "kind", "type" => "string", "opts" => %{"default" => "natural"}}
+        ],
+        slots: [%{"name" => "inner_block", "opts" => %{}, "attrs" => []}],
+        helpers: [
+          %{
+            "name" => "color_variant",
+            "code" => "defp color_variant(_, _), do: nil",
+            # `natural` is in the colour list because a real kit's colour axis contains its own
+            # attribute's default — alert's `kind` defaults to `natural` and the axis lists all
+            # thirteen. A fixture that leaves it out is testing a shape no kit ships, and the
+            # plausibility guard in `pair_leftovers/3` reads exactly that fact to tell a real
+            # `color` → `kind` from the generator axis it refuses on `divider`.
+            "discriminators" => [
+              %{"axis" => "variant", "values" => ["default", "outline"]},
+              %{"axis" => "color", "values" => ["natural", "primary", "danger"]}
+            ]
+          }
+        ],
+        extra: %{
+          "examples" => [
+            %{"source" => ~s(<.component component_name="wizardly" site="#{site.name}"/>)}
+          ]
+        }
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "wizardly")
+      assert has_element?(view, "#pb-example-tab-wizard")
+
+      view |> element("#pb-example-tab-wizard") |> render_click()
+
+      # Every axis the component declares, including the colour one whose helper parameter is named
+      # `color` while the attribute is `kind`.
+      assert has_element?(view, "#pb-wizard-variant-outline")
+      assert has_element?(view, "#pb-wizard-kind-danger")
+
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "outline"})
+      render_click(view, "wizard_pick", %{"name" => "kind", "value" => "danger"})
+
+      # The choices reach the SESSION, because the preview is a second LiveView in an iframe.
+      assert view |> editor() |> Map.fetch!(:wizard) == %{
+               "variant" => "outline",
+               "kind" => "danger"
+             }
+
+      # The code pane shows exactly what Insert will place.
+      html = render(view)
+      assert html =~ "variant=&quot;outline&quot;"
+      assert html =~ "kind=&quot;danger&quot;"
+
+      render_click(view, "insert_wizard", %{})
+
+      placed = component_node(view, "wizardly")
+      assert Node.attr_text(placed, "variant") == "outline"
+      assert Node.attr_text(placed, "kind") == "danger"
+
+      # …and it is an ordinary node: on the history, undoable like anything else.
+      assert view |> editor() |> Map.fetch!(:past) != []
+    end
+
+    # THE CHOICES LIVE IN TWO PLACES, because the preview is a second LiveView: the socket renders
+    # the controls and the SESSION is what the iframe can read. Every clearing point cleared one of
+    # them, so a variant picked for one component survived the modal that made it — into the next
+    # component's wizard, and into a preview still composing from choices nobody could see.
+    test "closing the wizard lets go of the choices in both places", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      wizardly!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "wizardly")
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "outline"})
+
+      assert view |> editor() |> Map.fetch!(:wizard) == %{"variant" => "outline"}
+
+      render_click(view, "close_examples", %{})
+
+      assert view |> editor() |> Map.fetch!(:wizard) == %{},
+             "the session kept choices the closed modal made"
+
+      assert :sys.get_state(view.pid).socket.assigns.wizard == %{}
+    end
+
+    test "and inserting from it does too", %{conn: conn, page: page, site: site} do
+      wizardly!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "wizardly")
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "outline"})
+      render_click(view, "insert_wizard", %{})
+
+      assert view |> editor() |> Map.fetch!(:wizard) == %{},
+             "the session kept the choices an insert had already spent"
+    end
+
+    test "and opening another component's wizard starts from that component", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      wizardly!(site)
+      create_component!(site_id: site.id, name: "plainly", template: "<div>plain</div>")
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "wizardly")
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "outline"})
+      render_click(view, "close_examples", %{})
+
+      show_examples!(view, "plainly")
+
+      assert view |> editor() |> Map.fetch!(:wizard) == %{},
+             "one component's picks were carried into another component's wizard"
+    end
+
+    # THE PALETTE CARD AND THE WIZARD MUST AGREE. A preset is what a DRAG of this component places,
+    # and the wizard opened on the kit's defaults instead — so the preview showed one thing, the
+    # card placed another, and "make this the default" saved only what the reader had re-picked,
+    # quietly dropping the rest of a preset they never meant to change.
+    test "the wizard opens on this component's stored preset", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      wizardly!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "wizardly")
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "outline"})
+      render_click(view, "save_preset", %{})
+      render_click(view, "close_examples", %{})
+
+      show_examples!(view, "wizardly")
+
+      assert view |> editor() |> Map.fetch!(:wizard) == %{"variant" => "outline"},
+             "the wizard opened on the kit's default while a drag would place the preset"
+    end
+
+    defp wizardly!(site) do
+      create_component!(
+        site_id: site.id,
+        name: "wizardly",
+        template: "<div class={color_variant(@variant, @kind)}>{render_slot(@inner_block)}</div>",
+        attrs: [
+          %{"name" => "variant", "type" => "string", "opts" => %{"default" => "default"}},
+          %{"name" => "kind", "type" => "string", "opts" => %{"default" => "natural"}}
+        ],
+        slots: [%{"name" => "inner_block", "opts" => %{}, "attrs" => []}],
+        helpers: [
+          %{
+            "name" => "color_variant",
+            "code" => "defp color_variant(_, _), do: nil",
+            "discriminators" => [
+              %{"axis" => "variant", "values" => ["default", "outline"]},
+              %{"axis" => "color", "values" => ["natural", "primary", "danger"]}
+            ]
+          }
+        ],
+        extra: %{
+          "examples" => [
+            %{"source" => ~s(<.component component_name="wizardly" site="#{site.name}"/>)}
+          ]
+        }
+      )
+    end
+
+    test "the wizard's preview canvas renders the composed component", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      # The options are declared on the attributes here rather than mined from a helper: this test is
+      # about the preview canvas rendering what the wizard composed, and a helper that fails to
+      # compile would fail it for an unrelated reason.
+      # The canvas renders a component through its COMPILED module, which a database row alone does
+      # not produce inside a test.
+      define_component!("previewable", site, "<div>previewed alert</div>")
+
+      create_component!(
+        site_id: site.id,
+        name: "previewable",
+        template: "<div class={@variant}>previewed alert</div>",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "default", "values" => ["default", "outline"]}
+          }
+        ]
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "outline"})
+
+      {:ok, canvas, html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}/wizard/previewable")
+
+      assert html =~ "previewed alert"
+      refute has_element?(canvas, "#pb-preview-bar")
+    end
+
+    # THE WIZARD LIVED BEHIND A DOOR WITH NO HANDLE. The badge that opens this modal was gated on
+    # `has_examples?` — a calculation over `extra.examples` / `extra.demo_examples` — and the Wizard
+    # tab is inside it. A kit shipping good `attrs` and no `extra` got a perfect palette tile, no
+    # badge, and therefore no option pickers, no live preview and no Insert.
+    test "a component with options but no examples still gets the badge", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "optiony",
+        template: "<div class={@variant}>x</div>",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "default", "values" => ["default", "outline"]}
+          }
+        ],
+        extra: %{}
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      entry = Enum.find(editor(view).components, &(&1.name == "optiony"))
+
+      refute entry[:has_examples?], "this component deliberately ships no examples"
+      assert entry[:offers_options?], "but it does declare an option list"
+
+      assert has_element?(view, "[phx-value-name=optiony][data-role=pb-variantbtn]"),
+             "the badge is the only way to reach the Wizard"
+    end
+
+    # Landing a reader on an empty Examples tab would be a worse door than the one they could not
+    # open before.
+    test "a component with only options opens on the Wizard tab", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "wizardonly",
+        template: "<div class={@variant}>x</div>",
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "default", "values" => ["default", "outline"]}
+          }
+        ],
+        extra: %{}
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "wizardonly")
+
+      assert :sys.get_state(view.pid).socket.assigns.example_tab == :wizard
+    end
+
+    test "a component with examples still opens on Examples", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "exampley",
+        template: "<div>x</div>",
+        extra: %{
+          "examples" => [
+            %{"source" => ~s(<.component component_name="exampley" site="#{site.name}"/>)}
+          ]
+        }
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "exampley")
+
+      assert :sys.get_state(view.pid).socket.assigns.example_tab == :examples
+    end
+
+    test "a component with no option lists gets no wizard tab", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      create_component!(
+        site_id: site.id,
+        name: "plainly",
+        attrs: [%{"name" => "title", "type" => "string", "opts" => %{}}],
+        extra: %{
+          "examples" => [
+            %{"source" => ~s(<.component component_name="plainly" site="#{site.name}"/>)}
+          ]
+        }
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "plainly")
+
+      refute has_element?(view, "#pb-example-tab-wizard")
+    end
+
     # A NUMBER WRITTEN AS A STRING IS NOT A NUMBER. The stepper wrote `value="45"` onto an attribute
     # the kit declares `:integer`, which is a type error where Phoenix checks it and arithmetic on a
     # binary where it does not — a progress bar set to 45 drew a bare track and a section drew 0%,
@@ -4034,6 +4412,39 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       # On a Page it then arrives working (spec 4.4): its own page assign, `:let` and names.
       assert Node.attr(placed_contact(view), "for") == {:expr, "assigns[:form_form]"}
       assert Node.attr(placed_contact(view), ":let") == {:expr, "f"}
+    end
+
+    test "and inserted from its wizard the same way", %{conn: conn, page: page, site: site} do
+      acme_forms!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "acme-contact")
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "boxed"})
+
+      assert has_element?(view, "#pb-example-code-body", "for={%{}}")
+
+      render_click(view, "insert_wizard", %{})
+
+      assert Node.attr(placed_contact(view), "for") == {:expr, "assigns[:form_form]"}
+      assert Node.attr_text(placed_contact(view), "variant") == "boxed"
+    end
+
+    test "and previewed from its wizard the same way", %{conn: conn, page: page, site: site} do
+      acme_forms!(site)
+      define_component!("acme-contact", site, "<div>contact form</div>")
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, canvas, _html} =
+        live(conn, "/admin/dashboard/runtime/builder-canvas/#{token(view)}/wizard/acme-contact")
+
+      previewed = fn -> contact_in(:sys.get_state(canvas.pid).socket.assigns.tree) end
+
+      assert Node.attr(previewed.(), "for") == {:expr, "%{}"}
+
+      render_click(view, "wizard_pick", %{"name" => "variant", "value" => "boxed"})
+
+      assert Node.attr_text(previewed.(), "variant") == "boxed"
+      assert Node.attr(previewed.(), "for") == {:expr, "%{}"}
     end
 
     test "Validation shows on a field bound to one of its form's keys", %{conn: conn, site: site} do
@@ -13018,6 +13429,233 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
                |> Kernel.=~("/admin/dashboard/runtime/builder/#{section}"),
                "#{path}'s main half must go straight to the editor"
       end
+    end
+  end
+
+  describe "the examples modal" do
+    setup %{site: site} do
+      create_component!(
+        site_id: site.id,
+        name: "promo-card",
+        extra: %{
+          "examples" => [
+            %{
+              "label" => "Base",
+              "base" => true,
+              "section" => nil,
+              "requires" => %{"components" => ["promo-title"]},
+              "source" =>
+                ~s(<.component component_name="promo-card" site="Global" variant="bordered" color="info"><h3>Deal</h3></.component>)
+            },
+            %{
+              "label" => "Filled",
+              "base" => false,
+              "section" => "Variants",
+              "requires" => %{},
+              # Furnished, like the Base one: curation now ranks an empty-bodied example below any
+              # with content and drops it when the component has better — see `Examples.substance/1`.
+              "source" =>
+                ~s(<.component component_name="promo-card" site="Global" variant="filled"><h3>Filled deal</h3></.component>)
+            }
+          ]
+        }
+      )
+
+      :ok
+    end
+
+    test "a component with examples shows a badge that opens the modal", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "promo-card")
+
+      html = render(view)
+      assert html =~ "pb-examples"
+      assert html =~ "2 variants"
+      assert html =~ "Base"
+      assert html =~ "Filled"
+      # It opens on the first variant, showing the preview rather than the source.
+      assert has_element?(view, "#pb-example-preview-0-desktop")
+      assert has_element?(view, "#pb-example-insert")
+      assert html =~ "also uses promo-title"
+    end
+
+    # §8: the old editor read only `ast[0][0]`, so an example's attributes and children never made
+    # it onto the page. The whole parsed subtree is inserted here.
+    test "inserting an example keeps its attributes AND its children", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "promo-card")
+      render_click(view, "insert_example", %{"index" => "0"})
+
+      tree = view |> editor() |> Map.fetch!(:tree)
+      inserted = tree |> Tree.walk() |> Enum.find(&(Node.component_name(&1) == "promo-card"))
+
+      assert Node.attr(inserted, "variant") == {:string, "bordered"}
+      assert Node.attr(inserted, "color") == {:string, "info"}
+      assert tree |> Tree.walk() |> Enum.any?(&(&1.tag == "h3"))
+    end
+
+    # Every kit example hardcodes site="Global"; on a tenant page that would bind the node to the
+    # wrong compiled module.
+    test "inserting an example rebinds site to this page's scope", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "promo-card")
+      render_click(view, "insert_example", %{"index" => "1"})
+
+      inserted =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "promo-card"))
+
+      assert Node.attr(inserted, "site") == {:string, "localhost"}
+      refute Node.attr(inserted, "site") == {:string, "Global"}
+    end
+
+    # The other half of the same rule: a GLOBAL component's module is hashed with "Global", so
+    # rebinding it to the page's site named a module nobody built and the canvas showed the runtime's
+    # red "failed to render" on every global component inserted from an example.
+    test "inserting a GLOBAL component's example leaves it bound to Global", %{
+      conn: conn,
+      page: page
+    } do
+      create_component!(
+        name: "kit-footer",
+        extra: %{
+          "examples" => [
+            %{
+              "label" => "Base",
+              "base" => true,
+              "source" => ~s(<.component component_name="kit-footer" site="Global" />)
+            }
+          ]
+        }
+      )
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "kit-footer")
+      render_click(view, "insert_example", %{"index" => "0"})
+
+      inserted =
+        view
+        |> editor()
+        |> Map.fetch!(:tree)
+        |> Tree.walk()
+        |> Enum.find(&(Node.component_name(&1) == "kit-footer"))
+
+      assert Node.attr(inserted, "site") == {:string, "Global"}
+    end
+
+    test "the inserted example survives a save", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      show_examples!(view, "promo-card")
+      render_click(view, "insert_example", %{"index" => "0"})
+      publish!(view)
+
+      {:ok, reloaded} =
+        Ash.get(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert reloaded.template =~ ~s(variant="bordered")
+      assert reloaded.template =~ ~s(site="localhost")
+      assert reloaded.template =~ "Deal"
+    end
+
+    # The modal is a chooser, not a source dump: picking a variant only changes what the preview
+    # renders, and nothing is inserted until Insert is pressed.
+    test "picking a variant moves the preview without touching the document", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+
+      show_examples!(view, "promo-card")
+      assert has_element?(view, "#pb-example-preview-0-desktop")
+
+      view |> element("#pb-example-1") |> render_click()
+      assert has_element?(view, "#pb-example-preview-1-desktop")
+      refute has_element?(view, "#pb-example-preview-0")
+
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
+    end
+
+    # A drawer under the preview, not a replacement for it: the source is the answer to a second
+    # question, and closing the picture to read it makes comparing the two impossible.
+    test "the Code drawer shows the source without hiding the preview", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "promo-card")
+
+      # The drawer is a fold the browser opens, so both are in the document at once — which is the
+      # point: reading the source must not close the picture.
+      assert has_element?(view, "#pb-example-code-body")
+      assert has_element?(view, "#pb-example-preview-0-desktop")
+      assert render(view) =~ "variant=&quot;bordered&quot;"
+    end
+
+    test "the device toggle narrows the stage to a phone width", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      show_examples!(view, "promo-card")
+
+      view |> element("#pb-example-device-mobile") |> render_click()
+
+      assert view |> element("#pb-example-preview-0-mobile") |> render() =~ "w-[320px]"
+    end
+
+    # The preview is drawn by the CANVAS in preview mode, in a document carrying the SITE's
+    # stylesheet — the admin's CSS would draw a different component than the site draws, and a second
+    # renderer would draw a different one than inserting produces.
+    test "the preview route renders the chosen example with the site's own CSS", %{
+      conn: conn,
+      page: page
+    } do
+      MishkaCmsCore.Runtime.States.AssetsState.save(%{
+        id: "__shared_base__",
+        type: "css",
+        value: ".from-shared-base{color:#123456}",
+        hash: "abc",
+        updated_at: DateTime.utc_now()
+      })
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, preview, body} = live(conn, example_path(token(view), "promo-card", 0))
+
+      # The same stylesheet the editing canvas gets, by the same cacheable URL — carried as the
+      # address here, because the `<link>` is the root layout's now. See the canvas tests.
+      assert css_hrefs(preview) == ["/assets/css/__shared_base__/abc"]
+      # The example's own subtree, resolved through the runtime the way the canvas resolves it.
+      assert body =~ ~s(data-component="promo-card")
+      # Preview mode: no drop tail, no element toolbar, no chrome stylesheet.
+      refute body =~ "pb-canvas-tail"
+      refute body =~ "pb-el-toolbar"
+
+      # And not the page preview's bar: an example is not the author's page, and its way back would
+      # toggle the editor's own preview from inside the modal.
+      refute has_element?(preview, "#pb-preview-bar")
+    end
+
+    test "an unknown example says so rather than crashing", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      {:ok, _preview, body} = live(conn, example_path(token(view), "promo-card", 99))
+
+      assert body =~ "no longer available"
+    end
+
+    test "closing the modal leaves the document untouched", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      before = view |> editor() |> Map.fetch!(:tree) |> Tree.size()
+
+      show_examples!(view, "promo-card")
+      render_click(view, "close_examples", %{})
+
+      refute render(view) =~ "pb-examples"
+      assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
     end
   end
 

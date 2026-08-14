@@ -55,6 +55,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Tokens
   alias MishkaCmsCore.Runtime.PageBuilder.Interactions
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
+  alias MishkaCmsCore.Runtime.PageBuilder.Wizard
+
   # The prototype's icon set, geometry and all. Ported rather than approximated: an icon drawn "close
   # enough" is the difference a reader notices first, and several of these are two or three shapes
   # (a camera lens, an eye's pupil, a duplicate's offset card) that a single path cannot express.
@@ -1894,6 +1896,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 </span>
                 <span class="line-clamp-2 w-full text-center text-[10.5px] font-semibold leading-[1.3] text-[#3a382f] [word-break:break-word]">
                   {short_label(entry, @kit_prefixes)}
+                </span>
+              </button>
+              <%!-- The examples affordance sits over the card's top-left corner rather than inside
+                    its flow, so a card with variants is the same size as one without. --%>
+              <button
+                :if={
+                  PaletteEntry.optional(entry, :has_examples?) ||
+                    PaletteEntry.optional(entry, :offers_options?)
+                }
+                type="button"
+                data-role="pb-variantbtn"
+                phx-click="show_examples"
+                phx-value-name={entry.name}
+                aria-label={gettext("Browse examples for %{name}", name: entry.name)}
+                title={gettext("Browse the example variants of this component")}
+                class="absolute left-px top-px grid size-6 place-items-center"
+              >
+                <span
+                  data-role="pb-variantdot"
+                  class="pointer-events-none grid size-[15px] place-items-center rounded-[4px] bg-[#fbf1df] font-['Space_Grotesk'] text-[10px] font-bold leading-none text-[#8a5514]"
+                >
+                  !
                 </span>
               </button>
               <%!-- NO `phx-click`. Starring is the browser's business from end to end — see
@@ -11280,6 +11304,418 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     </div>
     """
   end
+
+  @doc """
+  The examples modal: every variant the kit ships for a component, its source, and one button that
+  inserts the whole parsed subtree.
+
+  The kit carries roughly 3,000 of these. The old editor rendered twelve per component to build the
+  palette, used one, and dropped every attribute on insert; here nothing is pre-rendered and the
+  example arrives intact.
+  """
+  def examples_modal(assigns) do
+    assigns =
+      assigns
+      |> assign(:example, Enum.at(assigns.entry.examples, assigns.example_index))
+      |> assign(:docs_url, docs_url(assigns.entry))
+      |> assign(:wizard?, Wizard.offers?(assigns.entry))
+      |> assign_new(:preset?, fn -> false end)
+      |> assign_new(:components, fn -> [] end)
+
+    ~H"""
+    <div
+      id="pb-examples"
+      class="fixed inset-0 z-[90] flex items-center justify-center bg-[#17161a]/[.42] px-5 py-[5vh]"
+      phx-mounted={modal_in("#pb-examples > section")}
+      phx-remove={modal_out("#pb-examples > section")}
+      phx-window-keydown="close_examples"
+      phx-key="escape"
+    >
+      <%!-- A HEIGHT, not a maximum. With only `max-h` the modal was as tall as its content, so the
+            two tabs opened at different sizes: Examples listed six variants and filled the screen,
+            the Wizard listed three option rows and shrank to a strip with the preview squeezed into
+            what was left — the same component previewed at a third of the size depending on which
+            tab you were on. Fixed height, capped so it does not tower on a large monitor. --%>
+      <section
+        phx-click-away="close_examples"
+        class="flex h-[min(88vh,760px)] w-full max-w-[900px] flex-col overflow-hidden rounded-[18px] bg-white shadow-[0_30px_80px_rgba(20,18,26,.4)]"
+      >
+        <%!-- THE TITLE KEEPS ITS ROW. Docs and the tabs drop beneath it when both do not fit, and
+              the close button stays top-right, centred on the title's two lines. --%>
+        <header
+          data-role="modal-head"
+          class="flex flex-none items-start gap-2 border-b border-[#f0efea] px-5 py-3.5"
+        >
+          <div class="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2">
+            <div data-role="modal-head-title" class="min-w-0 flex-auto">
+              <h2 class="truncate font-['Space_Grotesk'] text-[14.5px] font-bold text-[#17161a]">
+                {@entry.name}
+              </h2>
+              <p class="mt-0.5 text-[10.5px] font-medium text-[#6d6a63]">
+                {(@example_tab == :wizard && gettext("Choose its options — the preview renders live")) ||
+                  gettext("Pick an example — the preview renders live")}
+              </p>
+            </div>
+
+            <div
+              :if={@docs_url || @wizard?}
+              data-role="modal-head-actions"
+              class="flex flex-wrap items-center gap-2"
+            >
+              <a
+                :if={@docs_url}
+                id="pb-example-docs"
+                href={@docs_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={gettext("Open this component's documentation")}
+                class="inline-flex h-[26px] flex-none items-center gap-1.5 rounded-[8px] border border-[#ecebe6] bg-white px-2.5 text-[10.5px] font-bold text-[#6d6a63] hover:border-[#dcdbf5] hover:text-[#4f4bcc]"
+              >
+                {gettext("Docs")} <.icon name={:external} size={11} />
+              </a>
+
+              <%!-- Two ways to get the same component onto the page: one the kit already wrote, or one
+                    built from its own options. They share the preview, the code pane and Insert. --%>
+              <div :if={@wizard?} class="flex flex-none rounded-[9px] bg-[#f2f1ec] p-0.5">
+                <button
+                  type="button"
+                  id="pb-example-tab-wizard"
+                  phx-click="example_tab"
+                  phx-value-tab="wizard"
+                  class={[
+                    "inline-flex h-[26px] items-center gap-1.5 rounded-[7px] px-[11px] text-[11px] font-bold",
+                    (@example_tab == :wizard &&
+                       "bg-white text-[#4f4bcc] shadow-[0_1px_2px_rgba(30,28,24,.12)]") ||
+                      "text-[#6d6a63]"
+                  ]}
+                >
+                  <.icon name={:sparkle} size={12} /> {gettext("Wizard")}
+                </button>
+                <button
+                  type="button"
+                  id="pb-example-tab-examples"
+                  phx-click="example_tab"
+                  phx-value-tab="examples"
+                  class={[
+                    "h-[26px] rounded-[7px] px-[11px] text-[11px] font-bold",
+                    (@example_tab == :examples &&
+                       "bg-white text-[#4f4bcc] shadow-[0_1px_2px_rgba(30,28,24,.12)]") ||
+                      "text-[#6d6a63]"
+                  ]}
+                >
+                  {gettext("Examples")}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            phx-click="close_examples"
+            title={gettext("Close")}
+            class="mt-[4.75px] grid size-[30px] flex-none place-items-center rounded-[9px] text-[#6d6a63] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+          >
+            <.icon name={:close} size={16} />
+          </button>
+        </header>
+
+        <%!-- ONE COLUMN on a phone. A 266px picker beside a preview leaves under 100px for the
+              preview on a 375px screen, which is narrower than the phone frame the device toggle
+              renders into. Stacked, the picker takes a third and the preview keeps the rest. --%>
+        <div class="grid min-h-0 flex-1 grid-cols-[266px_minmax(0,1fr)] max-[720px]:grid-cols-1! max-[720px]:grid-rows-[minmax(0,34%)_minmax(0,1fr)]!">
+          <%!-- Every variant the kit ships, named and described. Choosing one only changes what the
+                preview renders — nothing is inserted until Insert is pressed. --%>
+          <div
+            :if={@example_tab == :wizard}
+            class="flex min-h-0 flex-col gap-3 overflow-y-auto border-r border-[#f0efea] p-3 [scrollbar-width:none] max-[720px]:border-r-0! max-[720px]:border-b! [&::-webkit-scrollbar]:hidden"
+          >
+            <div :for={axis <- Wizard.axes(@entry)}>
+              <span class="mb-1.5 flex items-center gap-1.5">
+                <span class="min-w-0 flex-1 truncate text-[10.5px] font-bold text-[#3a382f]">
+                  {axis.label}
+                </span>
+                <span
+                  :if={@wizard[axis.name] not in [nil, ""]}
+                  class="flex-none font-['Space_Grotesk'] text-[9.5px] font-medium text-[#a8a5a0]"
+                >
+                  {@wizard[axis.name]}
+                </span>
+              </span>
+
+              <%!-- The panel's own rule: a short list reads as pills, a long one as a dropdown. --%>
+              <div :if={length(axis.values) <= 5} class="flex flex-wrap gap-1">
+                <button
+                  :for={value <- axis.values}
+                  type="button"
+                  id={"pb-wizard-#{axis.name}-#{value}"}
+                  phx-click="wizard_pick"
+                  phx-value-name={axis.name}
+                  value={value}
+                  class={[
+                    "h-[26px] flex-none rounded-[7px] border px-2.5 text-[10.5px] font-semibold",
+                    (@wizard[axis.name] == value && "border-[#dcdbf5] bg-[#f2f1fc] text-[#4f4bcc]") ||
+                      "border-[#ecebe6] bg-white text-[#6d6a63] hover:border-[#dcdbf5]"
+                  ]}
+                >
+                  {value}
+                </button>
+              </div>
+
+              <form
+                :if={length(axis.values) > 5}
+                id={"pb-wizard-form-#{axis.name}"}
+                phx-change="wizard_pick"
+                phx-submit="wizard_pick"
+              >
+                <input type="hidden" name="name" value={axis.name} />
+                <select
+                  id={"pb-wizard-select-#{axis.name}"}
+                  name="value"
+                  class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-medium text-[#3a382f]"
+                >
+                  <option value="">
+                    {(axis.default && gettext("%{value} (default)", value: axis.default)) ||
+                      gettext("— default —")}
+                  </option>
+                  <option
+                    :for={value <- axis.values}
+                    value={value}
+                    selected={@wizard[axis.name] == value}
+                  >
+                    {value}
+                  </option>
+                </select>
+              </form>
+            </div>
+
+            <button
+              type="button"
+              id="pb-wizard-reset"
+              phx-click="wizard_reset"
+              disabled={@wizard == %{}}
+              class="mt-1 h-[28px] flex-none rounded-[8px] border border-[#ecebe6] bg-white text-[10.5px] font-semibold text-[#6d6a63] hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:text-[#c9c7c1]"
+            >
+              {gettext("Back to the defaults")}
+            </button>
+          </div>
+
+          <div
+            :if={@example_tab == :examples}
+            class="flex min-h-0 flex-col gap-1.5 overflow-y-auto border-r border-[#f0efea] p-3 [scrollbar-width:none] max-[720px]:border-r-0! max-[720px]:border-b! [&::-webkit-scrollbar]:hidden"
+          >
+            <button
+              :for={{example, index} <- Enum.with_index(@entry.examples)}
+              type="button"
+              id={"pb-example-#{index}"}
+              phx-click="pick_example"
+              phx-value-index={index}
+              class={[
+                "flex flex-none items-center gap-[11px] rounded-[11px] border px-3 py-[11px] text-left hover:border-[#dcdbf5]",
+                (@example_index == index && "border-[#dcdbf5] bg-[#f2f1fc]") ||
+                  "border-[#ecebe6] bg-white"
+              ]}
+            >
+              <span class={[
+                "size-[15px] flex-none rounded-full border-2",
+                (@example_index == index && "border-[#5b57d6] bg-[#5b57d6]") || "border-[#6d6a63]"
+              ]}></span>
+              <span class="min-w-0 flex-1">
+                <span class={[
+                  "block truncate text-[12px] font-bold",
+                  (@example_index == index && "text-[#2e2b6b]") || "text-[#3a382f]"
+                ]}>
+                  {example.title}
+                </span>
+                <span class="mt-0.5 block line-clamp-2 text-[10.5px] font-medium leading-[1.4] text-[#6d6a63]">
+                  {example_note(example)}
+                </span>
+              </span>
+            </button>
+          </div>
+
+          <div class="flex min-h-0 min-w-0 flex-col">
+            <div class="flex flex-none items-center gap-[9px] border-b border-[#f4f3ee] bg-[#faf9f6] px-4 py-2.5">
+              <span class="text-[10px] font-bold uppercase tracking-[0.11em] text-[#6d6a63]">
+                {gettext("Preview")}
+              </span>
+              <span class="rounded-[5px] border border-[#e4e2f7] bg-[#f2f1fc] px-[7px] py-0.5 font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc]">
+                {preview_badge(@example_tab, @example, @example_index)}
+              </span>
+              <span class="flex-1"></span>
+              <%!-- The stage narrows to a phone width rather than scaling: the point is how the
+                    example reflows, and a scaled-down desktop render answers a different question. --%>
+              <div class="flex rounded-[8px] bg-[#efeee9] p-0.5">
+                <button
+                  :for={{device, label, glyph} <- example_devices()}
+                  type="button"
+                  id={"pb-example-device-#{device}"}
+                  phx-click="example_device"
+                  phx-value-device={device}
+                  title={label}
+                  class={[
+                    "grid h-6 w-7 place-items-center rounded-[6px]",
+                    (@example_device == device && "bg-white text-[#4f4bcc]") || "text-[#6d6a63]"
+                  ]}
+                >
+                  <.icon name={glyph} size={13} />
+                </button>
+              </div>
+            </div>
+
+            <%!-- The variant rendered by the canvas itself, in preview mode — same renderer, same
+                  inlined site stylesheet, so this is the component the insert would actually place. --%>
+            <div class="relative flex min-h-0 flex-1 justify-center overflow-y-auto bg-[#f6f5f2] px-5 py-6 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <.frame_pending
+                frame={preview_id(@example_tab, @example_index, @example_device, @wizard)}
+                label={gettext("Rendering the example…")}
+              />
+              <iframe
+                id={preview_id(@example_tab, @example_index, @example_device, @wizard)}
+                title={gettext("Example preview")}
+                src={preview_src(@example_tab, @token, @entry, @example_index)}
+                class={[
+                  "relative h-full max-w-full flex-none rounded-[12px] border-0 bg-white transition-[width] duration-200",
+                  example_stage_class(@example_device)
+                ]}
+              ></iframe>
+            </div>
+
+            <div class="flex-none border-t border-[#f0efea]">
+              <button
+                type="button"
+                id="pb-example-code"
+                phx-click={
+                  JS.toggle(to: "#pb-example-code-body")
+                  |> JS.toggle_class("is-open", to: "#pb-example-code")
+                }
+                class="flex w-full items-center gap-[9px] px-4 py-[11px] text-left hover:bg-[#faf9f6]"
+              >
+                <.icon name={:code} size={13} />
+                <span class="text-[11.5px] font-bold text-[#3a382f]">{gettext("Code")}</span>
+                <span class="font-['Space_Grotesk'] text-[10.5px] font-medium text-[#6d6a63]">heex</span>
+                <span class="flex-1"></span>
+                <.icon name={:chevron_up} size={14} class="[.is-open_&]:rotate-180" />
+              </button>
+              <pre
+                id="pb-example-code-body"
+                data-accent-panel
+                class="m-0 hidden max-h-[150px] overflow-auto bg-[#17161a] px-4 py-3.5 font-['Space_Grotesk'] text-[11.5px] leading-[1.7] text-[#c9c7d1] [overflow-wrap:anywhere] [scrollbar-width:none] whitespace-pre-wrap [&::-webkit-scrollbar]:hidden [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)] [[data-theme=dark]_&]:!bg-[#141317] [[data-theme=dark]_&]:!border-[#232228]"
+              >{preview_code(@example_tab, @example, @entry, @wizard, @site_name, @components)}</pre>
+            </div>
+          </div>
+        </div>
+
+        <footer class="flex flex-none items-center gap-2 border-t border-[#f0efea] px-5 py-3">
+          <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10px] font-medium text-[#6d6a63]">
+            {(@example_tab == :wizard &&
+                ngettext("%{count} option", "%{count} options", length(Wizard.axes(@entry)))) ||
+              ngettext("%{count} variant", "%{count} variants", length(@entry.examples))}
+          </span>
+          <%!-- WHAT THIS COMPONENT SHOULD START AS, on this site. A kit ships one default for
+                everyone; a site almost always has its own, and without somewhere to say so it is
+                retyped in the inspector after every single drop. It sits beside Insert because this
+                is the one screen where the choices are already made — see
+                `MishkaCmsCore.Runtime.PageBuilder.Presets`. --%>
+          <button
+            :if={@example_tab == :wizard}
+            type="button"
+            id="pb-example-default"
+            phx-click="save_preset"
+            title={
+              gettext("Every %{name} placed on this site will start with these options",
+                name: @entry.name
+              )
+            }
+            class="inline-flex h-8 flex-none items-center gap-[7px] rounded-[9px] border border-[#dcdbf5] bg-[#f2f1fc] px-3 text-[11.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+          >
+            <.icon name={:star} size={13} />
+            {(@preset? && gettext("Update the default")) || gettext("Make this the default")}
+          </button>
+          <button
+            :if={@example_tab == :wizard and @preset?}
+            type="button"
+            id="pb-example-default-clear"
+            phx-click="clear_preset"
+            title={gettext("Go back to the kit's own default")}
+            class="grid size-8 flex-none place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#6d6a63] hover:bg-[#f6f5f2]"
+          >
+            <.icon name={:close} size={13} />
+          </button>
+          <button
+            type="button"
+            phx-click="close_examples"
+            class="h-8 flex-none rounded-[9px] border border-[#ecebe6] bg-white px-3 text-[11.5px] font-semibold text-[#5c5a54] hover:bg-[#f6f5f2]"
+          >
+            {gettext("Cancel")}
+          </button>
+          <button
+            type="button"
+            id="pb-example-insert"
+            phx-click={(@example_tab == :wizard && "insert_wizard") || "insert_example"}
+            phx-value-index={@example_index}
+            class="inline-flex h-8 flex-none items-center gap-[7px] rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-3 text-[11.5px] font-bold text-white"
+          >
+            <.icon name={:plus} size={14} />
+            {(@example_tab == :wizard && gettext("Insert component")) || gettext("Insert example")}
+          </button>
+        </footer>
+      </section>
+    </div>
+    """
+  end
+
+  # The examples pane keeps its stable id. The wizard's carries a hash of the choices, because
+  # LiveView reuses an iframe with an unchanged id and the whole point of a pick is that the preview
+  # re-renders.
+  # STABLE across option changes. Hashing the wizard state into the id gave LiveView a different
+  # element on every click, so it destroyed the iframe and built a new one — a fresh document load,
+  # visible as a flash of half-painted frame. The preview inside subscribes to the session instead.
+  defp preview_id(:wizard, _index, device, _wizard), do: "pb-wizard-preview-#{device}"
+
+  defp preview_id(_tab, index, device, _wizard), do: "pb-example-preview-#{index}-#{device}"
+
+  defp preview_src(:wizard, token, entry, _index),
+    do: "/admin/dashboard/runtime/builder-canvas/#{token}/wizard/#{entry.name}"
+
+  defp preview_src(_examples, token, entry, index),
+    do: "/admin/dashboard/runtime/builder-canvas/#{token}/example/#{entry.name}/#{index}"
+
+  defp preview_badge(:wizard, _example, _index), do: gettext("Your options")
+  defp preview_badge(_tab, nil, index), do: gettext("Example %{number}", number: index + 1)
+  defp preview_badge(_tab, example, _index), do: example.title
+
+  defp preview_code(:wizard, _example, entry, wizard, site_name, components),
+    do: Wizard.compose(entry, wizard, site_name, :blank, components)
+
+  defp preview_code(_tab, example, _entry, _wizard, _site_name, _components),
+    do: example && example.source
+
+  # Desktop or phone width. The prototype offers these two and no more: a tablet column would show
+  # the same reflow as one of them for almost every kit component.
+  defp example_devices,
+    do: [{"desktop", gettext("Desktop"), :desktop}, {"mobile", gettext("Mobile"), :mobile}]
+
+  defp example_stage_class("mobile"), do: "w-[320px]"
+  defp example_stage_class(_device), do: "w-full"
+
+  # An example's own words when it has them, otherwise what it demonstrates — never a blank line. A
+  # variant that pulls in another component says so, because inserting it brings that one too.
+  # `Examples` already says what an example demonstrates; this adds the two things it cannot know
+  # from the markup alone — that the preview is a real usage from the kit's docs, and what else has
+  # to be installed for it to render.
+  defp example_note(example) do
+    [example.description, composed_note(example), requires(example)]
+    |> Enum.reject(&(is_nil(&1) or &1 == ""))
+    |> Enum.join(" · ")
+  end
+
+  defp composed_note(%{composed?: true}), do: gettext("from the kit's docs")
+  defp composed_note(_example), do: nil
+
+  defp requires(%{requires: %{"components" => [_ | _] = components}}),
+    do: gettext("also uses %{components}", components: Enum.join(components, ", "))
+
+  defp requires(_example), do: nil
 
   @doc "The overlay sheets — Studio, Assets, Review and Record history."
   def sheet(assigns) do
