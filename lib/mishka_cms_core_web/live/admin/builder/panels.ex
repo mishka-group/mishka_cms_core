@@ -23,6 +23,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.PaletteEntry
   alias Phoenix.LiveView.JS
+  alias MishkaCmsCore.Runtime.PageBuilder.AiBackend
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.CodeFlags
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
@@ -50,6 +51,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.PageBuilder.Demo
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Runtime.PageBuilder.Tokens
@@ -429,6 +431,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   def core_rails do
     [
       descriptor("layers", :rail_tab, gettext_noop("Layers"), 10, icon: "layers"),
+      descriptor("assistant", :rail_tab, gettext_noop("Assistant"), 20, icon: "sparkle"),
     ]
   end
 
@@ -8708,6 +8711,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:tree, :any, required: true)
   attr(:selection, :string, default: nil)
   attr(:expanded, :any, required: true)
+  attr(:selected_node, :any, default: nil)
+  attr(:ai_messages, :list, default: [])
+  attr(:ai_prompt, :string, default: "")
+  attr(:ai_backend, :any, default: nil)
+  attr(:ai_attachment, :any, default: nil)
   # `record` is read by `.audit`, which derives its findings from the document and the row, and by
   # `.layers`, whose `.interface` group is a view of two of that row's columns. `section` says which
   # kind of document this is, which is the only thing that decides whether that group exists at all.
@@ -8780,6 +8788,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         record={@record}
         section={@section}
         current_user={@current_user}
+      />
+      <.assistant
+        :if={@right_tab == :assistant}
+        ai_messages={@ai_messages}
+        ai_prompt={@ai_prompt}
+        ai_backend={@ai_backend}
+        ai_attachment={@ai_attachment}
+        selected_node={@selected_node}
       />
 
       <%!-- AND WHATEVER AN EXTENSION ADDED. The three above are the core's own rails and stay
@@ -9636,6 +9652,362 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       />
     </div>
     """
+  end
+
+  defp assistant(assigns) do
+    ~H"""
+    <div class="flex min-h-0 flex-1 flex-col">
+      <%!-- Who you are talking to, what it has already done, and how it is connected — the three
+            things worth knowing before typing. --%>
+      <div data-role="pb-aichrome" class="flex-none border-b border-[#f0efea] px-3.5 pb-2.5 pt-3.5">
+        <div class="flex items-center gap-[9px]">
+          <span class="grid size-7 flex-none place-items-center rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] text-white">
+            <.icon name={:bolt} size={15} />
+          </span>
+          <div class="min-w-0">
+            <div class="text-[12.5px] font-bold text-[#17161a]">{gettext("AI Assistant")}</div>
+            <div class="truncate text-[10px] font-medium text-[#6d6a63]">{@ai_backend}</div>
+          </div>
+        </div>
+
+        <div class="mt-[11px] flex items-center gap-2 rounded-[10px] border border-[#f0efea] bg-[#faf9f6] px-[9px] py-[7px]">
+          <.icon name={:history} size={13} class="flex-none text-[#6d6a63]" />
+          <span class="text-[10.5px] font-bold text-[#3a382f]">
+            {ngettext(
+              "%{count} revision",
+              "%{count} revisions",
+              ai_revision_count(ai_thread(@ai_messages))
+            )}
+          </span>
+          <span class="flex-1"></span>
+          <span class="text-[9.5px] font-semibold text-[#6d6a63]">{gettext("autosaved")}</span>
+        </div>
+
+        <button
+          type="button"
+          id="pb-ai-advanced"
+          phx-click={
+            JS.toggle(to: "#pb-ai-advanced-body")
+            |> JS.toggle_class("is-open", to: "#pb-ai-advanced")
+          }
+          class="mt-[7px] flex w-full items-center gap-2 rounded-[9px] px-[9px] py-[7px] hover:bg-[#f2f1fc]"
+        >
+          <.icon name={:link} size={13} class="flex-none text-[#6d6a63]" />
+          <span class="min-w-0 flex-1 text-left text-[10px] font-bold uppercase tracking-[0.05em] text-[#6d6a63]">
+            {gettext("Advanced settings")}
+          </span>
+          <span class={[
+            "rounded-[20px] px-2 py-0.5 text-[10px] font-bold",
+            (AiBackend.connected?() && "bg-[#e6f6ee] text-[#177a53]") || "bg-[#f4f3ef] text-[#6d6a63]"
+          ]}>
+            {(AiBackend.connected?() && gettext("Connected")) || gettext("Not connected")}
+          </span>
+          <.icon
+            name={:chevron}
+            size={12}
+            class="flex-none rotate-90 text-[#a8a5a0] [.is-open_&]:-rotate-90"
+          />
+        </button>
+
+        <div
+          id="pb-ai-advanced-body"
+          class="mt-1.5 hidden rounded-[11px] border border-[#e4e2f7] bg-[#faf9ff] px-[11px] py-2.5"
+        >
+          <div class="flex items-center gap-[7px]">
+            <span class={[
+              "size-1.5 flex-none rounded-full",
+              (AiBackend.connected?() && "bg-[#1f9d6b]") || "bg-[#a8a5a0]"
+            ]} />
+            <span class="min-w-0 flex-1 text-[10.5px] font-semibold text-[#3a382f]">
+              {@ai_backend}
+            </span>
+          </div>
+          <p class="mt-2 text-[9.5px] font-medium leading-[1.5] text-[#6d6a63]">
+            {AiBackend.adapter_note()}
+          </p>
+        </div>
+      </div>
+
+      <%!-- The thread. A reply that changed the document carries its revision, so it can be rolled
+            back from where it was made rather than from a separate history list. --%>
+      <div
+        id="pb-ai-thread"
+        data-role="pb-thread"
+        class="flex min-h-0 flex-1 flex-col gap-2.5 overflow-y-auto p-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <p
+          :if={ai_thread(@ai_messages) == []}
+          class="text-[11.5px] font-medium leading-[1.55] text-[#5c5a54]"
+        >
+          {gettext(
+            "I can edit this page for you — describe a change, or select an element and use “Ask AI” to scope it."
+          )}
+        </p>
+
+        <div
+          :for={{message, index} <- Enum.with_index(ai_thread(@ai_messages))}
+          id={"pb-ai-msg-#{index}"}
+          class={[
+            "flex items-start gap-2",
+            (message.role == :user && "flex-row-reverse") || "flex-row"
+          ]}
+        >
+          <span class={[
+            "grid size-[26px] flex-none place-items-center rounded-full font-['Space_Grotesk'] text-[9.5px] font-bold text-white",
+            (message.role == :user && "bg-[#5b57d6]") ||
+              "bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)]"
+          ]}>
+            {ai_initials(message)}
+          </span>
+
+          <div class={[
+            "max-w-[82%] rounded-[12px] border px-2.5 py-2",
+            (message.role == :user && "border-[#e4e2f7] bg-[#f2f1fc]") || "border-[#f0efea] bg-white"
+          ]}>
+            <div class="mb-[5px] flex items-center gap-[7px]">
+              <span class={[
+                "text-[10px] font-bold",
+                (message.role == :user && "text-[#2e2b6b]") || "text-[#4f4bcc]"
+              ]}>
+                {ai_sender(message)}
+              </span>
+              <span
+                :if={message.scope}
+                class="rounded-[5px] bg-[#f4f3ef] px-1.5 py-0.5 font-['Space_Grotesk'] text-[9px] font-bold text-[#6d6a63]"
+              >
+                {message.scope}
+              </span>
+            </div>
+
+            <%!-- What was sent with the question, named. The prototype shows a screenshot chip; this
+                  shows what actually travelled. --%>
+            <div
+              :if={message[:attachment]}
+              class="mb-[7px] flex items-center gap-[7px] rounded-[8px] bg-[#5b57d6]/[.10] px-2 py-1.5"
+            >
+              <.icon name={:paperclip} size={12} class="flex-none text-[#4f4bcc]" />
+              <span class="min-w-0 truncate font-['Space_Grotesk'] text-[10px] font-semibold text-[#4f4bcc]">
+                {message[:attachment]}
+              </span>
+            </div>
+
+            <div class="text-[12px] font-medium leading-[1.55] text-[#3a382f]">{message.text}</div>
+
+            <div
+              :if={message[:revision]}
+              class="mt-[9px] flex items-center gap-2 border-t border-[#f0efea] pt-[9px]"
+            >
+              <span class="flex-none rounded-[5px] bg-[#f2f1fc] px-1.5 py-0.5 font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc]">
+                {message.revision}
+              </span>
+              <span class="min-w-0 flex-1 truncate text-[9.5px] font-medium text-[#6d6a63]">
+                {message[:revision_note]}
+              </span>
+              <button
+                type="button"
+                id={"pb-ai-restore-#{index}"}
+                phx-click="ai_restore"
+                phx-value-index={index}
+                title={gettext("Roll back to this revision")}
+                class="inline-flex h-[23px] flex-none items-center gap-[5px] rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#5c5a54] hover:border-[#c3c1f0] hover:text-[#4f4bcc]"
+              >
+                <.icon name={:undo} size={10} /> {gettext("Restore")}
+              </button>
+            </div>
+
+            <div
+              :if={message[:plain]}
+              class="mt-[7px] text-[10.5px] font-medium leading-[1.55] text-[#6d6a63]"
+            >
+              {message[:plain]}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div data-role="pb-composer" class="flex-none border-t border-[#f0efea] px-3.5 pb-3.5 pt-3">
+        <%!-- Starter phrasings. They fill the box rather than sending, so the wording stays the
+              author's to adjust. --%>
+        <div
+          data-role="pb-chips"
+          id="pb-ai-chips"
+          phx-hook="PbDragScroll"
+          class="mb-[9px] flex cursor-grab select-none gap-[5px] overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        >
+          <button
+            :for={chip <- ai_chips()}
+            type="button"
+            phx-click="ai_chip"
+            phx-value-text={chip}
+            class="h-[26px] flex-none whitespace-nowrap rounded-[20px] border border-[#ecebe6] bg-white px-2.5 text-[10px] font-semibold text-[#6d6a63] hover:border-[#dcdbf5] hover:text-[#4f4bcc]"
+          >
+            {chip}
+          </button>
+        </div>
+
+        <.form
+          for={%{}}
+          as={:ai}
+          id="pb-ai-form"
+          phx-submit="ai_submit"
+          class="rounded-[13px] border border-[#ecebe6] bg-[#faf9f6] p-2.5 focus-within:border-[#c3c1f0] focus-within:bg-white"
+        >
+          <div
+            :if={@ai_attachment}
+            id="pb-ai-attachment"
+            class="mb-2 flex items-center gap-[7px] rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2 py-1.5"
+          >
+            <.icon name={:paperclip} size={12} class="flex-none text-[#4f4bcc]" />
+            <span class="min-w-0 flex-1 truncate font-['Space_Grotesk'] text-[10px] font-semibold text-[#4f4bcc]">
+              {@ai_attachment.label}
+            </span>
+            <button
+              type="button"
+              id="pb-ai-attachment-drop"
+              phx-click="drop_attachment"
+              title={gettext("Remove")}
+              class="grid size-4 flex-none place-items-center rounded-[5px] text-[#6d6a63] hover:text-[#c0473d]"
+            >
+              <.icon name={:close} size={11} />
+            </button>
+          </div>
+
+          <textarea
+            id="pb-ai-prompt"
+            name="prompt"
+            rows="2"
+            placeholder={
+              gettext("Describe a change — e.g. “add a testimonials section under the hero”")
+            }
+            class="min-h-[56px] w-full resize-none border-0 bg-transparent p-0 text-[12px] font-medium leading-[1.55] text-[#1b1a18] outline-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          >{@ai_prompt}</textarea>
+          <div class="mt-1.5 flex items-center gap-[7px]">
+            <%!-- Attach. Each item sends REAL context with the next prompt — the selected element's
+                  own markup, the whole template, or a file from the site's media library — because a
+                  model that is handed a picture of a screenshot and nothing else cannot act on it,
+                  and this editor already has the source. --%>
+            <div class="relative flex-none" phx-click-away={menu_close("#pb-ai-attach-menu")}>
+              <button
+                type="button"
+                id="pb-ai-attach"
+                phx-click={menu_toggle("#pb-ai-attach-menu")}
+                title={gettext("Attach")}
+                class="grid size-[30px] place-items-center rounded-[9px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+              >
+                <.icon name={:plus} size={16} />
+              </button>
+
+              <div
+                id="pb-ai-attach-menu"
+                phx-window-keydown={menu_close("#pb-ai-attach-menu")}
+                phx-key="escape"
+                class="absolute bottom-9 left-0 z-40 hidden w-[224px] rounded-[12px] border border-[#ecebe6] bg-white p-[5px] shadow-[0_16px_44px_rgba(20,18,26,.2)]"
+              >
+                <button
+                  type="button"
+                  id="pb-ai-attach-selection"
+                  phx-click={menu_close("#pb-ai-attach-menu") |> JS.push("attach")}
+                  phx-value-kind="selection"
+                  disabled={is_nil(@selected_node)}
+                  class="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2] disabled:cursor-not-allowed disabled:opacity-45"
+                >
+                  <.icon name={:frame} size={15} class="flex-none text-[#4f4bcc]" />
+                  <span>
+                    <span class="block text-[11.5px] font-semibold text-[#1b1a18]">
+                      {gettext("Capture selection")}
+                    </span>
+                    <span class="block text-[10px] font-medium text-[#6d6a63]">
+                      {gettext("Just the selected element")}
+                    </span>
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  id="pb-ai-attach-template"
+                  phx-click={menu_close("#pb-ai-attach-menu") |> JS.push("attach")}
+                  phx-value-kind="template"
+                  class="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
+                >
+                  <.icon name={:window} size={15} class="flex-none text-[#4f4bcc]" />
+                  <span>
+                    <span class="block text-[11.5px] font-semibold text-[#1b1a18]">
+                      {gettext("Capture template")}
+                    </span>
+                    <span class="block text-[10px] font-medium text-[#6d6a63]">
+                      {gettext("The whole page canvas")}
+                    </span>
+                  </span>
+                </button>
+                <span class="mx-1.5 my-1 block h-px bg-[#f0efea]"></span>
+                <button
+                  type="button"
+                  id="pb-ai-attach-file"
+                  phx-click={menu_close("#pb-ai-attach-menu") |> JS.push("attach")}
+                  phx-value-kind="file"
+                  class="flex w-full items-center gap-2.5 rounded-[9px] px-2.5 py-[9px] text-left hover:bg-[#f6f5f2]"
+                >
+                  <.icon name={:draft} size={15} class="flex-none text-[#4f4bcc]" />
+                  <span>
+                    <span class="block text-[11.5px] font-semibold text-[#1b1a18]">{gettext(
+                      "Add file"
+                    )}</span>
+                    <span class="block text-[10px] font-medium text-[#6d6a63]">
+                      {gettext("Image, HTML, or design spec")}
+                    </span>
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            <span class="inline-flex min-w-0 flex-1 items-center gap-1.5">
+              <span class="size-[5px] flex-none rounded-full bg-[#5b57d6]" />
+              <span class="truncate font-['Space_Grotesk'] text-[10.5px] font-semibold text-[#6d6a63]">
+                {(@selected_node && selection_tag(@selected_node)) || gettext("whole page")}
+              </span>
+            </span>
+            <button
+              id="pb-ai-send"
+              type="submit"
+              class="inline-flex h-[30px] flex-none items-center gap-1.5 rounded-[9px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-3 text-[11.5px] font-bold text-white"
+            >
+              <.icon name={:arrow_right} size={13} /> {gettext("Send")}
+            </button>
+          </div>
+        </.form>
+      </div>
+    </div>
+    """
+  end
+
+  # An empty thread shows the sample conversation when the demo flag is on; one real message and the
+  # session's own transcript is all that shows.
+  defp ai_thread([]), do: Demo.messages()
+  defp ai_thread(messages) when is_list(messages), do: messages
+
+  # The prototype's starter phrasings, as things this editor can actually be asked for.
+  defp ai_chips do
+    [
+      gettext("Make the header sticky"),
+      gettext("Add a testimonials section"),
+      gettext("Tighten the spacing"),
+      gettext("Improve the heading copy")
+    ]
+  end
+
+  defp ai_revision_count(messages),
+    do: Enum.count(messages, &(is_map(&1) and Map.get(&1, :revision)))
+
+  defp ai_sender(%{role: :user, author: author}) when is_binary(author), do: author
+  defp ai_sender(%{role: :user}), do: gettext("You")
+  defp ai_sender(_message), do: gettext("AI Assistant")
+
+  defp ai_initials(message) do
+    message
+    |> ai_sender()
+    |> String.split(~r/\s+/, trim: true)
+    |> Enum.map(&String.first/1)
+    |> Enum.take(2)
+    |> Enum.map_join(&String.upcase/1)
   end
 
   @doc "⌘K — actions first, then the admin routes to jump to."
@@ -14161,6 +14533,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       {"components", gettext("Components")},
       {"layers", gettext("Layers")},
       {"inspector", gettext("Inspector")},
+      {"assistant", gettext("Assistant")},
       {"assets", gettext("Assets")},
       {"studio", gettext("Studio")},
       {"palette", gettext("Search")},

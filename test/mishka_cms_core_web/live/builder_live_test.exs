@@ -374,6 +374,8 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
   defp example_path(token, name, index),
     do: "/admin/dashboard/runtime/builder-canvas/#{token}/example/#{name}/#{index}"
 
+  defp editor_messages(view), do: :sys.get_state(view.pid).socket.assigns.ai_messages
+
   # An element's own opening tag, for asserting on ITS classes rather than its children's.
   defp opening_tag(html), do: html |> String.split(">", parts: 2) |> hd()
 
@@ -5640,6 +5642,84 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert studio =~ "2"
     end
 
+    # Sample content must never stand in for real content, and must never claim to be a record you
+    # can act on. Both are checked here because the flag makes it easy to get wrong.
+    # THE RECORD IS NEVER SAMPLED. The other two panels show prototype content when they are empty,
+    # because an empty rail cannot be judged; the timeline does not, because a sample row there is
+    # indistinguishable from somebody's actual work and the button beside it offers to restore it.
+    test "the sample content never reaches the record", %{conn: conn, page: page} do
+      Application.put_env(:mishka_cms_core, :builder_demo_data, true)
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_demo_data) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "history"})
+
+      html = render_async(view)
+
+      assert html =~ "No changes recorded yet"
+      refute html =~ "Header made sticky"
+      refute html =~ "history_revert"
+
+      # And a real edit shows up as itself.
+      render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
+      _flushed = render_async(view)
+
+      assert render_async(view) =~ "Deleted element"
+    end
+
+    test "the sample thread yields to a real conversation", %{conn: conn, page: page} do
+      Application.put_env(:mishka_cms_core, :builder_demo_data, true)
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_demo_data) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+      assert render(view) =~ "Make the header sticky and reduce its height a bit"
+
+      view |> form("#pb-ai-form", %{"prompt" => "tighten the spacing"}) |> render_submit()
+
+      html = render(view)
+      refute html =~ "Make the header sticky and reduce its height a bit"
+      assert html =~ "tighten the spacing"
+    end
+
+    # The attach menu sends the SOURCE with the prompt, so each item has to produce something real.
+    test "Capture selection attaches the selected element's markup", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      view |> element("#pb-rail-assistant") |> render_click()
+
+      view |> element("#pb-ai-attach-selection") |> render_click()
+
+      assert has_element?(view, "#pb-ai-attachment")
+      assert render(view) =~ "&lt;h1&gt; ·"
+
+      view |> form("#pb-ai-form", %{"prompt" => "match this"}) |> render_submit()
+
+      # It travels with the message and the composer is clear again.
+      assert render(view) =~ "&lt;h1&gt; ·"
+      refute has_element?(view, "#pb-ai-attachment")
+    end
+
+    test "Capture template attaches the whole document", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+
+      view |> element("#pb-ai-attach-template") |> render_click()
+
+      assert render(view) =~ "whole template ·"
+    end
+
+    test "Add file opens the media library rather than a dead upload", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+
+      view |> element("#pb-ai-attach-file") |> render_click()
+
+      assert has_element?(view, "#pb-sheet")
+      assert render(view) =~ "Assets"
+    end
+
     # Every overlay had its click-away on the full-screen backdrop, where no click is ever "away".
     test "overlays carry click-away on the panel, not the backdrop", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
@@ -7120,6 +7200,16 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       refute render(canvas) =~ "calc(4px + 26px + 6px)",
              "preview draws no bar, so it keeps no band"
+    end
+
+    test "Ask AI and Comment open their rails in the chrome", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "open_rail", %{"action" => "ask_ai"})
+      assert render(view) =~ "Describe a change"
+
+      render_click(view, "open_rail", %{"action" => "comment"})
+      assert render(view) =~ "Commenting on"
     end
 
     # The canvas frame shows the author's own document and nothing else. An empty page still offers
@@ -8806,6 +8896,238 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert view |> editor() |> Map.fetch!(:tree) |> Tree.get(node.id) |> Map.fetch!(:attrs) ==
                before
+    end
+  end
+
+  describe "the assistant rail" do
+    test "sending a prompt reaches the backend and renders both turns", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+
+      assert has_element?(view, "#pb-ai-form")
+      assert render(view) =~ "Echo (no model configured)"
+
+      html =
+        view |> form("#pb-ai-form", %{"prompt" => "Make the header sticky"}) |> render_submit()
+
+      assert html =~ "Make the header sticky"
+      # The default backend must SAY it cannot act rather than fabricate an edit.
+      assert html =~ "No AI backend is configured"
+      assert html =~ "Nothing was changed"
+    end
+
+    test "the prompt is scoped to the selection", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      h1 = node_with_tag(view, "h1")
+      render_click(view, "select", %{"id" => h1.id})
+      view |> element("#pb-rail-assistant") |> render_click()
+
+      # The composer names the scope the way the prototype does — the tag in angle brackets.
+      assert render(view) =~ "&lt;h1&gt;"
+
+      html = view |> form("#pb-ai-form", %{"prompt" => "shorter"}) |> render_submit()
+      assert html =~ "h1"
+    end
+
+    test "an empty prompt does nothing", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+
+      view |> form("#pb-ai-form", %{"prompt" => "   "}) |> render_submit()
+      assert render(view) =~ "Describe a change"
+    end
+  end
+
+  describe "the assistant rail's chrome" do
+    setup %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+      %{view: view}
+    end
+
+    test "it names who is answering, how it is connected, and what it has done", %{view: view} do
+      html = render(view)
+
+      assert html =~ "AI Assistant"
+      assert html =~ "Echo (no model configured)"
+      assert html =~ "0 revisions"
+      # Claiming "Connected" while Echo answers would make its honest reply read as a malfunction.
+      assert html =~ "Not connected"
+      assert html =~ "Advanced settings"
+    end
+
+    # THE EXPLANATION IS ON THE PAGE, FOLDED. Nothing behind the disclosure needs this process, so
+    # the heading is a JS toggle of a body that shipped with the panel.
+    test "Advanced settings explains the backend, behind a fold the browser opens", %{view: view} do
+      assert render(view) =~ "No model is connected"
+      assert has_element?(view, "#pb-ai-advanced-body.hidden")
+      assert view |> element("#pb-ai-advanced") |> render() =~ "#pb-ai-advanced-body"
+    end
+
+    test "a chip fills the box rather than sending", %{view: view} do
+      html = render_click(view, "ai_chip", %{"text" => "Make the header sticky"})
+
+      assert html =~ "Make the header sticky"
+      # Nothing was asked — the wording stays the author's to adjust.
+      assert editor_messages(view) == []
+    end
+
+    test "both turns render with a sender and the scope", %{view: view} do
+      view |> form("#pb-ai-form", %{"prompt" => "Tighten the spacing"}) |> render_submit()
+
+      html = render(view)
+      assert html =~ "Tighten the spacing"
+      assert html =~ "boss"
+      assert html =~ "AI Assistant"
+    end
+
+    # Echo changes nothing, so it offers no Restore. A rollback button that rolls nothing back is
+    # worse than none — the prototype shows one on every turn because its transcript is a mock.
+    test "a reply that changed nothing offers no Restore", %{view: view} do
+      view |> form("#pb-ai-form", %{"prompt" => "Make it blue"}) |> render_submit()
+
+      refute has_element?(view, "#pb-ai-restore-1")
+      assert render(view) =~ "0 revisions"
+    end
+  end
+
+  # THE SEAM THE RAIL HAS ALWAYS CLAIMED. Echo returns no ops, so every one of the tests above passes
+  # against a transcript nothing applies; these run a backend that does return one.
+  describe "an assistant that edits the document" do
+    setup %{conn: conn, page: page} do
+      Application.put_env(:mishka_cms_core, :builder_ai_backend, MishkaCmsCore.Test.AiBackendStub)
+      MishkaCmsCore.Test.AiBackendStub.answer([])
+
+      on_exit(fn ->
+        Application.delete_env(:mishka_cms_core, :builder_ai_backend)
+        Application.delete_env(:mishka_cms_core, :test_ai_answer)
+      end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-assistant") |> render_click()
+      %{view: view}
+    end
+
+    test "the ops it returns are applied, and the revision counts what landed", %{view: view} do
+      insert_figure(view)
+
+      assert node_with_tag(view, "figure"), "the reply's op reached the document"
+      assert has_element?(view, "#pb-ai-restore-1")
+      assert render(view) =~ "1 revision"
+      assert render(view) =~ "1 change"
+    end
+
+    # One prompt is one undo step, however many ops it took — which is what a reader means by
+    # "undo what it just did".
+    test "undo takes the whole run back in one step", %{view: view} do
+      insert_figure(view)
+      assert node_with_tag(view, "figure")
+
+      render_click(view, "undo", %{})
+
+      refute node_with_tag(view, "figure")
+    end
+
+    # A run is all-or-nothing, so a refusal leaves the document alone — and the rail says so in the
+    # transcript rather than stamping a revision whose Restore would write over the author's work.
+    test "a refused op changes nothing, says so, and offers no Restore", %{view: view} do
+      h1 = node_with_tag(view, "h1")
+      before = editor(view).tree
+
+      ask_ai(view, [%{kind: :insert, parent_id: h1.id, index: 0, template: "<section></section>"}])
+
+      assert editor(view).tree == before
+      refute has_element?(view, "#pb-ai-restore-1")
+      assert render(view) =~ "0 revisions"
+
+      # The headline is the loud line, and the model's claim is not allowed to stand in it with the
+      # correction whispered underneath.
+      assert %{
+               text: "Nothing was changed. A `<h1>` can only hold text and inline elements.",
+               plain: "Done: Add a figure"
+             } = List.last(editor_messages(view))
+    end
+
+    # A model writes malformed ops, and a field-error list inspected into the bubble is a struct dump
+    # for an admin to read.
+    test "an op the editor cannot read is refused in words", %{view: view} do
+      ask_ai(view, [%{kind: :rewrite, parent_id: "root", index: 0}])
+
+      assert %{text: "Nothing was changed. That change could not be applied: unknown kind."} =
+               List.last(editor_messages(view))
+    end
+
+    # Applied is not the same as changed. A run leaving the very same tree records nothing, so a
+    # revision beside it would offer to roll back to the document already on screen — over whatever
+    # the author did while waiting for the answer, which is what the canvas was still doing.
+    test "an answer that changes nothing carries no revision", %{view: view} do
+      section = node_with_tag(view, "section")
+
+      ask_ai(
+        view,
+        [%{kind: :set_attr, node_id: section.id, name: "id", value: "hero", value_kind: :string}],
+        [%{kind: :insert, parent_id: "root", index: 0, template: "<aside></aside>"}]
+      )
+
+      refute has_element?(view, "#pb-ai-restore-1")
+      refute render(view) =~ "Nothing was changed"
+      assert render(view) =~ "0 revisions"
+      # The canvas's own insert, and no `:run` entry on top of it.
+      assert [%{kind: :insert}] = editor(view).past
+    end
+
+    # THE DOCUMENT MOVES WHILE THE MODEL THINKS. The canvas is a separate process that keeps writing
+    # for the whole round trip, so Restore has to put back the document as it was when the answer
+    # landed — the rail's own copy of the tree is the one from before the question.
+    test "Restore keeps an edit made while the answer was being written", %{view: view} do
+      ask_ai(
+        view,
+        [%{kind: :insert, parent_id: "root", index: 0, template: "<figure></figure>"}],
+        [%{kind: :insert, parent_id: "root", index: 0, template: "<aside></aside>"}]
+      )
+
+      assert node_with_tag(view, "figure")
+      assert node_with_tag(view, "aside")
+
+      render_click(view, "ai_restore", %{"index" => "1"})
+
+      refute node_with_tag(view, "figure")
+      assert node_with_tag(view, "aside"), "the edit made while the model was thinking survived"
+    end
+
+    # The history row is the assistant's, not the operator's, and carries what it was asked.
+    test "the run is recorded as the assistant's, with the prompt behind it", %{view: view} do
+      insert_figure(view)
+
+      assert %{author_type: :ai, label: "1 change", prompt: "Add a figure", backend: backend} =
+               hd(editor(view).past)
+
+      assert backend == "Stub (test backend)"
+    end
+
+    # `opts` was a declared argument nothing ever filled, so a backend that would rather write its
+    # own ops had no handle to write through.
+    test "the backend is handed the session and the document it is editing", %{
+      view: view,
+      page: page
+    } do
+      ask_ai(view, [])
+
+      assert_receive {:asked, "Add a figure", opts}
+      assert opts[:token] == token(view)
+      assert opts[:resource_id] == page.id
+      assert opts[:site_id] == page.site_id
+      assert opts[:section] == editor(view).section
+    end
+
+    defp insert_figure(view) do
+      ask_ai(view, [%{kind: :insert, parent_id: "root", index: 0, template: "<figure></figure>"}])
+    end
+
+    # `meanwhile` is what the canvas writes while the model is answering — see the stub.
+    defp ask_ai(view, ops, meanwhile \\ []) do
+      MishkaCmsCore.Test.AiBackendStub.answer(ops, meanwhile)
+      view |> form("#pb-ai-form", %{"prompt" => "Add a figure"}) |> render_submit()
     end
   end
 

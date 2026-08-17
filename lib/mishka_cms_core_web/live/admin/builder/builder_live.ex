@@ -39,6 +39,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.MediaCategory
+  alias MishkaCmsCore.Runtime.PageBuilder.AiBackend
   alias MishkaCmsCore.Runtime.PageBuilder.Classes
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
@@ -896,6 +897,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # Where the author was going when the editor stopped them, and the only thing that renders the
     # question. Nil is the ordinary state: nothing to lose, or nobody leaving.
     |> assign_new(:leave_to, fn -> nil end)
+    |> assign_new(:ai_attachment, fn -> nil end)
     |> assign_new(:autosave_failed?, fn -> false end)
     # Which property the Inspector should land on, set when a property row in the tree is clicked.
     |> assign_new(:focus_attr, fn -> nil end)
@@ -936,6 +938,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:drafts_enabled?, fn -> false end)
     |> assign_new(:draft_conflict, fn -> nil end)
     |> assign_new(:theme, fn -> "light" end)
+    |> assign_new(:ai_messages, fn -> [] end)
+    |> assign_new(:ai_prompt, fn -> "" end)
+    |> assign_new(:ai_backend, fn -> AiBackend.adapter().name() end)
     # The Studio chip counts the tokens this site added on top of the theme's own. It asked with no
     # site at all, which reads the GLOBAL sheets — the one place a site's own token can never be —
     # and `assign_new` meant it was answered once at mount and never again, so editing a token left
@@ -1024,7 +1029,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp assign_panel_tab(socket, panel) when panel in [:components, :inspector],
     do: assign(socket, :left_tab, panel)
 
-  defp assign_panel_tab(socket, panel) when panel in [:layers],
+  defp assign_panel_tab(socket, panel) when panel in [:layers, :assistant],
     do: assign(socket, :right_tab, panel)
   defp assign_panel_tab(%{assigns: %{rails: rails}} = socket, panel) do
     case Enum.any?(rails, &(to_string(Descriptor.key(&1)) == to_string(panel))) do
@@ -1034,6 +1039,51 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   defp assign_panel_tab(socket, _panel), do: socket
+
+  # Read back on every write and on mount, so the switches show what is stored rather than what was
+  # clicked.
+  defp prompt_with(text, nil), do: text
+
+  defp prompt_with(text, %{source: source, label: label}),
+    do: text <> "\n\n<!-- attached: " <> label <> " -->\n" <> source
+
+  defp attach(socket, :selection) do
+    node = socket.assigns[:selected_node]
+    tree = socket.assigns.editor.tree
+
+    source = tree |> Tree.subtree(node.id) |> Serializer.serialize()
+
+    socket
+    |> assign(:ai_attachment, %{
+      kind: :selection,
+      label:
+        ngettext(
+          "%{tag} · %{bytes} byte",
+          "%{tag} · %{bytes} bytes",
+          byte_size(source),
+          tag: Panels.selection_tag(node),
+          bytes: byte_size(source)
+        ),
+      source: source
+    })
+  end
+
+  defp attach(socket, :template) do
+    source = socket.assigns.editor.tree |> Serializer.serialize()
+
+    socket
+    |> assign(:ai_attachment, %{
+      kind: :template,
+      label:
+        ngettext(
+          "whole template · %{bytes} byte",
+          "whole template · %{bytes} bytes",
+          byte_size(source),
+          bytes: byte_size(source)
+        ),
+      source: source
+    })
+  end
 
   defp reload_canvas(socket) do
     socket
@@ -3205,7 +3255,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(canvas components layers inspector) do
+      when panel in ~w(canvas components layers inspector assistant) do
     panel = String.to_existing_atom(panel)
 
     {:noreply,
@@ -3563,6 +3613,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  def handle_event("drop_attachment", _params, socket),
+    do: {:noreply, assign(socket, :ai_attachment, nil)}
+
+  # What travels with the next prompt. The prototype attaches a screenshot; this attaches the SOURCE,
+  # because the editor already holds it and a model can act on markup but not on a picture of it.
+  def handle_event("attach", %{"kind" => "selection"}, socket) do
+    {:noreply, attach(socket, :selection)}
+  end
+
+  def handle_event("attach", %{"kind" => "template"}, socket) do
+    {:noreply, attach(socket, :template)}
+  end
+
+  # A file means a file the site already has, so this opens the library rather than inventing an
+  # upload the assistant could not read anyway.
+  def handle_event("attach", %{"kind" => "file"}, socket) do
+    {:noreply, assign(socket, :sheet, :assets)}
+  end
+
   # LEAVING IN PUBLISH MODE IS THE ONE WAY TO LOSE WORK HERE. Every other mode writes as you go, so
   # the door is free to walk through; publish mode deliberately writes nothing, which is what makes
   # "refresh and the original comes back" true and what makes a closed tab final.
@@ -3812,6 +3881,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("close_media_preview", _params, socket),
     do: {:noreply, assign(socket, :preview_media, nil)}
+
+  # THE RECORD IS MADE HERE, then the editor reopens on it. Creating it up front rather than holding
+  # the answers until the first save keeps every other path — autosave, drafts, publish, the canvas
+  # itself — working on an ordinary record instead of a special half-made one.
+  #
+  # `save_section/4` already knows master from tenant: a master writes `:master_create` with the
+  # site they chose, a tenant writes `:create` under their own and the site is dropped. That is why
+  # the form only asks a master.
+  # A chip fills the box rather than sending, so the wording stays the author's to adjust.
+  def handle_event("ai_chip", %{"text" => text}, socket),
+    do: {:noreply, assign(socket, :ai_prompt, text)}
+
+  # Restore rolls the document back to the state a reply produced, through the session's own history
+  # rather than a parallel one — so it is itself undoable.
+  def handle_event("ai_restore", %{"index" => index}, socket) do
+    message = Enum.at(socket.assigns.ai_messages, to_int(index))
+
+    case message && Map.get(message, :tree) do
+      nil ->
+        {:noreply, socket}
+
+      tree ->
+        {:ok, _editor} = EditorSession.put_tree(socket.assigns.token, tree, reason: :revert)
+        # The captured tree is the one from BEFORE the prompt, so this undoes that request rather
+        # than restoring what it produced. "Rolled back to r5" said the opposite.
+        {:noreply,
+         put_flash(
+           socket,
+           :info,
+           gettext("Undid %{revision} — the document is back to before that request.",
+             revision: message.revision
+           )
+         )}
+    end
+  end
 
   # A Behavior switch edits the element's `class`, so it goes through the same `set_attr` op every
   # other property edit uses — one funnel, one history entry, one containment check.
@@ -4526,6 +4630,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # The Assistant rail is only honest if Send actually reaches a backend. The default one replies
+  # that no model is configured rather than inventing an edit it never made.
+  def handle_event("ai_submit", %{"prompt" => prompt}, socket) do
+    case String.trim(prompt) do
+      "" -> {:noreply, socket}
+      text -> {:noreply, ask_assistant(socket, text)}
+    end
+  end
+
   def handle_event("shortcut", %{"key" => key}, socket), do: shortcut(key, socket)
 
   # The canvas has no flash of its own, so a refusal it could not show — an illegal drop, say —
@@ -4538,7 +4651,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("flash_info", %{"message" => message}, socket),
     do: {:noreply, put_flash(socket, :info, message)}
 
-  def handle_event("open_rail", %{"action" => "ask_ai"}, socket), do: {:noreply, socket}
+  # The canvas toolbar's "Ask AI" and "Comment" act on chrome the canvas cannot reach, so they are
+  # posted up and opened here — already scoped to the selection both panels read.
+  def handle_event("open_rail", %{"action" => "ask_ai"}, socket),
+    do: {:noreply, assign(socket, right_tab: :assistant, right_hidden: false)}
+
   def handle_event("open_rail", %{"action" => "comment"}, socket),
     do: {:noreply, assign(socket, sheet: :review)}
 
@@ -5037,6 +5154,118 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     socket
   end
+
+  defp ask_assistant(socket, text) do
+    scope = %{
+      node_id: socket.assigns.selection,
+      label: (socket.assigns.selected_node && ai_scope_label(socket.assigns.selected_node)) || nil
+    }
+
+    author = Presence.display_name(socket.assigns[:current_user])
+    attachment = socket.assigns[:ai_attachment]
+
+    message =
+      text
+      |> AiBackend.user_message(scope)
+      |> Map.put(:author, author)
+      |> Map.put(:attachment, attachment && attachment.label)
+
+    user = socket.assigns.ai_messages ++ [message]
+
+    # The attached source travels WITH the question, not as a note about it, so a real backend gets
+    # the markup it is being asked about.
+    case ask_backend(socket, text, attachment, scope) do
+      {:ok, reply} ->
+        socket
+        |> assign(:ai_prompt, "")
+        |> assign(:ai_attachment, nil)
+        |> assign(:ai_messages, user ++ [applied(reply, text, socket)])
+
+      {:error, reason} ->
+        socket |> assign(:ai_messages, user) |> put_flash(:error, human(reason))
+    end
+  end
+
+  # THE REPLY'S OPS ARE THE EDIT, not a report of one. They go through `apply_ops/4` — the funnel a
+  # person's own drag ends in — so an assistant's change is containment-checked, plugin-visible and
+  # undoable as the one step it was asked for, and the row it leaves in history is the assistant's
+  # rather than the operator's. Nothing is stamped until that write lands: a revision beside an
+  # unchanged document is a claim the editor cannot keep, and its Restore would write the pre-prompt
+  # tree over whatever the author did between asking and pressing it.
+  #
+  # `prompt` is what the AUTHOR TYPED, deliberately, and not the string `ask_backend/4` handed the
+  # model: the row is an audit of who asked for what, and the attached source and any `before_ask`
+  # rewrite are about what the model was shown.
+  defp applied(%{ops: [_ | _] = ops} = reply, prompt, socket) do
+    was = stored_tree(socket)
+
+    case EditorSession.apply_ops(socket.assigns.token, ops, changes(ops),
+           author_type: :ai,
+           note: reply[:plain],
+           prompt: prompt,
+           backend: socket.assigns[:ai_backend]
+         ) do
+      # A run leaving the very same tree is not an edit — the session records none, so neither does
+      # the transcript.
+      {:ok, %{tree: ^was}} -> reply
+      {:ok, _editor} -> stamp_revision(reply, was, socket)
+      {:error, reason} -> refused(reply, reason)
+    end
+  end
+
+  defp applied(reply, _prompt, _socket), do: reply
+
+  # THE STORED TREE, NOT THIS LIVEVIEW'S COPY OF IT — see `EditorSession.update_tree/3`. The rail sits
+  # blocked inside `ai_submit` for the whole round trip, so every edit the canvas made while the model
+  # was thinking is still in this process's mailbox: our copy is the document as it was when the
+  # question was asked. Read here, "the run changed nothing" is the session's own rule rather than a
+  # guess against a stale tree, and the restore point is the document as it was when the answer
+  # landed. A session that has expired leaves no tree, and `apply_ops/4` below refuses for the same
+  # reason.
+  defp stored_tree(socket) do
+    case EditorSession.fetch(socket.assigns.token) do
+      {:ok, editor} -> editor.tree
+      :error -> nil
+    end
+  end
+
+  # A REFUSAL REPLACES THE MODEL'S SENTENCE RATHER THAN FOOTNOTING IT. The headline is the loud line
+  # in the bubble; left alone it goes on claiming the edit the run just refused, with the correction
+  # in grey underneath. The model's own words move down there instead, where they read as what it
+  # meant to do.
+  defp refused(reply, reason) do
+    reply
+    |> Map.put(:text, gettext("Nothing was changed. %{reason}", reason: human(reason)))
+    |> Map.put(:plain, reply[:text])
+  end
+
+  # The tree captured with the revision is the one from BEFORE the prompt, which is what Restore puts
+  # back; it goes through `put_tree/3`, so the rollback is itself undoable.
+  defp stamp_revision(reply, was, socket) do
+    revision = "r" <> Integer.to_string(length(socket.assigns.ai_messages) + 1)
+
+    reply
+    |> Map.put(:revision, revision)
+    |> Map.put(:tree, was)
+    |> Map.put(:revision_note, revision_note(reply))
+  end
+
+  defp revision_note(%{ops: ops}),
+    do:
+      gettext("%{changes} · %{time}",
+        changes: changes(ops),
+        time: Calendar.strftime(DateTime.utc_now(), "%H:%M")
+      )
+
+  # What the run did, in the rail's note and in the history row's own title.
+  defp changes(ops) do
+    count = length(ops)
+
+    ngettext("%{count} change", "%{count} changes", count)
+  end
+
+  defp ai_scope_label(%{kind: :text}), do: gettext("text")
+  defp ai_scope_label(%{tag: tag}), do: tag
 
   # WHICH CHOOSER THIS PROPERTY HAS, asked of the same function the Inspector asks when it draws the
   # row — a second rule keyed on the attribute's name would drift from it the first time a kit called
@@ -5886,6 +6115,40 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # it gives a stable, readable id rather than a counter to keep.
   defp hook_id(node_id),
     do: "el-" <> (:erlang.md5(node_id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
+
+  # THE SCOPE CLASS SERVES BOTH FEATURES, so removing the click action only takes it off when the
+  # other one is not using it. `Tree.drop_scope/2` can see an interaction still naming the class,
+  # because that lives in an attribute; it cannot see the CSS, which lives in a stylesheet row — so
+  # the emptiness of the box is checked here, where it is known.
+  # THE PROMPT, BEFORE THE MODEL SEES IT. A plugin may rewrite it — a house style, a redaction pass —
+  # or refuse it outright, which is where anything about prompt handling belongs.
+  defp ask_backend(socket, text, attachment, scope) do
+    editor = socket.assigns.editor
+
+    case Events.before_ask(%{
+           prompt: prompt_with(text, attachment),
+           scope: scope,
+           backend: socket.assigns[:ai_backend],
+           section: editor.section,
+           resource_id: editor.resource_id,
+           site_id: editor.site_id,
+           actor_id: actor_id(socket)
+         }) do
+      {:ok, prompt} ->
+        # WHICH DOCUMENT, AND WHICH SESSION. A backend that writes its own ops rather than returning
+        # them needs the token `EditorSession` is addressed by; without it the `opts` the callback
+        # declares was a keyword list nothing ever filled.
+        AiBackend.ask(prompt, scope,
+          token: editor.token,
+          section: editor.section,
+          resource_id: editor.resource_id,
+          site_id: editor.site_id
+        )
+
+      {:error, message} ->
+        {:error, message}
+    end
+  end
 
   # THE CHOICES LIVE IN TWO PLACES, because the preview is a second LiveView: the socket renders the
   # controls and the SESSION is what the iframe can read. They are written together here, always.
@@ -6888,6 +7151,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           tree={@tree}
           selection={@selection}
           expanded={@expanded}
+          selected_node={@selected_node}
+          ai_messages={@ai_messages}
+          ai_prompt={@ai_prompt}
+          ai_backend={@ai_backend}
+          ai_attachment={@ai_attachment}
           record={@record}
           section={@section}
           current_user={@current_user}
