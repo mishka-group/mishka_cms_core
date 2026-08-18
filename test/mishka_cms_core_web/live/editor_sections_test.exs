@@ -756,6 +756,54 @@ defmodule MishkaCmsCoreWeb.Test.EditorSectionsTest do
         refute out =~ "phx-change"
         refute out =~ "assigns[:form_form]"
       end
+
+      # AND THE AUDIT HAS TO AGREE WITH THE DROP. It called that deliberately bare field a blocker,
+      # and its Fix comes back through the same gate the drop does and answers `:none` — the rail
+      # swung over to the Assistant instead of editing. Writing the form by hand only traded it for
+      # `form-no-destination`, which says visitors are thanked and code can receive the form: not
+      # here.
+      test "and the audit does not ask for a form in a #{section} either", %{
+        conn: conn,
+        site: site
+      } do
+        {view, _record} = open(conn, unquote(section), site)
+
+        render_click(view, "drop", %{
+          "kind" => "insert",
+          "parent_id" => node_with_tag(view, "section").id,
+          "index" => "1",
+          "template" => ~s(<input type="text" name="field" />)
+        })
+
+        view |> element("#pb-rail-audit") |> render_click()
+
+        refute has_element?(view, "#pb-audit-group-forms"),
+               "the Forms group ran where a form cannot exist"
+
+        refute has_element?(view, ~s([data-rule="field-no-form"]))
+      end
+
+      # WHAT HTML ITSELF IS WRONG ABOUT STILL RUNS HERE. A search box in a header is ordinary markup
+      # on any of these three, and a form with no way to send it is broken wherever it was written —
+      # that Fix inserts a button rather than routing back through the gate the drop above obeys.
+      test "but a form with nothing to send it is still reported in a #{section}", %{
+        conn: conn,
+        site: site
+      } do
+        {view, _record} = open(conn, unquote(section), site)
+
+        render_click(view, "drop", %{
+          "kind" => "insert",
+          "parent_id" => node_with_tag(view, "section").id,
+          "index" => "1",
+          "template" => ~s(<form action="/search"><input type="text" name="q" /></form>)
+        })
+
+        view |> element("#pb-rail-audit") |> render_click()
+
+        assert has_element?(view, "#pb-audit-group-forms")
+        assert has_element?(view, ~s([data-rule="form-no-submit"]))
+      end
     end
 
     # And a page, which does compile them, still gets the wrapper and the note.
@@ -773,6 +821,21 @@ defmodule MishkaCmsCoreWeb.Test.EditorSectionsTest do
 
       assert out =~ "<.form"
       assert out =~ ~r/phx-change="form-[a-z2-7]{5}-validate"/
+    end
+
+    # And where a form does compile, a field left loose is still the blocker it always was.
+    test "and a loose field on a page is still reported", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<section id="root"><input type="text" name="field" /></section>)
+        )
+
+      view = open_record(conn, :page, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert has_element?(view, "#pb-audit-group-forms")
+      assert has_element?(view, ~s([data-rule="field-no-form"]))
     end
   end
 

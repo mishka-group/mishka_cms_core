@@ -63,6 +63,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageBuilder.Mentions
@@ -1029,8 +1030,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp assign_panel_tab(socket, panel) when panel in [:components, :inspector],
     do: assign(socket, :left_tab, panel)
 
-  defp assign_panel_tab(socket, panel) when panel in [:layers, :assistant],
+  defp assign_panel_tab(socket, panel) when panel in [:layers, :assistant, :audit],
     do: assign(socket, :right_tab, panel)
+
   defp assign_panel_tab(%{assigns: %{rails: rails}} = socket, panel) do
     case Enum.any?(rails, &(to_string(Descriptor.key(&1)) == to_string(panel))) do
       true -> assign(socket, :right_tab, panel)
@@ -3255,7 +3257,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
-      when panel in ~w(canvas components layers inspector assistant) do
+      when panel in ~w(canvas components layers inspector assistant audit) do
     panel = String.to_existing_atom(panel)
 
     {:noreply,
@@ -3916,6 +3918,33 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
          )}
     end
   end
+
+  def handle_event("audit_rerun", _params, socket),
+    do:
+      {:noreply, put_flash(socket, :info, gettext("Checks re-run against the current document."))}
+
+  # A Forms finding names an edit rather than a decision — wrap this field, rename that form, move
+  # this button — so Fix makes it, in one history entry, and where there is no edit to make it says
+  # why in a sentence rather than swinging the rail over to the assistant. The patterns are narrower
+  # than the catch-all below on purpose: a clause with the same pattern would make the existing one
+  # unreachable rather than front it.
+  def handle_event("audit_fix", %{"rule" => "form-" <> _rest = rule} = params, socket),
+    do: form_fix(rule, params, socket)
+
+  def handle_event("audit_fix", %{"rule" => "field-" <> _rest = rule} = params, socket),
+    do: form_fix(rule, params, socket)
+
+  def handle_event("audit_fix", %{"rule" => "submit-no-form" = rule} = params, socket),
+    do: form_fix(rule, params, socket)
+
+  # Fix hands the finding to the assistant as scoped prompt text — the one rail that can actually
+  # change the document. Selecting the node first is what makes the request scoped.
+  # NOT `%{"rule" => rule, "id" => id}`. A finding about the DOCUMENT — no meta description, no
+  # title, no heading, a bundle over budget — has no node, and HEEx omits an attribute whose value is
+  # `nil`, so those clicks arrive without an `id` at all and used to fall through to the catch-all.
+  # Which meant the Fix button did nothing on exactly the findings that fire on every page.
+  def handle_event("audit_fix", %{"rule" => rule} = params, socket),
+    do: audit_ask(rule, params, socket)
 
   # A Behavior switch edits the element's `class`, so it goes through the same `set_attr` op every
   # other property edit uses — one funnel, one history entry, one containment check.
@@ -4879,6 +4908,65 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp save_interaction(socket, _gone, _action),
     do: {:noreply, put_flash(socket, :error, gettext("That element is no longer on the page."))}
 
+  # The rail's Fix, for every finding whose answer is a sentence rather than an edit. A Forms
+  # finding reaches this only when the document has moved on under the click, or when the answer is
+  # code somebody has to write.
+  defp audit_ask(rule, params, socket) do
+    socket =
+      case params["id"] || "" do
+        "" ->
+          socket
+
+        node_id ->
+          then(socket, fn s ->
+            {:ok, _e} = EditorSession.select(s.assigns.token, node_id)
+            s
+          end)
+      end
+
+    socket
+    |> assign(right_tab: :assistant, right_hidden: false)
+    |> ask_assistant(audit_prompt(rule))
+    |> then(&{:noreply, &1})
+  end
+
+  # A run rather than one op wherever the repair is two edits that only make sense together:
+  # wrapping a stray field is an insert and a delete, and undoing half of that loses the field.
+  # A form the Fix makes, or makes work, is announced on `builder:form:after_create` as `:fixed`.
+  defp form_fix(rule, params, socket) do
+    token = socket.assigns.token
+
+    case FormChecks.repair(socket.assigns.editor, rule, params["id"], params["fix"]) do
+      {:op, op} ->
+        token |> EditorSession.apply_op(op, announce: :fixed) |> fixed(socket)
+
+      {:ops, ops} ->
+        token
+        |> EditorSession.apply_ops(ops, audit_label(rule, params["fix"]), announce: :fixed)
+        |> set_form(socket, params["id"], fixed_setting(params["fix"]))
+        |> fixed(socket)
+
+      {:say, sentence} ->
+        {:noreply, put_flash(socket, :error, sentence)}
+
+      {:code, event, sentence} ->
+        {:noreply, answer_in_code(socket, event, sentence)}
+
+      :none ->
+        audit_ask(rule, params, socket)
+    end
+  end
+
+  # A code author gets the Code window on the form's handler, customized if it has none; anyone else
+  # reads the sentence.
+  defp answer_in_code(%{assigns: %{code_allowed?: true}} = socket, event, _sentence) do
+    socket
+    |> assign(source_modal: true, source_error: nil, source_tab: :events, code_fault: nil)
+    |> customize(event)
+  end
+
+  defp answer_in_code(socket, _event, sentence), do: put_flash(socket, :info, sentence)
+
   # Adds the default code for `event` when no entry answers it, else focuses the one that does,
   # counting a handler a pending rename moves onto the form. An event no form on the page names any
   # more changes nothing.
@@ -4953,6 +5041,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       |> PageForms.handlers([])
       |> Enum.sort_by(&(&1.kind != :submit))
       |> Enum.map(& &1.event)
+
+  defp fixed({:ok, _editor}, socket), do: {:noreply, socket}
+  defp fixed({:error, reason}, socket), do: {:noreply, put_flash(socket, :error, human(reason))}
 
   # The controls `Inspector.rule_op/3` answers for: the ones that write a single attribute. The Form
   # section's seed is deliberately not among them — it writes five names at once and takes
@@ -5051,6 +5142,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp addressed({:error, reason}, socket),
     do: {:noreply, put_flash(socket, :error, human(reason))}
+
+  defp fixed_setting("typing"), do: {:how, :typing}
+  defp fixed_setting(_fix), do: nil
 
   # Announces `builder:form:after_setting` once a form's setting was written.
   defp set_form({:ok, editor} = result, socket, node_id, {setting, value}) do
@@ -5154,6 +5248,65 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     socket
   end
+
+  defp audit_label("form-no-submit", "typing"), do: gettext("Made a form work as they type")
+  defp audit_label(rule, _fix), do: audit_label(rule)
+
+  defp audit_label("field-no-form"), do: gettext("Wrapped a field in a form")
+  defp audit_label("field-no-key"), do: gettext("Named a field")
+  defp audit_label("form-duplicate-seed"), do: gettext("Renamed a form")
+  defp audit_label("form-duplicate-token"), do: gettext("Gave a form its own handlers")
+
+  defp audit_label("form-duplicate-source"),
+    do: gettext("Gave a form its own place to keep values")
+
+  defp audit_label(rule), do: gettext("Fixed %{rule}", rule: rule)
+
+  defp audit_prompt("img-alt"), do: gettext("Write an alt attribute describing this image.")
+
+  defp audit_prompt("img-alt-empty"),
+    do: gettext("Replace this empty alt with a real description.")
+
+  defp audit_prompt("link-text"), do: gettext("Give this link visible text.")
+  defp audit_prompt("button-text"), do: gettext("Give this button a label.")
+
+  defp audit_prompt("heading-skip"),
+    do: gettext("Fix the heading order so it does not skip a level.")
+
+  defp audit_prompt("no-h1"), do: gettext("Make the first heading on this page an h1.")
+  defp audit_prompt("no-heading"), do: gettext("Add a top-level heading to this page.")
+
+  defp audit_prompt("nested-html"),
+    do: gettext("Remove the nested <html> element from this template.")
+
+  defp audit_prompt("field-no-form"), do: gettext("Put this field inside a form.")
+  defp audit_prompt("field-no-key"), do: gettext("Give this field a name to submit under.")
+
+  defp audit_prompt("field-name-shadow"),
+    do: gettext("Let this field's binding decide the key it sends.")
+
+  defp audit_prompt("form-no-as"), do: gettext("Give this form a name of its own.")
+
+  defp audit_prompt("form-no-source"),
+    do: gettext("Point this form at a page assign to hold what is typed.")
+
+  defp audit_prompt("form-duplicate-seed"),
+    do: gettext("Rename this form so no other form shares its name.")
+
+  defp audit_prompt("form-duplicate-token"),
+    do: gettext("Give this form event names no other form on this page shares.")
+
+  defp audit_prompt("form-duplicate-source"),
+    do: gettext("Give this form its own place to keep what is typed into it.")
+
+  defp audit_prompt("form-in-form"), do: gettext("Take this form out of the form around it.")
+
+  defp audit_prompt("form-no-change"),
+    do: gettext("Check this form as the visitor types, not only on send.")
+
+  defp audit_prompt("form-no-submit"), do: gettext("Add a submit button to this form.")
+  defp audit_prompt("submit-no-form"), do: gettext("Put this submit button inside a form.")
+  defp audit_prompt(rule), do: gettext("Fix the %{rule} issue on this page.", rule: rule)
 
   defp ask_assistant(socket, text) do
     scope = %{

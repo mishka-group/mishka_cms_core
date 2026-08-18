@@ -43,15 +43,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageComment
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageBuilder.Icons
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.PageBuilder.Interface
+  alias MishkaCmsCore.Runtime.PageBuilder.LayoutSlot
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Shadow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Demo
+  alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Runtime.PageBuilder.Tokens
@@ -432,6 +435,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     [
       descriptor("layers", :rail_tab, gettext_noop("Layers"), 10, icon: "layers"),
       descriptor("assistant", :rail_tab, gettext_noop("Assistant"), 20, icon: "sparkle"),
+      descriptor("audit", :rail_tab, gettext_noop("Audit"), 30, icon: "shield")
     ]
   end
 
@@ -8797,6 +8801,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         ai_attachment={@ai_attachment}
         selected_node={@selected_node}
       />
+      <.audit :if={@right_tab == :audit} tree={@tree} record={@record} editor={@editor} />
 
       <%!-- AND WHATEVER AN EXTENSION ADDED. The three above are the core's own rails and stay
             spelled out, because each takes a different slice of the editor's state; a contributed
@@ -10009,6 +10014,218 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     |> Enum.take(2)
     |> Enum.map_join(&String.upcase/1)
   end
+
+  defp audit(assigns) do
+    assigns =
+      assigns
+      |> assign(:findings, audit_findings(assigns.tree, assigns.record, assigns.editor))
+      |> then(&assign(&1, :groups, audit_groups(&1.findings)))
+
+    ~H"""
+    <div class="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <%!-- The score is a ring, not a number in a box: the sweep is the reading, and the line under
+            it says what kind of problem it is. --%>
+      <div class="flex items-center gap-3 rounded-[13px] border border-[#f0efea] bg-[#faf9f6] p-[13px]">
+        <span
+          class="grid size-11 flex-none place-items-center rounded-full"
+          style={"background:conic-gradient(#{score_colour(@findings)} 0 #{audit_score(@findings)}%, #ecebe6 #{audit_score(@findings)}% 100%)"}
+        >
+          <span
+            id="pb-audit-score"
+            class="grid size-[34px] place-items-center rounded-full bg-white font-['Space_Grotesk'] text-[12.5px] font-bold text-[#1b1a18]"
+          >
+            {audit_score(@findings)}
+          </span>
+        </span>
+        <div class="min-w-0">
+          <div class="text-[12.5px] font-bold text-[#1b1a18]">{gettext("Page score")}</div>
+          <div id="pb-audit-summary" class="mt-0.5 text-[10.5px] font-medium text-[#6d6a63]">
+            {audit_summary(@findings)}
+          </div>
+        </div>
+        <span class="flex-1"></span>
+        <button
+          type="button"
+          id="pb-audit-rerun"
+          phx-click="audit_rerun"
+          class="h-7 flex-none rounded-[8px] border border-[#ecebe6] bg-white px-[11px] text-[10.5px] font-semibold text-[#5c5a54] hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+        >
+          {gettext("Re-run")}
+        </button>
+      </div>
+
+      <div :for={{key, title, badge, items} <- @groups} id={"pb-audit-group-#{key}"}>
+        <div class="mb-2 flex items-center gap-2">
+          <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+            {title}
+          </span>
+          <span
+            id={"pb-audit-badge-#{key}"}
+            class={[
+              "rounded-[20px] px-2 py-0.5 font-['Space_Grotesk'] text-[9.5px] font-bold",
+              (issue_count(items) == 0 && "bg-[#e6f6ee] text-[#177a53]") ||
+                "bg-[#fdf9ec] text-[#8a5514]"
+            ]}
+          >
+            {badge}
+          </span>
+        </div>
+
+        <div class="flex flex-col gap-[7px]">
+          <div
+            :for={finding <- items}
+            class={[
+              "flex items-start gap-[9px] rounded-[11px] border px-[11px] py-[10px]",
+              severity_card(finding.severity)
+            ]}
+          >
+            <span class={[
+              "grid size-[18px] flex-none place-items-center rounded-full text-white",
+              severity_dot(finding.severity)
+            ]}>
+              <.icon name={severity_icon(finding.severity)} size={11} />
+            </span>
+            <div class="min-w-0 flex-1">
+              <button
+                :if={finding.node_id}
+                type="button"
+                phx-click="select"
+                phx-value-id={finding.node_id}
+                class="block text-left text-[11.5px] font-semibold text-[#1b1a18] hover:text-[#4f4bcc]"
+              >
+                {finding.message}
+              </button>
+              <span
+                :if={!finding.node_id}
+                class="block text-[11.5px] font-semibold text-[#1b1a18]"
+              >
+                {finding.message}
+              </span>
+              <div class="mt-0.5 text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
+                {finding.detail}
+              </div>
+            </div>
+            <button
+              :if={finding.severity != :ok and !finding[:fixes]}
+              type="button"
+              id={fix_id(finding)}
+              data-rule={finding.rule}
+              phx-click="audit_fix"
+              phx-value-rule={finding.rule}
+              phx-value-id={finding.node_id}
+              class="h-[22px] flex-none rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+            >
+              {gettext("Fix")}
+            </button>
+            <%!-- A finding with more than one way out offers each by name; the first keeps the
+                  finding's own Fix id. --%>
+            <div :if={finding[:fixes]} class="flex flex-none flex-col items-end gap-1">
+              <button
+                :for={{fix, at} <- Enum.with_index(finding[:fixes] || [])}
+                type="button"
+                id={(at == 0 && fix_id(finding)) || "#{fix_id(finding)}-#{fix.fix}"}
+                data-rule={(at == 0 && finding.rule) || nil}
+                data-fix={fix.fix}
+                phx-click="audit_fix"
+                phx-value-rule={finding.rule}
+                phx-value-id={finding.node_id}
+                phx-value-fix={fix.fix}
+                class="h-[22px] rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+              >
+                {fix.label}
+              </button>
+            </div>
+          </div>
+
+          <p :if={items == []} class="text-[10.5px] font-medium text-[#6d6a63]">
+            {gettext("Nothing to report.")}
+          </p>
+        </div>
+      </div>
+    </div>
+    """
+  end
+
+  # The prototype's three headings. Every group is shown, including a clean one — "nothing here" is a
+  # result, and a group that vanishes when it passes reads as a check that never ran.
+  defp audit_groups(findings) do
+    for {key, title} <- [
+          {:structure, gettext("Structure")},
+          {:accessibility, gettext("Accessibility")},
+          {:forms, gettext("Forms")},
+          {:seo, gettext("SEO & Meta")},
+          {:performance, gettext("Performance")}
+        ],
+        items = Enum.filter(findings, &(&1.group == key)),
+        shown?(key, items) do
+      {key, title, group_badge(items), items}
+    end
+  end
+
+  # Forms is the one heading that is not always about this page: a document with no form and no
+  # field raises nothing here and earns no ticks either, and an empty "Forms" group reads as a
+  # warning about something that is not on the page.
+  defp shown?(:forms, items), do: items != []
+
+  # Structure asks a question only a layout has an answer to, so on a page there is nothing to show
+  # and an empty heading would read as a check that failed to run.
+  defp shown?(:structure, items), do: items != []
+
+  # And SEO asks nothing at all of a record with no SEO fields — an error page, a component — so the
+  # heading goes with the lines rather than standing over an empty box. Anything that DOES have them
+  # keeps the group whether it is clean or not.
+  defp shown?(:seo, items), do: items != []
+  defp shown?(_group, _items), do: true
+
+  # A passing row is not an issue, so it must not be counted as one — a group of four green ticks is
+  # "healthy", not "4 issues". A note is not an issue either, and is counted on its own.
+  defp group_badge(items),
+    do: items |> issue_count() |> badge(Enum.count(items, &(&1.severity == :note)))
+
+  defp issue_count(items), do: Enum.count(items, &(&1.severity in [:blocker, :warning]))
+
+  defp badge(0, 0), do: gettext("healthy")
+  defp badge(0, notes), do: ngettext("%{count} note", "%{count} notes", notes)
+  defp badge(count, _notes), do: ngettext("%{count} issue", "%{count} issues", count)
+
+  defp audit_summary(findings) do
+    blockers = Enum.count(findings, &(&1.severity == :blocker))
+    warnings = Enum.count(findings, &(&1.severity == :warning))
+
+    case blockers + warnings do
+      0 ->
+        gettext("No blockers, no warnings")
+
+      _any ->
+        gettext("%{blockers} · %{warnings}",
+          blockers: ngettext("%{count} blocker", "%{count} blockers", blockers),
+          warnings: ngettext("%{count} warning", "%{count} warnings", warnings)
+        )
+    end
+  end
+
+  defp score_colour(findings) do
+    case audit_score(findings) do
+      score when score >= 90 -> "#1f9d6b"
+      score when score >= 70 -> "#cf8a24"
+      _low -> "#c3373c"
+    end
+  end
+
+  defp severity_card(:blocker), do: "border-[#f5dcd8] bg-[#fdf3f1]"
+  defp severity_card(:warning), do: "border-[#f0e6c8] bg-[#fdf9ec]"
+  defp severity_card(:note), do: "border-[#dcdbf5] bg-[#f6f5ff]"
+  defp severity_card(_ok), do: "border-[#d7eddf] bg-[#f2faf5]"
+
+  defp severity_dot(:blocker), do: "bg-[#c3373c]"
+  defp severity_dot(:warning), do: "bg-[#cf8a24]"
+  defp severity_dot(:note), do: "bg-[#6d69e6]"
+  defp severity_dot(_ok), do: "bg-[#1f9d6b]"
+
+  defp severity_icon(:blocker), do: :close
+  defp severity_icon(:warning), do: :minus
+  defp severity_icon(:note), do: :code
+  defp severity_icon(_ok), do: :check
 
   @doc "⌘K — actions first, then the admin routes to jump to."
   def command_palette(assigns) do
@@ -14534,6 +14751,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       {"layers", gettext("Layers")},
       {"inspector", gettext("Inspector")},
       {"assistant", gettext("Assistant")},
+      {"audit", gettext("Audit")},
       {"assets", gettext("Assets")},
       {"studio", gettext("Studio")},
       {"palette", gettext("Search")},
@@ -15628,6 +15846,559 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp blank_to_note(""), do: gettext("/* No overrides recorded for this element. */")
   defp blank_to_note(css), do: css
+
+  # Cheap, real checks over the server-side tree — the audit rail is honest from day one rather than
+  # a score ring over nothing.
+  # Real checks over the real tree, in the prototype's three groups. Each carries a severity, the
+  # sentence a reader acts on, and the node it is about, so both the title and Fix can jump there.
+  defp audit_findings(tree, record, editor) do
+    nodes = Tree.walk(tree)
+
+    issues =
+      Events.collect(
+        :audit_checks,
+        Enum.flat_map(nodes, &node_findings/1) ++
+          document_findings(nodes, editor) ++
+          structure_findings(tree, editor) ++
+          FormChecks.findings(tree, record, editor) ++
+          seo_findings(record) ++ Demo.audit_findings()
+      )
+
+    issues ++
+      passing_checks(
+        nodes,
+        issues,
+        FormChecks.forms?(nodes, editor),
+        %{outline?: outline_owned?(editor), seo?: seo_capable?(record)}
+      ) ++
+      performance_checks(editor)
+  end
+
+  # THE ONE CHECK THAT IS ABOUT WHAT THE DOCUMENT IS FOR. A layout exists to wrap a page, and it does
+  # that through `@inner_content`; without it the layout renders perfectly and every page on it comes
+  # out empty, which is the kind of breakage nobody looks for in the layout. Every other section has
+  # nothing to answer here, so the group stays off their panel entirely — see `shown?/2`.
+  defp structure_findings(tree, %{section: section}) do
+    case Section.normalize(section) do
+      "layout" -> [inner_content_finding(inner_content(tree))]
+      _other -> []
+    end
+  end
+
+  defp structure_findings(_tree, _editor), do: []
+
+  defp inner_content(tree) do
+    cond do
+      LayoutSlot.renders_inner_content?(tree) -> true
+      LayoutSlot.holds_inner_content?(tree) -> :hidden
+      true -> false
+    end
+  end
+
+  defp inner_content_finding(true),
+    do:
+      document_finding(
+        :structure,
+        :ok,
+        "inner-content",
+        gettext("The page renders inside this layout"),
+        gettext("@inner_content is on the canvas, so pages wrapped in this layout keep theirs.")
+      )
+
+  defp inner_content_finding(:hidden),
+    do:
+      document_finding(
+        :structure,
+        :blocker,
+        "inner-content",
+        gettext("This layout renders no page"),
+        gettext(
+          "@inner_content is inside an element hidden from visitors — show it, or every page on this layout loses its content."
+        )
+      )
+
+  defp inner_content_finding(false),
+    do:
+      document_finding(
+        :structure,
+        :blocker,
+        "inner-content",
+        gettext("This layout renders no page"),
+        gettext(
+          "Nothing renders @inner_content — publish this and every page on it loses its content."
+        )
+      )
+
+  # SEO reads the page's OWN fields — `seo_tags`, `description` and `title` — so every line here is
+  # about this record rather than about the markup in the canvas.
+  #
+  # WHICH IS THE WHOLE CONDITION FOR ASKING. `ErrorPage` and `Component` declare no `seo_tags` at
+  # all, so the group used to ask a 404 for a meta description, an Open Graph image and a title
+  # between 50 and 60 characters — none of which that record can hold, and the first of them is a
+  # BLOCKER, so a perfectly good error page was the only red score ring in the editor. Asked of the
+  # resource rather than of the section, because the resource is what actually knows.
+  defp seo_findings(record) do
+    case seo_capable?(record) do
+      true -> seo_lines(record)
+      false -> []
+    end
+  end
+
+  defp seo_capable?(%resource{}),
+    do: !is_nil(Ash.Resource.Info.attribute(resource, :seo_tags))
+
+  defp seo_capable?(_record), do: false
+
+  defp seo_lines(record) do
+    tags = seo_tags(record)
+
+    List.flatten([
+      description_finding(meta_tag(tags, "description") || record_description(record)),
+      og_finding(property_tag(tags, "og:image")),
+      title_finding(record_title(record))
+    ])
+  end
+
+  defp description_finding(nil),
+    do: [
+      document_finding(
+        :seo,
+        :blocker,
+        "meta-description",
+        gettext("Meta description missing"),
+        gettext("No description set for this page.")
+      )
+    ]
+
+  defp description_finding(_present), do: []
+
+  defp og_finding(nil),
+    do: [
+      document_finding(
+        :seo,
+        :warning,
+        "og-image",
+        gettext("Open Graph image not set"),
+        gettext("Add an og:image tag so link previews show a picture.")
+      )
+    ]
+
+  defp og_finding(_present), do: []
+
+  # 50–60 characters is the range a search result shows without truncating.
+  defp title_finding(title) when is_binary(title) do
+    length = String.length(title)
+
+    case length in 50..60 do
+      true -> []
+      false -> [title_length_finding(length)]
+    end
+  end
+
+  defp title_finding(:untitled), do: []
+
+  defp title_finding(_missing),
+    do: [
+      document_finding(
+        :seo,
+        :blocker,
+        "title",
+        gettext("Page has no title"),
+        gettext("A search result leads with the title; this page has none.")
+      )
+    ]
+
+  defp title_length_finding(length) when length < 50,
+    do:
+      document_finding(
+        :seo,
+        :warning,
+        "title-length",
+        gettext("Title is short"),
+        ngettext(
+          "%{count} character — a search result shows 50–60.",
+          "%{count} characters — a search result shows 50–60.",
+          length
+        )
+      )
+
+  defp title_length_finding(length),
+    do:
+      document_finding(
+        :seo,
+        :warning,
+        "title-length",
+        gettext("Title is long"),
+        ngettext(
+          "%{count} character — a search result truncates past 60.",
+          "%{count} characters — a search result truncates past 60.",
+          length
+        )
+      )
+
+  # The one performance number this editor can actually measure: the site's compiled stylesheet, the
+  # thing every page on it pays for.
+  #
+  # TODO: the rest of the prototype's performance panel — render-blocking scripts, image weight, the
+  # per-template JS bundle — needs the compiled asset manifest per template, which the runtime does
+  # not expose yet. Wire them here when it does.
+  @css_budget 60_000
+
+  # The site's own sheet plus the shared base, because that is what a visitor downloads. A component
+  # or layout being edited has no site of its own, and then the base is the whole of it.
+  defp performance_checks(%{site_name: site}) do
+    ["__shared_base__", site]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.map(&AssetsState.get_value(&1, "css"))
+    |> Enum.filter(&is_binary/1)
+    |> Enum.map(&byte_size/1)
+    |> Enum.sum()
+    |> bundle_checks()
+  end
+
+  defp performance_checks(_editor), do: []
+
+  defp bundle_checks(0), do: []
+  defp bundle_checks(bytes), do: [bundle_finding(bytes)]
+
+  defp bundle_finding(bytes) when bytes <= @css_budget,
+    do:
+      document_finding(
+        :performance,
+        :ok,
+        "bundle",
+        gettext("Bundle %{size}", size: kb(bytes)),
+        gettext("Under the %{size} budget for this template.", size: kb(@css_budget))
+      )
+
+  defp bundle_finding(bytes),
+    do:
+      document_finding(
+        :performance,
+        :warning,
+        "bundle",
+        gettext("Bundle %{size}", size: kb(bytes)),
+        gettext("Over the %{size} budget — every page on this site loads it.",
+          size: kb(@css_budget)
+        )
+      )
+
+  defp kb(bytes), do: "#{Float.round(bytes / 1000, 0) |> trunc()} KB"
+
+  defp document_finding(group, severity, rule, message, detail) do
+    %{
+      node_id: nil,
+      group: group,
+      severity: severity,
+      rule: rule,
+      message: message,
+      detail: detail
+    }
+  end
+
+  defp seo_tags(%{seo_tags: tags}) when is_list(tags), do: tags
+  defp seo_tags(_record), do: []
+
+  defp record_description(%{description: description}) when is_binary(description),
+    do: presence(description)
+
+  defp record_description(_record), do: nil
+
+  # `<title>` reads a page's `title`. A record without one — a layout — names no tab and is not asked.
+  defp record_title(%{title: title}) when is_binary(title), do: presence(title)
+  defp record_title(%{title: _missing}), do: nil
+  defp record_title(_untitled), do: :untitled
+
+  defp presence(""), do: nil
+  defp presence(value), do: value
+
+  defp meta_tag(tags, name), do: find_tag(tags, "name", name)
+  defp property_tag(tags, property), do: find_tag(tags, "property", property)
+
+  defp find_tag(tags, key, value) do
+    Enum.find_value(tags, fn tag ->
+      attrs = Map.get(tag, :attrs) || Map.get(tag, "attrs") || %{}
+      content = Map.get(tag, :content) || Map.get(tag, "content")
+
+      case Map.get(attrs, key) == value or Map.get(attrs, String.to_atom(key)) == value do
+        true -> presence(to_string(content || ""))
+        false -> nil
+      end
+    end)
+  end
+
+  # What PASSED, which is the other half of an audit: the prototype lists these in green under each
+  # group, and without them a healthy group says "nothing to report" — which reads as "not checked".
+  # Each one is a real check over the real document, and only appears when nothing in its group
+  # contradicts it.
+  defp passing_checks(nodes, issues, forms?, asks) do
+    failed = MapSet.new(issues, & &1.rule)
+    headings? = asks.outline? and Enum.any?(nodes, &(&1.tag in ~w(h1 h2 h3 h4 h5 h6)))
+
+    [
+      {:accessibility, "img-alt", gettext("Every image has alt text"),
+       gettext("Screen readers have something to announce."),
+       Enum.any?(nodes, &(&1.tag == "img"))},
+      {:accessibility, "link-text", gettext("Interactive elements are labelled"),
+       gettext("Every link and button has visible text."),
+       Enum.any?(nodes, &(&1.tag in ~w(a button)))},
+      {:accessibility, "heading-skip", gettext("Heading order is sound"),
+       gettext("No level is skipped on the way down."), headings?},
+      {:forms, "field-form", gettext("Every field is inside a form"),
+       gettext("What the visitor types has somewhere to go."), forms?},
+      {:forms, "form-destination", gettext("Every form reaches a handler"),
+       gettext("A submission is received rather than discarded."), forms?},
+      {:forms, "form-scope", gettext("Each form has a name of its own"),
+       gettext("One form's values never land in another's."), forms?},
+      {:seo, "no-h1", gettext("Page opens at h1"),
+       gettext("The outline starts where a search result does."), headings? and asks.seo?}
+    ]
+    |> Enum.filter(fn {_group, rule, _message, _detail, applicable?} ->
+      applicable? and not related_failure?(failed, rule)
+    end)
+    |> Enum.map(fn {group, rule, message, detail, _applicable?} ->
+      %{
+        node_id: nil,
+        group: group,
+        severity: :ok,
+        rule: "ok-" <> rule,
+        message: message,
+        detail: detail
+      }
+    end)
+  end
+
+  # `img-alt` and `img-alt-empty` are the same check reported two ways, and either one means the
+  # "every image has alt text" line has not earned its tick.
+  defp related_failure?(failed, "img-alt"),
+    do: MapSet.member?(failed, "img-alt") or MapSet.member?(failed, "img-alt-empty")
+
+  defp related_failure?(failed, "link-text"),
+    do: MapSet.member?(failed, "link-text") or MapSet.member?(failed, "button-text")
+
+  defp related_failure?(failed, "no-h1"),
+    do: MapSet.member?(failed, "no-h1") or MapSet.member?(failed, "no-heading")
+
+  # A field with no name has nowhere for its value to go either, so it withdraws the same tick a
+  # field with no form does.
+  defp related_failure?(failed, "field-form"),
+    do: any_failed?(failed, ~w(field-no-form field-no-key field-name-shadow))
+
+  defp related_failure?(failed, "form-destination"),
+    do: any_failed?(failed, ~w(form-no-destination))
+
+  defp related_failure?(failed, "form-scope"),
+    do:
+      any_failed?(
+        failed,
+        ~w(form-no-as form-no-source form-duplicate-seed form-duplicate-source form-duplicate-token)
+      )
+
+  defp related_failure?(failed, rule), do: MapSet.member?(failed, rule)
+
+  @doc """
+  The DOM id of one finding's Fix button.
+
+  A rule is not a finding. `field-no-form` fires once per loose field and `form-no-destination` once
+  per form, so naming the button after the rule alone put two elements with one id in the document as
+  soon as a page had two forms — reached on a stock install in three clicks. A duplicate id makes
+  `document.getElementById` answer whichever came first, so the second row's Fix drove the first
+  row's node.
+
+  A document-level finding carries no node and there is at most one of it, so the rule alone is
+  already unique there and the id it has always had is kept. `data-rule` is on every button either
+  way, for anything that wants to find them by rule rather than by finding.
+  """
+  @spec fix_id(map()) :: String.t()
+  def fix_id(%{rule: rule, node_id: nil}), do: "pb-audit-fix-#{rule}"
+  def fix_id(%{rule: rule, node_id: node_id}), do: "pb-audit-fix-#{rule}-#{node_id}"
+
+  defp any_failed?(failed, rules), do: Enum.any?(rules, &MapSet.member?(failed, &1))
+
+  defp node_findings(%Node{tag: "img"} = node) do
+    case Node.attr_text(node, "alt") do
+      nil ->
+        [
+          finding(
+            node,
+            :accessibility,
+            :blocker,
+            "img-alt",
+            gettext("Image missing alt text"),
+            gettext(
+              "This image has no alt attribute, so a screen reader has nothing to announce."
+            )
+          )
+        ]
+
+      "" ->
+        [
+          finding(
+            node,
+            :accessibility,
+            :warning,
+            "img-alt-empty",
+            gettext("Image alt text is empty"),
+            gettext(
+              "An empty alt is only right for decoration. Describe it, or say so deliberately."
+            )
+          )
+        ]
+
+      _described ->
+        []
+    end
+  end
+
+  defp node_findings(%Node{tag: "a", children: []} = node) do
+    [
+      finding(
+        node,
+        :accessibility,
+        :blocker,
+        "link-text",
+        gettext("Link has no visible text"),
+        gettext("A link with nothing inside it is announced as a bare URL.")
+      )
+    ]
+  end
+
+  defp node_findings(%Node{tag: "button", children: []} = node) do
+    [
+      finding(
+        node,
+        :accessibility,
+        :blocker,
+        "button-text",
+        gettext("Button has no label"),
+        gettext("A control with no text has nothing to announce and nothing to read.")
+      )
+    ]
+  end
+
+  defp node_findings(%Node{tag: "html"} = node) do
+    [
+      finding(
+        node,
+        :performance,
+        :blocker,
+        "nested-html",
+        gettext("A template should not contain <html>"),
+        gettext("The layout already provides the document shell; a second one is invalid.")
+      )
+    ]
+  end
+
+  defp node_findings(_node), do: []
+
+  # Checks about the page as a whole rather than about one element.
+  # THE OUTLINE IS NOT A FRAGMENT'S TO OWN. A layout's headings are its site name and its footer
+  # labels; the page's own h1 and h2 land between them at runtime, through `@inner_content`. So the
+  # `h1 → h3` a layout reads as on its own is a gap the page fills, and reporting it is a certainty
+  # this rail does not have — every seeded layout carried the warning. A component is a fragment for
+  # the same reason. A page and an error page are whole documents and keep the checks.
+  defp document_findings(nodes, editor) do
+    case outline_owned?(editor) do
+      true -> outline_findings(nodes)
+      false -> []
+    end
+  end
+
+  # A page and an error page are whole documents. A layout and a component are pieces of one, and
+  # the outline they read as on their own is not theirs — which withholds the green tick as well as
+  # the warning: "no level is skipped" is a claim about a document this rail is only holding half of.
+  defp outline_owned?(%{section: section}),
+    do: Section.normalize(section) not in ["layout", "component"]
+
+  defp outline_owned?(_editor), do: true
+
+  defp outline_findings(nodes) do
+    headings =
+      nodes
+      |> Enum.filter(&(&1.tag in ~w(h1 h2 h3 h4 h5 h6)))
+      |> Enum.map(&{&1, &1.tag |> String.trim_leading("h") |> String.to_integer()})
+
+    heading_findings(headings) ++ title_findings(headings)
+  end
+
+  # h1 → h3 skips a level, and the heading order is the outline a screen reader navigates by.
+  defp heading_findings(headings) do
+    headings
+    |> Enum.chunk_every(2, 1, :discard)
+    |> Enum.flat_map(fn [{_previous, from}, {node, to}] ->
+      case to - from > 1 do
+        true ->
+          [
+            finding(
+              node,
+              :accessibility,
+              :warning,
+              "heading-skip",
+              gettext("Heading order skips a level"),
+              gettext("h%{from} is followed directly by h%{to}.", from: from, to: to)
+            )
+          ]
+
+        false ->
+          []
+      end
+    end)
+  end
+
+  defp title_findings([]) do
+    [
+      %{
+        node_id: nil,
+        group: :seo,
+        severity: :warning,
+        rule: "no-heading",
+        message: gettext("Page has no heading"),
+        detail: gettext("Search results and screen readers both lead with the first heading.")
+      }
+    ]
+  end
+
+  defp title_findings([{node, level} | _rest]) when level > 1 do
+    [
+      finding(
+        node,
+        :seo,
+        :warning,
+        "no-h1",
+        gettext("Page does not start with an h1"),
+        gettext("The first heading is h%{level}; a page should open at the top level.",
+          level: level
+        )
+      )
+    ]
+  end
+
+  defp title_findings(_headings), do: []
+
+  defp finding(node, group, severity, rule, message, detail) do
+    %{
+      node_id: node.id,
+      group: group,
+      severity: severity,
+      rule: rule,
+      message: message,
+      detail: detail
+    }
+  end
+
+  # A blocker costs more than a warning, and the score stays a number so the ring can sweep to it.
+  defp audit_score([]), do: 100
+
+  defp audit_score(findings) do
+    penalty =
+      Enum.reduce(findings, 0, fn
+        %{severity: :blocker}, total -> total + 12
+        %{severity: :warning}, total -> total + 6
+        _ok, total -> total
+      end)
+
+    max(0, 100 - penalty)
+  end
 
   # A MODULE, resolved by identity rather than by name. The event carries `inspect(library)` because
   # that is what survives a round trip through the DOM, and turning it back with

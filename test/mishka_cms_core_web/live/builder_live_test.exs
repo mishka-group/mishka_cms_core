@@ -4170,6 +4170,310 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert has_element?(view, "#pb-layers")
       assert render(view) =~ "section"
     end
+
+    test "the audit rail reports a real finding, grouped and scored", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "template" => ~s(<img src="a.png">),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Image missing alt text"
+      assert html =~ "no alt attribute"
+      assert html =~ "Accessibility"
+      assert html =~ "1 issue"
+      # A blocker costs 12, so the ring reads 88 rather than a flat 100.
+      assert html =~ "88"
+      assert has_element?(view, ~s([data-rule="img-alt"]))
+    end
+
+    test "every group is shown even when it passes", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      # A group that vanishes when it passes reads as a check that never ran.
+      assert html =~ "Accessibility"
+      assert html =~ "SEO &amp; Meta"
+      assert html =~ "Performance"
+      assert html =~ "healthy"
+      assert html =~ "Page score"
+
+      # SEO is measured from the page's own fields: this fixture has a description but no social
+      # image and a short title, and that is exactly what the rail reports.
+      assert html =~ "Open Graph image not set"
+      assert html =~ "Add an og:image tag so link previews show a picture."
+      refute html =~ "site default"
+      assert html =~ "Title is short"
+      refute html =~ "Meta description missing"
+    end
+
+    # The SEO lines read the record, not the canvas — a page that sets its tags is clean.
+    test "a page with its meta tags set passes the SEO checks", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          title: String.duplicate("a", 52),
+          description: "A real description for this page.",
+          seo_tags: [
+            %{tag: "meta", attrs: %{"name" => "description"}, content: "A real description."},
+            %{tag: "meta", attrs: %{"property" => "og:image"}, content: "/img/social.png"}
+          ],
+          template: ~s(<div id="root"><h1>Title</h1></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      refute html =~ "Meta description missing"
+      refute html =~ "Open Graph image not set"
+      refute html =~ "Title is short"
+    end
+
+    # `<title>` reads the page's `title`; its `name` is the key it is filed under.
+    test "the title is measured on the page's title, not its name", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          name: String.duplicate("a", 52),
+          title: "Short",
+          template: ~s(<div id="root"><h1>Title</h1></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert render(view) =~ "Title is short"
+    end
+
+    # A layout has no `title` and names no tab, so nothing is asked about one.
+    test "a layout is asked nothing about a title", %{conn: conn, site: site} do
+      layout =
+        create_layout!(site_id: site.id, template: ~s(<div id="shell">{@inner_content}</div>))
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      _settled = render_async(view)
+      view |> element("#pb-rail-audit") |> render_click()
+      html = render(view)
+
+      assert html =~ "SEO &amp; Meta"
+      refute html =~ "Title is short"
+      refute html =~ "Title is long"
+      refute html =~ "Page has no title"
+    end
+
+    test "Fix scopes the assistant to the finding's own element", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+      section = node_with_tag(view, "section")
+
+      render_click(view, "op", %{
+        "kind" => "insert",
+        "template" => ~s(<img src="a.png">),
+        "parent_id" => section.id,
+        "index" => "0"
+      })
+
+      view |> element("#pb-rail-audit") |> render_click()
+      view |> element(~s([data-rule="img-alt"])) |> render_click()
+
+      html = render(view)
+      assert html =~ "Write an alt attribute"
+      # The offending node is selected, so the request is scoped to it.
+      assert editor(view).selection
+      assert has_element?(view, "#pb-ai-form")
+    end
+
+    test "a heading that skips a level is reported", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<div><h1>A</h1><h3>B</h3></div>))
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Heading order skips a level"
+      assert html =~ "h1 is followed directly by h3"
+    end
+
+    # A field with no form around it renders perfectly and submits nothing, so the rail is the only
+    # place the author can find out.
+    test "a field with no form around it is a blocker in the Forms group", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><h1>Sign up</h1><input name="email" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Forms"
+      assert html =~ "This field is not inside a form"
+      assert html =~ "never leaves the page"
+      assert has_element?(view, ~s([data-rule="field-no-form"]))
+    end
+
+    test "the Forms group is not shown on a page with no form and no field", %{
+      conn: conn,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Accessibility"
+      refute html =~ "Every field is inside a form"
+    end
+
+    test "Fix wraps the stray field in a real form, in one undo step", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><h1>Sign up</h1><input name="email" /></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+      view |> element(~s([data-rule="field-no-form"])) |> render_click()
+
+      assert [spec] = declared_forms(view)
+      assert spec.as == "form"
+      assert spec.assign == :form_form
+      assert spec.id == "form"
+      assert spec.change =~ ~r/^form-[a-z2-7]{5}-validate$/
+      assert spec.submit =~ ~r/^form-[a-z2-7]{5}-submit$/
+      assert spec.fields == [%{key: :email, type: :string, rules: []}]
+
+      refute render(view) =~ "This field is not inside a form"
+
+      undo!(view)
+
+      assert declared_forms(view) == []
+      assert node_with_tag(view, "input")
+    end
+
+    test "Fix appends a submit button to a form that has none", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.form :let={f} id="q-form" as={:q} for={assigns[:q_form]} phx-change="q_validate" phx-submit="q_submit"><input name={f[:email].name} /></.form></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert render(view) =~ "This form has no submit button"
+
+      view |> element(~s([data-rule="form-no-submit"])) |> render_click()
+
+      [send] =
+        view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> Enum.filter(&(&1.tag == "button"))
+
+      assert Node.attr_text(send, "type") == "submit"
+      assert Node.attr_text(send, "class") =~ "bg-slate-900"
+      assert node_parent(view, send.id) == node_with_tag(view, ".form").id
+
+      refute render(view) =~ "This form has no submit button"
+    end
+
+    # A code author's Fix opens the form's On submit in the Code window; the assistant is not asked.
+    test "Fix on a form nothing receives opens its On submit for a code author", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.form :let={f} id="q-form" as={:q} for={assigns[:q_form]} phx-change="q_validate" phx-submit="q_submit"><input name={f[:email].name} /><button type="submit">Send</button></.form></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert render(view) =~ "Nothing receives this form"
+
+      view |> element(~s([data-rule="form-no-destination"])) |> render_click()
+
+      assert has_element?(view, "#pb-form-handlers")
+      assert [%{"name" => "q_submit"}] = fragments(view).events
+      refute has_element?(view, "#pb-ai-form")
+    end
+
+    # A RULE IS NOT A FINDING. `form-no-destination` fires once per form, so naming the Fix button
+    # after the rule alone put two elements with one id in the document as soon as a page had two
+    # forms. `document.getElementById` answers whichever came first, so the second row's Fix drove
+    # the first row's node.
+    test "two forms raising one rule get one Fix button each, with ids of their own", %{
+      conn: conn,
+      site: site
+    } do
+      form = fn seed ->
+        ~s(<.form :let={f} id="#{seed}-form" as={:#{seed}} for={assigns[:#{seed}_form]} ) <>
+          ~s(phx-change="#{seed}_validate" phx-submit="#{seed}_submit">) <>
+          ~s(<input name={f[:email].name} /><button type="submit">Send</button></.form>)
+      end
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root">) <> form.("one") <> form.("two") <> ~s(</div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      ids =
+        view
+        |> render()
+        |> then(&Regex.scan(~r/id="(pb-audit-fix-form-no-destination[^"]*)"/, &1))
+        |> Enum.map(&List.last/1)
+
+      assert length(ids) == 2
+      assert length(Enum.uniq(ids)) == 2
+    end
+
+    # THE ONE PAGE WHERE THE EDITOR KNOWS BOTH CANDIDATES. Two forms used to send this Fix to the
+    # assistant, which from the author's seat is a button that only changes panels.
+    test "Fix moves a stray submit button into a form even when the page has two", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            ~s(<div id="root"><.form :let={f} id="contact-form" as={:contact} for={assigns[:contact_form]} phx-change="contact_validate" phx-submit="contact_submit"><input name={f[:email].name} /><button type="submit">Send</button></.form><.form :let={g} id="signup-form" as={:signup} for={assigns[:signup_form]} phx-change="signup_validate" phx-submit="signup_submit"><input name={g[:email].name} /><button type="submit">Join</button></.form><button type="submit">Go</button></div>),
+          events: [
+            %{name: "contact_submit", code: "{:noreply, socket}"},
+            %{name: "signup_submit", code: "{:noreply, socket}"}
+          ]
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert render(view) =~ "This submit button is not inside a form"
+
+      stray = view |> tagged("button") |> List.last()
+      view |> element(~s([data-rule="submit-no-form"])) |> render_click()
+
+      assert node_parent(view, stray.id) ==
+               view |> tagged(".form") |> List.last() |> Map.fetch!(:id)
+
+      refute has_element?(view, "#pb-ai-form")
+    end
   end
 
   @bound_form ~s(<div id="root"><.form :let={f} id="contact-form" as={:contact} for={assigns[:contact_form]} phx-change="contact_validate" phx-submit="contact_submit"><input name={f[:email].name} /><input name="loose" /></.form></div>)
@@ -5098,6 +5402,11 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     |> render_submit()
   end
 
+  defp open_audit(view), do: view |> element("#pb-rail-audit") |> render_click()
+
+  defp note_fix(view, form),
+    do: view |> element("#pb-audit-fix-form-no-destination-#{form.id}") |> render_click()
+
   defp written(names), do: Enum.map(names, &%{name: &1, code: "{:noreply, socket}"})
 
   describe "a page's forms on the Handlers tab" do
@@ -5322,6 +5631,29 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute has_element?(view, "#pb-code-form [data-focus]")
     end
 
+    test "Save stores the customized default, which still does not count as receiving it", %{
+      conn: conn,
+      site: site
+    } do
+      page = deep_forms_page!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+      handlers_tab(view)
+
+      customize!(view, "news-p3xa6-submit")
+      view |> form("#pb-code-form") |> render_submit()
+
+      assert [%{name: "news-p3xa6-submit", code: code}] = stored_events(page)
+      assert code == LiveViewCompiler.form_handler_sample(:submit, "news-p3xa6-submit")
+
+      view |> element("#pb-source-close") |> render_click()
+      open_audit(view)
+
+      assert has_element?(
+               view,
+               "#pb-audit-fix-form-no-destination-#{with_dom_id(view, "news-form").id}"
+             )
+    end
+
     test "announces builder:form:after_customize", %{conn: conn, site: site} do
       Process.register(self(), FormCustomizedProbe.waiter())
       register_plugin(FormCustomizedProbe, "builder:form:after_customize")
@@ -5340,6 +5672,81 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     end
   end
 
+  # The deep forms as a page saved before tags carries them: untagged event names.
+  @legacy_deep_forms @two_deep_forms
+                     |> String.replace("contact-k7m2q-", "contact_")
+                     |> String.replace("news-p3xa6-", "news_")
+
+  # A RENAME MOVES A PRE-TOKEN FORM'S OWN HANDLER AT SAVE. Until then the editor counts it under the
+  # name it moves to, so nothing offers the form a second handler that would stop it moving.
+  describe "a pre-token form a code author renamed, before the rename is saved" do
+    test "its own handler reads Custom, and Customize and the note's Fix focus it", %{
+      conn: conn,
+      site: site
+    } do
+      kit_rows!(site, chelekom_rows(~w(chelekom-form-wrapper)))
+
+      stores =
+        &~s|MishkaCmsCore.Runtime.PageForm.submit(socket, __page_forms__(), "#{&1}", params, fn values -> {:ok, values} end)|
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template: @legacy_deep_forms,
+          events: [
+            %{name: "contact_submit", code: stores.("contact_submit")},
+            %{name: "news_submit", code: stores.("news_submit")}
+          ]
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      forms = Enum.map(~w(contact-form news-form), &with_dom_id(view, &1))
+
+      for {form, name, index} <- Enum.zip([forms, ~w(Letters Digest), [0, 1]]) do
+        inspecting(view, form)
+        view |> element("#pb-rule-form-seed") |> render_change(%{"value" => name})
+
+        submit = Node.attr_text(node_again(view, form.id), "phx-submit")
+        assert submit =~ ~r/-[a-z2-7]{5}-submit$/
+        assert has_element?(view, ~s(#pb-form-card-submit[data-custom="true"]), "Custom")
+
+        view |> element("#pb-form-edit-in-code") |> render_click()
+
+        assert has_element?(view, "#pb-code-entry-events-#{index}[data-focus]")
+        refute has_element?(view, "#pb-form-handlers-#{form.id}[data-focus]")
+        assert has_element?(view, ~s(#pb-form-handler-#{submit}[data-custom="true"]))
+        refute has_element?(view, "#pb-form-customize-#{submit}")
+
+        render_click(view, "save_code", %{
+          "tab" => "events",
+          "customize" => submit,
+          "entry" => view |> fragments() |> Map.fetch!(:events) |> indexed()
+        })
+
+        assert length(fragments(view).events) == 2
+        assert has_element?(view, "#pb-code-entry-events-#{index}[data-focus]")
+
+        view |> element("#pb-source-close") |> render_click()
+        open_audit(view)
+        note_fix(view, form)
+
+        assert length(fragments(view).events) == 2
+        assert has_element?(view, "#pb-code-entry-events-#{index}[data-focus]")
+
+        view |> form("#pb-code-form") |> render_submit()
+
+        assert stored_names(page) ==
+                 Enum.map(forms, &Node.attr_text(node_again(view, &1.id), "phx-submit"))
+
+        assert Enum.find(stored_events(page), &(&1.name == submit)).code == stores.(submit)
+        view |> element("#pb-source-close") |> render_click()
+      end
+    end
+  end
+
+  defp indexed(entries),
+    do: entries |> Enum.with_index() |> Map.new(fn {entry, i} -> {to_string(i), entry} end)
+
   # A form the Handlers tab cannot list yet, because it has no name or no source: each Fix of the
   # note finishes one thing, and then the form's On submit opens in code.
   describe "the note's Fix on a form that is not finished" do
@@ -5353,6 +5760,64 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
     defp unfinished_page!(site) do
       kit_rows!(site, chelekom_rows(~w(chelekom-form-wrapper)))
       create_page!(site_id: site.id, template: @unfinished)
+    end
+
+    # Presses the note's Fix on the form with this DOM id until it opens the Code window, and
+    # answers how many presses edited the form first.
+    defp fix_until_code(view, dom_id) do
+      Enum.reduce_while(0..4, nil, fn edits, _none ->
+        note_fix(view, with_dom_id(view, dom_id))
+        render(view)
+
+        case has_element?(view, "#pb-source-modal") do
+          true -> {:halt, edits}
+          false -> {:cont, nil}
+        end
+      end)
+    end
+
+    test "gives each form its name, source and submit event, then opens its On submit", %{
+      conn: conn,
+      site: site
+    } do
+      page = unfinished_page!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      for {dom_id, clicks, event} <- [
+            {"search-form", 2, "search_go"},
+            {"q-form", 1, "q_submit"},
+            {"join-form", 3, "join_submit"}
+          ] do
+        assert fix_until_code(view, dom_id) == clicks
+
+        form = with_dom_id(view, dom_id)
+        assert Node.attr_text(form, "phx-submit") == event
+        assert has_element?(view, "#pb-form-handlers-#{form.id}")
+
+        index =
+          view |> fragments() |> Map.fetch!(:events) |> Enum.find_index(&(&1["name"] == event))
+
+        assert has_element?(view, "#pb-code-entry-events-#{index}[data-focus]")
+
+        view |> element("#pb-source-close") |> render_click()
+        open_audit(view)
+      end
+
+      assert stored_events(page) == []
+    end
+
+    test "a form that posts to its own address raises no note", %{conn: conn, site: site} do
+      {:ok, view, _html} = open_builder(conn, unfinished_page!(site))
+      open_audit(view)
+
+      find = with_dom_id(view, "find-form")
+      refute has_element?(view, "#pb-audit-fix-form-no-destination-#{find.id}")
+
+      assert has_element?(
+               view,
+               "#pb-audit-fix-form-no-destination-#{with_dom_id(view, "q-form").id}"
+             )
     end
 
     test "the card of a form with no name offers no Edit in Code, and says why", %{
@@ -5374,6 +5839,60 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert has_element?(view, "#pb-form-edit-in-code")
       refute has_element?(view, "#pb-form-card-unnamed")
+    end
+  end
+
+  describe "the note that nothing receives a form" do
+    test "is counted against nothing: the score and summary match a page whose forms have code",
+         %{
+           conn: conn,
+           site: site
+         } do
+      {:ok, noted, _html} = open_builder(conn, deep_forms_page!(site))
+      open_audit(noted)
+
+      received =
+        create_page!(site_id: site.id, template: @two_deep_forms, events: written(@deep_events))
+
+      {:ok, handled, _html} = open_builder(conn, received)
+      open_audit(handled)
+
+      assert has_element?(noted, "#pb-audit-badge-forms", "2 notes")
+      assert has_element?(handled, "#pb-audit-badge-forms", "healthy")
+
+      for id <- ~w(#pb-audit-score #pb-audit-summary) do
+        assert noted |> element(id) |> render() |> LazyHTML.from_fragment() |> LazyHTML.text() ==
+                 handled |> element(id) |> render() |> LazyHTML.from_fragment() |> LazyHTML.text()
+      end
+    end
+
+    test "its Fix opens each deep form's own On submit, customized once, stored never", %{
+      conn: conn,
+      site: site
+    } do
+      page = deep_forms_page!(site)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      news = with_dom_id(view, "news-form")
+      contact = with_dom_id(view, "contact-form")
+
+      note_fix(view, news)
+
+      assert has_element?(view, "#pb-source-modal #pb-form-handlers")
+      assert [%{"name" => "news-p3xa6-submit"}] = fragments(view).events
+      assert has_element?(view, "#pb-code-entry-events-0[data-focus]")
+
+      note_fix(view, news)
+      assert length(fragments(view).events) == 1
+
+      note_fix(view, contact)
+
+      assert [%{"name" => "news-p3xa6-submit"}, %{"name" => "contact-k7m2q-submit"}] =
+               fragments(view).events
+
+      assert has_element?(view, "#pb-code-entry-events-1[data-focus]")
+      assert stored_events(page) == []
     end
   end
 
@@ -5546,6 +6065,249 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute has_element?(view, "#pb-code-form")
       refute has_element?(view, "#pb-form-handlers")
     end
+
+    test "the note's Fix reads a plain sentence and opens nothing", %{conn: conn, site: site} do
+      {:ok, view, _html} = open_builder(conn, deep_forms_page!(site))
+      open_audit(view)
+
+      note_fix(view, with_dom_id(view, "news-form"))
+
+      refute has_element?(view, "#pb-source-modal")
+      assert flashes(view) =~ "Ask whoever writes code for this site"
+      refute flashes(view) =~ ~r/p3xa6|submit|handler/
+      assert fragments(view).events == []
+    end
+  end
+
+  # THE PAGE AREA WRITES THE PAGE'S CODE: its own type needs no code name of its own.
+  describe "a page admin" do
+    setup %{site: site} do
+      {:ok, pages: narrow_conn(site, ["admin:dashboard:runtime:page"])}
+    end
+
+    test "opens the Handlers tab with its form and adds a handler", %{pages: pages, site: site} do
+      {:ok, view, _html} = open_builder(pages, deep_forms_page!(site, written(["save"])))
+
+      render_click(view, "open_source", %{"tab" => "events"})
+      assert has_element?(view, "#pb-source-modal #pb-code-form")
+
+      render_click(view, "add_code", %{"tab" => "events"})
+      assert length(fragments(view).events) == 2
+    end
+
+    test "applies a template typed into the Template tab", %{pages: pages, page: page} do
+      {:ok, view, _html} = open_builder(pages, page)
+      view |> element("#pb-code") |> render_click()
+      assert has_element?(view, "#pb-source-form")
+
+      render_click(view, "apply_source", %{"source" => ~s(<div id="typed">typed</div>)})
+      assert Serializer.serialize(editor(view).tree) =~ "typed"
+    end
+
+    test "corrects a broken template on the recovery screen", %{pages: pages, site: site} do
+      page =
+        create_page!(site_id: site.id, template: "<div><p>fine</p></div>")
+        |> break_template!("<div><p>unclosed</div>")
+
+      {:ok, view, _html} = live(pages, "/admin/dashboard/runtime/builder/page/#{page.id}")
+
+      assert {:error, {:live_redirect, _to}} =
+               view
+               |> element("#pb-recover-form")
+               |> render_submit(%{"template" => "<div><p>mended</p></div>"})
+
+      assert Ash.get!(MishkaCmsCore.Runtime.Page, page.id, authorize?: false, tenant: site.id).template ==
+               "<div><p>mended</p></div>"
+    end
+  end
+
+  # EACH TYPE'S BUILDER OPENS FOR ITS OWN RUNTIME AREA OR `admin:dashboard:code`, asked at mount and
+  # again by the canvas, which is addressed by a session token rather than by the document.
+  describe "who may open which builder" do
+    test "the page area opens the page builder and not the layout builder", %{
+      site: site,
+      page: page
+    } do
+      conn = narrow_conn(site, ["admin:dashboard:runtime:page"])
+
+      {:ok, view, _html} = open_builder(conn, page)
+      assert has_element?(view, "#pb-root")
+
+      layout = create_layout!(site_id: site.id)
+
+      assert {:error, {:redirect, %{to: to, flash: flash}}} =
+               live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      assert to == "/admin/dashboard/runtime/layouts"
+      assert flash["error"] =~ "permission to open the layout builder"
+    end
+
+    test "the layout area alone does not open the page builder", %{site: site, page: page} do
+      conn = narrow_conn(site, ["admin:dashboard:runtime:layout"])
+
+      for path <- [
+            "/admin/dashboard/runtime/builder/page/#{page.id}",
+            "/admin/dashboard/runtime/builder/page"
+          ] do
+        assert {:error, {:redirect, %{to: "/admin/dashboard/runtime/pages"}}} = live(conn, path)
+      end
+    end
+
+    test "code opens every builder", %{site: site, page: page} do
+      conn = narrow_conn(site, ["admin:dashboard:code"])
+
+      for path <- [
+            "/admin/dashboard/runtime/builder/page/#{page.id}",
+            "/admin/dashboard/runtime/builder/layout/#{create_layout!(site_id: site.id).id}",
+            "/admin/dashboard/runtime/builder/component/#{create_component!(site_id: site.id).id}",
+            "/admin/dashboard/runtime/builder/error-page/#{create_error_page!(site_id: site.id).id}"
+          ] do
+        assert {:ok, _view, _html} = live(conn, path), path
+      end
+    end
+
+    test "an error page, addressed error-page, opens for its own area", %{site: site} do
+      error_page = create_error_page!(site_id: site.id)
+      path = "/admin/dashboard/runtime/builder/error-page/#{error_page.id}"
+
+      assert {:ok, _view, _html} =
+               live(narrow_conn(site, ["admin:dashboard:runtime:error_page"]), path)
+
+      assert {:error, {:redirect, %{to: "/admin/dashboard/runtime/error-pages"}}} =
+               live(narrow_conn(site, ["admin:dashboard:runtime:page"]), path)
+    end
+
+    test "the canvas refuses a session of a builder the reader may not open", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      {:ok, view, _html} = open_builder(conn, page)
+      path = "/admin/dashboard/runtime/builder-canvas/#{token(view)}"
+
+      {:ok, _canvas, html} = live(narrow_conn(site, ["admin:dashboard:runtime:layout"]), path)
+
+      assert html =~ "You do not have permission to open this builder."
+
+      {:ok, canvas, _html} = live(narrow_conn(site, ["admin:dashboard:runtime:page"]), path)
+
+      refute :sys.get_state(canvas.pid).socket.assigns.missing?
+    end
+
+    test "a plugin's rail is drawn for a holder of the name it names and nobody else", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      register_plugin(MishkaCmsCore.Test.Plugins.BuilderGatedRailProbe, "builder:rails")
+      key = MishkaCmsCore.Test.Plugins.BuilderGatedRailProbe.key()
+
+      {:ok, view, _html} = open_builder(conn, page)
+      assert has_element?(view, "#pb-rail-#{key}")
+
+      narrow = narrow_conn(site, ["admin:dashboard:runtime:page"])
+      {:ok, view, _html} = open_builder(narrow, page)
+
+      refute has_element?(view, "#pb-rail-#{key}")
+      render_click(view, "set_right_tab", %{"tab" => key})
+      refute has_element?(view, "#pb-gated-rail-body")
+    end
+
+    test "a plugin's Studio tab is drawn for a holder of the name it names alone", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      register_plugin(MishkaCmsCore.Test.Plugins.BuilderGatedStudioProbe, "builder:studio:tabs")
+      tab = "#pb-studio-" <> MishkaCmsCore.Test.Plugins.BuilderGatedStudioProbe.key()
+
+      view = open_studio(conn, page)
+      assert has_element?(view, tab)
+
+      narrow = narrow_conn(site, ["admin:dashboard:runtime:page"])
+      view = open_studio(narrow, page)
+      assert has_element?(view, "#pb-studio-tokens")
+      refute has_element?(view, tab)
+    end
+
+    test "a plugin's toolbar action is drawn for a holder of the name it names alone", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.BuilderGatedToolbarProbe,
+        "builder:canvas:toolbar"
+      )
+
+      button = "#pb-eltb-" <> MishkaCmsCore.Test.Plugins.BuilderGatedToolbarProbe.key()
+
+      for {who, drawn?} <- [
+            {conn, true},
+            {narrow_conn(site, ["admin:dashboard:runtime:page"]), false}
+          ] do
+        {:ok, view, _html} = open_builder(who, page)
+        render_click(view, "select", %{"id" => node_with_tag(view, "h1").id})
+
+        {:ok, canvas, _html} =
+          live(who, "/admin/dashboard/runtime/builder-canvas/#{token(view)}")
+
+        assert has_element?(canvas, button) == drawn?
+      end
+    end
+
+    test "a plugin's command is in the palette for a holder of the name it names alone", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      register_plugin(MishkaCmsCore.Test.Plugins.BuilderGatedCommandProbe, "builder:commands")
+      command = "#pb-cmd-" <> MishkaCmsCore.Test.Plugins.BuilderGatedCommandProbe.key()
+
+      for {who, drawn?} <- [
+            {conn, true},
+            {narrow_conn(site, ["admin:dashboard:runtime:page"]), false}
+          ] do
+        {:ok, view, _html} = open_builder(who, page)
+        render_click(view, "toggle_command", %{})
+
+        assert has_element?(view, "#pb-cmd-save"), "the palette is open"
+        assert has_element?(view, command) == drawn?
+      end
+    end
+
+    # NOTHING DRAWS A CONTRIBUTED SECTION YET: the Inspector draws its own. What the builder holds
+    # for the reader is what it would draw from, so that is what is asked.
+    test "a plugin's Inspector section is held for a holder of the name it names alone", %{
+      conn: conn,
+      site: site,
+      page: page
+    } do
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.BuilderGatedSectionProbe,
+        "builder:inspector:sections"
+      )
+
+      key = MishkaCmsCore.Test.Plugins.BuilderGatedSectionProbe.key()
+
+      for {who, held?} <- [
+            {conn, true},
+            {narrow_conn(site, ["admin:dashboard:runtime:page"]), false}
+          ] do
+        {:ok, view, _html} = open_builder(who, page)
+        sections = :sys.get_state(view.pid).socket.assigns.inspector_sections
+
+        assert Enum.any?(sections, &(to_string(&1.key) == "element")), "the core's are held"
+        assert Enum.any?(sections, &(to_string(&1.key) == key)) == held?
+      end
+    end
+  end
+
+  defp narrow_conn(site, permissions) do
+    admin =
+      create_admin("n#{System.unique_integer([:positive])}@example.com", site.id, permissions)
+
+    log_in(build_conn_for_host(), admin)
   end
 
   describe "editing" do
@@ -5640,6 +6402,20 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       # The Mock seeds two custom tokens (brand-teal, screen-xl) — the demo's "+2".
       assert studio =~ "2"
+    end
+
+    # The sample findings render through the SAME card as a measured one, so a missing key crashes
+    # the rail — which is exactly what happened, and only with the flag on.
+    test "the audit rail renders with sample findings switched on", %{conn: conn, page: page} do
+      Application.put_env(:mishka_cms_core, :builder_demo_data, true)
+      on_exit(fn -> Application.delete_env(:mishka_cms_core, :builder_demo_data) end)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Low contrast on muted text"
+      assert html =~ "Page score"
     end
 
     # Sample content must never stand in for real content, and must never claim to be a record you
@@ -11557,6 +12333,96 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert view |> editor() |> Map.fetch!(:tree) |> Serializer.serialize() =~ "<body"
     end
 
+    # THE ONE THING A LAYOUT IS FOR. Take `@inner_content` out and the layout still compiles, saves
+    # and previews — and every page wrapped in it serves this chrome with the page missing. The audit
+    # said "0 blockers" over exactly that document.
+    test "the audit names a layout that renders no page", %{conn: conn, site: site} do
+      layout = create_layout!(site_id: site.id, template: @body_layout)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      view |> element("#pb-rail-audit") |> render_click()
+      assert render(view) =~ "The page renders inside this layout"
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => expression_node(view).id})
+
+      html = render(view)
+      assert html =~ "This layout renders no page"
+      assert html =~ "every page on it loses its content"
+    end
+
+    test "a layout whose @inner_content is hidden from visitors is named, and not published",
+         %{conn: conn, site: site} do
+      template = ~s(<body><main>{@inner_content}</main></body>)
+      layout = create_layout!(site_id: site.id, template: template)
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      render_click(view, "ctx", %{
+        "action" => "visibility",
+        "node_id" => node_with_tag(view, "main").id
+      })
+
+      view |> element("#pb-rail-audit") |> render_click()
+      assert render(view) =~ "@inner_content is inside an element hidden from visitors"
+
+      publish!(view)
+
+      assert flashes(view) =~
+               "Not published — @inner_content is inside an element hidden from visitors"
+
+      stored =
+        Ash.get!(MishkaCmsCore.Runtime.Layout, layout.id, authorize?: false, tenant: site.id)
+
+      assert stored.template == template
+    end
+
+    # A LAYOUT'S HEADINGS ARE HALF AN OUTLINE. Its h1 is the site name and its h3s label the footer;
+    # the page's own headings land between them through `@inner_content`, so the `h1 → h3` it reads
+    # as on its own is a gap the page fills. Every seeded layout wore the warning.
+    test "no heading-order warning over an outline the page completes", %{conn: conn, site: site} do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          template:
+            ~s(<body><h1>Site</h1><main>{@inner_content}</main><footer><h3>More</h3></footer></body>)
+        )
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+
+      refute html =~ "Heading order skips a level"
+
+      # And no tick either: "no level is skipped" is a claim about a document this rail is holding
+      # half of, so it is withheld in both directions rather than only in the one that stings.
+      refute html =~ "Heading order is sound"
+      refute html =~ "Page opens at h1"
+    end
+
+    # And a page, which is a whole document, keeps it.
+    test "while a page still gets one", %{conn: conn, site: site} do
+      page = create_page!(site_id: site.id, template: ~s(<div><h1>Top</h1><h3>Then</h3></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert render(view) =~ "Heading order skips a level"
+    end
+
+    # Structure is a question only a layout has an answer to, so a page must not grow an empty
+    # heading that reads as a check which failed to run.
+    test "and says nothing of the kind on a page", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-rail-audit") |> render_click()
+
+      refute render(view) =~ "Structure"
+    end
+
     # Publishing is the deliberate "make this live", and this one is already broken — the same
     # promise a required property makes, made by the section instead of by a component.
     test "publishing a layout that renders no page is refused", %{conn: conn, site: site} do
@@ -11894,6 +12760,41 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       refute editor_html(second) =~ "Not found",
              "the strip said 500 and the canvas was still showing 404"
+    end
+
+    # SEO IS ADVICE ABOUT FIELDS THE RECORD HAS. `ErrorPage` declares no `seo_tags` at all, so the
+    # group asked a 404 for a meta description, an Open Graph image and a 50–60 character title it
+    # cannot hold — and "Meta description missing" is a BLOCKER, which made a perfectly good error
+    # page the only red score ring in the editor.
+    test "the audit asks an error page nothing about SEO", %{conn: conn, site: site} do
+      error_page =
+        create_error_page!(
+          site_id: site.id,
+          error_pages: [%{"status" => 404, "template" => "<h1>Not found</h1>", "layout" => %{}}]
+        )
+
+      {:ok, view, _html} =
+        live(conn, "/admin/dashboard/runtime/builder/error-page/#{error_page.id}")
+
+      view |> element("#pb-rail-audit") |> render_click()
+      html = render(view)
+
+      refute html =~ "Meta description missing"
+      refute html =~ "Open Graph image not set"
+      refute html =~ "SEO &amp; Meta"
+
+      # The outline IS its own, though — an error page is a whole document, not a fragment.
+      assert html =~ "Heading order is sound" or html =~ "Heading order skips a level"
+    end
+
+    # And a page, which declares `seo_tags`, keeps the whole group — the gate is the resource's
+    # fields, not a list of sections written down twice.
+    test "while a page, which has those fields, still gets asked", %{conn: conn, page: page} do
+      {:ok, view, _html} = open_builder(conn, page)
+
+      view |> element("#pb-rail-audit") |> render_click()
+
+      assert render(view) =~ "Open Graph image not set"
     end
 
     # AND THE COST OF GETTING IT WRONG, which is why this is not a cosmetic bug. `save_fields/3`
@@ -19527,6 +20428,41 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert render(view) =~ "cannot be installed from the mock registry"
     end
 
+    # An audit that only lists failures reads as "not checked". The prototype lists what passed too,
+    # and a green row here means a real check ran over the real document.
+    test "the audit lists what passed, not only what failed", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><h1>Title</h1><a href="/x">Read more</a></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Interactive elements are labelled"
+      assert html =~ "Page opens at h1"
+      # A pass is not an issue, and it has nothing to fix.
+      assert html =~ "healthy"
+      refute has_element?(view, "#pb-audit-fix-ok-link-text")
+    end
+
+    test "a failed check replaces its passing row", %{conn: conn, site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~s(<div id="root"><h1>T</h1><a href="/x"></a></div>)
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      html = render(view)
+      assert html =~ "Link has no visible text"
+      refute html =~ "Interactive elements are labelled"
+    end
+
     test "a preset card offers Apply for free presets and Unlock for paid ones", %{
       conn: conn,
       page: page
@@ -21350,6 +22286,81 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       end
     end
 
+    test "a form the audit's Fix puts around a field deep in a card is announced as fixed", %{
+      conn: conn,
+      site: site
+    } do
+      Process.register(self(), FormCreatedProbe.waiter())
+      register_plugin(FormCreatedProbe, "builder:form:after_create")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            String.replace(
+              @joining,
+              ~s(<div id="loose"></div>),
+              ~s(<div class="card"><div class="grid"><div id="l-col"><input id="stray" name="phone" /></div></div></div>)
+            )
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+      view |> element(~s([data-rule="field-no-form"])) |> render_click()
+
+      assert_receive {FormCreatedProbe, %{how: :fixed, seed: "form", node_id: id}}
+      tree = view |> editor() |> Map.fetch!(:tree)
+      assert PageForms.form?(Tree.get(tree, id))
+      assert Tree.get(tree, id).parent_id == dom(view, "l-col").id
+
+      assert tree
+             |> Tree.descendant_ids(id)
+             |> Enum.any?(&(Node.attr_text(Tree.get(tree, &1), "name") == "f[:phone].name"))
+
+      refute_receive {FormCreatedProbe, _another}, 200
+    end
+
+    test "a form the audit's Fix makes work is announced as fixed, a renamed one is not", %{
+      conn: conn,
+      site: site
+    } do
+      Process.register(self(), FormCreatedProbe.waiter())
+      register_plugin(FormCreatedProbe, "builder:form:after_create")
+
+      page =
+        create_page!(
+          site_id: site.id,
+          template:
+            String.replace(
+              @joining,
+              ~s(<div id="loose"></div>),
+              ~s(<div class="card"><div class="grid"><div id="l-col">) <>
+                ~s(<.form :let={h} id="bare-form" as={:bare} phx-change="bare-q2w3e-validate" phx-submit="bare-q2w3e-submit"><input name={h[:note].name} /><button type="submit">Send</button></.form>) <>
+                ~s(<.form :let={k} id="twin-form" as={:news} for={assigns[:twin_form]} phx-change="news-r4t5y-validate" phx-submit="news-r4t5y-submit"><input name={k[:code].name} /><button type="submit">Send</button></.form>) <>
+                ~s(</div></div></div>)
+            )
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      view |> element("#pb-rail-audit") |> render_click()
+
+      view
+      |> element(~s([data-rule="form-no-source"][phx-value-id="#{dom(view, "bare-form").id}"]))
+      |> render_click()
+
+      assert_receive {FormCreatedProbe, %{how: :fixed, seed: "bare", node_id: id}}
+      assert id == dom(view, "bare-form").id
+
+      view
+      |> element(~s([data-rule="form-duplicate-seed"]))
+      |> render_click()
+
+      assert view |> declared_forms() |> Enum.map(& &1.as) |> Enum.sort() ==
+               ~w(bare contact news news_2)
+
+      refute_receive {FormCreatedProbe, _renamed}, 200
+    end
+
     test "the Validation note names each form the way Layers does", %{conn: conn, site: site} do
       renamed_forms!(site)
 
@@ -21608,6 +22619,72 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       end
     end
 
+    test "a form whose Send was deleted offers both fixes, and As they type clears the finding",
+         %{conn: conn, site: site} do
+      {:ok, view, _html} = open_builder(conn, deep_forms_page!(site))
+      form = with_dom_id(view, "news-form")
+      [send] = buttons_in(view, form.id)
+
+      render_click(view, "op", %{"kind" => "delete", "node_id" => send.id})
+      open_audit(view)
+
+      assert has_element?(view, "#pb-audit-fix-form-no-submit-#{form.id}", "Add a Send button")
+
+      assert has_element?(
+               view,
+               "#pb-audit-fix-form-no-submit-#{form.id}-typing",
+               "Make it work as they type"
+             )
+
+      view |> element("#pb-audit-fix-form-no-submit-#{form.id}-typing") |> render_click()
+
+      assert view |> node_again(form.id) |> PageForms.as_typed?()
+      refute has_element?(view, "#pb-audit-fix-form-no-submit-#{form.id}")
+
+      refute has_element?(
+               view,
+               "#pb-audit-fix-form-no-submit-#{with_dom_id(view, "contact-form").id}"
+             )
+
+      undo!(view)
+      refute view |> node_again(form.id) |> PageForms.as_typed?()
+
+      view |> element("#pb-audit-fix-form-no-submit-#{form.id}") |> render_click()
+      assert [_send] = buttons_in(view, form.id)
+    end
+
+    test "a working kit form that cannot carry As they type is offered only the Send button",
+         %{conn: conn, site: site} do
+      kit_rows!(site, chelekom_rows(~w(chelekom-form-wrapper chelekom-simple-form)))
+
+      template =
+        ~s(<div id="root">) <>
+          ~s(<.component component_name="chelekom-simple-form" site="localhost" :let={s} id="lead-form" as={:lead} for={assigns[:lead_form]} phx-change="lead-m4r2q-validate" phx-submit="lead-m4r2q-submit"><div class="card"><div class="grid"><div id="lead-col"><input name={s[:email].name} /></div></div></div></.component>) <>
+          ~s(<.component component_name="chelekom-form-wrapper" site="localhost" :let={w} id="news-form" as={:news} for={assigns[:news_form]} phx-change="news-p3xa6-validate" phx-submit="news-p3xa6-submit"><div class="card"><div class="grid"><div id="news-col"><input name={w[:email].name} /></div></div></div></.component></div>)
+
+      {:ok, view, _html} = open_builder(conn, create_page!(site_id: site.id, template: template))
+      lead = with_dom_id(view, "lead-form")
+      news = with_dom_id(view, "news-form")
+      open_audit(view)
+
+      assert has_element?(view, "#pb-audit-fix-form-no-submit-#{lead.id}", "Add a Send button")
+      refute has_element?(view, "#pb-audit-fix-form-no-submit-#{lead.id}-typing")
+      assert has_element?(view, "#pb-audit-fix-form-no-submit-#{news.id}-typing")
+
+      render_click(view, "audit_fix", %{
+        "rule" => "form-no-submit",
+        "id" => lead.id,
+        "fix" => "typing"
+      })
+
+      refute view |> node_again(lead.id) |> PageForms.as_typed?()
+
+      inspecting(view, lead)
+      refute has_element?(view, "#pb-form-how")
+      inspecting(view, news)
+      assert has_element?(view, "#pb-form-how")
+    end
+
     test "the Form name and Success message speak plainly", %{conn: conn, site: site} do
       {:ok, view, _html} = open_builder(conn, deep_forms_page!(site))
       inspecting(view, with_dom_id(view, "news-form"))
@@ -21753,6 +22830,72 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
       assert Node.attr(node_again(view, contact.id), "multipart") == {:expr, "true"}
       assert has_element?(view, ~s(#pb-form-files[data-on="true"]))
+    end
+
+    test "Send to another address writes the four together, a rename carries them, and empty removes them",
+         %{conn: conn, site: site} do
+      Process.register(self(), FormCreatedProbe.waiter())
+      register_plugin(FormCreatedProbe, "builder:form:after_setting")
+      {:ok, view, _html} = open_builder(conn, deep_forms_page!(site))
+      contact = with_dom_id(view, "contact-form")
+      inspecting(view, contact)
+      phoenix_open(view)
+
+      view |> element("#pb-rule-target-_blank") |> render_click()
+      assert Node.attr_text(node_again(view, contact.id), "target") == "_blank"
+
+      view
+      |> element("#pb-form-address-form")
+      |> render_change(%{"value" => "https://pay.example.com/checkout"})
+
+      sent = node_again(view, contact.id)
+      assert Node.attr(sent, "target") == nil
+      refute has_element?(view, "#pb-form-phoenix #pb-rule-control-target")
+      assert has_element?(view, "#pb-form-address", "opens in this same tab")
+      assert PageForms.address(sent) == "https://pay.example.com/checkout"
+      assert Node.attr_text(sent, "method") == "post"
+      assert Node.attr(sent, "csrf_token") == {:expr, "false"}
+      assert Node.attr(sent, "phx-trigger-action") == {:expr, "assigns[:contact_send]"}
+      assert Node.attr_text(sent, "phx-submit") == "contact-k7m2q-submit"
+
+      assert_receive {FormCreatedProbe,
+                      %{
+                        setting: :address,
+                        value: "https://pay.example.com/checkout",
+                        seed: "contact"
+                      }}
+
+      open_audit(view)
+      refute has_element?(view, "#pb-audit-fix-form-no-destination-#{contact.id}")
+
+      assert has_element?(
+               view,
+               "#pb-audit-fix-form-no-destination-#{with_dom_id(view, "news-form").id}"
+             )
+
+      inspecting(view, contact)
+      view |> element("#pb-rule-form-seed") |> render_change(%{"value" => "Payment"})
+
+      renamed = node_again(view, contact.id)
+      assert PageForms.param_name(renamed) == "payment"
+      assert Node.attr(renamed, "phx-trigger-action") == {:expr, "assigns[:payment_send]"}
+      assert PageForms.address(renamed) == "https://pay.example.com/checkout"
+
+      view
+      |> element("#pb-form-address-form")
+      |> render_change(%{"value" => "http://pay.example.com"})
+
+      assert flashes(view) =~ "starts with https://"
+      assert PageForms.address(node_again(view, contact.id)) == "https://pay.example.com/checkout"
+
+      view |> element("#pb-form-address-form") |> render_change(%{"value" => ""})
+      cleared = node_again(view, contact.id)
+
+      for name <- ~w(action method csrf_token phx-trigger-action) do
+        assert Node.attr(cleared, name) == nil, name
+      end
+
+      assert Node.attr_text(cleared, "phx-submit") == "payment-k7m2q-submit"
     end
 
     test "Props and Advanced leave a working kit form's names to the Form panel", %{
