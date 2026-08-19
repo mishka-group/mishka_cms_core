@@ -39,6 +39,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.MediaCategory
+  alias MishkaCmsCore.Runtime.Translation
+  alias MishkaCmsCore.Runtime.Translations
+  alias MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup
   alias MishkaCmsCore.Runtime.PageBuilder.AiBackend
   alias MishkaCmsCore.Runtime.PageBuilder.Classes
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
@@ -1468,7 +1471,44 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end)
   end
 
+  # THE WORDS THIS DOCUMENT ASKS FOR, as it stands in the editor rather than as it was last saved —
+  # a `t("…")` typed a moment ago is already there to translate — in its markup and in the code of
+  # its helpers, events and infos (`Translations.source_keys/1`). They are registered on the way in,
+  # which is safe to repeat: `:register` never touches a row that exists, value included.
+  #
+  # Registered only where the reader may write. A site admin opening a GLOBAL component would
+  # otherwise be minting global rows, which is a master's to do; they still see what is there.
+  # AND THE WORDS OF EVERY COMPONENT IT RENDERS, nested ones included: a page's heading is often a
+  # card's, and an author translating "the page" means everything on it. Each component's words are
+  # registered under that COMPONENT's site — a global card's as global rows — and only where the
+  # reader may write, the same line as the document's own.
+  defp load_sheet(socket, :translations) do
+    %{editor: editor, current_user: actor} = socket.assigns
+
+    keys =
+      socket.assigns
+      |> Map.get(:fragments, %{})
+      |> Map.put(:template, Serializer.serialize(editor.tree))
+      |> Translations.source_keys()
+
+    if translatable_here?(actor, editor.site_id),
+      do: :ok = Translations.register(editor.site_id, keys)
+
+    words = editor.tree |> component_refs() |> Translations.component_words()
+
+    for {site_id, component_keys} <- words,
+        Translations.may_write?(actor, site_id),
+        do: :ok = Translations.register(site_id, component_keys)
+
+    all_keys = Enum.uniq(keys ++ Enum.flat_map(words, &elem(&1, 1)))
+    assign(socket, translation_keys: all_keys, translation_group: nil)
+  end
+
   defp load_sheet(socket, _sheet), do: socket
+
+  defp translatable_here?(%{site_id: nil}, _site_id), do: true
+  defp translatable_here?(%{site_id: site_id}, site_id), do: true
+  defp translatable_here?(_actor, _site_id), do: false
 
   # Only while the sheet is open. Every other route into these handlers — a deep link, a restored
   # session — leaves the assigns alone, and asking for a catalogue nobody is looking at is a
@@ -2023,6 +2063,27 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     end
   end
 
+  # THE TRANSLATIONS SHEET'S TABLE HEARS ITS WORDS CHANGE, as the admin list does — a save, a
+  # delete, a language the sheet registered on the way in — and never reloads to find out. Only a
+  # word this document asks for is handed down: the sheet's table reads those keys and no others,
+  # and whose rows of them it shows is still the resource's read policy, applied as it redraws.
+  # Our own writes come back too, and they are exactly the ones the table has to show.
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          payload: %Ash.Notifier.Notification{resource: Translation, data: row} = notification
+        },
+        socket
+      ) do
+    if row.key in (socket.assigns[:translation_keys] || []),
+      do:
+        send_update(MishkaGervaz.Table.Web.Live,
+          id: "pb-translations",
+          pubsub_notification: notification
+        )
+
+    {:noreply, socket}
+  end
+
   # Somebody else's document, or our own write coming back to us.
   def handle_info(%Phoenix.Socket.Broadcast{payload: %Ash.Notifier.Notification{}}, socket),
     do: {:noreply, socket}
@@ -2155,6 +2216,36 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_info({:form_cancelled, MediaCategory}, socket),
     do: {:noreply, assign(socket, :folder_form?, false)}
+
+  # THE TRANSLATIONS SHEET IS THE ADMIN MODAL'S BODY, moved the same way — see
+  # `MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup`. "Translate" on a row opens the word in
+  # every language; a save reads it again and moves on to the next language still missing. The
+  # table hears the save over PubSub, like every other change to its words.
+  def handle_info({:row_action, "edit_translation", %{"id" => id}}, socket),
+    do: {:noreply, TranslationGroup.open(socket, id)}
+
+  def handle_info({:row_action, "delete_translation_key", %{"id" => id}}, socket) do
+    case Translations.delete_key(socket.assigns.current_user, id) do
+      {:ok, removed} ->
+        {:noreply,
+         put_flash(
+           socket,
+           :info,
+           gettext("Deleted in every language (%{count}).", count: removed)
+         )}
+
+      {:error, :not_found} ->
+        {:noreply, put_flash(socket, :error, gettext("That word is no longer there."))}
+    end
+  end
+
+  def handle_info({:form_saved, _mode, %Translation{}}, socket),
+    do:
+      {:noreply,
+       socket |> TranslationGroup.saved() |> put_flash(:info, gettext("Translation saved."))}
+
+  def handle_info({:form_cancelled, Translation}, socket),
+    do: {:noreply, TranslationGroup.close(socket)}
 
   def handle_info({:form_saved, _mode, %MishkaCmsCore.Runtime.Snippet{} = snippet}, socket) do
     {:noreply,
@@ -3017,7 +3108,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("open_sheet", %{"sheet" => sheet}, socket) do
-    sheets = [:none, :studio, :assets, :review, :history, :examples]
+    sheets = [:none, :studio, :assets, :review, :history, :examples, :translations]
     opened = tab_atom(sheet, sheets)
 
     # The Record-history button always lands on Record history. Only the routes that mean "drafts"
@@ -3097,6 +3188,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # the DOM, so a click in the form is not a click away from the sheet.
   def handle_event("close_sheet", _params, socket),
     do: {:noreply, socket |> assign(:sheet, :none) |> assign(:media_target, nil)}
+
+  def handle_event("translation_pick", %{"id" => id}, socket),
+    do: {:noreply, TranslationGroup.pick(socket, id)}
+
+  def handle_event("translation_add_language", %{"language" => language}, socket),
+    do: {:noreply, TranslationGroup.add_language(socket, language)}
+
+  def handle_event("translation_back", _params, socket),
+    do: {:noreply, TranslationGroup.close(socket)}
 
   # THE NAME AND THE PATH, over the editor rather than back on the list. The modal is the resource's
   # own Gervaz form, so everything after the click belongs to the resource — see

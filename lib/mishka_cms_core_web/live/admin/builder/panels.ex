@@ -833,6 +833,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             icon={:image}
             label={gettext("Assets")}
           />
+          <.more_item
+            id="pb-more-translations"
+            event="open_sheet"
+            value={%{sheet: "translations"}}
+            icon={:language}
+            label={gettext("Translations")}
+            description={gettext("The t(…) words on this document, in every language")}
+          />
           <%!-- The same settings the name opens, landing on their SEO tab. --%>
           <.more_item
             :if={settable?(assigns) and SeoSettings.mode(@section)}
@@ -12350,6 +12358,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <.studio_sheet :if={@sheet == :studio} {assigns} />
           <.assets_sheet :if={@sheet == :assets} {assigns} />
           <.review_sheet :if={@sheet == :review} {assigns} />
+          <.translations_sheet :if={@sheet == :translations} {assigns} />
         </div>
       </section>
     </div>
@@ -14760,16 +14769,87 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     ]
   end
 
+  # Assets is the widest because it lays out a grid of thumbnails; Review and Versions are columns of
+  # text and read better narrow. `max-w-[94vw]` still caps all of them on a small screen.
+  # THE WORDS THIS DOCUMENT ASKS `t/1` FOR, and nothing else of the site's. The table and the form
+  # are Gervaz's — the same `MishkaCmsCore.Runtime.Translation` table and form the admin page shows —
+  # scoped by `key`, which a list path param turns into `key in …`. Which sites' rows come back is the
+  # resource's read policy, not this: a site admin gets their own and the global ones.
+  #
+  # `url_sync={false}` BECAUSE THIS TABLE IS NOT THE PAGE. The admin list writes its sort and filters
+  # into the address; here that address is the editor's, so the table's patch crashed BuilderLive,
+  # and every redraw replaced the page's flash with the table's empty one.
+  defp translations_sheet(assigns) do
+    ~H"""
+    <div id="pb-translations-sheet" class="space-y-3.5">
+      <div
+        :if={@translation_keys == []}
+        id="pb-translations-empty"
+        class="rounded-[12px] border border-dashed border-[#e6e4de] bg-[#faf9f6] px-4 py-5 text-[12.5px] leading-[1.6] text-[#6d6a63]"
+      >
+        <p class="font-semibold text-[#3a382f]">
+          {gettext("This document asks for no translated words yet.")}
+        </p>
+        <p class="mt-1.5">
+          <.sentence
+            text={
+              gettext_noop(
+                "Wrap a word in %{wrapper} and it appears here, in every language the site publishes in:"
+              )
+            }
+            parts={%{wrapper: {"code", "font-mono text-[#4f4bcc]", ~S|t("…")|}}}
+          />
+        </p>
+        <pre
+          class="mt-2 rounded-[8px] bg-white px-3 py-2 font-mono text-[11.5px] text-[#3a382f]"
+          phx-no-curly-interpolation
+        >&lt;h2&gt;{t("Categories")}&lt;/h2&gt;</pre>
+        <p class="mt-1.5">
+          {gettext("Until a language has a translation, the page shows the word itself.")}
+        </p>
+      </div>
+
+      <div :if={@translation_group} id="pb-translation-group-wrap" class="space-y-3">
+        <button
+          type="button"
+          id="pb-translation-back"
+          phx-click="translation_back"
+          class="inline-flex items-center gap-1.5 text-[12px] font-semibold text-[#5b57d6] hover:text-[#4f4bcc]"
+        >
+          <.icon name={:chevron} size={13} class="rotate-180" /> {gettext("All words")}
+        </button>
+        <MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup.translation_group
+          id="pb-translation-group"
+          group={@translation_group}
+          current_user={@current_user}
+        />
+      </div>
+
+      <.live_component
+        :if={@translation_keys != [] and is_nil(@translation_group)}
+        module={MishkaGervaz.Table.Web.Live}
+        id="pb-translations"
+        resource={MishkaCmsCore.Runtime.Translation}
+        current_user={@current_user}
+        url_state={%{path_params: %{key: @translation_keys}}}
+        url_sync={false}
+      />
+    </div>
+    """
+  end
+
   defp sheet_width_class(:assets), do: "w-[620px]"
   defp sheet_width_class(:studio), do: "w-[520px]"
   defp sheet_width_class(:review), do: "w-[420px]"
   defp sheet_width_class(:history), do: "w-[420px]"
+  defp sheet_width_class(:translations), do: "w-[680px]"
   defp sheet_width_class(_sheet), do: "w-[470px]"
 
   defp sheet_title(:studio), do: gettext("Studio")
   defp sheet_title(:assets), do: gettext("Assets")
   defp sheet_title(:review), do: gettext("Review")
   defp sheet_title(:history), do: gettext("Versions")
+  defp sheet_title(:translations), do: gettext("Translations")
   defp sheet_title(_sheet), do: ""
 
   # The prototype names the document being edited beside its state — "contact.heex · saved" reads as
