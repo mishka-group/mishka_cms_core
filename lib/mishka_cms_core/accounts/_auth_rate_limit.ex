@@ -15,6 +15,7 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
   | `request_magic_link` | 10 per hour | 3 per hour | `security.magic_link_per_*` |
   | `register_with_password` | 10 per hour | — | `security.register_per_ip` |
   | `change_password` | — | 10 per 15 minutes | `security.change_password_per_account` |
+  | `verify_with_totp`, `confirm_setup_with_totp`, `verify_with_recovery_code` | — | 5 per 5 minutes, together | `security.totp_per_account` |
 
   A master changes the numbers on the Settings page (`MishkaCmsCore.Settings`); the windows stay.
   `hit/3` reads the setting from the settings cache on every attempt, so a change takes effect on
@@ -38,7 +39,7 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
   alias MishkaCmsCore.Settings
 
   @type limited :: %{
-          action: :sign_in | :reset_request | :magic_link | :register | :change_password,
+          action: :sign_in | :reset_request | :magic_link | :register | :change_password | :totp,
           key: :ip | :account,
           retry_after: pos_integer()
         }
@@ -48,7 +49,10 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
     request_password_reset_token: "reset_request",
     request_magic_link: "magic_link",
     register_with_password: "register",
-    change_password: "change_password"
+    change_password: "change_password",
+    verify_with_totp: "totp",
+    confirm_setup_with_totp: "totp",
+    verify_with_recovery_code: "totp"
   }
 
   @actions %{
@@ -56,7 +60,8 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
     "reset_request" => :reset_request,
     "magic_link" => :magic_link,
     "register" => :register,
-    "change_password" => :change_password
+    "change_password" => :change_password,
+    "totp" => :totp
   }
 
   @scopes %{"ip" => :ip, "account" => :account}
@@ -66,7 +71,8 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
     reset_request: gettext_noop("Too many password reset requests"),
     magic_link: gettext_noop("Too many sign-in link requests"),
     register: gettext_noop("Too many new accounts"),
-    change_password: gettext_noop("Too many password change attempts")
+    change_password: gettext_noop("Too many password change attempts"),
+    totp: gettext_noop("Too many authenticator codes")
   }
 
   # Cloudflare Workers' address for a request to another zone. It lies inside Cloudflare's
@@ -110,11 +116,15 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
 
   @doc """
   The key a signed-in account's attempt on itself is counted under, within its site:
-  `"auth:<action>:account:<site id | master>:<user id>"`.
+  `"auth:<action>:account:<site id | master>:<user id>"`. An action input names its account in the
+  `:user` argument, as `verify_with_totp` does.
   """
-  @spec by_user(Ash.Changeset.t(), map()) :: String.t()
+  @spec by_user(Ash.Changeset.t() | Ash.ActionInput.t(), map()) :: String.t()
   def by_user(%Ash.Changeset{data: %{id: id}} = changeset, _context),
     do: key(changeset, "account", id)
+
+  def by_user(%Ash.ActionInput{} = input, _context),
+    do: key(input, "account", input |> Ash.ActionInput.get_argument(:user) |> Map.get(:id))
 
   defp key(%{action: %{name: name}, tenant: tenant}, scope, id),
     do: "auth:#{Map.fetch!(@buckets, name)}:#{scope}:#{tenant || "master"}:#{id}"

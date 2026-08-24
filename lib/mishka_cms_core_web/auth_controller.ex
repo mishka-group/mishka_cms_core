@@ -49,6 +49,9 @@ defmodule MishkaCmsCoreWeb.AuthController do
     see `MishkaCmsCore.Accounts.LiveSockets`
   - **Return Path Never Stored**: The destination travels as a `MishkaCmsCoreWeb.ReturnTo` token, so
     the session holds nothing to clean up and a sign-out always goes home
+  - **Second Factor**: An account with an authenticator gets a session only from the password
+    sign-in, which asked for its code (`MishkaCmsCore.Accounts.SecondFactor`); any other way in
+    ends on the sign-in page with its token revoked
   - **XSS Prevention**: Secure session handling prevents cross-site attacks
 
   ## Error Message Examples
@@ -132,7 +135,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # Extensions compile before the host's router exists, so `~p` is unavailable here.
   import MishkaCmsCore.Helpers, only: [path: 2]
 
-  alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, LiveSockets}
+  alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, LiveSockets, SecondFactor}
   alias MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCoreWeb.ReturnTo
@@ -166,8 +169,31 @@ defmodule MishkaCmsCoreWeb.AuthController do
   def success(conn, activity, user, token) do
     cond do
       refused?(conn, user) -> refuse(conn, user)
+      second_factor_skipped?(activity, user) -> second_factor_owed(conn, token)
       true -> signed_in(conn, activity, user, token)
     end
+  end
+
+  # A WAY IN THAT ASKED NO AUTHENTICATOR CODE opens no session for an account that has one: only the
+  # password sign-in asks for it (`MishkaCmsCore.Accounts.SecondFactor`). A sign-in link is refused
+  # before it gets here; a password reset of such an account ends on the sign-in page instead, and
+  # the token it was handed is revoked.
+  defp second_factor_skipped?({:password, how}, _user)
+       when how in [:sign_in, :sign_in_with_token],
+       do: false
+
+  defp second_factor_skipped?(_activity, user), do: SecondFactor.asked?(user)
+
+  defp second_factor_owed(conn, token) do
+    if is_binary(token),
+      do: AshAuthentication.TokenResource.revoke(MishkaCmsCore.Accounts.Token, token)
+
+    conn
+    |> put_flash(
+      :info,
+      gettext("Sign in with your password and the code from your authenticator app.")
+    )
+    |> redirect(to: path(conn, "/auth"))
   end
 
   # AN OFFLINE SITE SIGNS IN ONLY THOSE WHO MAY SEE IT. Every way in ends here — password, magic
@@ -379,12 +405,22 @@ defmodule MishkaCmsCoreWeb.AuthController do
 
   # A WAY IN THE SITE HAS CLOSED, said as itself rather than as a wrong password — the refusal comes
   # only after the password or the token was right. See `MishkaCmsCore.Accounts.AuthGate`.
+  #
+  # AN AUTHENTICATOR CODE STILL OWED, likewise: a sign-in link to an account with one, or a password
+  # posted without its code. See `MishkaCmsCore.Accounts.SecondFactor`.
   defp failure_message(conn, activity, reason) do
-    with nil <- AuthGate.refusal(reason) do
+    with nil <- AuthGate.refusal(reason),
+         nil <- SecondFactor.refusal(reason) do
       credentials_failure(conn, activity, reason)
     else
       %{action: action} -> closed_failure(conn, activity, reason, action)
+      second_factor -> {:second_factor, second_factor_text(second_factor)}
     end
+  end
+
+  defp second_factor_text(reason) do
+    %{title: title, text: text} = SecondFactor.describe(reason)
+    "#{title}. #{text}"
   end
 
   defp closed_failure(conn, activity, reason, action) do

@@ -37,6 +37,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
       |> assign(:loading?, Map.get(um, :loading?) == true)
       |> assign(:form_record_id, Map.get(um, :form_record_id))
       |> assign(:allowed, Map.get(um, :allowed, []))
+      |> assign(:turn_off?, Map.get(um, :turn_off?) == true)
+      |> assign(:turn_off_error, Map.get(um, :turn_off_error))
+      |> assign(:own_two_step?, Map.get(um, :own_two_step?) == true)
       |> assign(:head_button, @head_button)
       |> assign(:form_id, MishkaGervaz.Resource.Info.Form.component_id(User))
 
@@ -77,9 +80,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
         >
           <.icon name="hero-check-badge" class="size-4" /> {gettext("Confirm account")}
         </button>
+        <button
+          :if={:turn_off_totp in @allowed and @record.totp_enabled? == true and not @turn_off?}
+          type="button"
+          id="user-modal-turn-off-two-step"
+          phx-click="user_modal_turn_off_two_step"
+          class={[@head_button, "text-[#c0473d] hover:bg-[#fdf3f1]"]}
+        >
+          <.icon name="hero-shield-exclamation" class="size-4" /> {gettext("Turn off two-step")}
+        </button>
       </:actions>
 
       <div class="max-h-[72vh] overflow-y-auto px-6 py-5">
+        {turn_off_step(assigns)}
+
         <div :if={@loading? and is_nil(@record)} class="py-16 text-center text-sm text-zinc-400">
           {gettext("Loading…")}
         </div>
@@ -189,6 +203,98 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
       >
         <.icon name="hero-pencil-square" class="size-4" /> {gettext("Edit User")}
       </button>
+    </div>
+    """
+  end
+
+  # TURNING SOMEONE ELSE'S TWO-STEP OFF ASKS A CODE FROM THE ADMIN'S OWN AUTHENTICATOR: the step the
+  # header's button opens. An admin without one is sent to set theirs up first.
+  defp turn_off_step(assigns) do
+    ~H"""
+    <div
+      :if={@record && @turn_off? && :turn_off_totp in @allowed && @record.totp_enabled? == true}
+      id="user-modal-turn-off"
+      class="mb-5 rounded-[14px] border border-[#f3d5d0] bg-[#fdf6f4] px-4 py-[14px]"
+    >
+      <p class="m-0 text-[13px] font-bold text-[#3a382f]">
+        {gettext("Turn off two-step sign-in for this account?")}
+      </p>
+
+      <%= if @own_two_step? do %>
+        <form
+          id="user-modal-turn-off-form"
+          phx-submit="user_modal_turn_off_submit"
+          novalidate
+          class="mt-1.5 flex flex-col gap-3"
+        >
+          <p class="m-0 text-[12.5px] font-medium text-[#6b6862]">
+            {gettext(
+              "They then sign in with their password alone, and their recovery codes stop working. Enter a current code from your own authenticator app to confirm."
+            )}
+          </p>
+          <p
+            :if={@turn_off_error}
+            id="user-modal-turn-off-error"
+            class="m-0 text-[12.5px] font-semibold text-[#a5352c]"
+          >
+            {@turn_off_error}
+          </p>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <input
+              type="text"
+              id="user-modal-turn-off-code"
+              name="code"
+              dir="ltr"
+              inputmode="numeric"
+              autocomplete="one-time-code"
+              maxlength="7"
+              placeholder="123456"
+              aria-label={gettext("Current code from your authenticator app")}
+              class="h-10 w-[150px] rounded-[10px] border border-[#ecebe6] bg-white px-3 text-[14px] font-semibold tracking-[0.25em] text-[#1b1a18] outline-none focus:border-[#c3c1f0]"
+            />
+            <button
+              type="submit"
+              id="user-modal-turn-off-submit"
+              phx-disable-with={gettext("Checking…")}
+              class="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#c0473d] px-4 text-[12.5px] font-bold text-white hover:opacity-90"
+            >
+              <.icon name="hero-shield-exclamation" class="size-4" /> {gettext("Turn off")}
+            </button>
+            <button
+              type="button"
+              phx-click="user_modal_turn_off_cancel"
+              class="inline-flex h-10 items-center rounded-[10px] border border-[#ecebe6] bg-white px-4 text-[12.5px] font-semibold text-[#5c5a54] hover:bg-[#f7f6f3]"
+            >
+              {gettext("Cancel")}
+            </button>
+          </div>
+        </form>
+      <% else %>
+        <div id="user-modal-turn-off-own" class="mt-1.5 flex flex-col gap-3">
+          <p class="m-0 text-[12.5px] font-medium text-[#6b6862]">
+            {gettext(
+              "Turning it off for someone else asks a code from your own authenticator app. Set up two-step sign-in for your own account first."
+            )}
+          </p>
+          <div class="flex flex-wrap items-center gap-2.5">
+            <.link
+              id="user-modal-turn-off-setup"
+              navigate="/admin/dashboard/settings?tab=preferences"
+              class="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-[#17161a] px-4 text-[12.5px] font-bold text-white hover:opacity-90"
+            >
+              <.icon name="hero-device-phone-mobile" class="size-4" />
+              {gettext("Set up yours")}
+            </.link>
+            <button
+              type="button"
+              phx-click="user_modal_turn_off_cancel"
+              class="inline-flex h-10 items-center rounded-[10px] border border-[#ecebe6] bg-white px-4 text-[12.5px] font-semibold text-[#5c5a54] hover:bg-[#f7f6f3]"
+            >
+              {gettext("Cancel")}
+            </button>
+          </div>
+        </div>
+      <% end %>
     </div>
     """
   end

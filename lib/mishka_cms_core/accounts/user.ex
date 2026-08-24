@@ -110,6 +110,16 @@ defmodule MishkaCmsCore.Accounts.User do
 
         sender MishkaCmsCore.Accounts.User.Senders.SendMagicLinkEmail
       end
+
+      # An authenticator app as a second step after the password, for an account that sets one up
+      # — see `MishkaCmsCore.Accounts.SecondFactor`. Set up in two steps, so nothing is stored until
+      # a code from the app matches; a code on its own signs nobody in.
+      totp do
+        identity_field :email
+        issuer "MishkaCMS"
+        confirm_setup_enabled? true
+        brute_force_strategy :rate_limit
+      end
     end
   end
 
@@ -132,7 +142,7 @@ defmodule MishkaCmsCore.Accounts.User do
   # the actor read back from a token and `Ash.load/3` on it all read the account for its own holder,
   # and the row policies already limit them to that holder, AshAuthentication and admins.
   field_policies do
-    field_policy [:email, :confirmed_at, :site_id, :permission_values],
+    field_policy [:email, :confirmed_at, :site_id, :permission_values, :totp_enabled?],
                  action(:related) do
       description "An account reached through another resource shows its own fields to its owner and admins"
 
@@ -173,7 +183,7 @@ defmodule MishkaCmsCore.Accounts.User do
         end
 
         preload do
-          always [:site, :permission_values]
+          always [:site, :permission_values, :totp_enabled?]
         end
       end
 
@@ -230,6 +240,31 @@ defmodule MishkaCmsCore.Accounts.User do
                 "pending" => dgettext_noop("mishka_gervaz", "Pending")
               },
               dots: %{"confirmed" => "bg-[#1f9d6b]", "pending" => "bg-[#e5484d]"},
+              default_color: "bg-[#f4f3ef] text-[#8a877f]"
+            }
+          end
+        end
+
+        column :user_two_step do
+          source :totp_enabled?
+          label fn -> dgettext("mishka_gervaz", "Two-step") end
+          format fn enabled? -> if enabled? == true, do: "on", else: "off" end
+
+          ui do
+            type :badge
+            width "minmax(120px,0.6fr)"
+
+            extra %{
+              variant: :pill,
+              colors: %{
+                "on" => "bg-[#e6f6ee] text-[#177a53]",
+                "off" => "bg-[#f4f3ef] text-[#8a877f]"
+              },
+              labels: %{
+                "on" => dgettext_noop("mishka_gervaz", "On"),
+                "off" => dgettext_noop("mishka_gervaz", "Off")
+              },
+              dots: %{"on" => "bg-[#1f9d6b]", "off" => "bg-[#b5b2aa]"},
               default_color: "bg-[#f4f3ef] text-[#8a877f]"
             }
           end
@@ -319,6 +354,22 @@ defmodule MishkaCmsCore.Accounts.User do
           ui do
             label fn -> dgettext("mishka_gervaz", "Edit") end
             icon "hero-pencil-square"
+          end
+        end
+
+        # For someone who lost their authenticator app — see `MishkaCmsCore.Accounts.SecondFactor`.
+        # Opens the user's modal on the step that asks the admin's own current code.
+        action :turn_off_two_step do
+          type :event
+          event "turn_off_two_step_modal"
+          # Not on the actor's own row: its own is turned off on Preferences, with a current code.
+          visible fn record, state ->
+            record.totp_enabled? == true and record.id != Map.get(state.current_user || %{}, :id)
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Turn off two-step") end
+            icon "hero-shield-exclamation"
           end
         end
 
@@ -513,6 +564,16 @@ defmodule MishkaCmsCore.Accounts.User do
   # settings change them — see `MishkaCmsCore.Accounts.AuthRateLimit`.
   rate_limit do
     backend MishkaCmsCore.Accounts.AuthRateLimit
+
+    action :verify_with_totp,
+      limit: 5,
+      per: :timer.minutes(5),
+      key: &MishkaCmsCore.Accounts.AuthRateLimit.by_user/2
+
+    action :confirm_setup_with_totp,
+      limit: 5,
+      per: :timer.minutes(5),
+      key: &MishkaCmsCore.Accounts.AuthRateLimit.by_user/2
   end
 
   actions do
@@ -610,6 +671,12 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :totp_code, :string do
+        description "A current code from the account's authenticator app, when it has one."
+        allow_nil? true
+        sensitive? true
+      end
+
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 30,
                 per: :timer.minutes(5),
@@ -639,6 +706,9 @@ defmodule MishkaCmsCore.Accounts.User do
 
       # Refused here, after the password, when sign-in is closed — see `AuthGate`.
       prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in])
+
+      # And without a current code from an account's authenticator — see `SecondFactor`.
+      prepare &MishkaCmsCore.Accounts.SecondFactor.prepare(&1, &2, :code)
 
       metadata :token, :string do
         description "A JWT that can be used to authenticate the user."
@@ -1410,6 +1480,79 @@ defmodule MishkaCmsCore.Accounts.User do
       change AshAuthentication.GenerateTokenChange
     end
 
+    # TWO-FACTOR, beside the `totp` strategy's own `setup_with_totp` and `verify_with_totp` — see
+    # `MishkaCmsCore.Accounts.SecondFactor`. The confirmation is the strategy's own change, with the
+    # confirming code spent as a sign-in's is, so it cannot sign anybody in within its 30 seconds.
+    update :confirm_setup_with_totp do
+      description "Confirm TOTP setup by verifying a code and activating the secret."
+      accept []
+      require_atomic? false
+      touches_resources [MishkaCmsCore.Accounts.Token]
+
+      argument :setup_token, :string do
+        description "The setup token from the setup action."
+        allow_nil? false
+        sensitive? true
+      end
+
+      argument :code, :string do
+        description "A current code from the authenticator app."
+        allow_nil? false
+        sensitive? true
+      end
+
+      change AshAuthentication.Strategy.Totp.ConfirmSetupChange
+      change set_attribute(:last_totp_at, &DateTime.utc_now/0)
+      change {MishkaCmsCore.Accounts.Changes.AnnounceSecondFactor, event: :enabled}
+    end
+
+    update :disable_totp do
+      description "Turns off one's own authenticator, with a current code from it."
+      accept []
+      require_atomic? false
+
+      argument :code, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      change MishkaCmsCore.Accounts.Changes.RequireCurrentCode
+
+      # Written whatever the record in hand says — a page's copy of the account can be older than
+      # the authenticator it turns off.
+      change atomic_update(:totp_secret, expr(nil))
+      change atomic_update(:last_totp_at, expr(nil))
+
+      change {MishkaCmsCore.Accounts.Changes.AnnounceSecondFactor, event: :disabled}
+    end
+
+    update :turn_off_totp do
+      description "Turns off an account's authenticator for someone who lost the app, with a current code from the admin's own."
+      accept []
+      require_atomic? false
+
+      argument :code, :string do
+        description "A current code from the authenticator app of the admin running this."
+        allow_nil? false
+        sensitive? true
+      end
+
+      change {MishkaCmsCore.Accounts.Changes.RequireCurrentCode, of: :actor}
+
+      # Written whatever the record in hand says, so a row read before the app was set up still
+      # turns it off.
+      change atomic_update(:totp_secret, expr(nil))
+      change atomic_update(:last_totp_at, expr(nil))
+      change {MishkaCmsCore.Accounts.Changes.AnnounceSecondFactor, event: :disabled}
+      # So the Users table's row, redrawn from what this returns, says it is off.
+      change load(:totp_enabled?)
+    end
+
+    # Written by `SecondFactor` alone, with the time a code was accepted, so it is not accepted again.
+    update :record_totp_use do
+      accept []
+    end
+
     # For someone whose confirmation mail never came: the admin vouches for the address. Tells
     # plugins `"auth:account:confirmed"` with `%{user_id:, site_id:, by:}`, `by` the admin's id.
     update :confirm_by_admin do
@@ -1451,6 +1594,9 @@ defmodule MishkaCmsCore.Accounts.User do
 
       # A sign-in, so closed with sign-in as well as with sign-in links — see `AuthGate`.
       prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in, :magic_link])
+
+      # A link proves the mailbox, not the authenticator — see `SecondFactor`.
+      prepare &MishkaCmsCore.Accounts.SecondFactor.prepare(&1, &2, :refuse)
 
       metadata :token, :string do
         allow_nil? false
@@ -1602,6 +1748,29 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if always()
     end
 
+    # ONE'S OWN AUTHENTICATOR is set up, confirmed and turned off by the account itself and nobody
+    # else: an admin who set one up for an account could sign in as it. One already set up is turned
+    # off before another is. The code check and its record are the sign-in's own, never asked for.
+    policy action([
+             :setup_with_totp,
+             :confirm_setup_with_totp,
+             :disable_totp
+           ]) do
+      description "Only the account itself sets up or turns off its authenticator, or makes its recovery codes"
+      authorize_if expr(id == ^actor(:id))
+    end
+
+    policy action(:setup_with_totp) do
+      description "An authenticator already set up is turned off before another is set up"
+      forbid_unless expr(is_nil(totp_secret))
+      authorize_if always()
+    end
+
+    policy action([:verify_with_totp, :record_totp_use]) do
+      description "Run by the sign-in itself"
+      forbid_if always()
+    end
+
     bypass AshAuthentication.Checks.AshAuthenticationInteraction do
       authorize_if always()
     end
@@ -1660,6 +1829,23 @@ defmodule MishkaCmsCore.Accounts.User do
                   id == ^actor(:id) and not is_nil(^actor(:site_id)) and
                     not is_nil(^arg(:permission_ids))
                 )
+
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
+                     permissions: ["admin:dashboard:user", "admin:api:user"]}
+
+      forbid_unless MishkaCmsCore.Accounts.Checks.WithinCeiling
+
+      authorize_if actor_attribute_equals(:site_id, nil)
+      authorize_if expr(site_id == ^actor(:site_id))
+    end
+
+    # Turning off another account's authenticator weakens how it signs in, so it takes the user area
+    # within the actor's own site and ceiling, as `:tenant_update` does. Never the actor's own: that
+    # is `:disable_totp`, which asks a current code.
+    policy action(:turn_off_totp) do
+      description "A holder of the user area turns off authenticators of its own site's other accounts"
+
+      forbid_if expr(id == ^actor(:id))
 
       forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
                      permissions: ["admin:dashboard:user", "admin:api:user"]}
@@ -1785,6 +1971,7 @@ defmodule MishkaCmsCore.Accounts.User do
     publish :tenant_update, [[nil, :site_id], "updated"]
     publish :update, [[nil, :site_id], "updated"]
     publish :master_form_update, [[nil, :site_id], "updated"]
+    publish :turn_off_totp, [[nil, :site_id], "updated"]
     publish :confirm_by_admin, [[nil, :site_id], "updated"]
     publish :tenant_destroy, [[nil, :site_id], "destroyed"]
     publish :destroy, [[nil, :site_id], "destroyed"]
@@ -1818,6 +2005,20 @@ defmodule MishkaCmsCore.Accounts.User do
 
     attribute :confirmed_at, :utc_datetime_usec do
       public? true
+    end
+
+    # TWO-FACTOR (`MishkaCmsCore.Accounts.SecondFactor`): the authenticator's secret, and when a code
+    # from it was last accepted. The names and types AshAuthentication's `totp` strategy asks for.
+    attribute :totp_secret, :binary do
+      allow_nil? true
+      sensitive? true
+      public? false
+    end
+
+    attribute :last_totp_at, :datetime do
+      allow_nil? true
+      sensitive? true
+      public? false
     end
   end
 
@@ -1861,6 +2062,11 @@ defmodule MishkaCmsCore.Accounts.User do
       end
 
       load permissions: [:name]
+    end
+
+    calculate :totp_enabled?, :boolean, expr(not is_nil(totp_secret)) do
+      description "Whether the account signs in with a code from its authenticator after its password"
+      public? true
     end
   end
 

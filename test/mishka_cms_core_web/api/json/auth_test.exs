@@ -545,6 +545,79 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
     end
   end
 
+  # TWO-STEP SIGN-IN (`MishkaCmsCore.Accounts.SecondFactor`): an account with an authenticator app
+  # sends a current code as `totp_code`, or one of its recovery codes as `recovery_code`, with its
+  # password; without one it is answered 401 `second_factor_required`, with a wrong one
+  # `second_factor_invalid`. An account without an authenticator signs in as before.
+  describe "POST /auth/sign-in with two-step sign-in" do
+    test "an account without it signs in with its password, and a code sent anyway changes nothing",
+         %{master_user: master_user} do
+      assert %{status: 201} = two_step_sign_in(master_user, %{})
+      assert %{status: 201} = two_step_sign_in(master_user, %{"totp_code" => "123456"})
+    end
+
+    test "asks an account with it for the code, and answers the token with a current one", %{
+      master_user: master_user
+    } do
+      secret = enable!(master_user)
+
+      assert %{status: 401} = response = two_step_sign_in(master_user, %{})
+      assert [%{"code" => "second_factor_required"}] = errors(response)
+
+      assert %{status: 401} = response = two_step_sign_in(master_user, %{"totp_code" => "000000"})
+      assert [%{"code" => "second_factor_invalid"}] = errors(response)
+
+      later!(master_user)
+      code = NimbleTOTP.verification_code(secret)
+
+      assert %{status: 201} = response = two_step_sign_in(master_user, %{"totp_code" => code})
+      assert %{"meta" => %{"token" => token}} = Jason.decode!(response.resp_body)
+      assert is_binary(token)
+
+      assert %{status: 401} = response = two_step_sign_in(master_user, %{"totp_code" => code})
+      assert [%{"code" => "second_factor_invalid"}] = errors(response)
+    end
+
+    test "asks a site's account on its own site's address", %{site: site} do
+      tenant_user =
+        create_user!(
+          email: "two-step@example.com",
+          password: @password,
+          password_confirmation: @password,
+          site_id: site.id
+        )
+
+      secret = enable!(tenant_user)
+      opts = [headers: [{"x-no-tenant", "false"}], host: site.host]
+
+      assert %{status: 401} = response = two_step_sign_in(tenant_user, %{}, opts)
+      assert [%{"code" => "second_factor_required"}] = errors(response)
+
+      later!(tenant_user)
+      code = NimbleTOTP.verification_code(secret)
+
+      assert %{status: 201} = two_step_sign_in(tenant_user, %{"totp_code" => code}, opts)
+    end
+
+    test "answers a wrong password as before, saying nothing of a code", %{
+      master_user: master_user
+    } do
+      enable!(master_user)
+
+      response =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{"email" => to_string(master_user.email), "password" => "wrong-1A!"}
+          },
+          headers: [{"x-no-tenant", "true"}]
+        )
+
+      refute Enum.any?(errors(response), &String.starts_with?(&1["code"], "second_factor"))
+    end
+  end
+
   describe "POST /auth/reset-request" do
     test "request password reset token returns success regardless of email existence" do
       # Test with a real email (master_user exists from setup)
@@ -5032,6 +5105,57 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
   defp refusal(response) do
     errors = response.resp_body |> Jason.decode!() |> Map.get("errors", [])
     {response.status, Enum.map(errors, &Map.delete(&1, "id"))}
+  end
+
+  defp two_step_sign_in(user, second, opts \\ [headers: [{"x-no-tenant", "true"}]]) do
+    attributes = Map.merge(%{"email" => to_string(user.email), "password" => @password}, second)
+
+    make_api_request(
+      "#{@api_user_path}/sign-in",
+      %{"type" => "user", "attributes" => attributes},
+      opts
+    )
+  end
+
+  defp errors(response), do: Jason.decode!(response.resp_body)["errors"] || []
+
+  # Sets an authenticator up for `user` and hands back its secret, for the test to compute codes from.
+  defp enable!(user) do
+    started =
+      user
+      |> Ash.Changeset.for_update(:setup_with_totp, %{}, actor: user, tenant: user.site_id)
+      |> Ash.update!()
+
+    secret =
+      started.__metadata__.totp_url
+      |> URI.parse()
+      |> Map.fetch!(:query)
+      |> URI.decode_query()
+      |> Map.fetch!("secret")
+      |> Base.decode32!(padding: false)
+
+    user
+    |> Ash.Changeset.for_update(
+      :confirm_setup_with_totp,
+      %{
+        setup_token: started.__metadata__.setup_token,
+        code: NimbleTOTP.verification_code(secret)
+      },
+      actor: user,
+      tenant: user.site_id
+    )
+    |> Ash.update!()
+
+    secret
+  end
+
+  # As if the next 30-second period had come: the code that confirmed the setup is spent.
+  defp later!(user) do
+    MishkaCmsCore.Accounts.User
+    |> Ash.get!(user.id, tenant: user.site_id, authorize?: false)
+    |> Ash.Changeset.for_update(:record_totp_use, %{}, tenant: user.site_id, authorize?: false)
+    |> Ash.Changeset.force_change_attribute(:last_totp_at, DateTime.add(DateTime.utc_now(), -60))
+    |> Ash.update!()
   end
 
   defp master!(email) do

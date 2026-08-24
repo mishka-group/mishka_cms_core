@@ -62,3 +62,22 @@ end
 defimpl AshPhoenix.FormData.Error, for: MishkaCmsCore.Accounts.AuthGate.Closed do
   def to_form_error(_error), do: []
 end
+
+defimpl AshJsonApi.ToJsonApiError, for: MishkaCmsCore.Accounts.SecondFactor.Needed do
+  def to_json_api_error(%{reason: reason}) do
+    %{title: title, text: text} = MishkaCmsCore.Accounts.SecondFactor.describe(reason)
+
+    %AshJsonApi.Error{
+      status_code: 401,
+      code: "second_factor_#{reason}",
+      title: title,
+      detail: text,
+      meta: %{second_factor: "totp"},
+      log_level: :debug
+    }
+  end
+end
+
+defimpl AshPhoenix.FormData.Error, for: MishkaCmsCore.Accounts.SecondFactor.Needed do
+  def to_form_error(_error), do: []
+end

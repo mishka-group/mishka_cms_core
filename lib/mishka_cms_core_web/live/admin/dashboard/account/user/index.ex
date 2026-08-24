@@ -2,10 +2,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
   use MishkaCmsCore.ExtensionLiveView
 
   alias MishkaGervaz.Table.Web.UrlSync
-  alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.Accounts.{SecondFactor, User}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.SecurityCards
 
   @user_modal_id "user-details-modal"
-  @modal_actions [:confirm_by_admin]
+  @modal_actions [:confirm_by_admin, :turn_off_totp]
 
   defp default_user_modal,
     do: %{
@@ -13,7 +14,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       edit_mode?: false,
       loading?: false,
       form_record_id: nil,
-      allowed: []
+      allowed: [],
+      turn_off?: false,
+      turn_off_error: nil,
+      own_two_step?: false
     }
 
   defp show_user_modal(socket),
@@ -79,6 +83,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
     do: {:noreply, open_user_modal(socket, id, true)}
 
   @impl true
+  def handle_info({:row_action, "turn_off_two_step_modal", %{"id" => id}}, socket) do
+    socket = open_user_modal(socket, id, false)
+    {:noreply, assign(socket, :user_modal, %{socket.assigns.user_modal | turn_off?: true})}
+  end
+
+  @impl true
   def handle_info({:form_saved, :create, _result}, socket) do
     {:noreply,
      socket
@@ -115,6 +125,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
        socket.assigns.user_modal
        | record: loaded.user,
          allowed: loaded.allowed,
+         own_two_step?: loaded.own_two_step?,
          loading?: false
      })}
   end
@@ -136,6 +147,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
 
   def handle_event("close_user_modal", _params, socket),
     do: {:noreply, close_user_modal(socket)}
+
+  # TURNING SOMEONE'S TWO-STEP OFF ASKS THE ADMIN'S OWN CODE: the button opens that step, and the
+  # step's form runs `turn_off_totp` with it.
+  def handle_event("user_modal_turn_off_two_step", _params, socket),
+    do: {:noreply, turn_off_step(socket, true, nil)}
+
+  def handle_event("user_modal_turn_off_cancel", _params, socket),
+    do: {:noreply, turn_off_step(socket, false, nil)}
+
+  def handle_event("user_modal_turn_off_submit", %{"code" => code}, socket) do
+    case SecurityCards.six_digits(code) do
+      {:ok, code} ->
+        {:noreply,
+         on_modal_user(
+           socket,
+           :turn_off_totp,
+           %{code: code},
+           gettext("Two-step sign-in is turned off for this account.")
+         )}
+
+      :error ->
+        {:noreply,
+         turn_off_step(
+           socket,
+           true,
+           gettext("Enter the 6-digit code your authenticator app shows.")
+         )}
+    end
+  end
 
   def handle_event("user_modal_confirm", _params, socket),
     do:
@@ -165,10 +205,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
 
       %{
         user: user,
-        allowed: Enum.filter(@modal_actions, &allowed?(user, &1, current_user))
+        allowed: Enum.filter(@modal_actions, &allowed?(user, &1, current_user)),
+        own_two_step?: own_two_step?(current_user)
       }
     end)
   end
+
+  # Whether the admin has an authenticator of their own to confirm a turn-off with, as stored: the
+  # session's copy can be older than it.
+  defp own_two_step?(%{id: id, site_id: site_id}) do
+    case Ash.get(User, id, tenant: site_id, authorize?: false) do
+      {:ok, stored} -> SecondFactor.enabled?(stored)
+      {:error, _error} -> false
+    end
+  end
+
+  defp turn_off_step(socket, open?, error),
+    do:
+      assign(socket, :user_modal, %{
+        socket.assigns.user_modal
+        | turn_off?: open?,
+          turn_off_error: error
+      })
 
   defp allowed?(user, action, actor),
     do: Ash.can?({user, action}, actor, tenant: user.site_id, maybe_is: false)
@@ -188,8 +246,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       |> case do
         {:ok, _user} ->
           socket
+          |> turn_off_step(false, nil)
           |> put_flash(:info, done)
           |> load_user_modal(user.id)
+
+        {:error, error} when action == :turn_off_totp ->
+          turn_off_step(socket, true, SecondFactor.explain(error))
 
         {:error, _error} ->
           put_flash(socket, :error, gettext("This account could not be changed."))
@@ -207,9 +269,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       Ash.get!(User, id,
         action: :tenant_get,
         actor: actor,
-        tenant: site_id
+        tenant: site_id,
+        load: [:totp_enabled?]
       )
 
   defp get_user(id, %{site_id: nil} = actor),
-    do: Ash.get!(User, id, action: :master_get, actor: actor)
+    do: Ash.get!(User, id, action: :master_get, actor: actor, load: [:totp_enabled?])
 end

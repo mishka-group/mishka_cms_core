@@ -44,6 +44,12 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Sidebar.MenuSettings
   ]
 
+  # Account notices as plugins on the sign-in events they answer: the account is emailed when its
+  # two-step sign-in is turned off.
+  @account_notices [
+    MishkaCmsCore.Accounts.User.Notices.SecondFactorTurnedOff
+  ]
+
   # `mail:providers` plugins — the email providers a site can pick on the Email tab. An extension
   # adds one the same way (see `MishkaCmsCore.Mail.Provider`).
   @mail_providers [
@@ -80,7 +86,8 @@ defmodule MishkaCmsCore.Application do
   def plugins,
     do:
       @dashboard_widgets ++
-        @notify_producers ++ @settings_plugins ++ @cache_plugins ++ @mail_providers
+        @notify_producers ++
+        @settings_plugins ++ @cache_plugins ++ @mail_providers ++ @account_notices
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
