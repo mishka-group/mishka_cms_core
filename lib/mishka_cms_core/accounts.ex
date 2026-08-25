@@ -215,6 +215,7 @@ defmodule MishkaCmsCore.Accounts do
 
   resources do
     resource MishkaCmsCore.Accounts.Token
+    resource MishkaCmsCore.Accounts.RecoveryCode
     resource MishkaCmsCore.Accounts.User
     resource MishkaCmsCore.Accounts.Permission
     resource MishkaCmsCore.Accounts.UserPermission

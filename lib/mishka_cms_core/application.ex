@@ -45,9 +45,10 @@ defmodule MishkaCmsCore.Application do
   ]
 
   # Account notices as plugins on the sign-in events they answer: the account is emailed when its
-  # two-step sign-in is turned off.
+  # two-step sign-in is turned off and when one of its recovery codes is used.
   @account_notices [
-    MishkaCmsCore.Accounts.User.Notices.SecondFactorTurnedOff
+    MishkaCmsCore.Accounts.User.Notices.SecondFactorTurnedOff,
+    MishkaCmsCore.Accounts.User.Notices.RecoveryCodeUsed
   ]
 
   # `mail:providers` plugins — the email providers a site can pick on the Email tab. An extension

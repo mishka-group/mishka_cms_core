@@ -13,6 +13,14 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   an admin of the account's site, or a master, turns it off for someone who lost the app
   (`turn_off_totp`, the Users page), with a current code from their own (`step_up/2`).
 
+  ## Recovery codes
+
+  AshAuthentication's `recovery_code` strategy: `generate_recovery_codes` makes ten one-time codes
+  with a current code from the app, shown once and stored only as hashes
+  (`MishkaCmsCore.Accounts.RecoveryCode`); making new ones drops the old. Signing in, one sent as
+  `recovery_code` in place of `totp_code` is taken instead of the app's code, and deleted. Turning
+  the authenticator off deletes them all.
+
   ## Where it is asked
 
   At the account actions, so the sign-in page, AshAuthentication's own routes and the API hear the
@@ -47,7 +55,7 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   require Ash.Expr
   require Ash.Query
 
-  alias MishkaCmsCore.Accounts.{AuthRateLimit, User}
+  alias MishkaCmsCore.Accounts.{AuthRateLimit, RecoveryCode, User}
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Accounts.SecondFactor.Needed
   alias MishkaInstaller.Event.Hook
@@ -137,8 +145,16 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
     end
   end
 
+  # The app's code when one is sent, else a recovery code when one is.
   defp second_step(user, query) do
-    use_code(user, Ash.Query.get_argument(query, :totp_code), query.tenant)
+    case {Ash.Query.get_argument(query, :totp_code),
+          Ash.Query.get_argument(query, :recovery_code)} do
+      {code, recovery} when code in [nil, ""] and is_binary(recovery) and recovery != "" ->
+        recover(user, recovery, query.tenant)
+
+      {code, _recovery} ->
+        use_code(user, code, query.tenant)
+    end
   end
 
   @doc """
@@ -205,6 +221,92 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   end
 
   def step_up(_no_actor, _code), do: {:error, Needed.exception(reason: :own)}
+
+  # ONE OF THE ACCOUNT'S RECOVERY CODES, taken and deleted by the strategy's `verify_with_recovery_code`,
+  # counted by the same per-account limit as the app's codes. Typed as shown or not: case, spaces
+  # and dashes do not matter.
+  defp recover(user, code, tenant) do
+    code = code |> String.upcase() |> String.replace(~r/[\s-]/u, "")
+
+    User
+    |> Ash.ActionInput.for_action(:verify_with_recovery_code, %{user: user, code: code},
+      tenant: tenant,
+      authorize?: false
+    )
+    |> Ash.run_action()
+    |> case do
+      {:ok, %User{}} ->
+        Hook.call(
+          "auth:recovery_code:used",
+          %{user_id: user.id, site_id: user.site_id, left: recovery_codes_left(user)},
+          return: false
+        )
+
+        :ok
+
+      {:ok, nil} ->
+        {:error, Needed.exception(reason: :invalid)}
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  @doc """
+  An `after_action` for an action that turns the authenticator off: the account's recovery codes go
+  with it.
+
+      change after_action(&SecondFactor.cleared_recovery_codes/3)
+  """
+  @spec cleared_recovery_codes(Ash.Changeset.t(), User.t(), map()) ::
+          {:ok, User.t()} | {:error, term()}
+  def cleared_recovery_codes(_changeset, user, _context) do
+    with :ok <- clear_recovery_codes(user), do: {:ok, user}
+  end
+
+  @doc "Ten new recovery codes, as the `recovery_code` strategy makes them, before they are hashed."
+  @spec fresh_recovery_codes() :: [String.t()]
+  def fresh_recovery_codes do
+    strategy = AshAuthentication.Info.strategy!(User, :recovery_code)
+
+    AshAuthentication.Strategy.RecoveryCode.Actions.generate_codes_list(
+      strategy.code_length,
+      strategy.recovery_code_count,
+      strategy.code_alphabet
+    )
+  end
+
+  @doc """
+  How many recovery codes `user` has left. Read in AshAuthentication's own context, as the strategy
+  reads them: nobody else reads this table.
+  """
+  @spec recovery_codes_left(map()) :: non_neg_integer()
+  def recovery_codes_left(%{id: user_id}) do
+    RecoveryCode
+    |> Ash.Query.filter(user_id == ^user_id)
+    |> Ash.Query.set_context(%{private: %{ash_authentication?: true}})
+    |> Ash.count!()
+  end
+
+  @doc """
+  Deletes `user`'s recovery codes, in AshAuthentication's own context: an admin turning off
+  someone's authenticator reaches no codes of theirs otherwise.
+  """
+  @spec clear_recovery_codes(map()) :: :ok | {:error, term()}
+  def clear_recovery_codes(%{id: user_id}) do
+    RecoveryCode
+    |> Ash.Query.filter(user_id == ^user_id)
+    |> Ash.Query.set_context(%{private: %{ash_authentication?: true}})
+    |> Ash.bulk_destroy(:destroy, %{},
+      strategy: [:atomic, :atomic_batches, :stream],
+      context: %{private: %{ash_authentication?: true}},
+      return_errors?: true
+    )
+    |> case do
+      %Ash.BulkResult{status: :success} -> :ok
+      %Ash.BulkResult{errors: errors} -> {:error, Ash.Error.to_ash_error(errors)}
+    end
+  end
 
   @doc """
   The one line a person is told when a code they typed was refused — too many tries, a code that

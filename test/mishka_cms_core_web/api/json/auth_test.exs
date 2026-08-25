@@ -578,6 +578,29 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert [%{"code" => "second_factor_invalid"}] = errors(response)
     end
 
+    test "takes a recovery code in place of the code, once", %{master_user: master_user} do
+      secret = enable!(master_user)
+      later!(master_user)
+
+      {:ok, made} =
+        master_user
+        |> Ash.Changeset.for_update(
+          :generate_recovery_codes,
+          %{code: NimbleTOTP.verification_code(secret)},
+          actor: master_user
+        )
+        |> Ash.update()
+
+      [recovery | _rest] = made.__metadata__.recovery_codes
+
+      assert %{status: 201} = two_step_sign_in(master_user, %{"recovery_code" => recovery})
+
+      assert %{status: 401} =
+               response = two_step_sign_in(master_user, %{"recovery_code" => recovery})
+
+      assert [%{"code" => "second_factor_invalid"}] = errors(response)
+    end
+
     test "asks a site's account on its own site's address", %{site: site} do
       tenant_user =
         create_user!(

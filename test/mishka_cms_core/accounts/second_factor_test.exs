@@ -16,7 +16,7 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
   alias MishkaCmsCore.Accounts.SecondFactor
   alias MishkaCmsCore.Accounts.SecondFactor.Needed
   alias MishkaCmsCore.Accounts.User
-  alias MishkaCmsCore.Accounts.User.Notices.SecondFactorTurnedOff
+  alias MishkaCmsCore.Accounts.User.Notices.{RecoveryCodeUsed, SecondFactorTurnedOff}
 
   @password "Password123!"
 
@@ -221,6 +221,87 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
       assert {:error, %Ash.Error.Forbidden{}} = turn_off(admin, admin, "000000")
       assert SecondFactor.enabled?(reload(admin))
     end
+
+    test "takes the account's recovery codes with it, whoever turns it off", %{
+      site: site,
+      user: user
+    } do
+      enabled = enable!(user)
+      later!(user)
+      {:ok, _made} = generate(user, code(enabled.__metadata__.secret))
+      assert SecondFactor.recovery_codes_left(user) == 10
+
+      admin = create_user_with_permissions!(["admin:dashboard:user"], site_id: site.id)
+      own = enable!(admin)
+      later!(admin)
+
+      assert {:ok, _off} = turn_off(user, admin, code(own.__metadata__.secret))
+      assert SecondFactor.recovery_codes_left(user) == 0
+    end
+  end
+
+  describe "recovery codes" do
+    test "are made with a current code from the app: ten, handed back once", %{user: user} do
+      enabled = enable!(user)
+
+      assert {:error, _wrong} = generate(user, "000000")
+      assert SecondFactor.recovery_codes_left(user) == 0
+
+      later!(user)
+      assert {:ok, made} = generate(user, code(enabled.__metadata__.secret))
+      assert [_ | _] = codes = made.__metadata__.recovery_codes
+      assert length(codes) == 10
+      assert Enum.all?(codes, &Regex.match?(~r/\A[A-Z0-9]{12}\z/, &1))
+      assert SecondFactor.recovery_codes_left(user) == 10
+    end
+
+    test "are only for an account with an authenticator, made by itself", %{
+      site: site,
+      user: user
+    } do
+      assert {:error, %Ash.Error.Forbidden{}} = generate(user, "123456")
+
+      enable!(user)
+      admin = create_user_with_permissions!(["admin:dashboard:*"], site_id: site.id)
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               user
+               |> reload()
+               |> Ash.Changeset.for_update(:generate_recovery_codes, %{code: "123456"},
+                 actor: admin,
+                 tenant: site.id
+               )
+               |> Ash.update()
+    end
+
+    test "sign in once each in place of the app's code, typed any way", %{user: user} do
+      [first, second | _rest] = recovery_codes!(user)
+
+      assert {:ok, %User{}} = recover(user, first)
+      assert %Needed{reason: :invalid} = recover_error(user, first)
+
+      typed = second |> String.downcase() |> String.graphemes() |> Enum.chunk_every(4)
+      assert {:ok, %User{}} = recover(user, Enum.map_join(typed, "-", &Enum.join/1))
+      assert SecondFactor.recovery_codes_left(user) == 8
+    end
+
+    test "made again, the old ones stop working", %{user: user} do
+      [old | _rest] = recovery_codes!(user)
+      later!(user)
+      secret = reload(user).totp_secret
+
+      {:ok, _new} = generate(user, code(secret))
+
+      assert SecondFactor.recovery_codes_left(user) == 10
+      assert %Needed{reason: :invalid} = recover_error(user, old)
+    end
+
+    test "are refused to a wrong code without saying which part was wrong", %{user: user} do
+      recovery_codes!(user)
+
+      assert %Needed{reason: :invalid} = recover_error(user, "NOTACODE1234")
+      assert SecondFactor.recovery_codes_left(user) == 10
+    end
   end
 
   describe "the account's emails" do
@@ -257,8 +338,15 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
              ]
     end
 
+    test "say a recovery code was used", %{user: user} do
+      RecoveryCodeUsed.call(%{user_id: user.id, site_id: user.site_id, left: 9})
+
+      assert deliveries(user, "recovery_code_used") == ["A recovery code was used"]
+    end
+
     test "are plugins the core starts" do
       assert SecondFactorTurnedOff in MishkaCmsCore.Application.plugins()
+      assert RecoveryCodeUsed in MishkaCmsCore.Application.plugins()
     end
   end
 
@@ -402,6 +490,39 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
 
   defp turn_off_error(user, actor, code) do
     {:error, error} = turn_off(user, actor, code)
+    find_needed(error)
+  end
+
+  defp generate(user, code) do
+    user
+    |> reload()
+    |> Ash.Changeset.for_update(:generate_recovery_codes, %{code: code},
+      actor: user,
+      tenant: user.site_id
+    )
+    |> Ash.update()
+  end
+
+  # An account with an authenticator and its ten recovery codes, as they were handed back.
+  defp recovery_codes!(user) do
+    enabled = enable!(user)
+    later!(user)
+    {:ok, made} = generate(user, code(enabled.__metadata__.secret))
+    made.__metadata__.recovery_codes
+  end
+
+  defp recover(user, recovery_code) do
+    User
+    |> Ash.Query.for_read(
+      :sign_in_with_password,
+      %{email: to_string(user.email), password: @password, recovery_code: recovery_code},
+      tenant: user.site_id
+    )
+    |> Ash.read_one()
+  end
+
+  defp recover_error(user, recovery_code) do
+    {:error, error} = recover(user, recovery_code)
     find_needed(error)
   end
 

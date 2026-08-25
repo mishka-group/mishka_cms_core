@@ -120,6 +120,17 @@ defmodule MishkaCmsCore.Accounts.User do
         confirm_setup_enabled? true
         brute_force_strategy :rate_limit
       end
+
+      # One-time codes for signing in when the authenticator app is lost, made with a current code
+      # from it — see `MishkaCmsCore.Accounts.SecondFactor`. Hashed with bcrypt, salted per code: a
+      # code holds about 62 bits, under the 112 that NIST SP 800-63B lets a fast hash keep, so a
+      # stolen table must not be cheap to guess against.
+      recovery_code do
+        recovery_code_resource MishkaCmsCore.Accounts.RecoveryCode
+        hash_provider AshAuthentication.BcryptProvider
+        brute_force_strategy :rate_limit
+        generate_action_name :generate_recovery_codes
+      end
     end
   end
 
@@ -574,6 +585,11 @@ defmodule MishkaCmsCore.Accounts.User do
       limit: 5,
       per: :timer.minutes(5),
       key: &MishkaCmsCore.Accounts.AuthRateLimit.by_user/2
+
+    action :verify_with_recovery_code,
+      limit: 5,
+      per: :timer.minutes(5),
+      key: &MishkaCmsCore.Accounts.AuthRateLimit.by_user/2
   end
 
   actions do
@@ -673,6 +689,12 @@ defmodule MishkaCmsCore.Accounts.User do
 
       argument :totp_code, :string do
         description "A current code from the account's authenticator app, when it has one."
+        allow_nil? true
+        sensitive? true
+      end
+
+      argument :recovery_code, :string do
+        description "One of the account's recovery codes, in place of `totp_code`."
         allow_nil? true
         sensitive? true
       end
@@ -1522,6 +1544,7 @@ defmodule MishkaCmsCore.Accounts.User do
       # the authenticator it turns off.
       change atomic_update(:totp_secret, expr(nil))
       change atomic_update(:last_totp_at, expr(nil))
+      change after_action(&MishkaCmsCore.Accounts.SecondFactor.cleared_recovery_codes/3)
 
       change {MishkaCmsCore.Accounts.Changes.AnnounceSecondFactor, event: :disabled}
     end
@@ -1543,6 +1566,7 @@ defmodule MishkaCmsCore.Accounts.User do
       # turns it off.
       change atomic_update(:totp_secret, expr(nil))
       change atomic_update(:last_totp_at, expr(nil))
+      change after_action(&MishkaCmsCore.Accounts.SecondFactor.cleared_recovery_codes/3)
       change {MishkaCmsCore.Accounts.Changes.AnnounceSecondFactor, event: :disabled}
       # So the Users table's row, redrawn from what this returns, says it is off.
       change load(:totp_enabled?)
@@ -1551,6 +1575,69 @@ defmodule MishkaCmsCore.Accounts.User do
     # Written by `SecondFactor` alone, with the time a code was accepted, so it is not accepted again.
     update :record_totp_use do
       accept []
+    end
+
+    # The `recovery_code` strategy's check, written here because the one it builds returns `nil` for a
+    # code that does not match while declaring it never returns `nil`, so a wrong code raised instead
+    # of being refused (5.0.0-rc.14).
+    action :verify_with_recovery_code, :term do
+      description "Verify a recovery code and return the user if valid, nil otherwise."
+      allow_nil? true
+      transaction? true
+      touches_resources [MishkaCmsCore.Accounts.User, MishkaCmsCore.Accounts.RecoveryCode]
+
+      argument :user, :struct do
+        allow_nil? false
+        sensitive? true
+        constraints instance_of: MishkaCmsCore.Accounts.User
+      end
+
+      argument :code, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      run AshAuthentication.Strategy.RecoveryCode.VerifyAction
+    end
+
+    # The `recovery_code` strategy's own action, written here to ask a current code from the app
+    # first: ten new codes replace any made before, hashed as they are stored, and handed back once
+    # in the `:recovery_codes` metadata.
+    update :generate_recovery_codes do
+      description "Makes the account's recovery codes, with a current code from its authenticator."
+      accept []
+      require_atomic? false
+
+      argument :code, :string do
+        allow_nil? false
+        sensitive? true
+      end
+
+      argument :recovery_codes, {:array, :string} do
+        allow_nil? false
+        public? false
+        sensitive? true
+        default {MishkaCmsCore.Accounts.SecondFactor, :fresh_recovery_codes, []}
+      end
+
+      change MishkaCmsCore.Accounts.Changes.RequireCurrentCode
+
+      change {Ash.Resource.Change.CascadeDestroy,
+              relationship: :recovery_codes, after_action?: false}
+
+      change {AshAuthentication.Strategy.RecoveryCode.HashRecoveryCodesChange,
+              hash_provider: AshAuthentication.BcryptProvider}
+
+      change manage_relationship(:recovery_codes, :recovery_codes,
+               type: :create,
+               value_is_key: :code
+             )
+
+      change {MishkaCmsCore.Accounts.Changes.AnnounceSecondFactor, event: :recovery_codes}
+
+      metadata :recovery_codes, {:array, :string} do
+        allow_nil? false
+      end
     end
 
     # For someone whose confirmation mail never came: the admin vouches for the address. Tells
@@ -1754,7 +1841,8 @@ defmodule MishkaCmsCore.Accounts.User do
     policy action([
              :setup_with_totp,
              :confirm_setup_with_totp,
-             :disable_totp
+             :disable_totp,
+             :generate_recovery_codes
            ]) do
       description "Only the account itself sets up or turns off its authenticator, or makes its recovery codes"
       authorize_if expr(id == ^actor(:id))
@@ -1766,7 +1854,13 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if always()
     end
 
-    policy action([:verify_with_totp, :record_totp_use]) do
+    policy action(:generate_recovery_codes) do
+      description "Recovery codes come with an authenticator"
+      forbid_if expr(is_nil(totp_secret))
+      authorize_if always()
+    end
+
+    policy action([:verify_with_totp, :verify_with_recovery_code, :record_totp_use]) do
       description "Run by the sign-in itself"
       forbid_if always()
     end
@@ -2038,6 +2132,10 @@ defmodule MishkaCmsCore.Accounts.User do
       description "This user's permission grants, the rows behind `permissions`"
       destination_attribute :user_id
       filter expr(is_nil(type(^actor(:site_id), :uuid)) or user.site_id == ^actor(:site_id))
+    end
+
+    has_many :recovery_codes, MishkaCmsCore.Accounts.RecoveryCode do
+      description "The account's one-time recovery codes, as hashes"
     end
 
     many_to_many :permissions, MishkaCmsCore.Accounts.Permission do

@@ -1,7 +1,7 @@
 defmodule MishkaCmsCoreWeb.Live.Admin.Components.SecurityCards do
   @moduledoc """
   The cards of an account's own sign-in security, drawn on the settings page's Preferences tab: the
-  core's — its authenticator app (`TwoFactor`) — and any an
+  core's — its authenticator app (`TwoFactor`) and its recovery codes (`RecoveryCodes`) — and any an
   extension adds on the `"account:security:cards"` mishka_installer event, as a widget is added on
   `"dashboard:widgets"`.
 
@@ -21,14 +21,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SecurityCards do
   """
   use Phoenix.Component
 
-  alias MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{RecoveryCodes, TwoFactor}
 
   @type card :: %{id: String.t(), priority: integer(), module: module()}
 
   @event "account:security:cards"
 
   @core [
-    %{id: "two-factor", priority: 10, module: TwoFactor}
+    %{id: "two-factor", priority: 10, module: TwoFactor},
+    %{id: "recovery-codes", priority: 20, module: RecoveryCodes}
   ]
 
   @doc "The cards to draw, the core's first among equals, low priority first."
