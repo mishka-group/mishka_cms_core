@@ -21,6 +21,15 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   `recovery_code` in place of `totp_code` is taken instead of the app's code, and deleted. Turning
   the authenticator off deletes them all.
 
+  ## What a site asks of its admins
+
+  `policy/1`: `:off` — no code is asked of anyone, even an account with an authenticator;
+  `:optional` — each admin chooses; `:recommended` — an admin without one is reminded at each
+  sign-in (`MishkaCmsCore.Accounts.User.Notices.TwoStepReminder`) and on the dashboard;
+  `:required` — an admin without one sets one up before using the dashboard
+  (`MishkaCmsCore.Accounts.TwoStepGuard`). Read from the master's `security.two_step.every_site`, or
+  each site's own `security.two_step` while the master leaves it to them.
+
   ## Where it is asked
 
   At the account actions, so the sign-in page, AshAuthentication's own routes and the API hear the
@@ -55,12 +64,21 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   require Ash.Expr
   require Ash.Query
 
-  alias MishkaCmsCore.Accounts.{AuthRateLimit, RecoveryCode, User}
+  alias MishkaCmsCore.Accounts.{AuthRateLimit, Helper, RecoveryCode, User}
+  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Accounts.SecondFactor.Needed
   alias MishkaInstaller.Event.Hook
 
   @type reason :: :required | :invalid | :password | :own
+  @type policy :: :off | :optional | :recommended | :required
+
+  @policies %{
+    "off" => :off,
+    "optional" => :optional,
+    "recommended" => :recommended,
+    "required" => :required
+  }
 
   @codes %{
     "second_factor_required" => :required,
@@ -74,9 +92,49 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   def enabled?(%{totp_secret: secret}) when is_binary(secret) and secret != "", do: true
   def enabled?(_user), do: false
 
-  @doc "Whether signing in asks `user` for a code: it has an authenticator."
+  @doc """
+  What two-step sign-in asks of the admins of `site_id` — `nil` for masters: the master's
+  `security.two_step.every_site` when it names a policy, else the site's own `security.two_step`
+  (the master site's, for masters), else `:optional`.
+
+      SecondFactor.policy(site.id) #=> :recommended
+  """
+  @spec policy(String.t() | nil) :: policy()
+  def policy(site_id) do
+    case Map.fetch(@policies, Settings.get("security.two_step.every_site", "sites")) do
+      {:ok, policy} -> policy
+      :error -> site_policy(site_id || master_site_id())
+    end
+  end
+
+  defp site_policy(nil), do: :optional
+
+  defp site_policy(site_id),
+    do: Map.get(@policies, Settings.get_own("security.two_step", "optional", site_id), :optional)
+
+  defp master_site_id do
+    case SiteState.get_by_master() do
+      {:ok, %{id: id}} -> id
+      _none -> nil
+    end
+  end
+
+  @doc "Whether signing in asks `user` for a code: it has an authenticator, and its site's policy is not `:off`."
   @spec asked?(map()) :: boolean()
-  def asked?(user), do: enabled?(user)
+  def asked?(user), do: enabled?(user) and policy(user.site_id) != :off
+
+  @doc "Whether `user` is an admin without an authenticator on a site that requires one."
+  @spec owed?(map() | nil) :: boolean()
+  def owed?(user), do: without_one?(user, :required)
+
+  @doc "Whether `user` is an admin without an authenticator on a site that recommends one."
+  @spec reminded?(map() | nil) :: boolean()
+  def reminded?(user), do: without_one?(user, :recommended)
+
+  defp without_one?(%{site_id: site_id} = user, policy),
+    do: not enabled?(user) and policy(site_id) == policy and Helper.dashboard_admin?(user)
+
+  defp without_one?(_no_user, _policy), do: false
 
   @doc """
   The `otpauth://` address `setup_with_totp` hands back, named after the account's site: its

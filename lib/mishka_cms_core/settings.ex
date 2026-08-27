@@ -861,6 +861,43 @@ defmodule MishkaCmsCore.Settings do
             "How many codes from an authenticator app one account may try, right or wrong — signing in, setting one up or turning it off — before it waits for the 5 minutes to pass. Each site counts its own accounts; masters are counted together."
           )
       ),
+      # TWO-STEP SIGN-IN FOR ADMINS — see `MishkaCmsCore.Accounts.SecondFactor.policy/1`. The global
+      # one wins unless it leaves the choice to each site.
+      define("security.two_step.every_site", :select,
+        default: "sites",
+        category: "security",
+        group: gettext_noop("Two-step sign-in"),
+        scope: :master,
+        options: [
+          {gettext_noop("Each site decides"), "sites"},
+          {gettext_noop("Off"), "off"},
+          {gettext_noop("Optional"), "optional"},
+          {gettext_noop("Recommended"), "recommended"},
+          {gettext_noop("Required"), "required"}
+        ],
+        label: gettext_noop("Two-step sign-in for admins on every site"),
+        description:
+          gettext_noop(
+            "Each site decides: every site's own choice applies, and the master site's to masters. Off: nobody is asked for a code, even with an authenticator set up. Optional: each admin chooses. Recommended: admins without one are reminded at each sign-in and on the dashboard. Required: an admin without one sets one up before using the dashboard."
+          )
+      ),
+      define("security.two_step", :select,
+        default: "optional",
+        category: "security",
+        group: gettext_noop("Two-step sign-in"),
+        scope: :site,
+        options: [
+          {gettext_noop("Off"), "off"},
+          {gettext_noop("Optional"), "optional"},
+          {gettext_noop("Recommended"), "recommended"},
+          {gettext_noop("Required"), "required"}
+        ],
+        label: gettext_noop("Two-step sign-in for this site's admins"),
+        description:
+          gettext_noop(
+            "Off: nobody is asked for a code, even with an authenticator set up. Optional: each admin chooses. Recommended: admins without one are reminded at each sign-in and on the dashboard. Required: an admin without one sets one up before using the dashboard. A master's choice for every site comes first."
+          )
+      ),
       # Read on every request for /robots.txt — see `MishkaCmsCoreWeb.SeoController`.
       define("seo.robots.extra", :text,
         default: "",

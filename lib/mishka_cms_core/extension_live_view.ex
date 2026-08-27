@@ -100,6 +100,9 @@ defmodule MishkaCmsCore.ExtensionLiveView do
       # Closes the page the moment its site goes inactive, or offline for someone who may not see it.
       on_mount(MishkaCmsCore.Runtime.SiteAvailability)
 
+      # Sends an admin of a site that requires two-step sign-in, and has none, to set it up first.
+      on_mount(MishkaCmsCore.Accounts.TwoStepGuard)
+
       # Makes the topbar bell live: per-user unseen count + real-time updates (overrides Nav's count)
       on_mount(MishkaCmsCore.Notify.LiveHooks)
 

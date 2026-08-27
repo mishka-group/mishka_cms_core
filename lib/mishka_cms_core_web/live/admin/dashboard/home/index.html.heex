@@ -1,5 +1,19 @@
 <div>
   <div>
+    <%!-- ── an admin a two-step sign-in is recommended to, who has none ── --%>
+    <.tip :if={@two_step_reminder?} id="two-step-reminder" class="mt-1 mb-5">
+      {gettext(
+        "This site recommends signing in with a code from an authenticator app as well as your password, and yours is not set up yet."
+      )}
+      <.link
+        id="two-step-reminder-link"
+        navigate={path(@socket, "/admin/dashboard/settings?tab=preferences")}
+        class="font-bold underline underline-offset-2"
+      >
+        {gettext("Set it up")}
+      </.link>
+    </.tip>
+
     <%!-- ── header ── --%>
     <div class="mb-6 flex items-end justify-between gap-5">
       <div>

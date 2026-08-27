@@ -1,5 +1,7 @@
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index do
   use MishkaCmsCore.ExtensionLiveView
+
+  alias MishkaCmsCore.Accounts.SecondFactor
   alias MishkaCmsCore.Dashboard.Widget
 
   @impl true
@@ -11,6 +13,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index do
      socket
      |> assign(page_title: gettext("Dashboard"))
      |> assign(all_widgets: all, customize?: false, data: %{})
+     |> assign(two_step_reminder?: SecondFactor.reminded?(socket.assigns.current_user))
      |> subscribe_widgets()
      |> place(layout)
      |> load_widgets()}
