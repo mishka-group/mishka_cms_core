@@ -81,3 +81,7 @@ end
 defimpl AshPhoenix.FormData.Error, for: MishkaCmsCore.Accounts.SecondFactor.Needed do
   def to_form_error(_error), do: []
 end
+
+defimpl AshPhoenix.FormData.Error, for: MishkaCmsCore.Accounts.CaptchaCheck.Refused do
+  def to_form_error(_error), do: []
+end

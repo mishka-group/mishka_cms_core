@@ -135,7 +135,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # Extensions compile before the host's router exists, so `~p` is unavailable here.
   import MishkaCmsCore.Helpers, only: [path: 2]
 
-  alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, LiveSockets, SecondFactor}
+  alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, CaptchaCheck, LiveSockets, SecondFactor}
   alias MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCoreWeb.ReturnTo
@@ -408,14 +408,24 @@ defmodule MishkaCmsCoreWeb.AuthController do
   #
   # AN AUTHENTICATOR CODE STILL OWED, likewise: a sign-in link to an account with one, or a password
   # posted without its code. See `MishkaCmsCore.Accounts.SecondFactor`.
+  #
+  # A CAPTCHA NOT PASSED, likewise, and before either: the refusal comes before the password is
+  # checked. See `MishkaCmsCore.Accounts.CaptchaCheck`.
   defp failure_message(conn, activity, reason) do
-    with nil <- AuthGate.refusal(reason),
+    with nil <- CaptchaCheck.refusal(reason),
+         nil <- AuthGate.refusal(reason),
          nil <- SecondFactor.refusal(reason) do
       credentials_failure(conn, activity, reason)
     else
+      %{reason: captcha} -> {:captcha, captcha_text(captcha)}
       %{action: action} -> closed_failure(conn, activity, reason, action)
       second_factor -> {:second_factor, second_factor_text(second_factor)}
     end
+  end
+
+  defp captcha_text(reason) do
+    %{title: title, text: text} = CaptchaCheck.describe(reason)
+    "#{title}. #{text}"
   end
 
   defp second_factor_text(reason) do

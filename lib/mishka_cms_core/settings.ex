@@ -922,7 +922,9 @@ defmodule MishkaCmsCore.Settings do
             "Addresses on this site the sitemap lists besides its pages, separated by commas — /pricing, /contact. Each starts with / and is one address, with no : or *, written as a URL spells it — a space is %20."
           )
       )
-    ] ++ email_definitions() ++ MishkaCmsCore.Accounts.AuthGate.definitions()
+    ] ++
+      email_definitions() ++
+      MishkaCmsCore.Accounts.AuthGate.definitions() ++ MishkaCmsCore.Captcha.settings()
   end
 
   # THE EMAIL TAB. Which provider a scope sends through and that provider's own fields come from

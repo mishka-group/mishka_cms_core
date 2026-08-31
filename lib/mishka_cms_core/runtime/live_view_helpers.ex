@@ -54,11 +54,11 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaInstaller.Event.Hook
 
-  @renders [component: 1, component: 2]
+  @renders [component: 1, component: 2, captcha: 1]
   @translates [t: 1, t: 2]
 
   @doc """
-  What a runtime template imports from here — `component/1,2` and `t/1,2` — less any
+  What a runtime template imports from here — `component/1,2`, `captcha/1` and `t/1,2` — less any
   name its own `helpers` already define.
 
   Every compiler — component, page and layout — asks this rather than writing the list itself, so
@@ -74,6 +74,13 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
       MapSet.member?(own, Atom.to_string(name))
     end)
   end
+
+  @doc """
+  The captcha a form asks — see `MishkaCmsCore.Captcha.Widget.captcha/1`.
+
+      <.captcha form={f} for="sign_in" tenant={assigns[:current_tenant]} />
+  """
+  defdelegate captcha(assigns), to: MishkaCmsCore.Captcha.Widget
 
   @doc """
   `key` in the language this page is being answered in — the runtime counterpart of `gettext/1`,

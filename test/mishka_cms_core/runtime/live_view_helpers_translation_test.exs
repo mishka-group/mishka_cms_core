@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
   A runtime template never passes a site or a language to `t/1` — both are read off the process
   rendering it — so what is proved here is the path a visitor takes: a component saved with
   `t("…")` in its markup, built on its first render, drawn in the language the process answers in.
-  And `imports/1`, because a component whose own helpers define a `t` is a compile
+  And `imports/1`, because a component whose own helpers define a `t` — or a `captcha` — is a compile
   error the moment a second one is imported beside it.
   """
   use MishkaCmsCore.DataCase, async: false
@@ -24,8 +24,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
   @categories "دسته‌بندی‌ها"
 
   describe "imports/1 — what a runtime template imports from LiveViewHelpers" do
-    test "is component/1,2 and t/1,2 when there are no helpers" do
-      all = [component: 1, component: 2, t: 1, t: 2]
+    test "is component/1,2, captcha/1 and t/1,2 when there are no helpers" do
+      all = [component: 1, component: 2, captcha: 1, t: 1, t: 2]
 
       assert LiveViewHelpers.imports(nil) == all
       assert LiveViewHelpers.imports([]) == all
@@ -39,7 +39,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
             %{"name" => "t", "args" => "key", "code" => "key"},
             %Helper{name: "t", args: "key", code: "key"}
           ] do
-        assert LiveViewHelpers.imports([helper]) == [component: 1, component: 2],
+        assert LiveViewHelpers.imports([helper]) == [component: 1, component: 2, captcha: 1],
                "t is still imported beside #{inspect(helper)}"
       end
     end
@@ -56,7 +56,12 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
     test "finds the t among several helpers" do
       helpers = [%{name: "tone"}, %{"name" => "t"}, %{name: "format"}]
 
-      assert LiveViewHelpers.imports(helpers) == [component: 1, component: 2]
+      assert LiveViewHelpers.imports(helpers) == [component: 1, component: 2, captcha: 1]
+    end
+
+    test "leaves out any name a helper defines, captcha as much as t" do
+      assert LiveViewHelpers.imports([%{name: "captcha"}]) ==
+               [component: 1, component: 2, t: 1, t: 2]
     end
   end
 

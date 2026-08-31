@@ -699,11 +699,20 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :captcha_token, :string do
+        description "The token the site's captcha gave the browser, when the site asks one. The JSON:API never asks — see `MishkaCmsCore.Accounts.CaptchaCheck`."
+        allow_nil? true
+        sensitive? true
+      end
+
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 30,
                 per: :timer.minutes(5),
                 key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2
               )
+
+      # BETWEEN THE TWO LIMITS — see `MishkaCmsCore.Accounts.CaptchaCheck`.
+      prepare &MishkaCmsCore.Accounts.CaptchaCheck.prepare(&1, &2, :sign_in)
 
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 10,
@@ -801,6 +810,12 @@ defmodule MishkaCmsCore.Accounts.User do
         sensitive? true
       end
 
+      argument :captcha_token, :string do
+        description "The token the site's captcha gave the browser, when the site asks one. The JSON:API never asks — see `MishkaCmsCore.Accounts.CaptchaCheck`."
+        allow_nil? true
+        sensitive? true
+      end
+
       # Sets the email from the argument
       change set_attribute(:email, arg(:email))
 
@@ -830,6 +845,8 @@ defmodule MishkaCmsCore.Accounts.User do
              ),
              where: [MishkaCmsCore.Accounts.Validations.FromVisitor]
 
+      change &MishkaCmsCore.Accounts.CaptchaCheck.change(&1, &2, :register)
+
       change {MishkaCmsCore.Accounts.Changes.EnforceMasterEmailSeparation, []}
       # Hashes the provided password
       change AshAuthentication.Strategy.Password.HashPasswordChange
@@ -853,11 +870,20 @@ defmodule MishkaCmsCore.Accounts.User do
         allow_nil? false
       end
 
+      argument :captcha_token, :string do
+        description "The token the site's captcha gave the browser, when the site asks one. The JSON:API never asks — see `MishkaCmsCore.Accounts.CaptchaCheck`."
+        allow_nil? true
+        sensitive? true
+      end
+
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 10,
                 per: :timer.hours(1),
                 key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2
               )
+
+      # BETWEEN THE TWO LIMITS — see `MishkaCmsCore.Accounts.CaptchaCheck`.
+      prepare &MishkaCmsCore.Accounts.CaptchaCheck.prepare(&1, &2, :reset_request)
 
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 3,
@@ -1699,11 +1725,20 @@ defmodule MishkaCmsCore.Accounts.User do
         allow_nil? false
       end
 
+      argument :captcha_token, :string do
+        description "The token the site's captcha gave the browser, when the site asks one. The JSON:API never asks — see `MishkaCmsCore.Accounts.CaptchaCheck`."
+        allow_nil? true
+        sensitive? true
+      end
+
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 10,
                 per: :timer.hours(1),
                 key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2
               )
+
+      # BETWEEN THE TWO LIMITS — see `MishkaCmsCore.Accounts.CaptchaCheck`.
+      prepare &MishkaCmsCore.Accounts.CaptchaCheck.prepare(&1, &2, :magic_link)
 
       prepare AshRateLimiter.BuiltinPreparations.rate_limit(
                 limit: 3,

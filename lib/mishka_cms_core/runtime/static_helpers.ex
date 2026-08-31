@@ -48,6 +48,12 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
   """
   defdelegate component(assigns), to: LiveViewHelpers, as: :static_component
 
+  @doc """
+  The captcha a form asks, as the same markup — a preview draws its box, which nothing fills.
+  See `MishkaCmsCore.Captcha.Widget.captcha/1`.
+  """
+  defdelegate captcha(assigns), to: MishkaCmsCore.Captcha.Widget
+
   @doc "The same, from a name/site pair with extra assigns merged — `LiveViewHelpers.component/3`'s shape."
   def component(name, site, assigns \\ %{}) do
     LiveViewHelpers.static_component(Map.merge(assigns, %{component_name: name, site: site}))

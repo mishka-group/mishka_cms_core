@@ -60,6 +60,12 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Mail.Providers.DevMailbox
   ]
 
+  # `captcha:providers` plugins — the captchas a site can pick on the Security tab. An extension adds
+  # one the same way (see `MishkaCmsCore.Captcha.Provider`).
+  @captcha_providers [
+    MishkaCmsCore.Captcha.Providers.Turnstile
+  ]
+
   # THE REGISTRY EVERY PLUGIN BELOW REGISTERS IN, WHEN THE LIBRARY DID NOT START IT ITSELF.
   # `MishkaInstaller.Application` picks its own supervision tree in a COMPILE-TIME branch on
   # `MishkaInstaller.__information__().env`, and that reads an exported `MIX_ENV` BEFORE the
@@ -90,7 +96,8 @@ defmodule MishkaCmsCore.Application do
     do:
       @dashboard_widgets ++
         @notify_producers ++
-        @settings_plugins ++ @cache_plugins ++ @mail_providers ++ @account_notices
+        @settings_plugins ++
+        @cache_plugins ++ @mail_providers ++ @captcha_providers ++ @account_notices
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

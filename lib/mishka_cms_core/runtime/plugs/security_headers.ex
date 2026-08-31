@@ -39,6 +39,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   """
   import Plug.Conn
 
+  alias MishkaCmsCore.Captcha
   alias MishkaCmsCore.Runtime.CspNonce
 
   @nonce_bytes 18
@@ -150,7 +151,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
     end
   end
 
-  defp policy(_conn, admin?, nonce), do: directives(admin?, nonce, %{})
+  defp policy(conn, admin?, nonce), do: directives(admin?, nonce, captcha_sources(conn, admin?))
 
   # ENFORCED WHERE IT HAS BEEN CHECKED, REPORTED WHERE IT HAS NOT — the two do not have to move
   # together, and a public page is the side facing the internet.
@@ -209,6 +210,21 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
     ]
     |> Enum.join("; ")
   end
+
+  # THE CAPTCHA'S OWN ORIGINS, WHERE IT IS ASKED AND NOWHERE ELSE — see `MishkaCmsCore.Captcha`. A
+  # site's pages carry its provider's (and the master site's carry Global's too, which the masters'
+  # sign-in there asks), every one of them: the policy is written before the page is known, and a
+  # sign-in form can sit on any page. Read from the settings cache, no query.
+  #
+  # EVERY ADMIN PAGE carries every offered provider's: the settings page's test may try any of them,
+  # and it is reached by live navigation from any admin page, which keeps that page's policy.
+  defp captcha_sources(_conn, true), do: Captcha.csp_sources(:all)
+
+  defp captcha_sources(%{assigns: %{current_site: %{id: site_id} = site}}, false),
+    do:
+      Captcha.csp_sources(if(Map.get(site, :master) == true, do: [site_id, nil], else: [site_id]))
+
+  defp captcha_sources(_no_site, false), do: %{}
 
   defp sources(captcha, directive) do
     case Map.get(captcha, directive, []) do

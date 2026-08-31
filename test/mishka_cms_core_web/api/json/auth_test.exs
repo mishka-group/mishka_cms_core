@@ -641,6 +641,61 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
     end
   end
 
+  # THE JSON:API ASKS NO CAPTCHA: its clients are apps, which have none to show. Its requests are
+  # marked by `AuthRateLimitPlug` and pass `MishkaCmsCore.Accounts.CaptchaCheck` untouched, on a site
+  # whose sign-in pages ask one.
+  describe "a site whose sign-in pages ask a captcha" do
+    setup %{site: site} do
+      snapshot = MishkaCmsCore.Runtime.States.SettingsState.snapshot()
+      MishkaCmsCore.Settings.load_definitions()
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SettingsState.restore(snapshot) end)
+
+      for {key, value} <- [
+            {"security.captcha.provider", "turnstile"},
+            {"security.captcha.turnstile.site_key", "1x00000000000000000000AA"},
+            {"security.captcha.turnstile.secret_key", "1x0000000000000000000000000000000AA"}
+          ] do
+        {:ok, _} = MishkaCmsCore.Settings.put(key, value, site_id: site.id)
+      end
+
+      assert MishkaCmsCore.Captcha.on?(site.id)
+      Req.Test.stub(MishkaCmsCore.Captcha, fn _conn -> flunk("the JSON:API asked a captcha") end)
+      :ok
+    end
+
+    test "signs in and registers through the JSON:API without one", %{site: site} do
+      opts = [headers: [{"x-no-tenant", "false"}], host: site.host]
+
+      register =
+        make_api_request(
+          "#{@api_user_path}/register",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "email" => "no-captcha@example.com",
+              "password" => @password,
+              "password_confirmation" => @password
+            }
+          },
+          opts
+        )
+
+      assert register.status == 201
+
+      sign_in =
+        make_api_request(
+          "#{@api_user_path}/sign-in",
+          %{
+            "type" => "user",
+            "attributes" => %{"email" => "no-captcha@example.com", "password" => @password}
+          },
+          opts
+        )
+
+      assert sign_in.status == 201
+    end
+  end
+
   describe "POST /auth/reset-request" do
     test "request password reset token returns success regardless of email existence" do
       # Test with a real email (master_user exists from setup)
