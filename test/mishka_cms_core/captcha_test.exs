@@ -11,7 +11,7 @@ defmodule MishkaCmsCore.CaptchaTest do
 
   alias MishkaCmsCore.Captcha
   alias MishkaCmsCore.Captcha.Provider
-  alias MishkaCmsCore.Captcha.Providers.Turnstile
+  alias MishkaCmsCore.Captcha.Providers.{HCaptcha, Recaptcha, Turnstile}
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
 
@@ -43,6 +43,8 @@ defmodule MishkaCmsCore.CaptchaTest do
   describe "the providers" do
     test "Turnstile, reCAPTCHA and hCaptcha are installed as plugins on captcha:providers" do
       assert Turnstile in Provider.offered()
+      assert Recaptcha in Provider.offered()
+      assert HCaptcha in Provider.offered()
       assert {:ok, Turnstile} = Provider.fetch("turnstile")
       assert {:error, :unknown_provider} = Provider.fetch("nope")
     end
@@ -52,6 +54,7 @@ defmodule MishkaCmsCore.CaptchaTest do
 
       assert "security.captcha.provider" in keys
       assert "security.captcha.turnstile.secret_key" in keys
+      assert "security.captcha.recaptcha.min_score" in keys
 
       provider = Settings.definition("security.captcha.provider")
       assert {_none, "none"} = hd(provider.options)
@@ -107,6 +110,9 @@ defmodule MishkaCmsCore.CaptchaTest do
 
       refute Settings.get_own("security.captcha.turnstile.secret_key", nil, site.id) ==
                "1x0000000000000000000000000000000AA"
+
+      assert Settings.secret("security.captcha.turnstile.secret_key", site.id) ==
+               "1x0000000000000000000000000000000AA"
     end
   end
 
@@ -131,6 +137,22 @@ defmodule MishkaCmsCore.CaptchaTest do
                browser.options
 
       assert Captcha.browser(site.id, :register, "xx").options["language"] == "auto"
+    end
+
+    test "reCAPTCHA v2 is a widget, v3 a score asked as the form is sent", %{site: site} do
+      recaptcha!(site, "v2")
+      v2 = Captcha.browser(site.id, :sign_in, "en")
+
+      assert v2.mode == :widget
+      assert v2.script =~ "render=explicit"
+      assert v2.script =~ "hl=en"
+
+      put!(site, "security.captcha.recaptcha.version", "v3")
+      v3 = Captcha.browser(site.id, :sign_in, "en")
+
+      assert v3.mode == :score
+      assert v3.script =~ "render=recaptcha-site-key"
+      assert v3.options == %{"sitekey" => "recaptcha-site-key", "action" => "sign_in"}
     end
 
     test "nothing for a scope that asks none", %{site: site} do
@@ -341,6 +363,88 @@ defmodule MishkaCmsCore.CaptchaTest do
     end
   end
 
+  describe "hCaptcha" do
+    setup %{site: site} do
+      put!(site, "security.captcha.provider", "hcaptcha")
+      put!(site, "security.captcha.hcaptcha.site_key", "10000000-ffff-ffff-ffff-000000000001")
+
+      put!(
+        site,
+        "security.captcha.hcaptcha.secret_key",
+        "0x0000000000000000000000000000000000000000"
+      )
+
+      :ok
+    end
+
+    test "is a widget, in the page's language, loaded from hCaptcha's origins", %{site: site} do
+      browser = Captcha.browser(site.id, :sign_in, "fa")
+
+      assert browser.mode == :widget
+      assert browser.global == "hcaptcha"
+      assert browser.script =~ "https://js.hcaptcha.com/1/api.js?render=explicit&hl=fa"
+      assert browser.options["sitekey"] == "10000000-ffff-ffff-ffff-000000000001"
+
+      sources = Captcha.csp_sources([site.id])
+      assert "https://*.hcaptcha.com" in sources.script_src
+      assert "https://*.hcaptcha.com" in sources.style_src
+    end
+
+    test "sends the site key with the token, and passes what hCaptcha accepts", %{site: site} do
+      Req.Test.expect(MishkaCmsCore.Captcha, fn conn ->
+        {:ok, body, conn} = Plug.Conn.read_body(conn)
+        fields = URI.decode_query(body)
+
+        assert conn.host == "api.hcaptcha.com"
+        assert fields["sitekey"] == "10000000-ffff-ffff-ffff-000000000001"
+        assert fields["secret"] == "0x0000000000000000000000000000000000000000"
+
+        Req.Test.json(conn, %{"success" => true, "hostname" => "dummy-key-pass"})
+      end)
+
+      assert Captcha.check(token("h"), site.id, :register, %{}) == :ok
+    end
+
+    test "refuses a token hCaptcha refuses; cannot check with a key it refuses", %{site: site} do
+      answer!(%{"success" => false, "error-codes" => ["already-seen-response"]})
+
+      assert {:error, {:failed, "already-seen-response"}} =
+               Captcha.check(token("seen"), site.id, :sign_in, %{})
+
+      answer!(%{"success" => false, "error-codes" => ["sitekey-secret-mismatch"]})
+
+      assert {:error, {:unavailable, "sitekey-secret-mismatch"}} =
+               Captcha.check(token("mismatch"), site.id, :sign_in, %{})
+    end
+  end
+
+  describe "a reCAPTCHA v3 check" do
+    setup %{site: site} do
+      recaptcha!(site, "v3")
+      put!(site, "security.captcha.check_domain", false)
+      :ok
+    end
+
+    test "passes a score at or above the lowest, for the form it was asked for", %{site: site} do
+      answer!(%{"success" => true, "score" => 0.5, "action" => "sign_in"})
+
+      assert Captcha.check(token("person"), site.id, :sign_in, %{}) == :ok
+    end
+
+    test "refuses a lower score, and a token asked for another form", %{site: site} do
+      put!(site, "security.captcha.recaptcha.min_score", 70)
+      answer!(%{"success" => true, "score" => 0.6, "action" => "sign_in"})
+
+      assert {:error, {:failed, "score 0.6, below 0.7"}} =
+               Captcha.check(token("bot"), site.id, :sign_in, %{})
+
+      answer!(%{"success" => true, "score" => 0.9, "action" => "register"})
+
+      assert {:error, {:failed, "action \"register\", not sign_in"}} =
+               Captcha.check(token("elsewhere"), site.id, :sign_in, %{})
+    end
+  end
+
   # ---------------------------------------------------------------------------------------------
 
   defp put!(site, key, value),
@@ -350,6 +454,13 @@ defmodule MishkaCmsCore.CaptchaTest do
     put!(site, "security.captcha.provider", "turnstile")
     put!(site, "security.captcha.turnstile.site_key", "1x00000000000000000000AA")
     put!(site, "security.captcha.turnstile.secret_key", "1x0000000000000000000000000000000AA")
+  end
+
+  defp recaptcha!(site, version) do
+    put!(site, "security.captcha.provider", "recaptcha")
+    put!(site, "security.captcha.recaptcha.version", version)
+    put!(site, "security.captcha.recaptcha.site_key", "recaptcha-site-key")
+    put!(site, "security.captcha.recaptcha.secret_key", "recaptcha-secret")
   end
 
   defp policy(path, site) do

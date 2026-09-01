@@ -63,7 +63,9 @@ defmodule MishkaCmsCore.Application do
   # `captcha:providers` plugins — the captchas a site can pick on the Security tab. An extension adds
   # one the same way (see `MishkaCmsCore.Captcha.Provider`).
   @captcha_providers [
-    MishkaCmsCore.Captcha.Providers.Turnstile
+    MishkaCmsCore.Captcha.Providers.Turnstile,
+    MishkaCmsCore.Captcha.Providers.Recaptcha,
+    MishkaCmsCore.Captcha.Providers.HCaptcha
   ]
 
   # THE REGISTRY EVERY PLUGIN BELOW REGISTERS IN, WHEN THE LIBRARY DID NOT START IT ITSELF.
