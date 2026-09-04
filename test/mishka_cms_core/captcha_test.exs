@@ -445,6 +445,36 @@ defmodule MishkaCmsCore.CaptchaTest do
     end
   end
 
+  describe "the settings page's test" do
+    test "says why nothing can be tested, then what the provider answered", %{site: site} do
+      assert {:error, "No captcha is chosen" <> _} = Captcha.test(site.id, "t", %{})
+
+      put!(site, "security.captcha.provider", "turnstile")
+      assert {:error, "Enter both keys" <> _} = Captcha.test(site.id, "t", %{})
+
+      turnstile!(site)
+      assert {:error, "Solve the check first" <> _} = Captcha.test(site.id, "", %{})
+
+      answer!(%{"success" => true})
+
+      assert {:ok, "Cloudflare Turnstile accepted the check — with its test keys" <> _} =
+               Captcha.test(site.id, token("dummy"), %{})
+
+      answer!(%{"success" => false, "error-codes" => ["invalid-input-secret"]})
+
+      assert {:error, "Cloudflare Turnstile could not check it: invalid-input-secret" <> _} =
+               Captcha.test(site.id, token("bad-key"), %{})
+    end
+
+    test "says the keys work when real keys pass", %{site: site} do
+      turnstile!(site)
+      put!(site, "security.captcha.turnstile.secret_key", "0x-a-real-secret")
+      answer!(%{"success" => true, "hostname" => site.host})
+
+      assert {:ok, "The keys work" <> _} = Captcha.test(site.id, token("real"), %{})
+    end
+  end
+
   # ---------------------------------------------------------------------------------------------
 
   defp put!(site, key, value),

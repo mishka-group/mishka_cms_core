@@ -14,6 +14,7 @@ defmodule MishkaCmsCore.Accounts.TwoStepGuard do
   import MishkaCmsCore.Helpers, only: [path: 2]
 
   alias MishkaCmsCore.Accounts.{SecondFactor, User}
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive
 
   @preferences "/admin/dashboard/settings?tab=preferences"
 
@@ -36,6 +37,7 @@ defmodule MishkaCmsCore.Accounts.TwoStepGuard do
       else: {:halt, send_there(socket)}
   end
 
+  defp preferences?(SettingsLive, %{"tab" => "preferences"}), do: true
   defp preferences?(_view, _params), do: false
 
   defp stored(%{assigns: %{current_user: %{id: id, site_id: site_id}}}) do

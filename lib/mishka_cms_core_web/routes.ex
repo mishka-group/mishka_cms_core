@@ -29,7 +29,8 @@ defmodule MishkaCmsCoreWeb.Routes do
       {:live, "/account/permissions",
        MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index, :index},
       {:live, "/account/users", MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index, :index},
-      {:live, "/notifications", MishkaCmsCoreWeb.Live.Admin.Dashboard.Notification.Index, :index}
+      {:live, "/notifications", MishkaCmsCoreWeb.Live.Admin.Dashboard.Notification.Index, :index},
+      {:live, "/settings", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive, :index}
     ]
   end
 
