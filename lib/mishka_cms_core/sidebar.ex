@@ -225,6 +225,7 @@ defmodule MishkaCmsCore.Sidebar do
   end
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.Install.Extensions
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
 
@@ -738,8 +739,8 @@ defmodule MishkaCmsCore.Sidebar do
   end
 
   @doc """
-  Whether `user` on `site_id` sees `entry` — the per-entry setting and the permissions it
-  declares.
+  Whether `user` on `site_id` sees `entry` — the per-entry setting, the site's switch over the
+  extension that owns it, and the permissions it declares.
 
   Public because it is the whole of "may this be drawn", and a caller asking about one entry should
   not have to rebuild the menu to find out.
@@ -760,8 +761,18 @@ defmodule MishkaCmsCore.Sidebar do
   end
 
   defp visible?(entry, user, site_id) do
-    Settings.get(visible_key(entry.key), true, site_id) != false and permitted?(entry, user)
+    Settings.get(visible_key(entry.key), true, site_id) != false and
+      switched_on?(entry, site_id) and permitted?(entry, user)
   end
+
+  # AN EXTENSION A SITE SWITCHED OFF DRAWS NOTHING. The event that collects menus knows no site —
+  # it is fired once and answered by every plugin — so the question is asked here, where the site is,
+  # beside the per-entry visibility it already answers. An entry naming no extension is core's, and
+  # core cannot be switched off.
+  defp switched_on?(%{extension: app}, site_id) when is_atom(app) and not is_nil(app),
+    do: Extensions.active?(site_id, app)
+
+  defp switched_on?(_core_entry, _site_id), do: true
 
   defp permitted?(%{permissions: []}, user), do: !is_nil(user)
 
