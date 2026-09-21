@@ -1,0 +1,9 @@
+Dev seed release notes
+======================
+
+This file exists so a seeded `documents` row points at something real.
+It is generated, carries no copyright, and is safe to replace.
+
+0.3.0 - media library seeds ship their own files
+0.2.0 - per-site components and layouts
+0.1.0 - first dev seed
