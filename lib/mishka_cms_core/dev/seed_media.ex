@@ -239,7 +239,9 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
         ]
 
       {:error, reason} ->
-        IO.puts("  !! Could not store #{file.filename}: #{inspect(reason)}")
+        MishkaCmsCore.Dev.Seeds.announce(
+          "  !! Could not store #{file.filename}: #{inspect(reason)}"
+        )
 
         []
     end
