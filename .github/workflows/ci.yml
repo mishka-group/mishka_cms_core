@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: "1.18"
+          otp-version: "27"
+
+      - name: Cache deps and build
+        uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock') }}
+          restore-keys: ${{ runner.os }}-mix-
+
+      - run: mix deps.get
+
+      - run: mix format --check-formatted
+
+      # The schema is derived from the resources, never committed — see .gitignore. It covers the
+      # accounts and runtime tables this extension borrows from mishka_cms_core as well as its own.
+      - name: Build the test schema
+        run: mix ash.codegen ci --dev && mix ash.setup
+
+      # `mix test` and NOT `MIX_ENV=test mix test`.
+      #
+      # mishka_installer decides at DEP-COMPILE time whether to start its plugin engine:
+      #
+      #     if MishkaInstaller.__information__().env == :test do
+      #       def supervised_children(), do: []
+      #
+      # and `System.get_env("MIX_ENV")` outranks the `project_env: :dev` override in config/test.exs.
+      # Exporting MIX_ENV therefore compiles the engine away — Mnesia, the event handler and every
+      # plugin hook go missing, and the hook/filter tests fail with no obvious cause. `mix test` sets
+      # Mix.env without exporting it, so the override wins and the engine starts.
+      - name: Run the suite
+        run: mix test
