@@ -195,6 +195,8 @@ defmodule MishkaCmsCore.Dev.Generator do
         priority: 0,
         active: true,
         permissions: [],
+        npm: [],
+        modules: [],
         site_id: nil
       ],
       overrides: opts,
