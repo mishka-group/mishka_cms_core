@@ -187,6 +187,49 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitSourcesTest do
                UiKitHandler.resolve_kits(kits_dir: dir, channel: :stable)
     end
 
+    # NO RELEASE HAS THEM YET: the files committed on master are the last place the kits can be, and
+    # the answer says it fell back so the wizard can tell the operator.
+    test "while no release attaches a kit at all, every channel takes master and says so", %{
+      dir: dir
+    } do
+      github!([release("v1", files: []), release("v1-alpha", prerelease: true, files: [])])
+
+      for channel <- [:stable, :prerelease] do
+        assert %{
+                 release: %{channel: :master, tag: "master", fallback?: true},
+                 bundles: bundles,
+                 failures: []
+               } = UiKitHandler.resolve_kits(kits_dir: dir, channel: channel)
+
+        assert Enum.map(bundles, & &1["name"]) ==
+                 Enum.map(
+                   ["chelekom.json", "chelekom_headless.json"],
+                   &"/mishka-group/mishka_chelekom/master/priv/cms_ui_kits/#{&1}"
+                 )
+
+        File.rm_rf!(dir)
+        File.mkdir_p!(dir)
+      end
+    end
+
+    # MASTER IS THE LAST PLACE, so a package missing there too is reported, never silently skipped.
+    test "a package master does not hold is reported as missing", %{dir: dir} do
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          case conn.host do
+            "api.github.com" -> Req.Test.json(conn, [release("v1", files: [])])
+            _download -> Plug.Conn.send_resp(conn, 404, "Not Found")
+          end
+        end
+      )
+
+      assert %{
+               bundles: [],
+               release: %{channel: :master, fallback?: true},
+               failures: [%{key: :styled, tag: "master"}, %{key: :headless, tag: "master"}]
+             } = UiKitHandler.resolve_kits(kits_dir: dir, channel: :stable)
+    end
+
     test "master is the files committed on master, and asks GitHub's API nothing" do
       github!(releases())
 

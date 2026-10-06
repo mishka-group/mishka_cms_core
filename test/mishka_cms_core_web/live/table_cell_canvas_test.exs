@@ -37,7 +37,7 @@ defmodule MishkaCmsCoreWeb.Test.TableCellCanvasTest do
 
   @password "Password123!"
 
-  @bundle Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+  @bundle MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
   @components %{
     "cell-table" => ~S|<table class={@class}><tbody>{render_slot(@inner_block)}</tbody></table>|,

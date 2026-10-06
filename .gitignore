@@ -26,6 +26,10 @@ mishka_cms_core_resources-*.tar
 /priv/repo/migrations/
 /priv/resource_snapshots/
 
+# UI-kit bundles are downloaded by the server they run on, at install. The tests read theirs from
+# test/fixtures/cms_ui_kits/.
+/priv/cms_ui_kits/*.json
+
 # MishkaInstaller's plugin registry lives here on disk and survives runs.
 /.mnesia/
 

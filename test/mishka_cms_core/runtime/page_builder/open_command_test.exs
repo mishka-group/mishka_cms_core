@@ -319,7 +319,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.OpenCommandTest do
   describe "the components that ship a declaration" do
     setup do
       path =
-        Application.app_dir(:mishka_cms_core, "priv/cms_ui_kits/chelekom.json")
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
       kit =
         case File.read(path) do
@@ -441,7 +441,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.OpenCommandTest do
   defp dispatched_events(_absent), do: []
 
   defp hook_events do
-    path = Application.app_dir(:mishka_cms_core, "priv/cms_ui_kits/chelekom.json")
+    path = MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
     case File.read(path) do
       {:ok, raw} ->

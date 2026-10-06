@@ -23,7 +23,7 @@ defmodule MishkaCmsCore.UiKit.ExampleRenderableTest do
 
   @moduletag :unit
 
-  @kits_dir Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits"])
+  @kits_dir MishkaCmsCore.Runtime.Handlers.UiKitHandler.kits_dir()
 
   setup_all do
     components =

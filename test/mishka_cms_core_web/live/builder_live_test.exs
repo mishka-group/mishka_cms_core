@@ -1748,8 +1748,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       site: site
     } do
       wrapper =
-        [:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"]
-        |> Path.join()
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
         |> File.read!()
         |> Jason.decode!()
         |> Map.fetch!("components")
@@ -1795,8 +1794,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       site: site
     } do
       rows =
-        [:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"]
-        |> Path.join()
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
         |> File.read!()
         |> Jason.decode!()
         |> Map.fetch!("components")

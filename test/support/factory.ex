@@ -147,7 +147,7 @@ defmodule MishkaCmsCore.Test.Factory do
   defp site_name(site_id),
     do: Ash.get!(MishkaCmsCore.Runtime.Site, site_id, action: :get_any, authorize?: false).name
 
-  @chelekom Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+  @chelekom MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
   @doc """
   The named rows of the Chelekom kit this library ships, as palette entries (`name`, `attrs`,

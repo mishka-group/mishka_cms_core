@@ -80,7 +80,7 @@ defmodule MishkaCmsCoreWeb.Runtime.ComponentExamplesTest do
   end
 
   describe "examples are narrowed to the options the install actually kept" do
-    @bundle_path Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+    @bundle_path MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
     # A real kit component, narrowed the way the installer narrows one: `filter_helpers/2` drops
     # every helper clause the selection rules out, so the record's surviving

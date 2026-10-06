@@ -279,8 +279,7 @@ defmodule MishkaCmsCoreWeb.Test.OverlayCanvasTest do
 
     test "and the kit's floating components declare them on both" do
       entries =
-        [:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"]
-        |> Path.join()
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
         |> File.read!()
         |> Jason.decode!()
         |> Map.fetch!("components")

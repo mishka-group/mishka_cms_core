@@ -61,10 +61,11 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
       dir = Path.join(System.tmp_dir!(), "kits_dir_#{System.unique_integer([:positive])}")
       File.mkdir_p!(dir)
       write_bundle!(dir, "acme.json", bundle("acme", [component("acme-card")]))
+      configured = Application.fetch_env!(:mishka_cms_core, :ui_kits_dir)
       Application.put_env(:mishka_cms_core, :ui_kits_dir, dir)
 
       on_exit(fn ->
-        Application.delete_env(:mishka_cms_core, :ui_kits_dir)
+        Application.put_env(:mishka_cms_core, :ui_kits_dir, configured)
         File.rm_rf(dir)
       end)
 
@@ -74,7 +75,12 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
       assert [%{name: "acme", components: 1}] = UiKitHandler.available_kits()
     end
 
+    # The suite's own config points the kits at test/fixtures; a host that sets nothing gets priv.
     test "is priv/cms_ui_kits when nothing is configured" do
+      configured = Application.fetch_env!(:mishka_cms_core, :ui_kits_dir)
+      Application.delete_env(:mishka_cms_core, :ui_kits_dir)
+      on_exit(fn -> Application.put_env(:mishka_cms_core, :ui_kits_dir, configured) end)
+
       assert UiKitHandler.kits_dir() ==
                Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits"])
     end

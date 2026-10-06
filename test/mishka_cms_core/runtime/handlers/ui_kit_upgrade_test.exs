@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitUpgradeTest do
 
   @moduletag :integration
 
-  @chelekom Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+  @chelekom MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
   # A component with nothing on it but the two fields that cannot be left out, and one changed value
   # per field an install writes — the pair `digest/1` is asked about field by field.

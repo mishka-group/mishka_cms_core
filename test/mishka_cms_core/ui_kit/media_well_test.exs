@@ -24,8 +24,7 @@ defmodule MishkaCmsCore.UiKit.MediaWellTest do
   @moduletag :unit
 
   defp bundle do
-    [:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"]
-    |> Path.join()
+    MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
     |> File.read!()
     |> Jason.decode!()
     |> Map.fetch!("components")
