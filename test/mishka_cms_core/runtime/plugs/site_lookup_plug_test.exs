@@ -284,6 +284,51 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
     end
   end
 
+  # A SITE KNOWN ONLY BY ITS PUBLIC ADDRESS opens at localhost: the master site answers it while no
+  # site claims localhost. Dev and test builds only — a release compiles no such clause.
+  describe "call/2 at localhost" do
+    defp cached!(host, master?) do
+      :ok =
+        SiteState.save(%{
+          id: "site-#{host}",
+          name: host,
+          host: host,
+          priority: 1,
+          active: true,
+          master: master?
+        })
+
+      "site-#{host}"
+    end
+
+    test "is the master site while no site claims localhost" do
+      master = cached!("new.example.com", true)
+
+      for host <- ["localhost", "127.0.0.1", "localhost:4000"] do
+        conn = request("/", host)
+
+        refute conn.halted
+        assert conn.assigns.current_site.id == master
+      end
+    end
+
+    test "is the localhost site when there is one" do
+      cached!("new.example.com", true)
+      local = cached!("localhost", false)
+
+      assert request("/", "localhost").assigns.current_site.id == local
+    end
+
+    test "is still a 503 with no master site" do
+      cached!("new.example.com", false)
+
+      conn = request("/", "localhost")
+
+      assert conn.halted
+      assert conn.status == 503
+    end
+  end
+
   describe "call/2 with missing site" do
     test "returns 503 for unknown host", %{} do
       conn =
