@@ -253,6 +253,43 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitSourcesTest do
                UiKitHandler.resolve_kits(kits_dir: dir, channel: :stable)
     end
 
+    # THE DEV SEEDS' DOWNLOAD. A kit this server lacks is fetched from the release the installer
+    # would pick; a file already there is a developer's own and is never fetched over.
+    test "download_missing fetches only the kit that is missing, and keeps the one on disk", %{
+      dir: dir
+    } do
+      place!(dir, "chelekom.json", bundle("from-disk"))
+      github!(releases())
+
+      assert UiKitHandler.download_missing(kits_dir: dir) == []
+
+      assert %{"name" => "from-disk"} =
+               dir |> Path.join("chelekom.json") |> File.read!() |> Jason.decode!()
+
+      assert %{"name" => "/v1.4/chelekom_headless.json"} =
+               dir |> Path.join("chelekom_headless.json") |> File.read!() |> Jason.decode!()
+    end
+
+    test "download_missing looks nothing up while every kit is on disk", %{dir: dir} do
+      place!(dir, "chelekom.json", bundle("styled"))
+      place!(dir, "chelekom_headless.json", bundle("headless"))
+      github!(releases())
+
+      assert UiKitHandler.download_missing(kits_dir: dir) == []
+      refute_received :looked_up
+    end
+
+    test "download_missing names what it could not have", %{dir: dir} do
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 403, "rate limited") end
+      )
+
+      assert [%{key: :release, reason: "GitHub answered HTTP 403"}] =
+               UiKitHandler.download_missing(kits_dir: dir)
+
+      assert File.ls!(dir) == []
+    end
+
     # GITHUB DOWN, OR SIXTY REQUESTS USED UP: say so, and offer what this server already has.
     test "a lookup that fails is named, and the kits on disk are still offered", %{dir: dir} do
       place!(dir, "chelekom.json", bundle("from-disk"))

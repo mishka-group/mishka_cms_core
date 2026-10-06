@@ -301,6 +301,40 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   end
 
   @doc """
+  Downloads every official kit that is not in `kits_dir/0` yet, and leaves each file already there
+  as it is — a developer's own export included.
+
+  The version is found the way the installer finds it, from `channel:` (default `:stable`): the
+  newest stable release, else the newest pre-release, else `master`. Nothing is looked up while every
+  file is on disk. Returns what could not be had, in `resolve_kits/1`'s failure shape.
+  """
+  @spec download_missing(keyword()) :: [map()]
+  def download_missing(opts \\ []) do
+    dir = Keyword.get_lazy(opts, :kits_dir, &kits_dir/0)
+
+    case Enum.reject(packages(), &on_disk?(&1, dir)) do
+      [] -> []
+      _missing -> fetch_missing(dir, Keyword.get(opts, :channel, :stable))
+    end
+  end
+
+  defp fetch_missing(dir, channel) do
+    {kits, _release, lookup_failures} = looked_up(official_source(channel), channel)
+
+    lookup_failures ++
+      (kits
+       |> Enum.reject(&on_disk?(&1, dir))
+       |> Enum.flat_map(fn kit ->
+         case resolve_official(kit, dir, nil, false) do
+           {:ok, _bundle} -> []
+           {:error, failure} -> [failure]
+         end
+       end))
+  end
+
+  defp on_disk?(kit, dir), do: File.exists?(kit_path(kit, dir))
+
+  @doc """
   Every kit the installer should offer, WITH the ones that could not be fetched.
 
   Returns `%{bundles: [...], sources: [...], failures: [%{key:, label:, tag:, url:, reason:}]}`.
