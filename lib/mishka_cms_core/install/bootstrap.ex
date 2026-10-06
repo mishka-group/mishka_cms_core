@@ -54,7 +54,9 @@ defmodule MishkaCmsCore.Install.Bootstrap do
           optional(:component_selection) => map(),
           optional(:starter_content) => boolean(),
           optional(:languages) => [String.t()],
-          optional(:settings) => %{optional(String.t()) => term()}
+          optional(:settings) => %{optional(String.t()) => term()},
+          optional(:extensions) => [String.t()],
+          optional(:extension_answers) => %{optional(String.t()) => map()}
         }
 
   @permissions [
