@@ -111,6 +111,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   alias MishkaCmsCore.Accounts.AuthGate
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.States.SiteState
 
   # Where `AshAuthentication` keeps the signed-in user's token in the session.
   @session_token "user_token"
@@ -206,7 +207,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
         host = get_host(conn, opts)
 
         result =
-          case MishkaCmsCore.Runtime.States.SiteState.get_by_host(host) do
+          case site_for(host) do
             {:ok, site} ->
               handle_site_found(conn, site)
 
@@ -304,6 +305,19 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   defp language_sign_in_path?(_segments, _site), do: false
 
   # Private functions
+
+  # LOCALHOST IS THE MASTER SITE while no site claims it, so a site whose database knows it only by
+  # its public address opens locally with nothing to configure. Compiled only where the app's config
+  # sets `:env_dev?` or `:env_test?`, so a release has no such clause. Not `Mix.env/0`: a dependency
+  # is compiled in `:prod` whatever the app runs in.
+  if Application.compile_env(:mishka_cms_core, :env_dev?, false) or
+       Application.compile_env(:mishka_cms_core, :env_test?, false) do
+    defp site_for(host) when host in ["localhost", "127.0.0.1"] do
+      with {:error, :not_found} <- SiteState.get_by_host(host), do: SiteState.get_by_master()
+    end
+  end
+
+  defp site_for(host), do: SiteState.get_by_host(host)
 
   @doc false
   @spec get_host(Plug.Conn.t(), map()) :: String.t() | nil
