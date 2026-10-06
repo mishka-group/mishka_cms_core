@@ -61,6 +61,16 @@ defmodule MishkaCmsCore.MixProject do
       # `Phoenix.LiveViewTest` parses rendered markup with this. Test-only: it is never a burden on
       # anything that depends on this library.
       {:lazy_html, "~> 0.1", only: :test},
+      # The editor's Heroicons catalogue (`Icons.Heroicons`) reads these SVGs at compile time. A host
+      # brings its own copy, so this one serves only work on this library alone.
+      {:heroicons,
+       github: "tailwindlabs/heroicons",
+       tag: "v2.2.0",
+       sparse: "optimized",
+       app: false,
+       compile: false,
+       depth: 1,
+       only: [:dev, :test]},
       {:swoosh, "~> 1.28"},
       # The captcha providers' verify requests — see `MishkaCmsCore.Captcha.Provider.siteverify/2`.
       {:req, "~> 0.7"},
