@@ -536,7 +536,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   chose. A file on disk that IS the pinned version is read rather than downloaded again, in both.
 
   Either way the other source is still tried: a developer with no local copy still gets a working
-  install, and production still falls back to a cached or shipped bundle when the network is gone,
+  install, and production still falls back to a bundle downloaded earlier when the network is gone,
   so neither environment can dead-end.
 
   Default `false` — production behaviour — so a host that never configures it gets the version it
@@ -740,7 +740,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   @doc """
   Install any UI-kit bundle from `bundle_path`. Kit-agnostic — point it at
   any `mishka.ui_kit.bundle.v3` JSON. `install_chelekom!/1` is a thin
-  wrapper that defaults the path to the shipped Chelekom bundle.
+  wrapper that defaults the path to the downloaded Chelekom bundle.
 
   Rows are **upserted** by `unique_name_per_site` (name + site_id): an
   existing component/stylesheet/js_hook is updated in place (stable id,

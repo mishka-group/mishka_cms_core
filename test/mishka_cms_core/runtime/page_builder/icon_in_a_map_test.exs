@@ -38,7 +38,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconInAMapTest do
 
   @moduletag :unit
 
-  @bundle Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+  @bundle MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
   setup_all do
     entries = @bundle |> File.read!() |> Jason.decode!() |> Map.fetch!("components")

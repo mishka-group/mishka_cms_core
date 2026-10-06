@@ -2621,7 +2621,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSessionTest do
     # reported. Read from the bundle so a kit that rewrites its sample content is caught here.
     test "and the real chelekom-flex sample goes, which is what was reported" do
       body =
-        "priv/cms_ui_kits/chelekom.json"
+        MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
         |> File.read!()
         |> Jason.decode!()
         |> Map.fetch!("components")

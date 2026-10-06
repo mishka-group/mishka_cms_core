@@ -123,12 +123,17 @@ config :esbuild,
 # back to the other source, so neither dead-ends.
 config :mishka_cms_core, :prefer_local_ui_kits, true
 
-# THE SHIPPED STYLED KIT, FROM DISK, WITH NOTHING TO DOWNLOAD. The code default also offers the
-# headless package, which is not in `priv/cms_ui_kits/`, so every cold catalogue — the Studio sheet,
-# the Registry tab — fell through to a real HTTP request and parsed Chelekom behind it, and a test
-# waiting on that render timed out whenever the internet was slow. `url: nil` fails without a
-# request, so a missing file is reported rather than fetched. A test about downloading configures
-# its own list and a `:ui_kit_req_options` plug, and restores this one afterwards.
+# THE STYLED KIT FROM A FIXTURE, WITH NOTHING TO DOWNLOAD. A server downloads its kits into
+# `priv/cms_ui_kits/` at install, and nothing ships there; the tests read a committed copy of
+# Chelekom's styled bundle from `test/fixtures/cms_ui_kits/` instead.
+config :mishka_cms_core, :ui_kits_dir, Path.expand("../test/fixtures/cms_ui_kits", __DIR__)
+
+# The code default also offers the headless package, which is not among the fixtures, so every cold
+# catalogue — the Studio sheet, the Registry tab — fell through to a real HTTP request and parsed
+# Chelekom behind it, and a test waiting on that render timed out whenever the internet was slow.
+# `url: nil` fails without a request, so a missing file is reported rather than fetched. A test about
+# downloading configures its own list and a `:ui_kit_req_options` plug, and restores this one
+# afterwards.
 config :mishka_cms_core, :official_ui_kits, [
   %{key: :styled, label: "Chelekom — styled", file: "chelekom.json", tag: "test", url: nil}
 ]

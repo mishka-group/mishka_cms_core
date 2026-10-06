@@ -146,7 +146,7 @@ defmodule MishkaCmsCore.Builder.CollectionTest do
   end
 
   describe "which attributes this is for" do
-    @bundle Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+    @bundle MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
     alias MishkaCmsCore.Runtime.PageBuilder.Inspector
 

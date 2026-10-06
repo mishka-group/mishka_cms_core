@@ -34,7 +34,7 @@ defmodule MishkaCmsCore.UiKit.DelegatingClauseTest do
 
   @moduletag :unit
 
-  @bundle_path Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+  @bundle_path MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
   setup_all do
     bundle = @bundle_path |> File.read!() |> Jason.decode!()

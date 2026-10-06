@@ -28,7 +28,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionKitTest do
     end
 
     test "the UI kit's own bundle is found when asked for by name" do
-      # `chelekom.json` really does live in this application's priv/cms_ui_kits, not
+      # `chelekom.json` is downloaded into this application's priv/cms_ui_kits, not
       # priv/cms_components, so this proves the lookup is scoped to the extension directory rather
       # than searching priv at large.
       refute ExtensionKit.available?(:mishka_cms_core, "chelekom")

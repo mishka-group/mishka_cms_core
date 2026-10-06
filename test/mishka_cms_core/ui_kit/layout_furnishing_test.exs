@@ -24,7 +24,7 @@ defmodule MishkaCmsCore.UiKit.LayoutFurnishingTest do
   use ExUnit.Case, async: true
   @moduletag :unit
 
-  @bundle Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits", "chelekom.json"])
+  @bundle MishkaCmsCore.Runtime.Handlers.UiKitHandler.default_bundle_path()
 
   defp furnishing(name) do
     @bundle

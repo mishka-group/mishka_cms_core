@@ -27,7 +27,7 @@ defmodule MishkaCmsCore.UiKit.ListMarkerTest do
 
   @moduletag :unit
 
-  @kits_dir Path.join([:code.priv_dir(:mishka_cms_core), "cms_ui_kits"])
+  @kits_dir MishkaCmsCore.Runtime.Handlers.UiKitHandler.kits_dir()
 
   # `[&.list-disc]:ps-5` — a Tailwind rule that fires only when the element carries `list-disc`.
   @keyed_on_a_class ~r/\[&\.([A-Za-z0-9_-]+)\]/
