@@ -10514,7 +10514,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
         }
       })
 
-      html = render(view)
+      html = render_async(view)
       assert html =~ "Greeting block"
       # Blocks and size are read off the markup, not stored beside it.
       assert html =~ "1 block ·"
