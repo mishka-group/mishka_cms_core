@@ -95,6 +95,24 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.InterfaceTest do
       assert message =~ "cannot be a name"
     end
 
+    # NOT EVERY RULE, THOUGH. A slot's attribute never becomes an atom in a `def` — the compiler emits
+    # slots without them — so an HTML name is a name there, as Phoenix allows in a slot block.
+    # Chelekom's headless `toggle-group` declares `aria-label` on its `item`, and the whole kit failed
+    # to install over it.
+    test "a slot's attribute may be an HTML name, which a component's own may not" do
+      for name <- ["aria-label", "data-state", "aria-labelled_by"] do
+        assert Interface.validate([], [slot("item", %{"attrs" => [attr(name)]})]) == [], name
+        assert [{:attr, 0, _identifier}] = Interface.validate([attr(name)], [])
+      end
+
+      for name <- ["aria-", "-label", "aria--label", "Aria-label"] do
+        assert [{:slot, 0, message}] =
+                 Interface.validate([], [slot("item", %{"attrs" => [attr(name)]})])
+
+        assert message =~ "cannot be a name"
+      end
+    end
+
     test "reporting them against the slot that holds them, by position" do
       slot = slot("item", %{"attrs" => [attr("label"), attr("size", %{"type" => "colour"})]})
 
