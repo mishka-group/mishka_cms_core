@@ -1,0 +1,447 @@
+<div id="settings">
+  <div>
+    <div class="mb-[26px] flex flex-wrap items-start justify-between gap-5">
+      <div>
+        <div class="mb-2 text-[11.5px] font-semibold uppercase tracking-[0.14em] text-[#5b57d6]">
+          {gettext("System")}
+        </div>
+        <h1 class="m-0 font-['Newsreader'] text-[32px] font-medium leading-[1.05] tracking-[-0.01em] text-[#17161a]">
+          {gettext("Settings")}
+        </h1>
+        <div class="mt-2 max-w-[600px] text-[13.5px] font-medium text-[#7c7a75]">
+          {gettext("Configure your Mishka CMS system preferences and settings.")}
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5">
+        <form :if={@master?} id="scope-form" phx-change="switch_scope" class="relative">
+          <select
+            id="scope-select"
+            name="scope"
+            class="h-10 cursor-pointer appearance-none rounded-[11px] border border-[#ecebe6] bg-white ps-3.5 pe-[34px] text-[12.5px] font-semibold text-[#3a382f] outline-none"
+          >
+            <option
+              :for={{label, value} <- @scopes}
+              value={value || "global"}
+              selected={@active_scope == value}
+            >
+              {label}
+            </option>
+          </select>
+          <.icon
+            name="hero-chevron-down"
+            class="pointer-events-none absolute end-3 top-1/2 size-[14px] -translate-y-1/2 text-[#a8a5a0]"
+          />
+        </form>
+
+        <span
+          :if={!@master?}
+          id="scope-badge"
+          class="inline-flex h-10 items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] px-3.5 text-[12.5px] font-semibold text-[#3a382f]"
+        >
+          <.icon name="hero-globe-alt" class="size-[14px] text-[#a8a5a0]" />
+          {gettext("Editing: %{scope}", scope: scope_label(@active_scope, @scopes))}
+        </span>
+
+        <button
+          type="button"
+          phx-click="reset"
+          class="flex h-10 items-center gap-[7px] rounded-[11px] border border-[#ecebe6] bg-white px-[15px] text-[12.5px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3]"
+        >
+          <.icon name="hero-arrow-path" class="size-[14px]" /> {gettext("Reset to Defaults")}
+        </button>
+
+        <button
+          id="settings-save"
+          type="submit"
+          form="settings-form"
+          class="flex h-10 items-center gap-2 rounded-[11px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-[17px] text-[12.5px] font-bold text-white shadow-[0_5px_14px_rgba(79,75,204,0.3)] transition-opacity hover:opacity-95"
+        >
+          <span
+            :if={@dirty?}
+            class="size-[7px] shrink-0 rounded-full bg-[#ffd24a] shadow-[0_0_0_3px_rgba(255,210,74,0.3)]"
+          ></span>
+          <.icon name="hero-check" class="size-[15px]" /> {gettext("Save Changes")}
+        </button>
+      </div>
+    </div>
+
+    <div class="grid grid-cols-[290px_minmax(0,1fr)] items-start gap-[22px] max-[980px]:block!">
+      <nav
+        id="settings-tabs"
+        class="sticky top-0 flex flex-col gap-2.5 max-[980px]:z-30 max-[980px]:-mx-[15px] max-[980px]:-mt-2 max-[980px]:mb-4 max-[980px]:flex-row! max-[980px]:gap-2! max-[980px]:overflow-x-auto max-[980px]:overflow-y-hidden max-[980px]:border-b max-[980px]:border-[#e6e4de] max-[980px]:bg-[#f6f5f2] max-[980px]:px-[15px]! max-[980px]:py-2.5! max-[980px]:[scrollbar-width:none] max-[980px]:[&::-webkit-scrollbar]:hidden"
+      >
+        <.link
+          :for={category <- @categories}
+          id={"tab-#{category}"}
+          patch={"/admin/dashboard/settings?tab=#{category}"}
+          class={[
+            "flex items-center gap-[13px] rounded-[15px] border px-[15px] py-[14px] text-start transition-all max-[980px]:flex-none max-[980px]:rounded-xl! max-[980px]:px-[14px]! max-[980px]:py-2.5!",
+            (@active_tab == category &&
+               "border-[#dcdbf5] bg-[#f2f1fc] shadow-[0_6px_18px_rgba(79,75,204,0.12)]") ||
+              "border-[#ecebe6] bg-white shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+          ]}
+        >
+          <span class={[
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            (@active_tab == category && "bg-[#e4e2f7] text-[#4f4bcc]") ||
+              "bg-[#f5f4f0] text-[#8a877f]"
+          ]}>
+            <.icon name={category_icon(category)} class="size-[19px]" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class={[
+              "block text-[13.5px] font-bold",
+              (@active_tab == category && "text-[#2e2b6b]") || "text-[#3a382f]"
+            ]}>
+              {category_label(category)}
+            </span>
+            <span class={[
+              "mt-0.5 block truncate text-[11.5px] font-medium max-[980px]:hidden!",
+              (@active_tab == category && "text-[#7d79c4]") || "text-[#9a978f]"
+            ]}>
+              {category_description(category)}
+            </span>
+          </span>
+          <span
+            :if={@attention[category]}
+            title={gettext("Something here needs your attention")}
+            class="size-2 shrink-0 rounded-full bg-[#e5484d]"
+          ></span>
+        </.link>
+
+        <div class="mt-1.5 rounded-[15px] border border-[#e2ece5] bg-[#f3f8f4] px-4 py-[14px] max-[980px]:hidden!">
+          <div class="flex items-center gap-2">
+            <span class="size-2 shrink-0 animate-pulse rounded-full bg-[#1f9d6b]"></span>
+            <span class="text-[11.5px] font-bold text-[#177a53]">
+              {gettext("Live sync enabled")}
+            </span>
+          </div>
+          <div class="mt-[5px] ps-4 text-[11px] font-medium text-[#8a938c]">
+            {gettext("Changes from other admins appear instantly.")}
+          </div>
+        </div>
+      </nav>
+
+      <div class="flex min-w-0 flex-col gap-[22px]">
+        <.form
+          for={@form}
+          id="settings-form"
+          phx-change="validate"
+          phx-submit="save"
+          class="min-w-0"
+        >
+          <div class="overflow-hidden rounded-[18px] border border-[#ecebe6] bg-white shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
+            <div class="border-b border-[#f0efea] px-[26px] py-[22px]">
+              <h2 class="m-0 font-['Space_Grotesk'] text-[18px] font-bold text-[#17161a]">
+                {category_label(@active_tab)}
+              </h2>
+              <div class="mt-1 text-[12.5px] font-medium text-[#8a877f]">
+                {category_description(@active_tab)}
+              </div>
+            </div>
+
+            <div class="p-[26px]">
+              <div class="flex flex-col gap-[30px]">
+                <div :for={{group, group_fields} <- shown_groups(@field_groups, @form.params)}>
+                  <h3
+                    :if={group}
+                    class="m-0 mb-[15px] text-[10.5px] font-bold uppercase tracking-[0.13em] text-[#a8a5a0]"
+                  >
+                    {Settings.text(group)}
+                  </h3>
+
+                  <div class="flex flex-col gap-5">
+                    <div :for={{definition, editable} <- group_fields}>
+                      <%= if definition.type == :boolean do %>
+                        <div class={[
+                          "flex items-center gap-4 rounded-[13px] border border-[#f0efea] bg-[#faf9f6] px-[18px] py-4",
+                          !editable && "opacity-60"
+                        ]}>
+                          <div class="min-w-0 flex-1">
+                            <div class="flex flex-wrap items-center gap-[9px]">
+                              <span class="text-[13.5px] font-semibold text-[#1b1a18]">
+                                {field_label(definition, @active_scope)}
+                              </span>
+                              <span class={[
+                                badge_class(),
+                                scope_badge_class(definition, @active_scope)
+                              ]}>
+                                {scope_badge_label(definition, @active_scope)}
+                              </span>
+                            </div>
+                            <div
+                              :if={definition.description}
+                              class="mt-[3px] text-[11.5px] font-medium text-[#9a978f]"
+                            >
+                              {Settings.text(definition.description)}
+                            </div>
+                            <div
+                              :if={held_globally?(definition, @active_scope)}
+                              id={"held-#{dom_id(definition.key)}"}
+                              class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#f0e2c4] bg-[#fbf1df] px-2.5 py-1 text-[11.5px] font-semibold text-[#a5691a]"
+                            >
+                              <.icon name="hero-lock-closed" class="size-[13px]" />
+                              {gettext(
+                                "On for every site from Global — this site's own switch cannot turn it off."
+                              )}
+                            </div>
+                          </div>
+                          <label class={[
+                            "relative inline-flex shrink-0",
+                            editable && "cursor-pointer"
+                          ]}>
+                            <input type="hidden" name={field_name(definition)} value="false" />
+                            <input
+                              type="checkbox"
+                              id={"set-#{dom_id(definition.key)}"}
+                              name={field_name(definition)}
+                              value="true"
+                              checked={truthy?(@form[definition.key].value)}
+                              disabled={!editable}
+                              class="peer sr-only"
+                            />
+                            <span class="flex h-[29px] w-[50px] items-center rounded-[20px] bg-[#d9d7d0] p-[3px] transition-colors after:size-[23px] after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgba(0,0,0,0.25)] after:transition-transform peer-checked:bg-[#5b57d6] peer-checked:after:translate-x-[21px] rtl:peer-checked:after:-translate-x-[21px]"></span>
+                          </label>
+                        </div>
+                      <% else %>
+                        <label
+                          for={"set-#{dom_id(definition.key)}"}
+                          class="mb-2 flex flex-wrap items-center gap-[9px] text-[13px] font-semibold text-[#3a382f]"
+                        >
+                          {field_label(definition, @active_scope)}
+                          <span class={[
+                            badge_class(),
+                            scope_badge_class(definition, @active_scope)
+                          ]}>
+                            {scope_badge_label(definition, @active_scope)}
+                          </span>
+                        </label>
+
+                        <%= cond do %>
+                          <% definition.type == :select -> %>
+                            <div class="relative">
+                              <select
+                                id={"set-#{dom_id(definition.key)}"}
+                                name={field_name(definition)}
+                                disabled={!editable}
+                                class={[
+                                  input_class(),
+                                  "h-[46px] appearance-none ps-[15px] pe-[34px]"
+                                ]}
+                              >
+                                <option
+                                  :for={option <- definition.options}
+                                  value={option_value(option)}
+                                  selected={
+                                    to_string(@form[definition.key].value) ==
+                                      to_string(option_value(option))
+                                  }
+                                >
+                                  {option_label(option)}
+                                </option>
+                              </select>
+                              <.icon
+                                name="hero-chevron-down"
+                                class="pointer-events-none absolute end-3 top-1/2 size-[14px] -translate-y-1/2 text-[#a8a5a0]"
+                              />
+                            </div>
+                          <% definition.type == :secret -> %>
+                            <%!-- A stored secret is never drawn back: the field starts empty and
+                                says how the stored one ends; empty on save keeps it. What it holds
+                                is only what is being typed now, which the save then clears. --%>
+                            <div class="flex items-center gap-2.5">
+                              <input
+                                type="password"
+                                id={"set-#{dom_id(definition.key)}"}
+                                name={field_name(definition)}
+                                value={@form[definition.key].value}
+                                autocomplete="new-password"
+                                disabled={!editable}
+                                placeholder={secret_placeholder(@secret_hints[definition.key])}
+                                class={[input_class(), "h-[46px] min-w-0 flex-1 px-[15px]"]}
+                              />
+                              <button
+                                :if={editable && @secret_hints[definition.key]}
+                                type="button"
+                                id={"clear-#{dom_id(definition.key)}"}
+                                phx-click="clear_secret"
+                                phx-value-key={definition.key}
+                                data-confirm={
+                                  gettext(
+                                    "Remove this key? What uses it stops until a new one is saved."
+                                  )
+                                }
+                                class="h-[46px] shrink-0 rounded-xl border border-[#ecebe6] bg-white px-3.5 text-[12.5px] font-semibold text-[#c0473d] hover:bg-[#fdf3f1]"
+                              >
+                                {gettext("Remove")}
+                              </button>
+                            </div>
+                            <p
+                              :if={@secret_hints[definition.key] == :unreadable}
+                              id={"unreadable-#{dom_id(definition.key)}"}
+                              class="mt-2 text-[12px] font-semibold text-[#a5352c]"
+                            >
+                              {gettext(
+                                "This key was saved under an older server key (SECRET_KEY_BASE) and can no longer be read, so nothing uses it. Type it again and save."
+                              )}
+                            </p>
+                          <% definition.type == :text -> %>
+                            <textarea
+                              id={"set-#{dom_id(definition.key)}"}
+                              name={field_name(definition)}
+                              rows="3"
+                              disabled={!editable}
+                              class={[input_class(), "resize-y px-[15px] py-3.5 leading-relaxed"]}
+                            >{@form[definition.key].value}</textarea>
+                          <% true -> %>
+                            <input
+                              type={html_input_type(definition.type)}
+                              id={"set-#{dom_id(definition.key)}"}
+                              name={field_name(definition)}
+                              value={input_value(@form[definition.key].value)}
+                              disabled={!editable}
+                              class={[input_class(), "h-[46px] px-[15px]"]}
+                            />
+                        <% end %>
+
+                        <p
+                          :if={definition.description}
+                          class="mt-2 text-[12px] font-medium text-[#9a978f]"
+                        >
+                          {Settings.text(definition.description)}
+                        </p>
+                      <% end %>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <p :if={@fields == []} class="text-[13px] font-medium text-[#9a978f]">
+                {gettext("No settings in this category yet.")}
+              </p>
+            </div>
+          </div>
+        </.form>
+
+        <%!-- THE EMAIL TAB'S OWN: a test email through the scope's provider, and what was sent. Outside
+              the settings form, which a form inside it would break. --%>
+        <div
+          :if={@active_tab == "email"}
+          id="mail-panel"
+          class="flex min-w-0 flex-col gap-[22px]"
+        >
+          <form
+            id="mail-test-form"
+            phx-submit="send_test_email"
+            class="rounded-[18px] border border-[#ecebe6] bg-white px-[26px] py-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+          >
+            <h2 class="m-0 font-['Space_Grotesk'] text-[16px] font-bold text-[#17161a]">
+              {gettext("Send a test email")}
+            </h2>
+            <p class="mt-1 text-[12.5px] font-medium text-[#8a877f]">
+              {gettext(
+                "Sent now through this scope's saved provider and sender — save your changes first. The answer appears here and in the history below."
+              )}
+            </p>
+            <div class="mt-4 flex flex-wrap items-center gap-2.5">
+              <input
+                type="email"
+                id="mail-test-to"
+                name="to"
+                required
+                value={@current_user && @current_user.email}
+                class={[input_class(), "h-[46px] min-w-[240px] flex-1 px-[15px]"]}
+              />
+              <button
+                id="mail-test-send"
+                type="submit"
+                phx-disable-with={gettext("Sending…")}
+                class="flex h-[46px] items-center gap-2 rounded-xl bg-[#17161a] px-[17px] text-[12.5px] font-bold text-white hover:opacity-90"
+              >
+                <.icon name="hero-paper-airplane" class="size-[15px]" /> {gettext("Send test")}
+              </button>
+            </div>
+          </form>
+
+          <div class="rounded-[18px] border border-[#ecebe6] bg-white px-[26px] py-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
+            <h2 class="m-0 mb-4 font-['Space_Grotesk'] text-[16px] font-bold text-[#17161a]">
+              {gettext("Email history")}
+            </h2>
+            <.live_component
+              module={MishkaGervaz.Table.Web.Live}
+              id="mail-deliveries"
+              resource={MishkaCmsCore.Mail.Delivery}
+              current_user={@current_user}
+            />
+          </div>
+        </div>
+
+        <%!-- THE SECURITY TAB'S OWN: the scope's saved captcha, drawn and checked with its keys. Outside
+              the settings form for the same reason as the email tab's panel. --%>
+        <div
+          :if={@active_tab == "security"}
+          id="captcha-panel"
+          class="flex min-w-0 flex-col gap-[22px]"
+        >
+          <form
+            id="captcha-test-form"
+            phx-submit="test_captcha"
+            class="rounded-[18px] border border-[#ecebe6] bg-white px-[26px] py-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+          >
+            <h2 class="m-0 font-['Space_Grotesk'] text-[16px] font-bold text-[#17161a]">
+              {gettext("Try the captcha")}
+            </h2>
+            <p class="mt-1 text-[12.5px] font-medium text-[#8a877f]">
+              {gettext(
+                "Draws this scope's saved captcha — save your changes first — and checks it with the saved keys. Try it on the site's own address: its keys work only there."
+              )}
+            </p>
+            <Widget.captcha
+              :if={@captcha_test_id}
+              id={@captcha_test_id}
+              form={to_form(%{}, as: :captcha)}
+              for="test"
+              tenant={@active_scope}
+              class="mt-4"
+            />
+            <p
+              :if={!@captcha_test_id}
+              id="captcha-test-none"
+              class="mt-4 text-[12.5px] font-medium text-[#9a978f]"
+            >
+              {gettext("This scope asks no captcha: choose one above, enter its keys and save.")}
+            </p>
+            <div class="mt-4 flex flex-wrap items-center gap-2.5">
+              <button
+                id="captcha-test-run"
+                type="submit"
+                disabled={!@captcha_test_id}
+                phx-disable-with={gettext("Checking…")}
+                class="flex h-[46px] items-center gap-2 rounded-xl bg-[#17161a] px-[17px] text-[12.5px] font-bold text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                <.icon name="hero-shield-check" class="size-[15px]" /> {gettext("Test")}
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <%!-- THE PREFERENCES TAB'S OWN: the account's sign-in security — its authenticator app, its
+              recovery codes and any card an extension adds (`SecurityCards`) — outside the settings
+              form for the same reason as the email tab's panel. --%>
+        <div
+          :if={@active_tab == "preferences"}
+          id="security-panel"
+          class="flex min-w-0 flex-col gap-[22px]"
+        >
+          <.live_component
+            :for={card <- @security_cards}
+            module={card.module}
+            id={card.id}
+            current_user={@current_user}
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>

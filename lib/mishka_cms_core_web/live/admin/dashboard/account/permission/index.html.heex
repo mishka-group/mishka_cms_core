@@ -1,0 +1,46 @@
+<div>
+  <.header>
+    {gettext("Permissions")}
+    <:subtitle>{gettext("Manage roles and permissions.")}</:subtitle>
+    <:actions>
+      <.button
+        :if={@current_user && @current_user.site_id == nil}
+        phx-click="permission_modal_add"
+      >
+        {gettext("+ Add Permission")}
+      </.button>
+    </:actions>
+  </.header>
+
+  <%!-- Info for Tenant Users --%>
+  <div
+    :if={@current_user && @current_user.site_id != nil}
+    class="mt-4 mb-4 bg-blue-50 border border-blue-200 rounded-lg p-6"
+  >
+    <div class="flex items-center gap-3">
+      <.icon name="hero-information-circle" class="w-6 h-6 text-blue-600" />
+      <div>
+        <h3 class="text-lg font-medium text-blue-900">{gettext("Read-Only Access")}</h3>
+        <p class="text-sm text-blue-700 mt-1">
+          {gettext(
+            "Permissions can only be created, edited, or deleted by master administrators."
+          )}
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <MishkaCmsCoreWeb.Live.Admin.Components.PermissionDetailsModal.modal
+    permission_modal={@permission_modal}
+    current_user={@current_user}
+  />
+
+  <%!-- Permissions Table Component (MishkaGervaz) --%>
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="permissions-table"
+    resource={MishkaCmsCore.Accounts.Permission}
+    current_user={@current_user}
+    url_state={@url_state}
+  />
+</div>

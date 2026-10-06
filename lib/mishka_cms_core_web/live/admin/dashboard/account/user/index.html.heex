@@ -1,0 +1,33 @@
+<div>
+  <.link
+    navigate={path(@socket, "/admin/dashboard/account")}
+    class="mb-[18px] inline-flex items-center gap-[7px] text-[12.5px] font-semibold text-[#8a877f] transition-colors hover:text-[#1b1a18]"
+  >
+    <.icon name="hero-chevron-left" class="size-[15px] rtl:rotate-180" /> {gettext(
+      "Back to Dashboard"
+    )}
+  </.link>
+
+  <.header>
+    {gettext("Users")}
+    <:subtitle>{gettext("Manage user accounts and permissions.")}</:subtitle>
+    <:actions>
+      <.button id="add-user" phx-click="user_modal_add">
+        {dgettext("mishka_gervaz", "+ Add User")}
+      </.button>
+    </:actions>
+  </.header>
+
+  <MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal.modal
+    user_modal={@user_modal}
+    current_user={@current_user}
+  />
+
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="users-table"
+    resource={MishkaCmsCore.Accounts.User}
+    current_user={@current_user}
+    url_state={@url_state}
+  />
+</div>

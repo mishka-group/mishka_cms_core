@@ -1,0 +1,103 @@
+{
+  "$schema": "mishka.ui_kit.bundle.v3",
+  "components": [
+    {
+      "active": true,
+      "attrs": [
+        {
+          "name": "id",
+          "opts": {
+            "required": true
+          },
+          "type": "string"
+        },
+        {
+          "name": "size",
+          "opts": {
+            "default": "small",
+            "values": [
+              "small",
+              "large"
+            ]
+          },
+          "type": "string"
+        },
+        {
+          "name": "step",
+          "opts": {
+            "default": 1
+          },
+          "type": "integer"
+        },
+        {
+          "name": "rest",
+          "opts": {},
+          "type": "global"
+        }
+      ],
+      "body": null,
+      "dependencies": [],
+      "examples": [],
+      "extra": {
+        "clauses": null,
+        "component": "sample_live_counter",
+        "doc_examples": [],
+        "doc_url": "internal",
+        "function": "render",
+        "module_attributes": [],
+        "prelude": null,
+        "ui_kit": "livekit",
+        "ui_kit_version": "0.0.1"
+      },
+      "format": "heex",
+      "helpers": [
+        {
+          "args": "socket",
+          "attrs": [],
+          "code": "{:ok, assign(socket, :count, 0)}",
+          "discriminators": [],
+          "name": "mount",
+          "slots": []
+        },
+        {
+          "args": "\"bump\", _params, socket",
+          "attrs": [],
+          "code": "{:noreply, assign(socket, :count, socket.assigns.count + socket.assigns.step)}",
+          "discriminators": [],
+          "name": "handle_event",
+          "slots": []
+        },
+        {
+          "args": "count when count > 0",
+          "attrs": [],
+          "code": "\"text-emerald-600\"",
+          "discriminators": [],
+          "name": "counter_class",
+          "slots": []
+        },
+        {
+          "args": "_count",
+          "attrs": [],
+          "code": "\"text-zinc-500\"",
+          "discriminators": [],
+          "name": "counter_class",
+          "slots": []
+        }
+      ],
+      "name": "livekit-sample-live-counter",
+      "permissions": [],
+      "precompile": false,
+      "priority": 50,
+      "required": false,
+      "site_id": null,
+      "slots": [],
+      "stateful": true,
+      "template": "<div id={@id} class={[@size, counter_class(@count)]} {@rest}>\n  <span>{@count}</span>\n  <button type=\"button\" phx-click=\"bump\" phx-target={@myself}>Bump</button>\n</div>\n",
+      "type": "general"
+    }
+  ],
+  "js_hooks": [],
+  "name": "livekit",
+  "stylesheets": [],
+  "version": "0.0.1"
+}

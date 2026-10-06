@@ -1,0 +1,48 @@
+<div>
+  <.header>
+    {gettext("Error Pages")}
+    <:subtitle>{gettext("Configure custom error pages for your sites.")}</:subtitle>
+    <:actions>
+      <%!-- CREATING WRITES, so it is offered to a writer of the type; everyone else reads the list. --%>
+      <.create_menu
+        :if={@writable?}
+        id="add-error_page"
+        label={gettext("+ Add Error Page")}
+        navigate={Section.builder_path("error-page")}
+        modal={MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.modal_id()}
+      >
+        <:way
+          id="pb-create-form-error_page"
+          label={gettext("Create with the full form")}
+          event="preview_add"
+        >
+          {gettext("Every field this one has, on one form — then back to this list.")}
+        </:way>
+        <:way
+          id="pb-create-open-error_page"
+          label={gettext("Fill in the form, then open the editor")}
+          event="create_and_open"
+        >
+          {gettext("The same form, and the visual editor opens on what it saved.")}
+        </:way>
+      </.create_menu>
+    </:actions>
+  </.header>
+
+  <%!-- Runtime detail modal: Overview · Preview · Code · Versions · Pipeline · Configuration
+        (add/edit in-modal, so there is no second form modal on this page). --%>
+  <MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal.modal preview={@preview} />
+
+  <%!-- Error Pages Table — System Logs sit between the filters and the table via :before_table. --%>
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id="error-pages-table"
+    resource={MishkaCmsCore.Runtime.ErrorPage}
+    current_user={@current_user}
+    url_state={@url_state}
+  >
+    <:filter_actions>
+      <MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.feed setup={@activity_feed} />
+    </:filter_actions>
+  </.live_component>
+</div>

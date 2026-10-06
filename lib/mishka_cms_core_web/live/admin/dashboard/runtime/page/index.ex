@@ -1,0 +1,378 @@
+defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
+  @moduledoc """
+  The admin's page list, and the modal that makes a new one.
+
+  ## Two ways to create, both on the "+ Add" button
+
+  The button that opens the create modal carries a caret, and the caret holds the two ways of ending
+  up in the visual editor with a new page:
+
+    * **Fill in the details, then open the editor** — pressing it records the intent in
+      `open_builder?` and opens the ordinary modal. The save that follows is the ordinary save; the
+      guarded `{:form_saved, :create, result}` clause below turns it into a redirect. The question is
+      asked where the reader is choosing how to make one, not at the bottom of a modal they have
+      already committed to.
+    * **Create empty & open editor** — a plain link to `/admin/dashboard/runtime/builder/page`.
+      It LEAVES without opening the modal at all, so none of this form's validations fire on a form
+      the reader has just said they do not want to fill in; the editor asks for the two or three
+      things a record cannot exist without and makes it there.
+
+  ## One modal for everything
+
+  Creating, viewing and editing all happen in the inspector modal's Configuration tab
+  (`MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers`). There is no separate
+  `page-form-modal`: two mounts of one form component on a page collide on their DOM id, and the form
+  is what an author edits after reading the very tabs beside it.
+
+  ## Add translation
+
+  A row's "Add translation" asks two things — which of the site's languages, and at what path — and
+  then creates the page through its own create action, as the reader: see
+  `MishkaCmsCore.Runtime.PageEditions.translate/4`. The path follows the language until the reader
+  types one of their own. The new edition opens on the inspector's Configuration tab, inactive.
+  """
+
+  use MishkaCmsCore.ExtensionLiveView
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
+  alias MishkaCmsCore.Runtime.{Languages, Page, PageEditions}
+  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
+  alias MishkaGervaz.Table.Web.UrlSync
+
+  @impl true
+  def mount(_params, _session, socket) do
+    socket = assign_new(socket, :current_user, fn -> nil end)
+    socket = PreviewHelpers.assign_access(socket, MishkaCmsCore.Runtime.Page)
+
+    if connected?(socket),
+      do: PreviewHelpers.subscribe_drafts(socket.assigns.current_user, MishkaCmsCore.Runtime.Page)
+
+    socket =
+      RuntimeStatusLive.setup(socket,
+        resource: MishkaCmsCore.Runtime.Page,
+        table_id: "pages-table",
+        master_load: [:site, :layout],
+        tenant_load: [:site, :tenant_layout]
+      )
+
+    socket = PreviewHelpers.setup(socket)
+
+    socket =
+      MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.setup(socket,
+        resources: [MishkaCmsCore.Runtime.Page],
+        feed_id: "pages-activity"
+      )
+
+    new_socket =
+      socket
+      |> assign(:page_title, gettext("Listing Pages"))
+      |> assign(:url_state, nil)
+      |> assign(:translation, nil)
+
+    {:ok, assign(new_socket, :open_builder?, false)}
+  end
+
+  @impl true
+  def handle_params(params, uri, socket) do
+    url_state = UrlSync.decode(params, uri, MishkaCmsCore.Runtime.Page)
+    {:noreply, assign(socket, :url_state, url_state)}
+  end
+
+  @impl true
+  def handle_info({:form_saved, :create, result}, %{assigns: %{open_builder?: true}} = socket) do
+    {:noreply,
+     socket
+     |> assign(:open_builder?, false)
+     |> push_navigate(to: Section.builder_path("page", result.id))}
+  end
+
+  def handle_info({:form_saved, :create, _result}, socket) do
+    {:noreply,
+     socket |> PreviewHelpers.dismiss() |> put_flash(:info, gettext("Page created successfully"))}
+  end
+
+  @impl true
+  def handle_info({:form_saved, :update, _result}, socket) do
+    {:noreply,
+     socket |> PreviewHelpers.dismiss() |> put_flash(:info, gettext("Page updated successfully"))}
+  end
+
+  @impl true
+  # AND FORGOTTEN IF THE FORM IS ABANDONED, or the next ordinary Create would carry someone else's
+  # answer into the editor.
+  def handle_info({:form_cancelled, _resource}, socket) do
+    {:noreply, socket |> assign(:open_builder?, false) |> PreviewHelpers.dismiss()}
+  end
+
+  @impl true
+  def handle_info({:row_action, "show_preview_modal", %{"id" => id}}, socket),
+    do: {:noreply, PreviewHelpers.open(socket, id)}
+
+  @impl true
+  def handle_info({:row_action, "edit_preview_modal", %{"id" => id}}, socket),
+    do: {:noreply, PreviewHelpers.open_configuration(socket, id)}
+
+  @impl true
+  def handle_info({:row_action, "add_translation", %{"id" => id}}, socket) do
+    case readable_page(id, socket.assigns.current_user) do
+      {:ok, page} ->
+        {:noreply,
+         assign(socket, :translation, translation(page, PageEditions.language_suggestions(page)))}
+
+      _gone ->
+        {:noreply, put_flash(socket, :error, gettext("That page is no longer there."))}
+    end
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: "page_draft" <> _,
+          payload: %Ash.Notifier.Notification{data: data}
+        },
+        socket
+      ) do
+    user = socket.assigns.current_user
+
+    {:noreply, PreviewHelpers.sync_draft(socket, data, user)}
+  end
+
+  @impl true
+  def handle_info({:put_flash, kind, message}, socket) do
+    {:noreply, put_flash(socket, kind, message)}
+  end
+
+  @impl true
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: "page" <> _,
+          payload: %Ash.Notifier.Notification{} = notification
+        },
+        socket
+      ) do
+    send_update(MishkaGervaz.Table.Web.Live, id: "pages-table", pubsub_notification: notification)
+
+    {:noreply, RuntimeStatusLive.refresh_if_match(socket, notification)}
+  end
+
+  @impl true
+  def handle_info({:expand_row, id}, socket) do
+    {:noreply, RuntimeStatusLive.expand(socket, id)}
+  end
+
+  @impl true
+  def handle_async({:runtime_status_load, _id}, result, socket) do
+    {:noreply, RuntimeStatusLive.loaded(socket, result)}
+  end
+
+  def handle_async(name, result, socket)
+      when name in [:load_preview, :preview_versions, :preview_compile],
+      do: {:noreply, PreviewHelpers.async_result(socket, name, result)}
+
+  ## Preview modal
+
+  @impl true
+  # THE INTENT IS RECORDED BEFORE THE FORM IS FILLED, because that is where the reader chooses it:
+  # the caret beside "+ Add" asks how they want to make one, and this remembers the answer until the
+  # save arrives. It used to ride the form as a hidden param on a second submit button, which put the
+  # question at the bottom of a modal the reader had already committed to.
+  def handle_event("create_and_open", _params, socket) do
+    {:noreply, socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new()}
+  end
+
+  @impl true
+  def handle_event("preview_add", _params, socket),
+    do: {:noreply, socket |> assign(:open_builder?, false) |> PreviewHelpers.open_new()}
+
+  # A language chip on a row opens that edition, the way the eye opens the row's own.
+  @impl true
+  def handle_event("show_edition", %{"id" => id}, socket),
+    do: {:noreply, PreviewHelpers.open(socket, id)}
+
+  @impl true
+  def handle_event("translation_change", %{"translation" => params}, socket) do
+    case socket.assigns.translation do
+      nil -> {:noreply, socket}
+      translation -> {:noreply, assign(socket, :translation, follow(translation, params))}
+    end
+  end
+
+  @impl true
+  def handle_event("translation_create", %{"translation" => params}, socket) do
+    case socket.assigns.translation do
+      nil -> {:noreply, socket}
+      translation -> {:noreply, create_translation(socket, translation, params)}
+    end
+  end
+
+  @impl true
+  def handle_event("translation_cancel", _params, socket),
+    do: {:noreply, assign(socket, :translation, nil)}
+
+  @impl true
+  def handle_event("preview_force_compile", _params, socket),
+    do: {:noreply, PreviewHelpers.force_compile(socket)}
+
+  def handle_event("preview_set_tab", %{"tab" => tab}, socket),
+    do: {:noreply, PreviewHelpers.set_tab(socket, tab)}
+
+  @impl true
+  def handle_event("preview_set_device", %{"device" => device}, socket),
+    do: {:noreply, PreviewHelpers.set_device(socket, device)}
+
+  @impl true
+  def handle_event("preview_set_source", %{"source" => source}, socket),
+    do: {:noreply, PreviewHelpers.set_preview_source(socket, source)}
+
+  @impl true
+  def handle_event("close_preview_modal", _params, socket),
+    do: {:noreply, PreviewHelpers.close(socket)}
+
+  @impl true
+  def handle_event("preview_versions_page", %{"page" => page}, socket),
+    do: {:noreply, PreviewHelpers.versions_paginate(socket, String.to_integer(page))}
+
+  @impl true
+  def handle_event("preview_version_toggle", %{"id" => id}, socket),
+    do: {:noreply, PreviewHelpers.toggle_version(socket, id)}
+
+  @impl true
+  def handle_event("preview_version_restore", %{"id" => id}, socket),
+    do: {:noreply, PreviewHelpers.restore_version(socket, id)}
+
+  @impl true
+  def handle_event("preview_edit_code", _params, socket),
+    do: {:noreply, PreviewHelpers.edit_code(socket)}
+
+  @impl true
+  def handle_event("preview_cancel_edit", _params, socket),
+    do: {:noreply, PreviewHelpers.cancel_edit(socket)}
+
+  @impl true
+  def handle_event("preview_code_submit", %{"op" => "save", "source" => source} = params, socket),
+    do: {:noreply, PreviewHelpers.save_draft(socket, source, Map.get(params, "label"))}
+
+  @impl true
+  def handle_event("preview_code_submit", %{"source" => source}, socket),
+    do: {:noreply, PreviewHelpers.rerender(socket, source)}
+
+  @impl true
+  def handle_event("preview_select_draft", %{"id" => id}, socket),
+    do: {:noreply, PreviewHelpers.select_draft(socket, id)}
+
+  @impl true
+  def handle_event("preview_new_draft", _params, socket),
+    do: {:noreply, PreviewHelpers.new_draft(socket)}
+
+  @impl true
+  def handle_event("preview_drafts_page", %{"page" => page}, socket),
+    do: {:noreply, PreviewHelpers.drafts_paginate(socket, String.to_integer(page))}
+
+  @impl true
+  def handle_event("preview_publish_draft", _params, socket),
+    do: {:noreply, PreviewHelpers.publish_draft(socket)}
+
+  @impl true
+  def handle_event("preview_discard_draft", params, socket),
+    do: {:noreply, PreviewHelpers.discard_draft(socket, params["id"])}
+
+  ## Add translation
+
+  # READ AS THE READER, so the row id in the event cannot name a page they could not have opened.
+  defp readable_page(id, %{site_id: nil} = user),
+    do: Ash.get(Page, id, action: :master_get, actor: user)
+
+  defp readable_page(id, %{site_id: site_id} = user),
+    do: Ash.get(Page, id, tenant: site_id, actor: user)
+
+  defp translation(page, languages) do
+    language = List.first(languages)
+
+    %{
+      page: page,
+      languages: languages,
+      error: nil,
+      unreachable: unreachable_language(%{page: page}, language),
+      form: translation_form(page, language)
+    }
+  end
+
+  # A `lang` CAPTURE ANSWERS ONLY THE SITE'S LANGUAGES — `WebRunTimeMetaDataState` passes the pattern
+  # over otherwise — so a translation of `/:lang/…` into a language the site does not list is a page
+  # nothing can reach. A literal path has no such rule, which is why this is a sentence beside the
+  # path and not a refusal.
+  defp unreachable_language(%{page: page}, language) do
+    String.contains?(page.path, ":" <> Languages.capture()) and
+      language not in Languages.site(page.site_id)
+  end
+
+  defp translation_form(page, language, path \\ nil) do
+    to_form(
+      %{
+        "language" => language,
+        "path" => path || (language && PageEditions.translation_path(page, language))
+      },
+      as: :translation
+    )
+  end
+
+  # THE PATH FOLLOWS THE LANGUAGE while it is still the one this form suggested; a path the reader
+  # typed stays theirs.
+  defp follow(%{page: page, form: form} = translation, %{"language" => language} = params) do
+    path =
+      case params["path"] == PageEditions.translation_path(page, form.params["language"]) do
+        true -> nil
+        false -> params["path"]
+      end
+
+    %{
+      translation
+      | form: translation_form(page, language, path),
+        error: nil,
+        unreachable: unreachable_language(translation, language)
+    }
+  end
+
+  defp follow(translation, _params), do: translation
+
+  defp create_translation(socket, translation, %{"language" => language, "path" => path})
+       when is_binary(path) do
+    with {:ok, created} <-
+           PageEditions.translate(
+             translation.page,
+             language,
+             String.trim(path),
+             socket.assigns.current_user
+           ) do
+      socket
+      |> assign(:translation, nil)
+      |> put_flash(
+        :info,
+        gettext("Translation created as inactive — translate it, then activate it to go live.")
+      )
+      |> PreviewHelpers.open_configuration(created.id)
+    else
+      {:error, %Ash.Error.Invalid{errors: errors}} ->
+        refuse_translation(socket, translation, Enum.map_join(errors, ", ", &reason/1))
+
+      {:error, _refused} ->
+        refuse_translation(
+          socket,
+          translation,
+          gettext("The translation could not be created.")
+        )
+    end
+  end
+
+  defp create_translation(socket, translation, _params),
+    do: refuse_translation(socket, translation, gettext("Choose a language and a path."))
+
+  # The error's own sentence, without the breadcrumbs `Exception.message/1` puts in front of it.
+  defp reason(%{message: message} = error) when is_binary(message),
+    do: MishkaGervaz.Errors.translate_error(message, Map.get(error, :vars))
+
+  defp reason(error), do: MishkaGervaz.Errors.translate_error(Exception.message(error), [])
+
+  defp refuse_translation(socket, translation, message),
+    do: assign(socket, :translation, %{translation | error: message})
+end

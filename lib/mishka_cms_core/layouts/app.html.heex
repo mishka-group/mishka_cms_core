@@ -1,0 +1,32 @@
+<.flash_group flash={@flash}>
+  <.live_component
+    :if={assigns[:current_user]}
+    module={MishkaCmsCoreWeb.Live.Admin.Components.TranslationsRefusal}
+    id={MishkaCmsCoreWeb.Live.Admin.Components.TranslationsRefusal.id()}
+    current_user={assigns[:current_user]}
+  />
+</.flash_group>
+
+<div class="flex h-screen overflow-hidden bg-[#f6f5f2] font-[Manrope,ui-sans-serif,system-ui,sans-serif] text-[#1b1a18] antialiased [[data-theme=dark]_&]:[filter:invert(0.92)_hue-rotate(180deg)] [[data-theme=dark]_&]:[transition:filter_.3s_ease]">
+  <.sidebar current_path={assigns[:current_path]} current_user={assigns[:current_user]} />
+
+  <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
+    <.topbar
+      current_user={assigns[:current_user]}
+      notification_count={assigns[:notification_count] || 0}
+      notification_recent={assigns[:notification_recent] || []}
+      current_path={assigns[:current_path]}
+      language={assigns[:admin_language] || "en"}
+      languages={assigns[:admin_languages] || []}
+    />
+
+    <main class="flex-1 scroll-smooth overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div class="px-8 pb-16 pt-7 max-[980px]:px-[15px]! max-[980px]:pb-12! max-[980px]:pt-[18px]!">
+        <div class="mx-auto max-w-[1340px]">
+          {@inner_content}
+        </div>
+        <.footer_credit credit={assigns[:footer_credit]} />
+      </div>
+    </main>
+  </div>
+</div>

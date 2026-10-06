@@ -1,0 +1,184 @@
+{
+  "$schema": "mishka.ui_kit.bundle.v3",
+  "name": "acme",
+  "version": "0.1.0",
+  "components": [
+    {
+      "name": "acme-panel",
+      "type": "overlays",
+      "format": "heex",
+      "active": true,
+      "priority": 50,
+      "required": false,
+      "precompile": false,
+      "site_id": null,
+      "permissions": [],
+      "template": "<div\n  id={@id}\n  phx-hook=\"GlobalAcmeReveal\"\n  data-open=\"false\"\n  data-pb-open={Phoenix.LiveView.JS.dispatch(\"acme:open\", to: \"##{@id}\")}\n  data-pb-close={Phoenix.LiveView.JS.dispatch(\"acme:close\", to: \"##{@id}\")}\n  class={[\"acme-panel\", tone(@tone), @class]}\n  {@rest}\n>\n  <h3 class=\"acme-panel-title\">{@title}</h3>\n  <div class=\"acme-panel-body\">{render_slot(@inner_block)}</div>\n</div>",
+      "body": "",
+      "dependencies": [
+        "acme-badge"
+      ],
+      "attrs": [
+        {
+          "name": "id",
+          "type": "string",
+          "opts": {
+            "required": true,
+            "doc": "Needed by the hook and by anything that opens this."
+          }
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "opts": {
+            "default": "Panel",
+            "doc": "The heading shown at the top."
+          }
+        },
+        {
+          "name": "tone",
+          "type": "string",
+          "opts": {
+            "default": "quiet",
+            "values": [
+              "quiet",
+              "loud"
+            ],
+            "doc": "How loudly the surface is drawn."
+          }
+        },
+        {
+          "name": "class",
+          "type": "any",
+          "opts": {
+            "default": null,
+            "doc": "Extra classes."
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {
+            "doc": "Anything else the author writes."
+          }
+        }
+      ],
+      "slots": [
+        {
+          "name": "inner_block",
+          "opts": {
+            "required": true,
+            "doc": "What the panel reveals."
+          }
+        }
+      ],
+      "helpers": [
+        {
+          "name": "tone",
+          "args": "\"quiet\"",
+          "code": "defp tone(\"quiet\"), do: \"acme-panel--quiet\"\ndefp tone(\"loud\"), do: \"acme-panel--loud\"\ndefp tone(_unknown), do: \"acme-panel--quiet\"",
+          "discriminators": [
+            {
+              "axis": "tone",
+              "values": [
+                "quiet",
+                "loud"
+              ]
+            }
+          ],
+          "attrs": [],
+          "slots": []
+        }
+      ],
+      "examples": [
+        "<.component component_name=\"acme-panel\" site=\"Global\" id=\"acme-panel-terms\" title=\"Terms of service\" tone=\"quiet\">\n  Read these before you continue.\n</.component>",
+        "<.component component_name=\"acme-panel\" site=\"Global\" id=\"acme-panel-alert\" title=\"Storage almost full\" tone=\"loud\">\n  <.component component_name=\"acme-badge\" site=\"Global\">92%</.component>\n  Delete something, or add a plan.\n</.component>"
+      ],
+      "extra": {
+        "ui_kit": "acme",
+        "ui_kit_version": "0.1.0",
+        "function": "panel",
+        "doc_url": "https://example.test/acme/panel"
+      }
+    },
+    {
+      "name": "acme-badge",
+      "type": "general",
+      "format": "heex",
+      "active": true,
+      "priority": 50,
+      "required": false,
+      "precompile": false,
+      "site_id": null,
+      "permissions": [],
+      "template": "<span class={[\"acme-badge\", @class]} {@rest}>{render_slot(@inner_block)}</span>",
+      "body": "",
+      "dependencies": [],
+      "attrs": [
+        {
+          "name": "class",
+          "type": "any",
+          "opts": {
+            "default": null
+          }
+        },
+        {
+          "name": "rest",
+          "type": "global",
+          "opts": {}
+        }
+      ],
+      "slots": [
+        {
+          "name": "inner_block",
+          "opts": {
+            "required": true
+          }
+        }
+      ],
+      "helpers": [],
+      "examples": [
+        "<.component component_name=\"acme-badge\" site=\"Global\">New</.component>",
+        "<.component component_name=\"acme-badge\" site=\"Global\" class=\"acme-badge--muted\">Draft</.component>"
+      ],
+      "extra": {
+        "ui_kit": "acme",
+        "ui_kit_version": "0.1.0",
+        "function": "badge"
+      }
+    }
+  ],
+  "js_hooks": [
+    {
+      "name": "acme-reveal",
+      "site_id": null,
+      "format": "js",
+      "priority": 50,
+      "active": true,
+      "permissions": [],
+      "content": "export default {\n  mounted() {\n    this.onCommand = (event) => {\n      if (event.target !== this.el) return;\n      this.el.dataset.open = event.type === \"acme:close\" ? \"false\" : \"true\";\n    };\n    for (const name of [\"acme:open\", \"acme:close\"]) this.el.addEventListener(name, this.onCommand);\n  },\n  destroyed() {\n    for (const name of [\"acme:open\", \"acme:close\"]) this.el.removeEventListener(name, this.onCommand);\n  },\n};\n",
+      "extra": {
+        "ui_kit": "acme",
+        "ui_kit_version": "0.1.0",
+        "module": "Reveal",
+        "replaces": "reveal"
+      }
+    }
+  ],
+  "stylesheets": [
+    {
+      "name": "acme-theme",
+      "kind": "theme",
+      "site_id": null,
+      "format": "css",
+      "priority": 50,
+      "active": true,
+      "permissions": [],
+      "content": "@theme {\n  --color-acme: oklch(0.62 0.19 275);\n}\n",
+      "extra": {
+        "ui_kit": "acme",
+        "ui_kit_version": "0.1.0"
+      }
+    }
+  ]
+}

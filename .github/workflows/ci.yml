@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+
+    defaults:
+      run:
+        working-directory: mishka_cms_core
+
+    steps:
+      # mix.exs reaches its sibling packages by path (../mishka_gervaz),
+      # so each one is checked out next to this repository, as on a developer's machine.
+      - uses: actions/checkout@v7
+        with:
+          path: mishka_cms_core
+
+      - uses: actions/checkout@v7
+        with:
+          repository: mishka-group/mishka_gervaz
+          ref: ${{ vars.GERVAZ_REF || 'master' }}
+          path: mishka_gervaz
+
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: mishka_cms_core/.tool-versions
+          version-type: strict
+
+      - uses: actions/cache@v6
+        with:
+          path: |
+            mishka_cms_core/deps
+            mishka_cms_core/_build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mishka_cms_core/mix.lock', 'mishka_cms_core/.tool-versions') }}
+
+      - run: mix deps.get
+
+      - run: MIX_ENV=test mix compile --warnings-as-errors
+
+      # The formatter takes the DSL's paren-free calls (`table "pages"`, `reference :site, ...`)
+      # from the dependencies in .formatter.exs's import_deps, so it runs once they are fetched.
+      - run: MIX_ENV=test mix format --check-formatted
+
+      # The migrations are generated, not in git: generate them before the test alias's `ash.setup`
+      # migrates the test database.
+      - run: MIX_ENV=test mix ash.codegen ci
+
+      # `mix test`, not `MIX_ENV=test mix test`: mishka_installer decides at dep-compile time
+      # whether to start its plugin engine, and an exported MIX_ENV outranks the `project_env`
+      # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files.
+      - run: mix test --warnings-as-errors
