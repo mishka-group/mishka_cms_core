@@ -66,6 +66,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
     Site
   }
 
+  alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Settings
 
   # THREE SITES A BROWSER ON THIS MACHINE CAN REALLY OPEN. `mishka.tools` and `api.mishka.tools`
@@ -193,10 +194,10 @@ defmodule MishkaCmsCore.Dev.Seeds do
     # BEFORE THE PAGES, because the pages are made OF it. The showcase templates call
     # `chelekom-tabs`, `chelekom-table` and their siblings; a page seeded before the kit exists
     # resolves each of those to nothing and renders the red "Component failed to render!" box
-    # instead. This is also why the install lives here rather than only in the installer's own
-    # optional step — `priv/repo/dev_seeds.exs` calls `dev_seed/1` directly and never had one.
-    log.(gettext("Installing the Chelekom kit — the sample pages are built from it…"))
-    ensure_chelekom!()
+    # instead. This is also why the install lives here, where `priv/repo/dev_seeds.exs` reaches it
+    # too: it calls `dev_seed/1` directly.
+    log.(gettext("Installing every UI-kit component — the sample pages are built from them…"))
+    ensure_ui_kits!(log)
 
     log.(gettext("Creating the global layout & hooks…"))
     global_layout = seed_global_layout()
@@ -291,28 +292,24 @@ defmodule MishkaCmsCore.Dev.Seeds do
 
   @doc """
   The ordered seed phases for `selected`, as `{id, label}` — one progress row per phase (the installer
-  renders these as a live checklist). Always starts with `:core`; `:chelekom` (the full UI-kit) and the
-  extension seeds are added when selected.
+  renders these as a live checklist). Always starts with `:core`, which installs every UI-kit
+  component too; the extension seeds are added when selected.
   """
   @spec steps([atom()]) :: [{atom(), String.t()}]
   def steps(selected) do
-    chelekom =
-      if :chelekom in selected,
-        do: [{:chelekom, gettext_noop("Installing Chelekom UI components")}],
-        else: []
-
     extensions =
       categories() |> Enum.filter(&(&1.key in selected)) |> Enum.map(&{&1.key, &1.label})
 
-    [{:core, gettext_noop("Seeding core data (sites, users, permissions, content)")}] ++
-      chelekom ++ extensions
+    [{:core, gettext_noop("Seeding core data (sites, users, permissions, UI kits, content)")}] ++
+      extensions
   end
 
   @doc """
-  Runs the dev seed for local development: the core foundation + content (always), plus — when chosen —
-  the full Chelekom UI-kit and the extension seeds per site (mirrors `priv/repo/dev_seeds.exs`). For
-  DEV ONLY — never in production. `progress` is called with `{phase, status, detail}` so the installer
-  can show a live checklist. Returns the core foundation map.
+  Runs the dev seed for local development: the core foundation, every UI-kit component and the
+  content (always), plus — when chosen — the extension seeds per site (mirrors
+  `priv/repo/dev_seeds.exs`). For DEV ONLY — never in production. `progress` is called with
+  `{phase, status, detail}` so the installer can show a live checklist. Returns the core foundation
+  map.
   """
   @spec run([atom()], (term() -> any())) :: map()
   def run(selected \\ [], progress \\ fn _ -> :ok end) do
@@ -321,12 +318,6 @@ defmodule MishkaCmsCore.Dev.Seeds do
     progress.({:core, :running, nil})
     core = dev_seed(progress)
     progress.({:core, :done, nil})
-
-    if :chelekom in selected do
-      progress.({:chelekom, :running, nil})
-      ensure_chelekom!()
-      progress.({:chelekom, :done, nil})
-    end
 
     categories()
     |> Enum.filter(&(&1.key in selected))
@@ -345,20 +336,34 @@ defmodule MishkaCmsCore.Dev.Seeds do
     core
   end
 
-  # INSTALLED ONCE, whoever asks. The core seed needs the kit before it writes a page, and the
-  # installer offers it again as a step of its own; without this the 136-component bundle would be
-  # read and upserted twice for one seed. Asking the database is cheaper than doing the work again.
-  defp ensure_chelekom! do
-    case chelekom_installed?() do
-      true -> :already_installed
-      false -> MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!(site_id: nil)
+  # EVERY COMPONENT OF EVERY KIT, with nothing to choose: a dev database is where all of them get
+  # tried. No kit ships with the CMS, so one this server has not downloaded yet is downloaded first,
+  # the way the installer finds it; a file already there is kept, a developer's own export included.
+  #
+  # INSTALLED ONCE PER KIT, like every other step here. A kit this database already holds is left as
+  # it is, so a rerun upserts nothing.
+  defp ensure_ui_kits!(log) do
+    Enum.each(UiKitHandler.download_missing(), fn failure ->
+      log.(
+        gettext("%{label} (%{tag}) could not be downloaded: %{reason}",
+          label: failure.label,
+          tag: failure.tag,
+          reason: failure.reason
+        )
+      )
+    end)
+
+    case UiKitHandler.available_kits() |> Enum.reject(&kit_installed?/1) |> Enum.map(& &1.name) do
+      [] -> :already_installed
+      names -> UiKitHandler.install_kits!(names, site_id: nil)
     end
   end
 
-  defp chelekom_installed? do
+  defp kit_installed?(%{name: name}) do
     Component
     |> Ash.Query.for_read(:read_any)
-    |> Ash.Query.filter(name == "chelekom-card" and is_nil(site_id))
+    |> Ash.Query.filter(extra["ui_kit"] == ^name and is_nil(site_id))
+    |> Ash.Query.limit(1)
     |> Ash.read_one(authorize?: false)
     |> case do
       {:ok, nil} -> false

@@ -199,6 +199,45 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       :ok = Installer.uninstall_kit!(@seed_path)
       assert installed_components() == []
     end
+
+    # Chelekom's headless `toggle-group` declares `aria-label` on its `item` slot, and the whole kit
+    # failed to install over that one name.
+    test "a slot attribute with an HTML name installs" do
+      bundle = @seed_path |> File.read!() |> Jason.decode!()
+
+      components =
+        Enum.map(bundle["components"], fn
+          %{"name" => "kit-sample-card"} = card ->
+            Map.put(card, "slots", [
+              %{
+                "name" => "item",
+                "opts" => %{},
+                "attrs" => [%{"name" => "aria-label", "type" => "string", "opts" => %{}}]
+              }
+              | card["slots"]
+            ])
+
+          component ->
+            component
+        end)
+
+      path = Path.join(System.tmp_dir!(), "kit_aria_#{System.unique_integer([:positive])}.json")
+      File.write!(path, Jason.encode!(%{bundle | "components" => components}))
+      on_exit(fn -> File.rm(path) end)
+
+      {:ok, _} = Installer.install_kit!(path)
+
+      card =
+        Component
+        |> Ash.Query.filter(name == "kit-sample-card")
+        |> Ash.read_one!(authorize?: false)
+
+      assert [%{"name" => "aria-label"}] =
+               card.slots
+               |> Enum.find(&(to_string(&1["name"] || &1[:name]) == "item"))
+               |> then(&(&1["attrs"] || &1[:attrs]))
+               |> Enum.map(&%{"name" => to_string(&1["name"] || &1[:name])})
+    end
   end
 
   ## ─── uninstall ────────────────────────────────────────────────────

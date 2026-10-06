@@ -93,9 +93,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
 
   def validate(_attrs, _slots), do: []
 
-  # A name reaches the compiler as `String.to_atom/1` and is written into a `def`, so anything that
-  # is not an identifier is not a mistake to report later.
-  defp named(rows, kind) do
+  defp named(rows, kind, rule \\ :identifier) do
     seen =
       rows
       |> Enum.with_index()
@@ -106,16 +104,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
           name == "" ->
             {names, [{kind, index, gettext("Give this one a name.")} | faults]}
 
-          not Regex.match?(~r/^[a-z_][a-zA-Z0-9_]*$/, name) ->
-            {names,
-             [
-               {kind, index,
-                gettext(
-                  "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers and _ only.",
-                  name: name
-                )}
-               | faults
-             ]}
+          not name?(rule, name) ->
+            {names, [{kind, index, unnamed(name, rule)} | faults]}
 
           MapSet.member?(names, name) ->
             {names, [{kind, index, gettext("“%{name}” is declared twice.", name: name)} | faults]}
@@ -127,6 +117,30 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
 
     seen |> elem(1) |> Enum.reverse()
   end
+
+  # A name reaches the compiler as `String.to_atom/1` and is written into a `def`, so anything that
+  # is not an identifier is not a mistake to report later.
+  defp name?(:identifier, name), do: Regex.match?(~r/^[a-z_][a-zA-Z0-9_]*$/, name)
+
+  # A SLOT'S ATTRIBUTE IS NEVER WRITTEN INTO A `def`: the compiler emits slots without their
+  # attributes, and the entry reaches the template as a map read by `item[:"aria-label"]`. So an
+  # HTML name is one, as Phoenix allows in a slot block — Chelekom's headless `toggle-group` declares
+  # `aria-label` on its `item`.
+  defp name?(:slot_attr, name), do: Regex.match?(~r/^[a-z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*$/, name)
+
+  defp unnamed(name, :identifier),
+    do:
+      gettext(
+        "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers and _ only.",
+        name: name
+      )
+
+  defp unnamed(name, :slot_attr),
+    do:
+      gettext(
+        "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers, _ and - between them only.",
+        name: name
+      )
 
   # Phoenix's own: "cannot define attribute called :inner_block. Maybe you wanted to use `slot`
   # instead?" — which is exactly the mistake, because `inner_block` is the slot name everybody knows
@@ -194,7 +208,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
   end
 
   defp inner_faults(attrs) do
-    Enum.concat([named(attrs, :attr), typed(attrs), structured(attrs)])
+    Enum.concat([named(attrs, :attr, :slot_attr), typed(attrs), structured(attrs)])
   end
 
   defp held_attrs(slot) do
