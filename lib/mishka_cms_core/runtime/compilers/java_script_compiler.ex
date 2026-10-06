@@ -103,6 +103,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   require Ash.Query
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.Compilers.NpmPackages
   alias IgniterJs.Parsers.Javascript.{Parser, Formatter}
 
   @esbuild_verified_key :mishka_cms_esbuild_verified
@@ -728,7 +729,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
           runtime_hook_agregator
 
         hooks ->
-          Enum.reduce(hooks, runtime_hook_agregator, fn hook, acc ->
+          hooks
+          |> Enum.filter(&packages_ready?(&1, js_assets_dir, site_name))
+          |> Enum.reduce(runtime_hook_agregator, fn hook, acc ->
+            write_modules(hook, site_js_dir)
             formatted_hook_name = format_hook_name(hook, site_name)
 
             <<first::utf8, rest::binary>> = formatted_hook_name
@@ -758,6 +762,40 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     site_js_dir
     |> Path.join("mishka_runtime_components.js")
     |> File.write!(runtime_hook_agregator_content)
+  end
+
+  # A HOOK WHOSE PACKAGES CANNOT BE HAD IS LEFT OUT, and the rest of the site's hooks still build: one
+  # unresolved import fails esbuild for the whole bundle, and that bundle is what starts every page's
+  # live connection. Its packages are fetched once into `node_modules/`, where esbuild resolves the
+  # hook's bare imports — see `NpmPackages`.
+  defp packages_ready?(hook, js_assets_dir, site_name) do
+    case NpmPackages.ensure(hook.npm, js_assets_dir) do
+      :ok ->
+        true
+
+      {:error, reason} ->
+        Logger.warning(
+          "[JavaScriptCompiler] #{hook.name} is left out of #{site_name}'s JavaScript: #{reason}"
+        )
+
+        MishkaInstaller.Event.Hook.call(
+          "runtime:compile:js_hook_skipped",
+          %{hook: hook.name, site: site_name, reason: reason},
+          meta: %{site: site_name},
+          return: false
+        )
+
+        false
+    end
+  end
+
+  # The files a hook imports from beside itself (`./chart_extensions.js`), written next to it. The
+  # names were checked when the hook was saved — see `Validations.HookPackages`.
+  defp write_modules(hook, site_js_dir) do
+    for module <- hook.modules || [],
+        MishkaCmsCore.Runtime.Resources.Validations.HookPackages.module?(module),
+        %{"file" => file, "content" => content} = NpmPackages.stringify(module),
+        do: File.write!(Path.join(site_js_dir, file), content)
   end
 
   # Active JS hooks for a compile. The shared base (`global_only?`) takes the

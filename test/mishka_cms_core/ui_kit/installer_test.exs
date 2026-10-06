@@ -200,6 +200,156 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       assert installed_components() == []
     end
 
+    # A KIT NAMED WITH AN UNDERSCORE WRITES ITS ROWS SLUGIFIED — `acme_kit-card` is stored as
+    # `acme-kit-card` — and a reinstall looked them up by the bundle's spelling, found nothing and
+    # failed on the unique index: every upgrade of Chelekom's headless kit.
+    test "a kit whose name has an underscore reinstalls in place" do
+      bundle =
+        @seed_path
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.put("name", "acme_kit")
+        |> Map.update!("components", fn components ->
+          Enum.map(components, &Map.update!(&1, "name", fn name -> "acme_kit-" <> name end))
+        end)
+        |> Map.put("js_hooks", [
+          %{"name" => "acme_kit-floating", "format" => "js", "content" => "export default {};"}
+        ])
+
+      path = Path.join(System.tmp_dir!(), "acme_kit_#{System.unique_integer([:positive])}.json")
+      File.write!(path, Jason.encode!(bundle))
+      on_exit(fn -> File.rm(path) end)
+
+      count = fn resource ->
+        resource
+        |> Ash.Query.filter(like(name, "acme-kit-%"))
+        |> Ash.count!(authorize?: false)
+      end
+
+      assert {:ok, _} = Installer.install_kit!(path)
+      installed = {count.(Component), count.(MishkaCmsCore.Runtime.JsHook)}
+      assert installed == {4, 1}
+
+      assert {:ok, _} = Installer.install_kit!(path)
+      assert {count.(Component), count.(MishkaCmsCore.Runtime.JsHook)} == installed
+    end
+
+    # THE OLD NAMES GO WITH THE NEW ROWS OR NOT AT ALL. Removing the hooks a bundle renames ran before
+    # the transaction, so an install that then failed left the site with neither.
+    test "an install that fails keeps the hooks it would have renamed" do
+      MishkaCmsCore.Runtime.JsHook
+      |> Ash.Changeset.for_create(
+        :master_create,
+        %{name: "floating", content: "export default {};"},
+        authorize?: false
+      )
+      |> Ash.create!(authorize?: false)
+
+      bundle =
+        @seed_path
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.update!("components", fn [first | rest] ->
+          [Map.put(first, "attrs", [%{"name" => "Not A Name", "type" => "string"}]) | rest]
+        end)
+        |> Map.put("js_hooks", [
+          %{
+            "name" => "kit-floating",
+            "format" => "js",
+            "content" => "export default {};",
+            "extra" => %{"replaces" => "floating"}
+          }
+        ])
+
+      path =
+        Path.join(System.tmp_dir!(), "kit_failing_#{System.unique_integer([:positive])}.json")
+
+      File.write!(path, Jason.encode!(bundle))
+      on_exit(fn -> File.rm(path) end)
+
+      # A row the resource refuses raises out of the transaction; one the database refuses comes back
+      # as an error. A failed install either way.
+      failed =
+        try do
+          Installer.install_kit!(path)
+        rescue
+          error -> {:raised, error}
+        end
+
+      assert match?({:error, _reason}, failed) or match?({:raised, _error}, failed)
+
+      assert MishkaCmsCore.Runtime.JsHook
+             |> Ash.Query.filter(name == "floating")
+             |> Ash.exists?(authorize?: false)
+    end
+
+    # A HOOK'S PACKAGES AND MODULES ARRIVE WITH IT, and the modules are the site's once installed: a
+    # reinstall updates the packages and adds a module the kit has gained, and keeps every module the
+    # site already has exactly as it is.
+    test "a hook's npm packages and modules are installed, and a reinstall keeps the site's modules" do
+      integrity = "sha512-" <> Base.encode64(:crypto.hash(:sha512, "chart"))
+
+      bundle = fn version, modules ->
+        @seed_path
+        |> File.read!()
+        |> Jason.decode!()
+        |> Map.put("js_hooks", [
+          %{
+            "name" => "kit-chart",
+            "format" => "js",
+            "active" => true,
+            "content" => ~s|import settings from "./chart_extensions.js"; export default {};|,
+            "npm" => [
+              %{
+                "name" => "echarts",
+                "version" => version,
+                "path" => "node_modules/echarts",
+                "integrity" => integrity
+              }
+            ],
+            "modules" => modules
+          }
+        ])
+      end
+
+      write! = fn bundle ->
+        path = Path.join(System.tmp_dir!(), "kit_hook_#{System.unique_integer([:positive])}.json")
+        File.write!(path, Jason.encode!(bundle))
+        on_exit(fn -> File.rm(path) end)
+        path
+      end
+
+      read_hook = fn ->
+        MishkaCmsCore.Runtime.JsHook
+        |> Ash.Query.filter(name == "kit-chart")
+        |> Ash.read_one!(authorize?: false)
+      end
+
+      shipped = %{"file" => "chart_extensions.js", "content" => "export default {};"}
+
+      {:ok, _} = Installer.install_kit!(write!.(bundle.("6.0.0", [shipped])))
+
+      hook = read_hook.()
+      assert [%{"name" => "echarts", "version" => "6.0.0"}] = hook.npm
+      assert [%{"file" => "chart_extensions.js"}] = hook.modules
+
+      edited = %{
+        "file" => "chart_extensions.js",
+        "content" => ~s|export default { palette: ["#f00"] };|
+      }
+
+      hook
+      |> Ash.Changeset.for_update(:master_update, %{modules: [edited]}, authorize?: false)
+      |> Ash.update!(authorize?: false)
+
+      gained = %{"file" => "chart_theme.js", "content" => "export default {};"}
+      {:ok, _} = Installer.install_kit!(write!.(bundle.("6.1.0", [shipped, gained])))
+
+      hook = read_hook.()
+      assert [%{"version" => "6.1.0"}] = hook.npm
+      assert hook.modules == [edited, gained]
+    end
+
     # Chelekom's headless `toggle-group` declares `aria-label` on its `item` slot, and the whole kit
     # failed to install over that one name.
     test "a slot attribute with an HTML name installs" do
