@@ -167,7 +167,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   @doc """
   The official kits from `channel`, each with the `:tag` an operator reads in the wizard and the
   `:url` it is fetched from: the configured list as it is, or Chelekom's packages as the release
-  `channel` finds attaches them. `[]` when no release could be found.
+  `channel` finds attaches them — or as `master` holds them, while no release attaches any. `[]`
+  when the releases could not be looked up.
   """
   @spec official_kits(atom()) :: [map()]
   def official_kits(channel \\ :stable) do
@@ -189,11 +190,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   # WHICH RELEASE. `:stable` is the newest release that is not a pre-release and attaches a kit — and
   # while none does, the newest that does, marked `fallback?` so the wizard can say so rather than
   # install a pre-release silently. `:prerelease` is the newest of any kind. `:master` is the files
-  # committed on `master`, unreleased, so the branch is all the tag there is.
-  defp discover(:master) do
-    kits = Enum.map(@packages, &Map.merge(&1, %{tag: "master", url: master_url(&1.file)}))
-    {:ok, kits, %{channel: :master, tag: "master", fallback?: false}}
-  end
+  # committed on `master`, unreleased, so the branch is all the tag there is — and where every
+  # channel ends up, marked `fallback?`, while no published release attaches a kit at all.
+  defp discover(:master), do: from_master(false)
 
   defp discover(channel) do
     with {:ok, releases} <- releases() do
@@ -202,12 +201,15 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     end
   end
 
-  defp pick(_channel, _stable, nil),
-    do: {:error, gettext("no release of %{repo} attaches a UI kit", repo: repo())}
-
+  defp pick(_channel, _stable, nil), do: from_master(true)
   defp pick(:stable, nil, newest), do: found(newest, :stable, true)
   defp pick(:stable, stable, _newest), do: found(stable, :stable, false)
   defp pick(:prerelease, _stable, newest), do: found(newest, :prerelease, false)
+
+  defp from_master(fallback?) do
+    kits = Enum.map(@packages, &Map.merge(&1, %{tag: "master", url: master_url(&1.file)}))
+    {:ok, kits, %{channel: :master, tag: "master", fallback?: fallback?}}
+  end
 
   # A package the release does not attach keeps a `nil` URL, so it is reported as missing rather
   # than silently left out.
