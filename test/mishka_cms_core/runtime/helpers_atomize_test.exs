@@ -44,18 +44,16 @@ defmodule MishkaCmsCore.Runtime.HelpersAtomizeTest do
 
     # The one that matters: a document with many authored keys must not be able to fill the table.
     #
-    # A BUDGET, NOT AN EQUALITY. The atom table is global to the VM and the suite is concurrent, so
-    # another test compiling a module while this one runs moves the count by a handful — which is
-    # exactly what happened, at some seeds and not others. The flood is two thousand keys and the
-    # budget is a hundred, so the signal is twenty times the loudest noise anything else makes and a
-    # return of `String.to_atom/1` misses it by an order of magnitude.
+    # Each flooded key is checked by name, not through the VM's atom count: that count is global
+    # and the suite is concurrent, so a test compiling a runtime module meanwhile moves it by
+    # hundreds. The keys carry a unique integer, so nothing else can have made any of them an atom.
     test "so two thousand of them add nothing to the atom table" do
       keys = for n <- 1..2_000, do: "flood_#{System.unique_integer([:positive])}_#{n}"
-      before = :erlang.system_info(:atom_count)
 
-      Helpers.atomize_keys(Map.new(keys, &{&1, true}))
+      result = Helpers.atomize_keys(Map.new(keys, &{&1, true}))
 
-      assert :erlang.system_info(:atom_count) - before < 100
+      assert Enum.sort(Map.keys(result)) == Enum.sort(keys)
+      for key <- keys, do: assert_raise(ArgumentError, fn -> String.to_existing_atom(key) end)
     end
   end
 end
