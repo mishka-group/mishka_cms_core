@@ -225,4 +225,45 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewModalRenderTest do
       assert LazyHTML.text(busy) =~ "Duplicating…"
     end
   end
+
+  describe "the Overview's details" do
+    @about "Mishka Installer is the plugin and event manager of your Elixir application."
+
+    defp overview(record) do
+      render_component(&RuntimePreviewModal.modal/1,
+        preview:
+          state(%{
+            resource: Page,
+            active_tab: "overview",
+            record: record,
+            details: MishkaCmsCore.Runtime.RuntimePreview.details(record, Page)
+          })
+      )
+    end
+
+    defp labels(record),
+      do: record |> MishkaCmsCore.Runtime.RuntimePreview.details(Page) |> Enum.map(&elem(&1, 0))
+
+    # A page with no section showed its description under "Section", which names the extension or
+    # group a page belongs to (blog, docs), not what the page says.
+    test "a page without a section shows no Section row, and its description under its own name" do
+      page =
+        struct(Page, id: "rec-page", name: "installer", path: "/installer", description: @about)
+
+      refute "Section" in labels(page)
+
+      description =
+        overview(page) |> LazyHTML.from_fragment() |> LazyHTML.query("#preview-description")
+
+      assert LazyHTML.text(description) == @about
+    end
+
+    test "a page's section is shown as its section" do
+      page = struct(Page, id: "rec-page", name: "post", path: "/blog/:slug", section: "blog")
+
+      assert {"Section", "blog"} in MishkaCmsCore.Runtime.RuntimePreview.details(page, Page)
+
+      refute overview(page) =~ ~s(id="preview-description")
+    end
+  end
 end

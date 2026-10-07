@@ -547,6 +547,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
           <div class="grid grid-cols-2 gap-3">
             <.detail :for={{label, value} <- @rows} label={label}>{value}</.detail>
           </div>
+          <.detail
+            :if={is_binary(Map.get(@record, :description)) and @record.description != ""}
+            label={gettext("Description")}
+          >
+            <span id="preview-description" class="font-medium" dir="auto">{@record.description}</span>
+          </.detail>
           <div class="space-y-1">
             <.status_row label={gettext("Status")}>
               <span class={[
