@@ -480,7 +480,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
       defmodule unquote(params[:error_module]) do
         require Logger
         use unquote(@web_module), :live_view
-        import MishkaCmsCore.Runtime.LiveViewHelpers, only: [component: 1, component: 2]
+
+        import MishkaCmsCore.Runtime.LiveViewHelpers,
+          only:
+            unquote(
+              Keyword.take(MishkaCmsCore.Runtime.LiveViewHelpers.imports(params[:helpers]), [
+                :component,
+                :csp_nonce
+              ])
+            )
 
         unquote_splicing(functions_ast)
       end

@@ -1,47 +1,92 @@
 defmodule MishkaCmsCore.Runtime.CspNonce do
   @moduledoc """
-  The Content-Security-Policy nonce, carried from the plug into a LiveView's own assigns.
+  The Content-Security-Policy nonce, carried from the plug into a LiveView and into every template
+  it renders.
 
   ## Why a LiveView needs it at all
 
   The root layout can read `conn.assigns` and so marks its inline `<script>` without help. A
   LiveView's OWN template cannot: it renders from its socket, which never saw the conn. Several
   templates here emit a `<style>` element — the editor's canvas draws its chrome, its icons and the
-  site's theme that way, and the theme builder previews a palette that changes as you drag — and
-  every one of them is refused by `style-src-elem` without a nonce.
+  site's theme that way — and every one of them is refused by `style-src-elem` without a nonce.
 
-  Enforcing the policy on public pages without this broke `/theme-builder` outright: both of its
-  `<style>` blocks were refused and the page rendered with its layout collapsed.
+  ## One nonce per response, signed into the LiveView session
 
-  ## Why the SESSION and not the request
+  `MishkaCmsWeb.Runtime.Plugs.SecurityHeaders` mints a fresh nonce for every response, as the CSP
+  specification asks: a nonce is only worth something while it cannot be guessed, and one that
+  outlives its response is one an attacker has longer to learn.
 
-  A nonce is conventionally minted per response, and for a dead render that is right. A LiveView
-  re-renders over the socket for as long as the page is open, long after the response that carried
-  the header is gone — so a per-request nonce would put a value in the DOM that the live policy no
-  longer names, and the first re-render of a `<style>` would be refused. The nonce therefore lives
-  in the session, which the dead render and every later re-render agree on.
+  A LiveView keeps rendering over its socket long after that response, and everything it renders
+  must carry the nonce THAT document's header named. The socket's own session is the cookie at the
+  moment it connects, so a nonce kept there would follow whichever tab loaded last. Instead,
+  `session/1` is a `live_session` `:session` function: Phoenix signs what it returns into the page
+  (`data-phx-session`), the connected mount reads it back from that token, and a live navigation
+  inside the session carries the same token — so every render of one document agrees with its own
+  header, and two tabs never share a nonce.
 
-  That is weaker than per-response and worth being clear about: it is stable for the length of a
-  session. It still does the one thing a nonce is for — markup injected into the page cannot carry
-  it, because whoever injects it does not get to write the attribute.
+      live_session :public, session: {MishkaCmsCore.Runtime.CspNonce, :session, []} do
 
-  ## Use
+  ## Using it in a template
 
-      live_session :something, on_mount: [MishkaCmsCore.Runtime.CspNonce] do
+  `@csp_nonce` in a LiveView's own template, and `csp_nonce()` anywhere a runtime template is
+  compiled — a page, a layout, a component — because a component sees only the attrs it is handed:
 
-  and then `nonce={@csp_nonce}` on the `<style>` or `<script>` the template renders.
+      <style nonce={csp_nonce()}>…</style>
+
+  A `<style>` is the last resort. A class, the element's CSS box in the editor or a stylesheet row
+  is cached, shared between pages and needs no nonce at all.
+
+  `on_mount/4` records the value for the process, and the plug does the same for a response that
+  renders no LiveView, so `current/0` is one process-dictionary read on every call.
   """
+
   import Phoenix.Component, only: [assign_new: 3]
 
   @session_key "csp_nonce"
+  @process_key {__MODULE__, :nonce}
 
-  @doc "The session key the plug writes and `on_mount/4` reads."
+  @doc "The session key `session/1` writes and `on_mount/4` reads."
   @spec session_key() :: String.t()
   def session_key, do: @session_key
 
+  @doc """
+  What a `live_session` signs into the page for its LiveViews: this response's nonce.
+
+  `%{}` when the plug did not run, so the session carries nothing rather than a `nil` the mount
+  would have to tell apart from a real value.
+  """
+  @spec session(Plug.Conn.t()) :: %{optional(String.t()) => String.t()}
+  def session(%Plug.Conn{assigns: %{csp_nonce: nonce}}) when is_binary(nonce),
+    do: %{@session_key => nonce}
+
+  def session(_conn), do: %{}
+
+  @doc """
+  The nonce of the response this process is rendering, or `nil` outside one.
+
+  Set by the plug for the request process and by `on_mount/4` for a LiveView process.
+  """
+  @spec current() :: String.t() | nil
+  def current, do: Process.get(@process_key)
+
+  @doc "Records `nonce` as the one this process renders with. `nil` clears it."
+  @spec put(String.t() | nil) :: :ok
+  def put(nonce) when is_binary(nonce) do
+    Process.put(@process_key, nonce)
+    :ok
+  end
+
+  def put(nil) do
+    Process.delete(@process_key)
+    :ok
+  end
+
   @doc false
-  def on_mount(:default, _params, session, socket),
-    do: {:cont, assign_new(socket, :csp_nonce, fn -> session[@session_key] end)}
+  def on_mount(:default, _params, session, socket) do
+    socket = assign_new(socket, :csp_nonce, fn -> session[@session_key] end)
+    :ok = put(socket.assigns.csp_nonce)
+    {:cont, socket}
+  end
 
   def on_mount(_name, params, session, socket), do: on_mount(:default, params, session, socket)
 end
