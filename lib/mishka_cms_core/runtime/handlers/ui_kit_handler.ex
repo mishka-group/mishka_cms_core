@@ -119,7 +119,15 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     available_kits()
     |> Enum.filter(&wanted?(&1, kits))
     |> Enum.each(fn kit ->
-      install_kit!(kit.path, Keyword.put(opts, :selection, selection_for(kit, opts)))
+      case install_kit!(kit.path, Keyword.put(opts, :selection, selection_for(kit, opts))) do
+        {:error, reason} ->
+          Logger.error(
+            "[UiKitHandler] #{kit.name} #{kit.version} was not installed: #{inspect(reason)}"
+          )
+
+        _installed ->
+          :ok
+      end
     end)
   end
 
@@ -856,10 +864,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
       # Bounded by what the BUNDLE claims in `extra.replaces`, and global rows only. "Delete whatever
       # this would be called without its kit prefix" would take a site's own `carousel` on a first
       # install of a kit that happens to have one.
-      bundle
-      |> hook_rename_targets()
-      |> announce_renames(bundle["name"])
-      |> delete_existing_js_hooks()
+      #
+      # INSIDE THE TRANSACTION, with the rows that replace them: an install that fails rolls the
+      # removal back too, rather than leaving the site with the old hooks gone and no new ones.
+      renamed = bundle |> hook_rename_targets() |> announce_renames(bundle["name"])
 
       filtered_components =
         (bundle["components"] || [])
@@ -869,6 +877,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
         Ash.transaction(
           [Component, JsHook, Stylesheet],
           fn ->
+            delete_existing_js_hooks(renamed)
+
             {cps, cps_skipped} =
               filtered_components
               |> Enum.map(&create_component(&1, site_id, bundle, actor))
@@ -1910,8 +1920,25 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     |> Map.update(:format, :js, &coerce_enum(JsHook, :format, &1, :js))
     # JsHook has no `extra` field; drop the converter's traceability stamp.
     |> Map.delete(:extra)
+    |> keep_installed_modules(actor)
     |> upsert_row(JsHook, actor)
   end
+
+  # A HOOK'S MODULES ARE THE SITE'S ONCE INSTALLED. `chart_extensions.js` ships as a starting point
+  # for a site's own palette and formatters, so a reinstall adds a module the kit has gained and keeps
+  # every one already there exactly as it is.
+  defp keep_installed_modules(%{modules: [_ | _] = shipped, name: name} = attrs, actor) do
+    case active_row(JsHook, name, attrs[:site_id], actor) do
+      %{modules: [_ | _] = installed} ->
+        files = MapSet.new(installed, & &1["file"])
+        %{attrs | modules: installed ++ Enum.reject(shipped, &(&1["file"] in files))}
+
+      _new_or_without_modules ->
+        attrs
+    end
+  end
+
+  defp keep_installed_modules(attrs, _actor), do: attrs
 
   defp create_stylesheet(params, site_id, actor) do
     params
@@ -2010,8 +2037,13 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   # name + site_id scope. nil site_id must compare as IS NULL, not `= NULL`
   # (always false), or global rows are never found.
+  # BY THE NAME AS IT IS STORED. Each resource slugifies its name on the way in, so a kit called
+  # `chelekom_headless` writes `chelekom_headless-toggle` as `chelekom-headless-toggle`; asked for the
+  # bundle's spelling alone, a reinstall found nothing, created the row again and failed on the
+  # unique index — every upgrade of a kit whose name has an underscore.
   defp scope_to_row(query, name, site_id) do
-    query = Ash.Query.filter(query, name == ^name)
+    names = Enum.uniq([name, Slug.slugify(to_string(name)) || name])
+    query = Ash.Query.filter(query, name in ^names)
 
     if is_nil(site_id),
       do: Ash.Query.filter(query, is_nil(site_id)),

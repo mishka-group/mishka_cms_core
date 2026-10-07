@@ -118,6 +118,8 @@ defmodule MishkaCmsCore.Runtime.JsHook do
     :priority,
     :active,
     :permissions,
+    :npm,
+    :modules,
     :site_id
   ]
 
@@ -1645,6 +1647,12 @@ defmodule MishkaCmsCore.Runtime.JsHook do
     change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
   end
 
+  # What the JavaScript compiler fetches and writes to disk for this hook.
+  validations do
+    validate {MishkaCmsCore.Runtime.Resources.Validations.HookPackages, []},
+      on: [:create, :update]
+  end
+
   # Multi-tenancy configuration using site_id attribute
   multitenancy do
     strategy :attribute
@@ -1701,6 +1709,24 @@ defmodule MishkaCmsCore.Runtime.JsHook do
       default []
       public? true
       description "Permission strings required to access this JS hook"
+    end
+
+    # THE PACKAGES THIS HOOK IMPORTS, as its kit pinned them: the whole tree, each entry with its
+    # place in `node_modules`, exact version and integrity hash. The JavaScript compiler fetches
+    # them once — see `MishkaCmsCore.Runtime.Compilers.NpmPackages`.
+    attribute :npm, {:array, :map} do
+      default []
+      public? true
+      description "npm packages this hook imports: name, version, path and integrity"
+    end
+
+    # THE FILES THIS HOOK IMPORTS BESIDE ITSELF — `%{"file" => "chart_extensions.js", "content" => …}`
+    # — written next to it at every compile. A kit ships their first content; once installed they
+    # are the site's own, and a reinstall keeps them.
+    attribute :modules, {:array, :map} do
+      default []
+      public? true
+      description "Files this hook imports from beside itself, as file name and content"
     end
 
     create_timestamp :inserted_at
