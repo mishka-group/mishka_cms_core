@@ -39,7 +39,12 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
             %{"name" => "t", "args" => "key", "code" => "key"},
             %Helper{name: "t", args: "key", code: "key"}
           ] do
-        assert LiveViewHelpers.imports([helper]) == [component: 1, component: 2, captcha: 1, csp_nonce: 0],
+        assert LiveViewHelpers.imports([helper]) == [
+                 component: 1,
+                 component: 2,
+                 captcha: 1,
+                 csp_nonce: 0
+               ],
                "t is still imported beside #{inspect(helper)}"
       end
     end
@@ -56,7 +61,12 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
     test "finds the t among several helpers" do
       helpers = [%{name: "tone"}, %{"name" => "t"}, %{name: "format"}]
 
-      assert LiveViewHelpers.imports(helpers) == [component: 1, component: 2, captcha: 1, csp_nonce: 0]
+      assert LiveViewHelpers.imports(helpers) == [
+               component: 1,
+               component: 2,
+               captcha: 1,
+               csp_nonce: 0
+             ]
     end
 
     test "leaves out any name a helper defines, captcha as much as t" do
