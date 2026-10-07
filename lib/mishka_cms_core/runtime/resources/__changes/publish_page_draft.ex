@@ -37,6 +37,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
     :schema,
     :events,
     :infos,
+    :state,
     :resource_links,
     :helpers,
     :active,

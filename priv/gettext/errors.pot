@@ -26,7 +26,7 @@ msgstr ""
 msgid "Cannot restore version of component from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1232
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1234
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of js_hook from another site."
 msgstr ""
@@ -156,7 +156,7 @@ msgstr ""
 msgid "This is the original version."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:762
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:764
 #, elixir-autogen
 msgid "JS hook"
 msgstr ""
@@ -237,15 +237,15 @@ msgstr ""
 msgid "issue"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1392
-#: lib/mishka_cms_core/runtime/resources/page.ex:1455
-#: lib/mishka_cms_core/runtime/resources/page.ex:1501
-#: lib/mishka_cms_core/runtime/resources/page.ex:1554
-#: lib/mishka_cms_core/runtime/resources/page.ex:1936
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:474
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:520
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:558
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:592
+#: lib/mishka_cms_core/runtime/resources/page.ex:1420
+#: lib/mishka_cms_core/runtime/resources/page.ex:1484
+#: lib/mishka_cms_core/runtime/resources/page.ex:1530
+#: lib/mishka_cms_core/runtime/resources/page.ex:1584
+#: lib/mishka_cms_core/runtime/resources/page.ex:1967
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:475
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:521
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:559
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:593
 #, elixir-autogen
 msgid "language group"
 msgstr ""
@@ -256,15 +256,15 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:320
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:344
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:364
-#: lib/mishka_cms_core/runtime/resources/page.ex:1384
-#: lib/mishka_cms_core/runtime/resources/page.ex:1448
-#: lib/mishka_cms_core/runtime/resources/page.ex:1494
-#: lib/mishka_cms_core/runtime/resources/page.ex:1547
-#: lib/mishka_cms_core/runtime/resources/page.ex:1930
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:463
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:509
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:547
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:581
+#: lib/mishka_cms_core/runtime/resources/page.ex:1412
+#: lib/mishka_cms_core/runtime/resources/page.ex:1477
+#: lib/mishka_cms_core/runtime/resources/page.ex:1523
+#: lib/mishka_cms_core/runtime/resources/page.ex:1577
+#: lib/mishka_cms_core/runtime/resources/page.ex:1961
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:464
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:510
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:548
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:582
 #, elixir-autogen
 msgid "layout"
 msgstr ""
@@ -291,10 +291,10 @@ msgstr ""
 msgid "note's author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:469
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:515
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:553
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:587
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:470
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:516
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:554
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:588
 #, elixir-autogen
 msgid "page"
 msgstr ""
@@ -378,7 +378,7 @@ msgstr ""
 msgid "Cannot activate archived site. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:988
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:990
 #, elixir-autogen, elixir-format
 msgid "Cannot archive JS hook from another site."
 msgstr ""
@@ -388,7 +388,7 @@ msgstr ""
 msgid "Cannot archive component from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:981
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:983
 #, elixir-autogen, elixir-format
 msgid "Cannot archive global JS hook. Global JS hooks can only be archived by master users."
 msgstr ""
@@ -430,8 +430,8 @@ msgstr ""
 msgid "Cannot delete yourself."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:714
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:765
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:716
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:767
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived JS hook. Please unarchive it first."
 msgstr ""
@@ -466,8 +466,8 @@ msgstr ""
 msgid "Cannot edit archived media. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1504
-#: lib/mishka_cms_core/runtime/resources/page.ex:1557
+#: lib/mishka_cms_core/runtime/resources/page.ex:1533
+#: lib/mishka_cms_core/runtime/resources/page.ex:1587
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived page. Please unarchive it first."
 msgstr ""
@@ -483,7 +483,7 @@ msgstr ""
 msgid "Cannot edit archived stylesheet. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:737
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:739
 #, elixir-autogen, elixir-format
 msgid "Cannot modify JS hook from another site."
 msgstr ""
@@ -493,7 +493,7 @@ msgstr ""
 msgid "Cannot modify component from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:730
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:732
 #, elixir-autogen, elixir-format
 msgid "Cannot modify global JS hook. Global JS hooks can only be modified by master users."
 msgstr ""
@@ -523,7 +523,7 @@ msgstr ""
 msgid "Cannot modify stylesheet from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1045
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1047
 #, elixir-autogen, elixir-format
 msgid "Cannot permanently delete JS hook from another site."
 msgstr ""
@@ -533,7 +533,7 @@ msgstr ""
 msgid "Cannot permanently delete component from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1037
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1039
 #, elixir-autogen, elixir-format
 msgid "Cannot permanently delete global JS hook. Global JS hooks can only be deleted by master users."
 msgstr ""
@@ -577,9 +577,9 @@ msgstr ""
 msgid "Cannot restore version of archived error page. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1151
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1211
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1439
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1153
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1213
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1441
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived js_hook. Please unarchive it first."
 msgstr ""
@@ -605,9 +605,9 @@ msgstr ""
 msgid "Cannot restore version of archived media. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1917
-#: lib/mishka_cms_core/runtime/resources/page.ex:1971
-#: lib/mishka_cms_core/runtime/resources/page.ex:2047
+#: lib/mishka_cms_core/runtime/resources/page.ex:1948
+#: lib/mishka_cms_core/runtime/resources/page.ex:2002
+#: lib/mishka_cms_core/runtime/resources/page.ex:2078
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived page. Please unarchive it first."
 msgstr ""
@@ -617,7 +617,7 @@ msgstr ""
 msgid "Cannot restore version of global component. Global components can only be modified by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1136
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1138
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of global js_hook. Global js_hooks can only be modified by master users."
 msgstr ""
@@ -668,12 +668,12 @@ msgstr ""
 msgid "Host must be between 3 and 200 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:965
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:967
 #, elixir-autogen, elixir-format
 msgid "JS hook is already archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:944
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:946
 #, elixir-autogen, elixir-format
 msgid "JS hook is not archived."
 msgstr ""
@@ -763,7 +763,7 @@ msgid "Name must be between 3 and 100 characters."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:115
-#: lib/mishka_cms_core/runtime/resources/page.ex:127
+#: lib/mishka_cms_core/runtime/resources/page.ex:128
 #, elixir-autogen, elixir-format
 msgid "Name must be between 3 and 200 characters."
 msgstr ""
@@ -773,17 +773,17 @@ msgstr ""
 msgid "Name must be between 3 and 70 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:148
+#: lib/mishka_cms_core/runtime/resources/page.ex:149
 #, elixir-autogen, elixir-format
 msgid "Name, path, and template cannot be empty."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1706
+#: lib/mishka_cms_core/runtime/resources/page.ex:1737
 #, elixir-autogen, elixir-format
 msgid "Page is already archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1765
+#: lib/mishka_cms_core/runtime/resources/page.ex:1796
 #, elixir-autogen, elixir-format
 msgid "Page is not archived."
 msgstr ""
@@ -795,7 +795,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:119
 #: lib/mishka_cms_core/runtime/resources/layout.ex:111
-#: lib/mishka_cms_core/runtime/resources/page.ex:135
+#: lib/mishka_cms_core/runtime/resources/page.ex:136
 #, elixir-autogen, elixir-format
 msgid "Path must be between 1 and 255 characters."
 msgstr ""
@@ -804,7 +804,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:123
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:66
 #: lib/mishka_cms_core/runtime/resources/layout.ex:119
-#: lib/mishka_cms_core/runtime/resources/page.ex:143
+#: lib/mishka_cms_core/runtime/resources/page.ex:144
 #: lib/mishka_cms_core/runtime/resources/site.ex:99
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:87
 #, elixir-autogen, elixir-format
@@ -826,12 +826,12 @@ msgstr ""
 msgid "Stylesheet is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1402
+#: lib/mishka_cms_core/runtime/resources/page.ex:1430
 #, elixir-autogen, elixir-format
 msgid "Template cannot be empty."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:139
+#: lib/mishka_cms_core/runtime/resources/page.ex:140
 #, elixir-autogen, elixir-format
 msgid "Template must be at least 3 characters."
 msgstr ""
@@ -846,8 +846,8 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:389
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:380
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:406
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:607
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:633
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:608
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:634
 #, elixir-autogen, elixir-format
 msgid "This draft has already been published."
 msgstr ""
@@ -857,7 +857,7 @@ msgstr ""
 msgid "This note is on something shared by every site. Only a master can change it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:131
+#: lib/mishka_cms_core/runtime/resources/page.ex:132
 #, elixir-autogen, elixir-format
 msgid "Title must be between 1 and 200 characters."
 msgstr ""
@@ -888,10 +888,10 @@ msgstr ""
 msgid "Version does not belong to this error page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1174
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1320
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1461
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1550
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1176
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1322
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1463
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1552
 #, elixir-autogen, elixir-format
 msgid "Version does not belong to this js_hook."
 msgstr ""
@@ -920,10 +920,10 @@ msgstr ""
 msgid "Version does not belong to this media."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1994
-#: lib/mishka_cms_core/runtime/resources/page.ex:2070
-#: lib/mishka_cms_core/runtime/resources/page.ex:2158
-#: lib/mishka_cms_core/runtime/resources/page.ex:2228
+#: lib/mishka_cms_core/runtime/resources/page.ex:2025
+#: lib/mishka_cms_core/runtime/resources/page.ex:2101
+#: lib/mishka_cms_core/runtime/resources/page.ex:2189
+#: lib/mishka_cms_core/runtime/resources/page.ex:2259
 #, elixir-autogen, elixir-format
 msgid "Version does not belong to this page."
 msgstr ""
@@ -969,7 +969,7 @@ msgstr ""
 msgid "is invalid or expired"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/translations.ex:731
+#: lib/mishka_cms_core/runtime/translations.ex:734
 #, elixir-autogen, elixir-format
 msgid "is not a language this site publishes in"
 msgstr ""
@@ -1099,7 +1099,7 @@ msgstr ""
 msgid "A layout"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2779
+#: lib/mishka_cms_core/runtime/resources/page.ex:2830
 #, elixir-autogen, elixir-format
 msgid "A page with this language already exists in this language group."
 msgstr ""
@@ -1178,7 +1178,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:924
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:980
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
@@ -1193,7 +1193,7 @@ msgstr ""
 msgid "Invalid upload entry"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1820
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:1846
 #, elixir-autogen, elixir-format
 msgid "JS hook name must be unique within a site."
 msgstr ""
@@ -1223,12 +1223,12 @@ msgstr ""
 msgid "Media path must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2752
+#: lib/mishka_cms_core/runtime/resources/page.ex:2803
 #, elixir-autogen, elixir-format
 msgid "Page name must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2766
+#: lib/mishka_cms_core/runtime/resources/page.ex:2817
 #, elixir-autogen, elixir-format
 msgid "Page path must be unique within a site."
 msgstr ""
@@ -1267,8 +1267,8 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:672
 #: lib/mishka_cms_core/runtime/resources/layout.ex:2262
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:708
-#: lib/mishka_cms_core/runtime/resources/page.ex:2759
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:975
+#: lib/mishka_cms_core/runtime/resources/page.ex:2810
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:981
 #, elixir-autogen, elixir-format
 msgid "Preview token collision."
 msgstr ""
@@ -1460,4 +1460,34 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/__validations/from_visitor.ex:16
 #, elixir-autogen, elixir-format
 msgid "run with authorize?: false"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/page_state_names.ex:61
+#, elixir-autogen, elixir-format
+msgid "%{name} is an assign the runtime already sets; choose another name."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/page_state_names.ex:66
+#, elixir-autogen, elixir-format
+msgid "%{name} is not an assign name: start with a lowercase letter, then letters, digits or _."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/hook_packages.ex:38
+#, elixir-autogen, elixir-format
+msgid "Each module needs a file name like name.js and its content."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/hook_packages.ex:29
+#, elixir-autogen, elixir-format
+msgid "Each package needs an npm name, an exact version, its path in node_modules and a sha512 integrity hash."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/page_state_names.ex:74
+#, elixir-autogen, elixir-format
+msgid "Every state entry needs a name."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/page_state_names.ex:52
+#, elixir-autogen, elixir-format
+msgid "The state names %{name} twice; each name is one assign."
 msgstr ""

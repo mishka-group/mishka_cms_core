@@ -33,6 +33,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageGuardedStructTest do
                :schema,
                :events,
                :infos,
+               :state,
                :resource_links,
                :helpers,
                :uploads,

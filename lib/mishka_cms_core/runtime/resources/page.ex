@@ -88,6 +88,7 @@ defmodule MishkaCmsCore.Runtime.Page do
     :schema,
     :events,
     :infos,
+    :state,
     :resource_links,
     :helpers,
     :uploads,
@@ -1002,6 +1003,30 @@ defmodule MishkaCmsCore.Runtime.Page do
           end
         end
 
+        field :state, :nested do
+          ui do
+            label fn -> dgettext("mishka_gervaz", "State (starting assigns)") end
+            add_label fn -> dgettext("mishka_gervaz", "+ Add State") end
+            remove_label fn -> dgettext("mishka_gervaz", "Remove") end
+          end
+
+          nested_field :name do
+            ui do
+              label fn -> dgettext("mishka_gervaz", "Assign Name") end
+              placeholder "count"
+            end
+          end
+
+          nested_field :code, :textarea do
+            ui do
+              label fn -> dgettext("mishka_gervaz", "First Value") end
+              placeholder "0"
+              rows 2
+              class "font-mono text-sm"
+            end
+          end
+        end
+
         field :events, :nested do
           ui do
             label fn -> dgettext("mishka_gervaz", "Events (handle_event)") end
@@ -1226,6 +1251,7 @@ defmodule MishkaCmsCore.Runtime.Page do
           fields [
             :content,
             :extra,
+            :state,
             :events,
             :infos,
             :resource_links,
@@ -1317,6 +1343,7 @@ defmodule MishkaCmsCore.Runtime.Page do
     field :schema, {:array, :map}, derives: "validate(list)"
     field :events, {:array, :map}, derives: "validate(list)"
     field :infos, {:array, :map}, derives: "validate(list)"
+    field :state, {:array, :map}, derives: "validate(list)"
     field :resource_links, {:array, :map}, derives: "validate(list)"
     field :helpers, {:array, :map}, derives: "validate(list)"
     field :uploads, {:array, :map}, derives: "validate(list)"
@@ -1370,6 +1397,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -1435,6 +1463,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -1507,6 +1536,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -1560,6 +1590,7 @@ defmodule MishkaCmsCore.Runtime.Page do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -2464,6 +2495,26 @@ defmodule MishkaCmsCore.Runtime.Page do
                   ]
 
       description "Page-level info handlers with name and code"
+    end
+
+    attribute :state, {:array, :map} do
+      default []
+      public? true
+
+      constraints items: [
+                    fields: [
+                      name: [
+                        type: :string,
+                        allow_nil?: false
+                      ],
+                      code: [
+                        type: :string,
+                        allow_nil?: false
+                      ]
+                    ]
+                  ]
+
+      description "The assigns the page starts with: each name and the Elixir expression of its first value"
     end
 
     attribute :resource_links, {:array, :map} do

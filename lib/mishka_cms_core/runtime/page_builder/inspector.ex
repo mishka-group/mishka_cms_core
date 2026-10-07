@@ -1575,7 +1575,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   defp mentioned?(nil, _code), do: false
 
   defp mentioned?(pattern, code) do
-    [:events, :infos, :helpers]
+    [:events, :infos, :state, :helpers]
     |> Enum.flat_map(&Map.get(code, &1, []))
     |> Enum.any?(&Regex.match?(pattern, to_string(entry_code(&1))))
   end

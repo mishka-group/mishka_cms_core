@@ -80,7 +80,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.UserClosure do
   # Everything a page, layout or component carries that is markup or Elixir. `extra` is in the list
   # because a component's prelude, extra clauses and module attributes live there and all three are
   # compiled into its module.
-  @code_fields [:template, :body, :helpers, :events, :infos, :extra]
+  @code_fields [:template, :body, :helpers, :events, :infos, :state, :extra]
 
   @doc """
   Whether anything `record` — a page or a layout — draws can read the signed-in user.

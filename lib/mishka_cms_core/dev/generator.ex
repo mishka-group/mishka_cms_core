@@ -224,6 +224,7 @@ defmodule MishkaCmsCore.Dev.Generator do
         schema: [],
         events: [],
         infos: [],
+        state: [],
         resource_links: [],
         helpers: [],
         # EVERY ARRAY THIS RESOURCE HAS, PINNED — `uploads` was the one that was not. An attribute a
@@ -543,6 +544,7 @@ defmodule MishkaCmsCore.Dev.Generator do
         schema: StreamData.repeatedly(fn -> generate_page_schema() end),
         events: [],
         infos: [],
+        state: [],
         resource_links: StreamData.repeatedly(fn -> generate_page_resource_links() end),
         helpers: [],
         uploads: [],
@@ -611,6 +613,7 @@ defmodule MishkaCmsCore.Dev.Generator do
         schema: StreamData.repeatedly(fn -> generate_page_schema() end),
         events: [],
         infos: [],
+        state: [],
         resource_links: StreamData.repeatedly(fn -> generate_page_resource_links() end),
         helpers: [],
         uploads: [],
