@@ -141,8 +141,8 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
     end
   end
 
-  describe "a compile job left executing" do
-    defp executing_job!(page, attempted_at, node \\ Oban.config().node) do
+  describe "a compile job from before this node booted" do
+    defp job!(page, state, inserted_at) do
       {:ok, job} =
         %{"resource" => inspect(Page), "data" => %{"id" => page.id}}
         |> MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker.new(queue: :modules)
@@ -152,18 +152,17 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
         Oban.Repo.update_all(
           Oban.config(),
           from(j in Oban.Job, where: j.id == ^job.id),
-          set: [
-            state: "executing",
-            attempted_at: attempted_at,
-            attempted_by: [node, Ecto.UUID.generate()]
-          ]
+          set: [state: state, inserted_at: inserted_at, attempted_at: inserted_at]
         )
     end
 
-    # A restart or a deploy stops the node mid-job and nothing moves the row on until
-    # `Oban.Lifeline` does — the page compiled and served while its status said `Compiling…`.
-    test "by this node before it started is not read as compiling", %{page: page} do
-      executing_job!(page, ~U[2020-01-01 00:00:00.000000Z])
+    @before_boot ~U[2020-01-01 00:00:00.000000Z]
+
+    # A restart stops the node mid-job and the boot cancels what is left, then compiles from the
+    # database without a job — the page compiled and served while its status said `Compiling…` or
+    # `Compile cancelled`.
+    test "is not read as compiling", %{page: page} do
+      job!(page, "executing", @before_boot)
 
       status = RuntimeStatus.compute(page, Page)
 
@@ -171,16 +170,18 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
       assert status.job == nil
     end
 
-    test "that this node is running still reads as compiling", %{page: page} do
-      executing_job!(page, DateTime.utc_now())
+    test "is not read as failed when the boot cancelled it", %{page: page} do
+      job!(page, "cancelled", @before_boot)
 
-      assert RuntimeStatus.compute(page, Page).state == :compiling
+      assert RuntimeStatus.compute(page, Page).state == :lazy_ready
     end
 
-    test "by another node still reads as compiling", %{page: page} do
-      executing_job!(page, ~U[2020-01-01 00:00:00.000000Z], "another-node")
-
+    test "while one since the boot still decides it", %{page: page} do
+      job!(page, "executing", DateTime.utc_now())
       assert RuntimeStatus.compute(page, Page).state == :compiling
+
+      job!(page, "cancelled", DateTime.utc_now())
+      assert %{state: :failed, label: "Compile cancelled"} = RuntimeStatus.compute(page, Page)
     end
   end
 end

@@ -22,6 +22,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
 
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, JavaScriptCompiler}
   alias MishkaCmsCore.Runtime.States.AssetsState
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.States.CompileFailureState
 
   @doc """
@@ -80,7 +81,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
     site_name = site_name_of(record)
     mode = mode_of(cfg, record)
     {loaded?, artifact_label} = artifact(cfg, record, site_name)
-    job = resource |> latest_job(record.id) |> unless_orphaned()
+    job = resource |> latest_job(record.id) |> since_boot()
 
     base = %{
       mode: mode,
@@ -248,7 +249,6 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   # written by MishkaCmsCore.Runtime.Changes.SendToOban and read by Activity.Sources.Oban.
   @job_fields [
     :state,
-    :attempted_by,
     :errors,
     :attempted_at,
     :completed_at,
@@ -257,25 +257,19 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
     :inserted_at
   ]
 
-  # A JOB LEFT `executing` BY A NODE THAT STOPPED MID-RUN — a restart, a deploy — keeps that state
-  # until `Oban.Lifeline` rescues it, and `Compiling…` stayed on a record that had compiled and was
-  # serving. A job this node took before it booted is not running, so it says nothing about the
-  # record; one another node took cannot be told apart from a running one and still counts.
-  defp unless_orphaned(
-         %{state: "executing", attempted_at: %DateTime{} = at, attempted_by: [node | _]} = job
-       ) do
-    case node == Oban.config().node and DateTime.before?(at, booted_at()) do
+  # A JOB FROM BEFORE THIS NODE BOOTED DESCRIBES NOTHING NOW. The boot cancels every compile job a
+  # previous run left behind and compiles from the database itself, without a job — so the newest
+  # job of a page that compiled and is serving could still say `executing` (the node stopped
+  # mid-run) or `cancelled` (the boot cancelled it), and the Pipeline said "Compiling…" or "Compile
+  # cancelled" over a live page. What is loaded, and `CompileFailureState`, say how it is.
+  defp since_boot(%{inserted_at: %DateTime{} = at} = job) do
+    case DateTime.before?(at, BootHandler.booted_at()) do
       true -> nil
       false -> job
     end
   end
 
-  defp unless_orphaned(job), do: job
-
-  defp booted_at do
-    {since_boot, _since_last_call} = :erlang.statistics(:wall_clock)
-    DateTime.add(DateTime.utc_now(), -since_boot, :millisecond)
-  end
+  defp since_boot(job), do: job
 
   defp latest_job(resource, id) do
     query =

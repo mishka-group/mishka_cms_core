@@ -162,6 +162,37 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   ####################################################################################
   ########################### (▰˘◡˘▰) Server API (▰˘◡˘▰) #############################
   ####################################################################################
+  @doc """
+  When this node started — the moment every compile job created before it stopped describing
+  anything: the boot cancels those still pending (`cancel_leftover_jobs/0`) and compiles from the
+  database itself, without a job.
+  """
+  @spec booted_at() :: DateTime.t()
+  def booted_at do
+    {since_boot, _since_last_call} = :erlang.statistics(:wall_clock)
+    DateTime.add(DateTime.utc_now(), -since_boot, :millisecond)
+  end
+
+  @doc """
+  Cancels every runtime compile job a previous run left pending or executing, in whichever queue it
+  was put — the boot rebuilds what they would have. Other workers' jobs (mail, notifications) are
+  left to `Oban.Lifeline`.
+  """
+  @spec cancel_leftover_jobs() :: {:ok, non_neg_integer()}
+  def cancel_leftover_jobs do
+    Oban.Job
+    |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
+    |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
+    |> Oban.cancel_all_jobs()
+  end
+
+  @doc """
+  Whether the running Oban rescues jobs a stopped node left executing (`lifeline:` in the app's
+  Oban config). Without it, a mail or notification job interrupted by a restart stays `executing`.
+  """
+  @spec lifeline?() :: boolean()
+  def lifeline?, do: Enum.any?(Oban.config().plugins, &match?({Oban.Lifeline, _opts}, &1))
+
   @impl true
   def init(_opts) do
     {:ok, %{status: :initializing, started_at: System.monotonic_time(:millisecond)},
@@ -172,11 +203,13 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   def handle_continue(:boot, state) do
     Logger.info("[BootHandler] Starting boot process...")
 
-    Oban.Job
-    |> where([j], j.queue in ["default", "assets", "sitemaps"])
-    |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
-    |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
-    |> Oban.cancel_all_jobs()
+    _ = cancel_leftover_jobs()
+
+    if Oban.config().testing == :disabled and not lifeline?(),
+      do:
+        Logger.warning(
+          "[BootHandler] Oban runs without Lifeline: a job a restart interrupts stays executing. Add `lifeline: [rescue_after: {30, :minutes}]` to the app's Oban config."
+        )
 
     new_state =
       case perform_boot() do
