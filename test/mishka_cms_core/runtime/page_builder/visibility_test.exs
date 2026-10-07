@@ -183,7 +183,11 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.VisibilityTest do
                &(&1.kind == :component and &1 in descendants(tree, hidden))
              )
 
-      html = LiveViewCompiler.render_template(about, %{query_params: %{"lang" => "en"}})
+      html =
+        LiveViewCompiler.render_template(about, %{
+          page: %{language: "en"},
+          query_params: %{"lang" => "en"}
+        })
 
       assert html =~ "About localhost"
       refute html =~ "Coming soon: the team"

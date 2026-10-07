@@ -8,9 +8,11 @@ defmodule MishkaCmsCore.Layouts.Nav do
 
   It also puts the page in the language its admin reads the dashboard in —
   `MishkaCmsCore.Runtime.Languages.admin/1`, chosen in the topbar's user menu — as Gettext's locale
-  and as `@admin_language`, with the choices the menu offers as `@admin_languages`. And it names the
-  page's `@footer_credit`: the name and address of the extension that owns the page, or `nil` on the
-  core's own (`MishkaCmsCore.Sidebar.credit/1`).
+  and as `@admin_language`, with the choices the menu offers as `@admin_languages`. The menu's Sign
+  out is the site's sign-out page in the language its admin reads the site in, `@sign_out_path`
+  (`MishkaCmsCore.Runtime.Plugs.SiteLookupPlug.auth_address/3`). And it names the page's
+  `@footer_credit`: the name and address of the extension that owns the page, or `nil` on the core's
+  own (`MishkaCmsCore.Sidebar.credit/1`).
 
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
@@ -21,6 +23,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   import Ecto.Query
 
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
 
   def on_mount(:default, _params, session, socket) do
@@ -57,6 +60,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
       |> assign(
         admin_language: language,
         admin_languages: Languages.admin_choices(site_id(session)),
+        sign_out_path:
+          SiteLookupPlug.auth_address(session[Languages.session()], site_id(session), "/sign-out"),
         footer_credit: Sidebar.credit(socket.view)
       )
 

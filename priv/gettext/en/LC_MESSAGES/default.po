@@ -5526,7 +5526,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/settings.ex:908
 #, elixir-autogen, elixir-format
-msgid "Lines added to robots.txt below the rules every site has, which keep crawlers out of /admin/, /api/, /auth/ and /_preview/. Disallow: / hides the whole site; an Allow: line opens a path again."
+msgid "Lines added to robots.txt below the rules every site has, which keep crawlers out of /admin/, /api/, the sign-in pages and /_preview/. Disallow: / hides the whole site; an Allow: line opens a path again."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:242
@@ -14726,4 +14726,29 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/runtime_status.ex:174
 #, elixir-autogen, elixir-format
 msgid "Not in the js bundle of %{sites}, so no page there can run it. %{reason}"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:663
+#, elixir-autogen, elixir-format
+msgid "The first language has no prefix — /blog, /fa/blog"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:664
+#, elixir-autogen, elixir-format
+msgid "Every language has a prefix — /en/blog, /fa/blog"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:666
+#, elixir-autogen, elixir-format
+msgid "Language in addresses"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:668
+#, elixir-autogen, elixir-format
+msgid "How an address names its language. With no prefix for the first language, an address that names none is answered in it, and one that names it is sent to the address without it. With a prefix for every language, an address that names none is sent to the visitor's language. Pages keep their paths either way."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/page_provision.ex:373
+#, elixir-autogen, elixir-format
+msgid "another page already answers at its address %{value}"
 msgstr ""

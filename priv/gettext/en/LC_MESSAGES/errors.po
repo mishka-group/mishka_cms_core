@@ -1491,3 +1491,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "The state names %{name} twice; each name is one assign."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/public_address.ex:57
+#, elixir-autogen, elixir-format
+msgid "Only a path with :lang in it can answer every language. Add :lang to the path, or let the page answer its own language."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/public_address.ex:96
+#, elixir-autogen, elixir-format
+msgid "The page “%{page}” at %{path} already answers at %{address}."
+msgstr ""

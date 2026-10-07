@@ -16,7 +16,7 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
 
   setup do
     site = create_site!()
-    forget_settings(~w(site.languages), [site.id])
+    forget_settings(~w(site.languages site.language_urls), [site.id])
     %{site: site}
   end
 
@@ -369,6 +369,125 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
     refute Languages.captures?("/fa/about")
     refute Languages.captures?("/:language/about")
     refute Languages.captures?(nil)
+  end
+
+  # ONE FUNCTION BUILDS EVERY PUBLIC ADDRESS, so each mode is pinned here once: a link in a
+  # template, a page's editions, the sitemap, robots.txt and a redirect all read it.
+  describe "url/3 — a stored path's public address" do
+    setup %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      :ok
+    end
+
+    defp mode!(site, mode),
+      do: {:ok, _} = Settings.put("site.language_urls", mode, site_id: site.id)
+
+    test "leaves the primary language unprefixed by default", %{site: site} do
+      assert Languages.url_mode(site.id) == "prefix_others"
+
+      assert Languages.url("/:lang/blog", %{"lang" => "en"}, site.id) == "/blog"
+      assert Languages.url("/:lang/blog", %{"lang" => "fa"}, site.id) == "/fa/blog"
+      assert Languages.url("/:lang", %{"lang" => "en"}, site.id) == "/"
+      assert Languages.url("/:lang", %{"lang" => "fa"}, site.id) == "/fa"
+    end
+
+    test "drops a literal first segment that is the primary language, and only that one", %{
+      site: site
+    } do
+      assert Languages.url("/en/pricing", %{}, site.id) == "/pricing"
+      assert Languages.url("/en", %{}, site.id) == "/"
+      assert Languages.url("/fa/pricing", %{}, site.id) == "/fa/pricing"
+      assert Languages.url("/pricing", %{}, site.id) == "/pricing"
+      assert Languages.url("/", %{}, site.id) == "/"
+
+      # A lang anywhere but the first segment is an ordinary capture.
+      assert Languages.url("/docs/:lang/intro", %{"lang" => "en"}, site.id) == "/docs/en/intro"
+      assert Languages.url("/docs/en", %{}, site.id) == "/docs/en"
+    end
+
+    test "prefixes every language in prefix_all", %{site: site} do
+      mode!(site, "prefix_all")
+
+      assert Languages.url_mode(site.id) == "prefix_all"
+      assert Languages.url("/:lang/blog", %{"lang" => "en"}, site.id) == "/en/blog"
+      assert Languages.url("/:lang", %{"lang" => "en"}, site.id) == "/en"
+      assert Languages.url("/en/pricing", %{}, site.id) == "/en/pricing"
+    end
+
+    test "follows the site's first language", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+
+      assert Languages.url("/:lang/blog", %{"lang" => "fa"}, site.id) == "/blog"
+      assert Languages.url("/:lang/blog", %{"lang" => "en"}, site.id) == "/en/blog"
+    end
+
+    test "is nil for a language the site does not publish, or a capture it is not given", %{
+      site: site
+    } do
+      refute Languages.url("/:lang/blog", %{"lang" => "de"}, site.id)
+      refute Languages.url("/:lang/blog", %{}, site.id)
+      refute Languages.url("/:lang/blog/:slug", %{"lang" => "fa"}, site.id)
+
+      # A literal path names no capture to hold to the list.
+      assert Languages.url("/de/about", %{}, site.id) == "/de/about"
+    end
+
+    test "fills every capture, percent-encoding each and each segment of a rest", %{site: site} do
+      captures = %{"lang" => "fa", "slug" => "hello world", "rest" => "a b/c"}
+
+      assert Languages.url("/:lang/blog/:slug", captures, site.id) == "/fa/blog/hello%20world"
+      assert Languages.url("/:lang/docs/*rest", captures, site.id) == "/fa/docs/a%20b/c"
+
+      assert Languages.url("/:lang/blog/:slug", %{captures | "lang" => "en"}, site.id) ==
+               "/blog/hello%20world"
+    end
+
+    test "url/4 builds in the mode it is given, whatever the site's", %{site: site} do
+      mode!(site, "prefix_all")
+
+      assert Languages.url("/:lang/blog", %{"lang" => "en"}, site.id, "prefix_others") == "/blog"
+      assert Languages.url("/en/blog", %{}, site.id, "prefix_others") == "/blog"
+    end
+
+    test "a value that is no mode reads prefix_others", %{site: site} do
+      mode!(site, "sideways")
+
+      assert Languages.url_mode(site.id) == "prefix_others"
+      assert Languages.url_modes() == ["prefix_others", "prefix_all"]
+    end
+  end
+
+  describe "implied/2 — the language of an address that names none" do
+    setup %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      :ok
+    end
+
+    test "is the primary language while the site leaves it unprefixed", %{site: site} do
+      assert Languages.implied(["blog"], site.id) == "en"
+      assert Languages.implied([], site.id) == "en"
+      assert Languages.implied(["de", "about"], site.id) == "en"
+    end
+
+    test "is nil for an address that names one of the site's languages", %{site: site} do
+      refute Languages.implied(["fa", "blog"], site.id)
+      refute Languages.implied(["en", "blog"], site.id)
+    end
+
+    test "is nil when every language is prefixed", %{site: site} do
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      refute Languages.implied(["blog"], site.id)
+    end
+  end
+
+  test "fill/2 fills captures and keeps literals, nil for a capture it is not given" do
+    assert Languages.fill("/docs/:lang/*rest", %{"lang" => "fa", "rest" => "setup/linux"}) ==
+             "/docs/fa/setup/linux"
+
+    assert Languages.fill("/about", %{}) == "/about"
+    refute Languages.fill("/post/:slug", %{})
+    refute Languages.fill("/post/*rest", %{"rest" => ""})
   end
 
   test "direction/1 reads a language's primary subtag" do

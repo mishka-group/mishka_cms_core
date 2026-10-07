@@ -119,6 +119,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   # The pages a sign-in happens on, as whole path segments: `/authors` is a page like any other.
   @sign_in_paths [["auth"], ["api", "auth"]]
 
+  # Where the site's sign-in pages are stored — `MishkaCmsCore.Install.StarterContent.ensure_auth!/1`.
+  @sign_in_page "/:lang/auth"
+
   @doc """
   Initializes the plug with configuration options.
 
@@ -303,6 +306,27 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
     do: language in Languages.site(site_id)
 
   defp language_sign_in_path?(_segments, _site), do: false
+
+  @doc """
+  The address of the site's sign-in page in `language`, or of the page `under` it — `/:lang/auth`
+  as `MishkaCmsCore.Runtime.Languages.url/3` builds it, so a visitor sent to sign in, or to sign
+  out, lands on the page in the language they were reading. A language the site does not publish
+  in, and `nil`, are the site's first.
+
+  Every place that sends a visitor to sign in asks this, with the language they read pages in: the
+  socket's for a runtime page, the session's (`MishkaCmsCore.Runtime.Languages.session/0`) anywhere
+  else.
+
+      # site.languages ["en", "fa"], site.language_urls "prefix_others"
+      SiteLookupPlug.auth_address("fa", site.id)                #=> "/fa/auth"
+      SiteLookupPlug.auth_address(nil, site.id)                 #=> "/auth"
+      SiteLookupPlug.auth_address("en", site.id, "/sign-out")   #=> "/auth/sign-out"
+  """
+  @spec auth_address(String.t() | nil, String.t() | nil, String.t()) :: String.t()
+  def auth_address(language, site_id, under \\ "") do
+    language = Languages.remembered(language, site_id) || Languages.primary(site_id)
+    Languages.url(@sign_in_page <> under, %{Languages.capture() => language}, site_id)
+  end
 
   # Private functions
 

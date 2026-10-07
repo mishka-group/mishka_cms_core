@@ -1132,7 +1132,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       meta("name", "twitter:title", title),
       meta("name", "twitter:description", description),
       meta("name", "twitter:image", image),
-      alternates(languages, base, seo.site_id)
+      alternate_links(languages, base, seo.site_id)
     ])
   end
 
@@ -1146,17 +1146,33 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   defp link(_attrs, _no_href), do: []
 
-  # Each edition at its absolute address, and `x-default` at the site's primary language's.
-  defp alternates([_ | _] = languages, base, site_id) do
+  @doc """
+  The `rel="alternate"` links of a page in several languages: one per edition, at its absolute
+  address (`absolute/2`), and one `hreflang="x-default"` at the edition in the site's primary
+  language (`MishkaCmsCore.Runtime.Languages.primary/1`), when there is one. `[]` for fewer than two
+  editions, which have no alternate to offer.
+
+  `editions` is `[%{language: language, path: path}]`, each `path` a public address —
+  `MishkaCmsCore.Runtime.Languages.url/3`'s. The head's own are `:languages` of `head/2`; a plugin
+  answering for a record puts the record's in its `tags` from here.
+
+      Seo.alternate_links([%{language: "en", path: "/about"}, %{language: "fa", path: "/fa/about"}],
+        "https://acme.test", site.id)
+      #=> [%{tag: "link", attrs: %{"rel" => "alternate", "hreflang" => "en", "href" => "https://acme.test/about"}},
+      #    %{tag: "link", attrs: %{"rel" => "alternate", "hreflang" => "fa", "href" => "https://acme.test/fa/about"}},
+      #    %{tag: "link", attrs: %{"rel" => "alternate", "hreflang" => "x-default", "href" => "https://acme.test/about"}}]
+  """
+  @spec alternate_links([map()], String.t() | nil, String.t() | nil) :: [map()]
+  def alternate_links([_, _ | _] = editions, base, site_id) do
     primary = Languages.primary(site_id)
 
-    editions =
-      Enum.map(languages, fn %{language: language, path: path} ->
+    links =
+      Enum.flat_map(editions, fn %{language: language, path: path} ->
         link(%{"rel" => "alternate", "hreflang" => language}, absolute(path, base))
       end)
 
     fallback =
-      case Enum.find(languages, &(&1.language == primary)) do
+      case Enum.find(editions, &(&1.language == primary)) do
         %{path: path} ->
           link(%{"rel" => "alternate", "hreflang" => "x-default"}, absolute(path, base))
 
@@ -1164,10 +1180,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
           []
       end
 
-    editions ++ fallback
+    links ++ fallback
   end
 
-  defp alternates(_one_edition, _base, _site_id), do: []
+  def alternate_links(_one_edition, _base, _site_id), do: []
 
   defp schema(seo, vars, site_title, base) do
     seo.schema

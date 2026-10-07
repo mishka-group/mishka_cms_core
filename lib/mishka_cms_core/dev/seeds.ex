@@ -85,6 +85,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
       master: true,
       priority: 0,
       languages: ["en", "fa"],
+      language_urls: "prefix_others",
       pages: MishkaCmsCore.Dev.LocalhostPages
     },
     %{
@@ -94,6 +95,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
       master: false,
       priority: 1,
       languages: ["en", "fr"],
+      language_urls: "prefix_all",
       pages: MishkaCmsCore.Dev.SiteAPages
     },
     %{
@@ -103,6 +105,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
       master: false,
       priority: 2,
       languages: ["en"],
+      language_urls: "prefix_others",
       pages: MishkaCmsCore.Dev.SiteBPages
     }
   ]
@@ -259,21 +262,28 @@ defmodule MishkaCmsCore.Dev.Seeds do
     do: [nav: config.pages.nav(), templates: %{"Home" => config.pages.home()}]
 
   # THE LANGUAGES ARE A SETTING, and every `/:lang` page answers only in the ones it names — see
-  # `MishkaCmsCore.Runtime.Languages`.
+  # `MishkaCmsCore.Runtime.Languages`. So is how an address names them: `localhost` and `site-b`
+  # leave their first language unprefixed, `site-a` prefixes every one, so both modes are open on
+  # every reseed.
   #
-  # ASKED OF THE ROW, not of `Settings.get/3`: a site with no list of its own reads the global one,
+  # ASKED OF THE ROW, not of `Settings.get/3`: a site with no value of its own reads the global one,
   # so the façade can never answer "this site has none" and a run would either write over a
   # developer's edit every time or never write at all.
-  defp seed_languages(%{id: site_id}, %{languages: languages}) do
-    own? =
-      Setting
-      |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-      |> Ash.Query.filter(key == "site.languages" and site_id == ^site_id)
-      |> Ash.exists?(authorize?: false)
-
-    unless own? do
-      Settings.put("site.languages", languages, site_id: site_id, category: "general")
+  defp seed_languages(%{id: site_id}, config) do
+    for {key, value} <- [
+          {"site.languages", config.languages},
+          {"site.language_urls", config.language_urls}
+        ],
+        not own_setting?(key, site_id) do
+      Settings.put(key, value, site_id: site_id, category: "general")
     end
+  end
+
+  defp own_setting?(key, site_id) do
+    Setting
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(key == ^key and site_id == ^site_id)
+    |> Ash.exists?(authorize?: false)
   end
 
   @doc """

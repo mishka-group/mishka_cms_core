@@ -23,7 +23,8 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   ## In a template
 
   `MishkaCmsWeb.RuntimeLive` assigns `@page.language` — the language THIS response is in, so the
-  captured one on a pattern page — and `@page_languages`, which is `alternates/3` of `editions/2`:
+  captured one on a pattern page — and `@page_languages`, which is `alternates/3` of `editions/2`,
+  each at its public address (`MishkaCmsCore.Runtime.Languages.url/3`):
 
       <a :for={edition <- @page_languages} href={edition.path} hreflang={edition.language}>
         {String.upcase(edition.language)}
@@ -70,14 +71,18 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   @unindexed ["noindex", "none"]
 
   @doc """
-  The language a response is in: the captured `lang` when the page's path captures one, the page's
-  own language otherwise.
+  The language a response is in: the captured `lang` when the page's path captures one, else the
+  page's own language, else the primary language of `site_id` (`Languages.primary/1`).
+
+  A page reached at `/blog` on a site that leaves its primary language unprefixed was matched as
+  `/en/blog`, and captured `lang` as that language — see
+  `MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.resolve/2`.
   """
-  @spec language(map(), map()) :: String.t()
-  def language(page, captured) do
+  @spec language(map(), map(), String.t() | nil) :: String.t()
+  def language(page, captured, site_id) do
     case Languages.captures?(Map.get(page, :path)) and Map.get(captured, Languages.capture()) do
       language when is_binary(language) and language != "" -> language
-      _not_captured -> Map.get(page, :language) || hd(Languages.default())
+      _not_captured -> Map.get(page, :language) || Languages.primary(site_id)
     end
   end
 
@@ -106,45 +111,49 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   end
 
   @doc """
-  The URL a stored path makes with these captures, or `nil` when it needs one they do not hold.
+  A stored path with its captures filled, or `nil` when it needs one they do not hold — see
+  `MishkaCmsCore.Runtime.Languages.fill/2`. Not a public address: `Languages.url/3` is.
 
       PageEditions.path("/docs/:lang/*rest", %{"lang" => "fa", "rest" => "setup/linux"})
       #=> "/docs/fa/setup/linux"
   """
   @spec path(String.t(), map()) :: String.t() | nil
-  def path(pattern, captured) do
-    pattern
-    |> String.split("/", trim: true)
-    |> Enum.reduce_while([], fn segment, filled ->
-      case fill(segment, captured) do
-        nil -> {:halt, nil}
-        value -> {:cont, [value | filled]}
-      end
-    end)
-    |> case do
-      nil -> nil
-      filled -> "/" <> (filled |> Enum.reverse() |> Enum.join("/"))
-    end
+  defdelegate path(pattern, captured), to: Languages, as: :fill
+
+  @doc """
+  The public addresses a page answers at on its site, by the rule the resolver serves it by
+  (`served_languages/2`) and in the form `MishkaCmsCore.Runtime.Languages.url/3` builds — what a
+  sitemap lists and what no other page may answer.
+
+  A literal page answers at its one address, and a page whose only capture is the language at one
+  per language it answers. Any other pattern is the template of many addresses that only the
+  component owning its rows can fill, and answers `[]`. `mode` builds them as the site would in that
+  URL mode instead of its own.
+
+      # site.languages ["en", "fa"], site.language_urls "prefix_others"
+      PageEditions.urls(%{path: "/:lang/blog", language: "en", extra: %{"serves_all_languages" => true}}, site.id)
+      #=> ["/blog", "/fa/blog"]
+      PageEditions.urls(%{path: "/en/pricing", language: "en"}, site.id)
+      #=> ["/pricing"]
+  """
+  @spec urls(map(), String.t() | nil) :: [String.t()]
+  def urls(page, site_id), do: urls(page, site_id, Languages.url_mode(site_id))
+
+  @spec urls(map(), String.t() | nil, String.t()) :: [String.t()]
+  def urls(%{path: path} = page, site_id, mode) when is_binary(path) do
+    captures =
+      if language_only?(path),
+        do: Enum.map(served_languages(page, site_id), &%{Languages.capture() => &1}),
+        else: [%{}]
+
+    for captured <- captures,
+        url = Languages.url(path, captured, site_id, mode),
+        is_binary(url),
+        uniq: true,
+        do: url
   end
 
-  defp fill(":" <> name, captured), do: captured |> Map.get(name) |> encode()
-
-  defp fill("*" <> name, captured) do
-    case Map.get(captured, name) do
-      rest when is_binary(rest) and rest != "" ->
-        rest |> String.split("/") |> Enum.map(&encode/1) |> Enum.join("/")
-
-      _missing ->
-        nil
-    end
-  end
-
-  defp fill(literal, _captured), do: literal
-
-  defp encode(value) when is_binary(value) and value != "",
-    do: URI.encode(value, &URI.char_unreserved?/1)
-
-  defp encode(_missing), do: nil
+  def urls(_page, _site_id, _mode), do: []
 
   @doc """
   The page and the other editions of its group, each as its stored path, its language and its
@@ -196,14 +205,15 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
     {patterns, literals} = Enum.split_with(editions, &Languages.captures?(&1.path))
     {swappable, opaque} = Enum.split_with(patterns, &language_only?(&1.path))
 
-    literal_urls = Enum.map(literals, &{&1.language, path(&1.path, captured)})
+    literal_urls = Enum.map(literals, &{&1.language, Languages.url(&1.path, captured, site_id)})
 
     pattern_urls =
       for edition <- swappable,
           language <- served_languages(edition, site_id),
-          do: {language, path(edition.path, Map.put(captured, Languages.capture(), language))}
+          swapped = Map.put(captured, Languages.capture(), language),
+          do: {language, Languages.url(edition.path, swapped, site_id)}
 
-    (literal_urls ++ pattern_urls ++ self_urls(opaque, captured))
+    (literal_urls ++ pattern_urls ++ self_urls(opaque, captured, site_id))
     |> Enum.reject(fn {language, url} -> is_nil(url) or language in [nil, ""] end)
     |> Enum.uniq_by(&elem(&1, 0))
     |> Enum.map(fn {language, url} -> %{language: language, path: url} end)
@@ -217,10 +227,10 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   # The URL a pattern is answering right now, under the language it was asked for. Nothing is guessed
   # here — every capture is the visitor's own — so it is safe for a pattern whose other captures are
   # not translatable.
-  defp self_urls(editions, captured) do
+  defp self_urls(editions, captured, site_id) do
     case Map.get(captured, Languages.capture()) do
       language when is_binary(language) and language != "" ->
-        Enum.map(editions, &{language, path(&1.path, captured)})
+        Enum.map(editions, &{language, Languages.url(&1.path, captured, site_id)})
 
       _not_captured ->
         []
@@ -232,8 +242,9 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   and `/guides/:lang/*rest` no, and a literal path no. A glob is a capture like any other: `*rest`
   holds a path a translation spells its own way.
 
-  Such a path makes one URL per language in `served_languages/2`, with `path/2` given only the
-  language; any other pattern needs a capture only the component that owns its rows can fill.
+  Such a path makes one URL per language in `served_languages/2`, with `Languages.url/3` given
+  only the language; any other pattern needs a capture only the component that owns its rows can
+  fill.
   """
   @spec language_only?(String.t()) :: boolean()
   def language_only?(path) do
@@ -270,8 +281,9 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   hold one, else its layout's — a page's robots meta replaces its layout's in the head
   (`MishkaCmsWeb.RuntimeLive.page_head/1`), and the tags are read the way the head reads them.
 
-  The paths are what no sitemap may name: the resolver answers a literal page before any pattern,
-  so `/fa/blog` is the login-only page stored there, not `/:lang/blog` in Persian.
+  The paths, as public addresses (`MishkaCmsCore.Runtime.Languages.url/3`), are what no sitemap may
+  name: the resolver answers a literal page before any pattern, so `/fa/blog/archive` is the
+  login-only page stored there, not `/:lang/blog/:slug` in Persian.
 
   One read of the site's active rows, as the system, with each page's `tenant_layout` loaded beside
   it. A page carries its `id`, `path`, `language`, `language_group_id`, `extra`, `permissions`,
@@ -291,7 +303,11 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
             not noindex?(&1.seo_tags, layout_tags(&1.tenant_layout)))
       )
 
-    {listed, hidden |> Enum.map(&path(&1.path, %{})) |> Enum.reject(&is_nil/1) |> MapSet.new()}
+    {listed,
+     hidden
+     |> Enum.map(&Languages.url(&1.path, %{}, site_id))
+     |> Enum.reject(&is_nil/1)
+     |> MapSet.new()}
   end
 
   @doc """

@@ -26,10 +26,13 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
 
   setup do
     site = create_site!()
-    forget_settings(~w(site.languages), [site.id])
+    forget_settings(~w(site.languages site.language_urls), [site.id])
     {:ok, _} = Settings.put("site.languages", ["en", "fa", "ar"], site_id: site.id)
     %{site: site}
   end
+
+  defp prefix_all!(site),
+    do: {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
 
   defp editions(page, site) do
     page
@@ -58,15 +61,55 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
     end
   end
 
-  describe "language/2" do
-    test "is the captured lang on a page whose path captures one" do
-      assert PageEditions.language(%{path: "/docs/:lang", language: "en"}, %{"lang" => "fa"}) ==
-               "fa"
+  describe "language/3" do
+    test "is the captured lang on a page whose path captures one", %{site: site} do
+      assert PageEditions.language(
+               %{path: "/docs/:lang", language: "en"},
+               %{"lang" => "fa"},
+               site.id
+             ) == "fa"
     end
 
-    test "and the page's own language everywhere else" do
-      assert PageEditions.language(%{path: "/fa/about", language: "fa"}, %{}) == "fa"
-      assert PageEditions.language(%{path: "/:slug", language: "ar"}, %{"lang" => "fa"}) == "ar"
+    test "and the page's own language everywhere else", %{site: site} do
+      assert PageEditions.language(%{path: "/fa/about", language: "fa"}, %{}, site.id) == "fa"
+
+      assert PageEditions.language(%{path: "/:slug", language: "ar"}, %{"lang" => "fa"}, site.id) ==
+               "ar"
+    end
+
+    test "and the site's first language for a page that names none", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+
+      assert PageEditions.language(%{path: "/no-lang", language: nil}, %{}, site.id) == "fa"
+    end
+  end
+
+  describe "urls/2 — the public addresses a page answers at" do
+    test "a literal page at its one, a language-only pattern at one per language it answers", %{
+      site: site
+    } do
+      assert PageEditions.urls(%{path: "/en/pricing", language: "en"}, site.id) == ["/pricing"]
+      assert PageEditions.urls(%{path: "/fa/pricing", language: "fa"}, site.id) == ["/fa/pricing"]
+
+      assert PageEditions.urls(
+               %{path: "/:lang/blog", language: "en", extra: @every_language},
+               site.id
+             ) == ["/blog", "/fa/blog", "/ar/blog"]
+
+      assert PageEditions.urls(%{path: "/:lang/about", language: "fa", extra: %{}}, site.id) ==
+               ["/fa/about"]
+    end
+
+    test "none for a pattern only the component owning its rows can fill", %{site: site} do
+      assert PageEditions.urls(%{path: "/:lang/blog/:slug", language: "en"}, site.id) == []
+    end
+
+    test "every one prefixed in prefix_all, or in the mode asked for", %{site: site} do
+      prefix_all!(site)
+      page = %{path: "/:lang", language: "en", extra: @every_language}
+
+      assert PageEditions.urls(page, site.id) == ["/en", "/fa", "/ar"]
+      assert PageEditions.urls(page, site.id, "prefix_others") == ["/", "/fa", "/ar"]
     end
   end
 
@@ -119,6 +162,8 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
     end
 
     test "swaps the lang capture of a pattern page, first, middle or last", %{site: site} do
+      prefix_all!(site)
+
       for {path, url} <- [
             {"/:lang/guide", &"/#{&1}/guide"},
             {"/docs/:lang/setup", &"/docs/#{&1}/setup"},
@@ -145,6 +190,18 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
       end
     end
 
+    # THE PRIMARY LANGUAGE UNPREFIXED, the default: only a first segment is ever a prefix, so a lang
+    # captured further in keeps its segment.
+    test "builds each address the way the site's URL mode does", %{site: site} do
+      for {path, en} <- [{"/:lang/guide", "/guide"}, {"/docs/:lang/setup", "/docs/en/setup"}] do
+        page = create_page!(site_id: site.id, path: path, extra: @every_language)
+
+        alternates = PageEditions.alternates(editions(page, site), %{"lang" => "fa"}, site.id)
+
+        assert %{language: "en", path: ^en} = Enum.find(alternates, &(&1.language == "en"))
+      end
+    end
+
     test "names the URL it is serving when a literal translation answers for it", %{site: site} do
       master = create_page!(site_id: site.id, name: "post", path: "/:lang/blog/:slug")
 
@@ -161,7 +218,7 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
                %{"lang" => "en", "slug" => "my-post"},
                site.id
              ) == [
-               %{language: "en", path: "/en/blog/my-post"},
+               %{language: "en", path: "/blog/my-post"},
                %{language: "fa", path: "/fa/blog/neveshte"}
              ]
     end
@@ -185,7 +242,7 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
 
       assert PageEditions.alternates(editions(master, site), %{"lang" => "en"}, site.id) == [
                %{language: "ar", path: "/ar/guide"},
-               %{language: "en", path: "/en/guide"},
+               %{language: "en", path: "/guide"},
                %{language: "fa", path: "/fa/rahnama"}
              ]
     end
@@ -210,6 +267,13 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
         language: "fa",
         language_group_id: page.id
       )
+
+      assert PageEditions.alternates(editions(page, site), %{"lang" => "en"}, site.id) == [
+               %{language: "en", path: "/about"},
+               %{language: "fa", path: "/fa/about"}
+             ]
+
+      prefix_all!(site)
 
       assert PageEditions.alternates(editions(page, site), %{"lang" => "en"}, site.id) == [
                %{language: "en", path: "/en/about"},
@@ -308,7 +372,8 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
       unset = create_page!(site_id: site.id, path: "/unset", permissions: nil)
       create_page!(site_id: site.id, path: "/off", active: false)
       create_page!(site_id: site.id, path: "/members", permissions: ["members:read"])
-      create_page!(site_id: site.id, path: "/:lang/members", permissions: ["members:read"])
+      create_page!(site_id: site.id, path: "/en/club", permissions: ["members:read"])
+      create_page!(site_id: site.id, path: "/:lang/lounge", permissions: ["members:read"])
       create_page!(site_id: create_site!().id, path: "/elsewhere")
 
       archived = create_page!(site_id: site.id, path: "/gone")
@@ -322,8 +387,9 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
       {listed, hidden} = PageEditions.indexable(site.id)
 
       assert Enum.map(listed, & &1.id) == [open.id, unset.id]
-      # A pattern holds no one address of its own, so only the literal page is among them.
-      assert hidden == MapSet.new(["/members"])
+      # A pattern holds no one address of its own, so only the literal pages are among them, each
+      # at its public address.
+      assert hidden == MapSet.new(["/members", "/club"])
     end
 
     # THE ROBOTS META THE HEAD RENDERS: a page's own replaces its layout's there, so a page that says

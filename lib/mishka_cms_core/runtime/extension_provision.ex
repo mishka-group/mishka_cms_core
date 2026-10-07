@@ -223,10 +223,13 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
 
     * `%{"paths" => %{"/:lang/blog" => "/:lang/journal"}}` moves one page;
     * `%{"prefix" => "/mish"}` moves every page of the extension under one segment, which is the
-      answer when a site has its own `/blog` and wants ours somewhere else entirely.
+      answer when a site has its own `/blog` and wants ours somewhere else entirely. The segment
+      goes after a leading `:lang`, which only the first segment can be: `/:lang/blog` moves to
+      `/:lang/mish/blog`.
 
   A prefix is applied first and a named path wins over it, so an admin can move the lot and then
-  place one of them by hand.
+  place one of them by hand. A page moved to a path that captures no `lang` answers in its own
+  language alone (`MishkaCmsCore.Runtime.PageProvision.serving_all_languages/1`).
   """
   @spec moved([map()], map()) :: [map()]
   def moved(pages, answers) when map_size(answers) == 0, do: pages
@@ -242,11 +245,19 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
           _not_named -> prefixed(page.path, prefix)
         end
 
-      Map.put(page, :path, moved)
+      page |> Map.put(:path, moved) |> still_answering()
     end)
   end
 
+  defp still_answering(page) do
+    if PageProvision.serves_all_languages?(page),
+      do: PageProvision.serving_all_languages(page),
+      else: page
+  end
+
   defp prefixed(path, ""), do: path
+  defp prefixed("/:lang", prefix), do: "/:lang/" <> prefix
+  defp prefixed("/:lang/" <> rest, prefix), do: "/:lang/" <> prefix <> "/" <> rest
   defp prefixed(path, prefix), do: "/" <> prefix <> path
 
   @doc "The component names the extension's bundle ships, read off the bundle itself."

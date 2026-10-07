@@ -241,6 +241,7 @@ defmodule MishkaCmsCore.Layouts do
   attr :current_path, :string, default: nil
   attr :language, :string, default: "en"
   attr :languages, :list, default: []
+  attr :sign_out, :string, default: "/auth/sign-out"
 
   def topbar(assigns) do
     {shown, more} = split_languages(assigns.languages, assigns.language)
@@ -500,7 +501,8 @@ defmodule MishkaCmsCore.Layouts do
               </.form>
               <div :if={@languages != []} class="mx-1 my-1.5 h-px bg-[#f0efea]"></div>
               <.link
-                href="/auth/sign-out"
+                id="admin-sign-out"
+                href={@sign_out}
                 class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-semibold text-[#d5544b] hover:bg-[#fbe9e7]"
               >
                 <.icon name="hero-arrow-right-on-rectangle" class="size-4" /> {gettext("Sign out")}

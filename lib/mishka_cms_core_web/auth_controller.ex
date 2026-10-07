@@ -136,7 +136,8 @@ defmodule MishkaCmsCoreWeb.AuthController do
   import MishkaCmsCore.Helpers, only: [path: 2]
 
   alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, CaptchaCheck, LiveSockets, SecondFactor}
-  alias MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug
+  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Plugs.{AuthRateLimitPlug, SiteLookupPlug}
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
@@ -162,7 +163,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       data ->
         data.conn
         |> put_flash(:info, data.message)
-        |> redirect(to: path(data.conn, "/auth"))
+        |> redirect(to: sign_in_page(data.conn))
     end)
   end
 
@@ -193,7 +194,20 @@ defmodule MishkaCmsCoreWeb.AuthController do
       :info,
       gettext("Sign in with your password and the code from your authenticator app.")
     )
-    |> redirect(to: path(conn, "/auth"))
+    |> redirect(to: sign_in_page(conn))
+  end
+
+  # THE SIGN-IN PAGE IN THE LANGUAGE THE VISITOR READS PAGES IN — the one the last page they read
+  # left in the session (`MishkaCmsCore.Runtime.Plugs.LanguagePlug`), so a sign-in started on
+  # `/fa/auth` comes back to `/fa/auth`.
+  defp sign_in_page(conn) do
+    site_id =
+      case conn.assigns[:current_site] do
+        %{id: id} -> id
+        _no_site -> nil
+      end
+
+    path(conn, SiteLookupPlug.auth_address(get_session(conn, Languages.session()), site_id))
   end
 
   # AN OFFLINE SITE SIGNS IN ONLY THOSE WHO MAY SEE IT. Every way in ends here — password, magic
@@ -219,7 +233,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       data ->
         data.conn
         |> put_flash(:error, data.message)
-        |> redirect(to: path(data.conn, "/auth"))
+        |> redirect(to: sign_in_page(data.conn))
     end)
   end
 
@@ -353,7 +367,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
         <div class="container" id="auth-rate-limited">
           <h1>#{title}</h1>
           <p>#{text}</p>
-          <p><a href="#{path(conn, "/auth")}">#{gettext("Back to sign in")}</a></p>
+          <p><a href="#{sign_in_page(conn)}">#{gettext("Back to sign in")}</a></p>
         </div>
       </body>
     </html>
@@ -388,7 +402,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
           %{
             conn: conn,
             message: message,
-            redirect_to: path(conn, "/auth"),
+            redirect_to: sign_in_page(conn),
             failure_type: failure_type
           }
           |> then(&Hook.call("AuthController.Failure.BeforeRedirect", &1))
