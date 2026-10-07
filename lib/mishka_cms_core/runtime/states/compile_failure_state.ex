@@ -10,8 +10,11 @@ defmodule MishkaCmsCore.Runtime.States.CompileFailureState do
   `{module, :offline}` is an Error Page whose `:offline` entry compiled but raised when it was drawn;
   the module stays loaded for its other entries.
 
-  Read by `MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler` and
-  `MishkaCmsWeb.ErrorHTML.offline_page/1`.
+  `{MishkaCmsCore.Runtime.JsHook, hook_id, bundle}` is a JS hook left out of a site's JavaScript
+  bundle — see `MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.left_out/1`.
+
+  Read by `MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler`,
+  `MishkaCmsCore.Runtime.RuntimeStatus` and `MishkaCmsWeb.ErrorHTML.offline_page/1`.
   """
   use GenServer
 
@@ -28,6 +31,20 @@ defmodule MishkaCmsCore.Runtime.States.CompileFailureState do
   @doc "Forget a module's failure (e.g. after it compiles cleanly)."
   def clear(module) do
     if table?(), do: :ets.delete(@table, module)
+    :ok
+  end
+
+  @doc "Every recorded `{key, reason}` whose key matches `pattern`, an `:ets` match pattern."
+  def matching(pattern) do
+    case table?() do
+      true -> :ets.match_object(@table, {pattern, :_})
+      false -> []
+    end
+  end
+
+  @doc "Forget every failure whose key matches `pattern`, an `:ets` match pattern."
+  def clear_matching(pattern) do
+    if table?(), do: :ets.match_delete(@table, {pattern, :_})
     :ok
   end
 

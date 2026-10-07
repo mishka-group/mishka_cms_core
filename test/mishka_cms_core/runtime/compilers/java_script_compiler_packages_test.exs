@@ -1,7 +1,8 @@
 defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
   @moduledoc """
   A hook that imports npm packages and files of its own, built by the real esbuild against a registry
-  this test answers — and the rest of the site still building when one hook's packages cannot be had.
+  this test answers — and the rest of the site still building when one hook's packages cannot be had,
+  or when esbuild cannot build the hook itself.
 
   `async: false` — the registry is answered through `Application.put_env/3`, and the compile writes
   into the one shared `js_assets/` folder.
@@ -9,7 +10,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
-  alias MishkaCmsCore.Runtime.JsHook
+  alias MishkaCmsCore.Runtime.{JsHook, RuntimeStatus}
 
   setup do
     assets = js_assets_dir()
@@ -45,7 +46,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
     end
   end
 
-  defp tarball(name, marker) do
+  defp tarball(name, marker),
+    do: package(name, "export default function draw() { return #{inspect(marker)}; }")
+
+  defp package(name, index) do
     path = Path.join(System.tmp_dir!(), "pkg_#{System.unique_integer([:positive])}.tgz")
 
     :ok =
@@ -53,7 +57,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
         String.to_charlist(path),
         [
           {~c"package/package.json", ~s({"name": "#{name}", "main": "index.js"})},
-          {~c"package/index.js", "export default function draw() { return #{inspect(marker)}; }"}
+          {~c"package/index.js", index}
         ],
         [:compressed]
       )
@@ -140,6 +144,149 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
     assert {:ok, js} = JavaScriptCompiler.compile("packages_site", global_only: true)
     assert js =~ "TOAST_HOOK"
     refute js =~ "CHART_HOOK"
+  end
+
+  defp left_out!(site \\ "packages_site") do
+    assert {:ok, js} = JavaScriptCompiler.compile(site, global_only: true)
+    assert js =~ "TOAST_HOOK", "every other hook is still built"
+    refute js =~ "CHART_HOOK"
+    js
+  end
+
+  defp left_out_of_site(hook) do
+    hook.id |> JavaScriptCompiler.left_out() |> Map.new() |> Map.get("packages_site")
+  end
+
+  describe "a hook esbuild cannot build" do
+    setup do
+      hook!("toast", ~s|export default { mounted() { window.__toast = "TOAST_HOOK"; } };|, %{})
+      :ok
+    end
+
+    test "is left out when it imports a package it does not declare", %{package: package} do
+      chart =
+        hook!(
+          "chart",
+          ~s|import draw from "#{package}"; export default { mounted() { draw("CHART_HOOK"); } };|,
+          %{}
+        )
+
+      left_out!()
+
+      assert left_out_of_site(chart) =~
+               ~s(Could not resolve "#{package}")
+    end
+
+    test "is left out when it imports a file of its own it does not carry" do
+      chart =
+        hook!(
+          "chart",
+          ~s|import settings from "./chart_extensions.js"; export default { mounted() { window.__chart = [settings, "CHART_HOOK"]; } };|,
+          %{}
+        )
+
+      left_out!()
+
+      assert left_out_of_site(chart) =~
+               ~s(Could not resolve "./chart_extensions.js")
+    end
+
+    test "is left out when its own code does not parse" do
+      chart =
+        hook!(
+          "chart",
+          ~s|export default { mounted() { let = ; window.__chart = "CHART_HOOK"; } };|,
+          %{}
+        )
+
+      left_out!()
+
+      assert left_out_of_site(chart) =~ "Unexpected"
+    end
+
+    test "is left out when a file of its own does not parse" do
+      chart =
+        hook!(
+          "chart",
+          ~s|import settings from "./chart_extensions.js"; export default { mounted() { window.__chart = [settings, "CHART_HOOK"]; } };|,
+          %{modules: [%{"file" => "chart_extensions.js", "content" => "export default {"}]}
+        )
+
+      left_out!()
+
+      assert left_out_of_site(chart) =~
+               "chart_extensions.js"
+    end
+
+    test "is left out when a package it declares imports one its tree does not carry", %{
+      package: package
+    } do
+      tgz =
+        package(package, ~s|import missing from "#{package}-dependency"; export default missing;|)
+
+      registry!(%{"/#{package}/-/#{package}-1.0.0.tgz" => tgz})
+
+      chart =
+        hook!(
+          "chart",
+          ~s|import draw from "#{package}"; export default { mounted() { draw("CHART_HOOK"); } };|,
+          %{npm: [entry(package, tgz)]}
+        )
+
+      left_out!()
+
+      assert left_out_of_site(chart) =~
+               ~s(Could not resolve "#{package}-dependency")
+    end
+
+    test "is built again once it is fixed, and its reason is gone" do
+      chart = hook!("chart", ~s|export default { mounted() { let = ; } };|, %{})
+
+      left_out!()
+      assert left_out_of_site(chart)
+
+      chart
+      |> Ash.Changeset.for_update(
+        :master_update,
+        %{content: ~s|export default { mounted() { window.__chart = "CHART_HOOK"; } };|},
+        authorize?: false
+      )
+      |> Ash.update!(authorize?: false)
+
+      assert {:ok, js} = JavaScriptCompiler.compile("packages_site", global_only: true)
+      assert js =~ "CHART_HOOK"
+      assert js =~ "TOAST_HOOK"
+      assert left_out_of_site(chart) == nil
+    end
+
+    test "is reported on its runtime status rather than as live" do
+      chart = hook!("chart", ~s|import "./nowhere.js"; export default {};|, %{})
+
+      left_out!()
+
+      status = RuntimeStatus.compute(chart, JsHook)
+
+      assert status.state == :failed
+      assert status.label == "Left out of the bundle"
+      assert status.message =~ "packages_site"
+      assert status.message =~ ~s(Could not resolve "./nowhere.js")
+    end
+
+    test "does not hide an error in the code every site shares, nor forget what was left out" do
+      chart = hook!("chart", ~s|export default { mounted() { let = ; } };|, %{})
+      left_out!()
+      reported = left_out_of_site(chart)
+
+      boot = Path.join([js_assets_dir(), "js", "boot.js"])
+      original = File.read!(boot)
+      on_exit(fn -> File.write!(boot, original) end)
+      File.write!(boot, "export function boot( {")
+
+      assert {:error, reason} = JavaScriptCompiler.compile("packages_site", global_only: true)
+      assert reason =~ "Esbuild compilation failed"
+      assert reason =~ "boot.js"
+      assert left_out_of_site(chart) == reported, "the bundle still served is the one reported"
+    end
   end
 
   test "a package or a module that cannot be fetched or written is refused when the hook is saved" do
