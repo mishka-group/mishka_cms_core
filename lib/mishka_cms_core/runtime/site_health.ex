@@ -8,9 +8,12 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
   Signals (all cheap, computed on expand and on each realtime refresh):
     * serving state — straight off the loaded Site record, and whether it is offline: `offline_by` is
       `MishkaCmsCore.Settings.offline_by/1`, so the site's own switch and the Global one are told apart
-    * compile jobs grouped per target into in-progress, unrecovered (the target's latest
-      job failed) and recovered (failed earlier, but a later job succeeded) — one
-      `oban_jobs` query matched on the site's immutable `site_id` (all jobs carry it)
+    * compile jobs since this node booted, grouped per target into in-progress, unrecovered (the
+      target's latest job failed) and recovered (failed earlier, but a later job succeeded) — one
+      `oban_jobs` query matched on the site's immutable `site_id` (all jobs carry it). A job from
+      before the boot is left out: the boot cancelled it and compiled from the database itself
+      (`MishkaCmsCore.Runtime.Handlers.BootHandler.booted_at/0`)
+    * whether the app's Oban rescues jobs a restart interrupts (`BootHandler.lifeline?/0`)
     * per-resource active/inactive/archived counts — one UNION query across the 6
       runtime tables (site-specific records only)
     * CSS/JS bundle presence + freshness — O(1) `AssetsState` ETS reads
@@ -19,13 +22,13 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
   The derived headline is `:inactive → :offline → :attention (unrecovered) → :working (in progress)
   → :recovered → :healthy`. Red (`:attention`) is reserved for a target whose latest job
   is still failed; a target that failed and then succeeded is a soft orange `:recovered`,
-  because a later success supersedes the old failure (e.g. the fresh boot rebuild after
-  the boot-time auto-cancel).
+  because a later success supersedes the old failure (a fix saved after a failed save).
 
   Rendered by `MishkaCmsCoreWeb.Live.Admin.Components.SiteHealthPanel`.
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Activity.Query, as: ActivityQuery
@@ -67,7 +70,8 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
       error: latest_error(unrecovered),
       parts: part_counts(site_id),
       assets: %{css: asset_state(site.name, "css"), js: asset_state(site.name, "js")},
-      recent: recent_activity(site_id)
+      recent: recent_activity(site_id),
+      lifeline?: BootHandler.lifeline?()
     }
 
     Map.merge(base, headline(base))
@@ -184,9 +188,12 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
         "FROM oban_jobs " <>
         "WHERE COALESCE(args->>'site_id', args#>>'{data,site_id}') = $1 " <>
         "AND state IN ('executing','available','scheduled','retryable','discarded','cancelled','completed') " <>
+        "AND inserted_at >= $2 " <>
         "ORDER BY id DESC LIMIT 100"
 
-    case Ecto.Adapters.SQL.query(@repo, sql, [site_id]) do
+    booted_at = DateTime.to_naive(BootHandler.booted_at())
+
+    case Ecto.Adapters.SQL.query(@repo, sql, [site_id, booted_at]) do
       {:ok, %{rows: rows}} -> Enum.map(rows, &job_row/1)
       _ -> []
     end

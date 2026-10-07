@@ -172,6 +172,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SiteHealthPanel do
         </div>
       </div>
 
+      <div
+        :if={!@health.lifeline?}
+        id="site-health-lifeline"
+        class="mb-[14px] rounded-[11px] border border-[#f0e3c9] bg-[#fdf7ea] px-[15px] py-[13px] text-[11.5px] font-medium text-[#a5691a]"
+      >
+        {gettext(
+          "Background jobs are not rescued after a restart: an email or a notification interrupted by one stays unsent. Add lifeline: [rescue_after: {30, :minutes}] to the app's Oban config."
+        )}
+      </div>
+
       <div class="rounded-[11px] border border-[#f0efea] px-[15px] py-[13px]">
         <div class="mb-2 text-[12.5px] font-bold text-[#1b1a18]">{gettext("Recent activity")}</div>
         <div :if={@health.recent == []} class="text-[11px] font-medium text-[#a8a5a0]">

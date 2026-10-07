@@ -14727,3 +14727,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Not in the js bundle of %{sites}, so no page there can run it. %{reason}"
 msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/site_health_panel.ex:181
+#, elixir-autogen, elixir-format
+msgid "Background jobs are not rescued after a restart: an email or a notification interrupted by one stays unsent. Add lifeline: [rescue_after: {30, :minutes}] to the app's Oban config."
+msgstr ""
