@@ -55,7 +55,11 @@ defmodule Mix.Tasks.Mishka.Css.Closure do
   defp report(site, all, runtime_dir) do
     roots = TailwindCompiler.closure_roots(site, runtime_dir: runtime_dir)
 
-    case CssClosure.for_site(site, runtime_dir: runtime_dir, roots: roots) do
+    case CssClosure.for_site(site,
+           runtime_dir: runtime_dir,
+           roots: roots,
+           content_components: TailwindCompiler.content_components(site)
+         ) do
       :unbounded ->
         Mix.shell().info(
           "#{site}: unbounded — a template names a component through an expression"

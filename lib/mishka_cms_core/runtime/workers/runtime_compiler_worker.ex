@@ -437,14 +437,16 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   # THE SAME TWO-HALVES RULE A PAGE FOLLOWS, minus routing: a component has no path and no metadata
   # entry. Its template is written whenever it is active, so the site's CSS covers it; its module is
   # built here only when `precompile` says so, and otherwise by the first render that names it
-  # (`MishkaCmsCore.Runtime.LiveViewHelpers.component/1`). Purging unloads the module and removes
-  # the template.
+  # (`MishkaCmsCore.Runtime.LiveViewHelpers.component/1`). Its name is remembered in `SiteState`
+  # while it is active, which is what a marker in stored content is checked against. Purging unloads
+  # the module and removes the template and the name.
   @doc false
   def apply_component_lifecycle(action, com, module) do
     cond do
       purge?(action, com) ->
         ModuleCompiler.unload(module)
         BootHandler.delete_template_file(template_site(com), "component", com["name"])
+        SiteState.delete_component(com["site_id"], com["name"])
         Logger.info("Purged Component module: #{inspect(module)}")
         :ok
 
@@ -454,6 +456,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
         # is switched on, or has been edited — so the memory goes.
         CompileFailureState.clear(module)
         create_template(com, "component")
+        SiteState.put_component(com["site_id"], com["name"])
 
         if compile?(action, com, Helpers.loaded?(module)),
           do: compile_module(module, action, com, "component"),

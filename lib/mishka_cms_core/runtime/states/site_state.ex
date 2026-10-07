@@ -130,6 +130,12 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   @name_index :mishka_sites_name_index
   @allowed_origins_index :mishka_sites_allowed_origins_index
 
+  # `{{site_id | nil, component name}}` for every ACTIVE component: what a site has, so a name an
+  # author typed into content is checked against it as a string before a module name — an atom — is
+  # ever made from it. Kept with the template files: `BootHandler.compile_components/1` writes both,
+  # and `RuntimeCompilerWorker.apply_component_lifecycle/3` writes or drops both.
+  @components_index :mishka_sites_components_index
+
   @pubsub MishkaCmsCore.PubSub
 
   # The three topics `MishkaCmsCore.Runtime.Site`'s `pub_sub` block publishes without a pkey segment.
@@ -644,6 +650,33 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   end
 
   @doc """
+  Remembers that the site `site_id` — `nil` for the global scope — has an active component named
+  `name`.
+  """
+  @spec put_component(String.t() | nil, String.t()) :: :ok
+  def put_component(site_id, name) when is_binary(name) do
+    :ets.insert(@components_index, {{site_id, name}})
+    :ok
+  end
+
+  @doc "Forgets the component named `name` of the site `site_id` — `nil` for the global scope."
+  @spec delete_component(String.t() | nil, String.t()) :: :ok
+  def delete_component(site_id, name) when is_binary(name) do
+    :ets.delete(@components_index, {site_id, name})
+    :ok
+  end
+
+  @doc """
+  Whether the site `site_id` — `nil` for the global scope — has an active component named `name`.
+  One ETS lookup, and nothing is made from a name it does not know.
+  """
+  @spec component?(String.t() | nil, String.t()) :: boolean()
+  def component?(site_id, name) when is_binary(name),
+    do: :ets.member(@components_index, {site_id, name})
+
+  def component?(_site_id, _name), do: false
+
+  @doc """
   Returns the number of sites.
   """
   def count, do: :ets.info(@main_table, :size)
@@ -652,7 +685,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   Clears all data from all tables.
   """
   def clear do
-    [@main_table, @host_index, @name_index, @allowed_origins_index]
+    [@main_table, @host_index, @name_index, @allowed_origins_index, @components_index]
     |> Enum.each(fn table ->
       if :ets.whereis(table) != :undefined do
         :ets.delete_all_objects(table)
@@ -699,6 +732,14 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     :ets.new(@allowed_origins_index, [
       # bag allows duplicate keys with different values
       :bag,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
+    :ets.new(@components_index, [
+      :set,
       :public,
       :named_table,
       read_concurrency: true,

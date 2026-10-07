@@ -38,6 +38,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     `%Phoenix.LiveView.Rendered{}`, with `%{component_name: name, site: site, site_id: site_id}` as
     its meta: the name and site the template asked for, and the site being rendered. A plugin may
     answer with markup of its own.
+  - `runtime:render:before_content_component` — before each component a `rich_content/1` marker
+    names is drawn; see `MishkaCmsCore.Runtime.ContentComponents`.
 
   See also `MishkaCmsCore.Runtime.Compilers.ComponentCompiler` for how the target modules and their
   `__component_information__/0` metadata surface are generated.
@@ -48,19 +50,20 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   import Phoenix.Component
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.ContentComponents
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaInstaller.Event.Hook
 
-  @renders [component: 1, component: 2, captcha: 1]
+  @renders [component: 1, component: 2, captcha: 1, rich_content: 1]
   @translates [t: 1, t: 2]
   @nonces [csp_nonce: 0]
 
   @doc """
-  What a runtime template imports from here — `component/1,2`, `captcha/1`, `t/1,2` and
-  `csp_nonce/0` — less any name its own `helpers` already define.
+  What a runtime template imports from here — `component/1,2`, `captcha/1`, `rich_content/1`,
+  `t/1,2` and `csp_nonce/0` — less any name its own `helpers` already define.
 
   Every compiler — component, page and layout — asks this rather than writing the list itself, so
   the three cannot drift. The exception is not hypothetical: importing a `t/1` into a module that
@@ -94,6 +97,29 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
       <.captcha form={f} for="sign_in" tenant={assigns[:current_tenant]} />
   """
   defdelegate captcha(assigns), to: MishkaCmsCore.Captcha.Widget
+
+  @doc """
+  Stored HTML with the components its markers name drawn in place — a post's body, say.
+
+      <.rich_content
+        id={"\#{@id}-body"}
+        html={@body}
+        site={site_name()}
+        current_user={@current_user}
+      />
+
+    * `html` — sanitized HTML; it is drawn as it is given, markers aside.
+    * `site` — the site's name, as `<.component site="…">` takes it. A marker names the site's own
+      component, else the global one of that name. `nil` reaches the global ones alone.
+    * `id` — what a stateful component's id starts with, `"content"` when not given; unique on the
+      page when two of these draw content.
+    * `current_user` — handed to a component that declares a `current_user` attribute.
+
+  A marker that names nothing this site may draw is drawn as nothing. See
+  `MishkaCmsCore.Runtime.ContentComponents` for the marker and its rules.
+  """
+  @spec rich_content(map()) :: Phoenix.LiveView.Rendered.t()
+  def rich_content(assigns), do: ContentComponents.draw(assigns, :live)
 
   @doc """
   `key` in the language this page is being answered in — the runtime counterpart of `gettext/1`,
@@ -154,6 +180,23 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     result = fun.()
     :ok = Translations.put_site(previous)
     result
+  end
+
+  @doc """
+  The module `component/1` draws for `name` of the site named `site`, built on first use — or
+  `:error` where it draws nothing: a name nothing answers to, an inactive component, another site's.
+
+  For a caller that must know before it draws, as `rich_content/1` does to cast a marker's
+  attributes to what the component declares.
+  """
+  @spec resolve_component(String.t(), String.t() | nil) :: {:ok, module()} | :error
+  def resolve_component(name, site) do
+    module = Helpers.module_name(name, site, "Component")
+
+    case reachable(name, site, module) do
+      true -> {:ok, module}
+      _unreachable -> :error
+    end
   end
 
   defp site_id(site) do

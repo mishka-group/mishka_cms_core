@@ -1,0 +1,497 @@
+defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
+  @moduledoc """
+  Markers in content drawn as the components they name — `rich_content/1` on a page, in a preview
+  and inside a LiveView — and the list the editor's picker offers.
+
+  The components are real rows compiled by the runtime on first use, on a site this process renders
+  for, as a page on it would. Reading the marker itself is `MishkaCmsCore.Runtime.ContentComponentsTest`.
+
+  `async: false` — `SiteState`, compiled modules and the event registry are process-global.
+  """
+  use MishkaCmsCore.DataCase, async: false
+
+  import Phoenix.LiveViewTest
+
+  alias MishkaCmsCore.Runtime.{ContentComponents, LiveViewHelpers, StaticHelpers, Translations}
+  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
+  alias MishkaCmsCore.Runtime.States.{CompileFailureState, SiteState}
+  alias MishkaCmsCore.Test.Plugins.ContentComponentBeforeDraw
+
+  @moduletag :integration
+
+  @endpoint MishkaCmsCore.TestEndpoint
+
+  @note_attrs [
+    %{"name" => "title", "type" => "string", "opts" => %{"default" => nil}},
+    %{"name" => "count", "type" => "integer", "opts" => %{"default" => 0}},
+    %{"name" => "open", "type" => "boolean", "opts" => %{"default" => false}},
+    %{
+      "name" => "size",
+      "type" => "string",
+      "opts" => %{"default" => "small", "values" => ["small", "large"]}
+    },
+    %{"name" => "rest", "type" => "global", "opts" => %{}}
+  ]
+
+  @note_template ~S|<aside class="probe-note" data-title={@title} data-count={@count} data-open={to_string(@open)} data-size={@size} {@rest}>{render_slot(@inner_block)}</aside>|
+
+  setup do
+    n = System.unique_integer([:positive])
+    site = site!("content-#{n}")
+    :ok = Translations.put_site(site.id)
+
+    {:ok, site: site, n: n}
+  end
+
+  defp site!(name) do
+    site = create_site!(name: name, host: "#{name}.test")
+
+    :ok =
+      SiteState.save(%{id: site.id, name: site.name, host: site.host, priority: 0, active: true})
+
+    on_exit(fn -> SiteState.delete(site.id) end)
+    site
+  end
+
+  # WHAT THE COMPILE WORKER DOES FOR AN ACTIVE COMPONENT, which `testing: :manual` never runs: its
+  # name goes into `SiteState`, the names a marker is checked against.
+  defp known!(%{active: true} = component) do
+    :ok = SiteState.put_component(component.site_id, component.name)
+    on_exit(fn -> SiteState.delete_component(component.site_id, component.name) end)
+    component
+  end
+
+  defp known!(component), do: component
+
+  defp note!(site, name, opts \\ []) do
+    [
+      name: name,
+      template: @note_template,
+      attrs: @note_attrs,
+      slots: [%{"name" => "inner_block", "opts" => %{}}],
+      active: true,
+      precompile: false,
+      site_id: site && site.id
+    ]
+    |> Keyword.merge(opts)
+    |> create_component!()
+    |> known!()
+  end
+
+  defp live!(site, name) do
+    known!(
+      create_component!(
+        name: name,
+        site_id: site.id,
+        stateful: true,
+        active: true,
+        template: ~s(<div id={@id} {@rest} data-role="probe-live">{@label}</div>),
+        attrs: [
+          %{"name" => "label", "type" => "string", "opts" => %{"default" => "cold"}},
+          %{"name" => "rest", "type" => "global", "opts" => %{}}
+        ],
+        helpers: [
+          %{
+            "name" => "mount",
+            "args" => "socket",
+            "code" => "{:ok, Phoenix.Component.assign(socket, :n, 0)}"
+          }
+        ]
+      )
+    )
+  end
+
+  defp draw(html, site),
+    do: %{html: html, site: site} |> LiveViewHelpers.rich_content() |> to_html()
+
+  defp preview(html, site),
+    do: %{html: html, site: site} |> StaticHelpers.rich_content() |> to_html()
+
+  defp to_html(rendered), do: rendered |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+
+  # The module name the runtime would make for `name` on `site`, spelt out as a string so that
+  # asking about it makes no atom — `Helpers.module_name/3`'s hash.
+  defp module_string(name, site) do
+    hash = :md5 |> :crypto.hash(name <> site) |> Base.encode16(case: :lower)
+    "Elixir.MishkaCmsCore.Runtime.#{hash}.Component"
+  end
+
+  defp query(html, selector), do: html |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
+
+  defp attribute(html, selector, name),
+    do: html |> query(selector) |> LazyHTML.attribute(name) |> List.first()
+
+  defp register_plugin(module, event) do
+    {:ok, _} =
+      MishkaInstaller.Event.Event.write(%{
+        name: module,
+        event: event,
+        extension: :mishka_installer,
+        status: :started
+      })
+
+    :ok = MishkaInstaller.Event.EventHandler.do_compile(event, :start, false)
+    on_exit(fn -> MishkaInstaller.Event.Event.unregister(:name, module, false) end)
+  end
+
+  describe "rich_content/1 — a marker drawn as its component" do
+    test "draws the component with its cast attributes and its inner content", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s(<p>Before</p>[[component note-#{n} title="Heads up" count="3" open size="large" phx-click="boom" onclick="x"]]Body <b>bold</b>[[/component]]<p>After</p>),
+          site.name
+        )
+
+      assert attribute(html, ".probe-note", "data-title") == "Heads up"
+      assert attribute(html, ".probe-note", "data-count") == "3"
+      assert attribute(html, ".probe-note", "data-open") == "true"
+      assert attribute(html, ".probe-note", "data-size") == "large"
+      assert html |> query(".probe-note b") |> LazyHTML.text() == "bold"
+      assert html =~ "<p>Before</p>"
+      assert html =~ "<p>After</p>"
+
+      refute html =~ "[[component"
+      refute html =~ "phx-click"
+      refute html =~ "onclick"
+    end
+
+    test "a value that does not cast leaves the component's default", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      html = draw(~s([[component note-#{n} count="many" size="huge" /]]), site.name)
+
+      assert attribute(html, ".probe-note", "data-count") == "0"
+      assert attribute(html, ".probe-note", "data-size") == "small"
+    end
+
+    test "a self-closing marker hands an empty inner block", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      html = draw(~s([[component note-#{n} /]]), site.name)
+
+      assert html |> query(".probe-note") |> LazyHTML.text() == ""
+    end
+
+    test "a global component is drawn on any site", %{site: site, n: n} do
+      note!(nil, "shared-note-#{n}")
+
+      assert draw(~s([[component shared-note-#{n} title="g" /]]), site.name) =~ "probe-note"
+      assert draw(~s([[component shared-note-#{n} title="g" /]]), nil) =~ "probe-note"
+    end
+
+    test "the site's own component wins over the global one of its name", %{site: site, n: n} do
+      note!(nil, "both-#{n}", template: ~s(<i class="probe-global">global</i>))
+      note!(site, "both-#{n}", template: ~s(<i class="probe-own">own</i>))
+
+      html = draw("[[component both-#{n} /]]", site.name)
+
+      assert html =~ "probe-own"
+      refute html =~ "probe-global"
+    end
+
+    test "content with no marker is drawn as it is", %{site: site} do
+      html = "<p>Plain <b>post</b></p>"
+
+      assert draw(html, site.name) == html
+    end
+
+    # WHOEVER STORES CONTENT SANITIZES IT, ONCE, when it is written. Scrubbing it again here cost a
+    # code-heavy post ~150 ms a view, so the HTML around a marker is drawn byte for byte — markup a
+    # sanitizer would change included.
+    test "the HTML around a marker is drawn byte for byte, never sanitized again", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "note-#{n}", template: ~s(<i class="probe">x</i>))
+      before = ~s(<p><font data-probe="kept">a</font></p>\n<pre class="hl"><span>b</span></pre>)
+      after_marker = ~s(<marquee>c</marquee>)
+
+      assert draw(before <> "[[component note-#{n} /]]" <> after_marker, site.name) ==
+               before <> ~s(<i class="probe">x</i>) <> after_marker
+    end
+
+    test "a marker inside <code> stays text", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      html = draw(~s(<code>[[component note-#{n} /]]</code>), site.name)
+
+      assert html == ~s(<code>[[component note-#{n} /]]</code>)
+    end
+  end
+
+  describe "rich_content/1 — what is drawn as nothing" do
+    test "a name nothing answers to", %{site: site, n: n} do
+      assert draw(~s(<p>a</p>[[component nothing-#{n} /]]<p>b</p>), site.name) ==
+               "<p>a</p><p>b</p>"
+    end
+
+    test "an inactive component", %{site: site, n: n} do
+      note!(site, "off-#{n}", active: false)
+
+      assert draw("[[component off-#{n} /]]", site.name) == ""
+    end
+
+    test "another site's component, named from this site's content", %{site: site, n: n} do
+      other = site!("content-other-#{n}")
+      note!(other, "theirs-#{n}")
+
+      assert draw("[[component theirs-#{n} /]]", other.name) == ""
+      assert draw("[[component theirs-#{n} /]]", site.name) == ""
+    end
+
+    test "a component that draws content itself", %{site: site, n: n} do
+      known!(
+        create_component!(
+          name: "drawer-#{n}",
+          site_id: site.id,
+          active: true,
+          template:
+            ~s(<div class="probe-drawer"><.rich_content html={@body} site={@site} /></div>),
+          attrs: [%{"name" => "body", "type" => "string", "opts" => %{"default" => ""}}]
+        )
+      )
+
+      assert draw(~s([[component drawer-#{n} body="x" /]]), site.name) == ""
+    end
+
+    # A NAME AN AUTHOR TYPED IS A STRING UNTIL THE SITE IS KNOWN TO HAVE IT. A module name is an
+    # atom, and atoms are never collected — so a name no active component has makes none, and leaves
+    # no failure behind to remember it by.
+    test "a name no component has, without making an atom or remembering it", %{
+      site: site,
+      n: n
+    } do
+      name = "typed-by-an-author-#{n}"
+      [site_module, global_module] = Enum.map([site.name, "Global"], &module_string(name, &1))
+
+      assert draw("[[component #{name} /]]", site.name) == ""
+      assert preview("[[component #{name} /]]", site.name) =~ name
+
+      for module <- [site_module, global_module] do
+        assert_raise ArgumentError, fn -> String.to_existing_atom(module) end
+      end
+
+      refute Enum.any?(CompileFailureState.matching(:_), fn {key, _reason} ->
+               inspect(key) =~ name
+             end)
+    end
+
+    test "a row that exists but whose name the site does not know yet", %{site: site, n: n} do
+      create_component!(
+        name: "unlisted-#{n}",
+        site_id: site.id,
+        active: true,
+        template: ~s(<i class="probe-unlisted">x</i>)
+      )
+
+      assert draw("[[component unlisted-#{n} /]]", site.name) == ""
+    end
+
+    test "a component missing an attribute it requires", %{site: site, n: n} do
+      note!(site, "strict-#{n}",
+        attrs: [%{"name" => "title", "type" => "string", "opts" => %{"required" => true}}],
+        template: ~s(<p class="probe-strict">{@title}</p>)
+      )
+
+      assert draw("[[component strict-#{n} /]]", site.name) == ""
+      assert draw(~s([[component strict-#{n} title="ok" /]]), site.name) =~ "probe-strict"
+    end
+  end
+
+  describe "rich_content/1 in a preview" do
+    test "says why a marker draws nothing", %{site: site, n: n} do
+      html = preview("[[component nothing-#{n} /]]", site.name)
+
+      assert [_notice] =
+               html |> query(~s([data-role="content-component-unavailable"])) |> Enum.to_list()
+
+      assert html =~ "nothing-#{n}"
+    end
+
+    test "draws a stateful component cold", %{site: site, n: n} do
+      live!(site, "live-#{n}")
+
+      html = preview(~s([[component live-#{n} label="warm" /]]), site.name)
+
+      assert attribute(html, ~s([data-role="probe-live"]), "id") == "content-0"
+      assert html |> query(~s([data-role="probe-live"])) |> LazyHTML.text() == "warm"
+    end
+  end
+
+  describe "runtime:render:before_content_component" do
+    setup do
+      register_plugin(ContentComponentBeforeDraw, "runtime:render:before_content_component")
+    end
+
+    test "a plugin changes what a marker draws", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s([[component note-#{n} title="first" /]][[component note-#{n} title="second" /]]),
+          site.name
+        )
+
+      assert html |> query(".probe-note") |> LazyHTML.attribute("data-title") ==
+               ["FIRST-0", "SECOND-1"]
+    end
+
+    test "and refuses one", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s([[component note-#{n} title="refuse" /]][[component note-#{n} title="kept" /]]),
+          site.name
+        )
+
+      assert html |> query(".probe-note") |> LazyHTML.attribute("data-title") == ["KEPT-1"]
+    end
+  end
+
+  defmodule Host do
+    use Phoenix.LiveView
+
+    import MishkaCmsCore.Runtime.LiveViewHelpers, only: [rich_content: 1]
+
+    def mount(_params, session, socket) do
+      :ok = MishkaCmsCore.Runtime.Translations.put_site(session["site_id"])
+      {:ok, assign(socket, html: session["html"], site: session["site"])}
+    end
+
+    def handle_info({:html, html}, socket), do: {:noreply, assign(socket, :html, html)}
+
+    def render(assigns) do
+      ~H"""
+      <div id="host"><.rich_content id="post-body" html={@html} site={@site} /></div>
+      """
+    end
+  end
+
+  describe "rich_content/1 on a live page" do
+    defp mount_page(site, html) do
+      {:ok, view, _html} =
+        live_isolated(Phoenix.ConnTest.build_conn(), Host,
+          session: %{"html" => html, "site" => site.name, "site_id" => site.id}
+        )
+
+      view
+    end
+
+    test "draws a stateful component as a live component, its id from its place", %{
+      site: site,
+      n: n
+    } do
+      live!(site, "live-#{n}")
+      note!(site, "note-#{n}")
+
+      view =
+        mount_page(
+          site,
+          ~s(<p>Intro</p>[[component note-#{n} title="n" /]][[component live-#{n} label="first" /]][[component live-#{n} label="second" /]])
+        )
+
+      assert has_element?(view, "#host .probe-note[data-title='n']")
+      assert view |> element("#post-body-1") |> render() =~ "first"
+      assert view |> element("#post-body-2") |> render() =~ "second"
+      assert has_element?(view, "#host p", "Intro")
+    end
+
+    test "keeps each live component's id when the content around it changes", %{
+      site: site,
+      n: n
+    } do
+      live!(site, "live-#{n}")
+      view = mount_page(site, ~s([[component live-#{n} label="kept" /]]))
+
+      send(view.pid, {:html, ~s(<p>New intro</p>[[component live-#{n} label="kept" /]])})
+
+      assert has_element?(view, "#post-body-0", "kept")
+      assert has_element?(view, "#host p", "New intro")
+    end
+  end
+
+  # THE STYLESHEET IS BUILT FROM WHAT A SITE REACHES, and the components content names are in no
+  # template: whoever stores content says which, when the stylesheet is built.
+  describe "TailwindCompiler.content_components/1" do
+    test "is what the stored content of the site says it names", %{site: site} do
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
+        "runtime:compile:content_components"
+      )
+
+      assert TailwindCompiler.content_components(site.name) ==
+               ["probe-from-content", "probe-from-content-#{site.name}"]
+    end
+
+    test "is nothing for a site that is not there, or that nothing answers for", %{site: site} do
+      assert TailwindCompiler.content_components(site.name) == []
+      assert TailwindCompiler.content_components("no-such-site") == []
+    end
+  end
+
+  describe "embeddable/2 — what the editor offers" do
+    test "lists the site's active components and the global ones, with what a marker sets", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "pick-own-#{n}")
+      note!(nil, "pick-shared-#{n}")
+      note!(site, "pick-off-#{n}", active: false)
+      other = site!("content-elsewhere-#{n}")
+      note!(other, "pick-theirs-#{n}")
+
+      create_component!(
+        name: "pick-drawer-#{n}",
+        site_id: site.id,
+        active: true,
+        template: ~s(<div><.rich_content html={@body} /></div>),
+        attrs: [%{"name" => "body", "type" => "string", "opts" => %{"default" => ""}}]
+      )
+
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+
+      assert {:ok, entries} = ContentComponents.embeddable(master, site.id)
+      names = entries |> Enum.map(& &1.name) |> Enum.filter(&String.ends_with?(&1, "-#{n}"))
+
+      assert Enum.sort(names) == Enum.sort(["pick-own-#{n}", "pick-shared-#{n}"])
+
+      own = Enum.find(entries, &(&1.name == "pick-own-#{n}"))
+
+      assert own.inner_block
+      refute own.global
+      assert Enum.map(own.attrs, & &1.name) == ["title", "count", "open", "size"]
+      assert Enum.find(own.attrs, &(&1.name == "size")).values == ["small", "large"]
+    end
+
+    test "a site user is offered its own site's and the global ones", %{site: site, n: n} do
+      note!(site, "mine-#{n}")
+      note!(nil, "ours-#{n}")
+      other = site!("content-neighbour-#{n}")
+      note!(other, "not-mine-#{n}")
+
+      user = create_user_with_permissions!(["admin:dashboard:*"], site_id: site.id)
+
+      assert {:ok, entries} = ContentComponents.embeddable(user, site.id)
+      names = entries |> Enum.map(& &1.name) |> Enum.filter(&String.ends_with?(&1, "-#{n}"))
+
+      assert Enum.sort(names) == Enum.sort(["mine-#{n}", "ours-#{n}"])
+
+      assert {:ok, theirs} = ContentComponents.embeddable(user, other.id)
+      refute Enum.any?(theirs, &(&1.name == "not-mine-#{n}"))
+    end
+
+    test "with no site, the global ones alone", %{site: site, n: n} do
+      note!(site, "local-#{n}")
+      note!(nil, "everywhere-#{n}")
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+
+      assert {:ok, entries} = ContentComponents.embeddable(master, nil)
+      names = entries |> Enum.map(& &1.name) |> Enum.filter(&String.ends_with?(&1, "-#{n}"))
+
+      assert names == ["everywhere-#{n}"]
+    end
+  end
+end
