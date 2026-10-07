@@ -24,6 +24,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     MishkaCmsCore.Runtime.States.SiteState,
     MishkaCmsCore.Runtime.States.SettingsState,
     MishkaCmsCore.Runtime.States.TranslationsState,
+    MishkaCmsCore.Runtime.States.RedirectsState,
     MishkaCmsCore.Runtime.States.ViewerState,
     MishkaCmsCore.Runtime.States.RateLimitState,
     MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,

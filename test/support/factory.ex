@@ -306,6 +306,16 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  # Redirect factory — a rule is always a site's own.
+  def create_redirect!(overrides \\ []) do
+    {site_id, overrides} = Keyword.pop(overrides, :site_id)
+    site_id = site_id || create_site!().id
+
+    overrides
+    |> redirect(site_id)
+    |> generate()
+  end
+
   # Media factory
   def create_media!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

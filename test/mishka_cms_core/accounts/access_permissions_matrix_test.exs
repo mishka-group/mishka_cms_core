@@ -55,7 +55,7 @@ defmodule MishkaCmsCore.Accounts.AccessPermissionsMatrixTest do
     "admin:dashboard:blog:post"
   ]
 
-  @runtime_sections ~w(site page layout component error_page stylesheet js_hook media translation activity)
+  @runtime_sections ~w(site page layout component error_page stylesheet js_hook media translation redirect activity)
 
   @dashboard %{}
   @api %{shared: %{admin_surface: :api}}

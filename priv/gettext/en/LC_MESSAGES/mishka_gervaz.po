@@ -3619,3 +3619,78 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Confirm this account's email address without the confirmation email?"
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:37
+#, elixir-autogen, elixir-format
+msgid "301 Moved permanently"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:38
+#, elixir-autogen, elixir-format
+msgid "302 Found"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:39
+#, elixir-autogen, elixir-format
+msgid "307 Temporary"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:40
+#, elixir-autogen, elixir-format
+msgid "308 Permanent"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:405
+#, elixir-autogen, elixir-format
+msgid "A path on this site, or a full http(s) address. A visitor's query string is kept when this has none."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:239
+#, elixir-autogen, elixir-format
+msgid "Any status"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:315
+#, elixir-autogen, elixir-format
+msgid "Archive selected redirects?"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:264
+#, elixir-autogen, elixir-format
+msgid "Archive this redirect?"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:354
+#, elixir-autogen, elixir-format
+msgid "No redirects yet"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:330
+#, elixir-autogen, elixir-format
+msgid "Permanently delete selected redirects? This cannot be undone."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:294
+#, elixir-autogen, elixir-format
+msgid "Permanently delete this redirect? This cannot be undone."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:131
+#, elixir-autogen, elixir-format
+msgid "Redirect"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:322
+#, elixir-autogen, elixir-format
+msgid "Restore selected redirects?"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:278
+#, elixir-autogen, elixir-format
+msgid "Restore this redirect?"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:388
+#, elixir-autogen, elixir-format
+msgid "The address still being asked for. A full address works too: only its path is kept."
+msgstr ""

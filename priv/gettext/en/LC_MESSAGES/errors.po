@@ -1491,3 +1491,49 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "The state names %{name} twice; each name is one assign."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:187
+#, elixir-autogen, elixir-format
+msgid "A redirect cannot send an address to itself."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:524
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:538
+#, elixir-autogen, elixir-format
+msgid "Cannot edit an archived redirect. Restore it first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:139
+#, elixir-autogen, elixir-format
+msgid "Enter a path on this site starting with /, or a full http:// or https:// address."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:134
+#, elixir-autogen, elixir-format
+msgid "Enter an address on this site, such as /old-page."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:73
+#, elixir-autogen, elixir-format
+msgid "Status must be 301, 302, 307 or 308."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:661
+#, elixir-autogen, elixir-format
+msgid "This redirect is not archived."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:807
+#, elixir-autogen, elixir-format
+msgid "This site already redirects that address."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:214
+#, elixir-autogen, elixir-format
+msgid "This would make a loop: the redirects from %{target} come back to %{path}."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:166
+#, elixir-autogen, elixir-format
+msgid "This address belongs to the CMS itself (/admin, /api, /live) and cannot be redirected."
+msgstr ""
