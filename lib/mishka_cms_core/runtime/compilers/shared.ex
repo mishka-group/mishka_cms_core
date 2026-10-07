@@ -62,9 +62,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.Shared do
   """
   @spec site_css_href(String.t()) :: String.t() | nil
   def site_css_href(site_name) do
-    case MishkaCmsCore.Runtime.States.AssetsState.get!(site_name, "css") do
-      %{hash: hash} when is_binary(hash) and hash != "" -> "/assets/css/#{site_name}/#{hash}.css"
-      _other -> nil
+    case MishkaCmsCore.Runtime.States.AssetsState.hash(site_name, "css") do
+      hash when is_binary(hash) and hash != "" -> "/assets/css/#{site_name}/#{hash}.css"
+      _none -> nil
     end
   end
 
@@ -75,9 +75,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.Shared do
   """
   @spec site_js_href(String.t()) :: String.t() | nil
   def site_js_href(site_name) do
-    case MishkaCmsCore.Runtime.States.AssetsState.get!(site_name, "js") do
-      %{hash: hash} when is_binary(hash) and hash != "" -> "/assets/js/#{site_name}/#{hash}.js"
-      _other -> nil
+    case MishkaCmsCore.Runtime.States.AssetsState.hash(site_name, "js") do
+      hash when is_binary(hash) and hash != "" -> "/assets/js/#{site_name}/#{hash}.js"
+      _none -> nil
     end
   end
 end

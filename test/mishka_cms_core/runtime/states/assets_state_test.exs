@@ -271,6 +271,61 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
     end
   end
 
+  describe "hash/2 and updated_at/2" do
+    setup do
+      AssetsState.save(%{
+        id: "test_site",
+        type: "css",
+        value: String.duplicate("a", 4096),
+        hash: "abc123",
+        updated_at: ~U[2024-01-01 10:00:00Z]
+      })
+
+      :ok
+    end
+
+    test "answer the field alone" do
+      assert AssetsState.hash("test_site", "css") == "abc123"
+      assert AssetsState.updated_at("test_site", "css") == ~U[2024-01-01 10:00:00Z]
+    end
+
+    test "answer nil for an asset that was never compiled" do
+      assert AssetsState.hash("test_site", "js") == nil
+      assert AssetsState.hash("nonexistent", "css") == nil
+      assert AssetsState.updated_at("nonexistent", "css") == nil
+    end
+  end
+
+  describe "the site bundle's address" do
+    alias MishkaCmsCore.Runtime.Compilers.Shared
+
+    test "is nil before the site's first compile, so no page links an empty hash" do
+      assert Shared.site_css_href("fresh_site") == nil
+      assert Shared.site_js_href("fresh_site") == nil
+    end
+
+    test "is nil for an empty hash" do
+      AssetsState.save(%{id: "fresh_site", type: "css", value: "", hash: "", updated_at: nil})
+
+      assert Shared.site_css_href("fresh_site") == nil
+    end
+
+    test "carries the hash once the bundle exists" do
+      for type <- ["css", "js"] do
+        AssetsState.save(%{
+          id: "fresh_site",
+          type: type,
+          value: "",
+          hash: "h#{type}",
+          updated_at: nil
+        })
+      end
+
+      assert Shared.site_css_href("fresh_site") == "/assets/css/fresh_site/hcss.css"
+      assert Shared.site_js_href("fresh_site") == "/assets/js/fresh_site/hjs.js"
+    end
+  end
+
   describe "get_by_site/1" do
     setup do
       assets = [
