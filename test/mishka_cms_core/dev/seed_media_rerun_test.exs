@@ -22,6 +22,8 @@ defmodule MishkaCmsCore.Dev.SeedMediaRerunTest do
   alias MishkaCmsCore.Dev.SeedMedia
   alias MishkaCmsCore.Runtime.{Media, MediaCategory}
 
+  require Ash.Query
+
   # A SEEDED LIBRARY IS FILES, AND THE SANDBOX CANNOT ROLL A FILE BACK. Both directories, because
   # archiving a picture MOVES it: `uploads_archived` is where the one the admin threw away goes, and
   # a run that only took the live directory back left it in the working tree.
@@ -142,7 +144,8 @@ defmodule MishkaCmsCore.Dev.SeedMediaRerunTest do
   # A CATEGORY IS ASKED FOR ONLY WHERE THERE IS A FILE TO PUT IN IT. Made unconditionally, the run
   # that has nothing to add still found no live "banners" — an archived one does not count, since a
   # new picture cannot be filed in a category the admin threw away — and made a second empty one,
-  # every single run.
+  # every single run. A folder is archived only once it is empty, so the admin moves the banners
+  # out to the top level first.
   test "a category the admin archived is not made again when nothing needs one", %{site: site} do
     SeedMedia.install(site.id)
     before = census(site.id)
@@ -151,6 +154,11 @@ defmodule MishkaCmsCore.Dev.SeedMediaRerunTest do
       MediaCategory
       |> Ash.read!(tenant: site.id, authorize?: false, page: false)
       |> Enum.find(&(&1.name == "banners"))
+
+    Media
+    |> Ash.Query.filter(media_category_id == ^banners.id)
+    |> Ash.read!(tenant: site.id, authorize?: false, page: false)
+    |> Enum.each(&Ash.update!(&1, %{media_category_id: nil}, tenant: site.id, authorize?: false))
 
     Ash.destroy!(banners, tenant: site.id, authorize?: false)
 

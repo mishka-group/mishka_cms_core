@@ -1642,11 +1642,6 @@ msgstr ""
 msgid "Add"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:40
-#, elixir-autogen, elixir-format
-msgid "Add Category"
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:46
 #, elixir-autogen, elixir-format
 msgid "Add Permission"
@@ -1810,11 +1805,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/templates/studio_snippets.ex:40
 #, elixir-autogen, elixir-format
 msgid "All"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:108
-#, elixir-autogen, elixir-format
-msgid "All Media"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:92
@@ -1999,19 +1989,9 @@ msgstr ""
 msgid "Archived here"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:210
-#, elixir-autogen, elixir-format
-msgid "Are you sure you want to archive this category?"
-msgstr ""
-
 #: lib/mishka_cms_core_web/templates/version_history.ex:263
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this version? Current data will be replaced."
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:331
-#, elixir-autogen, elixir-format
-msgid "Are you sure? This will permanently delete this category and cannot be undone."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:99
@@ -2510,26 +2490,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:5722
 #, elixir-autogen, elixir-format
 msgid "Cast the shadow inside the element instead of behind it"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:31
-#, elixir-autogen, elixir-format
-msgid "Categories"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.ex:151
-#, elixir-autogen, elixir-format
-msgid "Category archived successfully"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.ex:223
-#, elixir-autogen, elixir-format
-msgid "Category permanently deleted"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.ex:198
-#, elixir-autogen, elixir-format
-msgid "Category restored successfully"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/tree/styles.ex:337
@@ -4179,16 +4139,6 @@ msgstr ""
 msgid "Failed Dependency"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:274
-#, elixir-autogen, elixir-format
-msgid "Failed to load archived categories"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:75
-#, elixir-autogen, elixir-format
-msgid "Failed to load categories"
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:428
 #, elixir-autogen, elixir-format
 msgid "Failed to load preview"
@@ -5628,11 +5578,6 @@ msgstr ""
 msgid "Load more"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:247
-#, elixir-autogen, elixir-format
-msgid "Load more categories"
-msgstr ""
-
 #: lib/mishka_cms_core_web/templates/studio_snippets.ex:142
 #, elixir-autogen, elixir-format
 msgid "Load more snippets"
@@ -5646,16 +5591,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/runtime_status_timeline.ex:291
 #, elixir-autogen, elixir-format
 msgid "Loaded"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:269
-#, elixir-autogen, elixir-format
-msgid "Loading archived categories..."
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:71
-#, elixir-autogen, elixir-format
-msgid "Loading categories..."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/site_details_modal.ex:262
@@ -6315,11 +6250,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/site_health_panel.ex:178
 #, elixir-autogen, elixir-format
 msgid "No activity yet."
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:294
-#, elixir-autogen, elixir-format
-msgid "No archived categories"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10205
@@ -11085,11 +11015,6 @@ msgstr ""
 msgid "View more info"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:259
-#, elixir-autogen, elixir-format
-msgid "Viewing archived categories"
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/page_builder/conditions.ex:46
 #, elixir-autogen, elixir-format
 msgid "Visitor is signed in"
@@ -14726,4 +14651,132 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/runtime_status.ex:174
 #, elixir-autogen, elixir-format
 msgid "Not in the js bundle of %{sites}, so no page there can run it. %{reason}"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:39
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:43
+#, elixir-autogen, elixir-format
+msgid "All media"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:231
+#, elixir-autogen, elixir-format
+msgid "Are you sure you want to archive this folder?"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:352
+#, elixir-autogen, elixir-format
+msgid "Are you sure? This will permanently delete this folder and cannot be undone."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:295
+#, elixir-autogen, elixir-format
+msgid "Could not load archived folders"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.ex:181
+#, elixir-autogen, elixir-format
+msgid "Folder archived."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.ex:252
+#, elixir-autogen, elixir-format
+msgid "Folder deleted for good."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:229
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:29
+#, elixir-autogen, elixir-format
+msgid "Folder path"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.ex:231
+#, elixir-autogen, elixir-format
+msgid "Folder restored."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:332
+#, elixir-autogen, elixir-format
+msgid "It is already here."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:268
+#, elixir-autogen, elixir-format
+msgid "Load more folders"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:290
+#, elixir-autogen, elixir-format
+msgid "Loading archived folders..."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:122
+#, elixir-autogen, elixir-format
+msgid "Loading folders..."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:222
+#, elixir-autogen, elixir-format
+msgid "Move"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:350
+#, elixir-autogen, elixir-format
+msgid "Move here"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:216
+#, elixir-autogen, elixir-format
+msgid "Move “%{name}”"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:183
+#, elixir-autogen, elixir-format
+msgid "Moved “%{name}” to %{folder}."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:190
+#, elixir-autogen, elixir-format
+msgid "Moved “%{name}” to the top level."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:91
+#, elixir-autogen, elixir-format
+msgid "New folder here"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:315
+#, elixir-autogen, elixir-format
+msgid "No archived folders"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:285
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:160
+#, elixir-autogen, elixir-format
+msgid "No folders in here."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/media_move.ex:222
+#, elixir-autogen, elixir-format
+msgid "Open the folder it goes in, then press Move here."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:202
+#, elixir-autogen, elixir-format
+msgid "Rename"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:49
+#, elixir-autogen, elixir-format
+msgid "That folder is no longer in the library."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:148
+#, elixir-autogen, elixir-format
+msgid "Up one level"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:280
+#, elixir-autogen, elixir-format
+msgid "Viewing archived folders"
 msgstr ""

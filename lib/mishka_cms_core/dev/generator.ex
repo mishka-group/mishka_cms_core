@@ -296,6 +296,7 @@ defmodule MishkaCmsCore.Dev.Generator do
       defaults: [
         name: sequence(:name, &"Test Media Category #{&1}"),
         description: sequence(:description, &"Test media category description #{&1}"),
+        parent_id: nil,
         site_id: nil
       ],
       overrides: opts,

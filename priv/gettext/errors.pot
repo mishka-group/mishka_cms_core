@@ -269,17 +269,6 @@ msgstr ""
 msgid "layout"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:967
-#: lib/mishka_cms_core/runtime/resources/media.ex:988
-#: lib/mishka_cms_core/runtime/resources/media.ex:1092
-#: lib/mishka_cms_core/runtime/resources/media.ex:1111
-#: lib/mishka_cms_core/runtime/resources/media.ex:1135
-#: lib/mishka_cms_core/runtime/resources/media.ex:1160
-#: lib/mishka_cms_core/runtime/resources/media.ex:1556
-#, elixir-autogen
-msgid "media category"
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/page_comment.ex:303
 #: lib/mishka_cms_core/runtime/resources/page_comment.ex:346
 #, elixir-autogen
@@ -454,12 +443,6 @@ msgstr ""
 msgid "Cannot edit archived layout. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:226
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:246
-#, elixir-autogen, elixir-format
-msgid "Cannot edit archived media category. Please unarchive it first."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/media.ex:1138
 #: lib/mishka_cms_core/runtime/resources/media.ex:1163
 #, elixir-autogen, elixir-format
@@ -591,13 +574,6 @@ msgstr ""
 msgid "Cannot restore version of archived layout. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:552
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:594
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:674
-#, elixir-autogen, elixir-format
-msgid "Cannot restore version of archived media category. Please unarchive it first."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/media.ex:1543
 #: lib/mishka_cms_core/runtime/resources/media.ex:1591
 #: lib/mishka_cms_core/runtime/resources/media.ex:1667
@@ -686,16 +662,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1263
 #, elixir-autogen, elixir-format
 msgid "Layout is not archived."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:351
-#, elixir-autogen, elixir-format
-msgid "Media category is already archived."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:405
-#, elixir-autogen, elixir-format
-msgid "Media category is not archived."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/media.ex:1274
@@ -902,14 +868,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1858
 #, elixir-autogen, elixir-format
 msgid "Version does not belong to this layout."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:617
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:697
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:790
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:863
-#, elixir-autogen, elixir-format
-msgid "Version does not belong to this media category."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/media.ex:1614
@@ -1208,11 +1166,6 @@ msgstr ""
 msgid "Layout path must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media_category.ex:1089
-#, elixir-autogen, elixir-format
-msgid "Media category name must be unique within a site."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/media.ex:2153
 #, elixir-autogen, elixir-format
 msgid "Media name must be unique within a site."
@@ -1490,4 +1443,81 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/__validations/page_state_names.ex:52
 #, elixir-autogen, elixir-format
 msgid "The state names %{name} twice; each name is one assign."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/folder_parent.ex:36
+#, elixir-autogen, elixir-format
+msgid "A folder cannot go inside itself."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/folder_parent.ex:42
+#, elixir-autogen, elixir-format
+msgid "A folder cannot go inside one of its own folders."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:1166
+#, elixir-autogen, elixir-format
+msgid "Another folder in the same place already has this name."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:268
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:295
+#, elixir-autogen, elixir-format
+msgid "Cannot edit an archived folder. Restore it first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:613
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:664
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:744
+#, elixir-autogen, elixir-format
+msgid "Cannot restore a version of an archived folder. Restore the folder first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/folder_parent.ex:48
+#, elixir-autogen, elixir-format
+msgid "That folder could not be checked. Try again."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:687
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:767
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:859
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:931
+#, elixir-autogen, elixir-format
+msgid "That version is not one of this folder's."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:407
+#, elixir-autogen, elixir-format
+msgid "This folder is already archived."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:464
+#, elixir-autogen, elixir-format
+msgid "This folder is not archived."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/folder_is_empty.ex:36
+#, elixir-autogen, elixir-format
+msgid "This folder still holds files, archived ones included. Move them out or delete them for good first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/folder_is_empty.ex:28
+#, elixir-autogen, elixir-format
+msgid "This folder still holds other folders, archived ones included. Move them out or delete them for good first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media.ex:980
+#: lib/mishka_cms_core/runtime/resources/media.ex:1001
+#: lib/mishka_cms_core/runtime/resources/media.ex:1105
+#: lib/mishka_cms_core/runtime/resources/media.ex:1124
+#: lib/mishka_cms_core/runtime/resources/media.ex:1148
+#: lib/mishka_cms_core/runtime/resources/media.ex:1173
+#: lib/mishka_cms_core/runtime/resources/media.ex:1569
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:231
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:247
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:277
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:304
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:627
+#, elixir-autogen, elixir-format
+msgid "folder"
 msgstr ""

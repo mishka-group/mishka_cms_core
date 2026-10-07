@@ -6,6 +6,13 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
   to a specific site and can have multiple media files associated with it. Categories
   help organize and filter media content within the CMS.
 
+  A category is a folder, and a folder sits inside another one of its site through `parent_id`, or
+  at the top level when it has none. Its name is unique among the folders beside it, not across the
+  site. A folder never goes inside itself or one of its own subfolders, and is archived or deleted
+  only once nothing is left in it — not a file and not a folder, archived ones included. Moving a
+  folder moves everything under it: the folders below name it, not where it is. `trail/2` reads the
+  folders above one, and `:path_label` names a folder by them.
+
   Media categories feature full version control through PaperTrail integration, tracking all changes
   with snapshot-based history and the ability to restore previous versions. The resource
   implements soft deletion via archival and provides comprehensive metadata management
@@ -37,6 +44,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
   @admin_fields [
     :name,
     :description,
+    :parent_id,
     :site_id
   ]
 
@@ -49,10 +57,16 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
     references do
       reference :site, on_delete: :delete
+      reference :parent
     end
 
     # Database-level optimization for archived records
     base_filter_sql "(archived_at IS NULL)"
+
+    # A folder's subfolders are read by their parent, a master's across every site.
+    custom_indexes do
+      index [:parent_id], all_tenants?: true
+    end
 
     check_constraints do
       check_constraint :name, "name_length_check",
@@ -133,6 +147,24 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
           end
         end
 
+        # Left empty, the folder sits at the top level; changed on an edit, it moves the folder and
+        # everything inside it.
+        field :parent_id, :relation do
+          resource MishkaCmsCore.Runtime.MediaCategory
+          display_field &MishkaCmsCore.Runtime.MediaCategory.picker_label/1
+          search_field :name
+          mode :search
+          min_chars 1
+          page_size 15
+          depends_on :site_id
+          load &MishkaCmsCore.Runtime.MediaCategory.offer/2
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Inside folder") end
+            placeholder fn -> dgettext("mishka_gervaz", "Top level") end
+          end
+        end
+
         field :description do
           ui do
             label fn -> dgettext("mishka_gervaz", "Description") end
@@ -142,7 +174,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
       groups do
         group :basic_info do
-          fields [:name, :site_id, :description]
+          fields [:name, :site_id, :parent_id, :description]
 
           ui do
             columns 1
@@ -193,6 +225,11 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                field: :parent_id,
+                resource: MishkaCmsCore.Runtime.MediaCategory,
+                label: dgettext_noop("errors", "folder")}
+
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change slugify(:name, into: :name)
 
@@ -203,6 +240,11 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       validate present([:name, :site_id])
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                field: :parent_id,
+                resource: MishkaCmsCore.Runtime.MediaCategory,
+                label: dgettext_noop("errors", "folder")}
 
       change fn changeset, _context ->
         site_id = Ash.Changeset.get_attribute(changeset, :site_id)
@@ -225,9 +267,16 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       validate absent(:archived_at) do
         message dgettext_noop(
                   "errors",
-                  "Cannot edit archived media category. Please unarchive it first."
+                  "Cannot edit an archived folder. Restore it first."
                 )
       end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                field: :parent_id,
+                resource: MishkaCmsCore.Runtime.MediaCategory,
+                label: dgettext_noop("errors", "folder")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderParent, []}
 
       change slugify(:name, into: :name)
 
@@ -245,9 +294,16 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       validate absent(:archived_at) do
         message dgettext_noop(
                   "errors",
-                  "Cannot edit archived media category. Please unarchive it first."
+                  "Cannot edit an archived folder. Restore it first."
                 )
       end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                field: :parent_id,
+                resource: MishkaCmsCore.Runtime.MediaCategory,
+                label: dgettext_noop("errors", "folder")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderParent, []}
 
       change slugify(:name, into: :name)
 
@@ -348,11 +404,13 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
         if changeset.data.archived_at do
           {:error,
            field: :archived_at,
-           message: dgettext_noop("errors", "Media category is already archived.")}
+           message: dgettext_noop("errors", "This folder is already archived.")}
         else
           :ok
         end
       end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderIsEmpty, []}
     end
 
     destroy :master_destroy do
@@ -366,11 +424,13 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
         if changeset.data.archived_at do
           {:error,
            field: :archived_at,
-           message: dgettext_noop("errors", "Media category is already archived.")}
+           message: dgettext_noop("errors", "This folder is already archived.")}
         else
           :ok
         end
       end
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderIsEmpty, []}
 
       # Set tenant from record's site_id for version tracking
       change fn changeset, _context ->
@@ -401,8 +461,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       validate fn changeset, _context ->
         if is_nil(changeset.data.archived_at) do
           {:error,
-           field: :archived_at,
-           message: dgettext_noop("errors", "Media category is not archived.")}
+           field: :archived_at, message: dgettext_noop("errors", "This folder is not archived.")}
         else
           :ok
         end
@@ -417,6 +476,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       require_atomic? false
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderIsEmpty, []}
 
       description "Permanently removes media category and version history from database (tenant users) - use with extreme caution"
     end
@@ -427,6 +487,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       require_atomic? false
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderIsEmpty, []}
     end
 
     read :get_with_versions do
@@ -551,12 +612,21 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       validate absent(:archived_at) do
         message dgettext_noop(
                   "errors",
-                  "Cannot restore version of archived media category. Please unarchive it first."
+                  "Cannot restore a version of an archived folder. Restore the folder first."
                 )
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.MediaCategory.Version}
+
+      # A version can put the folder back inside one that has since been archived, or moved under
+      # it.
+      validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
+                field: :parent_id,
+                resource: MishkaCmsCore.Runtime.MediaCategory,
+                label: dgettext_noop("errors", "folder")}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.FolderParent, []}
     end
 
     action :restore_version_api, :struct do
@@ -593,7 +663,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                      message:
                        dgettext_noop(
                          "errors",
-                         "Cannot restore version of archived media category. Please unarchive it first."
+                         "Cannot restore a version of an archived folder. Restore the folder first."
                        )
                    )
                  ]
@@ -616,7 +686,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                            message:
                              dgettext_noop(
                                "errors",
-                               "Version does not belong to this media category."
+                               "That version is not one of this folder's."
                              )
                          )
                        ]
@@ -673,7 +743,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                      message:
                        dgettext_noop(
                          "errors",
-                         "Cannot restore version of archived media category. Please unarchive it first."
+                         "Cannot restore a version of an archived folder. Restore the folder first."
                        )
                    )
                  ]
@@ -696,7 +766,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                            message:
                              dgettext_noop(
                                "errors",
-                               "Version does not belong to this media category."
+                               "That version is not one of this folder's."
                              )
                          )
                        ]
@@ -786,8 +856,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                errors: [
                  Ash.Error.Changes.InvalidAttribute.exception(
                    field: :version_id,
-                   message:
-                     dgettext_noop("errors", "Version does not belong to this media category.")
+                   message: dgettext_noop("errors", "That version is not one of this folder's.")
                  )
                ]
              )}
@@ -859,8 +928,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                errors: [
                  Ash.Error.Changes.InvalidAttribute.exception(
                    field: :version_id,
-                   message:
-                     dgettext_noop("errors", "Version does not belong to this media category.")
+                   message: dgettext_noop("errors", "That version is not one of this folder's.")
                  )
                ]
              )}
@@ -972,6 +1040,13 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       description "The site this media category belongs to"
     end
 
+    belongs_to :parent, MishkaCmsCore.Runtime.MediaCategory do
+      read_action :read_any
+      allow_nil? true
+      public? true
+      description "The folder this one sits inside, or none for a folder at the top level"
+    end
+
     has_many :media, MishkaCmsCore.Runtime.Media do
       public? true
       description "Media files in this category"
@@ -1064,31 +1139,189 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
       public? true
 
       calculation fn records, _context ->
-        Enum.map(records, fn record ->
-          sql = """
-          SELECT COUNT(*)
-          FROM media
-          WHERE media_category_id = $1
-          AND archived_at IS NULL
-          """
-
-          case Ecto.Adapters.SQL.query(@repo, sql, [Ecto.UUID.dump!(record.id)]) do
-            {:ok, %{rows: [[count]]}} -> count
-            _ -> 0
-          end
-        end)
+        MishkaCmsCore.Runtime.MediaCategory.media_counts(records)
       end
 
-      description "Returns total number of media files in this category using raw SQL"
+      description "Returns how many live media files are directly in this category"
+    end
+
+    calculate :path_label, :string do
+      public? true
+
+      calculation fn records, context ->
+        MishkaCmsCore.Runtime.MediaCategory.path_labels(records,
+          actor: context.actor,
+          authorize?: context.authorize?
+        )
+      end
+
+      description "Returns the category's name after the names of the folders above it, outermost first"
     end
   end
 
   identities do
-    identity :unique_name_per_site, [:name, :site_id] do
-      description "Ensures category names are unique within each site"
-      message dgettext_noop("errors", "Media category name must be unique within a site.")
+    # Two folders at the top level of a site have no parent between them, and still clash.
+    identity :unique_name_per_parent, [:name, :site_id, :parent_id] do
+      description "Ensures category names are unique among the folders beside each other"
+      message dgettext_noop("errors", "Another folder in the same place already has this name.")
       all_tenants? true
       nils_distinct? false
     end
+  end
+
+  @doc """
+  What a folder picker shows for `folder`: its `:path_label` when that was loaded, its name when not.
+  """
+  @spec picker_label(map()) :: String.t()
+  def picker_label(%{path_label: label}) when is_binary(label), do: label
+  def picker_label(%{name: name}), do: name
+
+  @doc """
+  The folders a form's folder picker offers, as its `load`: those of the site the form is for, each
+  with its `:path_label`. The site is the one picked on the form, else the edited record's, else the
+  user's own; a form with no site yet is offered no folder.
+  """
+  @spec offer(Ash.Query.t(), map()) :: Ash.Query.t()
+  def offer(query, state) do
+    case form_site(state) do
+      nil -> Ash.Query.filter(query, false)
+      site_id -> query |> Ash.Query.filter(site_id == ^site_id) |> Ash.Query.load(:path_label)
+    end
+  end
+
+  defp form_site(%{field_values: %{site_id: site_id}}) when is_binary(site_id) and site_id != "",
+    do: site_id
+
+  defp form_site(%{form: %{source: %{source: %{data: %{site_id: site_id}}}}})
+       when is_binary(site_id),
+       do: site_id
+
+  defp form_site(%{current_user: %{site_id: site_id}}) when is_binary(site_id), do: site_id
+  defp form_site(_state), do: nil
+
+  @doc """
+  The folder `id` and every folder above it, outermost first, each with its `:id`, `:name`,
+  `:parent_id` and `:site_id` — what a breadcrumb draws.
+
+  Read through `:read_any` as `opts[:actor]`, with `opts[:authorize?]`, one level at a time: one
+  small read per folder up the chain. `{:ok, []}` when the folder is archived, gone, or not one the
+  actor reads.
+  """
+  @spec trail(Ecto.UUID.t(), keyword()) :: {:ok, [%__MODULE__{}]} | {:error, term()}
+  def trail(id, opts) do
+    with {:ok, known} <- climb([id], %{}, opts), do: {:ok, chain(known, id)}
+  end
+
+  @doc """
+  Each of `folders` named after the folders above it, outermost first: `photos / 2024 / covers`.
+
+  The folders above are read as `trail/2` reads them, one level at a time for all of `folders`
+  together. When they cannot be read, each folder is named by its own name.
+  """
+  @spec path_labels([%__MODULE__{}], keyword()) :: [String.t()]
+  def path_labels(folders, opts) do
+    known = Map.new(folders, &{&1.id, &1})
+
+    case climb(above(folders, known), known, opts) do
+      {:ok, known} ->
+        Enum.map(folders, &path(known, &1.id))
+
+      {:error, _unread} ->
+        Enum.map(folders, & &1.name)
+    end
+  end
+
+  @doc """
+  The whole path of each folder `ids` names, outermost first, keyed by id: `photos / 2024`. Read as
+  `trail/2` reads, one level at a time for all of them together. A `nil`, a folder the actor cannot
+  read, and every one when the folders cannot be read, are left out.
+  """
+  @spec paths([Ecto.UUID.t() | nil], keyword()) :: %{Ecto.UUID.t() => String.t()}
+  def paths(ids, opts) do
+    ids = ids |> Enum.reject(&is_nil/1) |> Enum.uniq()
+
+    case climb(ids, %{}, opts) do
+      {:ok, known} ->
+        for id <- ids, Map.has_key?(known, id), into: %{}, do: {id, path(known, id)}
+
+      {:error, _unread} ->
+        %{}
+    end
+  end
+
+  defp path(known, id), do: known |> chain(id) |> Enum.map_join(" / ", & &1.name)
+
+  defp climb([], known, _opts), do: {:ok, known}
+
+  defp climb(ids, known, opts) do
+    read_opts = read_opts(opts)
+
+    __MODULE__
+    |> Ash.Query.for_read(:read_any, %{}, read_opts)
+    |> Ash.Query.filter(id in ^ids)
+    |> Ash.Query.select([:id, :name, :parent_id, :site_id])
+    |> Ash.read([page: false] ++ read_opts)
+    |> case do
+      {:ok, folders} ->
+        known = Enum.reduce(folders, known, &Map.put(&2, &1.id, &1))
+        climb(above(folders, known), known, opts)
+
+      {:error, error} ->
+        {:error, error}
+    end
+  end
+
+  # An `authorize?: nil` handed on would read unauthorized; left out, the actor is authorized as on
+  # any read.
+  defp read_opts(opts) do
+    case Keyword.get(opts, :authorize?) do
+      authorize? when is_boolean(authorize?) -> [actor: opts[:actor], authorize?: authorize?]
+      nil -> [actor: opts[:actor]]
+    end
+  end
+
+  defp above(folders, known) do
+    folders
+    |> Enum.map(& &1.parent_id)
+    |> Enum.reject(&(is_nil(&1) or Map.has_key?(known, &1)))
+    |> Enum.uniq()
+  end
+
+  # Up from `id` through the folders read, stopping at the top, at one that was not read, or at one
+  # already on the way.
+  defp chain(known, id, below \\ []) do
+    case Map.fetch(known, id) do
+      {:ok, folder} ->
+        if Enum.any?(below, &(&1.id == id)),
+          do: below,
+          else: chain(known, folder.parent_id, [folder | below])
+
+      :error ->
+        below
+    end
+  end
+
+  @doc """
+  How many live files sit directly in each of `folders`, in their order — one query for all of them.
+  """
+  @spec media_counts([%__MODULE__{}]) :: [non_neg_integer()]
+  def media_counts(folders) do
+    sql = """
+    SELECT media_category_id, COUNT(*)
+    FROM media
+    WHERE media_category_id = ANY($1)
+    AND archived_at IS NULL
+    GROUP BY media_category_id
+    """
+
+    ids = Enum.map(folders, &Ecto.UUID.dump!(&1.id))
+
+    counts =
+      case Ecto.Adapters.SQL.query(@repo, sql, [ids]) do
+        {:ok, %{rows: rows}} -> Map.new(rows, fn [id, count] -> {Ecto.UUID.cast!(id), count} end)
+        _unread -> %{}
+      end
+
+    Enum.map(folders, &Map.get(counts, &1.id, 0))
   end
 end

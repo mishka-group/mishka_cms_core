@@ -1339,11 +1339,6 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:546
-#, elixir-autogen, elixir-format
-msgid "Search categories..."
-msgstr ""
-
 #: lib/mishka_cms_core/accounts/user.ex:345
 #: lib/mishka_cms_core/runtime/resources/component.ex:479
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:486
@@ -2898,11 +2893,6 @@ msgstr ""
 msgid "This page"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:452
-#, elixir-autogen, elixir-format
-msgid "Uncategorized"
-msgstr ""
-
 #: lib/mishka_cms_core/notify/notification.ex:184
 #, elixir-autogen, elixir-format
 msgid "Unread"
@@ -3618,4 +3608,30 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:74
 #, elixir-autogen, elixir-format
 msgid "Confirm this account's email address without the confirmation email?"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media.ex:439
+#, elixir-autogen, elixir-format
+msgid "Folder"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:163
+#, elixir-autogen, elixir-format
+msgid "Inside folder"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media.ex:603
+#, elixir-autogen, elixir-format
+msgid "Move"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media.ex:555
+#, elixir-autogen, elixir-format
+msgid "Search folders..."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media.ex:457
+#: lib/mishka_cms_core/runtime/resources/media_category.ex:164
+#, elixir-autogen, elixir-format
+msgid "Top level"
 msgstr ""

@@ -1,18 +1,37 @@
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
   @moduledoc """
-  Media management LiveView with grid/list view and categories sidebar.
+  Media management LiveView with grid/list view and a folders sidebar.
   Uses MishkaGervaz MediaGallery template for media display with real-time updates.
-  Categories sidebar uses async streaming.
   Media upload/edit form powered by MishkaGervaz Form DSL.
+
+  ## Folders
+
+  The library opens on a folder, `filter_media_category_id` in the URL — the same param the
+  gallery's own Folder filter writes, so either one moves the other — or on none, the top level. The
+  breadcrumb above names the folders down to it, the rail lists the folders directly inside it, read
+  async a page at a time, and the gallery its files. A new folder is made inside it, and a file
+  dropped on the upload form lands in it. Each folder in the rail opens, renames, moves and archives;
+  each file in the gallery moves too, through
+  `MishkaCmsCoreWeb.Live.Admin.Components.MediaMove`.
+
+  At the top level the gallery shows only the files in no folder, as a folder shows only its own —
+  until a search or a filter, which looks through every folder; each card names its folder by the
+  whole path to it.
+
+  The folder is the only thing the rail reads again for: the gallery's own filters, sort and page
+  patch the same URL and leave it as it is.
   """
   use MishkaCmsCore.ExtensionLiveView
+  require Ash.Query
   alias Phoenix.LiveView.AsyncResult
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Accounts.User
   alias MishkaCmsCore.Runtime.{Media, MediaCategory}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.MediaMove
   alias MishkaGervaz.Table.Web.UrlSync
 
   @category_form_modal "media-category-form-modal"
+  @media_path "/admin/dashboard/runtime/medias"
 
   defp category_form_component_id,
     do: MishkaGervaz.Resource.Info.Form.component_id(MediaCategory)
@@ -29,23 +48,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
   defp exec_modal_js(socket, id, js),
     do: push_event(socket, "gervaz:exec-js", %{target: id, js: Jason.encode!(js.ops)})
 
-  # The selected chip is highlighted client-side with the JS module — no server round-trip, so the
-  # highlight is instant. This project's runtime CSS compiler only emits rules for classes present in
-  # server-rendered HTML, so a class added by JS never gets a rule; an inline style set via JS needs no
-  # compiler and outranks the mobile chip's own bg at any breakpoint. The HEEx template stays on classes
-  # — this inline style lives only in the JS module, never in the markup.
-  @active_category_style "background-color:#f2f1fc;border-color:#dcdbf5"
-
-  defp apply_category_selection(nil), do: select_category_js("__all__")
-  defp apply_category_selection(category_id), do: select_category_js(category_id)
-
-  defp select_category_js(category_id) do
-    JS.remove_attribute("style", to: ".category-chip")
-    |> JS.set_attribute({"style", @active_category_style},
-      to: "[data-category-id='#{category_id}']"
-    )
-  end
-
   @pubsub_topics ~w(created updated destroyed)
   @categories_page_size 20
 
@@ -58,7 +60,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
       socket
       |> assign(:page_title, gettext("Media Library"))
       |> assign(:url_state, nil)
-      |> assign(:selected_category_id, nil)
+      |> assign(:folder_id, nil)
+      |> assign(:folder_read?, false)
+      |> assign(:folder_missing?, false)
+      |> assign(:trail, [])
       |> assign(:categories_page, 1)
       |> assign(:categories_has_more, false)
       |> assign(:categories_loading, AsyncResult.loading())
@@ -78,27 +83,47 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
       |> stream(:categories, [])
       |> stream(:archived_categories, [])
 
-    socket =
-      if connected?(socket) do
-        socket
-        |> subscribe_to_pubsub(user)
-        |> load_categories_async(page: 1, reset: true)
-      else
-        socket
-      end
+    socket = if connected?(socket), do: subscribe_to_pubsub(socket, user), else: socket
 
     {:ok, socket}
   end
 
   @impl true
   def handle_params(params, uri, socket) do
-    url_state = UrlSync.decode(params, uri, Media)
-    category_id = Map.get(params, "filter_media_category_id")
+    folder_id = blank_to_nil(Map.get(params, "filter_media_category_id"))
+    url_state = params |> UrlSync.decode(uri, Media) |> library_scope(folder_id)
 
     {:noreply,
      socket
      |> assign(:url_state, url_state)
-     |> assign(:selected_category_id, category_id)}
+     |> open_folder(folder_id)}
+  end
+
+  # AT THE TOP LEVEL THE GALLERY SHOWS ONLY THE FILES IN NO FOLDER, until a search or a filter looks
+  # through every folder — `Media`'s table `on_load` reads `library_top_level`, a path param that
+  # names no attribute and filters nothing by itself. In a folder, the folder filter is the scope.
+  defp library_scope(%{} = url_state, nil),
+    do: Map.update(url_state, :path_params, %{library_top_level: true}, &top_level/1)
+
+  defp library_scope(url_state, _folder_id), do: url_state
+
+  defp top_level(path_params), do: Map.put(path_params || %{}, :library_top_level, true)
+
+  # The rail and the breadcrumb are read when the folder changes, and once the socket connects.
+  defp open_folder(%{assigns: %{folder_id: folder_id, folder_read?: true}} = socket, folder_id),
+    do: socket
+
+  defp open_folder(socket, folder_id) do
+    socket = socket |> assign(:folder_id, folder_id) |> assign(:folder_missing?, false)
+
+    if connected?(socket) do
+      socket
+      |> assign(:folder_read?, true)
+      |> load_trail_async()
+      |> load_categories_async(page: 1, reset: true)
+    else
+      socket
+    end
   end
 
   @impl true
@@ -127,6 +152,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
      |> open_modal(@category_form_modal)}
   end
 
+  def handle_event("move_category", %{"id" => id}, socket) do
+    send_update(MediaMove, id: "media-move", open: {:folder, id})
+    {:noreply, socket}
+  end
+
   def handle_event("delete_category", %{"id" => id}, socket) do
     user = socket.assigns.current_user
 
@@ -136,20 +166,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
     # `authorize?: false` and `TenantContext` waves it through. The permanent ones are outside the
     # archive today and resolve it in time; they say it too, so removing them from
     # `exclude_destroy_actions` cannot quietly reopen this.
-    case user do
-      %User{site_id: nil} ->
-        category = get_category(id, user)
-        Ash.destroy!(category, action: :master_destroy, actor: user, authorize?: true)
+    #
+    # A folder that still holds anything is refused, and the refusal is the reader's to see.
+    destroyed =
+      with {:ok, category} <- Ash.get(MediaCategory, id, category_read(user)) do
+        {action, tenant} = user_action(user, {:master_destroy, :destroy})
+        Ash.destroy(category, action: action, actor: user, tenant: tenant, authorize?: true)
+      end
 
-      %User{site_id: site_id} ->
-        category = get_category(id, user)
-        Ash.destroy!(category, action: :destroy, actor: user, tenant: site_id, authorize?: true)
+    case destroyed do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Folder archived."))
+         |> stream_delete(:categories, %{id: id})}
+
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, refusal(error))}
     end
-
-    {:noreply,
-     socket
-     |> put_flash(:info, gettext("Category archived successfully"))
-     |> stream_delete(:categories, %{id: id})}
   end
 
   def handle_event("toggle_category_archive_view", _params, socket) do
@@ -180,48 +214,47 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
     {:noreply, load_archived_categories_async(socket, page: next_page, reset: false)}
   end
 
+  # A restore is refused when a live folder beside it has taken its name since.
   def handle_event("restore_category", %{"id" => id}, socket) do
     user = socket.assigns.current_user
 
-    case user do
-      %User{site_id: nil} ->
-        category = get_archived_category(id, user)
-        Ash.update!(category, action: :master_unarchive, actor: user)
+    restored =
+      with {:ok, category} <- Ash.get(MediaCategory, id, archived_category_read(user)) do
+        {action, tenant} = user_action(user, {:master_unarchive, :unarchive})
+        Ash.update(category, %{}, action: action, actor: user, tenant: tenant)
+      end
 
-      %User{site_id: site_id} ->
-        category = get_archived_category(id, user)
-        Ash.update!(category, action: :unarchive, actor: user, tenant: site_id)
+    case restored do
+      {:ok, _category} ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Folder restored."))
+         |> stream_delete(:archived_categories, %{id: id})}
+
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, refusal(error))}
     end
-
-    {:noreply,
-     socket
-     |> put_flash(:info, gettext("Category restored successfully"))
-     |> stream_delete(:archived_categories, %{id: id})}
   end
 
   def handle_event("permanent_delete_category", %{"id" => id}, socket) do
     user = socket.assigns.current_user
 
-    case user do
-      %User{site_id: nil} ->
-        category = get_archived_category(id, user)
-        Ash.destroy!(category, action: :master_permanent_destroy, actor: user, authorize?: true)
+    destroyed =
+      with {:ok, category} <- Ash.get(MediaCategory, id, archived_category_read(user)) do
+        {action, tenant} = user_action(user, {:master_permanent_destroy, :permanent_destroy})
+        Ash.destroy(category, action: action, actor: user, tenant: tenant, authorize?: true)
+      end
 
-      %User{site_id: site_id} ->
-        category = get_archived_category(id, user)
+    case destroyed do
+      :ok ->
+        {:noreply,
+         socket
+         |> put_flash(:info, gettext("Folder deleted for good."))
+         |> stream_delete(:archived_categories, %{id: id})}
 
-        Ash.destroy!(category,
-          action: :permanent_destroy,
-          actor: user,
-          tenant: site_id,
-          authorize?: true
-        )
+      {:error, error} ->
+        {:noreply, put_flash(socket, :error, refusal(error))}
     end
-
-    {:noreply,
-     socket
-     |> put_flash(:info, gettext("Category permanently deleted"))
-     |> stream_delete(:archived_categories, %{id: id})}
   end
 
   def handle_event("load_more_categories", _params, socket) do
@@ -256,6 +289,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
      |> assign(:has_categories_data, true)
      |> assign(:categories_loading, AsyncResult.failed(socket.assigns.categories_loading, reason))}
   end
+
+  # A folder the reader cannot open — archived, deleted, another site's, or a mistyped id — is said
+  # to be gone in the breadcrumb, beside the way back to the top level, rather than drawn as an empty
+  # folder that is there. A path read for a folder the reader has since left is dropped.
+  def handle_async(
+        :load_trail,
+        {:ok, {folder_id, read}},
+        %{assigns: %{folder_id: folder_id}} = socket
+      ) do
+    case read do
+      {:ok, [_ | _] = trail} -> {:noreply, assign(socket, :trail, trail)}
+      {:ok, []} -> {:noreply, socket |> assign(:trail, []) |> assign(:folder_missing?, true)}
+      {:error, _unread} -> {:noreply, assign(socket, :trail, [])}
+    end
+  end
+
+  def handle_async(:load_trail, _left_or_failed, socket), do: {:noreply, socket}
 
   def handle_async(:load_archived_categories, {:ok, {page, results, has_more, reset}}, socket) do
     socket =
@@ -313,6 +363,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
     {:noreply, assign(socket, :preview_media, %{name: media.name, data_url: media.relative_path})}
   end
 
+  def handle_info({:row_action, "move_media", %{"id" => id}}, socket) do
+    send_update(MediaMove, id: "media-move", open: {:media, id})
+    {:noreply, socket}
+  end
+
   def handle_info({:put_flash, kind, message}, socket) do
     {:noreply, put_flash(socket, kind, message)}
   end
@@ -349,17 +404,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
         socket
       )
       when name in [:unarchive, :master_unarchive] do
-    user = socket.assigns.current_user
-    socket = stream_delete(socket, :archived_categories, category)
-
-    socket =
-      if visible_to_user?(category, user) do
-        insert_reread(socket, :categories, reread_category(category.id, user), at: 0)
-      else
-        socket
-      end
-
-    {:noreply, socket}
+    {:noreply,
+     socket
+     |> stream_delete(:archived_categories, category)
+     |> place_category(category, at: 0)}
   end
 
   def handle_info(
@@ -386,15 +434,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
         },
         socket
       ) do
-    user = socket.assigns.current_user
-
-    if visible_to_user?(category, user) do
-      {:noreply, insert_reread(socket, :categories, reread_category(category.id, user), at: 0)}
-    else
-      {:noreply, socket}
-    end
+    {:noreply, place_category(socket, category, at: 0)}
   end
 
+  # A rename or a move. The breadcrumb is read again when the folder is on it: a folder above this
+  # one renamed, or this one moved, changes the path to it.
   def handle_info(
         %Phoenix.Socket.Broadcast{
           payload: %Ash.Notifier.Notification{
@@ -405,13 +449,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
         },
         socket
       ) do
-    user = socket.assigns.current_user
-
-    if visible_to_user?(category, user) do
-      {:noreply, insert_reread(socket, :categories, reread_category(category.id, user))}
-    else
-      {:noreply, socket}
-    end
+    {:noreply,
+     socket
+     |> place_category(category)
+     |> retrail(category)}
   end
 
   def handle_info(
@@ -425,7 +466,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
         socket
       ) do
     user = socket.assigns.current_user
-    socket = stream_delete(socket, :categories, category)
+    socket = socket |> stream_delete(:categories, category) |> retrail(category)
 
     socket =
       if visible_to_user?(category, user) && socket.assigns.category_archive_status == :archived do
@@ -458,19 +499,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
 
   defp load_categories_async(socket, opts) do
     user = socket.assigns.current_user
+    folder_id = socket.assigns.folder_id
     page = Keyword.get(opts, :page, 1)
     reset = Keyword.get(opts, :reset, false)
 
     socket
     |> assign(:categories_loading, AsyncResult.loading())
     |> MishkaGervaz.Messages.start_async(:load_categories, fn ->
-      {action, tenant} = user_action(user, {:master_read, :read})
-
       page_result =
-        MediaCategory
-        |> Ash.Query.for_read(action, %{}, actor: user, tenant: tenant)
-        |> Ash.Query.sort(name: :asc)
-        |> Ash.Query.load(category_loads(user))
+        user
+        |> folders_query(folder_id)
         |> Ash.read!(
           page: [offset: (page - 1) * @categories_page_size, limit: @categories_page_size]
         )
@@ -481,20 +519,65 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
 
   defp refresh_categories_silently(socket) do
     user = socket.assigns.current_user
-    current_page = socket.assigns.categories_page
-    {action, tenant} = user_action(user, {:master_read, :read})
-    total_limit = current_page * @categories_page_size
+    total_limit = socket.assigns.categories_page * @categories_page_size
 
     page_result =
-      MediaCategory
-      |> Ash.Query.for_read(action, %{}, actor: user, tenant: tenant)
-      |> Ash.Query.sort(name: :asc)
-      |> Ash.Query.load(category_loads(user))
+      user
+      |> folders_query(socket.assigns.folder_id)
       |> Ash.read!(page: [limit: total_limit])
 
     socket
     |> assign(:categories_has_more, page_result.more?)
     |> stream(:categories, page_result.results, reset: true)
+  end
+
+  # The folders directly inside `folder_id`, or at the top level for none — every site's top level,
+  # for a master.
+  defp folders_query(user, folder_id) do
+    {action, tenant} = user_action(user, {:master_read, :read})
+
+    MediaCategory
+    |> Ash.Query.for_read(action, %{}, actor: user, tenant: tenant)
+    |> inside(folder_id)
+    |> Ash.Query.sort(name: :asc)
+    |> Ash.Query.load(category_loads(user))
+  end
+
+  defp inside(query, nil), do: Ash.Query.filter(query, is_nil(parent_id))
+  defp inside(query, folder_id), do: Ash.Query.filter(query, parent_id == ^folder_id)
+
+  defp load_trail_async(%{assigns: %{folder_id: nil}} = socket), do: assign(socket, :trail, [])
+
+  defp load_trail_async(socket) do
+    user = socket.assigns.current_user
+    folder_id = socket.assigns.folder_id
+
+    MishkaGervaz.Messages.start_async(socket, :load_trail, fn ->
+      {folder_id, MediaCategory.trail(folder_id, actor: user)}
+    end)
+  end
+
+  defp retrail(socket, category) do
+    if Enum.any?(socket.assigns.trail, &(&1.id == category.id)),
+      do: load_trail_async(socket),
+      else: socket
+  end
+
+  # A folder written elsewhere goes in the rail when it sits in the folder the rail lists, and out of
+  # it when it does not — a folder moved in arrives, one moved away leaves.
+  defp place_category(socket, category, opts \\ []) do
+    user = socket.assigns.current_user
+    folder_id = socket.assigns.folder_id
+
+    read =
+      if visible_to_user?(category, user),
+        do: reread_category(category.id, user),
+        else: :none
+
+    case read do
+      {:ok, %{parent_id: ^folder_id} = here} -> stream_insert(socket, :categories, here, opts)
+      _elsewhere_or_gone -> stream_delete(socket, :categories, category)
+    end
   end
 
   defp visible_to_user?(_record, %User{site_id: nil}), do: true
@@ -515,10 +598,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
     Ash.get!(Media, id, action: action, actor: user, tenant: tenant)
   end
 
-  defp get_category(id, user), do: Ash.get!(MediaCategory, id, category_read(user))
-
-  defp get_archived_category(id, user),
-    do: Ash.get!(MediaCategory, id, archived_category_read(user))
+  defp refusal(error), do: MishkaGervaz.Errors.extract_error_message(error, MediaCategory)
 
   # THE ROW A NOTIFICATION CARRIES IS THE ROW THE WRITE RETURNED: no `:site`, no count, and no
   # promise it is still there. The rail reads it back through its own action, actor and tenant —
@@ -553,7 +633,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
 
   # A row the rail's own read no longer answers for — deleted for good between the write and this,
   # or archived out from under the notification — is one to leave out, not a page to lose.
-  defp insert_reread(socket, stream, read, opts \\ [])
+  defp insert_reread(socket, stream, read, opts)
 
   defp insert_reread(socket, stream, {:ok, category}, opts),
     do: stream_insert(socket, stream, category, opts)
@@ -608,4 +688,33 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
 
   defp pubsub_topics(prefix, %User{site_id: site_id}),
     do: Enum.flat_map(@pubsub_topics, &["#{prefix}:#{&1}", "#{prefix}:#{site_id}:#{&1}"])
+
+  defp blank_to_nil(""), do: nil
+  defp blank_to_nil(value), do: value
+
+  # Where a folder opens: the library filtered to it, and to its site for a master, whose Site
+  # filter would otherwise go on listing every site.
+  defp folder_path(nil, _master?), do: @media_path
+
+  defp folder_path(%{id: id, site_id: site_id}, true),
+    do: "#{@media_path}?filter_media_category_id=#{id}&filter_site_id=#{site_id}"
+
+  defp folder_path(%{id: id}, false), do: "#{@media_path}?filter_media_category_id=#{id}"
+
+  # The folder above the one open, `nil` for the top level.
+  defp parent_folder(trail), do: trail |> Enum.drop(-1) |> List.last()
+
+  # WHAT A NEW FOLDER AND A NEW FILE START IN: the folder open, and for a master its site, once the
+  # breadcrumb has said which — until then the master's form still asks. Each is a default the form
+  # drops again when the reader picks another.
+  defp form_defaults(nil, _trail, _master?, _field), do: %{}
+
+  defp form_defaults(folder_id, trail, true, field) do
+    case List.last(trail) do
+      %{id: ^folder_id, site_id: site_id} -> %{:site_id => site_id, field => folder_id}
+      _not_read_yet -> %{field => folder_id}
+    end
+  end
+
+  defp form_defaults(folder_id, _trail, false, field), do: %{field => folder_id}
 end
