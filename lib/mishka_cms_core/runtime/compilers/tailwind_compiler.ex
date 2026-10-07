@@ -1400,8 +1400,65 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     CssClosure.for_site(site_name,
       runtime_dir: runtime,
       extra_scopes: extra_scopes,
-      roots: closure_roots(site_name, runtime_dir: runtime, extra_scopes: extra_scopes)
+      roots: closure_roots(site_name, runtime_dir: runtime, extra_scopes: extra_scopes),
+      content_components: content_components(site_name)
     )
+  end
+
+  @doc """
+  The component names the stored content of the site `site_name` uses — what a template drawing
+  that content reaches (`MishkaCmsCore.Runtime.Compilers.CssClosure`).
+
+  Asked of whoever stores content through `runtime:compile:content_components`, with
+  `%{site: name, site_id: id, components: []}`: a plugin adds the names its content uses to
+  `components`. Read while a stylesheet is built, never in a request. `[]` for a site `SiteState`
+  does not know.
+
+      def call(%{site_id: site_id, components: names} = data),
+        do: {:reply, %{data | components: names ++ names_my_posts_use(site_id)}}
+  """
+  @spec content_components(String.t()) :: [String.t()]
+  def content_components(site_name) do
+    with {:ok, %{id: site_id}} <- MishkaCmsCore.Runtime.States.SiteState.get_by_name(site_name),
+         %{components: names} when is_list(names) <-
+           MishkaInstaller.Event.Hook.call(
+             "runtime:compile:content_components",
+             %{site: site_name, site_id: site_id, components: []},
+             meta: %{site: site_name}
+           ) do
+      names |> Enum.filter(&is_binary/1) |> Enum.uniq()
+    else
+      _nothing_named -> []
+    end
+  end
+
+  @doc """
+  Enqueues the stylesheet build of the site `site_id` names — its `"css"` job, on the per-site path
+  that coalesces a burst of writes into one build. For a write that changed what the stylesheet is
+  built from without a component, page or layout being written: content that names a component it
+  did not name before.
+
+  A switched-off or unknown site has nothing to build, and is `:ok`. So is every call under the
+  `:env_test?` flag, as for every other runtime job.
+  """
+  @spec schedule(String.t()) :: :ok | {:ok, Oban.Job.t()} | {:error, term()}
+  def schedule(site_id) when is_binary(site_id) do
+    case Application.get_env(:mishka_cms_core, :env_test?, false) do
+      true -> :ok
+      false -> enqueue(site_id)
+    end
+  end
+
+  defp enqueue(site_id) do
+    case MishkaCmsCore.Runtime.States.SiteState.get(site_id) do
+      {:ok, %{active: true} = site} ->
+        site.name
+        |> MishkaCmsCore.Runtime.Handlers.BootHandler.asset_job(site.id, "css")
+        |> Oban.insert()
+
+      _nothing_to_build ->
+        :ok
+    end
   end
 
   # THE RUNTIME SHELL — the host code that renders AROUND a database page: the whole `components/`

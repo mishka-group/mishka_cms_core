@@ -804,7 +804,7 @@ msgstr ""
 msgid "%{name} (inactive)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:459
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:502
 #, elixir-autogen, elixir-format
 msgid "%{name} Component failed to render!"
 msgstr ""
@@ -830,7 +830,7 @@ msgstr ""
 msgid "%{name} is bound to %{value} — press to store it as plain text instead"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:286
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:329
 #, elixir-autogen, elixir-format
 msgid "%{name} keeps state, so it needs an id — add one to its tag."
 msgstr ""
@@ -2115,6 +2115,7 @@ msgid "Awaiting review"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:634
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:256
 #, elixir-autogen, elixir-format
 msgid "Back"
 msgstr ""
@@ -2737,6 +2738,7 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:13815
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:13992
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14040
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:272
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:102
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:197
 #, elixir-autogen, elixir-format
@@ -3344,6 +3346,7 @@ msgid "Declared — every page using this component reads it."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/inspector.ex:1201
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:528
 #, elixir-autogen, elixir-format
 msgid "Default: %{value}"
 msgstr ""
@@ -4906,12 +4909,15 @@ msgstr ""
 msgid "Inner block"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:449
 #: lib/mishka_cms_core_web/templates/studio_snippets.ex:212
 #, elixir-autogen, elixir-format
 msgid "Insert"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:12308
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:235
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:265
 #, elixir-autogen, elixir-format
 msgid "Insert component"
 msgstr ""
@@ -5968,7 +5974,7 @@ msgstr ""
 msgid "Missing bundles"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:493
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:536
 #, elixir-autogen, elixir-format
 msgid "Missing for_slot attribute in %{count} slot(s)"
 msgstr ""
@@ -6227,6 +6233,7 @@ msgstr ""
 msgid "Next drafts"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:487
 #: lib/mishka_cms_core_web/live/admin/components/site_details_modal.ex:182
 #, elixir-autogen, elixir-format
 msgid "No"
@@ -8633,6 +8640,7 @@ msgid "Shadow colour"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/snippets.ex:199
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:355
 #: lib/mishka_cms_core_web/templates/snippet_form.ex:49
 #: lib/mishka_cms_core_web/templates/studio_snippets.ex:42
 #, elixir-autogen, elixir-format
@@ -8998,7 +9006,7 @@ msgstr ""
 msgid "Skipped — this site starts empty"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:474
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:517
 #, elixir-autogen, elixir-format
 msgid "Slot Error in %{name}:"
 msgstr ""
@@ -10684,7 +10692,7 @@ msgstr ""
 msgid "Unavailable For Legal Reasons"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:508
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:551
 #, elixir-autogen, elixir-format
 msgid "Undeclared slot(s): %{slots}"
 msgstr ""
@@ -11407,6 +11415,7 @@ msgstr ""
 msgid "XS"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:486
 #: lib/mishka_cms_core_web/live/admin/components/site_details_modal.ex:182
 #, elixir-autogen, elixir-format
 msgid "Yes"
@@ -14905,4 +14914,64 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/page_builder/interface.ex:140
 #, elixir-autogen, elixir-format
 msgid "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers, _ and - between them only."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:483
+#, elixir-autogen, elixir-format
+msgid "%{name} draws content of its own, so it cannot be placed inside content."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:496
+#, elixir-autogen, elixir-format
+msgid "%{name} is not a component this site can show, so visitors see nothing here."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:489
+#, elixir-autogen, elixir-format
+msgid "%{name} needs %{attrs}, so visitors see nothing here."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:530
+#, elixir-autogen, elixir-format
+msgid "Default"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:421
+#, elixir-autogen, elixir-format
+msgid "Inner content"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:349
+#, elixir-autogen, elixir-format
+msgid "Keeps state"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:325
+#, elixir-autogen, elixir-format
+msgid "Loading components…"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:373
+#, elixir-autogen, elixir-format
+msgid "No component matches."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:316
+#, elixir-autogen, elixir-format
+msgid "Search components"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:397
+#, elixir-autogen, elixir-format
+msgid "Takes nothing a marker can set."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:329
+#, elixir-autogen, elixir-format
+msgid "The components could not be read."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:238
+#, elixir-autogen, elixir-format
+msgid "Writes a component's marker into the content; the page draws the component there."
 msgstr ""

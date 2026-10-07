@@ -174,6 +174,41 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
     end
   end
 
+  # A POST'S MARKERS NAME COMPONENTS NO TEMPLATE SHOWS. Whoever stores the content says which, and a
+  # template that draws content reaches exactly those — see `MishkaCmsCore.Runtime.ContentComponents`.
+  describe "components named in stored content" do
+    test "a template that draws content reaches the components its content names", %{root: root} do
+      global_component(
+        root,
+        "kit-article",
+        ~s|<div><.rich_content html={@body} site="acme" /></div>|
+      )
+
+      global_component(root, "kit-alert", reference("kit-icon"))
+      global_component(root, "kit-icon", "<span></span>")
+      global_component(root, "kit-carousel", "<div></div>")
+      write(root, "acme", "page", "home", reference("kit-article"))
+
+      assert %{components: ["kit-alert", "kit-article", "kit-icon"]} =
+               closure(root, "acme", content_components: ["kit-alert", "kit-gone"])
+    end
+
+    test "none of them when nothing reached draws content", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", "<p>plain</p>")
+
+      assert %{components: []} = closure(root, "acme", content_components: ["kit-alert"])
+    end
+
+    test "and none when the content names none", %{root: root} do
+      global_component(root, "kit-article", ~s|<div><.rich_content html={@body} /></div>|)
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", reference("kit-article"))
+
+      assert %{components: ["kit-article"]} = closure(root)
+    end
+  end
+
   describe "giving up" do
     # `component_name={@name}` names something only the request knows. Scanning the whole directory
     # then is the ONLY safe answer: an under-approximation ships a page with no CSS.

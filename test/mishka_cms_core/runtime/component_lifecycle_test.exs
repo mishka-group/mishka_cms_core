@@ -123,6 +123,22 @@ defmodule MishkaCmsCore.Runtime.ComponentLifecycleTest do
       refute File.exists?(template_file(component.name, site.id))
     end
 
+    # WHAT A MARKER IN STORED CONTENT IS CHECKED AGAINST before a module name is made from it — see
+    # `MishkaCmsCore.Runtime.ContentComponents`. Written beside the template file, so the two agree.
+    test "an active component's name is known to its site, an inactive one's is not", %{
+      site: site
+    } do
+      on = make_component(tag: "known", site_id: site.id)
+      off = make_component(tag: "unknown", active: false, site_id: site.id)
+      on_exit(fn -> SiteState.delete_component(site.id, on.name) end)
+
+      assert :ok = BootHandler.compile_components(site.id)
+
+      assert SiteState.component?(site.id, on.name)
+      refute SiteState.component?(site.id, off.name)
+      refute SiteState.component?(nil, on.name)
+    end
+
     # AN ATTRIBUTE'S DEFAULT IS A CLASS NO CALL SITE EVER WRITES. Set `font_weight` on a component
     # and the value lands in the PAGE's template, which is scanned; leave it alone and the component
     # renders with a class Tailwind never saw. That is why `font-normal` and `leading-5` had no rule
@@ -305,6 +321,32 @@ defmodule MishkaCmsCore.Runtime.ComponentLifecycleTest do
       on_exit(fn -> BootHandler.delete_template_file(site.name, "component", name) end)
 
       refute CompileFailureState.failed?(module)
+    end
+  end
+
+  describe "the names a site's components are known by" do
+    test "the compile worker remembers an active component's name and forgets a purged one", %{
+      site: site
+    } do
+      name = "lifecycle-named-#{System.unique_integer([:positive])}"
+      module = module_for(name, site.id)
+      data = %{"name" => name, "site_id" => site.id, "active" => true, "precompile" => false}
+      on_exit(fn -> BootHandler.delete_template_file(site.name, "component", name) end)
+
+      RuntimeCompilerWorker.apply_component_lifecycle("create", data, module)
+      assert SiteState.component?(site.id, name)
+
+      RuntimeCompilerWorker.apply_component_lifecycle(
+        "update",
+        %{data | "active" => false},
+        module
+      )
+
+      refute SiteState.component?(site.id, name)
+
+      RuntimeCompilerWorker.apply_component_lifecycle("update", data, module)
+      RuntimeCompilerWorker.apply_component_lifecycle("destroy", data, module)
+      refute SiteState.component?(site.id, name)
     end
   end
 

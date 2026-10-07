@@ -628,9 +628,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   end
 
   @doc false
-  # Writes a template file for every ACTIVE component and compiles a module for
-  # the PRECOMPILED ones. Used at boot and by `RuntimeOrchestrator` after a bulk
-  # install.
+  # Writes a template file for every ACTIVE component, remembers its name in
+  # `SiteState`, and compiles a module for the PRECOMPILED ones. Used at boot and
+  # by `RuntimeOrchestrator` after a bulk install.
   #
   # The two halves are deliberately independent. The template file is what
   # `CssClosure` walks and what Tailwind scans, so it is written for every active
@@ -674,6 +674,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
                   component.name,
                   build_component_class_content(component)
                 )
+
+                SiteState.put_component(component.site_id, component.name)
 
                 boot_compile_component(component, component.precompile)
               end,

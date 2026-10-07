@@ -45,6 +45,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   form — but a hand-written template can contain one, and it must degrade to correct-and-large
   rather than small-and-broken.
 
+  ## Components named in stored content
+
+  A template that draws stored content — `<.rich_content …/>` — reaches the components the
+  content's markers name, which no template shows (`MishkaCmsCore.Runtime.ContentComponents`). The
+  caller passes those names as `:content_components`, and such a template names exactly them, each
+  resolved as a `component_name="…"` is. A site where nothing reached draws content reaches none of
+  them.
+
   ## Usage
 
       iex> CssClosure.for_site("localhost")
@@ -99,6 +107,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
       preview writes its unsaved template into a throwaway namespace, and that draft may be the only
       thing referencing the component being previewed — a walk over the SAVED site would miss it and
       the preview would render unstyled, which is precisely the state the author is checking.
+    * `:content_components` — the component names the site's stored content uses: what a template
+      that draws content names. `[]` unless given.
   """
   @spec for_site(String.t(), keyword()) :: result()
   def for_site(site_name, opts \\ []) do
@@ -111,7 +121,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
     roots = Keyword.get_lazy(opts, :roots, fn -> entry_templates(root, scopes) end)
 
-    case walk(roots, dirs) do
+    case walk(roots, dirs, Keyword.get(opts, :content_components, [])) do
       {:ok, templates, scanned} ->
         # The roots are part of the ANSWER, not only a source of edges: a page's own markup carries
         # classes, and so does a layout's.
@@ -171,9 +181,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   # Breadth-first over `component_name="…"` edges. `seen` is the answer being accumulated and also
   # the visited set, which is what stops a cycle: two components that render each other inside
   # opposite branches are legal and would otherwise loop forever.
-  defp walk(roots, dirs) do
+  defp walk(roots, dirs, content) do
     Enum.reduce_while(roots, {:ok, MapSet.new(), 0}, fn path, {:ok, seen, scanned} ->
-      case visit([path], dirs, seen, scanned) do
+      case visit([path], dirs, content, seen, scanned) do
         {:ok, seen, scanned} -> {:cont, {:ok, seen, scanned}}
         {:dynamic, _offenders} = halt -> {:halt, halt}
       end
@@ -184,9 +194,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     end
   end
 
-  defp visit([], _dirs, seen, scanned), do: {:ok, seen, scanned}
+  defp visit([], _dirs, _content, seen, scanned), do: {:ok, seen, scanned}
 
-  defp visit([path | rest], dirs, seen, scanned) do
+  defp visit([path | rest], dirs, content, seen, scanned) do
     case File.read(path) do
       {:ok, source} ->
         case dynamic_reference?(source) do
@@ -196,7 +206,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
           false ->
             {next, seen} =
               source
-              |> references()
+              |> references(content)
               |> Enum.reduce({[], seen}, fn name, {queue, seen} ->
                 case resolve(name, dirs) do
                   nil -> {queue, seen}
@@ -204,14 +214,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
                 end
               end)
 
-            visit(next ++ rest, dirs, seen, scanned + 1)
+            visit(next ++ rest, dirs, content, seen, scanned + 1)
         end
 
       # A reference to a component that was uninstalled leaves a dangling name. It is not this
       # module's job to report that — the page will raise on render — and dropping it here is the
       # same as the old glob, which also had nothing to match.
       {:error, _reason} ->
-        visit(rest, dirs, seen, scanned)
+        visit(rest, dirs, content, seen, scanned)
     end
   end
 
@@ -244,9 +254,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   @reference ~r/component_name="([^"]+)"/
   @dynamic ~r/component_name=\{/
+  @draws_content ~r/<\.rich_content\b/
 
-  defp references(source) do
-    @reference |> Regex.scan(source) |> Enum.map(fn [_all, name] -> name end) |> Enum.uniq()
+  defp references(source, content) do
+    named = @reference |> Regex.scan(source) |> Enum.map(fn [_all, name] -> name end)
+
+    case Regex.match?(@draws_content, source) do
+      true -> Enum.uniq(named ++ content)
+      false -> Enum.uniq(named)
+    end
   end
 
   defp dynamic_reference?(source), do: Regex.match?(@dynamic, source)

@@ -24,8 +24,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
   @categories "دسته‌بندی‌ها"
 
   describe "imports/1 — what a runtime template imports from LiveViewHelpers" do
-    test "is component/1,2, captcha/1, t/1,2 and csp_nonce/0 when there are no helpers" do
-      all = [component: 1, component: 2, captcha: 1, t: 1, t: 2, csp_nonce: 0]
+    test "is component/1,2, captcha/1, rich_content/1, t/1,2 and csp_nonce/0 when there are no helpers" do
+      all = [component: 1, component: 2, captcha: 1, rich_content: 1, t: 1, t: 2, csp_nonce: 0]
 
       assert LiveViewHelpers.imports(nil) == all
       assert LiveViewHelpers.imports([]) == all
@@ -43,6 +43,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                  component: 1,
                  component: 2,
                  captcha: 1,
+                 rich_content: 1,
                  csp_nonce: 0
                ],
                "t is still imported beside #{inspect(helper)}"
@@ -65,13 +66,19 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                component: 1,
                component: 2,
                captcha: 1,
+               rich_content: 1,
                csp_nonce: 0
              ]
     end
 
     test "leaves out any name a helper defines, captcha as much as t" do
       assert LiveViewHelpers.imports([%{name: "captcha"}]) ==
-               [component: 1, component: 2, t: 1, t: 2, csp_nonce: 0]
+               [component: 1, component: 2, rich_content: 1, t: 1, t: 2, csp_nonce: 0]
+    end
+
+    test "and rich_content, for a component that draws its own" do
+      assert LiveViewHelpers.imports([%{"name" => "rich_content"}]) ==
+               [component: 1, component: 2, captcha: 1, t: 1, t: 2, csp_nonce: 0]
     end
   end
 
