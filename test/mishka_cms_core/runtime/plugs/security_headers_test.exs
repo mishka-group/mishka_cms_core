@@ -262,4 +262,65 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
       refute policy =~ "localhost:4007"
     end
   end
+
+  describe "the players a site lets its pages embed" do
+    alias MishkaCmsCore.Runtime.States.SettingsState
+
+    @key "security.frame_origins"
+
+    setup do
+      on_exit(fn ->
+        SettingsState.delete(nil, @key)
+        SettingsState.delete("site-frames", @key)
+      end)
+    end
+
+    defp frame_src(conn) do
+      [frame] = Regex.run(~r/frame-src [^;]+/, csp(conn))
+      frame
+    end
+
+    defp on_site(path, site_id) do
+      Application.put_env(:mishka_cms, SecurityHeaders, [])
+
+      :get
+      |> conn(path)
+      |> assign(:current_site, %{id: site_id, master: false})
+      |> SecurityHeaders.call([])
+    end
+
+    test "only the page's own origin, until one is allowed" do
+      assert frame_src(run("/about")) == "frame-src 'self'"
+    end
+
+    test "the global origins reach every page" do
+      SettingsState.put(nil, @key, %{"value" => ["https://www.youtube-nocookie.com"]})
+
+      assert frame_src(run("/about")) == "frame-src 'self' https://www.youtube-nocookie.com"
+      assert frame_src(on_site("/about", "site-frames")) =~ "https://www.youtube-nocookie.com"
+    end
+
+    test "a site's own origins replace the global ones on its pages" do
+      SettingsState.put(nil, @key, %{"value" => ["https://www.youtube-nocookie.com"]})
+      SettingsState.put("site-frames", @key, %{"value" => ["https://player.vimeo.com"]})
+
+      frame = frame_src(on_site("/about", "site-frames"))
+
+      assert frame =~ "https://player.vimeo.com"
+      refute frame =~ "youtube"
+    end
+
+    test "only https origins with nothing after the host are accepted" do
+      assert SecurityHeaders.frame_origins?([])
+      assert SecurityHeaders.frame_origins?(["https://www.youtube-nocookie.com"])
+      assert SecurityHeaders.frame_origins?(["https://maps.example.com:8443"])
+
+      refute SecurityHeaders.frame_origins?(["http://www.youtube.com"])
+      refute SecurityHeaders.frame_origins?(["https://www.youtube.com/embed"])
+      refute SecurityHeaders.frame_origins?(["https://*.youtube.com"])
+      refute SecurityHeaders.frame_origins?(["https://YouTube.com"])
+      refute SecurityHeaders.frame_origins?(["youtube.com"])
+      refute SecurityHeaders.frame_origins?("https://www.youtube.com")
+    end
+  end
 end

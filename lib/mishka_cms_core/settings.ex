@@ -751,6 +751,18 @@ defmodule MishkaCmsCore.Settings do
         label: gettext_noop("Delete all notifications after (days)"),
         description: gettext_noop("Every notification is pruned at this age, read or not.")
       ),
+      define("security.frame_origins", :list,
+        default: [],
+        validate: &MishkaCmsWeb.Runtime.Plugs.SecurityHeaders.frame_origins?/1,
+        category: "security",
+        group: gettext_noop("Embeds"),
+        scope: :both,
+        label: gettext_noop("Sites pages may embed"),
+        description:
+          gettext_noop(
+            "Players a page may show in a frame — a video, a map — as https origins separated by commas. https://www.youtube-nocookie.com plays YouTube without cookies. Leave empty to allow none."
+          )
+      ),
       # The most tries `MishkaCmsCore.Accounts.AuthRateLimit` lets through in each window, read on
       # every try. The defaults are the numbers `MishkaCmsCore.Accounts.User` writes in its actions.
       define("security.sign_in_per_account", :integer,

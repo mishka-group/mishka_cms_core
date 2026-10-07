@@ -41,6 +41,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
 
   alias MishkaCmsCore.Captcha
   alias MishkaCmsCore.Runtime.CspNonce
+  alias MishkaCmsCore.Settings
 
   @nonce_bytes 18
 
@@ -50,6 +51,10 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   # same-origin.
   @fonts_css "https://fonts.googleapis.com"
   @fonts_files "https://fonts.gstatic.com"
+
+  # An origin a page may frame: https, a host of dot-separated labels, an optional port. No path, no
+  # wildcard — a frame source names exactly the player it trusts.
+  @frame_origin ~r/^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?$/
 
   def init(opts), do: opts
 
@@ -136,7 +141,18 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
     end
   end
 
-  defp policy(conn, admin?, nonce), do: directives(admin?, nonce, captcha_sources(conn, admin?))
+  @doc """
+  Whether every entry of `origins` is an origin `security.frame_origins` may hold:
+  `https://host` or `https://host:port`, lower case, nothing after it.
+  """
+  @spec frame_origins?(term()) :: boolean()
+  def frame_origins?(origins) when is_list(origins),
+    do: Enum.all?(origins, &(is_binary(&1) and Regex.match?(@frame_origin, &1)))
+
+  def frame_origins?(_origins), do: false
+
+  defp policy(conn, admin?, nonce),
+    do: directives(admin?, nonce, captcha_sources(conn, admin?), frame_origins(conn))
 
   # ENFORCED WHERE IT HAS BEEN CHECKED, REPORTED WHERE IT HAS NOT — the two do not have to move
   # together, and a public page is the side facing the internet.
@@ -160,7 +176,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   # a site for both — so the pipeline cannot tell them apart and the path has to.
   defp admin?(conn), do: String.starts_with?(conn.request_path, "/admin")
 
-  defp directives(admin?, nonce, captcha) do
+  defp directives(admin?, nonce, captcha, frames) do
     [
       "default-src 'self'",
       "base-uri 'self'",
@@ -168,7 +184,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
       # The canvas is a same-origin iframe of the editor, and the preview modal renders into an
       # `<iframe srcdoc>`; both are 'self'.
       "frame-ancestors 'self'",
-      "frame-src 'self'#{sources(captcha, :frame_src)}",
+      "frame-src 'self'#{sources(captcha, :frame_src)}#{sources(%{frames: frames}, :frames)}",
       "form-action 'self'",
       # A page an author built may point at any image on the web, and the media library serves
       # data: thumbnails.
@@ -210,6 +226,14 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
       Captcha.csp_sources(if(Map.get(site, :master) == true, do: [site_id, nil], else: [site_id]))
 
   defp captcha_sources(_no_site, false), do: %{}
+
+  # THE PLAYERS A SITE LETS ITS PAGES EMBED — a video, a map — from `security.frame_origins`, the
+  # site's own value, else the global one. Read from the settings cache, no query. An admin page
+  # carries its site's too: the editor previews that site's pages inside it.
+  defp frame_origins(%{assigns: %{current_site: %{id: site_id}}}),
+    do: Settings.get("security.frame_origins", [], site_id)
+
+  defp frame_origins(_no_site), do: Settings.get("security.frame_origins", [])
 
   defp sources(captcha, directive) do
     case Map.get(captcha, directive, []) do

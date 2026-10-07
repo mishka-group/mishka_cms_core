@@ -14727,3 +14727,18 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Not in the js bundle of %{sites}, so no page there can run it. %{reason}"
 msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:758
+#, elixir-autogen, elixir-format
+msgid "Embeds"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:760
+#, elixir-autogen, elixir-format
+msgid "Sites pages may embed"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:763
+#, elixir-autogen, elixir-format
+msgid "Players a page may show in a frame — a video, a map — as https origins separated by commas. https://www.youtube-nocookie.com plays YouTube without cookies. Leave empty to allow none."
+msgstr ""

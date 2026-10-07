@@ -1236,4 +1236,21 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       assert closed_here?(site)
     end
   end
+
+  describe "the players pages may embed" do
+    test "the setting takes https origins and refuses anything else" do
+      definition = Settings.definition("security.frame_origins")
+
+      assert definition.category == "security"
+
+      assert {:ok, ["https://www.youtube-nocookie.com", "https://player.vimeo.com"]} =
+               Settings.cast(
+                 definition,
+                 "https://www.youtube-nocookie.com, https://player.vimeo.com"
+               )
+
+      assert :error = Settings.cast(definition, "https://ok.example.com, javascript:x")
+      assert :error = Settings.cast(definition, "https://www.youtube.com/embed/x")
+    end
+  end
 end
