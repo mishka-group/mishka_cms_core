@@ -20,7 +20,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
 
   import Ecto.Query
 
-  alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.Compilers.{Helpers, JavaScriptCompiler}
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.States.CompileFailureState
 
@@ -90,6 +90,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       artifact_label: artifact_label,
       site_name: site_name,
       module: module_of(cfg, record, site_name),
+      left_out: left_out(cfg, record),
       job: job
     }
 
@@ -128,6 +129,15 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   defp asset_bundle_id("Global"), do: "__shared_base__"
   defp asset_bundle_id(site_name), do: site_name
 
+  defp bundle_name("__shared_base__"), do: "Global"
+  defp bundle_name(site_name), do: site_name
+
+  # A global hook is built into every site's bundle, so any of them may have left it out.
+  defp left_out(%{kind: :asset, asset_type: "js"}, record),
+    do: JavaScriptCompiler.left_out(record.id)
+
+  defp left_out(_cfg, _record), do: []
+
   # First match wins.
   defp classify(%{archived?: true}, _cfg),
     do: {:archived, gettext("Archived"), gettext("Soft-deleted — runtime artifact purged.")}
@@ -153,6 +163,18 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       true -> {:failed, gettext("Compile failed"), failure_message(base, reason(module))}
       false -> classify_runtime(base, cfg)
     end
+  end
+
+  # The bundle was built without this hook, so `Live` would say it runs when no page can run it.
+  defp classify(%{left_out: [_ | _] = left_out}, _cfg) do
+    sites = Enum.map_join(left_out, ", ", fn {bundle, _reason} -> bundle_name(bundle) end)
+    reasons = left_out |> Enum.map(fn {_bundle, reason} -> reason end) |> Enum.uniq()
+
+    {:failed, gettext("Left out of the bundle"),
+     gettext("Not in the js bundle of %{sites}, so no page there can run it. %{reason}",
+       sites: sites,
+       reason: Enum.join(reasons, "; ")
+     )}
   end
 
   defp classify(base, cfg), do: classify_runtime(base, cfg)

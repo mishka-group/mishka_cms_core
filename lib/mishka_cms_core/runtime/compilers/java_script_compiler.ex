@@ -74,6 +74,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   ## Error Handling
 
   Compilation failures are handled gracefully with:
+  - A hook that does not build is left out and the rest of the bundle is built without it; the
+    reason is read with `left_out/1` and sent as `runtime:compile:js_hook_skipped`
   - Detailed error messages including ESBuild output
   - Automatic cleanup of temporary files
   - Logging of compilation status and errors
@@ -101,7 +103,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   require Logger
   require Ash.Query
-  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, CompileFailureState, SiteState}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.NpmPackages
   alias IgniterJs.Parsers.Javascript.{Parser, Formatter}
@@ -272,11 +274,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
           try do
             ensure_installed()
 
-            _ = generate_runtime_hooks!(site_name, global_only?)
+            hooks = runtime_hooks(site_name, global_only?, js_assets_dir)
 
             _ = ensure_colocated_hooks(js_assets_dir)
 
-            {:ok, execute_esbuild(tmp_dir, site_name)}
+            bundle(hooks, site_name, tmp_dir)
           rescue
             e -> {:error, Exception.message(e)}
           after
@@ -686,35 +688,143 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     end
   end
 
-  # Generate runtime JavaScript hooks from database for a specific site.
-  #
-  # Fetches JavaScript hooks from the database and generates individual JavaScript
-  # files for each hook, then creates an aggregator module that exports all hooks.
-  #
-  # ## Parameters
-  #
-  # - `site_name` - The site identifier to generate hooks for
-  #
-  # ## Process
-  #
-  # 1. Creates base aggregator module structure
-  # 2. Fetches hooks from database via SiteState
-  # 3. Generates individual JS files for each hook
-  # 4. Creates import statements and object extensions
-  # 5. Formats final aggregator using IgniterJs parsers
-  #
-  # ## Generated Files
-  #
-  # - `{site_name}/mishka_runtime_components.js` - Main aggregator
-  # - `{site_name}/{hookName}.js` - Individual hook files
-  #
-  # ## Hook Naming Convention
-  #
-  # - Global hooks: `Global{CapitalizedName}`
-  # - Site hooks: `{SitePrefix}{CapitalizedName}`
-  defp generate_runtime_hooks!(site_name, global_only?) do
-    js_assets_dir = get_js_assets_dir()
-    site_js_dir = Path.join([js_assets_dir, "js", site_name])
+  # The site's active hooks, split into those whose npm packages are in place and those left out
+  # because their packages cannot be had. Packages are fetched once into `node_modules/`, where
+  # esbuild resolves the hook's bare imports — see `NpmPackages`.
+  defp runtime_hooks(site_name, global_only?, js_assets_dir) do
+    case load_runtime_hooks(site_name, global_only?) do
+      :none ->
+        {[], []}
+
+      hooks ->
+        Enum.reduce(hooks, {[], []}, fn hook, {ready, left_out} ->
+          case NpmPackages.ensure(hook.npm, js_assets_dir) do
+            :ok -> {ready ++ [hook], left_out}
+            {:error, reason} -> {ready, [{hook, reason} | left_out]}
+          end
+        end)
+    end
+  end
+
+  # ONE HOOK THAT DOES NOT BUILD IS LEFT OUT, and the rest of the site's hooks still build: a single
+  # unresolved import or syntax error fails esbuild for the whole bundle, and that bundle is what
+  # starts every page's live connection. esbuild names the file of each error, so an error in a
+  # hook's own file, in one of its `modules` or inside one of its `npm` packages leaves that hook out
+  # and the bundle is built again without it. An error no hook owns — `boot.js`, a shared hook —
+  # fails the compile, and the hooks the bundle served before stay as they were reported.
+  defp bundle({hooks, left_out}, site_name, tmp_dir) do
+    _ = write_runtime_hooks!(hooks, site_name)
+
+    case execute_esbuild(tmp_dir, site_name) do
+      {:ok, js} ->
+        report_left_out(left_out, site_name)
+        {:ok, js}
+
+      {:error, reason} ->
+        hooks
+        |> failing_hooks(reason, site_name)
+        |> rebuild_without(reason, {hooks, left_out}, site_name, tmp_dir)
+    end
+  end
+
+  defp rebuild_without([], reason, _hooks, _site_name, _tmp_dir), do: {:error, reason}
+
+  defp rebuild_without(failing, _reason, {hooks, left_out}, site_name, tmp_dir) do
+    failing_ids = Enum.map(failing, fn {hook, _reason} -> hook.id end)
+
+    _ = cleanup_runtime_files(Path.join([get_js_assets_dir(), "js", site_name]))
+
+    bundle(
+      {Enum.reject(hooks, &(&1.id in failing_ids)), failing ++ left_out},
+      site_name,
+      tmp_dir
+    )
+  end
+
+  # esbuild prints each error as `✘ [ERROR] <message>`, a blank line, then `    <file>:<line>:<col>:`.
+  @esbuild_error ~r/^\S+ \[ERROR\] ([^\n]+)\n\n\s+([^\n]+?):(\d+):\d+:$/m
+
+  defp failing_hooks(hooks, output, site_name) do
+    errors = Regex.scan(@esbuild_error, output, capture: :all_but_first)
+
+    for hook <- hooks,
+        owned =
+          Enum.filter(errors, fn [_message, file, _line] -> owns?(hook, file, site_name) end),
+        owned != [],
+        do: {hook, Enum.map_join(owned, "; ", &describe_error/1)}
+  end
+
+  defp describe_error([message, file, line]), do: "#{message} (#{Path.basename(file)}:#{line})"
+
+  # esbuild prints the real path of a file, so a hook's files are matched by their last segments.
+  defp owns?(hook, file, site_name) do
+    own_files = Enum.map(hook_files(hook, site_name), &["js", site_name, &1])
+
+    Enum.take(Path.split(file), -3) in own_files or
+      Enum.any?(hook.npm || [], &in_package?(file, &1))
+  end
+
+  defp hook_files(hook, site_name) do
+    modules =
+      for module <- hook.modules || [],
+          MishkaCmsCore.Runtime.Resources.Validations.HookPackages.module?(module),
+          do: NpmPackages.stringify(module)["file"]
+
+    [hook_file(hook, site_name) | modules]
+  end
+
+  defp in_package?(file, entry) do
+    case NpmPackages.stringify(entry) do
+      %{"path" => path} when is_binary(path) -> String.contains?("/" <> file, "/" <> path <> "/")
+      _not_a_package -> false
+    end
+  end
+
+  # What a bundle left out is replaced only when the bundle is built, so it always describes the
+  # bundle being served.
+  defp report_left_out(left_out, site_name) do
+    CompileFailureState.clear_matching(left_out_key(:_, site_name))
+
+    Enum.each(left_out, fn {hook, reason} ->
+      Logger.warning(
+        "[JavaScriptCompiler] #{hook.name} is left out of #{site_name}'s JavaScript: #{reason}"
+      )
+
+      CompileFailureState.record(left_out_key(hook.id, site_name), reason)
+
+      MishkaInstaller.Event.Hook.call(
+        "runtime:compile:js_hook_skipped",
+        %{hook: hook.name, site: site_name, reason: reason},
+        meta: %{site: site_name},
+        return: false
+      )
+    end)
+  end
+
+  @doc """
+  The bundles the JS hook `hook_id` was left out of when they were last built, each with the
+  reason, sorted by bundle: `[{"localhost", ~s(Could not resolve "echarts" (globalChart.js:28))}]`.
+
+  A bundle is a site's name, or `"#{@shared_base_id}"` for the global hooks every site without hooks
+  of its own shares. A global hook is built into every site's bundle, so it can be left out of
+  several.
+  """
+  @spec left_out(String.t()) :: [{String.t(), String.t()}]
+  def left_out(hook_id) do
+    hook_id
+    |> left_out_key(:_)
+    |> CompileFailureState.matching()
+    |> Enum.map(fn {{_resource, _hook_id, bundle}, reason} -> {bundle, reason} end)
+    |> Enum.sort()
+  end
+
+  defp left_out_key(hook_id, bundle), do: {MishkaCmsCore.Runtime.JsHook, hook_id, bundle}
+
+  # Writes each hook to `{site_name}/{hookName}.js` beside its `modules`, and
+  # `{site_name}/mishka_runtime_components.js`, which exports them all under their browser names:
+  # `Global{Name}` for a global hook, `{SitePrefix}{Name}` for a site's own.
+  defp write_runtime_hooks!(hooks, site_name) do
+    site_js_dir = Path.join([get_js_assets_dir(), "js", site_name])
     _ = File.mkdir_p!(site_js_dir)
 
     runtime_hook_agregator = """
@@ -724,69 +834,38 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     """
 
     runtime_hook_agregator_content =
-      case load_runtime_hooks(site_name, global_only?) do
-        :none ->
-          runtime_hook_agregator
+      Enum.reduce(hooks, runtime_hook_agregator, fn hook, acc ->
+        write_modules(hook, site_js_dir)
+        formatted_hook_name = format_hook_name(hook, site_name)
+        filename = hook_file(hook, site_name)
 
-        hooks ->
-          hooks
-          |> Enum.filter(&packages_ready?(&1, js_assets_dir, site_name))
-          |> Enum.reduce(runtime_hook_agregator, fn hook, acc ->
-            write_modules(hook, site_js_dir)
-            formatted_hook_name = format_hook_name(hook, site_name)
+        File.write!(Path.join(site_js_dir, filename), hook.content)
 
-            <<first::utf8, rest::binary>> = formatted_hook_name
-            filename = String.downcase(<<first::utf8>>) <> rest
+        import = """
+        import #{formatted_hook_name} from "./#{filename}";
+        """
 
-            filepath = Path.join(site_js_dir, "#{filename}.js")
-            File.write!(filepath, hook.content)
+        {:ok, _, imported} = Parser.insert_imports(acc, import)
 
-            import = """
-            import #{formatted_hook_name} from "./#{filename}.js";
-            """
+        {:ok, _, extended} =
+          imported
+          |> Parser.extend_var_object_by_object_names(
+            "MishkaRuntimeComponents",
+            "#{formatted_hook_name}"
+          )
 
-            {:ok, _, imported} = Parser.insert_imports(acc, import)
-
-            {:ok, _, extended} =
-              imported
-              |> Parser.extend_var_object_by_object_names(
-                "MishkaRuntimeComponents",
-                "#{formatted_hook_name}"
-              )
-
-            {:ok, _, formatted} = Formatter.format(extended)
-            formatted
-          end)
-      end
+        {:ok, _, formatted} = Formatter.format(extended)
+        formatted
+      end)
 
     site_js_dir
     |> Path.join("mishka_runtime_components.js")
     |> File.write!(runtime_hook_agregator_content)
   end
 
-  # A HOOK WHOSE PACKAGES CANNOT BE HAD IS LEFT OUT, and the rest of the site's hooks still build: one
-  # unresolved import fails esbuild for the whole bundle, and that bundle is what starts every page's
-  # live connection. Its packages are fetched once into `node_modules/`, where esbuild resolves the
-  # hook's bare imports — see `NpmPackages`.
-  defp packages_ready?(hook, js_assets_dir, site_name) do
-    case NpmPackages.ensure(hook.npm, js_assets_dir) do
-      :ok ->
-        true
-
-      {:error, reason} ->
-        Logger.warning(
-          "[JavaScriptCompiler] #{hook.name} is left out of #{site_name}'s JavaScript: #{reason}"
-        )
-
-        MishkaInstaller.Event.Hook.call(
-          "runtime:compile:js_hook_skipped",
-          %{hook: hook.name, site: site_name, reason: reason},
-          meta: %{site: site_name},
-          return: false
-        )
-
-        false
-    end
+  defp hook_file(hook, site_name) do
+    <<first::utf8, rest::binary>> = format_hook_name(hook, site_name)
+    String.downcase(<<first::utf8>>) <> rest <> ".js"
   end
 
   # The files a hook imports from beside itself (`./chart_extensions.js`), written next to it. The
@@ -835,7 +914,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   #
   # ## Returns
   #
-  # Returns the compiled JavaScript as a string.
+  # `{:ok, js}`, or `{:error, reason}` with esbuild's own messages at the end of `reason`.
   #
   # ## ESBuild Configuration
   #
@@ -846,9 +925,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # - **External**: Excludes fonts and images
   # - **Alias**: @ points to js directory for cleaner imports
   #
-  # ## Error Handling
-  #
-  # Raises detailed error on compilation failure with exit code and configuration.
   # Which esbuild profile to run. The host defines it in its own config (the CMS calls it
   # `:mishka_cms_js`); a different host names its own.
   defp esbuild_profile,
@@ -871,29 +947,58 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         "--minify",
         "--outfile=#{output_file}",
         "--log-level=error",
+        "--log-limit=0",
+        "--color=false",
         "--external:/fonts/*",
         "--external:/images/*",
         "--resolve-extensions=.js",
         "--alias:@=#{Path.join(js_assets_dir, "js")}"
       ]
 
-      case Esbuild.run(esbuild_profile(), args) do
-        0 ->
-          File.read!(output_file)
+      case run_esbuild(args) do
+        {_output, 0} ->
+          {:ok, File.read!(output_file)}
 
-        exit_code ->
-          raise """
-          Esbuild compilation failed with exit code #{exit_code}
-          Profile: #{esbuild_profile()}
-          Entry file: #{entry_file}
-          Output file: #{output_file}
-          Args: #{inspect(args)}
-          """
+        {output, exit_code} ->
+          {:error,
+           """
+           Esbuild compilation failed with exit code #{exit_code}
+           Profile: #{esbuild_profile()}
+           Entry file: #{entry_file}
+           Output file: #{output_file}
+           Args: #{inspect(args)}
+
+           #{output}
+           """}
       end
     after
       Enum.each([entry_file, output_file, "#{output_file}.map"], &File.rm/1)
     end
   end
+
+  # The profile run the way `Esbuild.run/2` runs it, with esbuild's messages kept rather than
+  # streamed to stdout: they name the file each error is in.
+  defp run_esbuild(args) do
+    config = Esbuild.config_for!(esbuild_profile())
+
+    System.cmd(Esbuild.bin_path(), (config[:args] || []) ++ args,
+      cd: config[:cd] || File.cwd!(),
+      env: Map.new(config[:env] || %{}, fn {key, value} -> {key, env_value(value)} end),
+      stderr_to_stdout: true
+    )
+  end
+
+  defp env_value(value) when is_list(value) do
+    separator =
+      case :os.type() do
+        {:win32, _} -> ";"
+        {:unix, _} -> ":"
+      end
+
+    Enum.join(value, separator)
+  end
+
+  defp env_value(value), do: value
 
   # Create entry file combining app.js with runtime components.
   #

@@ -14717,3 +14717,13 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "This key was saved under an older server key (SECRET_KEY_BASE) and can no longer be read, so nothing uses it. Type it again and save."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/runtime_status.ex:173
+#, elixir-autogen, elixir-format
+msgid "Left out of the bundle"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/runtime_status.ex:174
+#, elixir-autogen, elixir-format
+msgid "Not in the js bundle of %{sites}, so no page there can run it. %{reason}"
+msgstr ""
