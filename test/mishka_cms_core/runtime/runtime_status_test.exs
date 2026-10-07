@@ -11,6 +11,8 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
   """
   use MishkaCmsCore.DataCase
 
+  import Ecto.Query
+
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.RuntimeStatus
   alias MishkaCmsCore.Runtime.States.CompileFailureState
@@ -136,6 +138,49 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
       assert status.module == nil
       assert status.state in [:live, :pending]
       assert status.message =~ "js bundle"
+    end
+  end
+
+  describe "a compile job left executing" do
+    defp executing_job!(page, attempted_at, node \\ Oban.config().node) do
+      {:ok, job} =
+        %{"resource" => inspect(Page), "data" => %{"id" => page.id}}
+        |> MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker.new(queue: :modules)
+        |> Oban.insert()
+
+      {1, _} =
+        Oban.Repo.update_all(
+          Oban.config(),
+          from(j in Oban.Job, where: j.id == ^job.id),
+          set: [
+            state: "executing",
+            attempted_at: attempted_at,
+            attempted_by: [node, Ecto.UUID.generate()]
+          ]
+        )
+    end
+
+    # A restart or a deploy stops the node mid-job and nothing moves the row on until
+    # `Oban.Lifeline` does — the page compiled and served while its status said `Compiling…`.
+    test "by this node before it started is not read as compiling", %{page: page} do
+      executing_job!(page, ~U[2020-01-01 00:00:00.000000Z])
+
+      status = RuntimeStatus.compute(page, Page)
+
+      assert status.state == :lazy_ready
+      assert status.job == nil
+    end
+
+    test "that this node is running still reads as compiling", %{page: page} do
+      executing_job!(page, DateTime.utc_now())
+
+      assert RuntimeStatus.compute(page, Page).state == :compiling
+    end
+
+    test "by another node still reads as compiling", %{page: page} do
+      executing_job!(page, ~U[2020-01-01 00:00:00.000000Z], "another-node")
+
+      assert RuntimeStatus.compute(page, Page).state == :compiling
     end
   end
 end

@@ -80,7 +80,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
     site_name = site_name_of(record)
     mode = mode_of(cfg, record)
     {loaded?, artifact_label} = artifact(cfg, record, site_name)
-    job = latest_job(resource, record.id)
+    job = resource |> latest_job(record.id) |> unless_orphaned()
 
     base = %{
       mode: mode,
@@ -226,6 +226,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   # written by MishkaCmsCore.Runtime.Changes.SendToOban and read by Activity.Sources.Oban.
   @job_fields [
     :state,
+    :attempted_by,
     :errors,
     :attempted_at,
     :completed_at,
@@ -233,6 +234,26 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
     :discarded_at,
     :inserted_at
   ]
+
+  # A JOB LEFT `executing` BY A NODE THAT STOPPED MID-RUN — a restart, a deploy — keeps that state
+  # until `Oban.Lifeline` rescues it, and `Compiling…` stayed on a record that had compiled and was
+  # serving. A job this node took before it booted is not running, so it says nothing about the
+  # record; one another node took cannot be told apart from a running one and still counts.
+  defp unless_orphaned(
+         %{state: "executing", attempted_at: %DateTime{} = at, attempted_by: [node | _]} = job
+       ) do
+    case node == Oban.config().node and DateTime.before?(at, booted_at()) do
+      true -> nil
+      false -> job
+    end
+  end
+
+  defp unless_orphaned(job), do: job
+
+  defp booted_at do
+    {since_boot, _since_last_call} = :erlang.statistics(:wall_clock)
+    DateTime.add(DateTime.utc_now(), -since_boot, :millisecond)
+  end
 
   defp latest_job(resource, id) do
     query =
