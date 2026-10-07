@@ -56,10 +56,11 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
 
   @renders [component: 1, component: 2, captcha: 1]
   @translates [t: 1, t: 2]
+  @nonces [csp_nonce: 0]
 
   @doc """
-  What a runtime template imports from here — `component/1,2`, `captcha/1` and `t/1,2` — less any
-  name its own `helpers` already define.
+  What a runtime template imports from here — `component/1,2`, `captcha/1`, `t/1,2` and
+  `csp_nonce/0` — less any name its own `helpers` already define.
 
   Every compiler — component, page and layout — asks this rather than writing the list itself, so
   the three cannot drift. The exception is not hypothetical: importing a `t/1` into a module that
@@ -70,10 +71,22 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   def imports(helpers) do
     own = helpers |> List.wrap() |> MapSet.new(&helper_name/1)
 
-    Enum.reject(@renders ++ @translates, fn {name, _arity} ->
+    Enum.reject(@renders ++ @translates ++ @nonces, fn {name, _arity} ->
       MapSet.member?(own, Atom.to_string(name))
     end)
   end
+
+  @doc """
+  This response's Content-Security-Policy nonce, for the rare `<style>` a template cannot avoid —
+  a page, a layout and a component alike, since a component never sees the page's assigns.
+
+      <style nonce={csp_nonce()}>…</style>
+
+  `nil` outside a response, which HEEx renders as no attribute. See
+  `MishkaCmsCore.Runtime.CspNonce` for where the value comes from.
+  """
+  @spec csp_nonce() :: String.t() | nil
+  defdelegate csp_nonce(), to: MishkaCmsCore.Runtime.CspNonce, as: :current
 
   @doc """
   The captcha a form asks — see `MishkaCmsCore.Captcha.Widget.captcha/1`.

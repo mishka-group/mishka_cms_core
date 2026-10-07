@@ -147,6 +147,23 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
       refute run("/about").assigns.csp_nonce == run("/about").assigns.csp_nonce
     end
 
+    # One nonce per RESPONSE. It used to live in the session cookie for the whole visit; a page now
+    # carries its own into its LiveView through `CspNonce.session/1`, so nothing is stored here.
+    test "is not kept in the session, so one visit's responses never share it" do
+      first = :get |> conn("/about") |> init_test_session(%{}) |> SecurityHeaders.call([])
+      second = :get |> conn("/about") |> init_test_session(%{}) |> SecurityHeaders.call([])
+
+      assert get_session(first, "csp_nonce") == nil
+      refute first.assigns.csp_nonce == second.assigns.csp_nonce
+    end
+
+    test "is what `csp_nonce/0` answers while the response renders" do
+      conn = run("/about")
+
+      assert MishkaCmsCore.Runtime.CspNonce.current() == conn.assigns.csp_nonce
+      assert MishkaCmsCore.Runtime.LiveViewHelpers.csp_nonce() == conn.assigns.csp_nonce
+    end
+
     test "reads nil rather than raising where the plug never ran" do
       assert SecurityHeaders.nonce(%{}) == nil
       assert SecurityHeaders.nonce(nil) == nil

@@ -12537,6 +12537,51 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       assert render(view) =~ "double-click it on the canvas"
     end
 
+    # A `<style>` renders nothing a visitor sees, so the style surface would record overrides for an
+    # element that shows none of them. It is offered its attributes, the nonce it is saved with and
+    # a way to where its rules belong instead.
+    test "a style block is offered its attributes and where its rules belong", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: ~s(<div><style>.x { color: red; }</style></div>))
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "style").id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      refute has_element?(view, "#pb-style-base-font-size")
+      refute has_element?(view, ~s([data-role="pb-bptabs"]))
+      assert has_element?(view, "#pb-not-styleable")
+      assert has_element?(view, "#pb-style-nonce-note")
+
+      assert has_element?(
+               view,
+               ~s(#pb-raw-block-home[href="/admin/dashboard/runtime/stylesheets"])
+             )
+
+      refute has_element?(view, "#pb-css-toggle"), "it has no CSS box of its own"
+      refute has_element?(view, "#pb-act-toggle"), "nothing to click"
+      refute has_element?(view, "#pb-hook-toggle"), "nothing to hook"
+      assert has_element?(view, "#pb-when-toggle"), "whether it renders is still a condition"
+    end
+
+    test "a script block points at JS hooks and is promised no nonce", %{conn: conn, site: site} do
+      page =
+        create_page!(site_id: site.id, template: ~S|<div><script>console.log(1)</script></div>|)
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      render_click(view, "select", %{"id" => node_with_tag(view, "script").id})
+      view |> element("#pb-lefttab-inspector") |> render_click()
+
+      assert has_element?(view, "#pb-not-styleable")
+      refute has_element?(view, "#pb-style-nonce-note")
+      assert has_element?(view, ~s(#pb-raw-block-home[href="/admin/dashboard/runtime/js-hooks"]))
+    end
+
     # The element it sits in still gets everything, which is the half that proves the gate is about
     # the node rather than about the panel.
     test "the element around it still gets the whole surface", %{conn: conn, site: site} do

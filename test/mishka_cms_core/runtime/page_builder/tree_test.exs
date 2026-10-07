@@ -357,6 +357,32 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TreeTest do
     test "an empty tree serializes to an empty string" do
       assert Serializer.serialize(Tree.new()) == ""
     end
+
+    # `style-src-elem` refuses a `<style>` without the response's nonce, so a block an author wrote
+    # would silently do nothing on the published page.
+    test "a <style> is saved with the response's nonce" do
+      tree = Tree.parse!(~s(<div><style>.x { color: red; }</style></div>))
+
+      assert Serializer.serialize(tree) =~
+               ~S|<style nonce={csp_nonce()}>.x { color: red; }</style>|
+
+      assert {:ok, _reparsed} = Serializer.to_heex(tree)
+    end
+
+    test "a <style> that names a nonce already keeps its own" do
+      tree = Tree.parse!(~s(<style nonce={@csp_nonce}>.x { color: red; }</style>))
+      source = Serializer.serialize(tree)
+
+      assert source =~ "nonce={@csp_nonce}"
+      refute source =~ "csp_nonce()"
+    end
+
+    # A nonce would also admit a `src` from anywhere; behaviour belongs in a JS hook.
+    test "a <script> is left as written" do
+      tree = Tree.parse!(~S|<script>console.log(1)</script>|)
+
+      refute Serializer.serialize(tree) =~ "nonce"
+    end
   end
 
   describe "blank?/2" do

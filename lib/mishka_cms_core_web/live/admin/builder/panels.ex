@@ -3256,6 +3256,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <p class="text-[10.5px] font-medium leading-[1.55] text-[#6d6a63]">
             {unstyleable_note(@selected_node)}
           </p>
+          <p
+            :if={raw_block?(@selected_node) and @selected_node.tag == "style"}
+            id="pb-style-nonce-note"
+            class="flex items-start gap-1 font-['Space_Grotesk'] text-[10px] leading-[1.35] text-[#a5691a]"
+          >
+            <.icon name={:shield} size={11} class="mt-[1px] flex-none" />
+            <span>
+              {gettext(
+                "Saved with nonce={csp_nonce()}, this page's security nonce, so the browser applies it."
+              )}
+            </span>
+          </p>
+          <.link
+            :if={raw_block?(@selected_node)}
+            id="pb-raw-block-home"
+            navigate={raw_block_home(@selected_node)}
+            class="inline-flex h-[26px] items-center gap-1.5 self-start rounded-[8px] border border-[#dcdbf5] bg-[#f2f1fc] px-2.5 text-[10.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+          >
+            <.icon name={:code} size={12} /> {raw_block_home_label(@selected_node)}
+          </.link>
           <button
             :if={@selected_node.parent_id}
             type="button"
@@ -3311,7 +3331,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               above is where that is set, so this would be a second attribute editor disagreeing
               with the first. --%>
         <.inspector_group
-          :if={styleable?(@selected_node) and @selected_node.kind != :component}
+          :if={
+            (styleable?(@selected_node) or raw_block?(@selected_node)) and
+              @selected_node.kind != :component
+          }
           title={gettext_noop("Attributes")}
           group_folds={@group_folds}
           folded_by_default={true}
@@ -3433,7 +3456,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           </div>
         </.inspector_group>
 
+        <%!-- A `<style>` or `<script>` draws nothing, so it has no CSS box, nothing to click and
+              nothing to hook; whether it renders at all is still a condition it can take. --%>
         <.element_css
+          :if={!raw_block?(@selected_node)}
           node={@selected_node}
           entry={component_entry(assigns)}
           css={@element_css}
@@ -3455,7 +3481,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         />
 
         <.interactions
-          :if={bindable?(@section)}
+          :if={bindable?(@section) and !raw_block?(@selected_node)}
           node={@selected_node}
           entry={component_entry(assigns)}
           state={Interactions.read(Node.attr(@selected_node, "phx-click"))}
@@ -3467,7 +3493,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         />
 
         <.hook_picker
-          :if={bindable?(@section)}
+          :if={bindable?(@section) and !raw_block?(@selected_node)}
           node={@selected_node}
           entry={component_entry(assigns)}
           hooks={@js_hooks}
@@ -14860,8 +14886,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # override recorded against one was dropped on the way out and nothing on the canvas ever moved.
   # The panel offered the whole surface anyway, on `{@inner_content}` most of all: the one node every
   # layout has, and the first thing an author clicks.
-  defp styleable?(%Node{} = node), do: Node.container?(node)
+  defp styleable?(%Node{} = node), do: Node.container?(node) and not raw_block?(node)
   defp styleable?(_node), do: false
+
+  # A `<style>` or a `<script>` renders nothing the visitor sees, so it takes no styling — what it
+  # takes is its attributes and a word on where its contents belong instead.
+  defp raw_block?(%Node{kind: :tag, tag: tag}) when tag in ["style", "script"], do: true
+  defp raw_block?(_node), do: false
 
   # And it says what CAN be done there instead, which is the half a hidden panel does not supply.
   defp unstyleable_note(%Node{kind: :text}),
@@ -14876,8 +14907,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         "Dynamic content. What appears here is worked out when the page renders, so it carries no classes of its own."
       )
 
+  defp unstyleable_note(%Node{tag: "style"}),
+    do:
+      gettext(
+        "An inline style block. A class, this element's CSS box or a stylesheet does the same job, is cached, and needs no nonce."
+      )
+
+  defp unstyleable_note(%Node{tag: "script"}),
+    do:
+      gettext(
+        "An inline script. It does not run after a live navigation and the security policy refuses it — behaviour belongs in a JS hook."
+      )
+
   defp unstyleable_note(_comment),
     do: gettext("A comment renders nothing, so there is nothing to style.")
+
+  defp raw_block_home(%Node{tag: "style"}), do: "/admin/dashboard/runtime/stylesheets"
+  defp raw_block_home(%Node{tag: "script"}), do: "/admin/dashboard/runtime/js-hooks"
+
+  defp raw_block_home_label(%Node{tag: "style"}), do: gettext("Open stylesheets")
+  defp raw_block_home_label(%Node{tag: "script"}), do: gettext("Open JS hooks")
 
   # THE STATUS TRAVELS WITH THE LINK. An error page holds one template per status and the editor is
   # looking at exactly one of them, but the shareable URL carried no `?status=` — so

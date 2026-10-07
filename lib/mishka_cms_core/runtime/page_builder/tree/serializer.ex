@@ -118,7 +118,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer do
     [
       "<",
       tag,
-      attrs_source(styled_attrs(node)),
+      attrs_source(node |> styled_attrs() |> nonced(tag)),
       ">",
       Enum.map(children, &node_source(tree, &1)),
       "</",
@@ -126,6 +126,20 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer do
       ">"
     ]
   end
+
+  # A `<style>` IS REFUSED WITHOUT THE RESPONSE'S NONCE. `style-src-elem` names it, so a block the
+  # author wrote would do nothing on the published page and say nothing about it. It is given
+  # `csp_nonce()`, which every runtime template imports, unless it already carries a nonce. A
+  # `<script>` is left as written: a nonce would also admit a `src` from anywhere, and behaviour
+  # belongs in a JS hook, which the inspector says.
+  defp nonced(attrs, "style") do
+    case List.keymember?(attrs, "nonce", 0) do
+      true -> attrs
+      false -> attrs ++ [{"nonce", {:expr, "csp_nonce()"}}]
+    end
+  end
+
+  defp nonced(attrs, _tag), do: attrs
 
   # Recorded overrides are compiled into the `class` attribute on the way out (ADR-8), after the
   # author's own classes and in a stable order, so the next parse lifts exactly the same map back.

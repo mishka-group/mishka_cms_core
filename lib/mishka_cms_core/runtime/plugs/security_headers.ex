@@ -59,7 +59,8 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
       %{path: conn.request_path, method: conn.method},
       fn ->
         conn = MishkaInstaller.Event.Hook.call("web:request:before_response", conn)
-        {conn, nonce} = session_nonce(conn)
+        nonce = nonce()
+        :ok = CspNonce.put(nonce)
 
         result =
           conn
@@ -115,25 +116,9 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   def nonce(%{} = assigns), do: Map.get(assigns, :csp_nonce)
   def nonce(_other), do: nil
 
-  # ONE NONCE PER SESSION, NOT PER RESPONSE, because a LiveView outlives the response that carried
-  # the header. Its `<style>` blocks re-render over the socket for as long as the page is open, and
-  # a fresh nonce each request would leave the live policy naming a value the DOM no longer has —
-  # see `MishkaCmsCore.Runtime.CspNonce`, which reads this back on the other side.
-  defp session_nonce(conn) do
-    case Plug.Conn.get_session(conn, CspNonce.session_key()) do
-      nonce when is_binary(nonce) -> {conn, nonce}
-      _absent -> mint(conn)
-    end
-  rescue
-    # A pipeline with no session — the API ones — still gets a policy, just a per-request nonce.
-    ArgumentError -> {conn, nonce()}
-  end
-
-  defp mint(conn) do
-    nonce = nonce()
-    {Plug.Conn.put_session(conn, CspNonce.session_key(), nonce), nonce}
-  end
-
+  # ONE NONCE PER RESPONSE. A LiveView keeps the one its page was served with because
+  # `MishkaCmsCore.Runtime.CspNonce.session/1` signs it into that page's LiveView session — so nothing
+  # is written to the cookie, and no tab can be handed another tab's nonce.
   defp nonce, do: @nonce_bytes |> :crypto.strong_rand_bytes() |> Base.encode64()
 
   defp put_csp(conn, nonce) do
