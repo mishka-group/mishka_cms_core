@@ -21846,7 +21846,12 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       [row] = history_rows(page)
 
       render_click(view, "history_revert", %{"id" => row.id})
-      _flushed = render_async(view)
+      _reverted = render_async(view)
+
+      # THE "RESTORED" ROW IS A SECOND TASK'S. The revert's task only puts the tree back; the editor
+      # hears the session change and starts the flush that writes the row — after the wait above
+      # listed the tasks it would wait for, but before it returned. So one more wait covers it.
+      _recorded = render_async(view)
 
       assert Serializer.serialize(editor(view).tree) =~ "Contact Us"
       assert Enum.any?(history_rows(page), &(&1.op == :restore))
