@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeAccess do
 
   @doc "The attributes author-written Elixir is stored in. A resource declares whichever it has."
   @spec fields() :: [atom()]
-  def fields, do: [:events, :infos, :helpers]
+  def fields, do: [:events, :infos, :state, :helpers]
 
   @doc """
   Whether this deployment allows code the server runs — Elixir and hand-written HEEx.

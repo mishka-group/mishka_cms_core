@@ -165,6 +165,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         :schema,
         :events,
         :infos,
+        :state,
         :resource_links,
         :helpers,
         :active,

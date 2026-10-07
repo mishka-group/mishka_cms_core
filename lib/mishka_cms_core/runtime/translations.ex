@@ -60,7 +60,7 @@ defmodule MishkaCmsCore.Runtime.Translations do
   @sources [Component, Page, Layout]
 
   # The fields of a record whose entries hold code that `t/1` is imported into.
-  @code_fields [:helpers, :events, :infos]
+  @code_fields [:helpers, :events, :infos, :state]
 
   @doc """
   What `t/1` returns: `key` in the language this process is answering in, else the key itself.

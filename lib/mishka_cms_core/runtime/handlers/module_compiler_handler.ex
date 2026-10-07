@@ -839,6 +839,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
       template: page.template,
       events: page.events,
       infos: page.infos,
+      state: Map.get(page, :state),
       helpers: page.helpers,
       uploads: Map.get(page, :uploads),
       # WHO MAY OPEN THE PAGE, which `MishkaCmsWeb.RuntimeLive` reads back from the compiled module

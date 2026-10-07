@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeAudit do
   alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
 
   @sources [
-    {Page, [:events, :infos, :helpers]},
+    {Page, [:events, :infos, :state, :helpers]},
     {Layout, [:helpers]},
     {Component, [:helpers]},
     {ErrorPage, [:helpers]}

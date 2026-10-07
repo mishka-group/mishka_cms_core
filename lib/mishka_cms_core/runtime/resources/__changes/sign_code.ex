@@ -20,7 +20,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.SignCode do
 
   alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
 
-  @code_fields [:events, :infos, :helpers]
+  @code_fields [:events, :infos, :state, :helpers]
 
   @impl true
   def init(opts), do: {:ok, opts}

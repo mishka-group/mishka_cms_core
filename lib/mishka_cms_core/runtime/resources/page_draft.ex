@@ -70,6 +70,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     :schema,
     :events,
     :infos,
+    :state,
     :resource_links,
     :helpers,
     :active,
@@ -872,6 +873,11 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     end
 
     attribute :infos, {:array, :map} do
+      default []
+      public? true
+    end
+
+    attribute :state, {:array, :map} do
       default []
       public? true
     end

@@ -5407,6 +5407,75 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
 
   defp written(names), do: Enum.map(names, &%{name: &1, code: "{:noreply, socket}"})
 
+  describe "a page's starting state on the Code tab" do
+    defp stored_state(page) do
+      MishkaCmsCore.Runtime.Page
+      |> Ash.get!(page.id, authorize?: false, tenant: page.site_id)
+      |> Map.fetch!(:state)
+      |> Enum.map(&{&1.name, &1.code})
+    end
+
+    defp state_tab(view) do
+      view |> element("#pb-code") |> render_click()
+      view |> element("#pb-sourcetab-state") |> render_click()
+    end
+
+    test "is a tab of its own, and saving it writes the assigns the page starts with", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(
+          site_id: site.id,
+          template: ~S|<p>{@count}</p>|,
+          state: [%{name: "count", code: "0"}]
+        )
+
+      {:ok, view, _html} = open_builder(conn, page)
+      state_tab(view)
+
+      assert has_element?(view, "#pb-code-entry-state-0")
+      assert render(view) =~ "@count ="
+
+      render_click(view, "save_code", %{
+        "tab" => "state",
+        "entry" => %{
+          "0" => %{"name" => "count", "code" => "10"},
+          "1" => %{"name" => "step", "code" => "5"}
+        }
+      })
+
+      assert stored_state(page) == [{"count", "10"}, {"step", "5"}]
+    end
+
+    test "a name the runtime already sets is refused, and the page keeps its state", %{
+      conn: conn,
+      site: site
+    } do
+      page =
+        create_page!(site_id: site.id, template: "<p>x</p>", state: [%{name: "count", code: "0"}])
+
+      {:ok, view, _html} = open_builder(conn, page)
+      state_tab(view)
+
+      render_click(view, "save_code", %{
+        "tab" => "state",
+        "entry" => %{"0" => %{"name" => "flash", "code" => "%{}"}}
+      })
+
+      assert stored_state(page) == [{"count", "0"}]
+    end
+
+    test "a layout has no state to declare, so it is offered no tab", %{conn: conn, site: site} do
+      layout = create_layout!(site_id: site.id, template: ~s(<main>{@inner_content}</main>))
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/builder/layout/#{layout.id}")
+      view |> element("#pb-code") |> render_click()
+
+      refute has_element?(view, "#pb-sourcetab-state")
+    end
+  end
+
   describe "a page's forms on the Handlers tab" do
     test "lists both deep forms, each with its On change and On submit, Automatic", %{
       conn: conn,

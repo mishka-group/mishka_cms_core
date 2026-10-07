@@ -79,8 +79,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
   @doc """
   Checks one page's code.
 
-  Takes the same shape `LiveViewCompiler` takes — `:template`, `:events`, `:infos`, `:helpers` — and
-  fills in the rest, because none of it affects whether the code compiles.
+  Takes the same shape `LiveViewCompiler` takes — `:template`, `:events`, `:infos`, `:state`,
+  `:helpers` — and fills in the rest, because none of it affects whether the code compiles.
 
   Returns `:ok`, or every fault it can attribute. Fragment faults are reported together so an author
   fixing three typos is told about three typos; a module-level fault is reported alone, because
@@ -170,6 +170,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
       template: Map.get(page, :template) || "",
       events: listed(page, :events),
       infos: listed(page, :infos),
+      state: listed(page, :state),
       helpers: listed(page, :helpers)
     }
   end
@@ -199,6 +200,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
     Enum.flat_map([{:events, params.events}, {:infos, params.infos}], fn {tab, entries} ->
       entries |> Enum.with_index() |> Enum.flat_map(&body_fault(tab, &1))
     end) ++
+      (params.state |> Enum.with_index() |> Enum.flat_map(&state_fault/1)) ++
       (params.helpers |> Enum.with_index() |> Enum.flat_map(&helper_fault/1))
   end
 
@@ -220,6 +222,26 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
 
       true ->
         parse_fault(tab, index, entry.name, entry.code)
+    end
+  end
+
+  # A STATE ENTRY IS ONE EXPRESSION, its first value. An empty one would start the page with `nil`
+  # under a name the author meant to give a value, so it is said here, beside the box.
+  defp state_fault({entry, index}) do
+    case blank?(entry.code) do
+      true ->
+        [
+          fault(
+            :state,
+            index,
+            entry.name,
+            nil,
+            gettext("This value has no code. Write the expression the page starts with, like 0.")
+          )
+        ]
+
+      false ->
+        parse_fault(:state, index, entry.name, entry.code)
     end
   end
 
@@ -304,6 +326,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
     |> stage(:template, &LiveViewCompiler.build_page_forms/1)
     |> stage(:events, &LiveViewCompiler.build_event_handlers/1)
     |> stage(:infos, &LiveViewCompiler.build_info_handlers/1)
+    |> stage(:state, &LiveViewCompiler.build_page_state/1)
     |> stage(:template, &LiveViewCompiler.build_renders/1)
     |> stage(:helpers, &LiveViewCompiler.build_helpers/1)
     |> load(params.page_module)

@@ -10646,7 +10646,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # Not `phx-change`: the editor's element id contains a hash of the code — which is how a
   # server-side change reaches a box that is `phx-update="ignore"` — so feeding every keystroke back
   # would give the element a new id on every keystroke and remount CodeMirror under the cursor.
-  defp leaving(from, to) when from in [:events, :infos, :helpers],
+  defp leaving(from, to) when from in [:state, :events, :infos, :helpers],
     do: [type: "submit", form: "pb-code-form", name: "go", value: to]
 
   defp leaving(_from, to),
@@ -10678,6 +10678,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         true ->
           Enum.filter(
             [
+              {:state, gettext("State"), length(Map.get(fragments, :state, []))},
               {:events, gettext("Handlers"), length(Map.get(fragments, :events, []))},
               {:infos, gettext("Messages"), length(Map.get(fragments, :infos, []))},
               {:helpers, gettext("Helpers"), length(Map.get(fragments, :helpers, []))}
@@ -11110,17 +11111,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               data-focus={@focus == {:entry, index}}
               data-language="elixir"
               data-accent-panel
-              class="min-h-[9rem] w-full resize-y overflow-hidden bg-[#17161a] px-4 pl-8 [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
+              class={[
+                "w-full resize-y overflow-hidden bg-[#17161a] px-4 pl-8 [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]",
+                (@tab == :state && "min-h-[3.5rem]") || "min-h-[9rem]"
+              ]}
             >
               <textarea
                 name={"entry[#{index}][code]"}
                 spellcheck="false"
-                rows="6"
+                rows={(@tab == :state && "2") || "6"}
                 class="w-full resize-none border-0 bg-transparent py-1 font-['Space_Grotesk'] text-[12.5px] leading-[1.7] text-[#c9c7d1] outline-none"
               >{entry["code"]}</textarea>
             </div>
+            <%!-- A state value is one expression, not a function: there is no block to close. --%>
             <div class="bg-[#17161a] px-4 pb-3">
-              <span class="font-['Space_Grotesk'] text-[11.5px] text-[#a3a1ad]">end</span>
+              <span
+                :if={@tab != :state}
+                class="font-['Space_Grotesk'] text-[11.5px] text-[#a3a1ad]"
+              >
+                end
+              </span>
             </div>
 
             <p
@@ -11711,15 +11721,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp wrapper_head(:infos, entry), do: "def handle_info(#{entry["name"]}, socket) do"
 
+  defp wrapper_head(:state, entry), do: "@#{entry["name"]} ="
+
   defp wrapper_head(:helpers, entry),
     do: "def #{entry["name"]}(#{entry["args"]}) do"
 
   defp name_placeholder(:events), do: "save"
   defp name_placeholder(:infos), do: ":tick"
+  defp name_placeholder(:state), do: "count"
   defp name_placeholder(:helpers), do: "money"
 
   defp add_label(:events), do: gettext("+ Handler")
   defp add_label(:infos), do: gettext("+ Message")
+  defp add_label(:state), do: gettext("+ Value")
   defp add_label(:helpers), do: gettext("+ Helper")
 
   defp empty_note(:events, [_form | _more]),
@@ -11739,6 +11753,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp empty_note(:helpers),
     do: gettext("No helpers yet. One is a function the template can call.")
 
+  defp empty_note(:state),
+    do:
+      gettext(
+        "No state yet. Each value is an assign the page starts with, so @count is there from the first render."
+      )
+
   # Whether the record being edited compiles to a `Phoenix.LiveComponent` — read off the row rather
   # than the compiled module, because the editor is looking at what will be saved rather than at
   # what was last built.
@@ -11747,6 +11767,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp scope_note(:helpers),
     do: gettext("Helpers belong to this page and its template can call them.")
+
+  defp scope_note(:state),
+    do:
+      gettext(
+        "Worked out for each visitor when the page opens. A handler changes a value with assign(socket, :count, 1)."
+      )
 
   defp scope_note(_tab), do: gettext("Code is written on its own, not with the document.")
 

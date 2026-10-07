@@ -21,7 +21,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles do
 
   alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
 
-  @fields [:template, :events, :infos, :helpers]
+  @fields [:template, :events, :infos, :state, :helpers]
 
   @impl true
   def init(opts), do: {:ok, opts}

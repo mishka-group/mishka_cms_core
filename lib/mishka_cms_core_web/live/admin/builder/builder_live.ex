@@ -104,7 +104,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # EVERY TAB THE CODE WINDOW HAS, in the order it draws them. Two events name a tab — one opens the
   # window on it, one switches to it while it is open — and both have to agree about which names are
   # real, because `tab_atom/2` falls back to the head of this list for anything it does not know.
-  @source_tabs [:template, :interface, :events, :infos, :helpers, :styles]
+  @source_tabs [:template, :interface, :state, :events, :infos, :helpers, :styles]
 
   # `layout: false` drops the admin shell — sidebar, topbar and the 1340px content column — so the
   # editor owns the whole viewport the way the prototype does. It is not a preference: the editor is
@@ -2917,7 +2917,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       do: {:noreply, put_flash(socket, :error, CodeAccess.refusal())}
 
   def handle_event("add_code", %{"tab" => tab}, socket) do
-    key = tab_atom(tab, [:events, :infos, :helpers])
+    key = tab_atom(tab, [:events, :infos, :state, :helpers])
     entries = Map.get(socket.assigns.fragments, key, []) ++ [blank_entry(key)]
 
     {:noreply,
@@ -2927,7 +2927,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("remove_code", %{"tab" => tab, "index" => index}, socket) do
-    key = tab_atom(tab, [:events, :infos, :helpers])
+    key = tab_atom(tab, [:events, :infos, :state, :helpers])
     entries = socket.assigns.fragments |> Map.get(key, []) |> List.delete_at(to_int(index))
 
     {:noreply,
@@ -2961,7 +2961,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # a half-written handler would report a fault about a sentence somebody is still in the middle of.
   def handle_event("save_code", %{"tab" => tab, "go" => going} = params, socket)
       when is_binary(going) and going != "" do
-    key = tab_atom(tab, [:events, :infos, :helpers])
+    key = tab_atom(tab, [:events, :infos, :state, :helpers])
 
     {:noreply,
      socket
@@ -2972,7 +2972,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   def handle_event("save_code", %{"tab" => tab} = params, socket) do
-    key = tab_atom(tab, [:events, :infos, :helpers])
+    key = tab_atom(tab, [:events, :infos, :state, :helpers])
     fragments = Map.put(socket.assigns.fragments, key, submitted_entries(params))
 
     case CodeCheck.check(checkable(socket, fragments)) do
@@ -6729,7 +6729,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # ONLY A PAGE HAS THEM. `events` and `infos` are Page attributes; a Layout, a Component and an
   # error page have `helpers` and no handlers, so writing the keys on those sections would be
   # rejected by the resource rather than ignored.
-  @fragment_keys [:events, :infos, :helpers]
+  @fragment_keys [:state, :events, :infos, :helpers]
 
   defp code_keys(resource),
     do: Enum.filter(@fragment_keys, &(!is_nil(Ash.Resource.Info.attribute(resource, &1))))
@@ -7638,7 +7638,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # and shows them beside the snippet. It is dropped and the template checked again without those
   # fragments, which still catches the case that matters here — markup calling a helper that is not
   # there — against the helpers that actually compile.
-  @code_tabs [:events, :infos, :helpers]
+  @code_tabs [:state, :events, :infos, :helpers]
 
   defp compiles(socket, tree) do
     case CodeCheck.check(checkable(socket, socket.assigns.fragments, tree)) do

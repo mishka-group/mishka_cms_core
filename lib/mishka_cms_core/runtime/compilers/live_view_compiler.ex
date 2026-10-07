@@ -294,6 +294,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
           |> Map.update(:template, nil, &MishkaCmsCore.Runtime.PageBuilder.Visibility.strip/1)
           |> build_assigns()
           |> build_uploads()
+          |> build_page_state()
           |> build_page_forms()
           |> build_page_messages()
           |> build_event_handlers()
@@ -524,6 +525,54 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
 
   defp upload_field(declaration, key),
     do: Map.get(declaration, key) || Map.get(declaration, String.to_existing_atom(key))
+
+  @doc """
+  Compiles the page's `state` into the assigns it starts with — see
+  `MishkaCmsCore.Runtime.PageState`, which the mounting LiveView calls.
+
+  ## Generated
+
+      def __page_state__, do: %{count: 0, roles: roles()}
+      def __page_state_keys__, do: [:count, :roles]
+
+  `__page_state__/0` is evaluated each time a visitor mounts the page, so an expression may call the
+  page's helpers and a timestamp is fresh. `__page_state_keys__/0` is a literal, read without running
+  any of it. Both are emitted whether or not anything is declared.
+
+  Each value passes through the same signature check as a handler: unsigned code, where signing is
+  on, compiles to `nil`. The names become atoms here, at compile time, from rows that passed
+  `MishkaCmsCore.Runtime.Resources.Validations.PageStateNames`; anything that is not a name is
+  skipped rather than minted.
+  """
+  def build_page_state({params, functions_ast}) do
+    declared = declared_state(params[:state])
+    pairs = Enum.map(declared, fn {key, entry} -> {key, trusted_body(entry, :state, nil)} end)
+    keys = Enum.map(declared, &elem(&1, 0))
+
+    state_ast =
+      quote do
+        def __page_state__, do: unquote({:%{}, [], pairs})
+        def __page_state_keys__, do: unquote(keys)
+      end
+
+    {params, functions_ast ++ [state_ast]}
+  end
+
+  defp declared_state(entries) when is_list(entries) do
+    for entry <- entries,
+        is_map(entry),
+        name = state_field(entry, :name),
+        MishkaCmsCore.Runtime.PageState.valid_name?(name),
+        code = state_field(entry, :code),
+        is_binary(code) and String.trim(code) != "" do
+      {String.to_atom(name), %{name: name, code: code, signature: state_field(entry, :signature)}}
+    end
+    |> Enum.uniq_by(&elem(&1, 0))
+  end
+
+  defp declared_state(_entries), do: []
+
+  defp state_field(entry, key), do: Map.get(entry, key) || Map.get(entry, Atom.to_string(key))
 
   @doc """
   Compiles the page's own forms into `__page_forms__/0`, and generates the change and submit
