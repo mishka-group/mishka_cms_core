@@ -180,7 +180,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
     socket
     |> assign(components: AsyncResult.loading(), loaded_for: site_id, picked: nil)
-    |> start_async(:components, fn -> ContentComponents.embeddable(user, site_id) end)
+    |> MishkaGervaz.Messages.start_async(:components, fn ->
+      ContentComponents.embeddable(user, site_id)
+    end)
   end
 
   defp close(socket),

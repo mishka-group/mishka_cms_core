@@ -84,7 +84,15 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
 
     test "leaves out any name a helper defines, captcha as much as t" do
       assert LiveViewHelpers.imports([%{name: "captcha"}]) ==
-               [component: 1, component: 2, rich_content: 1, t: 1, t: 2, csp_nonce: 0, site_path: 2]
+               [
+                 component: 1,
+                 component: 2,
+                 rich_content: 1,
+                 t: 1,
+                 t: 2,
+                 csp_nonce: 0,
+                 site_path: 2
+               ]
     end
 
     test "and rich_content, for a component that draws its own" do
