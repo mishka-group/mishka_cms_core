@@ -1424,7 +1424,11 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     err = MishkaCmsCore.Runtime.Helpers.atomize_keys(err)
     helpers_blob = helpers_to_text(Map.get(err, :helpers, []))
 
+    # THE LIST IS ATOMIZED ON ITS OWN. A record read at boot is a struct, which `atomize_keys/1`
+    # leaves as it is, and a status's `layout` is a plain map stored as JSON: its key stays
+    # "template", and the layout's classes would be left out of the site's stylesheet.
     err.error_pages
+    |> MishkaCmsCore.Runtime.Helpers.atomize_keys()
     |> Enum.flat_map(fn error_page ->
       [error_page.template, get_in(error_page, [:layout, :template])]
     end)

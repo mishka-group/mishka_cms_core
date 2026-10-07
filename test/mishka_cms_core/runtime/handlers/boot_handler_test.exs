@@ -78,4 +78,48 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandlerTest do
                {:compilation_exit, {:shutdown, 1}}
     end
   end
+
+  describe "build_error_template_content/1 — what the site's stylesheet scans" do
+    @error_pages [
+      %{
+        status: 404,
+        template: ~s(<p class="status-class">gone</p>),
+        layout: %{"template" => ~s(<div class="layout-class"><%= @inner_content %></div>)}
+      }
+    ]
+
+    test "a record read at boot carries every status's layout" do
+      record =
+        struct(MishkaCmsCore.Runtime.ErrorPage,
+          root_layout_template: ~s(<body class="root-class"><%= @inner_content %></body>),
+          helpers: [],
+          error_pages: @error_pages
+        )
+
+      content = BootHandler.build_error_template_content(record)
+
+      assert content =~ "root-class"
+      assert content =~ "status-class"
+      assert content =~ "layout-class"
+    end
+
+    test "a job's data carries them the same way" do
+      data = %{
+        "root_layout_template" => ~s(<body class="root-class"><%= @inner_content %></body>),
+        "helpers" => [],
+        "error_pages" => [
+          %{
+            "status" => 404,
+            "template" => ~s(<p class="status-class">gone</p>),
+            "layout" => %{"template" => ~s(<div class="layout-class"><%= @inner_content %></div>)}
+          }
+        ]
+      }
+
+      content = BootHandler.build_error_template_content(data)
+
+      assert content =~ "status-class"
+      assert content =~ "layout-class"
+    end
+  end
 end
