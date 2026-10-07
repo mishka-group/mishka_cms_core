@@ -197,13 +197,17 @@ defmodule MishkaCmsCore.Runtime.States.AssetsState do
   def exists?(id, type), do: :ets.member(@main_table, {id, type})
 
   @doc """
+  The `hash` of an asset without reading its (large) value — `nil` if absent.
+
+  One lookup that copies the hash alone, for the paths that run on every page render.
+  """
+  @spec hash(String.t(), String.t()) :: String.t() | nil
+  def hash(id, type), do: :ets.lookup_element(@main_table, {id, type}, 3, nil)
+
+  @doc """
   The `updated_at` of an asset without reading its (large) value — `nil` if absent.
   """
-  def updated_at(id, type) do
-    if :ets.member(@main_table, {id, type}),
-      do: :ets.lookup_element(@main_table, {id, type}, 4),
-      else: nil
-  end
+  def updated_at(id, type), do: :ets.lookup_element(@main_table, {id, type}, 4, nil)
 
   @doc """
   Gets all assets for a specific site (all types).
