@@ -303,6 +303,23 @@ defmodule MishkaCmsCore.Dev.Generator do
     )
   end
 
+  def redirect(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.Redirect,
+      :create,
+      authorize?: false,
+      defaults: [
+        from_path: sequence(:redirect_from, &"/old-#{&1}"),
+        to: sequence(:redirect_to, &"/new-#{&1}"),
+        status: 301,
+        active: true,
+        description: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
   # `relative_path` is still taken as an option, but handed on as the private `stored_path`: the
   # create does not accept the path as input, only from the code that stored the file.
   def media(opts \\ [], tenant \\ nil) do

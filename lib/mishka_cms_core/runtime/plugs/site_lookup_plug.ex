@@ -20,9 +20,11 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   1. **Host Extraction**: Extracts and normalizes host from request headers
   2. **Site Lookup**: Queries SiteState cache for host-to-site mapping
   3. **Site Validation**: Checks site active status
-  4. **Sign-in Pool**: On the master site, `?master_user=` picks the accounts its sign-in page uses
-  5. **Tenant Assignment**: Sets Ash tenant context from the session's token
-  6. **State Storage**: Persists site data in assigns and session
+  4. **Redirects**: An address one of the site's redirect rules names is answered with that redirect
+     and halted, before the session is touched — see `MishkaCmsCore.Runtime.Redirects`
+  5. **Sign-in Pool**: On the master site, `?master_user=` picks the accounts its sign-in page uses
+  6. **Tenant Assignment**: Sets Ash tenant context from the session's token
+  7. **State Storage**: Persists site data in assigns and session
 
   ## Usage
 
@@ -110,7 +112,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   import Plug.Conn
 
   alias MishkaCmsCore.Accounts.AuthGate
-  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.{Languages, Redirects}
   alias MishkaCmsCore.Runtime.States.SiteState
 
   # Where `AshAuthentication` keeps the signed-in user's token in the session.
@@ -193,6 +195,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   ## Response Scenarios
 
   - **Active Site Found**: Connection continues with site context
+  - **Redirected Address**: The rule's status and `location`, halted, with `:current_site` assigned
   - **Inactive Site**: 503 "Site Temporarily Unavailable" response
   - **Site Not Found**: 503 "Service Unavailable" response
   - **Master session on the master site**: Site context set, no tenant
@@ -399,10 +402,20 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       true ->
         conn
         |> assign(:current_site, site)
-        |> put_session(:current_site, site)
-        |> sign_in_pool(site)
-        |> scope(site)
+        |> Redirects.redirect(site)
+        |> serve(site)
     end
+  end
+
+  # A REDIRECTED REQUEST IS ANSWERED ALREADY: the address it asked for is none of this site's pages, so
+  # nothing is written to its session.
+  defp serve(%Plug.Conn{halted: true} = conn, _site), do: conn
+
+  defp serve(conn, site) do
+    conn
+    |> put_session(:current_site, site)
+    |> sign_in_pool(site)
+    |> scope(site)
   end
 
   @doc false

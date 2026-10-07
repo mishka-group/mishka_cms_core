@@ -339,6 +339,30 @@ defmodule MishkaCmsCore.Runtime do
 
         get :master_preview_version, route: "/:category_id/version/:version_id/preview"
       end
+
+      base_route "/v1/tenant/admin/runtime/redirect", MishkaCmsCore.Runtime.Redirect do
+        index :read
+        get :read
+        index :archived, route: "/archived"
+        get :get_archived, route: "/archived/:id"
+        post :create
+        patch :update
+        patch :unarchive, route: "/:id/unarchive", read_action: :get_archived
+        delete :destroy, route: "/:id/archive"
+        delete :permanent_destroy, route: "/:id/permanent"
+      end
+
+      base_route "/v1/master/admin/runtime/redirect", MishkaCmsCore.Runtime.Redirect do
+        index :master_read
+        get :master_get
+        index :master_archived, route: "/archived"
+        get :master_get_archived, route: "/archived/:id"
+        post :master_create
+        patch :master_update, route: "/:id", read_action: :master_get
+        patch :master_unarchive, route: "/:id/unarchive", read_action: :master_get_archived
+        delete :master_destroy, route: "/:id/archive", read_action: :master_get
+        delete :master_permanent_destroy, route: "/:id/permanent", read_action: :master_get
+      end
     end
   end
 
@@ -490,6 +514,9 @@ defmodule MishkaCmsCore.Runtime do
     end
 
     resource MishkaCmsCore.Runtime.MediaCategory do
+    end
+
+    resource MishkaCmsCore.Runtime.Redirect do
     end
 
     resource MishkaCmsCore.Runtime.Snippet do

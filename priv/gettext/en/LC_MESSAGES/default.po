@@ -14727,3 +14727,35 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Not in the js bundle of %{sites}, so no page there can run it. %{reason}"
 msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.html.heex:9
+#, elixir-autogen, elixir-format
+msgid "+ Add redirect"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__mixins/redirect_paper_trail_mixin.ex:16
+#, elixir-autogen, elixir-format
+msgid "Redirect"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.ex:58
+#, elixir-autogen, elixir-format
+msgid "Redirect created"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.ex:61
+#, elixir-autogen, elixir-format
+msgid "Redirect updated"
+msgstr ""
+
+#: lib/mishka_cms_core/sidebar.ex:393
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.ex:34
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.html.heex:3
+#, elixir-autogen, elixir-format
+msgid "Redirects"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.html.heex:5
+#, elixir-autogen, elixir-format
+msgid "Send the addresses that moved — old pages, old files — to where they are now."
+msgstr ""

@@ -9,8 +9,8 @@ defmodule MishkaCmsCore.Runtime.RuntimeSectionRulesTest do
   is written as its document is. What the builder generates into a stylesheet is written by any
   builder's type.
 
-  Sites, media, translations and the Activity log carry no code: their own section writes them, and
-  reads the log. Code writes none of them.
+  Sites, media, translations, redirects and the Activity log carry no code: their own section writes
+  them, and reads the log. Code writes none of them.
 
   Every write runs on a site of its own, since a site holds one error page.
   """
@@ -33,6 +33,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeSectionRulesTest do
     MediaCategory,
     Page,
     PageDraft,
+    Redirect,
     Site,
     Stylesheet,
     Translation
@@ -201,11 +202,12 @@ defmodule MishkaCmsCore.Runtime.RuntimeSectionRulesTest do
     end
   end
 
-  # SITES, MEDIA AND TRANSLATIONS ARE WRITTEN BY THEIR OWN SECTION; CODE PLAYS NO PART.
+  # SITES, MEDIA, TRANSLATIONS AND REDIRECTS ARE WRITTEN BY THEIR OWN SECTION; CODE PLAYS NO PART.
   @sections [
     {:site, "admin:dashboard:runtime:site", "admin:api:runtime:site"},
     {:media, "admin:dashboard:runtime:media", "admin:api:runtime:media"},
-    {:translation, "admin:dashboard:runtime:translation", "admin:api:runtime:translation"}
+    {:translation, "admin:dashboard:runtime:translation", "admin:api:runtime:translation"},
+    {:redirect, "admin:dashboard:runtime:redirect", "admin:api:runtime:redirect"}
   ]
 
   for {section, own, api_own} <- @sections do
@@ -427,7 +429,8 @@ defmodule MishkaCmsCore.Runtime.RuntimeSectionRulesTest do
     |> Ash.run_action()
   end
 
-  # WHO WRITES A SECTION'S RECORDS: a site is a master's to create, media and translations a site's.
+  # WHO WRITES A SECTION'S RECORDS: a site is a master's to create, media, translations and redirects
+  # a site's.
   defp holder_of(:site), do: :master
   defp holder_of(_section), do: :site_admin
 
@@ -457,6 +460,14 @@ defmodule MishkaCmsCore.Runtime.RuntimeSectionRulesTest do
       &create(Translation, %{key: forgotten(&1), language: language(&1), value: "v"}, &2),
       &edit(registered!(&1), %{value: "v"}, &2),
       &destroy(registered!(&1), &2)
+    ]
+  end
+
+  defp writes(:redirect) do
+    [
+      fn _site, opts -> create(Redirect, %{from_path: "/r#{n()}", to: "/new"}, opts) end,
+      &edit(create_redirect!(site_id: &1.id), %{to: "/r#{n()}"}, &2),
+      &destroy(create_redirect!(site_id: &1.id), &2)
     ]
   end
 

@@ -389,6 +389,19 @@ defmodule MishkaCmsCore.Sidebar do
                     ]
                   },
                   %{
+                    key: "runtime.redirects",
+                    label: gettext_noop("Redirects"),
+                    icon: "hero-link",
+                    path: "/admin/dashboard/runtime/redirects",
+                    module: MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Redirect.Index,
+                    group: "runtime",
+                    order: 90,
+                    permissions: [
+                      "admin:dashboard:runtime:redirect",
+                      {:under, "admin:dashboard"}
+                    ]
+                  },
+                  %{
                     key: "account.users",
                     label: gettext_noop("Users"),
                     icon: "hero-user",
