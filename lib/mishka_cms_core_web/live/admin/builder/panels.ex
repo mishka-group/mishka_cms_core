@@ -13487,7 +13487,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # THE FORM HERE IS SHORTER THAN THE LIBRARY'S, and deliberately so. A page belongs to a site, so
   # the sheet must not ask which one — `hidden_fields` drops the Site field and `defaults` carries
   # the page's own `site_id` into the save, for a master exactly as for a tenant. And with no Site to
-  # pick, Category has nothing to wait for.
+  # pick, Folder has nothing to wait for: it starts on the folder the rail has open, so a file dropped
+  # there lands in it.
   #
   # `submit false` removes the Create button for the same reason: in 620px of overlay the dropzone IS
   # the action, so `UploadSubmitsItself` submits the moment a file is staged. Gervaz still allows the
@@ -13578,7 +13579,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             current_user={@current_user}
             hidden_fields={(@editor.site_id && [:site_id]) || []}
             submit={false}
-            defaults={%{site_id: @editor.site_id}}
+            defaults={%{site_id: @editor.site_id, media_category_id: @assets_category}}
           />
         </div>
 
@@ -13601,6 +13602,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       <.folder_modal
         :if={@folder_form?}
         site_id={@editor.site_id}
+        parent_id={@assets_category}
         current_user={@current_user}
       />
 
@@ -13925,7 +13927,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   `MishkaCmsCore.Runtime.MediaCategory`'s own — so a folder made here is a folder made there, with
   the same actions, the same validation and the same `master_create` / `create` pair. Shorter by one
   field for the reason the upload form is: the page belongs to a site, so `hidden_fields` drops Site
-  and `defaults` carries the answer.
+  and `defaults` carries the answer. It starts inside the folder the rail has open, `parent_id`.
 
   Nothing here puts the new folder in the rail. `MediaCategory` publishes on `media_category:created`
   and `BuilderLive` re-reads the rail when it hears it — the same route a folder added in another tab
@@ -13954,6 +13956,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   the siblings keep their places and the new node is simply added.
   """
   attr(:site_id, :string, default: nil)
+  attr(:parent_id, :string, default: nil)
   attr(:current_user, :map, required: true)
 
   def folder_modal(assigns) do
@@ -14000,7 +14003,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             resource={MediaCategory}
             current_user={@current_user}
             hidden_fields={(@site_id && [:site_id]) || []}
-            defaults={%{site_id: @site_id}}
+            defaults={%{site_id: @site_id, parent_id: @parent_id}}
           />
         </div>
       </section>
@@ -14122,15 +14125,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             </span>
           </:failed>
 
+          <%!-- A folder inside another one sits under it, stepped in by how deep it is. --%>
           <button
-            :for={category <- categories}
+            :for={{category, depth} <- nest_folders(categories)}
             type="button"
             id={"pb-folder-#{category.id}"}
+            data-depth={depth}
             phx-click="select_asset_category"
             phx-value-id={category.id}
             title={category.name}
             class={[
               "flex items-center gap-2 rounded-[9px] border px-[9px] py-2 text-left max-[560px]:justify-center max-[560px]:px-0",
+              folder_step(depth),
               (@selected == category.id && "border-[#dcdbf5] bg-[#f2f1fc]") ||
                 "border-transparent hover:bg-[#f7f6f3]"
             ]}
@@ -14168,6 +14174,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     </nav>
     """
   end
+
+  # THE RAIL'S FOLDERS IN TREE ORDER, each with how deep it sits: a folder, then the folders inside
+  # it, in the order they were read. A folder whose parent was not read stands at the top.
+  defp nest_folders(folders) do
+    read = MapSet.new(folders, & &1.id)
+
+    folders
+    |> Enum.group_by(&if(MapSet.member?(read, &1.parent_id), do: &1.parent_id))
+    |> nest_under(nil, 0)
+  end
+
+  defp nest_under(inside, parent_id, depth) do
+    inside
+    |> Map.get(parent_id, [])
+    |> Enum.flat_map(&[{&1, depth} | nest_under(inside, &1.id, depth + 1)])
+  end
+
+  # Four steps are enough to see the shape in a 168px rail; deeper folders stand at the fourth. The
+  # icon-only rail of a narrow screen has no room to step at all.
+  defp folder_step(0), do: nil
+  defp folder_step(1), do: "ps-[19px] max-[560px]:ps-0"
+  defp folder_step(2), do: "ps-[29px] max-[560px]:ps-0"
+  defp folder_step(_deeper), do: "ps-[39px] max-[560px]:ps-0"
 
   # PATH PARAMS ARE THE ONLY CHANNEL INTO A GERVAZ TABLE that both filters the query and reaches a
   # row action's `visible` callback, and they arrive through `url_state`, not through an assign of

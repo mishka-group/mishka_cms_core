@@ -1195,7 +1195,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
       {:ok, media} = update_as(media, %{media_category_id: own.id}, context.star, context.site.id)
 
       assert {:error, error} = restore(media, tainted, context.star)
-      assert Exception.message(error) =~ "media category is not one this site can use"
+      assert Exception.message(error) =~ "folder is not one this site can use"
     end
 
     test "says the site's own layout it named is archived", context do
@@ -1296,7 +1296,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
       archive!(first, context.site.id)
 
       assert {:error, error} = restore(media, named, context.star)
-      assert Exception.message(error) =~ "That media category is archived. Restore it first."
+      assert Exception.message(error) =~ "That folder is archived. Restore it first."
     end
   end
 
@@ -1741,7 +1741,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
                  context.star,
                  context.site.id
                ),
-               "media category"
+               "folder"
              )
 
       assert refused?(
@@ -1751,7 +1751,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
                  master,
                  nil
                ),
-               "media category"
+               "folder"
              )
 
       assert refused?(
@@ -1762,7 +1762,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
                  context.star,
                  context.site.id
                ),
-               "media category"
+               "folder"
              )
 
       assert refused?(
@@ -1773,12 +1773,12 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
                  master,
                  nil
                ),
-               "media category"
+               "folder"
              )
 
       assert refused?(
                update_with(media, :master_update, %{media_category_id: theirs.id}, master, nil),
-               "media category"
+               "folder"
              )
 
       own = create_media_category!(site_id: context.site.id)

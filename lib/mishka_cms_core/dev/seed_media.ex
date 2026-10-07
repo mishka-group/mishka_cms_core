@@ -200,9 +200,10 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
 
   defp categories(_site_id, []), do: %{}
 
-  # THE NAME IS THE CATEGORY, which `MediaCategory`'s `unique_name_per_site` is what says: a second
-  # run finds "Banners" already there and puts this run's banners in it rather than dying on a name
-  # it cannot have twice. The description an admin rewrote stays theirs — this only ever reads.
+  # THE NAME IS THE CATEGORY, which `MediaCategory`'s `unique_name_per_parent` is what says for the
+  # top level the seed writes to: a second run finds "Banners" already there and puts this run's
+  # banners in it rather than dying on a name it cannot have twice. The description an admin
+  # rewrote stays theirs — this only ever reads.
   #
   # ONLY THE SHAPES THAT HAVE A FILE TO WRITE, which is why `install/1` works out what is pending
   # before it asks for these. A run with nothing new to store asks for no category at all, so a site
@@ -315,12 +316,14 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
 
   # LIVE CATEGORIES ONLY, unlike the media above, because this answer is what a NEW row is filed
   # under: a category an admin archived is gone from the library, and putting today's picture in it
-  # would hide the picture rather than reuse the category.
+  # would hide the picture rather than reuse the category. And TOP-LEVEL ONLY, where the seed makes
+  # them: an admin's own "banners" folder inside another one is theirs, not the seed's.
   defp held_categories(site_id) do
     names = @category_names |> Map.values() |> Enum.map(&Slug.slugify/1)
 
     MediaCategory
     |> rows(:read, site_id, names)
+    |> Enum.filter(&is_nil(&1.parent_id))
     |> Map.new(&{&1.name, &1})
   end
 
@@ -332,10 +335,11 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
   # category it had made and died creating it again.
   defp stored_name(filename), do: filename |> Media.upload_name() |> Slug.slugify()
 
-  # A PAGE IS NOT THE WHOLE ANSWER, and sizing it by the names asked about was the trap. Live rows
-  # are bounded by that list — a name is unique per site — but `unique_name_per_site` is partial on
-  # `archived_at IS NULL`, so one name can have any number of ARCHIVED rows behind it, and enough of
-  # them crowded another name off the page. That name then looked absent and was written a second
+  # A PAGE IS NOT THE WHOLE ANSWER, and sizing it by the names asked about was the trap. A file's
+  # live rows are bounded by that list — its name is unique per site — but `unique_name_per_site` is
+  # partial on `archived_at IS NULL`, so one name can have any number of ARCHIVED rows behind it,
+  # and enough of them crowded another name off the page. A folder's name is unique only beside its
+  # siblings, so even its live rows are not bounded by it. That name then looked absent and was written a second
   # time: the duplication this module exists to stop. So the pages are followed to the end instead,
   # and `page: false` is not the shortcut — these actions require a page.
   defp rows(_resource, _action, _site_id, []), do: []

@@ -19,16 +19,67 @@
       id={MishkaGervaz.Resource.Info.Form.component_id(MishkaCmsCore.Runtime.Media)}
       resource={MishkaCmsCore.Runtime.Media}
       current_user={@current_user}
+      defaults={form_defaults(@folder_id, @trail, @is_master, :media_category_id)}
     />
   </div>
 
+  <%!-- Where the library is: the top level, then each folder down to the one open. --%>
+  <nav
+    id="media-breadcrumb"
+    aria-label={gettext("Folder path")}
+    class="mb-4 flex flex-wrap items-center gap-1 rounded-[14px] border border-[#ecebe6] bg-white px-3 py-2 text-[12.5px] font-semibold shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+  >
+    <.icon name="hero-folder-open" class="size-4 flex-none text-[#8a877f]" />
+    <%= if @folder_id do %>
+      <.link
+        id="media-crumb-root"
+        patch={path(@socket, folder_path(nil, @is_master))}
+        class="rounded-[7px] px-1.5 py-0.5 text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+      >
+        {gettext("All media")}
+      </.link>
+    <% else %>
+      <span id="media-crumb-root" aria-current="page" class="px-1.5 py-0.5 text-[#1b1a18]">
+        {gettext("All media")}
+      </span>
+    <% end %>
+    <%= if @folder_missing? do %>
+      <.icon name="hero-chevron-right" class="size-3 flex-none text-[#a8a5a0] rtl:rotate-180" />
+      <span id="media-crumb-missing" role="alert" class="px-1.5 py-0.5 text-[#b13a2f]">
+        {gettext("That folder is no longer in the library.")}
+      </span>
+    <% end %>
+    <%= for {folder, index} <- Enum.with_index(@trail) do %>
+      <.icon name="hero-chevron-right" class="size-3 flex-none text-[#a8a5a0] rtl:rotate-180" />
+      <%= if index < length(@trail) - 1 do %>
+        <.link
+          id={"media-crumb-#{folder.id}"}
+          dir="auto"
+          patch={path(@socket, folder_path(folder, @is_master))}
+          class="max-w-[200px] truncate rounded-[7px] px-1.5 py-0.5 text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+        >
+          {folder.name}
+        </.link>
+      <% else %>
+        <span
+          id={"media-crumb-#{folder.id}"}
+          dir="auto"
+          aria-current="page"
+          class="max-w-[200px] truncate px-1.5 py-0.5 text-[#1b1a18]"
+        >
+          {folder.name}
+        </span>
+      <% end %>
+    <% end %>
+  </nav>
+
   <div class="grid grid-cols-[250px_minmax(0,1fr)] items-start gap-[22px] max-[980px]:grid-cols-1!">
-    <%!-- Categories Sidebar --%>
+    <%!-- Folders Sidebar: the folders directly inside the one open --%>
     <aside class="sticky top-0 z-[25]">
       <div class="rounded-[16px] border border-[#ecebe6] bg-white p-[14px] shadow-[0_1px_2px_rgba(30,28,24,0.04)] max-[980px]:rounded-[14px]! max-[980px]:p-[10px]!">
         <div class="mb-3 flex items-center justify-between px-1 max-[980px]:mb-2!">
           <span class="font-['Space_Grotesk'] text-[13px] font-bold text-[#1b1a18]">
-            {gettext("Categories")}
+            {gettext("Folders")}
           </span>
           <div class="flex gap-1.5">
             <button
@@ -37,9 +88,9 @@
               type="button"
               class="grid size-[26px] place-items-center rounded-lg border border-[#ecebe6] bg-[#faf9f6] text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
               phx-click="toggle_category_form"
-              title={gettext("Add Category")}
+              title={gettext("New folder here")}
             >
-              <.icon name="hero-plus" class="size-[14px]" />
+              <.icon name="hero-folder-plus" class="size-[14px]" />
             </button>
             <button
               type="button"
@@ -61,27 +112,21 @@
           </div>
         </div>
 
-        <%!-- Active Categories View --%>
+        <%!-- Active Folders View --%>
         <div :if={@category_archive_status == :active}>
           <div
             :if={@categories_loading.loading && !@has_categories_data}
             class="flex flex-col items-center justify-center py-6"
           >
             <span class="inline-block size-8 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
-            <p class="mt-2 text-[12px] text-[#8a877f]">{gettext("Loading categories...")}</p>
+            <p class="mt-2 text-[12px] text-[#8a877f]">{gettext("Loading folders...")}</p>
           </div>
 
           <div :if={@categories_loading.failed} class="text-[12px] text-[#b91c1c]">
-            {gettext("Failed to load categories")}
+            {gettext("Could not load folders")}
           </div>
 
           <div :if={@has_categories_data} class="relative">
-            <span
-              id={"category-selection-#{@selected_category_id || "none"}"}
-              class="hidden"
-              phx-mounted={apply_category_selection(@selected_category_id)}
-            />
-
             <div
               :if={@categories_loading.loading}
               class="absolute inset-0 z-10 flex items-center justify-center bg-white/70"
@@ -93,23 +138,15 @@
               data-role="md-catlist"
               class="flex flex-col gap-0.5 max-[980px]:flex-row! max-[980px]:gap-2! max-[980px]:overflow-x-auto! max-[980px]:pb-1!"
             >
-              <ul class="flex flex-col gap-0.5 p-0 max-[980px]:flex-row! max-[980px]:gap-2!">
-                <li
-                  data-category-id="__all__"
-                  class="category-chip flex cursor-pointer items-center gap-2.5 rounded-[10px] border border-transparent px-[11px] py-[9px] transition-colors hover:bg-[#f7f6f3] max-[980px]:flex-none! max-[980px]:border-[#eceae4] max-[980px]:bg-[#faf9f6] max-[980px]:px-3! max-[980px]:py-[7px]!"
-                >
-                  <.link
-                    patch={path(@socket, "/admin/dashboard/runtime/medias")}
-                    phx-click={select_category_js("__all__")}
-                    class="flex min-w-0 flex-1 items-center gap-2.5"
-                  >
-                    <span class="size-2 flex-none rounded-[3px] bg-[#8a877f]" />
-                    <span class="flex-1 truncate text-[12.5px] font-semibold text-[#3a382f]">
-                      {gettext("All Media")}
-                    </span>
-                  </.link>
-                </li>
-              </ul>
+              <.link
+                :if={@folder_id && @trail != []}
+                id="media-folder-up"
+                patch={path(@socket, folder_path(parent_folder(@trail), @is_master))}
+                class="flex items-center gap-2.5 rounded-[10px] border border-transparent px-[11px] py-[8px] text-[12.5px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3] max-[980px]:flex-none! max-[980px]:border-[#eceae4] max-[980px]:bg-[#faf9f6] max-[980px]:px-3! max-[980px]:py-[7px]!"
+              >
+                <.icon name="hero-arrow-uturn-up" class="size-[15px] flex-none text-[#8a877f]" />
+                <span class="truncate">{gettext("Up one level")}</span>
+              </.link>
 
               <ul
                 id="categories-list"
@@ -117,51 +154,26 @@
                 class="flex flex-col gap-0.5 p-0 max-[980px]:flex-row! max-[980px]:gap-2!"
               >
                 <li
+                  id="categories-empty"
+                  class="hidden px-[11px] py-3 text-[12px] text-[#a8a5a0] only:block max-[980px]:py-[7px]"
+                >
+                  {gettext("No folders in here.")}
+                </li>
+                <li
                   :for={{dom_id, category} <- @streams.categories}
                   id={dom_id}
-                  data-category-id={category.id}
-                  class="category-chip flex items-center gap-2.5 rounded-[10px] border border-transparent px-[11px] py-[8px] transition-colors hover:bg-[#f7f6f3] max-[980px]:flex-none! max-[980px]:border-[#eceae4] max-[980px]:bg-[#faf9f6] max-[980px]:px-3! max-[980px]:py-[7px]!"
+                  class="flex items-center gap-2.5 rounded-[10px] border border-transparent px-[11px] py-[8px] transition-colors hover:bg-[#f7f6f3] max-[980px]:flex-none! max-[980px]:border-[#eceae4] max-[980px]:bg-[#faf9f6] max-[980px]:px-3! max-[980px]:py-[7px]!"
                 >
-                  <% dot =
-                    cond do
-                      String.contains?(String.downcase(category.name || ""), "video") ->
-                        "bg-[#7a5bd0]"
-
-                      String.contains?(String.downcase(category.name || ""), [
-                        "image",
-                        "photo",
-                        "pic"
-                      ]) ->
-                        "bg-[#3a6cb5]"
-
-                      String.contains?(String.downcase(category.name || ""), [
-                        "doc",
-                        "file",
-                        "text"
-                      ]) ->
-                        "bg-[#177a53]"
-
-                      true ->
-                        Enum.at(
-                          ~w(bg-[#4f4bcc] bg-[#c2410c] bg-[#0d9488] bg-[#b45309] bg-[#7a5bd0] bg-[#be185d]),
-                          rem(:erlang.phash2(category.id), 6)
-                        )
-                    end %>
-                  <% cat_path =
-                    if @is_master do
-                      "/admin/dashboard/runtime/medias?filter_media_category_id=#{category.id}&filter_site_id=#{category.site_id}"
-                    else
-                      "/admin/dashboard/runtime/medias?filter_media_category_id=#{category.id}"
-                    end %>
                   <.link
-                    patch={path(@socket, cat_path)}
-                    phx-click={select_category_js(category.id)}
+                    id={"category-open-#{category.id}"}
+                    patch={path(@socket, folder_path(category, @is_master))}
                     class="flex min-w-0 flex-1 items-center gap-2.5"
                   >
-                    <span class={["size-2 flex-none rounded-[3px]", dot]} />
+                    <.icon name="hero-folder" class="size-[15px] flex-none text-[#8a877f]" />
                     <span class="min-w-0 flex-1">
                       <span
                         id={"category-name-#{category.id}"}
+                        dir="auto"
                         class="block truncate text-[12.5px] font-semibold text-[#3a382f]"
                       >
                         {category.name}
@@ -187,7 +199,7 @@
                       class="grid size-[24px] place-items-center rounded-[7px] text-[#8a877f] transition-colors hover:bg-[#eae8f7] hover:text-[#4f4bcc]"
                       phx-click="edit_category"
                       phx-value-id={category.id}
-                      title={gettext("Edit")}
+                      title={gettext("Rename")}
                     >
                       <svg
                         viewBox="0 0 24 24"
@@ -204,10 +216,19 @@
                     </button>
                     <button
                       type="button"
+                      class="grid size-[24px] place-items-center rounded-[7px] text-[#8a877f] transition-colors hover:bg-[#eae8f7] hover:text-[#4f4bcc]"
+                      phx-click="move_category"
+                      phx-value-id={category.id}
+                      title={gettext("Move")}
+                    >
+                      <.icon name="hero-folder-arrow-down" class="size-[13px]" />
+                    </button>
+                    <button
+                      type="button"
                       class="grid size-[24px] place-items-center rounded-[7px] text-[#c08078] transition-colors hover:bg-[#fbe9e7] hover:text-[#c0473d]"
                       phx-click="delete_category"
                       phx-value-id={category.id}
-                      data-confirm={gettext("Are you sure you want to archive this category?")}
+                      data-confirm={gettext("Are you sure you want to archive this folder?")}
                       title={gettext("Archive")}
                     >
                       <svg
@@ -244,19 +265,19 @@
                   <span class="inline-block size-4 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
                   {gettext("Loading...")}
                 <% else %>
-                  {gettext("Load more categories")}
+                  {gettext("Load more folders")}
                 <% end %>
               </button>
             </div>
           </div>
         </div>
 
-        <%!-- Archived Categories View --%>
+        <%!-- Archived Folders View --%>
         <div :if={@category_archive_status == :archived}>
           <div class="mb-3 flex items-center gap-2 rounded-[10px] border border-[#f0e2c4] bg-[#fbf1df] p-2.5 text-[#a5691a]">
             <.icon name="hero-archive-box" class="size-4 flex-none" />
             <span class="text-[12px] font-medium">
-              {gettext("Viewing archived categories")}
+              {gettext("Viewing archived folders")}
             </span>
           </div>
 
@@ -266,12 +287,12 @@
           >
             <span class="inline-block size-8 animate-spin rounded-full border-2 border-[#e3e1da] border-t-[#8a877f]"></span>
             <p class="mt-2 text-[12px] text-[#8a877f]">
-              {gettext("Loading archived categories...")}
+              {gettext("Loading archived folders...")}
             </p>
           </div>
 
           <div :if={@archived_categories_loading.failed} class="text-[12px] text-[#b91c1c]">
-            {gettext("Failed to load archived categories")}
+            {gettext("Could not load archived folders")}
           </div>
 
           <div :if={@has_archived_categories_data} class="relative">
@@ -291,7 +312,7 @@
                 id="archived-categories-empty"
                 class="hidden py-4 text-center text-[12px] text-[#a8a5a0] only:block"
               >
-                {gettext("No archived categories")}
+                {gettext("No archived folders")}
               </li>
               <li
                 :for={{dom_id, category} <- @streams.archived_categories}
@@ -329,7 +350,7 @@
                       phx-value-id={category.id}
                       data-confirm={
                         gettext(
-                          "Are you sure? This will permanently delete this category and cannot be undone."
+                          "Are you sure? This will permanently delete this folder and cannot be undone."
                         )
                       }
                       title={gettext("Permanently Delete")}
@@ -373,15 +394,22 @@
     </main>
   </div>
 
-  <%!-- Category Form Modal (MishkaGervaz) --%>
+  <%!-- Folder Form Modal (MishkaGervaz): a new folder starts inside the one open --%>
   <.modal id="media-category-form-modal">
     <.live_component
       module={MishkaGervaz.Form.Web.Live}
       id={MishkaGervaz.Resource.Info.Form.component_id(MishkaCmsCore.Runtime.MediaCategory)}
       resource={MishkaCmsCore.Runtime.MediaCategory}
       current_user={@current_user}
+      defaults={form_defaults(@folder_id, @trail, @is_master, :parent_id)}
     />
   </.modal>
+
+  <.live_component
+    module={MishkaCmsCoreWeb.Live.Admin.Components.MediaMove}
+    id="media-move"
+    current_user={@current_user}
+  />
 
   <%!-- Image Preview Overlay --%>
   <div
