@@ -98,6 +98,17 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert alternates(Seo.head(seo(site), base: @base, languages: [])) == []
     end
 
+    test "names x-default once, at the edition in the site's first language", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+      languages = [%{language: "en", path: "/en/about"}, %{language: "fa", path: "/about"}]
+
+      head = Seo.head(seo(site), base: @base, languages: languages)
+
+      assert Enum.filter(alternates(head), &match?({"x-default", _href}, &1)) == [
+               {"x-default", "#{@base}/about"}
+             ]
+    end
+
     test "emits no relative address, and an http one as it is", %{site: site} do
       head = Seo.head(seo(site, url: "/en/about", image: "http://cdn.test/a.png"), base: nil)
 
@@ -899,5 +910,44 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     for {"link", attrs} <- head.tags,
         {"rel", "alternate"} in attrs,
         do: {hd(for({"hreflang", lang} <- attrs, do: lang)), hd(for({"href", h} <- attrs, do: h))}
+  end
+
+  describe "alternate_links/3" do
+    test "links each edition and x-default at the primary one, as stored tags", %{site: site} do
+      editions = [%{language: "en", path: "/about"}, %{language: "fa", path: "/fa/about"}]
+
+      assert Seo.alternate_links(editions, @base, site.id) == [
+               %{
+                 tag: "link",
+                 attrs: %{"rel" => "alternate", "hreflang" => "en", "href" => "#{@base}/about"}
+               },
+               %{
+                 tag: "link",
+                 attrs: %{"rel" => "alternate", "hreflang" => "fa", "href" => "#{@base}/fa/about"}
+               },
+               %{
+                 tag: "link",
+                 attrs: %{
+                   "rel" => "alternate",
+                   "hreflang" => "x-default",
+                   "href" => "#{@base}/about"
+                 }
+               }
+             ]
+    end
+
+    test "names no x-default when no edition is in the primary language", %{site: site} do
+      editions = [%{language: "fa", path: "/fa/about"}, %{language: "ar", path: "/ar/about"}]
+
+      refute Enum.any?(
+               Seo.alternate_links(editions, @base, site.id),
+               &(&1.attrs["hreflang"] == "x-default")
+             )
+    end
+
+    test "is nothing for fewer than two editions", %{site: site} do
+      assert Seo.alternate_links([%{language: "en", path: "/about"}], @base, site.id) == []
+      assert Seo.alternate_links([], @base, site.id) == []
+    end
   end
 end

@@ -11,7 +11,19 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Install.StarterContent
-  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Page, PageProvision, Stylesheet}
+  alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+
+  alias MishkaCmsCore.Runtime.{
+    Component,
+    ErrorPage,
+    Layout,
+    Page,
+    PageProvision,
+    Stylesheet,
+    Translations
+  }
+
+  alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
@@ -147,8 +159,85 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
     template = one(Layout, site).template
 
-    assert template =~ ~s|navigate={"/#{lang_marker()}/pricing"}|
+    assert template =~ ~s|navigate={site_path("/:lang/pricing", lang(assigns))}|
     assert template =~ ">Pricing<"
+  end
+
+  # ONE LINK, BOTH MODES: every link is written as the stored path and the page's language, so it
+  # follows the site's `site.language_urls`.
+  describe "the links between the starter pages" do
+    setup %{site: site} do
+      forget_settings(~w(site.languages site.language_urls), [site.id])
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      :ok = Translations.put_site(site.id)
+      StarterContent.seed!(site)
+      :ok
+    end
+
+    defp hrefs(template, assigns) do
+      template
+      |> LiveViewCompiler.render_template(assigns)
+      |> then(&Regex.scan(~r/href="([^"]*)"/, &1, capture: :all_but_first))
+      |> List.flatten()
+    end
+
+    defp page_links(site, path, language) do
+      page = Enum.find(rows(Page, site), &(&1.path == path))
+      hrefs(page.template, %{page: %{language: language}, query_params: %{"lang" => language}})
+    end
+
+    test "leave the primary language unprefixed by default", %{site: site} do
+      assert page_links(site, "/:lang/about", "en") == ["/"]
+      assert page_links(site, "/:lang/about", "fa") == ["/fa"]
+      assert "/about" in page_links(site, "/:lang", "en")
+      assert "/fa/contact" in page_links(site, "/:lang", "fa")
+    end
+
+    test "prefix every language in prefix_all", %{site: site} do
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert page_links(site, "/:lang/about", "en") == ["/en"]
+      assert "/en/about" in page_links(site, "/:lang", "en")
+    end
+
+    test "the error page's Back home is the visitor's language's home, else the first one's", %{
+      site: site
+    } do
+      [not_found | _] = one(ErrorPage, site).error_pages
+      home = &hrefs(not_found.template, %{conn: %{assigns: %{site_language: &1}}})
+
+      assert home.("fa") == ["/fa"]
+      assert home.(nil) == ["/"]
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert home.(nil) == ["/en"]
+    end
+
+    test "the offline page's sign-in is in the visitor's language, else the first one's", %{
+      site: site
+    } do
+      offline = Enum.find(one(ErrorPage, site).error_pages, &(&1.status == :offline))
+      sign_in = &hrefs(offline.template, %{conn: %{assigns: %{site_language: &1}}})
+
+      assert sign_in.("fa") == ["/fa/auth?master_user=false"]
+      assert sign_in.(nil) == ["/auth?master_user=false"]
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert sign_in.(nil) == ["/en/auth?master_user=false"]
+    end
+
+    test "the sign-in pages link to each other in the language they answer in", %{site: site} do
+      StarterContent.ensure_auth!(site)
+      sign_in = Enum.find(rows(Page, site), &(&1.path == "/:lang/auth/register"))
+
+      assert sign_in.template =~
+               ~s|navigate={returning(assigns, site_path("/:lang/auth", @page.language))}|
+
+      assert Enum.any?(sign_in.helpers, &(&1.name == "returning"))
+      refute Enum.any?(sign_in.helpers, &(&1.name == "flow_path"))
+    end
   end
 
   # THE NAME THE USER TYPED, not the one the database kept: `Site :create` slugifies `:name`, so a
@@ -262,8 +351,4 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   end
 
   defp one(resource, site), do: resource |> rows(site) |> hd()
-
-  # The `lang` capture as a template spells it, kept out of the assertion above so the string there
-  # is not two escapes deep.
-  defp lang_marker, do: "\#{lang(assigns)}"
 end

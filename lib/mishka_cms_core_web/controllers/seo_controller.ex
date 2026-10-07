@@ -12,12 +12,12 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   Built on every request, from ETS:
 
-    1. the rules every site has — `User-agent: *` and a `Disallow` for `/admin/`, `/api/`, `/auth/`
-       and `/_preview/` — and, for each language the site publishes in
-       (`MishkaCmsCore.Runtime.Languages.site/1`), its sign-in page `/<lang>/auth` with a query
-       and the pages under it: `Disallow: /<lang>/auth$`, `Disallow: /<lang>/auth?` and
-       `Disallow: /<lang>/auth/`, which leave an address that only starts the same way, such as
-       `/<lang>/authors`, open;
+    1. the rules every site has — `User-agent: *` and a `Disallow` for `/admin/`, `/api/` and
+       `/_preview/` — and the sign-in page with a query and the pages under it, at `/auth` and at
+       its address in each language the site publishes in
+       (`MishkaCmsCore.Runtime.Plugs.SiteLookupPlug.auth_address/3`): `Disallow: /auth$`,
+       `Disallow: /auth?` and `Disallow: /auth/`, then the same for `/fa/auth`…, which leave an
+       address that only starts the same way, such as `/authors`, open;
     2. what a plugin on `seo:robots:lines` makes of them: it is handed `%{site: site, lines: lines}`
        and returns the map with its `lines`;
     3. the site's `seo.robots.extra` setting, a line at a time;
@@ -59,6 +59,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   alias MishkaCmsCore.Helpers
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
@@ -66,8 +67,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   @rules [
     "User-agent: *",
     "Disallow: /admin/",
-    "Disallow: /api/",
-    "Disallow: /auth/"
+    "Disallow: /api/"
   ]
 
   # Seconds a crawler is told to wait for a sitemap not built yet.
@@ -157,13 +157,17 @@ defmodule MishkaCmsCoreWeb.SeoController do
     Enum.join(lines ++ extra_rules(site) ++ ["", sitemap], "\n") <> "\n"
   end
 
+  # `/auth` whatever the URL mode, then the address of each language's: in `"prefix_others"` the
+  # primary language's is `/auth` itself.
   defp rules(site) do
-    sign_in =
-      for language <- Languages.site(site.id),
-          ending <- ["$", "?", "/"],
-          do: "Disallow: /#{language}/auth#{ending}"
+    addresses = Enum.map(Languages.site(site.id), &SiteLookupPlug.auth_address(&1, site.id))
 
-    @rules ++ sign_in ++ ["Disallow: /_preview/"]
+    disallowed =
+      for path <- Enum.uniq(["/auth" | addresses]),
+          ending <- ["$", "?", "/"],
+          do: "Disallow: #{path}#{ending}"
+
+    @rules ++ disallowed ++ ["Disallow: /_preview/"]
   end
 
   defp extra_rules(site) do

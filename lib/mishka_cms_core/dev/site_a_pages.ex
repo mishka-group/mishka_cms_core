@@ -43,13 +43,13 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
       </p>
       <div class="mt-7 flex flex-wrap items-center gap-3">
         <.link
-          navigate={"/#{@query_params["lang"]}/services"}
+          navigate={site_path("/:lang/services", @page.language)}
           class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
         >
           What we do
         </.link>
         <.link
-          navigate={"/#{@query_params["lang"]}/team"}
+          navigate={site_path("/:lang/team", @page.language)}
           class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
         >
           Meet the team
@@ -66,7 +66,7 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
             {"Support", "We answer on the day you write.", "support"}
           ]
         }
-        navigate={"/#{@query_params["lang"]}/services/#{slug}"}
+        navigate={site_path("/:lang/services/:slug", %{"lang" => @page.language, "slug" => slug})}
         class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
       >
         <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
@@ -82,7 +82,7 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
         <p class="mt-1 text-[13.5px] text-ink-soft">Tell us what you are making and who it is for.</p>
       </div>
       <.link
-        navigate={"/#{@query_params["lang"]}/contact"}
+        navigate={site_path("/:lang/contact", @page.language)}
         class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
       >
         Get in touch
@@ -124,7 +124,7 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
           <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{line}</p>
           <p class="mt-4">
             <.link
-              navigate={"/#{@query_params["lang"]}/services/#{slug}"}
+              navigate={site_path("/:lang/services/:slug", %{"lang" => @page.language, "slug" => slug})}
               class="text-[13px] font-bold text-accent"
             >
               What that means →
@@ -189,8 +189,8 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
       format: :heex,
       template: ~S"""
       <.component component_name="chelekom-breadcrumb" site="Global" id="service-crumbs">
-        <:item link={"/#{@query_params["lang"]}"} title="Home">Home</:item>
-        <:item link={"/#{@query_params["lang"]}/services"} title="Services">Services</:item>
+        <:item link={site_path("/:lang", @page.language)} title="Home">Home</:item>
+        <:item link={site_path("/:lang/services", @page.language)} title="Services">Services</:item>
         <:item title={@query_params["slug"]}>{@query_params["slug"]}</:item>
       </.component>
 
@@ -204,7 +204,7 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
         </p>
         <p class="mt-6">
           <.link
-            navigate={"/#{@query_params["lang"]}/contact"}
+            navigate={site_path("/:lang/contact", @page.language)}
             class="inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
           >
             Ask about it

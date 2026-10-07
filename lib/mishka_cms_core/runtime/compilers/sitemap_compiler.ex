@@ -9,11 +9,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   Its addresses, each once, the first to name a path keeping it:
 
     1. the site's pages a search engine may be sent to
-       (`MishkaCmsCore.Runtime.PageEditions.indexable/1`), each at its own path when that path is
-       literal, and a page whose only capture is the language at one address per language it
-       answers (`PageEditions.served_languages/2`);
+       (`MishkaCmsCore.Runtime.PageEditions.indexable/1`), each at its public addresses
+       (`PageEditions.urls/2`): a literal page at its one, and a page whose only capture is the
+       language at one per language it answers (`PageEditions.served_languages/2`);
     2. the site's `seo.sitemap.paths` setting;
     3. what a plugin on `seo:sitemap:urls` adds, below.
+
+  Every address is the one a visitor is served at (`MishkaCmsCore.Runtime.Languages.url/3`): on a
+  site that leaves its primary language unprefixed, `/en/pricing`, whoever lists it, is listed as
+  `/pricing`, so no address in the sitemap redirects.
 
   None is listed at the path of a literal page `indexable/1` leaves out — a login-only or a noindex
   one — whichever of them names it: the resolver answers that page there before any pattern. Nor at
@@ -92,7 +96,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
     * a page or a layout — `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker`, after its own;
     * the site switched on, renamed or installed — `BootHandler.compile_site/2`; its host —
       `MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime`;
-    * its languages or its `seo.sitemap.paths`, and a row an extension lists —
+    * its languages, how its addresses name them, or its `seo.sitemap.paths`, and a row an
+      extension lists —
       `MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh`;
     * a `seo:sitemap:urls` plugin started or stopped — every open site's (`attach/0`).
 
@@ -357,6 +362,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
 
     urls
     |> Stream.filter(&match?(%{path: "/" <> _}, &1))
+    |> Stream.flat_map(&public(&1, site.id))
     |> Stream.transform(MapSet.new(), &once(&1, &2, rules))
     |> Stream.map(&url(&1, site.host))
   end
@@ -369,27 +375,33 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
     listed =
       for path <- List.wrap(Settings.get("seo.sitemap.paths", [], site.id)),
           is_binary(path),
-          do: %{path: path, lastmod: nil}
+          entry <- public(%{path: path, lastmod: nil}, site.id),
+          do: entry
 
     {Enum.uniq_by(page_urls ++ listed, & &1.path), pages, hidden}
   end
 
-  # A literal page at its path; a page whose only capture is the language at one address per
+  # AN ADDRESS AS A VISITOR IS SERVED IT, whoever listed it: one under the primary language a site
+  # leaves unprefixed is listed without it, never at the address that redirects there.
+  defp public(%{path: path} = entry, site_id) do
+    case Languages.url(path, %{}, site_id) do
+      nil -> []
+      public -> [%{entry | path: public}]
+    end
+  end
+
+  # A literal page at its address; a page whose only capture is the language at one address per
   # language it answers; any other pattern page goes to the plugins, which own what fills it.
   defp page_urls(site_id) do
     {indexable, hidden} = PageEditions.indexable(site_id)
-    {literals, patterns} = Enum.split_with(indexable, &PageEditions.path(&1.path, %{}))
 
+    {literals, patterns} = Enum.split_with(indexable, &Languages.fill(&1.path, %{}))
     {swappable, pages} = Enum.split_with(patterns, &PageEditions.language_only?(&1.path))
 
     urls =
-      Enum.map(literals, &%{path: PageEditions.path(&1.path, %{}), lastmod: &1.updated_at}) ++
-        Enum.flat_map(swappable, fn page ->
-          for language <- PageEditions.served_languages(page, site_id) do
-            path = PageEditions.path(page.path, %{Languages.capture() => language})
-            %{path: path, lastmod: page.updated_at}
-          end
-        end)
+      for page <- literals ++ swappable,
+          path <- PageEditions.urls(page, site_id),
+          do: %{path: path, lastmod: page.updated_at}
 
     {urls, pages, hidden}
   end

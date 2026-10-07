@@ -41,10 +41,10 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
         :for={
           {title, body, path} <- [
             {"Guides", "Every page under one address, however deep.",
-             "/guides/#{@query_params["lang"]}/getting-started/install"},
-            {"FAQ", "The questions that arrive first.", "/#{@query_params["lang"]}/faq"},
-            {"Status", "What is up, what is not, in a table.", "/#{@query_params["lang"]}/status"},
-            {"Changelog", "What changed, and when.", "/#{@query_params["lang"]}/changelog"}
+             site_path("/guides/:lang/*rest", %{"lang" => @page.language, "rest" => "getting-started/install"})},
+            {"FAQ", "The questions that arrive first.", site_path("/:lang/faq", @page.language)},
+            {"Status", "What is up, what is not, in a table.", site_path("/:lang/status", @page.language)},
+            {"Changelog", "What changed, and when.", site_path("/:lang/changelog", @page.language)}
           ]
         }
         navigate={path}
@@ -98,7 +98,7 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
 
       <p class="mt-6 text-[13px]">
         <.link
-          navigate={"/guides/#{@query_params["lang"]}/getting-started/install"}
+          navigate={site_path("/guides/:lang/*rest", %{"lang" => @page.language, "rest" => "getting-started/install"})}
           class="font-bold text-accent"
         >
           Open the guides →
@@ -135,7 +135,7 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
         <ul class="mt-6 space-y-2 text-[13px]">
           <li :for={rest <- ["getting-started/install", "getting-started/first-page", "recipes/seo"]}>
             <.link
-              navigate={"/guides/#{@query_params["lang"]}/#{rest}"}
+              navigate={site_path("/guides/:lang/*rest", %{"lang" => @page.language, "rest" => rest})}
               class="font-medium text-accent hover:underline"
             >
               {rest}
@@ -143,7 +143,7 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
           </li>
         </ul>
         <p class="mt-6 text-[13px]">
-          <.link navigate={"/#{@query_params["lang"]}/faq"} class="font-bold text-accent">
+          <.link navigate={site_path("/:lang/faq", @page.language)} class="font-bold text-accent">
             ← Back to the FAQ
           </.link>
         </p>
@@ -224,7 +224,7 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
           <p class="mt-1 text-[13.5px] text-ink-soft">{line}</p>
         </section>
         <p class="mt-8 text-[13px]">
-          <.link navigate={"/#{@query_params["lang"]}"} class="font-bold text-accent">
+          <.link navigate={site_path("/:lang", @page.language)} class="font-bold text-accent">
             ← Back to the site
           </.link>
         </p>
@@ -255,7 +255,7 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
           site's stylesheet came with it.
         </p>
         <p class="mt-4 text-[13px]">
-          <.link navigate={"/#{@query_params["lang"]}/status"} class="font-bold text-[#5b57d6]">
+          <.link navigate={site_path("/:lang/status", @page.language)} class="font-bold text-[#5b57d6]">
             Status →
           </.link>
         </p>

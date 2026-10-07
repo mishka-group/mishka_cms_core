@@ -164,14 +164,24 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
     end
 
     test "a flow page links to its siblings in the language it answers in", %{site: site} do
+      publish!(site, ["en", "fa"])
       StarterContent.ensure_auth!(site)
+      module = compiled!(page_at(site, "/:lang/auth"), site, "Page")
 
-      html = page_html(compiled!(page_at(site, "/:lang/auth"), site, "Page"), site, "fa")
+      html = page_html(module, site, "fa")
 
       assert html =~ ~s(id="auth-sign-in-form")
       assert html =~ ~s(href="/fa/auth/register")
       assert html =~ ~s(href="/fa/auth/forgot-password")
       assert html =~ ~s(href="/fa/auth/magic-link")
+
+      # The first language unprefixed, the site's default — or prefixed like the others.
+      assert page_html(module, site, "en") =~ ~s(href="/auth/register")
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+      forget_settings(~w(site.language_urls), [site.id])
+
+      assert page_html(module, site, "en") =~ ~s(href="/en/auth/register")
     end
 
     # A TOKEN THIS APPLICATION SIGNED IS CARRIED ON, into the links and the form action; a stranger's
@@ -184,7 +194,7 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       carried = page_html(module, site, "en", %{"return_to" => token})
       query = URI.encode_query(%{"return_to" => token})
 
-      assert carried =~ ~s(href="/en/auth/register?#{query}")
+      assert carried =~ ~s(href="/auth/register?#{query}")
       assert carried =~ "sign_in?#{query}"
 
       dropped = page_html(module, site, "en", %{"return_to" => "https://evil.example"})
@@ -412,10 +422,10 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
 
       sign_in = compiled!(page_at(site, "/:lang/auth"), site, "Page")
 
-      for language <- ["fr", "ru"] do
+      for {language, register} <- [{"fr", "/auth/register"}, {"ru", "/ru/auth/register"}] do
         html = page_html(sign_in, site, language)
         assert html =~ "Welcome back"
-        assert html =~ ~s(href="/#{language}/auth/register")
+        assert html =~ ~s(href="#{register}")
       end
     end
 
@@ -423,11 +433,13 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
     # primary language, never a fixed one.
     test "the links fall back to the site's primary language", %{site: site} do
       publish!(site, ["ru", "en"])
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+      forget_settings(~w(site.language_urls), [site.id])
       StarterContent.ensure_auth!(site)
 
       sign_in = compiled!(page_at(site, "/:lang/auth"), site, "Page")
 
-      assert sign_in.flow_path(%{current_site: site}, "/register") == "/ru/auth/register"
+      assert page_html(sign_in, site, nil) =~ ~s(href="/ru/auth/register")
     end
 
     test "a site that gains fa later is given the words it is missing", %{site: site} do
@@ -691,6 +703,8 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
   end
 
   defp page_html(module, site, language \\ "en", query \\ %{}) do
+    :ok = Translations.put_site(site.id)
+
     %{
       page: %{language: language},
       query_params: Map.merge(%{"lang" => language}, query),

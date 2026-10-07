@@ -142,6 +142,23 @@ defmodule MishkaCmsCore.Runtime.PageProvisionTest do
     end
   end
 
+  # A STORED PATH THAT IS FREE CAN STILL BE AN ADDRESS ANOTHER PAGE ANSWERS: `/:lang/manual` is
+  # `/manual` in the site's first language, which a page of the site's own already is.
+  describe "an address another page answers at" do
+    test "leaves the page out, says why, and still writes the rest", %{site: site} do
+      [answered | rest] = paths(site.id)
+      mine = create_page!(site_id: site.id, path: "/manual", template: ~S(<div>mine</div>))
+
+      report = run(site.id)
+
+      assert created(report) == rest
+      assert [%{path: ^answered, fields: [answered_at: "/manual"]} = held] = report.skipped
+      assert PageProvision.answered?(held)
+      assert PageProvision.note(held) =~ ~s(another page already answers at its address "/manual")
+      assert Enum.find(rows(site.id), &(&1.path == "/manual")).id == mine.id
+    end
+  end
+
   # THE IDENTITY NO READING OF PATHS CAN SEE, and the one a real site fails on: every site the dev
   # seeds touched holds a page named "Blog" at `/blog`. An address is what a page IS, so a held one
   # is a real skip; a NAME is how an admin finds it in a list, and answering a held one with a skip
@@ -571,6 +588,27 @@ defmodule MishkaCmsCore.Runtime.PageProvisionTest do
 
       assert PageProvision.ours?(page, :mishka_blog)
       assert PageProvision.provisioned_version(page) == nil
+    end
+  end
+
+  describe "serving_all_languages/1" do
+    test "marks a page whose path captures lang, keeping what extra holds" do
+      attrs = PageProvision.serving_all_languages(%{path: "/:lang/blog", extra: %{"kept" => 1}})
+
+      assert attrs.extra == %{"kept" => 1, "serves_all_languages" => true}
+      assert PageProvision.serves_all_languages?(attrs)
+    end
+
+    # A page refuses the mark on any other path, so a page moved off `:lang` loses it.
+    test "clears the mark from a page whose path captures none" do
+      attrs =
+        PageProvision.serving_all_languages(%{
+          path: "/journal",
+          extra: %{"serves_all_languages" => true}
+        })
+
+      assert attrs.extra == %{}
+      refute PageProvision.serves_all_languages?(attrs)
     end
   end
 

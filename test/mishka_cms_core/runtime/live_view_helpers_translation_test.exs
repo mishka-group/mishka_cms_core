@@ -1,7 +1,7 @@
 defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
   @moduledoc """
-  `t/1` inside a template that was compiled from the database, and the import list that puts it
-  there.
+  `t/1` and `site_path/2` inside a template that was compiled from the database, and the import list
+  that puts them there.
 
   A runtime template never passes a site or a language to `t/1` — both are read off the process
   rendering it — so what is proved here is the path a visitor takes: a component saved with
@@ -24,8 +24,17 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
   @categories "دسته‌بندی‌ها"
 
   describe "imports/1 — what a runtime template imports from LiveViewHelpers" do
-    test "is component/1,2, captcha/1, rich_content/1, t/1,2 and csp_nonce/0 when there are no helpers" do
-      all = [component: 1, component: 2, captcha: 1, rich_content: 1, t: 1, t: 2, csp_nonce: 0]
+    test "is component/1,2, captcha/1, rich_content/1, t/1,2, csp_nonce/0 and site_path/2 when there are no helpers" do
+      all = [
+        component: 1,
+        component: 2,
+        captcha: 1,
+        rich_content: 1,
+        t: 1,
+        t: 2,
+        csp_nonce: 0,
+        site_path: 2
+      ]
 
       assert LiveViewHelpers.imports(nil) == all
       assert LiveViewHelpers.imports([]) == all
@@ -44,7 +53,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                  component: 2,
                  captcha: 1,
                  rich_content: 1,
-                 csp_nonce: 0
+                 csp_nonce: 0,
+                 site_path: 2
                ],
                "t is still imported beside #{inspect(helper)}"
       end
@@ -67,18 +77,64 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                component: 2,
                captcha: 1,
                rich_content: 1,
-               csp_nonce: 0
+               csp_nonce: 0,
+               site_path: 2
              ]
     end
 
     test "leaves out any name a helper defines, captcha as much as t" do
       assert LiveViewHelpers.imports([%{name: "captcha"}]) ==
-               [component: 1, component: 2, rich_content: 1, t: 1, t: 2, csp_nonce: 0]
+               [component: 1, component: 2, rich_content: 1, t: 1, t: 2, csp_nonce: 0, site_path: 2]
     end
 
     test "and rich_content, for a component that draws its own" do
       assert LiveViewHelpers.imports([%{"name" => "rich_content"}]) ==
-               [component: 1, component: 2, captcha: 1, t: 1, t: 2, csp_nonce: 0]
+               [component: 1, component: 2, captcha: 1, t: 1, t: 2, csp_nonce: 0, site_path: 2]
+
+      assert LiveViewHelpers.imports([%{name: "site_path"}]) ==
+               [component: 1, component: 2, captcha: 1, rich_content: 1, t: 1, t: 2, csp_nonce: 0]
+    end
+  end
+
+  # ONE LINK, BOTH MODES: a template names the stored path and the language, and the address follows
+  # the site's `site.language_urls`.
+  describe "site_path/2" do
+    setup :site
+
+    test "is the public address on the site this process renders for", %{site: site} do
+      answering_in(site, "en")
+
+      assert LiveViewHelpers.site_path("/:lang/blog", "en") == "/blog"
+      assert LiveViewHelpers.site_path("/:lang/blog", "fa") == "/fa/blog"
+      assert LiveViewHelpers.site_path("/:lang", nil) == "/"
+
+      assert LiveViewHelpers.site_path("/:lang/blog/:slug", %{"lang" => "fa", "slug" => "a b"}) ==
+               "/fa/blog/a%20b"
+
+      refute LiveViewHelpers.site_path("/:lang/blog", "de")
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert LiveViewHelpers.site_path("/:lang/blog", "en") == "/en/blog"
+      assert LiveViewHelpers.site_path("/:lang", nil) == "/en"
+    end
+
+    test "is imported into a compiled component", %{site: site} do
+      component =
+        make_component(
+          site,
+          ~s|<a class="sp-probe" href={site_path("/:lang/about", "en")}>en</a><a href={site_path("/:lang/about", "fa")}>fa</a>|
+        )
+
+      answering_in(site, "en")
+      html = render(component, site)
+
+      assert html =~ ~s(href="/about")
+      assert html =~ ~s(href="/fa/about")
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert render(component, site) =~ ~s(href="/en/about")
     end
   end
 
@@ -270,7 +326,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
 
     on_exit(fn -> SiteState.delete(site.id) end)
 
-    forget_settings(~w(site.languages), [site.id])
+    forget_settings(~w(site.languages site.language_urls), [site.id])
     {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
 
     %{site: site}

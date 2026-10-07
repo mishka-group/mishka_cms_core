@@ -154,6 +154,17 @@ defmodule MishkaCmsCore.Runtime.SitemapTriggersTest do
       assert sitemap_jobs(other) == []
     end
 
+    # Every address in a sitemap is built in the site's URL mode.
+    test "how a site's addresses name a language enqueues that site's sitemap job" do
+      [site, other] = [stored_site(), stored_site()]
+      jobs_off()
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert length(sitemap_jobs(site)) == 1
+      assert sitemap_jobs(other) == []
+    end
+
     test "a sitemap reads, set globally, enqueues every open site's" do
       [one, two] = [stored_site(), stored_site()]
       jobs_off()

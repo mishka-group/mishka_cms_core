@@ -81,4 +81,7 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
   that calls `t("…")` previewed as "Preview unavailable" while the published page rendered it.
   """
   defdelegate t(key, bindings \\ []), to: LiveViewHelpers
+
+  @doc "A public address on the site being previewed — `LiveViewHelpers.site_path/2`."
+  defdelegate site_path(path, language_or_captures), to: LiveViewHelpers
 end

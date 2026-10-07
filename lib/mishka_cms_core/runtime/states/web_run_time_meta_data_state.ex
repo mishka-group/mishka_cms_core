@@ -96,6 +96,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
 
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.States.SiteState
 
   # ETS table names
   @main_table :mishka_web_run_time_meta_data
@@ -338,26 +339,66 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   Every capture is refused, not just `lang`: `/post/:slug` would otherwise answer with `:slug` as
   the slug, and `*rest` the same. `dynamic_path?/1` is the same predicate that decides what earns a
   dynamic row, so a path is a pattern here exactly when it is one there.
+
+  ## An address that names no language
+
+  On a site whose primary language has no prefix (`MishkaCmsCore.Runtime.Languages.url_mode/1`), a
+  request whose first segment is not one of its languages is in the primary one
+  (`Languages.implied/2`), and is asked three questions in turn:
+
+    1. the literal page stored at the path as typed — `/blog`;
+    2. the literal page stored under the primary language — `/en/blog`;
+    3. the best pattern for either form, by the precedence `find_by_dynamic_path/2` keeps, and the
+       prefixed form when the two tie — `/:lang/blog` answers `/blog` as `/en/blog`.
+
+  A match through the prefixed form captures `lang` as the primary language, as `/en/blog` would
+  have, so a page's editions and the language of the response read it the same way. A site that
+  prefixes every language, and a request that names one, are asked about the path as typed alone.
   """
   @spec resolve(String.t(), String.t()) :: {:ok, map(), map()} | {:error, :not_found}
   def resolve(path, site) do
     case dynamic_path?(path) do
       true -> {:error, :not_found}
-      false -> stored_or_dynamic(path, site)
+      false -> requested(path, site)
+    end
+  end
+
+  defp requested(path, site) do
+    segments = split(path)
+
+    case implied(segments, site) do
+      nil -> stored_or_dynamic(path, site)
+      primary -> unprefixed(path, segments, primary, site)
+    end
+  end
+
+  defp implied(segments, site) do
+    case SiteState.get_by_name(site) do
+      {:ok, %{id: site_id}} -> Languages.implied(segments, site_id)
+      _unknown -> nil
+    end
+  end
+
+  defp unprefixed(path, segments, primary, site) do
+    prefixed = [primary | segments]
+
+    with {:error, :not_found} <- stored(path, site),
+         {:error, :not_found} <- stored("/" <> Enum.join(prefixed, "/"), site) do
+      dynamic([prefixed, segments], site)
+    end
+  end
+
+  defp stored(path, site) do
+    with [{{^path, ^site}, id}] <- :ets.lookup(@path_index, {path, site}),
+         {:ok, record} <- get(id) do
+      {:ok, record, %{}}
+    else
+      _missing -> {:error, :not_found}
     end
   end
 
   defp stored_or_dynamic(path, site) do
-    case :ets.lookup(@path_index, {path, site}) do
-      [{{^path, ^site}, id}] ->
-        case get(id) do
-          {:ok, record} -> {:ok, record, %{}}
-          error -> error
-        end
-
-      [] ->
-        find_by_dynamic_path(path, site)
-    end
+    with {:error, :not_found} <- stored(path, site), do: find_by_dynamic_path(path, site)
   end
 
   @doc """
@@ -397,8 +438,11 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   """
   @spec find_by_dynamic_path(String.t(), String.t()) ::
           {:ok, map(), map()} | {:error, :not_found}
-  def find_by_dynamic_path(path, site) do
-    segments = split(path)
+  def find_by_dynamic_path(path, site), do: dynamic([split(path)], site)
+
+  # Every form is matched against every pattern, and the best match wins as one list: an earlier
+  # form wins only a tie.
+  defp dynamic(forms, site) do
     patterns = :ets.lookup(@dynamic_index, site)
 
     languages =
@@ -407,21 +451,24 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
         false -> []
       end
 
-    patterns
-    |> Enum.flat_map(fn {^site, {pattern, id}} ->
-      with {:ok, captured} <- match(pattern, segments, languages),
-           true <- edition?(id, captured) do
-        [{specificity(pattern), id, captured}]
-      else
-        _not_this_one -> []
-      end
+    forms
+    |> Enum.with_index()
+    |> Enum.flat_map(fn {segments, form} ->
+      Enum.flat_map(patterns, fn {^site, {pattern, id}} ->
+        with {:ok, captured} <- match(pattern, segments, languages),
+             true <- edition?(id, captured) do
+          [{specificity(pattern), form, id, captured}]
+        else
+          _not_this_one -> []
+        end
+      end)
     end)
-    |> Enum.sort_by(fn {score, id, _captured} -> {score, priority_of(id), id} end)
+    |> Enum.sort_by(fn {score, form, id, _captured} -> {score, form, priority_of(id), id} end)
     |> case do
       [] ->
         {:error, :not_found}
 
-      [{_score, id, captured} | _rest] ->
+      [{_score, _form, id, captured} | _rest] ->
         case get(id) do
           {:ok, found} -> {:ok, found, captured}
           _gone -> {:error, :not_found}

@@ -12,6 +12,8 @@ defmodule MishkaCmsCore.LiveUserAuth do
   import MishkaCmsCore.Helpers, only: [path: 2]
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
 
   # Where `:live_user_lazy` keeps the session for `load_current_user/1`. Private rather than an
   # assign because the socket's private is not change-tracked and is never part of a diff sent to
@@ -50,14 +52,18 @@ defmodule MishkaCmsCore.LiveUserAuth do
     {:cont, socket}
   end
 
-  def on_mount(:live_user_required, _params, _session, socket) do
+  # THE SIGN-IN PAGE IN THE LANGUAGE THE VISITOR READS PAGES IN — the session's, which the admin
+  # never changes — rather than the one the admin is drawn in.
+  def on_mount(:live_user_required, _params, session, socket) do
     if socket.assigns[:current_user] do
       {:cont, maybe_load_user_site(socket)}
     else
+      sign_in = SiteLookupPlug.auth_address(session[Languages.session()], site_id(session))
+
       new_socket =
         socket
         |> Phoenix.LiveView.put_flash(:error, gettext("You must log in to access this page."))
-        |> Phoenix.LiveView.redirect(to: path(socket, "/auth"))
+        |> Phoenix.LiveView.redirect(to: path(socket, sign_in))
 
       {:halt, new_socket}
     end
@@ -142,6 +148,9 @@ defmodule MishkaCmsCore.LiveUserAuth do
   # AshAuthentication.Phoenix component and a page's sign-in forms scope themselves by it.
   defp assign_current_tenant(socket, session),
     do: assign(socket, :current_tenant, session["tenant"])
+
+  defp site_id(%{"current_site" => %{id: id}}), do: id
+  defp site_id(_session), do: nil
 
   # Load site relation for tenant users (site_id is not nil)
   defp maybe_load_user_site(socket) do

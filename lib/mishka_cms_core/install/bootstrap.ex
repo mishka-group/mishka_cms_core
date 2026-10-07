@@ -27,7 +27,9 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   The site's languages (`:languages`, codes `MishkaCmsCore.Runtime.Languages.valid?/1` accepts, the
   first being the primary) are saved to the new site's own `site.languages` before any page is
   written, so every page the install writes answers each of them. A run given none leaves the site
-  reading the global list.
+  reading the global list. How its addresses name them (`:language_urls`, one of
+  `MishkaCmsCore.Runtime.Languages.url_modes/0`) is saved beside them to its own
+  `site.language_urls`; a run given none leaves the site reading the global setting.
 
   See `MishkaCmsCore.Install`.
   """
@@ -54,6 +56,7 @@ defmodule MishkaCmsCore.Install.Bootstrap do
           optional(:component_selection) => map(),
           optional(:starter_content) => boolean(),
           optional(:languages) => [String.t()],
+          optional(:language_urls) => String.t(),
           optional(:settings) => %{optional(String.t()) => term()},
           optional(:extensions) => [String.t()],
           optional(:extension_answers) => %{optional(String.t()) => map()}
@@ -241,7 +244,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   defp run_step(:languages, %{params: %{languages: languages}, site: site} = acc, progress) do
     with :ok <- valid_languages(languages),
          {:ok, saved} <-
-           Settings.put("site.languages", languages, site_id: site.id, category: "general") do
+           Settings.put("site.languages", languages, site_id: site.id, category: "general"),
+         :ok <- save_language_urls(acc.params, site) do
       MishkaInstaller.Event.Hook.call(
         "installer:languages:saved",
         %{site_id: site.id, languages: saved},
@@ -253,7 +257,9 @@ defmodule MishkaCmsCore.Install.Bootstrap do
     end
   end
 
-  defp run_step(:languages, acc, _progress), do: {:ok, acc}
+  defp run_step(:languages, %{site: site} = acc, _progress) do
+    with :ok <- save_language_urls(acc.params, site), do: {:ok, acc}
+  end
 
   defp run_step(:settings, acc, _progress) do
     apply_settings(Map.get(acc.params, :settings, %{}))
@@ -381,6 +387,21 @@ defmodule MishkaCmsCore.Install.Bootstrap do
 
   defp valid_languages(languages) do
     if Languages.valid?(languages), do: :ok, else: {:error, {:invalid_languages, languages}}
+  end
+
+  defp save_language_urls(%{language_urls: mode}, site) do
+    with {:ok, mode} <- language_urls(mode),
+         {:ok, _saved} <-
+           Settings.put("site.language_urls", mode, site_id: site.id, category: "general"),
+         do: :ok
+  end
+
+  defp save_language_urls(_params, _site), do: :ok
+
+  defp language_urls(mode) do
+    if mode in Languages.url_modes(),
+      do: {:ok, mode},
+      else: {:error, {:invalid_language_urls, mode}}
   end
 
   defp describe_error(error) when is_exception(error), do: Exception.message(error)

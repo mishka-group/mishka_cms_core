@@ -52,6 +52,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.ContentComponents
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
+  alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
@@ -60,10 +61,11 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   @renders [component: 1, component: 2, captcha: 1, rich_content: 1]
   @translates [t: 1, t: 2]
   @nonces [csp_nonce: 0]
+  @addresses [site_path: 2]
 
   @doc """
   What a runtime template imports from here — `component/1,2`, `captcha/1`, `rich_content/1`,
-  `t/1,2` and `csp_nonce/0` — less any name its own `helpers` already define.
+  `t/1,2`, `csp_nonce/0` and `site_path/2` — less any name its own `helpers` already define.
 
   Every compiler — component, page and layout — asks this rather than writing the list itself, so
   the three cannot drift. The exception is not hypothetical: importing a `t/1` into a module that
@@ -74,7 +76,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   def imports(helpers) do
     own = helpers |> List.wrap() |> MapSet.new(&helper_name/1)
 
-    Enum.reject(@renders ++ @translates ++ @nonces, fn {name, _arity} ->
+    Enum.reject(@renders ++ @translates ++ @nonces ++ @addresses, fn {name, _arity} ->
       MapSet.member?(own, Atom.to_string(name))
     end)
   end
@@ -133,6 +135,28 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   """
   @spec t(term(), keyword() | map()) :: String.t()
   def t(key, bindings \\ []), do: Translations.translate(key, bindings)
+
+  @doc """
+  The public address of a stored path on the site this page is rendered for, in a language or with
+  captures — `MishkaCmsCore.Runtime.Languages.url/3`, so a link is written once and follows the
+  site's URL mode:
+
+      <.link navigate={site_path("/:lang/about", @page.language)}>About</.link>
+      <a href={site_path("/:lang/blog/:slug", %{"lang" => @page.language, "slug" => @post.slug})}>
+
+  A language of `nil` is the site's primary one. `nil` when the path makes no address — a capture
+  it needs is missing, or the language is not one the site publishes in — which HEEx draws as no
+  `href` at all. The site is the one `MishkaCmsCore.Runtime.Translations.put_site/1` named for this
+  process, as for `component/1`.
+  """
+  @spec site_path(String.t(), String.t() | map() | nil) :: String.t() | nil
+  def site_path(path, captures) when is_map(captures),
+    do: Languages.url(path, captures, Translations.site())
+
+  def site_path(path, language) when is_binary(language) or is_nil(language) do
+    site_id = Translations.site()
+    Languages.url(path, %{Languages.capture() => language || Languages.primary(site_id)}, site_id)
+  end
 
   @doc """
   Renders a runtime component by name.

@@ -13,7 +13,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvisionTest do
 
   import MishkaCmsCore.Test.Factory
 
-  alias MishkaCmsCore.Runtime.ExtensionProvision
+  alias MishkaCmsCore.Runtime.{ExtensionProvision, PageProvision}
 
   require Ash.Query
 
@@ -40,6 +40,44 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvisionTest do
   @components %{"name" => "kit", "version" => "1.0.0", "components" => [%{"name" => "kit-card"}]}
 
   defp snippet, do: %{snippet: %{name: "Kit", source: fn _site -> ~s(<div id="kit"></div>) end}}
+
+  describe "moved/2" do
+    @every_language %{"serves_all_languages" => true}
+
+    defp sample_pages do
+      [
+        %{path: "/:lang/blog", extra: @every_language},
+        %{path: "/:lang", extra: @every_language},
+        %{path: "/archive", extra: %{}}
+      ]
+    end
+
+    # Only the first segment is ever a language, so a prefix goes after it.
+    test "puts a prefix after a leading :lang, and in front of any other path" do
+      moved = ExtensionProvision.moved(sample_pages(), %{"prefix" => " /mish/ "})
+
+      assert Enum.map(moved, & &1.path) == ["/:lang/mish/blog", "/:lang/mish", "/mish/archive"]
+    end
+
+    test "a named path wins over the prefix" do
+      moved =
+        ExtensionProvision.moved(sample_pages(), %{
+          "prefix" => "/mish",
+          "paths" => %{"/:lang/blog" => "/:lang/journal"}
+        })
+
+      assert Enum.map(moved, & &1.path) == ["/:lang/journal", "/:lang/mish", "/mish/archive"]
+      assert Enum.all?(Enum.take(moved, 2), &PageProvision.serves_all_languages?/1)
+    end
+
+    test "a page moved to a path with no lang answers its own language alone" do
+      [journal | _rest] =
+        ExtensionProvision.moved(sample_pages(), %{"paths" => %{"/:lang/blog" => "/journal"}})
+
+      assert journal.path == "/journal"
+      refute PageProvision.serves_all_languages?(journal)
+    end
+  end
 
   describe "required/1" do
     test "names components, pages and the site for a bundle of components", %{dir: dir} do
