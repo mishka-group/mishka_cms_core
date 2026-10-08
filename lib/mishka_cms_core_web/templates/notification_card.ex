@@ -136,6 +136,7 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
         <label
           :if={filter.type == :select}
           class="text-[11px] font-bold tracking-[0.04em] text-[#8a877f]"
+          for={"#{@static.id}-filter-#{filter.name}"}
         >
           {filter_label(filter)}
         </label>
@@ -150,15 +151,21 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
             />
             <input
               type="text"
+              id={"#{@static.id}-filter-#{filter.name}"}
               name={filter.name}
               value={Map.get(@state.filter_values, filter.name) || ""}
               dir="auto"
               placeholder={filter_placeholder(filter)}
+              aria-label={filter_label(filter)}
               phx-debounce="300"
               class={[input_class(), "ps-10 pe-[14px]"]}
             />
           <% else %>
-            <select name={filter.name} class={select_class()}>
+            <select
+              id={"#{@static.id}-filter-#{filter.name}"}
+              name={filter.name}
+              class={select_class()}
+            >
               <option value="">{filter_prompt(filter)}</option>
               <option
                 :for={{label, value} <- translate_options(filter.options || [])}
