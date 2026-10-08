@@ -13,11 +13,18 @@ defmodule Mix.Tasks.Mishka.Css.Closure do
 
   ## Reading the output
 
-  `unbounded` means a template names a component through an expression
-  (`component_name={@name}`), which no build-time walk can resolve. That site keeps the full glob;
-  the named templates are printed so they can be rewritten to literals if the saving is wanted.
+  `unbounded` means a reached template names a component in a way no build-time walk can resolve —
+  an expression in `component_name={…}`, or a call handing an expression to an attribute a
+  component names one through. That site keeps the full glob; the templates responsible are logged
+  so they can be rewritten to literals if the saving is wanted.
 
-  See `MishkaCmsCore.Runtime.Compilers.CssClosure`.
+  A component that names one through its own attribute — `component_name={@card}` — is printed
+  with the names that attribute takes, its default and what the reached callers write for it:
+
+      doc-workspace-list.card -> nothing
+
+  See `MishkaCmsCore.Runtime.Compilers.CssClosure`, whose moduledoc lists every reference it cannot
+  resolve.
   """
 
   use Mix.Task
@@ -62,10 +69,10 @@ defmodule Mix.Tasks.Mishka.Css.Closure do
          ) do
       :unbounded ->
         Mix.shell().info(
-          "#{site}: unbounded — a template names a component through an expression"
+          "#{site}: unbounded — a template names a component the walk cannot resolve"
         )
 
-      %{components: reached, scanned: scanned} ->
+      %{components: reached, scanned: scanned, resolved: resolved} ->
         saved = bytes(all, runtime_dir) - bytes(reached, runtime_dir)
 
         Mix.shell().info(
@@ -73,9 +80,17 @@ defmodule Mix.Tasks.Mishka.Css.Closure do
             "templates, #{human(saved)} not scanned"
         )
 
+        Enum.each(
+          resolved,
+          &Mix.shell().info("  #{&1.component}.#{&1.attribute} -> #{names(&1)}")
+        )
+
         Enum.each(reached, &Mix.shell().info("    #{&1}"))
     end
   end
+
+  defp names(%{names: []}), do: "nothing"
+  defp names(%{names: names}), do: Enum.join(names, ", ")
 
   defp sites_in(runtime_dir) do
     case File.ls(runtime_dir) do

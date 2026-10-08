@@ -1443,6 +1443,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   Aggregates every class-bearing field of a Component into one blob for
   Tailwind to scan: `template`, `body`, helper code, and the templates
   + bodies of multi-clause variants stored in `extra.clauses`.
+
+  It ends with the attribute lines the CSS closure reads to follow a component named through an
+  attribute — `MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks/1`.
   """
   def build_component_class_content(component) do
     extra = field(component, :extra) || %{}
@@ -1465,7 +1468,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       helpers_to_text(field(component, :helpers)),
       clauses_blob,
       defaults_to_text(field(component, :attrs)),
-      defaults_to_text(field(component, :slots))
+      defaults_to_text(field(component, :slots)),
+      MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks(component)
     ]
     |> Enum.filter(fn s -> is_binary(s) and s != "" end)
     |> Enum.join("\n\n")
