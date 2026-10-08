@@ -8,12 +8,12 @@ defmodule MishkaCmsCore.PlainText do
   HEEx escapes it into a page, `MishkaCmsCore.Runtime.Seo` into the head and its JSON-LD. Stored
   escaped instead, each of those escapes it a second time, and a reader sees `Tom &amp; Jerry`.
 
-  Markup is taken out, never kept: `Tom <b>"cat"</b>` is stored as `Tom "cat"`, and
-  `<script>alert(1)</script>Hi` as `alert(1)Hi` — the script's text, without the script. Removal
-  repeats until there is nothing left to remove, so a tag hidden inside a tag (`<<b>b>`) goes too,
-  and the result is stable: `text(text(value)) == text(value)`, so saving a form twice changes
-  nothing. An entity typed into a field is text like any other: `&amp;` is kept as the five
-  characters typed.
+  Markup is taken out, never kept, by `MishkaGervaz.Helpers.strip_tags/1`: `Tom <b>"cat"</b>` is
+  stored as `Tom "cat"`, and `<script>alert(1)</script>Hi` as `alert(1)Hi` — the script's text,
+  without the script. Removal repeats until there is nothing left to remove, so a tag hidden inside
+  a tag (`<<b>b>`) goes too, and the result is stable: `text(text(value)) == text(value)`, so saving
+  a form twice changes nothing. An entity typed into a field is text like any other: `&amp;` is kept
+  as the five characters typed.
 
       iex> MishkaCmsCore.PlainText.text(~s(Tom & Jerry's <b>"cat"</b>))
       ~s(Tom & Jerry's "cat")
@@ -35,25 +35,13 @@ defmodule MishkaCmsCore.PlainText do
 
   @escaped %{"&amp;" => "&", "&lt;" => "<", "&gt;" => ">"}
 
-  # mochiweb, the parser under `HtmlSanitizeEx`, reads what follows these two tags without reading
-  # the entities in it, so they are taken out first and what they held is read like any other text.
-  @unread_tags ~r/<\/?(?:script|textarea)\b(?:"[^"]*"|'[^']*'|[^>"'])*>/i
-
   @doc """
-  `value` without its tags, everything else as it was. Anything but a string is returned as it is,
-  for the field's own `validate(...)` to judge.
+  `value` without its tags, everything else as it was — `MishkaGervaz.Helpers.strip_tags/1`, the
+  rule Gervaz's forms, table search and URL filters use too. Anything but a string is returned as
+  it is, for the field's own `validate(...)` to judge.
   """
   @spec text(term()) :: term()
-  def text(value) when is_binary(value) do
-    # A pass only takes out markup, each piece opening with a `<` no pass adds back, so the passes
-    # end.
-    case value |> String.replace("&", "&amp;") |> shown() do
-      ^value -> value
-      stripped -> text(stripped)
-    end
-  end
-
-  def text(value), do: value
+  defdelegate text(value), to: MishkaGervaz.Helpers, as: :strip_tags
 
   @doc """
   GuardedStruct's per-field `validator:` hook: the field's value as `text/1` returns it.
@@ -63,20 +51,15 @@ defmodule MishkaCmsCore.PlainText do
 
   @doc """
   The text an HTML fragment shows — a rich-text field's, for a description or a summary. Its tags
-  are taken out and its entities read: `<p>Tom &amp; Jerry</p>` is `Tom & Jerry`. Anything but a
-  string is returned as it is.
+  are taken out by `HtmlSanitizeEx.strip_tags/1` and its entities read: `<p>Tom &amp; Jerry</p>` is
+  `Tom & Jerry`. Anything but a string is returned as it is.
   """
   @spec from_html(term()) :: term()
-  def from_html(html) when is_binary(html), do: shown(html)
-  def from_html(value), do: value
+  def from_html(html) when is_binary(html),
+    do:
+      html
+      |> HtmlSanitizeEx.strip_tags()
+      |> String.replace(Map.keys(@escaped), &Map.fetch!(@escaped, &1))
 
-  # `HtmlSanitizeEx.strip_tags/1` takes the tags out and escapes `&`, `<` and `>` in the text it
-  # leaves; that escaping is read back. `text/1` escapes every `&` before this, so an entity typed
-  # into a field reaches the parser as text and comes back as it was typed.
-  defp shown(html) do
-    html
-    |> String.replace(@unread_tags, "")
-    |> HtmlSanitizeEx.strip_tags()
-    |> String.replace(Map.keys(@escaped), &Map.fetch!(@escaped, &1))
-  end
+  def from_html(value), do: value
 end

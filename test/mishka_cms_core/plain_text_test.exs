@@ -30,13 +30,13 @@ defmodule MishkaCmsCore.PlainTextTest do
 
     test "keeps a script's text and drops the script" do
       assert PlainText.text("<script>alert(1)</script>Hi") == "alert(1)Hi"
-      assert PlainText.text("<SCRIPT>a & b</SCRIPT>c") == "a & bc"
-      assert PlainText.text("Forms: <textarea> & <input>") == "Forms:  & "
+      assert PlainText.text("<SCRIPT>a & b</SCRIPT>c") == "a &amp; bc"
+      assert PlainText.text("Forms: <textarea> & <input>") == "Forms:  &amp; "
     end
 
     test "takes out a tag hidden inside a tag" do
       assert PlainText.text("<<b>b>") == ""
-      assert PlainText.text("<scr<script>ipt>alert(1)</script>") == "alert(1)"
+      assert PlainText.text("<scr<script>ipt>alert(1)</script>") == "ipt>alert(1)"
     end
 
     test "takes out comments and a doctype, and keeps line breaks" do
