@@ -20,9 +20,11 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   1. **Host Extraction**: Extracts and normalizes host from request headers
   2. **Site Lookup**: Queries SiteState cache for host-to-site mapping
   3. **Site Validation**: Checks site active status
-  4. **Sign-in Pool**: On the master site, `?master_user=` picks the accounts its sign-in page uses
-  5. **Tenant Assignment**: Sets Ash tenant context from the session's token
-  6. **State Storage**: Persists site data in assigns and session
+  4. **Redirects**: An address one of the site's redirect rules names is answered with that redirect
+     and halted, before the session is touched — see `MishkaCmsCore.Runtime.Redirects`
+  5. **Sign-in Pool**: On the master site, `?master_user=` picks the accounts its sign-in page uses
+  6. **Tenant Assignment**: Sets Ash tenant context from the session's token
+  7. **State Storage**: Persists site data in assigns and session
 
   ## Usage
 
@@ -110,7 +112,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   import Plug.Conn
 
   alias MishkaCmsCore.Accounts.AuthGate
-  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.{Languages, Redirects}
   alias MishkaCmsCore.Runtime.States.SiteState
 
   # Where `AshAuthentication` keeps the signed-in user's token in the session.
@@ -118,6 +120,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   # The pages a sign-in happens on, as whole path segments: `/authors` is a page like any other.
   @sign_in_paths [["auth"], ["api", "auth"]]
+
+  # Where the site's sign-in pages are stored — `MishkaCmsCore.Install.StarterContent.ensure_auth!/1`.
+  @sign_in_page "/:lang/auth"
 
   @doc """
   Initializes the plug with configuration options.
@@ -193,6 +198,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   ## Response Scenarios
 
   - **Active Site Found**: Connection continues with site context
+  - **Redirected Address**: The rule's status and `location`, halted, with `:current_site` assigned
   - **Inactive Site**: 503 "Site Temporarily Unavailable" response
   - **Site Not Found**: 503 "Service Unavailable" response
   - **Master session on the master site**: Site context set, no tenant
@@ -304,6 +310,27 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   defp language_sign_in_path?(_segments, _site), do: false
 
+  @doc """
+  The address of the site's sign-in page in `language`, or of the page `under` it — `/:lang/auth`
+  as `MishkaCmsCore.Runtime.Languages.url/3` builds it, so a visitor sent to sign in, or to sign
+  out, lands on the page in the language they were reading. A language the site does not publish
+  in, and `nil`, are the site's first.
+
+  Every place that sends a visitor to sign in asks this, with the language they read pages in: the
+  socket's for a runtime page, the session's (`MishkaCmsCore.Runtime.Languages.session/0`) anywhere
+  else.
+
+      # site.languages ["en", "fa"], site.language_urls "prefix_others"
+      SiteLookupPlug.auth_address("fa", site.id)                #=> "/fa/auth"
+      SiteLookupPlug.auth_address(nil, site.id)                 #=> "/auth"
+      SiteLookupPlug.auth_address("en", site.id, "/sign-out")   #=> "/auth/sign-out"
+  """
+  @spec auth_address(String.t() | nil, String.t() | nil, String.t()) :: String.t()
+  def auth_address(language, site_id, under \\ "") do
+    language = Languages.remembered(language, site_id) || Languages.primary(site_id)
+    Languages.url(@sign_in_page <> under, %{Languages.capture() => language}, site_id)
+  end
+
   # Private functions
 
   # LOCALHOST IS THE MASTER SITE while no site claims it, so a site whose database knows it only by
@@ -399,10 +426,20 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       true ->
         conn
         |> assign(:current_site, site)
-        |> put_session(:current_site, site)
-        |> sign_in_pool(site)
-        |> scope(site)
+        |> Redirects.redirect(site)
+        |> serve(site)
     end
+  end
+
+  # A REDIRECTED REQUEST IS ANSWERED ALREADY: the address it asked for is none of this site's pages, so
+  # nothing is written to its session.
+  defp serve(%Plug.Conn{halted: true} = conn, _site), do: conn
+
+  defp serve(conn, site) do
+    conn
+    |> put_session(:current_site, site)
+    |> sign_in_pool(site)
+    |> scope(site)
   end
 
   @doc false

@@ -107,10 +107,23 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewFrameOriginTest do
       assert String.ends_with?(url, "/contact")
     end
 
-    test "a path capturing only the language is opened in the page's own language" do
-      url = PreviewHelpers.live_url(record(Page, path: "/:lang/blog", language: "en"), Page)
+    test "a path capturing only the language is opened in the page's own language, at the address the site's URL mode gives it" do
+      site = create_site!(host: "open-#{System.unique_integer([:positive])}.test")
+      forget_settings(~w(site.languages site.language_urls), [site.id])
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
 
-      assert String.ends_with?(url, "/en/blog")
+      opened =
+        &PreviewHelpers.live_url(
+          record(Page, path: "/:lang/blog", language: &1, site: site),
+          Page
+        )
+
+      assert opened.("en") == MishkaCmsCore.Helpers.site_url(site.host, "/blog")
+      assert opened.("fa") == MishkaCmsCore.Helpers.site_url(site.host, "/fa/blog")
+
+      {:ok, _} = MishkaCmsCore.Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert opened.("en") == MishkaCmsCore.Helpers.site_url(site.host, "/en/blog")
     end
 
     # The template of many URLs and the address of none: no button, rather than a 404.

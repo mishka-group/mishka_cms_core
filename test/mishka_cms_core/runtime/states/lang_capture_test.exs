@@ -27,7 +27,7 @@ defmodule MishkaCmsCore.Runtime.States.LangCaptureTest do
         master: site.master
       })
 
-    forget_settings(~w(site.languages), [site.id])
+    forget_settings(~w(site.languages site.language_urls), [site.id])
     {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
 
     on_exit(fn ->
@@ -53,6 +53,61 @@ defmodule MishkaCmsCore.Runtime.States.LangCaptureTest do
   end
 
   defp resolve(site, path), do: WebRunTimeMetaDataState.resolve(path, site.name)
+
+  # THE PRIMARY LANGUAGE UNPREFIXED, the default: an address whose first segment is not one of the
+  # site's languages is read as the primary language's.
+  describe "an address that names no language" do
+    test "is the page under the primary language, which it captures", %{site: site} do
+      route!(site, "blog", "/:lang/blog")
+      route!(site, "home", "/:lang")
+
+      assert {:ok, %{id: "blog"}, %{"lang" => "en"}} = resolve(site, "/blog")
+      assert {:ok, %{id: "home"}, %{"lang" => "en"}} = resolve(site, "/")
+      assert {:ok, %{id: "blog"}, %{"lang" => "fa"}} = resolve(site, "/fa/blog")
+    end
+
+    test "is a literal page as typed first, then one stored under the primary language", %{
+      site: site
+    } do
+      route!(site, "prefixed", "/en/pricing")
+      assert {:ok, %{id: "prefixed"}, captured} = resolve(site, "/pricing")
+      assert captured == %{}
+
+      route!(site, "as-typed", "/pricing")
+      assert {:ok, %{id: "as-typed"}, _captured} = resolve(site, "/pricing")
+
+      route!(site, "pattern", "/:lang/about")
+      route!(site, "literal", "/en/about")
+      assert {:ok, %{id: "literal"}, _captured} = resolve(site, "/about")
+    end
+
+    test "takes the best pattern of either form, the prefixed one winning a tie", %{site: site} do
+      route!(site, "by-slug", "/:slug")
+      route!(site, "about", "/:lang/about")
+      route!(site, "anything", "/:lang/*rest")
+
+      assert {:ok, %{id: "about"}, %{"lang" => "en"}} = resolve(site, "/about")
+      assert {:ok, %{id: "by-slug"}, %{"slug" => "news"}} = resolve(site, "/news")
+      assert {:ok, %{id: "anything"}, %{"rest" => "news/today"}} = resolve(site, "/news/today")
+    end
+
+    test "is not the page of a language the page was not written in", %{site: site} do
+      route!(site, "about-fa", "/:lang/about", 0, "fa")
+
+      assert resolve(site, "/about") == {:error, :not_found}
+      assert {:ok, %{id: "about-fa"}, _captured} = resolve(site, "/fa/about")
+    end
+
+    test "is asked about as typed alone when every language is prefixed", %{site: site} do
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+      route!(site, "blog", "/:lang/blog")
+      route!(site, "prefixed", "/en/pricing")
+
+      assert resolve(site, "/blog") == {:error, :not_found}
+      assert resolve(site, "/pricing") == {:error, :not_found}
+      assert {:ok, %{id: "blog"}, %{"lang" => "en"}} = resolve(site, "/en/blog")
+    end
+  end
 
   test "answers only the site's languages, first, middle or last", %{site: site} do
     route!(site, "first", "/:lang/about")

@@ -136,6 +136,7 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
         <label
           :if={filter.type == :select}
           class="text-[11px] font-bold tracking-[0.04em] text-[#8a877f]"
+          for={"#{@static.id}-filter-#{filter.name}"}
         >
           {filter_label(filter)}
         </label>
@@ -150,15 +151,21 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
             />
             <input
               type="text"
+              id={"#{@static.id}-filter-#{filter.name}"}
               name={filter.name}
               value={Map.get(@state.filter_values, filter.name) || ""}
               dir="auto"
               placeholder={filter_placeholder(filter)}
+              aria-label={filter_label(filter)}
               phx-debounce="300"
               class={[input_class(), "ps-10 pe-[14px]"]}
             />
           <% else %>
-            <select name={filter.name} class={select_class()}>
+            <select
+              id={"#{@static.id}-filter-#{filter.name}"}
+              name={filter.name}
+              class={select_class()}
+            >
               <option value="">{filter_prompt(filter)}</option>
               <option
                 :for={{label, value} <- translate_options(filter.options || [])}
@@ -329,12 +336,13 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
           phx-target={@myself}
           class="flex items-center gap-[9px]"
         >
-          <span class="text-[12px] font-semibold text-[#8a877f]">
+          <span id={"#{@static.id}-page-size-label"} class="text-[12px] font-semibold text-[#8a877f]">
             {dgettext("mishka_gervaz", "Per page")}
           </span>
           <div class="relative">
             <select
               name="size"
+              aria-labelledby={"#{@static.id}-page-size-label"}
               class="h-[38px] cursor-pointer appearance-none rounded-[10px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
             >
               <option

@@ -116,7 +116,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
         </.component>
       </div>
       <p class="mt-8">
-        <.link navigate={"/#{@query_params["lang"]}"} class="text-[13px] font-bold text-accent">
+        <.link navigate={site_path("/:lang", @page.language)} class="text-[13px] font-bold text-accent">
           ← Back home
         </.link>
       </p>
@@ -149,13 +149,13 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
       </p>
       <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
         <.link
-          navigate={"/#{@query_params["lang"]}/gallery"}
+          navigate={site_path("/:lang/gallery", @page.language)}
           class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
         >
           Open the gallery
         </.link>
         <.link
-          navigate={"/#{@query_params["lang"]}/pricing"}
+          navigate={site_path("/:lang/pricing", @page.language)}
           class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
         >
           Pricing
@@ -199,7 +199,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
             {"Forms and uploads", "Two forms on one page, and a live file field.", "/forms"}
           ]
         }
-        navigate={"/#{@query_params["lang"]}#{path}"}
+        navigate={site_path("/:lang#{path}", @page.language)}
         class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
       >
         <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
@@ -218,13 +218,13 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
       </div>
       <div class="flex flex-wrap gap-3">
         <.link
-          navigate={"/#{@query_params["lang"]}/features/multi-tenant"}
+          navigate={site_path("/:lang/features/multi-tenant", @page.language)}
           class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
         >
           A :param page
         </.link>
         <.link
-          navigate={"/#{@query_params["lang"]}/handbook/getting-started/install"}
+          navigate={site_path("/:lang/handbook/getting-started/install", @page.language)}
           class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
         >
           A *rest page
@@ -340,7 +340,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
       </section>
 
       <p class="mt-6 text-[13px]">
-        <.link navigate={"/#{@query_params["lang"]}/gallery"} class="font-bold text-accent">
+        <.link navigate={site_path("/:lang/gallery", @page.language)} class="font-bold text-accent">
           See the rest of the kit →
         </.link>
       </p>
@@ -451,7 +451,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
       </section>
 
       <p class="mt-6 text-[13px]">
-        <.link navigate={"/fa/gallery"} class="font-bold text-accent">
+        <.link navigate={site_path("/:lang/gallery", @page.language)} class="font-bold text-accent">
           باقی کیت را ببینید ←
         </.link>
       </p>
@@ -474,7 +474,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
       format: :heex,
       template: ~S"""
       <.component component_name="chelekom-breadcrumb" site="Global" id="gallery-crumbs">
-        <:item link={"/#{@query_params["lang"]}"} title="Home">Home</:item>
+        <:item link={site_path("/:lang", @page.language)} title="Home">Home</:item>
         <:item title="Gallery">Gallery</:item>
       </.component>
 
@@ -650,7 +650,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
             ]
           }>
             <.link
-              navigate={"/#{@query_params["lang"]}#{path}"}
+              navigate={site_path("/:lang#{path}", @page.language)}
               class="font-medium text-accent hover:underline"
             >
               {label}
@@ -670,7 +670,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
       description: "هر بخش تعاملی کیت در یک‌جا، و راه رسیدن به باقی صفحه‌های توسعه.",
       template: ~S"""
       <.component component_name="chelekom-breadcrumb" site="Global" id="gallery-crumbs">
-        <:item link={"/fa"} title="خانه">خانه</:item>
+        <:item link={site_path("/:lang", @page.language)} title="خانه">خانه</:item>
         <:item title="گالری">گالری</:item>
       </.component>
 
@@ -852,7 +852,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
             ]
           }>
             <.link
-              navigate={"/fa#{path}"}
+              navigate={site_path("/:lang#{path}", @page.language)}
               class="font-medium text-accent hover:underline"
             >
               {label}
@@ -1499,7 +1499,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
         <div class="mt-6 flex flex-wrap gap-2 text-[13px]">
           <.link
             :for={slug <- ["multi-tenant", "page-builder", "runtime-css"]}
-            navigate={"/#{@query_params["lang"]}/features/#{slug}"}
+            navigate={site_path("/:lang/features/:slug", %{"lang" => @page.language, "slug" => slug})}
             class="rounded-[9px] border border-line px-3 py-1.5 font-medium text-ink hover:text-accent"
           >
             {slug}
@@ -1529,7 +1529,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
         <div class="mt-6 flex flex-wrap gap-2 text-[13px]">
           <.link
             :for={slug <- ["multi-tenant", "page-builder", "runtime-css"]}
-            navigate={"/fa/features/#{slug}"}
+            navigate={site_path("/:lang/features/:slug", %{"lang" => @page.language, "slug" => slug})}
             class="rounded-[9px] border border-line px-3 py-1.5 font-medium text-ink hover:text-accent"
           >
             {slug}
@@ -1560,7 +1560,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
         <ul class="mt-6 space-y-2 text-[13px]">
           <li :for={rest <- ["getting-started/install", "getting-started/first-page", "recipes/seo"]}>
             <.link
-              navigate={"/#{@query_params["lang"]}/handbook/#{rest}"}
+              navigate={site_path("/:lang/handbook/*rest", %{"lang" => @page.language, "rest" => rest})}
               class="font-medium text-accent hover:underline"
             >
               /handbook/{rest}
@@ -1590,7 +1590,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
         <ul class="mt-6 space-y-2 text-[13px]">
           <li :for={rest <- ["getting-started/install", "getting-started/first-page", "recipes/seo"]}>
             <.link
-              navigate={"/fa/handbook/#{rest}"}
+              navigate={site_path("/:lang/handbook/*rest", %{"lang" => @page.language, "rest" => rest})}
               class="font-medium text-accent hover:underline"
             >
               /handbook/{rest}
@@ -1618,7 +1618,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
           what you do not.
         </p>
         <p class="mt-8 text-[13px]">
-          <.link navigate={"/#{@query_params["lang"]}/privacy"} class="font-bold text-accent">
+          <.link navigate={site_path("/:lang/privacy", @page.language)} class="font-bold text-accent">
             Privacy →
           </.link>
         </p>
@@ -1641,7 +1641,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
           چیزی را تعهد می‌کنید و چه چیزی را نه.
         </p>
         <p class="mt-8 text-[13px]">
-          <.link navigate={"/fa/privacy"} class="font-bold text-accent">
+          <.link navigate={site_path("/:lang/privacy", @page.language)} class="font-bold text-accent">
             حریم خصوصی ←
           </.link>
         </p>

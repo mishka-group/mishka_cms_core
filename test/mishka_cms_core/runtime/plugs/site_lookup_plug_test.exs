@@ -51,8 +51,12 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
     |> Ash.create!()
   end
 
-  defp forget_languages(site),
-    do: on_exit(fn -> SettingsState.delete(site.id, "site.languages") end)
+  defp forget_languages(site) do
+    on_exit(fn ->
+      SettingsState.delete(site.id, "site.languages")
+      SettingsState.delete(site.id, "site.language_urls")
+    end)
+  end
 
   defp cached_site!(host, master?) do
     site = create_site!(name: host, host: host, active: true, master: master?)
@@ -626,6 +630,43 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
       end
 
       refute SiteLookupPlug.sign_in_path?(["en", "auth"], nil)
+    end
+  end
+
+  # EVERY PLACE THAT SENDS A VISITOR TO SIGN IN asks this with the language they read pages in.
+  describe "auth_address/3" do
+    setup do
+      MishkaCmsCore.DataCase.setup_sandbox(%{async: false})
+      site = cached_site!("auth-address.example.com", false)
+      forget_languages(site)
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      {:ok, site: site}
+    end
+
+    test "is the sign-in page in the language asked, the first one unprefixed", %{site: site} do
+      assert SiteLookupPlug.auth_address("fa", site.id) == "/fa/auth"
+      assert SiteLookupPlug.auth_address("en", site.id) == "/auth"
+      assert SiteLookupPlug.auth_address("fa", site.id, "/sign-out") == "/fa/auth/sign-out"
+      assert SiteLookupPlug.auth_address("en", site.id, "/sign-out") == "/auth/sign-out"
+    end
+
+    test "names every language when the site prefixes them all", %{site: site} do
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert SiteLookupPlug.auth_address("en", site.id) == "/en/auth"
+      assert SiteLookupPlug.auth_address("fa", site.id) == "/fa/auth"
+    end
+
+    test "is the site's first language for none, or one the site does not publish", %{
+      site: site
+    } do
+      assert SiteLookupPlug.auth_address(nil, site.id) == "/auth"
+      assert SiteLookupPlug.auth_address("de", site.id) == "/auth"
+
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+
+      assert SiteLookupPlug.auth_address(nil, site.id) == "/auth"
+      assert SiteLookupPlug.auth_address("en", site.id) == "/en/auth"
     end
   end
 

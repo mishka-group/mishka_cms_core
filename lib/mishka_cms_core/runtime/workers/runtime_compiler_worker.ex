@@ -24,7 +24,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   # what the purge took away. A removal still runs, so nothing it cleans up is left behind.
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
-    if builds_for_inactive_site?(args), do: :ok, else: run(job)
+    if builds_for_inactive_site?(args) or stale?(args), do: :ok, else: run(job)
   end
 
   # A SITEMAP BUILD HAS TEN MINUTES, so one that never ends cannot hold the `:sitemaps` queue for
@@ -53,6 +53,45 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
        do: match?({:ok, %{active: false}}, SiteState.get_by_name(site_name))
 
   defp builds_for_inactive_site?(_args), do: false
+
+  # A JOB CARRIES THE ROW AS IT WAS SAVED, and one that runs late would write that copy over a newer
+  # one: a job a stopped node left `executing` — a seed script that exited mid-job — is rescued by
+  # `Oban.Lifeline` half an hour later, after the next save's own job already built the row, and its
+  # old template replaced the new one, classes and all. The stored row's `updated_at` decides; a job
+  # whose row is gone, or whose copy carries no time, runs as before.
+  @row_resources %{
+    "MishkaCmsCore.Runtime.Page" => MishkaCmsCore.Runtime.Page,
+    "MishkaCmsCore.Runtime.Layout" => MishkaCmsCore.Runtime.Layout,
+    "MishkaCmsCore.Runtime.ErrorPage" => MishkaCmsCore.Runtime.ErrorPage,
+    "MishkaCmsCore.Runtime.Component" => MishkaCmsCore.Runtime.Component,
+    "MishkaCmsCore.Runtime.JsHook" => MishkaCmsCore.Runtime.JsHook,
+    "MishkaCmsCore.Runtime.Stylesheet" => MishkaCmsCore.Runtime.Stylesheet
+  }
+
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
+
+  defp stale?(%{
+         "action" => action,
+         "resource" => resource,
+         "data" => %{"id" => id, "updated_at" => saved}
+       })
+       when action in @building and is_binary(id) and is_binary(saved) do
+    with {:ok, module} <- Map.fetch(@row_resources, resource),
+         {:ok, uuid} <- Ecto.UUID.dump(id),
+         {:ok, saved_at, _offset} <- DateTime.from_iso8601(saved),
+         {:ok, %{rows: [[%NaiveDateTime{} = stored]]}} <-
+           Ecto.Adapters.SQL.query(
+             @repo,
+             "SELECT updated_at FROM #{AshPostgres.DataLayer.Info.table(module)} WHERE id = $1",
+             [uuid]
+           ) do
+      NaiveDateTime.before?(DateTime.to_naive(saved_at), stored)
+    else
+      _cannot_tell -> false
+    end
+  end
+
+  defp stale?(_args), do: false
 
   defp run(%Oban.Job{args: %{"resource" => "MishkaCmsCore.Runtime.Page"} = args}) do
     %{"action" => action, "data" => page} = args
@@ -398,14 +437,16 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   # THE SAME TWO-HALVES RULE A PAGE FOLLOWS, minus routing: a component has no path and no metadata
   # entry. Its template is written whenever it is active, so the site's CSS covers it; its module is
   # built here only when `precompile` says so, and otherwise by the first render that names it
-  # (`MishkaCmsCore.Runtime.LiveViewHelpers.component/1`). Purging unloads the module and removes
-  # the template.
+  # (`MishkaCmsCore.Runtime.LiveViewHelpers.component/1`). Its name is remembered in `SiteState`
+  # while it is active, which is what a marker in stored content is checked against. Purging unloads
+  # the module and removes the template and the name.
   @doc false
   def apply_component_lifecycle(action, com, module) do
     cond do
       purge?(action, com) ->
         ModuleCompiler.unload(module)
         BootHandler.delete_template_file(template_site(com), "component", com["name"])
+        SiteState.delete_component(com["site_id"], com["name"])
         Logger.info("Purged Component module: #{inspect(module)}")
         :ok
 
@@ -415,6 +456,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
         # is switched on, or has been edited — so the memory goes.
         CompileFailureState.clear(module)
         create_template(com, "component")
+        SiteState.put_component(com["site_id"], com["name"])
 
         if compile?(action, com, Helpers.loaded?(module)),
           do: compile_module(module, action, com, "component"),

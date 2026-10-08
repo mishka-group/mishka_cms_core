@@ -119,6 +119,7 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Activity.Sources.RuntimeCompile.attach()
     MishkaCmsCore.PluginRegistrations.attach()
     MishkaCmsCore.Runtime.Compilers.SitemapCompiler.attach()
+    :ok = MishkaCmsCore.Runtime.LiveViewHelpers.carry_into_tasks()
 
     opts = [strategy: :one_for_one, name: MishkaCmsCore.Supervisor]
     Supervisor.start_link(children, opts)

@@ -52,6 +52,7 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       })
 
     {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+    {:ok, _} = Settings.put("site.language_urls", "prefix_others", site_id: site.id)
 
     on_exit(fn ->
       SettingsState.restore(snapshot)
@@ -162,10 +163,9 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
                User-agent: *
                Disallow: /admin/
                Disallow: /api/
+               Disallow: /auth$
+               Disallow: /auth?
                Disallow: /auth/
-               Disallow: /en/auth$
-               Disallow: /en/auth?
-               Disallow: /en/auth/
                Disallow: /fa/auth$
                Disallow: /fa/auth?
                Disallow: /fa/auth/
@@ -181,15 +181,27 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
     test "keeps out the sign-in pages in every language the site publishes in, and nothing that only starts like one",
          %{site: site} do
       {:ok, _} = Settings.put("site.languages", ["en", "de"], site_id: site.id)
-      rules = disallowed(fetch(site, "/robots.txt").resp_body)
 
-      for language <- ["en", "de"],
-          path <- ["/auth", "/auth?return_to=abc", "/auth/register", "/auth/magic-link/tok"] do
-        assert kept_out?(rules, "/#{language}#{path}"), "/#{language}#{path} is crawlable"
-      end
+      # `/auth` in either mode, and each language's own address of it.
+      for {mode, prefixes} <- [{"prefix_others", ["", "/de"]}, {"prefix_all", ["", "/en", "/de"]}] do
+        {:ok, _} = Settings.put("site.language_urls", mode, site_id: site.id)
+        rules = disallowed(fetch(site, "/robots.txt").resp_body)
 
-      for path <- ["/en/authors", "/de/authentic", "/en/about/auth", "/fa/auth", "/en"] do
-        refute kept_out?(rules, path), "#{path} is kept out"
+        for prefix <- prefixes,
+            path <- ["/auth", "/auth?return_to=abc", "/auth/register", "/auth/magic-link/tok"] do
+          assert kept_out?(rules, prefix <> path), "#{prefix <> path} is crawlable in #{mode}"
+        end
+
+        for path <- [
+              "/authors",
+              "/en/authors",
+              "/de/authentic",
+              "/en/about/auth",
+              "/fa/auth",
+              "/en"
+            ] do
+          refute kept_out?(rules, path), "#{path} is kept out in #{mode}"
+        end
       end
     end
 
@@ -298,6 +310,11 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       create_page!(site_id: site.id, path: "/:lang/careers", language: "de")
 
       assert site |> built_locs() |> Enum.sort() ==
+               Enum.map(["/fa/guide", "/fa/team", "/guide"], &(origin(site) <> &1))
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert site |> built_locs() |> Enum.sort() ==
                Enum.map(["/en/guide", "/fa/guide", "/fa/team"], &(origin(site) <> &1))
     end
 
@@ -353,8 +370,9 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
              ]
     end
 
-    # THE RESOLVER ANSWERS A LITERAL PAGE BEFORE ANY PATTERN, so an address a login-only or noindex
-    # page is stored at is that page's, whichever pattern or plugin would name it too.
+    # AN ADDRESS A LOGIN-ONLY OR NOINDEX PAGE ANSWERS AT is that page's, whichever plugin would name
+    # it too — compared as a visitor is served it, so `/en/from-plugin` is `/from-plugin` on a site
+    # that leaves English unprefixed.
     test "leaves out an address a page it does not list is stored at", %{site: site} do
       register!(SeoSitemapUrls, "seo:sitemap:urls")
       create_page!(site_id: site.id, path: "/about")
@@ -362,20 +380,21 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
       create_page!(
         site_id: site.id,
-        path: "/fa/guide",
+        path: "/fa/members",
         language: "fa",
         permissions: ["members:read"]
       )
 
       create_page!(
         site_id: site.id,
-        path: "/from-plugin",
+        path: "/en/from-plugin",
         seo_tags: [%{tag: "meta", attrs: %{"name" => "robots"}, content: "noindex"}]
       )
 
       assert built_locs(site) == [
                origin(site) <> "/about",
-               origin(site) <> "/en/guide",
+               origin(site) <> "/guide",
+               origin(site) <> "/fa/guide",
                origin(site) <> "/%C3%BCber%20uns"
              ]
     end
@@ -395,6 +414,25 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
           do: create_page!(site_id: site.id, path: path)
 
       assert built_locs(site) == [origin(site) <> "/about", origin(site) <> "/sitemaps/guide"]
+    end
+
+    # NO ADDRESS IN A SITEMAP REDIRECTS: one under the primary language a site leaves unprefixed is
+    # listed where a visitor lands, once, whoever named it.
+    test "lists an address where a visitor is served it, whoever names it", %{site: site} do
+      create_page!(site_id: site.id, path: "/en/pricing")
+      create_page!(site_id: site.id, path: "/fa/pricing", language: "fa")
+
+      {:ok, _} =
+        Settings.put("seo.sitemap.paths", ["/en/pricing", "/en/search", "/fa/search"],
+          site_id: site.id
+        )
+
+      assert built_locs(site) == [
+               origin(site) <> "/pricing",
+               origin(site) <> "/fa/pricing",
+               origin(site) <> "/search",
+               origin(site) <> "/fa/search"
+             ]
     end
 
     test "lists the site's extra addresses, escaped", %{site: site} do

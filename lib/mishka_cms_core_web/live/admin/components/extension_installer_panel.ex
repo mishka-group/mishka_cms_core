@@ -364,6 +364,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
           :if={@sites != []}
           id={"#{@id}-site"}
           name="site_id"
+          aria-label={gettext("Site")}
           class="h-[34px] min-w-[220px] rounded-[9px] border border-[#ecebe6] bg-white px-2.5 text-[12.5px] font-semibold text-[#3a382f]"
         >
           <option
@@ -639,6 +640,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
             :if={@sites != []}
             id={"#{@id}-site"}
             name="site_id"
+            aria-label={gettext("Site")}
             class="h-[42px] min-w-[220px] flex-1 cursor-pointer appearance-none rounded-xl border border-[#ecebe6] bg-white px-[15px] text-[12.5px] font-semibold text-[#3a382f] outline-none"
           >
             <option

@@ -1,22 +1,32 @@
 defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
   @moduledoc """
-  Puts every request on an address that names the language it is answered in, and remembers which
-  one the visitor is reading.
+  Answers every request in the language its address names, sends one whose address is not the
+  site's form of it to the one that is, and remembers which language the visitor is reading.
 
   ## The rule
 
-  A site's pages are stored under a language — `/:lang/about`, or a literal `/fa/pricing`. An
-  address that names none is not an address the site publishes at, so it is sent to one:
+  A site's pages are stored under a language — `/:lang/about`, or a literal `/fa/pricing` — and
+  `site.language_urls` (`MishkaCmsCore.Runtime.Languages.url_mode/1`) says how a public address
+  names it. Only the FIRST segment is ever read as a language.
 
-      /            -> /en
-      /blog        -> /en/blog
+  With no prefix for the primary language (`"prefix_others"`, the default), the address decides
+  and nothing about the visitor does:
+
+      /blog        -> served in the primary language, as /en/blog would have been
+      /fa/blog     -> served, and `fa` is remembered
+      /en/blog     -> 301 /blog            (en is the primary language)
+      /            -> served in the primary language, whatever the session says
+
+  With a prefix for every language (`"prefix_all"`):
+
       /fa/pricing  -> served, and `fa` is remembered
-      /blog        -> /fa/blog          (after the line above)
+      /blog        -> 302 /fa/blog         (after the line above)
+      /no-lang     -> served in its page's own language, when a page is stored there
 
-  Which language a visitor is sent to is their remembered one when the site still publishes in it,
-  and `MishkaCmsCore.Runtime.Languages.primary/1` otherwise — the first of the site's list. A
-  remembered language the page has no edition in falls back to that same first language rather than
-  to a 404: an address that does not name a language is not a request for one.
+  Which language `"prefix_all"` sends a visitor to is their remembered one when the site still
+  publishes in it, and `MishkaCmsCore.Runtime.Languages.primary/1` otherwise — the first of the
+  site's list. A remembered language the page has no edition in falls back to that same first
+  language rather than to a 404: an address that does not name a language is not a request for one.
 
   ## What is NOT redirected
 
@@ -26,29 +36,33 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
 
     * a path that already resolves is served as it stands — a page stored at `/no-lang` keeps its
       address, and moving it under a language would be inventing one it does not have
-    * a path that resolves under neither form is left alone and 404s, or is a route Phoenix owns:
-      `/auth`, `/admin/...`, `/mish-...`. They still get the locale set, so their Gettext strings are
-      in the visitor's language, but their addresses are none of this module's business.
+    * a path that resolves under neither form is left alone and 404s
+    * a route Phoenix owns — `/admin/...`, `/api/...`, an asset bundle, `/mish-...` — is neither
+      moved nor remembered: it is answered in the visitor's remembered language, else the site's
+      first, so its Gettext strings are in the language they were reading, and the language a
+      visitor reads pages in is the last page's, never the admin's or a stylesheet's. The admin keeps
+      its own, `MishkaCmsCore.Runtime.Languages.admin_session/0`.
 
   ## Why it is told which route the CMS answers
 
   `:router` and `:live_view` are required, and only a request the router would hand to that LiveView
-  is ever redirected. Without them, an author who published a page at `/en/auth` would take the sign
-  in page down: `/auth` is a Phoenix route, `/en/auth` would resolve, and the rule above would send
-  every visitor from one to the other. A static route already wins the match — this makes it win the
-  language rule too.
+  is ever redirected, or remembered. Without them, an author who published a page at `/en/admin`
+  would take a Phoenix route down: `/admin` would resolve under a language, and the rule above would
+  send every visitor from one to the other. A static route already wins the match — this makes it
+  win the language rule too.
 
       plug MishkaCmsCore.Runtime.Plugs.LanguagePlug,
         router: MishkaCmsWeb.Router,
         live_view: MishkaCmsWeb.RuntimeLive
 
-  ## The redirect is a 302, deliberately
+  ## 301 or 302
 
-  Where a visitor is sent depends on their session, so a 301 would be cached by the browser and
-  keep sending them to `/en/blog` after they had chosen Persian. A crawler, which carries no
-  session, always lands on `primary/1` and reads the `hreflang` alternates
-  `MishkaCmsWeb.RuntimeLive.page_head/1` puts in the head — which is how the other languages are
-  discovered, rather than through this redirect.
+  The primary language's prefix is dropped with a 301: `/en/blog` is `/blog` for every visitor, so a
+  browser and a crawler may keep that answer. Sending an address with no language to one is a 302:
+  where a visitor goes depends on their session, and a 301 would be cached by the browser and keep
+  sending them to `/en/blog` after they had chosen Persian. A crawler, which carries no session,
+  always lands on `primary/1` and reads the `hreflang` alternates
+  `MishkaCmsWeb.RuntimeLive.page_head/1` puts in the head.
 
   ## Asked in two places
 
@@ -61,7 +75,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
 
   import Plug.Conn
 
-  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.{Languages, PageEditions}
   alias MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState
 
   @section "Page"
@@ -79,16 +93,13 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
   def call(%Plug.Conn{assigns: %{current_site: %{name: name, id: id}}} = conn, opts) do
     remembered = conn |> get_session(Languages.session()) |> Languages.remembered(id)
 
-    case target(conn.path_info, {name, id}, remembered) do
-      {:serve, language} ->
-        speaking(conn, language)
-
-      {:redirect, path, language} ->
-        if answered_by_the_cms?(conn, opts) do
-          redirect_to(conn, path <> query(conn))
-        else
-          speaking(conn, language)
-        end
+    if answered_by_the_cms?(conn, opts) do
+      case target(conn.path_info, {name, id}, remembered) do
+        {:serve, language} -> speaking(conn, language)
+        {:redirect, path, status} -> redirect_to(conn, path <> query(conn), status)
+      end
+    else
+      reading(conn, remembered || Languages.primary(id))
     end
   end
 
@@ -96,31 +107,57 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
 
   @doc """
   Where a request for `segments` belongs: `{:serve, language}` to answer it where it is, or
-  `{:redirect, path}` to send it to an address that names a language.
+  `{:redirect, path, status}` to send it to the site's form of its address — `301` for a primary
+  language's prefix the site leaves off, `302` for a language chosen for the visitor.
 
   `site` is the `{name, id}` pair — the name is what the routing table is keyed by, the id is what
   the language settings are keyed by. `remembered` is a language already put through
   `MishkaCmsCore.Runtime.Languages.remembered/2`, or `nil`.
 
-      target(["fa", "pricing"], {"localhost", id}, nil)  #=> {:serve, "fa"}
-      target(["blog"], {"localhost", id}, "fa")          #=> {:redirect, "/fa/blog", "fa"}
-      target(["no-lang"], {"localhost", id}, nil)        #=> {:serve, "en"}
+      # site.languages ["en", "fa"], site.language_urls "prefix_others"
+      target(["fa", "pricing"], {"localhost", id}, nil) #=> {:serve, "fa"}
+      target(["en", "blog"], {"localhost", id}, nil)    #=> {:redirect, "/blog", 301}
+      target(["blog"], {"localhost", id}, "fa")         #=> {:serve, "en"}
+
+      # site.language_urls "prefix_all"
+      target(["blog"], {"localhost", id}, "fa")         #=> {:redirect, "/fa/blog", 302}
   """
   @spec target([String.t()], {String.t(), String.t()}, String.t() | nil) ::
-          {:serve, String.t()} | {:redirect, String.t(), String.t()}
+          {:serve, String.t()} | {:redirect, String.t(), 301 | 302}
   def target(segments, {name, id}, remembered) do
-    case Languages.leading(segments, Languages.site(id)) do
-      language when is_binary(language) ->
+    [primary | _others] = languages = Languages.site(id)
+
+    case {Languages.url_mode(id), Languages.leading(segments, languages)} do
+      {"prefix_others", ^primary} ->
+        unprefixed(segments, id, primary)
+
+      {_mode, language} when is_binary(language) ->
         {:serve, language}
 
-      nil ->
-        tried = Enum.uniq([remembered, Languages.primary(id)] -- [nil])
+      {"prefix_others", nil} ->
+        {:serve, primary}
 
-        if published?(path(segments), name) do
-          {:serve, hd(tried)}
-        else
-          under(segments, name, tried)
-        end
+      {"prefix_all", nil} ->
+        prefixed(segments, {name, id}, Enum.uniq([remembered, primary] -- [nil]))
+    end
+  end
+
+  # THE PRIMARY LANGUAGE'S ADDRESS IS THE ONE WITHOUT IT. A path that makes no address — one that
+  # spells a capture — is left to 404 where it is.
+  defp unprefixed(segments, site_id, primary) do
+    case Languages.url(path(segments), %{}, site_id) do
+      nil -> {:serve, primary}
+      path -> {:redirect, path, 301}
+    end
+  end
+
+  defp prefixed(segments, {name, id}, tried) do
+    case WebRunTimeMetaDataState.resolve(path(segments), name) do
+      {:ok, %{section: @section} = page, captured} ->
+        {:serve, PageEditions.language(page, captured, id)}
+
+      _not_a_page ->
+        under(segments, name, tried)
     end
   end
 
@@ -132,11 +169,11 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
   # touched by this, so `/fa/about` still 404s when nobody wrote it.
   defp under(segments, site, tried) do
     tried
-    |> Enum.map(&{&1, path([&1 | segments])})
-    |> Enum.find(fn {_language, path} -> published?(path, site) end)
+    |> Enum.map(&path([&1 | segments]))
+    |> Enum.find(&published?(&1, site))
     |> case do
-      {language, path} -> {:redirect, path, language}
       nil -> {:serve, hd(tried)}
+      path -> {:redirect, path, 302}
     end
   end
 
@@ -149,17 +186,14 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
   @spec spoken(Plug.Conn.t()) :: String.t() | nil
   def spoken(conn), do: conn.assigns[:site_language]
 
-  # ONE PLACE SETS THE LANGUAGE, so the assign, the session and Gettext cannot disagree. A redirect
-  # passes `nil`: the request is not being answered, and the response it is sent to will set all
-  # three itself.
-  defp speaking(conn, nil), do: conn
+  # ONE PLACE SETS THE LANGUAGE, so the assign, the session and Gettext cannot disagree. Only an
+  # address the CMS answers is a page the visitor reads, so only that one is remembered.
+  defp speaking(conn, language),
+    do: conn |> reading(language) |> put_session(Languages.session(), language)
 
-  defp speaking(conn, language) do
+  defp reading(conn, language) do
     Gettext.put_locale(language)
-
-    conn
-    |> assign(:site_language, language)
-    |> put_session(Languages.session(), language)
+    assign(conn, :site_language, language)
   end
 
   # A LIVE ROUTE KEEPS ITS VIEW IN THE METADATA, not in `:plug_opts` — that one holds the live
@@ -185,12 +219,11 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
   defp query(%Plug.Conn{query_string: ""}), do: ""
   defp query(%Plug.Conn{query_string: query}), do: "?" <> query
 
-  # 302, not 301 — see the moduledoc.
-  defp redirect_to(conn, path) do
+  defp redirect_to(conn, path, status) do
     conn
     |> put_resp_header("location", path)
     |> put_resp_content_type("text/html")
-    |> send_resp(302, "")
+    |> send_resp(status, "")
     |> halt()
   end
 end

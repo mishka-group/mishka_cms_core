@@ -213,7 +213,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
               # that knows which shape it actually took, and a stale module built before this column
               # existed answers `nil` through `get_in/2`, which is falsy — so it keeps the old path
               # until something rebuilds it.
-              stateful: unquote(params[:stateful] == true)
+              stateful: unquote(params[:stateful] == true),
+              # Whether the template draws stored content — calls `rich_content`. Such a component
+              # is never drawn by a marker inside content, which could be a marker for itself. See
+              # `MishkaCmsCore.Runtime.ContentComponents`.
+              draws_content:
+                unquote(MishkaCmsCore.Runtime.ContentComponents.draws_content?(params[:template]))
             },
             acl: %{permissions: unquote(Macro.escape(params[:permissions] || []))},
             extra: unquote(Macro.escape(extra))

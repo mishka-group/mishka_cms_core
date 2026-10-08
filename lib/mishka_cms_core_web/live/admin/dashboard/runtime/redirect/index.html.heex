@@ -1,0 +1,34 @@
+<div>
+  <.header>
+    {gettext("Redirects")}
+    <:subtitle>
+      {gettext("Send the addresses that moved — old pages, old files — to where they are now.")}
+    </:subtitle>
+    <:actions>
+      <.button :if={@writable?} id="redirect-add" phx-click="redirect_add">
+        {gettext("+ Add redirect")}
+      </.button>
+    </:actions>
+  </.header>
+
+  <.modal id={@form_modal}>
+    <.live_component
+      module={MishkaGervaz.Form.Web.Live}
+      id={MishkaGervaz.Resource.Info.Form.component_id(MishkaCmsCore.Runtime.Redirect)}
+      resource={MishkaCmsCore.Runtime.Redirect}
+      current_user={@current_user}
+    />
+  </.modal>
+
+  <.live_component
+    module={MishkaGervaz.Table.Web.Live}
+    id={@table_id}
+    resource={MishkaCmsCore.Runtime.Redirect}
+    current_user={@current_user}
+    url_state={@url_state}
+  >
+    <:filter_actions>
+      <ActivityFeed.feed setup={@activity_feed} />
+    </:filter_actions>
+  </.live_component>
+</div>

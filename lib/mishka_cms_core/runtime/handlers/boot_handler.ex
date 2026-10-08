@@ -162,6 +162,37 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   ####################################################################################
   ########################### (▰˘◡˘▰) Server API (▰˘◡˘▰) #############################
   ####################################################################################
+  @doc """
+  When this node started — the moment every compile job created before it stopped describing
+  anything: the boot cancels those still pending (`cancel_leftover_jobs/0`) and compiles from the
+  database itself, without a job.
+  """
+  @spec booted_at() :: DateTime.t()
+  def booted_at do
+    {since_boot, _since_last_call} = :erlang.statistics(:wall_clock)
+    DateTime.add(DateTime.utc_now(), -since_boot, :millisecond)
+  end
+
+  @doc """
+  Cancels every runtime compile job a previous run left pending or executing, in whichever queue it
+  was put — the boot rebuilds what they would have. Other workers' jobs (mail, notifications) are
+  left to `Oban.Lifeline`.
+  """
+  @spec cancel_leftover_jobs() :: {:ok, non_neg_integer()}
+  def cancel_leftover_jobs do
+    Oban.Job
+    |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
+    |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
+    |> Oban.cancel_all_jobs()
+  end
+
+  @doc """
+  Whether the running Oban rescues jobs a stopped node left executing (`lifeline:` in the app's
+  Oban config). Without it, a mail or notification job interrupted by a restart stays `executing`.
+  """
+  @spec lifeline?() :: boolean()
+  def lifeline?, do: Enum.any?(Oban.config().plugins, &match?({Oban.Lifeline, _opts}, &1))
+
   @impl true
   def init(_opts) do
     {:ok, %{status: :initializing, started_at: System.monotonic_time(:millisecond)},
@@ -172,11 +203,13 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   def handle_continue(:boot, state) do
     Logger.info("[BootHandler] Starting boot process...")
 
-    Oban.Job
-    |> where([j], j.queue in ["default", "assets", "sitemaps"])
-    |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
-    |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
-    |> Oban.cancel_all_jobs()
+    _ = cancel_leftover_jobs()
+
+    if Oban.config().testing == :disabled and not lifeline?(),
+      do:
+        Logger.warning(
+          "[BootHandler] Oban runs without Lifeline: a job a restart interrupts stays executing. Add `lifeline: [rescue_after: {30, :minutes}]` to the app's Oban config."
+        )
 
     new_state =
       case perform_boot() do
@@ -595,9 +628,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   end
 
   @doc false
-  # Writes a template file for every ACTIVE component and compiles a module for
-  # the PRECOMPILED ones. Used at boot and by `RuntimeOrchestrator` after a bulk
-  # install.
+  # Writes a template file for every ACTIVE component, remembers its name in
+  # `SiteState`, and compiles a module for the PRECOMPILED ones. Used at boot and
+  # by `RuntimeOrchestrator` after a bulk install.
   #
   # The two halves are deliberately independent. The template file is what
   # `CssClosure` walks and what Tailwind scans, so it is written for every active
@@ -641,6 +674,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
                   component.name,
                   build_component_class_content(component)
                 )
+
+                SiteState.put_component(component.site_id, component.name)
 
                 boot_compile_component(component, component.precompile)
               end,
@@ -1391,7 +1426,11 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     err = MishkaCmsCore.Runtime.Helpers.atomize_keys(err)
     helpers_blob = helpers_to_text(Map.get(err, :helpers, []))
 
+    # THE LIST IS ATOMIZED ON ITS OWN. A record read at boot is a struct, which `atomize_keys/1`
+    # leaves as it is, and a status's `layout` is a plain map stored as JSON: its key stays
+    # "template", and the layout's classes would be left out of the site's stylesheet.
     err.error_pages
+    |> MishkaCmsCore.Runtime.Helpers.atomize_keys()
     |> Enum.flat_map(fn error_page ->
       [error_page.template, get_in(error_page, [:layout, :template])]
     end)
@@ -1404,6 +1443,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   Aggregates every class-bearing field of a Component into one blob for
   Tailwind to scan: `template`, `body`, helper code, and the templates
   + bodies of multi-clause variants stored in `extra.clauses`.
+
+  It ends with the attribute lines the CSS closure reads to follow a component named through an
+  attribute — `MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks/1`.
   """
   def build_component_class_content(component) do
     extra = field(component, :extra) || %{}
@@ -1426,7 +1468,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       helpers_to_text(field(component, :helpers)),
       clauses_blob,
       defaults_to_text(field(component, :attrs)),
-      defaults_to_text(field(component, :slots))
+      defaults_to_text(field(component, :slots)),
+      MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks(component)
     ]
     |> Enum.filter(fn s -> is_binary(s) and s != "" end)
     |> Enum.join("\n\n")

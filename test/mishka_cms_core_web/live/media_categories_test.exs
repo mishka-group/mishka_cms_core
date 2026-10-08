@@ -369,11 +369,10 @@ defmodule MishkaCmsCoreWeb.Test.MediaCategoriesTest do
            "the row is active again, so the archive rail has to let it go"
   end
 
-  # Archiving a category leaves its files where they are, so a restore hands the active rail back
-  # the count the row went in with. The clause used to stream `%{loaded | media_count: 0}` — the
-  # create clause's zero, copied onto a row that was never new. Nothing here toggles the panel: a
-  # toggle re-reads the whole rail, and what is under test is the row the clause streams.
-  test "a restore elsewhere brings the row back counting the files it still has", %{
+  # Archiving a folder takes nothing with it: one that still holds a file is refused, so the row
+  # stays in the active rail still counting the file, and the archive button is a bang no more — the
+  # refusal is the reader's to read, not a crash that takes the page with it.
+  test "archiving a folder that still holds a file is refused, and the row keeps its count", %{
     conn: conn,
     site: site
   } do
@@ -385,18 +384,12 @@ defmodule MishkaCmsCoreWeb.Test.MediaCategoriesTest do
     render_async(view)
     assert has_element?(view, "#category-count-#{category.id}", "1")
 
-    send(view.pid, destroyed_elsewhere!(category, :master_destroy))
-    render(view)
-
-    refute has_element?(view, "#category-name-#{category.id}"),
-           "the archive took the row out of the active rail"
-
-    {:ok, archived} = archived_category_row(category.id)
-    send(view.pid, restored_elsewhere!(archived))
-    render(view)
+    render_click(button(view, "delete_category", category.id))
 
     assert has_element?(view, "#category-count-#{category.id}", "1"),
-           "the restored row is counting the file it still has, not starting over from zero"
+           "the refused folder is still in the rail, counting the file it holds"
+
+    assert {:ok, %{archived_at: nil}} = category_row(category.id)
   end
 
   # `:master_get`, which is how a master's rail reads a notified row back, is one of the archive's

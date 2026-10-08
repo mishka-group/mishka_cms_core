@@ -38,7 +38,7 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
   which is how a preview surface breaks silently.
   """
 
-  alias MishkaCmsCore.Runtime.LiveViewHelpers
+  alias MishkaCmsCore.Runtime.{ContentComponents, LiveViewHelpers}
 
   @doc """
   A runtime component, rendered as markup rather than as something LiveView will run.
@@ -63,6 +63,12 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
   defdelegate ensure_component_loaded(name, site), to: LiveViewHelpers
 
   @doc """
+  `LiveViewHelpers.rich_content/1` as markup: a stateful component a marker names is drawn cold, and
+  a marker the published page draws nothing for says why in its place.
+  """
+  def rich_content(assigns), do: ContentComponents.draw(assigns, :static)
+
+  @doc """
   The same renderer under its own name, for a template that calls `static_component/1` directly.
 
   `component/1` above is the name a runtime template uses; this is here because the eval environment
@@ -75,4 +81,7 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
   that calls `t("…")` previewed as "Preview unavailable" while the published page rendered it.
   """
   defdelegate t(key, bindings \\ []), to: LiveViewHelpers
+
+  @doc "A public address on the site being previewed — `LiveViewHelpers.site_path/2`."
+  defdelegate site_path(path, language_or_captures), to: LiveViewHelpers
 end

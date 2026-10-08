@@ -1422,6 +1422,9 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PublicAddress, []},
+        before_action?: true
+
       validate fn changeset, _context ->
         template = Ash.Changeset.get_attribute(changeset, :template)
 
@@ -1483,6 +1486,9 @@ defmodule MishkaCmsCore.Runtime.Page do
                 resource: MishkaCmsCore.Runtime.Page,
                 label: dgettext_noop("errors", "language group")}
 
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PublicAddress, []},
+        before_action?: true
+
       validate fn changeset, _context ->
         template = Ash.Changeset.get_attribute(changeset, :template)
 
@@ -1534,6 +1540,9 @@ defmodule MishkaCmsCore.Runtime.Page do
       end
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PublicAddress, []},
+        before_action?: true
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
@@ -1588,6 +1597,9 @@ defmodule MishkaCmsCore.Runtime.Page do
       end
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PublicAddress, []},
+        before_action?: true
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
@@ -1953,6 +1965,9 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.Page.Version}
+
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PublicAddress, []},
+        before_action?: true
 
       # A version written before the rule may name another site's record; restoring it does not.
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,

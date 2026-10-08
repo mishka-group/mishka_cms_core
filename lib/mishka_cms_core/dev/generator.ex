@@ -296,7 +296,25 @@ defmodule MishkaCmsCore.Dev.Generator do
       defaults: [
         name: sequence(:name, &"Test Media Category #{&1}"),
         description: sequence(:description, &"Test media category description #{&1}"),
+        parent_id: nil,
         site_id: nil
+      ],
+      overrides: opts,
+      tenant: tenant
+    )
+  end
+
+  def redirect(opts \\ [], tenant \\ nil) do
+    changeset_generator(
+      MishkaCmsCore.Runtime.Redirect,
+      :create,
+      authorize?: false,
+      defaults: [
+        from_path: sequence(:redirect_from, &"/old-#{&1}"),
+        to: sequence(:redirect_to, &"/new-#{&1}"),
+        status: 301,
+        active: true,
+        description: nil
       ],
       overrides: opts,
       tenant: tenant

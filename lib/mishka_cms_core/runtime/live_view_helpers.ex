@@ -32,12 +32,31 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   built for one site among others renders inside `rendering_for/2`. A global layout draws on the
   page's site, so it reaches that site's components and the global ones.
 
+  ## In a task
+
+  The site a template renders for and the response's CSP nonce are kept in the process rendering
+  it, as Gettext's locale is. A task the template starts through
+  `MishkaGervaz.Messages.start_async/4` — or `assign_async/4`, or `in_caller_locale/1` — is handed
+  all three (`carry_into_tasks/0`), so `t/1,2`, `site_path/2`, `component/1` and `csp_nonce/0`
+  answer inside it what they answer outside it:
+
+      def load(socket) do
+        MishkaGervaz.Messages.start_async(socket, :links, fn ->
+          %{about: site_path("/:lang/about", "fa"), label: t("About")}
+        end)
+      end
+
+  A task started any other way, `Phoenix.LiveView.start_async/4` among them, renders for no site
+  and in the default locale: `site_path/2` is `nil` there, and `t/1` answers from the global words.
+
   ## Events
 
   - `runtime:render:component_unavailable` — what is drawn in place of a refused component, an empty
     `%Phoenix.LiveView.Rendered{}`, with `%{component_name: name, site: site, site_id: site_id}` as
     its meta: the name and site the template asked for, and the site being rendered. A plugin may
     answer with markup of its own.
+  - `runtime:render:before_content_component` — before each component a `rich_content/1` marker
+    names is drawn; see `MishkaCmsCore.Runtime.ContentComponents`.
 
   See also `MishkaCmsCore.Runtime.Compilers.ComponentCompiler` for how the target modules and their
   `__component_information__/0` metadata surface are generated.
@@ -48,19 +67,23 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   import Phoenix.Component
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.ContentComponents
+  alias MishkaCmsCore.Runtime.CspNonce
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
+  alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaInstaller.Event.Hook
 
-  @renders [component: 1, component: 2, captcha: 1]
+  @renders [component: 1, component: 2, captcha: 1, rich_content: 1]
   @translates [t: 1, t: 2]
   @nonces [csp_nonce: 0]
+  @addresses [site_path: 2]
 
   @doc """
-  What a runtime template imports from here — `component/1,2`, `captcha/1`, `t/1,2` and
-  `csp_nonce/0` — less any name its own `helpers` already define.
+  What a runtime template imports from here — `component/1,2`, `captcha/1`, `rich_content/1`,
+  `t/1,2`, `csp_nonce/0` and `site_path/2` — less any name its own `helpers` already define.
 
   Every compiler — component, page and layout — asks this rather than writing the list itself, so
   the three cannot drift. The exception is not hypothetical: importing a `t/1` into a module that
@@ -71,7 +94,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   def imports(helpers) do
     own = helpers |> List.wrap() |> MapSet.new(&helper_name/1)
 
-    Enum.reject(@renders ++ @translates ++ @nonces, fn {name, _arity} ->
+    Enum.reject(@renders ++ @translates ++ @nonces ++ @addresses, fn {name, _arity} ->
       MapSet.member?(own, Atom.to_string(name))
     end)
   end
@@ -89,11 +112,49 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   defdelegate csp_nonce(), to: MishkaCmsCore.Runtime.CspNonce, as: :current
 
   @doc """
+  Registers what the imports above read from the process rendering a template — the site
+  `MishkaCmsCore.Runtime.Translations.put_site/1` names and the nonce
+  `MishkaCmsCore.Runtime.CspNonce.put/1` records — with
+  `MishkaGervaz.Messages.carry_process_keys/1`, so a task started through
+  `MishkaGervaz.Messages.start_async/4`, `assign_async/4` or `in_caller_locale/1` renders as its
+  starter does. Gervaz carries the locale itself. See "In a task" above.
+
+  Called once, when `MishkaCmsCore.Application` starts.
+  """
+  @spec carry_into_tasks() :: :ok
+  def carry_into_tasks do
+    MishkaGervaz.Messages.carry_process_keys([Translations.site_key(), CspNonce.process_key()])
+  end
+
+  @doc """
   The captcha a form asks — see `MishkaCmsCore.Captcha.Widget.captcha/1`.
 
       <.captcha form={f} for="sign_in" tenant={assigns[:current_tenant]} />
   """
   defdelegate captcha(assigns), to: MishkaCmsCore.Captcha.Widget
+
+  @doc """
+  Stored HTML with the components its markers name drawn in place — a post's body, say.
+
+      <.rich_content
+        id={"\#{@id}-body"}
+        html={@body}
+        site={site_name()}
+        current_user={@current_user}
+      />
+
+    * `html` — sanitized HTML; it is drawn as it is given, markers aside.
+    * `site` — the site's name, as `<.component site="…">` takes it. A marker names the site's own
+      component, else the global one of that name. `nil` reaches the global ones alone.
+    * `id` — what a stateful component's id starts with, `"content"` when not given; unique on the
+      page when two of these draw content.
+    * `current_user` — handed to a component that declares a `current_user` attribute.
+
+  A marker that names nothing this site may draw is drawn as nothing. See
+  `MishkaCmsCore.Runtime.ContentComponents` for the marker and its rules.
+  """
+  @spec rich_content(map()) :: Phoenix.LiveView.Rendered.t()
+  def rich_content(assigns), do: ContentComponents.draw(assigns, :live)
 
   @doc """
   `key` in the language this page is being answered in — the runtime counterpart of `gettext/1`,
@@ -107,6 +168,28 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   """
   @spec t(term(), keyword() | map()) :: String.t()
   def t(key, bindings \\ []), do: Translations.translate(key, bindings)
+
+  @doc """
+  The public address of a stored path on the site this page is rendered for, in a language or with
+  captures — `MishkaCmsCore.Runtime.Languages.url/3`, so a link is written once and follows the
+  site's URL mode:
+
+      <.link navigate={site_path("/:lang/about", @page.language)}>About</.link>
+      <a href={site_path("/:lang/blog/:slug", %{"lang" => @page.language, "slug" => @post.slug})}>
+
+  A language of `nil` is the site's primary one. `nil` when the path makes no address — a capture
+  it needs is missing, or the language is not one the site publishes in — which HEEx draws as no
+  `href` at all. The site is the one `MishkaCmsCore.Runtime.Translations.put_site/1` named for this
+  process, as for `component/1`.
+  """
+  @spec site_path(String.t(), String.t() | map() | nil) :: String.t() | nil
+  def site_path(path, captures) when is_map(captures),
+    do: Languages.url(path, captures, Translations.site())
+
+  def site_path(path, language) when is_binary(language) or is_nil(language) do
+    site_id = Translations.site()
+    Languages.url(path, %{Languages.capture() => language || Languages.primary(site_id)}, site_id)
+  end
 
   @doc """
   Renders a runtime component by name.
@@ -154,6 +237,23 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     result = fun.()
     :ok = Translations.put_site(previous)
     result
+  end
+
+  @doc """
+  The module `component/1` draws for `name` of the site named `site`, built on first use — or
+  `:error` where it draws nothing: a name nothing answers to, an inactive component, another site's.
+
+  For a caller that must know before it draws, as `rich_content/1` does to cast a marker's
+  attributes to what the component declares.
+  """
+  @spec resolve_component(String.t(), String.t() | nil) :: {:ok, module()} | :error
+  def resolve_component(name, site) do
+    module = Helpers.module_name(name, site, "Component")
+
+    case reachable(name, site, module) do
+      true -> {:ok, module}
+      _unreachable -> :error
+    end
   end
 
   defp site_id(site) do

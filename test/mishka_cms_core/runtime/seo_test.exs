@@ -7,6 +7,9 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
   alias MishkaCmsCore.Runtime.Seo
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Settings
@@ -98,6 +101,17 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert alternates(Seo.head(seo(site), base: @base, languages: [])) == []
     end
 
+    test "names x-default once, at the edition in the site's first language", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+      languages = [%{language: "en", path: "/en/about"}, %{language: "fa", path: "/about"}]
+
+      head = Seo.head(seo(site), base: @base, languages: languages)
+
+      assert Enum.filter(alternates(head), &match?({"x-default", _href}, &1)) == [
+               {"x-default", "#{@base}/about"}
+             ]
+    end
+
     test "emits no relative address, and an http one as it is", %{site: site} do
       head = Seo.head(seo(site, url: "/en/about", image: "http://cdn.test/a.png"), base: nil)
 
@@ -163,6 +177,31 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
                "image" => "#{@base}/uploads/cover.png",
                "isPartOf" => %{"@type" => "WebSite", "name" => "Acme Studio", "url" => @base}
              }
+    end
+
+    # A plain-text field holds `&` as typed (`MishkaCmsCore.PlainText`); the head is where it is
+    # escaped, once — rendered the way the host's `page_head` renders it.
+    test "writes a title with an ampersand escaped once, in the tags and in the JSON-LD", %{
+      site: site
+    } do
+      html = site |> seo(title: "MCP & AI-Ready") |> Seo.head(base: @base) |> rendered_head()
+
+      assert html =~ ~s(content="MCP &amp; AI-Ready")
+      refute html =~ "&amp;amp;"
+      assert html =~ ~S("name":"MCP \u0026 AI-Ready")
+
+      document = LazyHTML.from_fragment(html)
+
+      assert document
+             |> LazyHTML.query(~s(meta[property="og:title"]))
+             |> LazyHTML.attribute("content") ==
+               ["MCP & AI-Ready"]
+
+      assert %{"name" => "MCP & AI-Ready"} =
+               document
+               |> LazyHTML.query(~s(script[type="application/ld+json"]))
+               |> LazyHTML.text()
+               |> Jason.decode!()
     end
 
     test "is replaced whole by a stored schema", %{site: site} do
@@ -887,6 +926,17 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
 
   defp meta(key, name, content), do: %{tag: "meta", attrs: %{key => name}, content: content}
 
+  defp rendered_head(head) do
+    assigns = %{seo: head}
+
+    rendered_to_string(~H"""
+    <meta :for={{"meta", attrs} <- @seo.tags} {attrs} />
+    <script :for={json <- @seo.schema} type="application/ld+json">
+      <%= Phoenix.HTML.raw(json) %>
+    </script>
+    """)
+  end
+
   defp values(head, tag, key, name) do
     for {^tag, attrs} <- head.tags,
         {key, name} in attrs,
@@ -899,5 +949,44 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     for {"link", attrs} <- head.tags,
         {"rel", "alternate"} in attrs,
         do: {hd(for({"hreflang", lang} <- attrs, do: lang)), hd(for({"href", h} <- attrs, do: h))}
+  end
+
+  describe "alternate_links/3" do
+    test "links each edition and x-default at the primary one, as stored tags", %{site: site} do
+      editions = [%{language: "en", path: "/about"}, %{language: "fa", path: "/fa/about"}]
+
+      assert Seo.alternate_links(editions, @base, site.id) == [
+               %{
+                 tag: "link",
+                 attrs: %{"rel" => "alternate", "hreflang" => "en", "href" => "#{@base}/about"}
+               },
+               %{
+                 tag: "link",
+                 attrs: %{"rel" => "alternate", "hreflang" => "fa", "href" => "#{@base}/fa/about"}
+               },
+               %{
+                 tag: "link",
+                 attrs: %{
+                   "rel" => "alternate",
+                   "hreflang" => "x-default",
+                   "href" => "#{@base}/about"
+                 }
+               }
+             ]
+    end
+
+    test "names no x-default when no edition is in the primary language", %{site: site} do
+      editions = [%{language: "fa", path: "/fa/about"}, %{language: "ar", path: "/ar/about"}]
+
+      refute Enum.any?(
+               Seo.alternate_links(editions, @base, site.id),
+               &(&1.attrs["hreflang"] == "x-default")
+             )
+    end
+
+    test "is nothing for fewer than two editions", %{site: site} do
+      assert Seo.alternate_links([%{language: "en", path: "/about"}], @base, site.id) == []
+      assert Seo.alternate_links([], @base, site.id) == []
+    end
   end
 end

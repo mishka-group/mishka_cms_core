@@ -11206,6 +11206,76 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLiveTest do
       refute :sys.get_state(view.pid).socket.assigns.assets_category
     end
 
+    # A FOLDER INSIDE ANOTHER SITS UNDER IT in the rail, stepped in by how deep it is — the library's
+    # tree, read in the one query the rail already makes.
+    test "the folder rail nests a folder under the one it is in", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      photos = create_media_category!(site_id: site.id, name: "Photos")
+      videos = create_media_category!(site_id: site.id, name: "Videos")
+      year = create_media_category!(site_id: site.id, name: "Year", parent_id: photos.id)
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      html = render_async(view)
+
+      rail =
+        Regex.scan(~r/id="pb-folder-([0-9a-f-]{36})" data-depth="(\d)"/, html,
+          capture: :all_but_first
+        )
+
+      assert rail == [[photos.id, "0"], [year.id, "1"], [videos.id, "0"]]
+    end
+
+    # WHAT THE SHEET MAKES, IT MAKES IN THE FOLDER IT HAS OPEN — a new folder and an upload alike.
+    test "a new folder and an upload start in the folder the rail has open", %{
+      conn: conn,
+      page: page,
+      site: site
+    } do
+      dir = Path.join(System.tmp_dir!(), "pb_assets_#{System.unique_integer([:positive])}")
+      File.mkdir_p!(dir)
+      Application.put_env(:mishka_cms_core, :media_static_dir, dir)
+
+      on_exit(fn ->
+        Application.delete_env(:mishka_cms_core, :media_static_dir)
+        File.rm_rf(dir)
+      end)
+
+      photos = create_media_category!(site_id: site.id, name: "Photos")
+
+      {:ok, view, _html} = open_builder(conn, page)
+      render_click(view, "open_sheet", %{"sheet" => "assets"})
+      render_async(view)
+      render_click(view, "select_asset_category", %{"id" => photos.id})
+
+      render_click(view, "new_folder", %{})
+
+      view
+      |> element("#pb-folder-modal #media_category_form-form")
+      |> render_submit(%{"form" => %{"name" => "Inner"}})
+
+      inner =
+        MishkaCmsCore.Runtime.MediaCategory
+        |> Ash.Query.filter(name == "inner")
+        |> Ash.read_one!(tenant: site.id, authorize?: false)
+
+      assert inner.parent_id == photos.id
+
+      file =
+        file_input(view, "#pb-media-upload #media_form-form", :media_files_media_form, [
+          %{name: "shot.png", content: "shot", type: "image/png"}
+        ])
+
+      render_upload(file, "shot.png")
+      view |> element("#pb-media-upload #media_form-form") |> render_submit(%{"form" => %{}})
+
+      [media] = Ash.read!(MishkaCmsCore.Runtime.Media, tenant: site.id, authorize?: false)
+      assert media.media_category_id == photos.id
+    end
+
     # The library's own filters and pagination come with the Gervaz table; the sheet does not
     # reimplement folders. What it DOES own is the scope: an editor only ever browses its own site.
     test "Assets shows this site's library and not another's", %{

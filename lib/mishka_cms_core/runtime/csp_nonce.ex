@@ -69,6 +69,14 @@ defmodule MishkaCmsCore.Runtime.CspNonce do
   @spec current() :: String.t() | nil
   def current, do: Process.get(@process_key)
 
+  @doc """
+  The process dictionary key `put/1` writes, which
+  `MishkaCmsCore.Runtime.LiveViewHelpers.carry_into_tasks/0` registers so a task a template starts
+  renders with the same nonce.
+  """
+  @spec process_key() :: term()
+  def process_key, do: @process_key
+
   @doc "Records `nonce` as the one this process renders with. `nil` clears it."
   @spec put(String.t() | nil) :: :ok
   def put(nonce) when is_binary(nonce) do

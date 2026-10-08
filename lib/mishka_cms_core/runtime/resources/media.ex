@@ -92,6 +92,8 @@ defmodule MishkaCmsCore.Runtime.Media do
       index [:type]
       index [:format]
       index [:featured]
+      # A folder's files are read by their folder, a master's across every site.
+      index [:media_category_id], all_tenants?: true
     end
 
     check_constraints do
@@ -188,10 +190,13 @@ defmodule MishkaCmsCore.Runtime.Media do
         stream_name :media
       end
 
+      # THE FOLDER A CARD NAMES IS THE WHOLE PATH TO IT, `photos / 2024`: a search at the top
+      # level looks through every folder, and a file's folder name alone does not say which of two
+      # "covers" it is in. The gallery card reads `media_category`, so `:folder` is handed to it
+      # under that name.
       source do
         preload do
-          tenant [:media_category]
-          master master_media_category: :media_category
+          always folder: :media_category
         end
       end
 
@@ -430,26 +435,26 @@ defmodule MishkaCmsCore.Runtime.Media do
 
         column :category_info do
           static true
-          requires [:media_category_id, :media_category]
-          label fn -> dgettext("mishka_gervaz", "Category") end
+          requires [:media_category_id, :folder]
+          label fn -> dgettext("mishka_gervaz", "Folder") end
 
           ui do
             width "minmax(140px,1.4fr)"
           end
 
           render fn record ->
-            assigns = %{category: record.media_category}
+            assigns = %{folder: record.folder}
 
             ~H"""
             <span
-              :if={@category}
+              :if={@folder}
               class="inline-flex max-w-[150px] items-center gap-[6px] truncate rounded-[7px] bg-[#f4f3ef] px-[9px] py-[4px] text-[11px] font-semibold text-[#6d6a63]"
             >
               <span class="size-[6px] shrink-0 rounded-[2px] bg-[#a8a5a0]"></span>
-              <span class="truncate">{@category.name}</span>
+              <span class="truncate" dir="auto">{@folder.name}</span>
             </span>
-            <span :if={!@category} class="text-[11px] font-medium italic text-[#a8a5a0]">
-              {dgettext("mishka_gervaz", "Uncategorized")}
+            <span :if={!@folder} class="text-[11px] font-medium italic text-[#a8a5a0]">
+              {dgettext("mishka_gervaz", "Top level")}
             </span>
             """
           end
@@ -506,7 +511,11 @@ defmodule MishkaCmsCore.Runtime.Media do
         end
 
         filter :media_category_id, :relation do
-          display_field &if &2.master_user?, do: "#{&1.name} - #{&1.site.name}", else: &1.name
+          display_field fn folder, state ->
+            label = MishkaCmsCore.Runtime.MediaCategory.picker_label(folder)
+            if state.master_user?, do: "#{label} - #{folder.site.name}", else: label
+          end
+
           search_field :name
           mode :search
           min_chars 1
@@ -514,7 +523,7 @@ defmodule MishkaCmsCore.Runtime.Media do
           depends_on :site_id
 
           preload do
-            always [:site]
+            always [:site, :path_label]
           end
 
           load fn query, state ->
@@ -542,8 +551,8 @@ defmodule MishkaCmsCore.Runtime.Media do
           end
 
           ui do
-            label fn -> dgettext("mishka_gervaz", "Category") end
-            placeholder fn -> dgettext("mishka_gervaz", "Search categories...") end
+            label fn -> dgettext("mishka_gervaz", "Folder") end
+            placeholder fn -> dgettext("mishka_gervaz", "Search folders...") end
             disabled_prompt fn -> dgettext("mishka_gervaz", "Select Site first") end
           end
         end
@@ -576,6 +585,23 @@ defmodule MishkaCmsCore.Runtime.Media do
           ui do
             label fn -> dgettext("mishka_gervaz", "Preview") end
             icon "hero-eye"
+          end
+        end
+
+        # The Media page answers it with a folder browser, `{:row_action, "move_media", …}`; the
+        # builder's Assets sheet draws its own templates and has none, so it is not drawn there.
+        action :move do
+          type :event
+          event "move_media"
+
+          visible fn _record, state ->
+            state.archive_status == :active and
+              state.template.name() in [:media_gallery, :table]
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Move") end
+            icon "hero-folder-arrow-down"
           end
         end
 
@@ -701,14 +727,24 @@ defmodule MishkaCmsCore.Runtime.Media do
       # that are up: a file of an inactive or offline site would not load for anyone else. The editor
       # asks with `editor_open_only` in `path_params`, which matches no attribute and filters nothing
       # on its own.
+      #
+      # THE LIBRARY'S TOP LEVEL HOLDS THE FILES IN NO FOLDER, as a folder holds only its own; a search
+      # or a filter there looks through every folder. The Media page asks with `library_top_level`,
+      # another path param that filters nothing on its own.
       hooks do
         on_load fn query, state ->
-          if state.path_params[:editor_open_only] do
-            open = MishkaCmsCore.Runtime.SiteAvailability.open_site_ids()
-            {:cont, Ash.Query.filter(query, site_id in ^open)}
-          else
-            {:cont, query}
-          end
+          query =
+            if state.path_params[:editor_open_only] do
+              open = MishkaCmsCore.Runtime.SiteAvailability.open_site_ids()
+              Ash.Query.filter(query, site_id in ^open)
+            else
+              query
+            end
+
+          if state.path_params[:library_top_level] == true and
+               not MishkaCmsCore.Runtime.Media.narrowed?(state.filter_values),
+             do: {:cont, Ash.Query.filter(query, is_nil(media_category_id))},
+             else: {:cont, query}
         end
       end
     end
@@ -745,38 +781,15 @@ defmodule MishkaCmsCore.Runtime.Media do
         end
 
         field :media_category_id, :relation do
-          display_field :name
+          display_field &MishkaCmsCore.Runtime.MediaCategory.picker_label/1
           search_field :name
           mode :search
           depends_on :site_id
-
-          load fn query, state ->
-            site_id =
-              case state do
-                %{field_values: %{site_id: sid}} when is_binary(sid) and sid != "" ->
-                  sid
-
-                %{form: %{source: %{source: %{data: %{site_id: sid}}}}} when is_binary(sid) ->
-                  sid
-
-                %{current_user: %{site_id: sid}} when is_binary(sid) ->
-                  sid
-
-                _ ->
-                  nil
-              end
-
-            # A category belongs to one site, so a file with no site yet is offered none.
-            if site_id do
-              Ash.Query.filter(query, site_id == ^site_id)
-            else
-              Ash.Query.filter(query, false)
-            end
-          end
+          load &MishkaCmsCore.Runtime.MediaCategory.offer/2
 
           ui do
-            label fn -> dgettext("mishka_gervaz", "Category") end
-            placeholder fn -> dgettext("mishka_gervaz", "Search categories...") end
+            label fn -> dgettext("mishka_gervaz", "Folder") end
+            placeholder fn -> dgettext("mishka_gervaz", "Search folders...") end
           end
         end
 
@@ -964,7 +977,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change set_attribute(:relative_path, arg(:stored_path))
@@ -985,7 +998,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
 
       change fn changeset, _context ->
         site_id = Ash.Changeset.get_attribute(changeset, :site_id)
@@ -1089,7 +1102,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
@@ -1108,7 +1121,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
 
       change fn changeset, _context ->
         site_id = Ash.Changeset.get_attribute(changeset, :site_id)
@@ -1132,7 +1145,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
 
       validate absent(:archived_at) do
         message dgettext_noop("errors", "Cannot edit archived media. Please unarchive it first.")
@@ -1157,7 +1170,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
 
       validate absent(:archived_at) do
         message dgettext_noop("errors", "Cannot edit archived media. Please unarchive it first.")
@@ -1553,7 +1566,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 field: :media_category_id,
                 resource: MishkaCmsCore.Runtime.MediaCategory,
-                label: dgettext_noop("errors", "media category")}
+                label: dgettext_noop("errors", "folder")}
     end
 
     action :restore_version_api, :struct do
@@ -2126,6 +2139,19 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
     end
 
+    calculate :folder, :map do
+      public? true
+
+      calculation fn records, context ->
+        MishkaCmsCore.Runtime.Media.folders(records,
+          actor: context.actor,
+          authorize?: context.authorize?
+        )
+      end
+
+      description "Returns the folder the file is in as `%{id, name}`, `name` the whole path to it, or nil at the top level"
+    end
+
     calculate :archived_data_url, :string do
       public? true
 
@@ -2162,6 +2188,35 @@ defmodule MishkaCmsCore.Runtime.Media do
       nils_distinct? false
     end
   end
+
+  @doc """
+  Each of `records`' folders as `%{id, name}`, `name` the whole path to it (`photos / 2024`), or
+  `nil` for a file at the top level — read once for all of them, as
+  `MishkaCmsCore.Runtime.MediaCategory.paths/2` reads, with `opts`' actor.
+  """
+  @spec folders([map()], keyword()) :: [%{id: Ecto.UUID.t(), name: String.t()} | nil]
+  def folders(records, opts) do
+    paths =
+      records
+      |> Enum.map(& &1.media_category_id)
+      |> MishkaCmsCore.Runtime.MediaCategory.paths(opts)
+
+    Enum.map(records, fn %{media_category_id: id} ->
+      case paths do
+        %{^id => path} -> %{id: id, name: path}
+        _top_level -> nil
+      end
+    end)
+  end
+
+  @doc """
+  Whether a table's filter values narrow what it shows — a search typed, or any filter set.
+  """
+  @spec narrowed?(map() | nil) :: boolean()
+  def narrowed?(filter_values) when is_map(filter_values),
+    do: Enum.any?(filter_values, fn {_filter, value} -> value not in [nil, "", [], false] end)
+
+  def narrowed?(_none), do: false
 
   @allowed_extensions %{
     images: ~w(.jpg .jpeg .png .gif .webp .svg),

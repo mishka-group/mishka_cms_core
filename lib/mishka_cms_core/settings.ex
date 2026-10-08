@@ -654,6 +654,21 @@ defmodule MishkaCmsCore.Settings do
             "The languages this site publishes in, as codes separated by commas — en, fa, ar. A page path's :lang segment answers only these. Only languages the master allows can be saved, and the ones the master requires are always included."
           )
       ),
+      # Read on every request — see `MishkaCmsCore.Runtime.Languages.url_mode/1`.
+      define("site.language_urls", :select,
+        default: "prefix_others",
+        category: "general",
+        scope: :both,
+        options: [
+          {gettext_noop("The first language has no prefix — /blog, /fa/blog"), "prefix_others"},
+          {gettext_noop("Every language has a prefix — /en/blog, /fa/blog"), "prefix_all"}
+        ],
+        label: gettext_noop("Language in addresses"),
+        description:
+          gettext_noop(
+            "How an address names its language. With no prefix for the first language, an address that names none is answered in it, and one that names it is sent to the address without it. With a prefix for every language, an address that names none is sent to the visitor's language. Pages keep their paths either way."
+          )
+      ),
       define("site.allowed_languages", :list,
         default: [],
         validate: &MishkaCmsCore.Runtime.Languages.codes_or_empty?/1,
@@ -750,6 +765,18 @@ defmodule MishkaCmsCore.Settings do
         scope: :global,
         label: gettext_noop("Delete all notifications after (days)"),
         description: gettext_noop("Every notification is pruned at this age, read or not.")
+      ),
+      define("security.frame_origins", :list,
+        default: [],
+        validate: &MishkaCmsWeb.Runtime.Plugs.SecurityHeaders.frame_origins?/1,
+        category: "security",
+        group: gettext_noop("Embeds"),
+        scope: :both,
+        label: gettext_noop("Sites pages may embed"),
+        description:
+          gettext_noop(
+            "Players a page may show in a frame — a video, a map — as https origins separated by commas. https://www.youtube-nocookie.com plays YouTube without cookies. Leave empty to allow none."
+          )
       ),
       # The most tries `MishkaCmsCore.Accounts.AuthRateLimit` lets through in each window, read on
       # every try. The defaults are the numbers `MishkaCmsCore.Accounts.User` writes in its actions.
@@ -906,7 +933,7 @@ defmodule MishkaCmsCore.Settings do
         label: gettext_noop("Extra robots.txt rules"),
         description:
           gettext_noop(
-            "Lines added to robots.txt below the rules every site has, which keep crawlers out of /admin/, /api/, /auth/ and /_preview/. Disallow: / hides the whole site; an Allow: line opens a path again."
+            "Lines added to robots.txt below the rules every site has, which keep crawlers out of /admin/, /api/, the sign-in pages and /_preview/. Disallow: / hides the whole site; an Allow: line opens a path again."
           )
       ),
       # Read when the site's sitemap is built, and a change rebuilds it — see

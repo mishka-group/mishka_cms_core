@@ -107,7 +107,8 @@ defmodule MishkaCmsCore.SidebarTest do
                "Media",
                "Stylesheets",
                "JS Hooks",
-               "Translations"
+               "Translations",
+               "Redirects"
              ]
     end
 
@@ -609,7 +610,8 @@ defmodule MishkaCmsCore.SidebarTest do
         {"runtime.medias", "media"},
         {"runtime.stylesheets", "stylesheet"},
         {"runtime.js_hooks", "js_hook"},
-        {"runtime.translations", "translation"}
+        {"runtime.translations", "translation"},
+        {"runtime.redirects", "redirect"}
       ]
 
       areas = Enum.map(lists, &elem(&1, 1))

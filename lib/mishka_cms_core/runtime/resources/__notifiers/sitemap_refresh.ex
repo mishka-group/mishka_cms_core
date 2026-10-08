@@ -31,10 +31,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh do
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
 
   # What a sitemap reads: `seo.sitemap.paths` in `SitemapCompiler`, and the languages a page answers
-  # in `MishkaCmsCore.Runtime.Languages`.
+  # in and how its address names them in `MishkaCmsCore.Runtime.Languages`.
   @settings [
     "seo.sitemap.paths",
     "site.languages",
+    "site.language_urls",
     "site.allowed_languages",
     "site.required_languages"
   ]

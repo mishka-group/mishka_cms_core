@@ -20,6 +20,8 @@ defmodule MishkaCmsCoreWeb.Routes do
        :index},
       {:live, "/runtime/translations",
        MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index, :index},
+      {:live, "/runtime/redirects", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Redirect.Index,
+       :index},
       {:live, "/runtime/stylesheets",
        MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Stylesheet.Index, :index},
       {:live, "/runtime/medias", MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index,

@@ -31,9 +31,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
   ## The addresses
 
   `/:lang`, `/:lang/about`, `/:lang/contact`, `/:lang/privacy` — the path mode
-  `MishkaCmsCore.Runtime.Languages` validates, so `/en/about` answers and `/xyz/about` does not.
+  `MishkaCmsCore.Runtime.Languages` validates, so `/fa/about` answers and `/xyz/about` does not.
   None of them collides with a route this application answers itself. Each page answers every
   language the site publishes in (`PageProvision.serving_all_languages/1`).
+
+  Every link between them is written with `site_path/2`
+  (`MishkaCmsCore.Runtime.LiveViewHelpers.site_path/2`), in the language of the page it is on, so
+  it follows the site's URL mode: `/about` and `/fa/about`, or `/en/about` and `/fa/about`. A page
+  that knows no language links in the site's first.
 
   ## The sign-in pages
 
@@ -436,14 +441,18 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <header class={["border-b border-line bg-white", @class]}>
           <div class="mx-auto flex w-full max-w-[1100px] flex-wrap items-center justify-between gap-4 px-6 py-4">
             <.link
-              navigate={"/#{@lang}"}
+              navigate={site_path("/:lang", @lang)}
               class="font-display text-[17px] font-bold tracking-[-0.03em] text-ink"
             >
               {@brand}
             </.link>
             <nav class="flex flex-wrap items-center gap-5 text-[13px] font-medium text-ink-soft">
-              <.link navigate={"/#{@lang}/about"} class="hover:text-accent">About</.link>
-              <.link navigate={"/#{@lang}/contact"} class="hover:text-accent">Contact</.link>
+              <.link navigate={site_path("/:lang/about", @lang)} class="hover:text-accent">
+                About
+              </.link>
+              <.link navigate={site_path("/:lang/contact", @lang)} class="hover:text-accent">
+                Contact
+              </.link>
               {render_slot(@inner_block)}
             </nav>
           </div>
@@ -464,7 +473,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
           <div class="mx-auto flex w-full max-w-[1100px] flex-wrap items-center justify-between gap-4 px-6 py-8 text-[12.5px] text-muted">
             <p>© {@brand} — built with MishkaCMS</p>
             <div class="flex flex-wrap items-center gap-3">
-              <.link navigate={"/#{@lang}/privacy"} class="hover:text-accent">Privacy</.link>
+              <.link navigate={site_path("/:lang/privacy", @lang)} class="hover:text-accent">
+                Privacy
+              </.link>
               <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
                     response, so a live navigation into another language would keep the first
                     one's. --%>
@@ -514,7 +525,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
     %{
       "name" => "lang",
       "type" => "string",
-      "opts" => %{"default" => "en", "doc" => "The language the links stay in."}
+      "opts" => %{
+        "default" => nil,
+        "doc" => "The language the links stay in. The site's first language when not given."
+      }
     }
   end
 
@@ -561,7 +575,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
                 %{
                   name: "lang",
                   args: "assigns",
-                  code: ~S/(assigns[:page] || %{})[:language] || "en"/
+                  code: ~S"""
+                  (assigns[:page] || %{})[:language] ||
+                    MishkaCmsCore.Runtime.Languages.primary(MishkaCmsCore.Runtime.Translations.site())
+                  """
                 }
               ],
               priority: 0,
@@ -617,7 +634,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Enum.map_join(nav, "", fn {label, path} ->
       ~s"""
 
-          <.link navigate={"/\#{lang(assigns)}#{path}"} class="hover:text-accent">#{label}</.link>\
+          <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="hover:text-accent">#{label}</.link>\
       """
     end)
   end
@@ -653,13 +670,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
       </p>
       <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
         <.link
-          navigate={"/\#{@query_params["lang"]}/about"}
+          navigate={site_path("/:lang/about", @page.language)}
           class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
         >
           About this site
         </.link>
         <.link
-          navigate={"/\#{@query_params["lang"]}/contact"}
+          navigate={site_path("/:lang/contact", @page.language)}
           class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
         >
           Get in touch
@@ -696,7 +713,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         </p>
       </div>
       <.link
-        navigate={"/\#{@query_params["lang"]}/contact"}
+        navigate={site_path("/:lang/contact", @page.language)}
         class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
       >
         Contact us
@@ -734,7 +751,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
             </div>
           </dl>
           <p class="mt-8">
-            <.link navigate={"/\#{@query_params["lang"]}"} class="text-[13px] font-bold text-accent">
+            <.link navigate={site_path("/:lang", @page.language)} class="text-[13px] font-bold text-accent">
               ← Back home
             </.link>
           </p>
@@ -834,7 +851,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               a visitor needs here.
             </p>
             <p class="mt-6 text-[13px]">
-              <.link navigate={"/#{@query_params["lang"]}/privacy"} class="font-bold text-accent">
+              <.link navigate={site_path("/:lang/privacy", @page.language)} class="font-bold text-accent">
                 How we handle what you send →
               </.link>
             </p>
@@ -868,7 +885,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
             <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
           </section>
           <p class="mt-8">
-            <.link navigate={"/#{@query_params["lang"]}"} class="text-[13px] font-bold text-accent">
+            <.link navigate={site_path("/:lang", @page.language)} class="text-[13px] font-bold text-accent">
               ← Back home
             </.link>
           </p>
@@ -936,7 +953,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <p class="mt-3 text-[13.5px] text-[#57544d]">
           #{error_body(status)}
         </p>
-        <a href="/en" class="mt-7 inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white">
+        <a href={site_path("/:lang", @conn.assigns[:site_language])} class="mt-7 inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white">
           Back home
         </a>
       </div>
@@ -946,7 +963,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   # THE PAGE AN OFFLINE SITE SHOWS, the site's own to reword like its 404 and 500. Without it the
   # gate draws its built-in page, which knows nothing of the site's look. It offers the site's own
-  # sign-in, because the admin who can bring the site back is the one reading it.
+  # sign-in, in the language the visitor reads the site in, because the admin who can bring the
+  # site back is the one reading it.
   defp offline_status do
     %{
       status: :offline,
@@ -960,7 +978,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <p class="mt-3 text-[13.5px] text-[#57544d]">
           We are making some changes to this site. Please check back soon.
         </p>
-        <a href="/auth?master_user=false" class="mt-7 inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white">
+        <a href={site_path("/:lang/auth", @conn.assigns[:site_language]) <> "?master_user=false"} class="mt-7 inline-block rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white">
           Administrator sign in
         </a>
       </div>
@@ -1150,7 +1168,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     |> Ash.create!()
   end
 
-  @navigation ~w(flow_path return_params)
+  @navigation ~w(returning return_params)
   # What a refused sign-in form says: a captcha not passed, a rate limit, or a way in the site has
   # closed.
   @rate_limit ~w(refused_or captcha_message rate_limited rate_limit_message gate_message)
@@ -1504,7 +1522,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       <%= if assigns[:second_factor] do %>
         <div>
           <.link
-            navigate={flow_path(assigns, "")}
+            navigate={returning(assigns, site_path("/:lang/auth", @page.language))}
             id="auth-second-factor-back"
             class="#{@back_class}"
           >
@@ -1706,7 +1724,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               <label for="auth-signin-pw" class="#{@label_class}">{t("Password")}</label>
               <span class="flex-1"></span>
               <.link
-                navigate={flow_path(assigns, "/magic-link")}
+                navigate={returning(assigns, site_path("/:lang/auth/magic-link", @page.language))}
                 id="auth-go-magic"
                 class="#{@link_class}"
               >
@@ -1714,7 +1732,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               </.link>
               <span class="h-[11px] w-px bg-[#e6e4de]"></span>
               <.link
-                navigate={flow_path(assigns, "/forgot-password")}
+                navigate={returning(assigns, site_path("/:lang/auth/forgot-password", @page.language))}
                 id="auth-go-forgot"
                 class="#{@link_class}"
               >
@@ -1763,7 +1781,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         </.form>
 
         <.link
-          navigate={flow_path(assigns, "/magic-link")}
+          navigate={returning(assigns, site_path("/:lang/auth/magic-link", @page.language))}
           id="auth-go-magic-cta"
           class="#{@dashed_class}"
         >
@@ -1773,7 +1791,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <div class="mt-[22px] border-t border-[#ecebe6] pt-[18px] text-center text-[12.5px] font-medium text-[#6d6a63]">
           {t("New to MishkaCMS?")}
           <.link
-            navigate={flow_path(assigns, "/register")}
+            navigate={returning(assigns, site_path("/:lang/auth/register", @page.language))}
             id="auth-go-signup"
             class="font-bold text-[#4f4bcc] hover:text-[#3a37a8]"
           >
@@ -1789,7 +1807,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     ~s"""
     <div>
       <div>
-        <.link navigate={flow_path(assigns, "")} id="auth-back-to-login" class="#{@back_class}">
+        <.link navigate={returning(assigns, site_path("/:lang/auth", @page.language))} id="auth-back-to-login" class="#{@back_class}">
           <.chevron_left_svg />{t("Back to login")}
         </.link>
         <h1 class="#{@title_class}">{t("Create your account")}</h1>
@@ -1960,7 +1978,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     ~s"""
     <div>
       <div>
-        <.link navigate={flow_path(assigns, "")} id="auth-back-to-login" class="#{@back_class}">
+        <.link navigate={returning(assigns, site_path("/:lang/auth", @page.language))} id="auth-back-to-login" class="#{@back_class}">
           <.chevron_left_svg />{t("Back to login")}
         </.link>
         <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#fbf1df] text-[#a5691a]">
@@ -2041,7 +2059,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     ~s"""
     <div>
       <div>
-        <.link navigate={flow_path(assigns, "")} id="auth-back-to-login" class="#{@back_class}">
+        <.link navigate={returning(assigns, site_path("/:lang/auth", @page.language))} id="auth-back-to-login" class="#{@back_class}">
           <.chevron_left_svg />{t("Back to login")}
         </.link>
         <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#f2f1fc] text-[#4f4bcc]">
@@ -2134,7 +2152,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp password_reset_template do
     ~s"""
     <div>
-      <.link navigate={flow_path(assigns, "")} id="auth-back-to-login" class="#{@back_class}">
+      <.link navigate={returning(assigns, site_path("/:lang/auth", @page.language))} id="auth-back-to-login" class="#{@back_class}">
         <.chevron_left_svg />{t("Back to login")}
       </.link>
       <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#fbf1df] text-[#a5691a]">
@@ -2162,7 +2180,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp confirm_new_user_template do
     ~s"""
     <div>
-      <.link navigate={flow_path(assigns, "")} id="auth-back-to-login" class="#{@back_class}">
+      <.link navigate={returning(assigns, site_path("/:lang/auth", @page.language))} id="auth-back-to-login" class="#{@back_class}">
         <.chevron_left_svg />{t("Back to login")}
       </.link>
       <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#e6f6ee] text-[#177a53]">
@@ -2192,7 +2210,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp magic_link_sign_in_template do
     ~s"""
     <div>
-      <.link navigate={flow_path(assigns, "")} id="auth-back-to-login" class="#{@back_class}">
+      <.link navigate={returning(assigns, site_path("/:lang/auth", @page.language))} id="auth-back-to-login" class="#{@back_class}">
         <.chevron_left_svg />{t("Back to login")}
       </.link>
       <span class="mb-4 flex size-[46px] items-center justify-center rounded-[14px] bg-[#f2f1fc] text-[#4f4bcc]">
@@ -2577,16 +2595,12 @@ defmodule MishkaCmsCore.Install.StarterContent do
     ''')
   end
 
-  # THE SAME LANGUAGE, and the verified `return_to` carried on.
-  defp auth_helper("flow_path") do
-    helper("flow_path", "assigns, suffix", ~S'''
-    language =
-      (assigns[:page] || %{})[:language] ||
-        MishkaCmsCore.Runtime.Languages.primary(Map.get(assigns[:current_site] || %{}, :id))
-
+  # A SIGN-IN PAGE'S ADDRESS, with the verified `return_to` carried on to it.
+  defp auth_helper("returning") do
+    helper("returning", "assigns, path", ~S'''
     case return_params(assigns) do
-      query when map_size(query) == 0 -> "/#{language}/auth#{suffix}"
-      query -> "/#{language}/auth#{suffix}?#{URI.encode_query(query)}"
+      query when map_size(query) == 0 -> path
+      query -> "#{path}?#{URI.encode_query(query)}"
     end
     ''')
   end

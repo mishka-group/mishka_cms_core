@@ -603,16 +603,19 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       phx-target={@myself}
       class="mt-[22px] flex items-center gap-[9px]"
     >
-      <span class="text-[12px] font-semibold text-[#8a877f]">{dgettext("mishka_gervaz", "Show")}</span>
+      <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
+        {dgettext("mishka_gervaz", "Show")}
+      </span>
       <select
         name="size"
+        aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
         class="h-9 cursor-pointer rounded-[9px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-semibold text-[#3a382f] outline-none"
       >
         <option :for={option <- @page_size_options} value={option} selected={option == @page_size}>
           {option}
         </option>
       </select>
-      <span class="text-[12px] font-semibold text-[#8a877f]">
+      <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
         {dgettext("mishka_gervaz", "per page")}
       </span>
     </form>
@@ -639,18 +642,19 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
         phx-target={@myself}
         class="flex items-center gap-[9px]"
       >
-        <span class="text-[12px] font-semibold text-[#8a877f]">
+        <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
           {dgettext("mishka_gervaz", "Show")}
         </span>
         <select
           name="size"
+          aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
           class="h-9 cursor-pointer rounded-[9px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-semibold text-[#3a382f] outline-none"
         >
           <option :for={option <- @page_size_options} value={option} selected={option == @page_size}>
             {option}
           </option>
         </select>
-        <span class="text-[12px] font-semibold text-[#8a877f]">
+        <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
           {dgettext("mishka_gervaz", "per page")}
         </span>
       </form>

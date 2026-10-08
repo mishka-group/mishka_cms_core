@@ -486,7 +486,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
             unquote(
               Keyword.take(MishkaCmsCore.Runtime.LiveViewHelpers.imports(params[:helpers]), [
                 :component,
-                :csp_nonce
+                :csp_nonce,
+                :site_path
               ])
             )
 

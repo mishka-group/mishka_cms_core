@@ -12,6 +12,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  import Ecto.Query
+
   # Raw SQL here needs the same repo the resources write through.
   @repo Application.compile_env!(:mishka_cms_core, :repo)
   use Oban.Testing, repo: @repo
@@ -38,6 +40,50 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
       assert length(enqueued_asset_jobs("a", "css")) == 1
       assert length(enqueued_asset_jobs("b", "css")) == 1
       assert length(enqueued_asset_jobs("a", "js")) == 1
+    end
+  end
+
+  describe "the boot's cleanup" do
+    # The page and component compile jobs run in the `modules` queue, which the cleanup's own list
+    # of queues left out — every one a restart interrupted stayed `executing` for good.
+    test "cancels the compile jobs a previous run left, in every queue, and nothing else" do
+      compile =
+        for queue <- [:modules, :default, :assets, :sitemaps] do
+          {:ok, job} =
+            %{
+              "resource" => "MishkaCmsCore.Runtime.Page",
+              "data" => %{"id" => Ecto.UUID.generate()}
+            }
+            |> RuntimeCompilerWorker.new(queue: queue)
+            |> Oban.insert()
+
+          job
+        end
+
+      {:ok, mail} =
+        %{"delivery_id" => Ecto.UUID.generate()}
+        |> MishkaCmsCore.Mail.Workers.DeliverWorker.new()
+        |> Oban.insert()
+
+      ids = Enum.map(compile, & &1.id)
+
+      Oban.Repo.update_all(
+        Oban.config(),
+        from(j in Oban.Job, where: j.id in ^[hd(ids), mail.id]),
+        set: [state: "executing"]
+      )
+
+      assert {:ok, 4} = BootHandler.cancel_leftover_jobs()
+
+      states =
+        Oban.Repo.all(
+          Oban.config(),
+          from(j in Oban.Job, where: j.id in ^[mail.id | ids], select: {j.id, j.state})
+        )
+        |> Map.new()
+
+      assert Enum.all?(ids, &(states[&1] == "cancelled"))
+      assert states[mail.id] == "executing"
     end
   end
 

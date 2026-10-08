@@ -155,4 +155,60 @@ defmodule MishkaCmsCore.Runtime.CssInvalidationTest do
       refute File.exists?(path)
     end
   end
+
+  describe "a job that runs after a newer save" do
+    # A job carries the row as it was saved, the way `SendToOban.build_job_args/2` writes it — JSON,
+    # so its times are ISO 8601 text.
+    defp args_of(record, overrides) do
+      record
+      |> Map.from_struct()
+      |> Map.take(
+        Ash.Resource.Info.attribute_names(MishkaCmsCore.Runtime.Component)
+        |> MapSet.to_list()
+      )
+      |> Map.merge(overrides)
+      |> JSON.encode!()
+      |> JSON.decode!()
+    end
+
+    defp template_of(site, com) do
+      ["runtime", site.name, "component"]
+      |> MishkaCmsCore.Runtime.Helpers.static_temp_dir()
+      |> Path.join("#{Slug.slugify(com.name)}.template")
+    end
+
+    # Rescued by `Oban.Lifeline` half an hour after a seed script left it executing, it wrote its old
+    # template over the one the next save had built.
+    test "does not write its older copy over the stored row's", %{sites: [site, _other]} do
+      com =
+        create_component!(
+          site_id: site.id,
+          template: ~s(<b class="css-inv-new"></b>),
+          active: true
+        )
+
+      older = com.updated_at |> DateTime.add(-60, :second)
+      stale = args_of(com, %{template: ~s(<b class="css-inv-old"></b>), updated_at: older})
+
+      assert :ok = save_component(stale, "update")
+
+      refute File.exists?(template_of(site, com)) and
+               File.read!(template_of(site, com)) =~ "css-inv-old"
+    end
+
+    test "while a job carrying the stored row's own copy still builds it", %{
+      sites: [site, _other]
+    } do
+      com =
+        create_component!(
+          site_id: site.id,
+          template: ~s(<b class="css-inv-new"></b>),
+          active: true
+        )
+
+      assert :ok = save_component(args_of(com, %{}), "update")
+
+      assert File.read!(template_of(site, com)) =~ "css-inv-new"
+    end
+  end
 end

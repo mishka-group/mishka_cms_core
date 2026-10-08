@@ -427,6 +427,44 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
     end
   end
 
+  # A SIGN-IN THAT ENDS BACK ON THE SIGN-IN PAGE ENDS ON IT IN THE LANGUAGE THE VISITOR WAS READING,
+  # which the last page they read left in the session — whatever URL mode the site is in.
+  describe "the sign-in page a visitor is sent back to" do
+    setup %{site: site} do
+      MishkaCmsCore.DataCase.forget_settings(~w(site.languages site.language_urls), [site.id])
+      {:ok, _} = MishkaCmsCore.Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      :ok
+    end
+
+    defp sent_back(session) do
+      build_conn()
+      |> with_host()
+      |> Plug.Test.init_test_session(session)
+      |> post("/api/auth/user/password/reset_request", %{
+        "user" => %{"email" => "nobody-#{System.unique_integer([:positive])}@example.com"}
+      })
+      |> redirected_to()
+    end
+
+    test "is in the language the visitor reads, the first one unprefixed", %{site: site} do
+      language = MishkaCmsCore.Runtime.Languages.session()
+
+      assert sent_back(%{language => "fa"}) == "/fa/auth"
+      assert sent_back(%{language => "en"}) == "/auth"
+      assert sent_back(%{}) == "/auth"
+
+      {:ok, _} =
+        MishkaCmsCore.Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert sent_back(%{language => "fa"}) == "/fa/auth"
+      assert sent_back(%{}) == "/en/auth"
+    end
+
+    test "is the site's first language for one the site no longer publishes" do
+      assert sent_back(%{MishkaCmsCore.Runtime.Languages.session() => "de"}) == "/auth"
+    end
+  end
+
   defp register_plugin(module, event) do
     {:ok, _} =
       MishkaInstaller.Event.Event.write(%{

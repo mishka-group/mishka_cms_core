@@ -28,9 +28,11 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
     * one keyed on a `nil` of ours that it counts as distinct, which cannot collide with anything.
 
   `create/2` is where the first kind is caught, and with it the row another run wrote in between:
-  a create refused by a unique index is read as the page being taken and reported as a skip, while
-  every other error is raised, because a template that does not compile is not a page somebody
-  already has.
+  a create refused by a unique index is read as the page being taken and reported as a skip, and so
+  is one refused because another page answers at its public address
+  (`MishkaCmsCore.Runtime.Resources.Validations.PublicAddress`) — `/:lang/blog` on a site whose
+  `/blog` is a page of its own. Every other error is raised, because a template that does not
+  compile is not a page somebody already has.
 
   ## A held NAME is not a held address
 
@@ -76,6 +78,7 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
 
   require Ash.Query
 
+  alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Page
 
   # The page size of the reads below, not how much of them is read: `every_page/1` reads all of it.
@@ -201,12 +204,21 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
     if serves_all_languages?(page), do: nil, else: Map.get(page, :language)
   end
 
-  @doc "Marks `attrs` as a page that answers every language — see `serves_all_languages?/1`."
+  @doc """
+  Marks `attrs` as a page that answers every language — see `serves_all_languages?/1` — when its
+  `:path` captures `lang`, and clears the mark when it does not: only a `lang` capture can answer
+  more than one language, and a page refuses the mark on any other path.
+  """
   @spec serving_all_languages(map()) :: map()
   def serving_all_languages(attrs) do
     extra = attrs |> Map.get(:extra, %{}) |> then(&if(is_map(&1), do: &1, else: %{}))
 
-    Map.put(attrs, :extra, Map.put(extra, @any_language_key, true))
+    extra =
+      if Languages.captures?(Map.get(attrs, :path)),
+        do: Map.put(extra, @any_language_key, true),
+        else: Map.delete(extra, @any_language_key)
+
+    Map.put(attrs, :extra, extra)
   end
 
   @doc "The version `stamp/3` recorded, or `nil`. See `provisioned_by/1` about `nil`."
@@ -338,7 +350,8 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
   happened.
   """
   @spec answered?(held()) :: boolean()
-  def answered?(%{path: path, fields: fields}), do: Keyword.get(fields, :path) == path
+  def answered?(%{path: path, fields: fields}),
+    do: Keyword.get(fields, :path) == path or Keyword.has_key?(fields, :answered_at)
 
   # THE SITE IS NOT NEWS. Every identity but the global ones is keyed on it, and a line telling an
   # admin the site they chose is already the site they chose says nothing.
@@ -355,6 +368,9 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
   defp taken_phrase(:name, value), do: gettext("its name %{value} is taken", value: value)
   defp taken_phrase(:path, value), do: gettext("its path %{value} is taken", value: value)
   defp taken_phrase(:language, value), do: gettext("its language %{value} is taken", value: value)
+
+  defp taken_phrase(:answered_at, value),
+    do: gettext("another page already answers at its address %{value}", value: value)
 
   defp taken_phrase(key, value),
     do: gettext("its %{field} %{value} is taken", field: key, value: value)
@@ -671,6 +687,16 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
       {:unique, {:ok, value}} -> [{field, value}]
       {:unique, :error} -> []
       _not_a_unique_index -> nil
+    end
+  end
+
+  # ANOTHER PAGE ANSWERS AT ITS PUBLIC ADDRESS — see
+  # `MishkaCmsCore.Runtime.Resources.Validations.PublicAddress`. Its stored path is free, so no
+  # identity says so; the refusal does.
+  defp unique_refusal(%{field: :path, vars: vars}, _values) when is_list(vars) do
+    case Keyword.get(vars, :answered_at) do
+      address when is_binary(address) -> [answered_at: address]
+      _other -> nil
     end
   end
 

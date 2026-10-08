@@ -424,7 +424,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
 
       for input <- uploads do
         assert {:error, error} = Ash.run_action(input)
-        assert Exception.message(error) =~ "media category is not one this site can use"
+        assert Exception.message(error) =~ "folder is not one this site can use"
       end
 
       stored = Path.wildcard(Path.join([dir, "uploads", "**", "*.png"]))

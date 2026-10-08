@@ -34,6 +34,13 @@ defmodule MishkaCmsCore.Runtime.Languages do
   anything that is not a language code is dropped rather than admitted. The settings page refuses to
   store such a list (`valid?/1`); this is for one that reached the store some other way.
 
+  ## Public addresses
+
+  `site.language_urls` decides how an address names its language — see `url_mode/1`. Every public
+  address the CMS builds comes out of `url/3`, and a request whose first segment names no language
+  is read through `implied/2`. A stored path is the same in both modes, so switching modes rewrites
+  no page.
+
   ## Names
 
   `name/1` and `names/1` put a code into a sentence a person reads, in the locale of the calling
@@ -51,6 +58,9 @@ defmodule MishkaCmsCore.Runtime.Languages do
   @setting "site.languages"
   @allowed "site.allowed_languages"
   @required "site.required_languages"
+  @url_setting "site.language_urls"
+  @prefix_others "prefix_others"
+  @prefix_all "prefix_all"
   @capture "lang"
   @default ["en"]
   @session "site_language"
@@ -486,6 +496,142 @@ defmodule MishkaCmsCore.Runtime.Languages do
   end
 
   def leading(_segments, _languages), do: nil
+
+  @doc """
+  How the public addresses of `site_id` name their language — its `site.language_urls` setting:
+
+    * `"prefix_others"` — the primary language (`primary/1`) has no prefix, every other has its
+      own: `/blog`, `/fa/blog`;
+    * `"prefix_all"` — every language has its own: `/en/blog`, `/fa/blog`.
+
+  Any other value reads `"prefix_others"`.
+
+      Languages.url_mode(site.id) #=> "prefix_others"
+  """
+  @spec url_mode(String.t() | nil) :: String.t()
+  def url_mode(site_id) do
+    case Settings.get(@url_setting, @prefix_others, site_id) do
+      @prefix_all -> @prefix_all
+      _prefix_others -> @prefix_others
+    end
+  end
+
+  @doc "The values `url_mode/1` answers, the default first."
+  @spec url_modes() :: [String.t()]
+  def url_modes, do: [@prefix_others, @prefix_all]
+
+  @doc """
+  The public address a stored path makes on the site `site_id` with these captures, or `nil` when
+  it makes none.
+
+  `path` is what a page is stored under — a literal, or a pattern holding `:name` and `*name`
+  segments. Three steps:
+
+    1. each capture is filled from `captures`, by its name as a string — percent-encoded, a
+       `*name` one segment at a time — and a capture `captures` does not hold is `nil`;
+    2. a `lang` capture whose value is not one of the site's languages is `nil` — the resolver would
+       refuse that address;
+    3. in `"prefix_others"` (`url_mode/1`), a FIRST segment that is the primary language is
+       dropped: `/en` is `/`, `/en/blog/x` is `/blog/x`. Only the first segment is ever a language
+       prefix; a `lang` anywhere else in the path stays as it is.
+
+  Every public address the CMS builds comes out of this — a link in a template
+  (`MishkaCmsCore.Runtime.LiveViewHelpers.site_path/2`), a page's editions, the sitemap,
+  robots.txt, a redirect — so no two of them can name one page differently.
+
+      # site.languages ["en", "fa"], site.language_urls "prefix_others"
+      Languages.url("/:lang/blog", %{"lang" => "en"}, site.id)  #=> "/blog"
+      Languages.url("/:lang/blog", %{"lang" => "fa"}, site.id)  #=> "/fa/blog"
+      Languages.url("/:lang/blog", %{"lang" => "de"}, site.id)  #=> nil
+      Languages.url("/en/pricing", %{}, site.id)                #=> "/pricing"
+      Languages.url("/:lang/blog/:slug", %{"lang" => "fa"}, site.id) #=> nil
+  """
+  @spec url(String.t(), map(), String.t() | nil) :: String.t() | nil
+  def url(path, captures, site_id), do: url(path, captures, site_id, url_mode(site_id))
+
+  @doc """
+  `url/3` in `mode` rather than the site's own — for a caller comparing addresses as they would be
+  in either mode.
+  """
+  @spec url(String.t(), map(), String.t() | nil, String.t()) :: String.t() | nil
+  def url(path, captures, site_id, mode) when is_binary(path) and is_map(captures) do
+    languages = site(site_id)
+
+    with true <- admitted?(path, captures, languages),
+         filled when is_binary(filled) <- fill(path, captures) do
+      if mode == @prefix_all, do: filled, else: unprefixed(filled, hd(languages))
+    else
+      _not_an_address -> nil
+    end
+  end
+
+  def url(_path, _captures, _site_id, _mode), do: nil
+
+  defp admitted?(path, captures, languages) do
+    not captures?(path) or Map.get(captures, @capture) in languages
+  end
+
+  defp unprefixed(path, primary) do
+    case String.split(path, "/", trim: true) do
+      [^primary | rest] -> "/" <> Enum.join(rest, "/")
+      _other -> path
+    end
+  end
+
+  # A capture is percent-encoded, each segment of a `*name` one on its own; a literal segment is kept
+  # as it is stored. `nil` when the path needs a capture `captures` does not hold.
+  defp fill(path, captures) do
+    path
+    |> String.split("/", trim: true)
+    |> Enum.reduce_while([], fn segment, filled ->
+      case filled_segment(segment, captures) do
+        nil -> {:halt, nil}
+        value -> {:cont, [value | filled]}
+      end
+    end)
+    |> case do
+      nil -> nil
+      filled -> "/" <> (filled |> Enum.reverse() |> Enum.join("/"))
+    end
+  end
+
+  defp filled_segment(":" <> name, captures), do: captures |> Map.get(name) |> encode()
+
+  defp filled_segment("*" <> name, captures) do
+    case Map.get(captures, name) do
+      rest when is_binary(rest) and rest != "" ->
+        rest |> String.split("/") |> Enum.map(&encode/1) |> Enum.join("/")
+
+      _missing ->
+        nil
+    end
+  end
+
+  defp filled_segment(literal, _captures), do: literal
+
+  defp encode(value) when is_binary(value) and value != "",
+    do: URI.encode(value, &URI.char_unreserved?/1)
+
+  defp encode(_missing), do: nil
+
+  @doc """
+  The language a request whose first segment names none is answered in: the site's primary language
+  while it is left unprefixed (`"prefix_others"`), else `nil` — as it is when the first segment is
+  one of the site's languages.
+
+  What `MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.resolve/2` reads `/blog` as, and what
+  `MishkaCmsCore.Runtime.Plugs.LanguagePlug` serves it in.
+
+      Languages.implied(["blog"], site.id)       #=> "en"
+      Languages.implied(["fa", "blog"], site.id) #=> nil
+  """
+  @spec implied([String.t()], String.t() | nil) :: String.t() | nil
+  def implied(segments, site_id) do
+    languages = site(site_id)
+
+    if url_mode(site_id) == @prefix_others and is_nil(leading(segments, languages)),
+      do: hd(languages)
+  end
 
   defp normalize(languages) when is_list(languages) do
     languages

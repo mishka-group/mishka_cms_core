@@ -66,7 +66,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   require Ash.Query
 
   alias MishkaCmsCore.Runtime.{RuntimePreview, RuntimeStatus, DraftPreviewAssets, ComponentCopy}
-  alias MishkaCmsCore.Runtime.PageEditions
+  alias MishkaCmsCore.Runtime.{Languages, PageEditions}
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
@@ -1095,13 +1095,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   Where the modal's "Open page" goes: an active page's own URL on its site's host, or `nil`.
 
   A stored path is a route, not always a URL. One that captures only `:lang` is filled with a
-  language the page is served in (`/:lang/blog` opens `/en/blog`). One that captures a record —
-  `/:lang/blog/:slug`, `/:lang/docs/:workspace/:section` — is the template of many URLs and the
-  address of none, so it has no page to open: the button is hidden, and "Copy link" shares the
-  preview instead of a path that answers 404.
+  language the page is served in, at the address the site's URL mode gives it
+  (`MishkaCmsCore.Runtime.Languages.url/3`: `/:lang/blog` opens `/blog`, or `/en/blog` on a site
+  that prefixes every language). One that captures a record — `/:lang/blog/:slug`,
+  `/:lang/docs/:workspace/:section` — is the template of many URLs and the address of none, so it
+  has no page to open: the button is hidden, and "Copy link" shares the preview instead of a path
+  that answers 404.
 
       live_url(%Page{active: true, path: "/:lang/blog", language: "en", site: site}, Page)
-      #=> "http://site-b.localhost:4000/en/blog"
+      #=> "http://site-b.localhost:4000/blog"
   """
   @spec live_url(map(), module()) :: String.t() | nil
   def live_url(
@@ -1109,9 +1111,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         MishkaCmsCore.Runtime.Page
       )
       when is_binary(host) and is_binary(path) do
-    case PageEditions.path(path, %{"lang" => open_language(page, site)}) do
+    captured = %{Languages.capture() => open_language(page, site)}
+
+    case Languages.url(path, captured, Map.get(site, :id)) do
       nil -> nil
-      filled -> MishkaCmsCore.Helpers.site_url(host, filled)
+      address -> MishkaCmsCore.Helpers.site_url(host, address)
     end
   end
 
