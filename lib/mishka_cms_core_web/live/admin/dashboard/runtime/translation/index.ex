@@ -107,8 +107,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
   def handle_info(_message, socket), do: {:noreply, socket}
 
   @impl true
-  def handle_event("translation_add", _params, socket),
-    do: {:noreply, socket |> TranslationGroup.close() |> open_modal(@modal_id)}
+  def handle_event("translation_add", _params, socket) do
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: MishkaGervaz.Resource.Info.Form.component_id(Translation),
+      record_id: nil,
+      reset: true
+    )
+
+    {:noreply, socket |> TranslationGroup.close() |> open_modal(@modal_id)}
+  end
 
   def handle_event("translation_pick", %{"id" => id}, socket),
     do: {:noreply, TranslationGroup.pick(socket, id)}

@@ -821,6 +821,27 @@ defmodule MishkaCmsCore.CoreComponents do
     |> JS.focus(to: "##{id}-container")
   end
 
+  @doc """
+  Shows the modal `id` with the Gervaz form inside it started over as an empty create form, the
+  form's defaults kept — what an "Add" button runs that opens a form modal on the client. `form` is
+  the form's resource, or its component id when the page mounts it under another one.
+
+      <button phx-click={show_form_modal("post-form-modal", MyApp.Post)}>Add post</button>
+
+  A page that opens the modal from the server sends the form `reset: true` instead — see
+  `MishkaGervaz.Form.Web.Live`.
+  """
+  def show_form_modal(js \\ %JS{}, id, form) when is_binary(id) do
+    js
+    |> MishkaGervaz.Form.Web.Live.reset(form_component_id(form))
+    |> show_modal(id)
+  end
+
+  defp form_component_id(id) when is_binary(id), do: id
+
+  defp form_component_id(resource) when is_atom(resource),
+    do: MishkaGervaz.Resource.Info.Form.component_id(resource)
+
   def hide_modal(js \\ %JS{}, id) do
     js
     |> JS.hide(

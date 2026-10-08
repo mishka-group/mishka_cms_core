@@ -198,6 +198,50 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
     assert has_element?(view, row(saved))
   end
 
+  test "Add redirect after a close that sent the form nothing opens it empty", %{
+    conn: conn,
+    site: site
+  } do
+    redirect = rule!(site, %{from_path: "/kept", to: "/there"})
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{
+      "form" => %{"from_path" => "/half-typed"},
+      "_target" => ["form", "from_path"]
+    })
+
+    assert has_element?(view, ~s(#redirect_form-form_from_path[value="/half-typed"]))
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form[method=post]")
+    refute has_element?(view, ~s(#redirect_form-form_from_path[value="/half-typed"]))
+
+    view |> element("#{row(redirect)} button[title='Edit']") |> render_click()
+    settle(view)
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{"form" => %{"to" => "/unsaved"}, "_target" => ["form", "to"]})
+
+    view |> element("#{row(redirect)} button[title='Edit']") |> render_click()
+    settle(view)
+
+    assert has_element?(view, ~s(#redirect_form-form_to[value="/there"]))
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form[method=post]")
+    refute has_element?(view, ~s(#redirect_form-form_from_path[value="/kept"]))
+  end
+
   test "Edit opens the rule in the form, and a save changes it", %{conn: conn, site: site} do
     redirect = rule!(site, %{from_path: "/old", to: "/new"})
     view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()

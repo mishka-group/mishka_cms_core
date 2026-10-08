@@ -738,7 +738,7 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
     test "a master is asked for the site first, with Global offered", %{conn: conn} do
       view = conn |> as_master() |> open()
       view |> element("#translations-add") |> render_click()
-      html = render(view)
+      html = view |> settle() |> render()
 
       [site_at, key_at] =
         for name <- ~w(_search_site_id form[key]), do: :binary.match(html, name) |> elem(0)
@@ -751,8 +751,26 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       view = conn |> as_site_admin(site) |> open()
       view |> element("#translations-add") |> render_click()
 
-      refute render(view) =~ "_search_site_id"
+      refute view |> settle() |> render() =~ "_search_site_id"
       assert has_element?(view, ~s(#translation_form-form [name="form[key]"]))
+    end
+
+    test "opened again after a close that sent the form nothing, it is empty", %{conn: conn} do
+      view = conn |> as_master() |> open()
+      view |> element("#translations-add") |> render_click()
+      settle(view)
+
+      view
+      |> element("#translation_form-form")
+      |> render_change(%{"form" => %{"key" => "half.typed"}, "_target" => ["form", "key"]})
+
+      assert has_element?(view, "#translation_form-form_key", "half.typed")
+
+      view |> element("#translations-add") |> render_click()
+      settle(view)
+
+      assert has_element?(view, "#translation_form-form")
+      refute has_element?(view, "#translation_form-form_key", "half.typed")
     end
   end
 

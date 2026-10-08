@@ -121,6 +121,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index do
 
   # + Add Permission → open the modal straight into an empty create form.
   def handle_event("permission_modal_add", _params, socket) do
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: MishkaGervaz.Resource.Info.Form.component_id(Permission),
+      record_id: nil,
+      reset: true
+    )
+
     {:noreply,
      socket
      |> assign(:permission_modal, %{default_permission_modal() | edit_mode?: true})

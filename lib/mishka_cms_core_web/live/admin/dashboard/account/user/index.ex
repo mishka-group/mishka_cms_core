@@ -136,6 +136,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
 
   @impl true
   def handle_event("user_modal_add", _params, socket) do
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: MishkaGervaz.Resource.Info.Form.component_id(User),
+      record_id: nil,
+      reset: true
+    )
+
     {:noreply,
      socket
      |> assign(:user_modal, %{default_user_modal() | edit_mode?: true})
