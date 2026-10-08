@@ -32,6 +32,23 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   built for one site among others renders inside `rendering_for/2`. A global layout draws on the
   page's site, so it reaches that site's components and the global ones.
 
+  ## In a task
+
+  The site a template renders for and the response's CSP nonce are kept in the process rendering
+  it, as Gettext's locale is. A task the template starts through
+  `MishkaGervaz.Messages.start_async/4` — or `assign_async/4`, or `in_caller_locale/1` — is handed
+  all three (`carry_into_tasks/0`), so `t/1,2`, `site_path/2`, `component/1` and `csp_nonce/0`
+  answer inside it what they answer outside it:
+
+      def load(socket) do
+        MishkaGervaz.Messages.start_async(socket, :links, fn ->
+          %{about: site_path("/:lang/about", "fa"), label: t("About")}
+        end)
+      end
+
+  A task started any other way, `Phoenix.LiveView.start_async/4` among them, renders for no site
+  and in the default locale: `site_path/2` is `nil` there, and `t/1` answers from the global words.
+
   ## Events
 
   - `runtime:render:component_unavailable` — what is drawn in place of a refused component, an empty
@@ -51,6 +68,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.ContentComponents
+  alias MishkaCmsCore.Runtime.CspNonce
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.States.CompileFailureState
@@ -92,6 +110,21 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   """
   @spec csp_nonce() :: String.t() | nil
   defdelegate csp_nonce(), to: MishkaCmsCore.Runtime.CspNonce, as: :current
+
+  @doc """
+  Registers what the imports above read from the process rendering a template — the site
+  `MishkaCmsCore.Runtime.Translations.put_site/1` names and the nonce
+  `MishkaCmsCore.Runtime.CspNonce.put/1` records — with
+  `MishkaGervaz.Messages.carry_process_keys/1`, so a task started through
+  `MishkaGervaz.Messages.start_async/4`, `assign_async/4` or `in_caller_locale/1` renders as its
+  starter does. Gervaz carries the locale itself. See "In a task" above.
+
+  Called once, when `MishkaCmsCore.Application` starts.
+  """
+  @spec carry_into_tasks() :: :ok
+  def carry_into_tasks do
+    MishkaGervaz.Messages.carry_process_keys([Translations.site_key(), CspNonce.process_key()])
+  end
 
   @doc """
   The captcha a form asks — see `MishkaCmsCore.Captcha.Widget.captcha/1`.

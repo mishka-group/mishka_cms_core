@@ -5,14 +5,15 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
 
   A runtime template never passes a site or a language to `t/1` — both are read off the process
   rendering it — so what is proved here is the path a visitor takes: a component saved with
-  `t("…")` in its markup, built on its first render, drawn in the language the process answers in.
-  And `imports/1`, because a component whose own helpers define a `t` — or a `captcha` — is a compile
-  error the moment a second one is imported beside it.
+  `t("…")` in its markup, built on its first render, drawn in the language the process answers in —
+  and in a task the component starts, which answers what the render does. And `imports/1`, because
+  a component whose own helpers define a `t` — or a `captcha` — is a compile error the moment a
+  second one is imported beside it.
   """
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
-  alias MishkaCmsCore.Runtime.{LiveViewHelpers, Translation, Translations}
+  alias MishkaCmsCore.Runtime.{CspNonce, LiveViewHelpers, Translation, Translations}
   alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
   alias MishkaCmsCore.Runtime.States.{CompileFailureState, SiteState, TranslationsState}
   alias MishkaCmsCore.Settings
@@ -299,6 +300,44 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
     end
   end
 
+  # A TASK IS ANOTHER PROCESS, and the site and the nonce a template reads live in the process
+  # dictionary of the one rendering it. `MishkaGervaz.Messages.start_async/4` hands both to the task
+  # because `LiveViewHelpers.carry_into_tasks/0` registered them when the core started.
+  describe "in a task a compiled component starts with MishkaGervaz.Messages.start_async/4" do
+    setup [:site, :task_component]
+
+    test "site_path/2, t/1,2 and csp_nonce/0 answer what they answer outside it", %{
+      module: module
+    } do
+      outside = module.answers()
+
+      assert outside.fa == "/fa/about"
+      assert outside.primary == "/about"
+      assert outside.captured == "/fa/blog/a%20b"
+      assert outside.word == @categories
+      assert outside.bound == "3 نوشته را بخوانید"
+      assert is_binary(outside.nonce)
+
+      socket = module.in_task(connected_socket())
+      {_ref, pid, _kind} = socket.private.live_async[:probe]
+      monitor = Process.monitor(pid)
+      assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 5_000
+
+      assert_received {:phoenix, :async_result, {:start, {_ref, _cid, :probe, {:ok, in_task}}}}
+      assert in_task == outside
+    end
+
+    # WHAT THE CARRY IS FOR: the same function in a process nobody handed anything renders for no
+    # site, in the default language.
+    test "and a task started any other way answers for no site", %{module: module} do
+      in_task = Task.async(fn -> module.answers() end) |> Task.await()
+
+      assert in_task.fa == nil
+      assert in_task.word == "Categories"
+      assert in_task.nonce == nil
+    end
+  end
+
   describe "a component whose own helpers define t" do
     setup :site
 
@@ -340,6 +379,43 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
     %{site: site}
   end
 
+  # A component whose helpers start a task that answers with what the imports return, and answer
+  # with the same themselves.
+  defp task_component(%{site: site}) do
+    helpers = [
+      %{
+        name: "in_task",
+        args: "socket",
+        code: "MishkaGervaz.Messages.start_async(socket, :probe, fn -> answers() end)"
+      },
+      %{
+        name: "answers",
+        args: "",
+        code: ~S"""
+        %{
+          fa: site_path("/:lang/about", "fa"),
+          primary: site_path("/:lang/about", nil),
+          captured: site_path("/:lang/blog/:slug", %{"lang" => "fa", "slug" => "a b"}),
+          word: t("Categories"),
+          bound: t("Read %{count} posts", count: 3),
+          nonce: csp_nonce()
+        }
+        """
+      }
+    ]
+
+    component = make_component(site, ~s|<span class="task-probe">probe</span>|, helpers: helpers)
+
+    cache!(site.id, "fa", "Categories", @categories)
+    cache!(site.id, "fa", "Read %{count} posts", "%{count} نوشته را بخوانید")
+    answering_in(site, "fa")
+    :ok = CspNonce.put("nonce-#{unique()}")
+
+    assert render(component, site) =~ "task-probe"
+
+    %{module: module_for(component, site)}
+  end
+
   defp make_component(site, template, opts \\ []) do
     component =
       create_component!(
@@ -377,6 +453,15 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
     |> LiveViewHelpers.component()
     |> Phoenix.HTML.Safe.to_iodata()
     |> IO.iodata_to_binary()
+  end
+
+  # A socket `Phoenix.LiveView.start_async/4` starts a task for: connected, its answer sent to this
+  # process.
+  defp connected_socket do
+    %Phoenix.LiveView.Socket{
+      transport_pid: self(),
+      private: %{live_temp: %{}, lifecycle: %Phoenix.LiveView.Lifecycle{}}
+    }
   end
 
   defp unique, do: System.unique_integer([:positive])

@@ -110,6 +110,14 @@ defmodule MishkaCmsCore.Runtime.Translations do
   def site, do: Process.get(@site_key)
 
   @doc """
+  The process dictionary key `put_site/1` writes, which
+  `MishkaCmsCore.Runtime.LiveViewHelpers.carry_into_tasks/0` registers so a task a template starts
+  answers for the same site.
+  """
+  @spec site_key() :: term()
+  def site_key, do: @site_key
+
+  @doc """
   The keys a template asks for, in the order it first asks, each once.
 
       Translations.keys(~s|<h2>{t("Categories")}</h2><a>{t("Tags")}</a>|)
