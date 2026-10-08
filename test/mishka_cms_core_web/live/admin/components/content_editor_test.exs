@@ -41,7 +41,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
          value: session["value"],
          forms: session["forms"] || ["post_form"],
          extra: session["extra"] || %{content_editor: true},
-         placeholder: Map.get(session, "placeholder", "Write the post")
+         placeholder: Map.get(session, "placeholder", "Write the post"),
+         module: session["module"] || MishkaCmsCoreWeb.UIAdapters.Admin,
+         debounce: Map.get(session, "debounce", 300)
        )}
     end
 
@@ -50,7 +52,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       <div id="host">
         <.dynamic_component
           :for={form <- @forms}
-          module={MishkaCmsCoreWeb.UIAdapters.Admin}
+          module={@module}
           function={:textarea}
           name="form[content]"
           id={form <> "-form_content"}
@@ -63,7 +65,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
           disabled={false}
           readonly={false}
           label_id={form <> "-form_content-label"}
-          phx_debounce={300}
+          phx_debounce={@debounce}
         />
       </div>
       """
@@ -225,7 +227,43 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert has_element?(view, "[phx-hook=PbCodeEditor] textarea[name='form[content]']")
       refute has_element?(view, "[phx-hook=ContentEditor]")
     end
+
+    test "every other textarea is the Tailwind adapter's, with the field's own debounce", ctx do
+      for debounce <- [300, 500, "blur", nil] do
+        session = %{"extra" => %{}, "debounce" => debounce}
+        admin = plain_textarea(ctx, session)
+
+        assert admin ==
+                 plain_textarea(ctx, Map.put(session, "module", MishkaGervaz.UIAdapters.Tailwind)),
+               "debounce #{inspect(debounce)}"
+
+        assert admin |> LazyHTML.from_fragment() |> LazyHTML.attribute("class") ==
+                 [MishkaGervaz.UIAdapters.Tailwind.multiline_class("")]
+      end
+    end
+
+    test "a code field is drawn at its rows' height, debounced by the field or 300ms", ctx do
+      for {debounce, sent} <- [{300, "300"}, {500, "500"}, {nil, "300"}, {"blur", "300"}] do
+        view = open(ctx, %{"extra" => %{code: "js"}, "debounce" => debounce})
+
+        assert has_element?(
+                 view,
+                 "#gvz-code-post_form-form_content[phx-hook=PbCodeEditor][phx-update=ignore]" <>
+                   "[data-language=js][class*='h-[14rem]']"
+               )
+
+        assert has_element?(
+                 view,
+                 "#gvz-code-post_form-form_content textarea#post_form-form_content" <>
+                   "[name='form[content]'][rows='8'][phx-debounce='#{sent}']"
+               ),
+               "debounce #{inspect(debounce)}"
+      end
+    end
   end
+
+  defp plain_textarea(ctx, session),
+    do: ctx |> open(session) |> element("textarea#post_form-form_content") |> render()
 
   describe "the palette" do
     test "offers the site's own components and the shared ones, never another site's", ctx do

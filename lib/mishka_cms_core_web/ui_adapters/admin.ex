@@ -143,24 +143,31 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
     """
   end
 
+  # NO DEFAULTS HERE. Phoenix merges a declared default into the assigns before any clause runs, so a
+  # `class: nil` would reach the fallback as a class it keeps — every plain textarea would lose the
+  # Tailwind adapter's field style — and a `phx_debounce: 300` would hide the debounce the field asks
+  # for. The fallback fills its own; the two editors fill theirs in `editor_defaults/1`.
   attr :name, :string, required: true
-  attr :id, :string, default: nil
-  attr :value, :any, default: nil
-  attr :placeholder, :string, default: nil
-  attr :rows, :integer, default: 4
-  attr :class, :string, default: nil
-  attr :disabled, :boolean, default: false
-  attr :readonly, :boolean, default: false
-  attr :extra, :map, default: %{}
-  attr :phx_debounce, :any, default: 300
+  attr :id, :string
+  attr :value, :any
+  attr :placeholder, :string
+  attr :rows, :integer
+  attr :class, :string
+  attr :disabled, :boolean
+  attr :readonly, :boolean
+  attr :extra, :map
 
   @doc """
   A textarea, and a real code editor or a rich-text editor when the field asks for one.
 
   `ui do extra %{code: "js"} end` on a `:textarea` field turns it into CodeMirror with that
   language's grammar, line numbers and bracket matching — the same editor the page builder's drawer
-  uses, loaded from the same on-demand bundle. Anything else falls through to the Tailwind adapter's
-  plain box, so this costs nothing to every other form in the admin.
+  uses, loaded from the same on-demand bundle. Anything else is the Tailwind adapter's plain box,
+  handed exactly the assigns the field passed — its class, rows and `phx-debounce` defaults are the
+  Tailwind adapter's own — so this costs nothing to every other form in the admin.
+
+  The code editor is `rows` tall (four when unset) and sends its changes at the field's debounce
+  when that is a number of milliseconds, else every 300ms.
 
   The textarea is still the form field. CodeMirror mounts beside it and writes into it on every
   change, so validation, `phx-change` and save never learn that an editor exists — and a page where
@@ -208,7 +215,10 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   `MishkaCmsCore.Layouts.Nav` does it for every admin page.
   """
   def textarea(%{extra: %{code: language}} = assigns) when is_binary(language) do
-    assigns = assign(assigns, :language, language)
+    assigns =
+      assigns
+      |> editor_defaults()
+      |> assign(language: language, debounce: editor_debounce(assigns[:"phx-debounce"]))
 
     ~H"""
     <div
@@ -229,7 +239,7 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
         rows={@rows}
         disabled={@disabled}
         readonly={@readonly}
-        phx-debounce={@phx_debounce}
+        phx-debounce={@debounce}
         spellcheck="false"
         class="h-full w-full resize-none border-0 bg-transparent font-['Space_Grotesk'] text-[12.5px] leading-[1.7] text-[#c9c7d1] outline-none"
       >{@value}</textarea>
@@ -242,7 +252,9 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
     state = assigns[:state]
 
     assigns =
-      assign(assigns,
+      assigns
+      |> editor_defaults()
+      |> assign(
         editor: editor,
         components: editor <> "-components",
         site_id: ContentComponentPicker.site(state),
@@ -343,7 +355,8 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   # EVERY OTHER TEXTAREA IS THE FALLBACK'S. `use MishkaGervaz.Behaviours.UIAdapter` writes a
   # `defdelegate` for each component and then `defoverridable`, so defining `textarea/1` here takes
   # the whole function over — without this clause the description box on the same form, and every
-  # other plain textarea in the admin, would raise `FunctionClauseError`.
+  # other plain textarea in the admin, would raise `FunctionClauseError`. It reaches the fallback
+  # with no default of this module's in it, so the box is exactly the Tailwind adapter's.
   def textarea(assigns), do: super(assigns)
 
   attr :command, :string, required: true
@@ -365,6 +378,17 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
       <span :if={@text} aria-hidden="true">{@text}</span>
     </button>
     """
+  end
+
+  # What the code and content editors draw an attribute the field left out as.
+  defp editor_defaults(assigns) do
+    assigns
+    |> assign_new(:id, fn -> nil end)
+    |> assign_new(:value, fn -> nil end)
+    |> assign_new(:placeholder, fn -> nil end)
+    |> assign_new(:rows, fn -> 4 end)
+    |> assign_new(:disabled, fn -> false end)
+    |> assign_new(:readonly, fn -> false end)
   end
 
   defp editor_debounce(debounce) when is_integer(debounce) and debounce >= 0, do: debounce

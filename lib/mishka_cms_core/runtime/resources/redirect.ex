@@ -376,7 +376,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
         end
 
-        field :from_path do
+        field :from_path, :text do
           required true
 
           ui do
@@ -393,7 +393,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
         end
 
-        field :to do
+        field :to, :text do
           required true
 
           ui do
