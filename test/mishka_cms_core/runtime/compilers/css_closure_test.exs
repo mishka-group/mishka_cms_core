@@ -13,7 +13,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
   """
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
 
   setup do
     root = Path.join(System.tmp_dir!(), "css_closure_#{System.unique_integer([:positive])}")
@@ -34,6 +37,33 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
 
   defp closure(root, site \\ "acme", opts \\ []) do
     CssClosure.for_site(site, Keyword.put(opts, :runtime_dir, root))
+  end
+
+  # A COMPONENT FILE AS BOOT WRITES IT, attribute lines and all — so the walk reads exactly what
+  # `BootHandler.build_component_class_content/1` produces from the row.
+  defp component_row(root, name, row) do
+    global_component(root, name, BootHandler.build_component_class_content(row))
+  end
+
+  defp attribute(name, default \\ ""),
+    do: %{name: name, type: "string", opts: %{default: default}}
+
+  defp named_through(attribute),
+    do: ~s|<.component component_name={@#{attribute}} site="acme" id="x" />|
+
+  defp call(name, given), do: ~s|<.component component_name="#{name}" site="acme" #{given} />|
+
+  # `kit-list` draws each item with the component its caller names as `card`.
+  defp card_list(root, default \\ "") do
+    component_row(root, "kit-list", %{
+      template: ~s|<div class="grid">#{named_through("card")}</div>|,
+      attrs: [attribute("card", default)]
+    })
+  end
+
+  defp unbounded_naming(fun) do
+    log = capture_log(fn -> assert fun.() == :unbounded end)
+    log
   end
 
   describe "reachability" do
@@ -224,6 +254,325 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
       write(root, "acme", "page", "home", reference("kit-alert"))
 
       assert closure(root) == :unbounded
+    end
+  end
+
+  # `component_name={@card}` NAMES WHATEVER THE CALLER HANDS OVER AS `card`. When the component
+  # declares `card` and never assigns it itself, that is its default and the literals its reached
+  # callers write — a closed set, walked like any literal. Anything the walk cannot read gives up.
+  describe "a component named through its own attribute" do
+    test "callers that hand nothing over resolve to nothing, and the site stays bounded",
+         %{root: root} do
+      card_list(root)
+      global_component(root, "kit-card", "<div class='p-9'></div>")
+      write(root, "acme", "page", "home", reference("kit-list"))
+
+      assert %{
+               components: ["kit-list"],
+               resolved: [%{component: "kit-list", attribute: "card", names: []}]
+             } = closure(root)
+    end
+
+    test "the literals reached callers write are walked, and what those reach", %{root: root} do
+      card_list(root)
+      global_component(root, "kit-a", reference("kit-icon"))
+      global_component(root, "kit-b", "<div></div>")
+      global_component(root, "kit-icon", "<span></span>")
+      global_component(root, "kit-c", "<div></div>")
+      write(root, "acme", "page", "home", call("kit-list", ~s|card="kit-a"|))
+      write(root, "acme", "page", "about", call("kit-list", ~s|heading="Docs" card="kit-b"|))
+
+      assert %{
+               components: ["kit-a", "kit-b", "kit-icon", "kit-list"],
+               resolved: [%{component: "kit-list", attribute: "card", names: ["kit-a", "kit-b"]}]
+             } = closure(root)
+    end
+
+    test "a caller that is not reached hands nothing over", %{root: root} do
+      card_list(root)
+      global_component(root, "kit-c", "<div></div>")
+      write(root, "acme", "page", "home", reference("kit-list"))
+      write(root, "other", "page", "home", call("kit-list", ~s|card="kit-c"|))
+
+      assert %{components: ["kit-list"]} = closure(root)
+      assert %{components: ["kit-c", "kit-list"]} = closure(root, "other")
+    end
+
+    test "the declared default counts", %{root: root} do
+      card_list(root, "kit-default")
+      global_component(root, "kit-default", "<div></div>")
+      global_component(root, "kit-a", "<div></div>")
+      write(root, "acme", "page", "home", reference("kit-list"))
+      write(root, "acme", "page", "about", call("kit-list", ~s|card="kit-a"|))
+
+      assert %{
+               components: ["kit-a", "kit-default", "kit-list"],
+               resolved: [%{names: ["kit-a", "kit-default"]}]
+             } = closure(root)
+    end
+
+    # The component a name reaches may hand a name on through its own attribute, and only once the
+    # first is walked does the second have a caller.
+    test "a name handed on by a component reached through an attribute is followed",
+         %{root: root} do
+      component_row(root, "kit-outer", %{
+        template: ~s|<.component component_name={@card} site="acme" inner="kit-leaf" />|,
+        attrs: [attribute("card")]
+      })
+
+      component_row(root, "kit-mid", %{
+        template: named_through("inner"),
+        attrs: [attribute("inner")]
+      })
+
+      global_component(root, "kit-leaf", "<b></b>")
+      write(root, "acme", "page", "home", call("kit-outer", ~s|card="kit-mid"|))
+
+      assert %{components: ["kit-leaf", "kit-mid", "kit-outer"]} = closure(root)
+    end
+
+    test "a site component of that name is the one reached", %{root: root} do
+      card_list(root)
+      global_component(root, "kit-a", "<div class='global'></div>")
+      write(root, "acme", "component", "kit-a", "<div class='mine'></div>")
+      write(root, "acme", "page", "home", call("kit-list", ~s|card="kit-a"|))
+
+      assert %{templates: templates} = closure(root)
+      assert Enum.any?(templates, &String.ends_with?(&1, "/acme/component/kit-a.template"))
+      refute Enum.any?(templates, &String.ends_with?(&1, "/__global__/component/kit-a.template"))
+    end
+
+    test "one caller handing the attribute an expression makes it unbounded, naming that caller",
+         %{root: root} do
+      card_list(root)
+      global_component(root, "kit-a", "<div></div>")
+      write(root, "acme", "page", "home", call("kit-list", ~s|card="kit-a"|))
+      write(root, "acme", "page", "chooser", call("kit-list", ~s|card={@which}|))
+
+      log = unbounded_naming(fn -> closure(root) end)
+
+      assert log =~ "chooser.template"
+      refute log =~ "kit-list.template"
+    end
+
+    test "a caller spreading attributes into the tag can hand anything over", %{root: root} do
+      card_list(root)
+      write(root, "acme", "page", "spreader", call("kit-list", ~s|{@rest}|))
+
+      assert unbounded_naming(fn -> closure(root) end) =~ "spreader.template"
+    end
+
+    # A post's marker writes the attributes, and the walk is handed only the names.
+    test "a component drawn from stored content is handed what an author wrote", %{root: root} do
+      card_list(root)
+      global_component(root, "kit-article", ~s|<div><.rich_content html={@body} /></div>|)
+      write(root, "acme", "page", "home", reference("kit-article"))
+
+      log = unbounded_naming(fn -> closure(root, "acme", content_components: ["kit-list"]) end)
+
+      assert log =~ "kit-article.template"
+    end
+
+    test "a template that calls a component from code can hand anything over", %{root: root} do
+      card_list(root)
+
+      write(
+        root,
+        "acme",
+        "page",
+        "coded",
+        reference("kit-list") <> ~s|{component(%{component_name: "kit-list", card: "kit-x"})}|
+      )
+
+      assert unbounded_naming(fn -> closure(root) end) =~ "coded.template"
+    end
+
+    test "an attribute the component does not declare stays unbounded", %{root: root} do
+      component_row(root, "kit-loose", %{template: named_through("card"), attrs: []})
+      write(root, "acme", "page", "home", call("kit-loose", ~s|card="kit-a"|))
+
+      assert unbounded_naming(fn -> closure(root) end) =~ "kit-loose.template"
+    end
+
+    test "a page names nothing through an attribute, whatever its file says", %{root: root} do
+      write(
+        root,
+        "acme",
+        "page",
+        "home",
+        named_through("card") <> "\n<%!-- css-closure attr=card --%>"
+      )
+
+      assert closure(root) == :unbounded
+    end
+
+    test "any other expression in a component_name stays unbounded", %{root: root} do
+      global_component(root, "kit-a", "<div></div>")
+
+      for expression <- [~s|{@card <> "-x"}|, "{pick(@card)}", "{@card.name}", "{assigns.card}"] do
+        component_row(root, "kit-list", %{
+          template:
+            ~s|<.component component_name=#{expression} site="acme" />| <> named_through("card"),
+          attrs: [attribute("card")]
+        })
+
+        write(root, "acme", "page", "home", call("kit-list", ~s|card="kit-a"|))
+
+        assert unbounded_naming(fn -> closure(root) end) =~ "kit-list.template", expression
+      end
+    end
+
+    test "a tag that names nothing and spreads a map names an expression", %{root: root} do
+      write(root, "acme", "page", "home", ~s|<.component {@attrs} />|)
+
+      assert closure(root) == :unbounded
+    end
+
+    # `:if={@total > 0}` holds a `>`, and a string in an expression may hold a brace.
+    test "a tag is read through expressions holding > and braces", %{root: root} do
+      card_list(root)
+      global_component(root, "kit-a", "<div></div>")
+
+      write(
+        root,
+        "acme",
+        "page",
+        "home",
+        ~s|<.component :if={@total > 0} component_name="kit-list" label={"a } \#{%{b: 1}}"} | <>
+          ~s|site="acme" card="kit-a" />|
+      )
+
+      assert %{components: ["kit-a", "kit-list"]} = closure(root)
+    end
+  end
+
+  describe "attribute_marks/1" do
+    test "marks a declared attribute the markup names a component through, with its default" do
+      assert CssClosure.attribute_marks(%{
+               template: named_through("card"),
+               attrs: [attribute("card", "kit-card"), attribute("heading", "Docs")]
+             }) == ~s|<%!-- css-closure attr=card default="kit-card" --%>|
+    end
+
+    test "an empty default writes no default" do
+      assert CssClosure.attribute_marks(%{
+               template: named_through("card"),
+               attrs: [attribute("card")]
+             }) == "<%!-- css-closure attr=card --%>"
+    end
+
+    test "nothing to mark when the markup names no component through an attribute" do
+      assert CssClosure.attribute_marks(%{
+               template: ~s|<.component component_name="kit-a" />|,
+               attrs: [attribute("card")]
+             }) == ""
+    end
+
+    test "an attribute the component does not declare is not marked" do
+      assert CssClosure.attribute_marks(%{template: named_through("card"), attrs: []}) == ""
+    end
+
+    # IT WOULD NO LONGER BE THE CALLER'S. A component that assigns `card` itself draws whatever it
+    # assigned, which no caller wrote down.
+    test "an attribute the component's own code assigns is not marked" do
+      for code <- [
+            ~s|{:ok, assign(socket, :card, "kit-other")}|,
+            ~s|{:ok, assign(socket, card: "kit-other", page: 1)}|,
+            ~s|{:ok, socket \|> assign(:page, 1) \|> assign(:card, "kit-other")}|,
+            ~s|{:ok, Phoenix.Component.assign(socket, %{card: "kit-other"})}|,
+            ~s|{:ok, assign_new(socket, :card, fn -> "kit-other" end)}|,
+            ~s|{:ok, update(socket, :card, &String.trim/1)}|,
+            ~s|Map.put(assigns, :card, "kit-other")|,
+            ~s|%{assigns \| card: "kit-other"}|
+          ] do
+        assert CssClosure.attribute_marks(%{
+                 template: named_through("card"),
+                 attrs: [attribute("card")],
+                 helpers: [%{name: "update", args: "assigns, socket", code: code}]
+               }) == "",
+               code
+      end
+    end
+
+    test "a body that assigns the attribute marks nothing" do
+      assert CssClosure.attribute_marks(%{
+               template: named_through("card"),
+               attrs: [attribute("card")],
+               body: ~s|assign(assigns, :card, "kit-other")|
+             }) == ""
+    end
+
+    test "an assign whose name is worked out at runtime marks nothing" do
+      for code <- [
+            "{:ok, assign(socket, key, value)}",
+            "{:ok, assign(socket, values)}",
+            "Map.put(assigns, key, value)",
+            "put_in(socket.assigns.card, 1)"
+          ] do
+        assert CssClosure.attribute_marks(%{
+                 template: named_through("card"),
+                 attrs: [attribute("card")],
+                 helpers: [%{name: "update", code: code}]
+               }) == "",
+               code
+      end
+    end
+
+    # A `{@card}` inside a helper's `~H` reads THAT function's assigns, which its caller built.
+    test "an attribute read inside a helper's markup is not marked" do
+      assert CssClosure.attribute_marks(%{
+               template: named_through("card") <> "{row(%{card: @other})}",
+               attrs: [attribute("card")],
+               helpers: [%{name: "row", code: ~s|~H"#{named_through("card")}"|}]
+             }) == ""
+    end
+
+    test "code that does not parse marks nothing" do
+      assert CssClosure.attribute_marks(%{
+               template: named_through("card"),
+               attrs: [attribute("card")],
+               helpers: [%{name: "broken", code: "assign(socket, "}]
+             }) == ""
+    end
+
+    # The shape of the Mishka Document kit's list: a body-level `rescue`, writes to other assigns
+    # and to a map that is not `assigns`, and the stock `assign(socket, assigns)`.
+    test "writes to other assigns and other maps leave the attribute marked" do
+      helpers = [
+        %{name: "fetch_now", code: "fetch(asked)\nrescue\n  error -> {:error, error}"},
+        %{name: "href", code: "Map.put(extra, key, code)"},
+        %{
+          name: "load",
+          code: "socket |> assign(loading: false) |> assign(:asked, %{asked | page: 2})"
+        },
+        %{name: "update", code: "{:ok, assign(socket, assigns)}"}
+      ]
+
+      assert CssClosure.attribute_marks(%{
+               template: named_through("card"),
+               attrs: [attribute("card")],
+               helpers: helpers
+             }) == "<%!-- css-closure attr=card --%>"
+    end
+
+    test "a record decoded from a job, with string keys, is read the same" do
+      assert CssClosure.attribute_marks(%{
+               "template" => named_through("card"),
+               "attrs" => [
+                 %{"name" => "card", "type" => "string", "opts" => %{"default" => "kit-a"}}
+               ],
+               "helpers" => [%{"name" => "load", "code" => "assign(socket, :page, 1)"}]
+             }) == ~s|<%!-- css-closure attr=card default="kit-a" --%>|
+    end
+
+    test "boot writes the lines into the component's template file" do
+      content =
+        BootHandler.build_component_class_content(%{
+          template: named_through("card"),
+          attrs: [attribute("card", "kit-a")]
+        })
+
+      assert content =~ ~s|<%!-- css-closure attr=card default="kit-a" --%>|
     end
   end
 

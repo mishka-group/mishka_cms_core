@@ -33,17 +33,43 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   An error page needs no layout root: `BootHandler.build_error_template_content/1` already writes
   its layouts' markup into the error template itself.
 
+  ## A component named through its own attribute
+
+  A component may draw another it is told the name of:
+
+      <.component component_name={@card} site={site_name()} doc={row.doc} />
+
+  When `card` is an attribute the component declares and never assigns itself, the names it can
+  take are known: its default, when that is a non-empty string, and every literal a reached caller
+  writes for it — `<.component component_name="doc-workspace-list" card="doc-card" …>`. Those names
+  are walked as literal references are. The component they name may hand a name on in turn, so the
+  walk repeats until nothing new is reached.
+
+  WHICH ATTRIBUTES QUALIFY IS DECIDED WHERE THE COMPONENT'S CODE IS AT HAND, when its template file
+  is written: `attribute_marks/1` writes a line per attribute into the file and the walk reads it
+  back, so it asks nothing of the database. `component_name={@name}` in a file with no line for
+  `name` — not declared, assigned by the component's own code, read inside a helper, or a file
+  written before these lines existed — is a reference the walk cannot resolve.
+
   ## When the answer is "everything"
 
-  `<.component component_name={@name}>` names a component the compiler cannot know, so any template
-  containing one makes the closure unsound and `for_site/1` returns `:unbounded`. Callers must
-  fall back to globbing the whole directory. This is the whole safety story: an under-approximated
-  closure means a component renders with no CSS at all, which is worse than a large stylesheet, and
-  it would show up in production rather than in a build.
+  A reference the walk cannot resolve makes the closure unsound, and `for_site/2` returns
+  `:unbounded`. Callers must fall back to globbing the whole directory. This is the whole safety
+  story: an under-approximated closure means a component renders with no CSS at all, which is worse
+  than a large stylesheet, and it would show up in production rather than in a build.
 
-  No such reference exists in the CMS's own output today — the builder always writes the literal
-  form — but a hand-written template can contain one, and it must degrade to correct-and-large
-  rather than small-and-broken.
+  A reference cannot be resolved when, in a reached template:
+
+    * `component_name={…}` is any expression but `{@name}`, or `{@name}` sits in a page, a layout or
+      an error page, or a `<.component>` tag names nothing and spreads `{…}`;
+    * `{@name}` names an attribute the file has no line for;
+    * a call to a component that names one through `name` hands `name` over as an expression
+      (`card={…}`), or spreads `{…}` into the tag, or draws the component from stored content,
+      whose markers an author writes — that CALLER is the template named;
+    * once anything is named through an attribute, a template calls `component(…)` or
+      `send_update(…)` from code, or holds a `<.component>` tag the walk cannot read.
+
+  Each degrades to correct-and-large rather than small-and-broken.
 
   ## Components named in stored content
 
@@ -56,7 +82,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   ## Usage
 
       iex> CssClosure.for_site("localhost")
-      %{components: ["chelekom-alert", "chelekom-icon"], templates: [...], scanned: 8, dynamic: []}
+      %{components: ["chelekom-alert", "chelekom-icon"], templates: [...], scanned: 8, dynamic: [],
+        resolved: []}
 
   See `MishkaCmsCore.Runtime.Compilers.TailwindCompiler`, which turns the result into `@source`
   lines, and `Mix.Tasks.Mishka.Css.Closure`, which prints it.
@@ -64,28 +91,46 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   require Logger
 
+  alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
+
   @global "__global__"
 
   # A visitor asks for one of these by URL; nothing has to name them for them to render.
   @entry_kinds ["page", "error"]
 
+  @reference ~r/component_name="([^"]+)"/
+  @expression_name ~r/component_name\s*=\s*\{/
+  @draws_content ~r/<\.rich_content\b/
+  @component_tag ~r/<(?:[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*)?\.component(?=[\s\/>])/
+  @attribute_name ~r/\A[^\s=\/>{}"']+/
+  @read_attribute ~r/\A\s*@([a-z_][A-Za-z0-9_]*[?!]?)\s*\z/
+  @named_through ~r/component_name\s*=\s*\{\s*@([a-z_][A-Za-z0-9_]*[?!]?)\s*\}/
+  @code_call ~r/\b(?:component|send_update(?:_after)?)\(/
+  @mark ~r/<%!-- css-closure attr=([a-z_][A-Za-z0-9_]*[?!]?)(?: default="([^"\r\n]*)")? --%>/
+
   @typedoc """
-  Everything a site's stylesheet has to be built from, or `:unbounded` when a dynamic reference
-  makes the walk unsound.
+  Everything a site's stylesheet has to be built from, or `:unbounded` when a reference the walk
+  cannot resolve makes it unsound.
 
   `components` are the reachable component names, for a reader. `templates` are the resolved paths
   of EVERYTHING that must be scanned — the roots, the layouts they use and the components they
   reach — because a name is not enough to point a compiler at a file: it may resolve into the
   site's own component directory or into the global one, and only the walk knows which.
+  `resolved` is every reached component that names a component through one of its attributes, with
+  the names that attribute was found to take.
   """
   @type result ::
           %{
             components: [String.t()],
             templates: [String.t()],
             scanned: non_neg_integer(),
-            dynamic: [String.t()]
+            dynamic: [String.t()],
+            resolved: [resolved()]
           }
           | :unbounded
+
+  @typedoc "A component, the attribute it names a component through, and every name that takes."
+  @type resolved :: %{component: String.t(), attribute: String.t(), names: [String.t()]}
 
   @doc """
   Walks a site's roots and returns every template its stylesheet has to be built from.
@@ -95,8 +140,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   scanned. On a real install that is 176 components of which the pages reference a handful, and the
   rest contributed their classes to the stylesheet every visitor downloads.
 
-  `:unbounded` means a template names a component through an expression; the caller must scan every
-  component instead.
+  `:unbounded` means a reached template names a component in a way the walk cannot resolve — see
+  "When the answer is everything" above. The caller must scan every component instead, and the
+  templates responsible are logged.
 
   ## Options
 
@@ -121,23 +167,31 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
     roots = Keyword.get_lazy(opts, :roots, fn -> entry_templates(root, scopes) end)
 
-    case walk(roots, dirs, Keyword.get(opts, :content_components, [])) do
-      {:ok, templates, scanned} ->
+    content =
+      opts
+      |> Keyword.get(:content_components, [])
+      |> Enum.map(&resolve(&1, dirs))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    case walk(roots, dirs, content) do
+      {:ok, %{components: components, scanned: scanned, resolved: resolved}} ->
         # The roots are part of the ANSWER, not only a source of edges: a page's own markup carries
         # classes, and so does a layout's.
-        reached = Enum.sort(Enum.uniq(roots ++ templates))
+        reached = Enum.sort(Enum.uniq(roots ++ components))
 
         %{
           components: reached |> component_names(dirs) |> Enum.sort(),
           templates: reached,
           scanned: scanned,
-          dynamic: []
+          dynamic: [],
+          resolved: resolved
         }
 
       {:dynamic, offenders} ->
         Logger.warning(
-          "[CssClosure] #{site_name}: #{length(offenders)} template(s) name a component through " <>
-            "an expression, so every component will be scanned: #{Enum.join(offenders, ", ")}"
+          "[CssClosure] #{site_name}: #{length(offenders)} template(s) name a component the walk " <>
+            "cannot resolve, so every component will be scanned: #{Enum.join(offenders, ", ")}"
         )
 
         :unbounded
@@ -178,60 +232,237 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     |> Path.join("runtime")
   end
 
-  # Breadth-first over `component_name="…"` edges. `seen` is the answer being accumulated and also
-  # the visited set, which is what stops a cycle: two components that render each other inside
-  # opposite branches are legal and would otherwise loop forever.
-  defp walk(roots, dirs, content) do
-    Enum.reduce_while(roots, {:ok, MapSet.new(), 0}, fn path, {:ok, seen, scanned} ->
-      case visit([path], dirs, content, seen, scanned) do
-        {:ok, seen, scanned} -> {:cont, {:ok, seen, scanned}}
-        {:dynamic, _offenders} = halt -> {:halt, halt}
-      end
-    end)
-    |> case do
-      {:ok, seen, scanned} -> {:ok, MapSet.to_list(seen), scanned}
-      other -> other
+  @doc """
+  The lines a component's template file carries so `for_site/2` can follow
+  `component_name={@name}` through `name`: one for each attribute the component's markup names a
+  component through, that it declares, and that none of its code assigns or reads inside a helper.
+  `""` when there are none.
+
+      <%!-- css-closure attr=card default="doc-workspace-card" --%>
+
+  The default is written when it is a non-empty string without a quote or a line break. Code that
+  does not parse, or that assigns an attribute whose name it works out at runtime, marks nothing —
+  see `MishkaCmsCore.Runtime.PageBuilder.CodeReads.assigned/1`.
+
+  `component` is the component's row, or the same record decoded from a job, with string keys.
+  `MishkaCmsCore.Runtime.Handlers.BootHandler.build_component_class_content/1` writes the lines into
+  the file.
+  """
+  @spec attribute_marks(map()) :: String.t()
+  def attribute_marks(component) do
+    extra = field(component, :extra)
+    clauses = extra |> field(:clauses) |> List.wrap()
+    markup = [field(component, :template) | Enum.map(clauses, &field(&1, :template))]
+
+    helpers = component |> field(:helpers) |> List.wrap() |> Enum.map(&field(&1, :code))
+    bodies = [field(component, :body) | helpers] ++ Enum.map(clauses, &field(&1, :body))
+    code = [field(extra, :prelude) | bodies]
+
+    # A `{@name}` INSIDE A HELPER READS THAT FUNCTION'S ASSIGNS, which are whatever its caller built
+    # — not necessarily the component's attributes at all.
+    named = attribute_reads(markup) -- attribute_reads(code)
+
+    with [_ | _] <- named,
+         {:ok, assigned} <- assigned(field(extra, :prelude), bodies) do
+      declared = declared(field(component, :attrs))
+
+      named
+      |> Enum.filter(&(Map.has_key?(declared, &1) and not MapSet.member?(assigned, &1)))
+      |> Enum.map_join("\n", &mark(&1, Map.fetch!(declared, &1)))
+    else
+      _nothing_to_mark -> ""
     end
   end
 
-  defp visit([], _dirs, _content, seen, scanned), do: {:ok, seen, scanned}
+  # THE WALK REPEATS UNTIL NOTHING NEW IS REACHED. One pass follows every edge out of what is reached
+  # so far. A name an attribute takes is an edge only once a caller handing it over has been reached,
+  # and the component it names may hand a name on in turn. Every set only grows, so it settles — and
+  # a cycle, two components that render each other inside opposite branches, settles with it.
+  defp walk(roots, dirs, content) do
+    settle(%{roots: roots, dirs: dirs, content: content, read: %{}, components: [], names: %{}})
+  end
 
-  defp visit([path | rest], dirs, content, seen, scanned) do
+  defp settle(state) do
+    state = read(state.roots ++ state.components, state)
+    edges = edges(state)
+    names = names(edges, state)
+    components = edges |> Enum.map(fn {_from, _how, to} -> to end) |> Enum.uniq() |> Enum.sort()
+
+    case components == state.components and names == state.names do
+      true -> settled(edges, state)
+      false -> settle(%{state | components: components, names: names})
+    end
+  end
+
+  # EACH FILE IS READ ONCE, however many passes reach it. SEEN IS PATHS, NOT NAMES: a name means
+  # nothing on its own now that it can resolve into either scope; two scopes could hold the same name
+  # and only one of them is the answer.
+  defp read(paths, state) do
+    Enum.reduce(paths, state, fn path, state ->
+      case Map.has_key?(state.read, path) do
+        true -> state
+        false -> %{state | read: Map.put(state.read, path, summary(path, state.dirs))}
+      end
+    end)
+  end
+
+  defp summary(path, dirs) do
     case File.read(path) do
       {:ok, source} ->
-        case dynamic_reference?(source) do
-          true ->
-            {:dynamic, [Path.basename(path)]}
-
-          false ->
-            {next, seen} =
-              source
-              |> references(content)
-              |> Enum.reduce({[], seen}, fn name, {queue, seen} ->
-                case resolve(name, dirs) do
-                  nil -> {queue, seen}
-                  template -> enqueue(template, queue, seen)
-                end
-              end)
-
-            visit(next ++ rest, dirs, content, seen, scanned + 1)
-        end
+        summarize(source, Path.dirname(path) in dirs, dirs)
 
       # A reference to a component that was uninstalled leaves a dangling name. It is not this
       # module's job to report that — the page will raise on render — and dropping it here is the
       # same as the old glob, which also had nothing to match.
       {:error, _reason} ->
-        visit(rest, dirs, content, seen, scanned)
+        :missing
     end
   end
 
-  # SEEN IS PATHS, NOT NAMES. A name means nothing on its own now that it can resolve into either
-  # scope; two scopes could hold the same name and only one of them is the answer.
-  defp enqueue(template, queue, seen) do
-    case MapSet.member?(seen, template) do
-      true -> {queue, seen}
-      false -> {[template | queue], MapSet.put(seen, template)}
+  defp summarize(source, component?, dirs) do
+    tags = component_tags(source)
+    calls = for {:ok, attributes} <- tags, found = call(attributes, dirs), found.target, do: found
+    refs = for(%{target: {:attribute, name}} <- calls, do: name) |> Enum.uniq()
+
+    %{
+      named:
+        @reference |> Regex.scan(source) |> Enum.map(fn [_all, name] -> name end) |> paths(dirs),
+      calls: calls,
+      refs: refs,
+      # A page, a layout and an error page declare no attributes, so nothing they hold is a mark.
+      marks: if(component?, do: marks(source), else: %{}),
+      dynamic?:
+        Enum.any?(calls, &(&1.target == :dynamic)) or
+          length(Regex.scan(@expression_name, source)) > length(attribute_calls(calls)),
+      opaque?: :error in tags or Regex.match?(@code_call, source),
+      draws_content?: Regex.match?(@draws_content, source)
+    }
+  end
+
+  defp attribute_calls(calls), do: Enum.filter(calls, &match?(%{target: {:attribute, _}}, &1))
+
+  # `{from, how, to}`: `how` is the call that hands `to` its attributes, `:named` for a name written
+  # outside a `<.component>` tag, or `:content` for a component drawn from stored content.
+  defp edges(state) do
+    for path <- state.roots ++ state.components,
+        %{} = summary <- [Map.get(state.read, path)],
+        edge <- edges_of(path, summary, state),
+        do: edge
+  end
+
+  defp edges_of(path, summary, state) do
+    named = for to <- summary.named, do: {path, :named, to}
+
+    called =
+      for call <- summary.calls, to <- targets(call.target, path, state), do: {path, call, to}
+
+    drawn =
+      case summary.draws_content? do
+        true -> for to <- state.content, do: {path, :content, to}
+        false -> []
+      end
+
+    named ++ called ++ drawn
+  end
+
+  defp targets({:path, to}, _from, _state), do: [to]
+
+  defp targets({:attribute, name}, from, state),
+    do: state.names |> Map.get({from, name}, []) |> paths(state.dirs)
+
+  defp targets(:dynamic, _from, _state), do: []
+
+  # WHAT EACH ATTRIBUTE CAN BE: its default, and every literal a reached call hands over for it. An
+  # empty string names nothing.
+  defp names(edges, state) do
+    defaults =
+      for path <- state.components,
+          %{} = summary <- [Map.get(state.read, path)],
+          {name, default} <- resolvable(summary),
+          is_binary(default) and default != "",
+          do: {{path, name}, default}
+
+    handed =
+      for {_from, %{given: given}, to} <- edges,
+          %{} = summary <- [Map.get(state.read, to)],
+          {name, _default} <- resolvable(summary),
+          {:literal, value} <- [Map.get(given, name)],
+          value != "",
+          do: {{to, name}, value}
+
+    (defaults ++ handed)
+    |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
+    |> Map.new(fn {key, values} -> {key, values |> Enum.uniq() |> Enum.sort()} end)
+  end
+
+  # The attributes a template names a component through and has a mark for, with their defaults.
+  defp resolvable(summary) do
+    for name <- summary.refs, Map.has_key?(summary.marks, name), do: {name, summary.marks[name]}
+  end
+
+  defp settled(edges, state) do
+    case offenders(edges, state) do
+      [] ->
+        {:ok,
+         %{
+           components: state.components,
+           scanned: Enum.count(state.read, fn {_path, summary} -> is_map(summary) end),
+           resolved: resolved(state)
+         }}
+
+      offenders ->
+        {:dynamic, offenders}
     end
+  end
+
+  defp offenders(edges, state) do
+    reached =
+      for path <- state.roots ++ state.components,
+          %{} = summary <- [Map.get(state.read, path)],
+          do: {path, summary}
+
+    through_attributes? = Enum.any?(reached, fn {_path, summary} -> summary.refs != [] end)
+
+    own = for {path, summary} <- reached, unresolved?(summary, through_attributes?), do: path
+
+    # THE CALLER IS NAMED, not the component: the component is sound, and it is the call that hands
+    # it a name nobody can read.
+    handing =
+      for {from, how, to} <- edges,
+          %{} = summary <- [Map.get(state.read, to)],
+          names = Enum.map(resolvable(summary), &elem(&1, 0)),
+          names != [] and hands_unread?(how, names),
+          do: from
+
+    (own ++ handing) |> Enum.map(&Path.basename/1) |> Enum.uniq() |> Enum.sort()
+  end
+
+  defp unresolved?(summary, through_attributes?) do
+    summary.dynamic? or
+      Enum.any?(summary.refs, &(not Map.has_key?(summary.marks, &1))) or
+      (summary.opaque? and through_attributes?)
+  end
+
+  defp hands_unread?(:named, _names), do: false
+  defp hands_unread?(:content, _names), do: true
+  defp hands_unread?(%{spread?: true}, _names), do: true
+
+  defp hands_unread?(%{given: given}, names),
+    do: Enum.any?(names, &match?({:expression, _source}, Map.get(given, &1)))
+
+  defp resolved(state) do
+    for path <- state.components,
+        %{} = summary <- [Map.get(state.read, path)],
+        {name, _default} <- resolvable(summary),
+        do: %{
+          component: name_of(path),
+          attribute: name,
+          names: Map.get(state.names, {path, name}, [])
+        }
+  end
+
+  defp paths(names, dirs) do
+    names |> Enum.map(&resolve(&1, dirs)) |> Enum.reject(&is_nil/1) |> Enum.uniq()
   end
 
   # FIRST HIT WINS, and `dirs` arrives in shadowing order — the site's own component directories
@@ -252,20 +483,212 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     |> Enum.uniq()
   end
 
-  @reference ~r/component_name="([^"]+)"/
-  @dynamic ~r/component_name=\{/
-  @draws_content ~r/<\.rich_content\b/
+  # A call reaches a component by its literal name, by an attribute it was handed, or by an
+  # expression the walk cannot read — or names nothing, when the tag has no `component_name`.
+  defp call(attributes, dirs) do
+    given = for {name, value} <- attributes, into: %{}, do: {name, value}
+    spread? = :spread in attributes
 
-  defp references(source, content) do
-    named = @reference |> Regex.scan(source) |> Enum.map(fn [_all, name] -> name end)
+    %{
+      target: target(Map.get(given, "component_name"), spread?, dirs),
+      given: given,
+      spread?: spread?
+    }
+  end
 
-    case Regex.match?(@draws_content, source) do
-      true -> Enum.uniq(named ++ content)
-      false -> Enum.uniq(named)
+  defp target({:literal, name}, _spread?, dirs) do
+    case resolve(name, dirs) do
+      nil -> nil
+      path -> {:path, path}
     end
   end
 
-  defp dynamic_reference?(source), do: Regex.match?(@dynamic, source)
+  defp target({:expression, source}, _spread?, _dirs) do
+    case Regex.run(@read_attribute, source) do
+      [_all, name] -> {:attribute, name}
+      nil -> :dynamic
+    end
+  end
+
+  # A TAG THAT SPREADS A MAP AND NAMES NOTHING names whatever that map holds.
+  defp target(nil, true, _dirs), do: :dynamic
+  defp target(_nothing, _spread?, _dirs), do: nil
+
+  # Every `<.component …>` opening tag, as its attributes or `:error` when it cannot be read.
+  defp component_tags(source) do
+    for [{start, length}] <- Regex.scan(@component_tag, source, return: :index) do
+      offset = start + length
+      source |> binary_part(offset, byte_size(source) - offset) |> attributes([])
+    end
+  end
+
+  # ONE OPENING TAG, attribute by attribute, up to the `>` that ends it — which is why an expression
+  # is stepped over by its braces rather than matched by a pattern: `:if={@total > 0}` holds a `>`.
+  defp attributes(<<char, rest::binary>>, found) when char in ~c" \t\r\n",
+    do: attributes(rest, found)
+
+  defp attributes("/>" <> _rest, found), do: {:ok, found}
+  defp attributes(">" <> _rest, found), do: {:ok, found}
+
+  defp attributes("{" <> rest, found) do
+    case expression(rest) do
+      {:ok, _source, rest} -> attributes(rest, [:spread | found])
+      :error -> :error
+    end
+  end
+
+  defp attributes(source, found) do
+    case Regex.run(@attribute_name, source) do
+      [name] ->
+        size = byte_size(name)
+
+        source
+        |> binary_part(size, byte_size(source) - size)
+        |> String.trim_leading()
+        |> value(name, found)
+
+      nil ->
+        :error
+    end
+  end
+
+  defp value("=" <> rest, name, found), do: rest |> String.trim_leading() |> given(name, found)
+  defp value(rest, name, found), do: attributes(rest, [{name, :bare} | found])
+
+  defp given("\"" <> rest, name, found), do: quoted(rest, "\"", name, found)
+  defp given("'" <> rest, name, found), do: quoted(rest, "'", name, found)
+
+  defp given("{" <> rest, name, found) do
+    case expression(rest) do
+      {:ok, source, rest} -> attributes(rest, [{name, {:expression, source}} | found])
+      :error -> :error
+    end
+  end
+
+  defp given(_unreadable, _name, _found), do: :error
+
+  defp quoted(rest, delimiter, name, found) do
+    case :binary.split(rest, delimiter) do
+      [value, rest] -> attributes(rest, [{name, {:literal, value}} | found])
+      [_unterminated] -> :error
+    end
+  end
+
+  defp expression(source) do
+    case closing(source, 0, 0) do
+      {:ok, at} ->
+        {:ok, binary_part(source, 0, at), binary_part(source, at + 1, byte_size(source) - at - 1)}
+
+      :error ->
+        :error
+    end
+  end
+
+  # WHERE AN EXPRESSION'S BRACES CLOSE, in bytes. A string is stepped over whole, interpolations and
+  # all, so a brace inside one counts for nothing.
+  defp closing(<<"}", _rest::binary>>, 0, at), do: {:ok, at}
+  defp closing(<<"}", rest::binary>>, depth, at), do: closing(rest, depth - 1, at + 1)
+  defp closing(<<"{", rest::binary>>, depth, at), do: closing(rest, depth + 1, at + 1)
+
+  defp closing(<<delimiter, rest::binary>>, depth, at) when delimiter in ~c"\"'" do
+    case string_end(rest, delimiter, 0) do
+      {:ok, size} ->
+        closing(binary_part(rest, size, byte_size(rest) - size), depth, at + 1 + size)
+
+      :error ->
+        :error
+    end
+  end
+
+  defp closing(<<_char, rest::binary>>, depth, at), do: closing(rest, depth, at + 1)
+  defp closing(<<>>, _depth, _at), do: :error
+
+  defp string_end(<<"\\", _escaped, rest::binary>>, delimiter, at),
+    do: string_end(rest, delimiter, at + 2)
+
+  defp string_end(<<"\#{", rest::binary>>, delimiter, at) do
+    case closing(rest, 0, 0) do
+      {:ok, inner} ->
+        rest
+        |> binary_part(inner + 1, byte_size(rest) - inner - 1)
+        |> string_end(delimiter, at + 3 + inner)
+
+      :error ->
+        :error
+    end
+  end
+
+  defp string_end(<<delimiter, _rest::binary>>, delimiter, at), do: {:ok, at + 1}
+  defp string_end(<<_char, rest::binary>>, delimiter, at), do: string_end(rest, delimiter, at + 1)
+  defp string_end(<<>>, _delimiter, _at), do: :error
+
+  defp marks(source) do
+    for match <- Regex.scan(@mark, source), into: %{} do
+      case match do
+        [_all, name, default] -> {name, default}
+        [_all, name] -> {name, nil}
+      end
+    end
+  end
+
+  defp attribute_reads(sources) do
+    for source <- sources,
+        is_binary(source),
+        [_all, name] <- Regex.scan(@named_through, source),
+        uniq: true,
+        do: name
+  end
+
+  # A HELPER IS A FUNCTION BODY, compiled inside `def … do … end`, so a body-level `rescue` is legal
+  # in one and is read the same way here. The prelude is module-level code and is read as it is.
+  defp assigned(prelude, bodies) do
+    sources =
+      for(source <- [prelude], is_binary(source), do: source) ++
+        for(body <- bodies, is_binary(body), do: "def a do\n#{body}\nend")
+
+    Enum.reduce_while(sources, {:ok, MapSet.new()}, fn source, {:ok, found} ->
+      case CodeReads.assigned(source) do
+        {:ok, written} -> {:cont, {:ok, MapSet.union(found, written)}}
+        :unknown -> {:halt, :unknown}
+      end
+    end)
+  end
+
+  # A default that cannot be read off the declaration leaves the attribute unmarked.
+  defp declared(attrs) do
+    for attr <- List.wrap(attrs),
+        name = field(attr, :name),
+        is_binary(name),
+        {:ok, default} <- [default(field(attr, :opts))],
+        into: %{},
+        do: {name, default}
+  end
+
+  defp default(nil), do: {:ok, nil}
+  defp default(opts) when is_map(opts) or is_list(opts), do: {:ok, field(opts, :default)}
+  defp default(_unreadable), do: :error
+
+  defp mark(name, default) when is_binary(default) and default != "" do
+    case String.contains?(default, ["\"", "\n", "\r"]) do
+      true -> "<%!-- css-closure attr=#{name} --%>"
+      false -> ~s|<%!-- css-closure attr=#{name} default="#{default}" --%>|
+    end
+  end
+
+  defp mark(name, _no_default), do: "<%!-- css-closure attr=#{name} --%>"
+
+  # Boot reads Ash structs, the compile worker the same record decoded from a job with string keys,
+  # and an attribute's `opts` may be a keyword list.
+  defp field(%{} = map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+
+  defp field([{_key, _value} | _rest] = list, key) do
+    case List.keyfind(list, key, 0) || List.keyfind(list, Atom.to_string(key), 0) do
+      {_key, value} -> value
+      nil -> nil
+    end
+  end
+
+  defp field(_other, _key), do: nil
 
   defp component_dir(scope_dir), do: Path.join(scope_dir, "component")
 
