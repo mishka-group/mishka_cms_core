@@ -297,16 +297,88 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     end
   end
 
-  describe "append/2" do
-    test "puts the marker on a line of its own" do
-      assert ContentComponents.append(nil, "[[component a /]]") == "[[component a /]]"
-      assert ContentComponents.append("", "[[component a /]]") == "[[component a /]]"
+  describe "segments/1 — what the editor holds as blocks" do
+    defp joined(segments),
+      do:
+        Enum.map_join(segments, fn
+          {:html, html} -> html
+          {:component, c} -> c.source
+        end)
 
-      assert ContentComponents.append("<p>x</p>", "[[component a /]]") ==
-               "<p>x</p>\n[[component a /]]"
+    test "content with no marker is one piece of HTML" do
+      assert ContentComponents.segments("<p>Just text</p>") == [{:html, "<p>Just text</p>"}]
+    end
 
-      assert ContentComponents.append("<p>x</p>\n", "[[component a /]]") ==
-               "<p>x</p>\n[[component a /]]"
+    test "a marker alone in its paragraph is a block, the paragraph with it" do
+      marker = ~s([[component chelekom-alert title="Heads up"]]Read <b>this</b>[[/component]])
+      html = "<p>Intro</p><p>#{marker}</p><p>After</p>"
+
+      assert ContentComponents.segments(html) == [
+               {:html, "<p>Intro</p>"},
+               {:component,
+                %{
+                  name: "chelekom-alert",
+                  attrs: %{"title" => "Heads up"},
+                  inner: "Read <b>this</b>",
+                  marker: marker,
+                  source: "<p>#{marker}</p>"
+                }},
+               {:html, "<p>After</p>"}
+             ]
+    end
+
+    test "a marker inside no element is a block" do
+      html = "<p>Intro</p>\n[[component chelekom-badge /]]"
+
+      assert [
+               {:html, "<p>Intro</p>\n"},
+               {:component, %{marker: "[[component chelekom-badge /]]"}}
+             ] =
+               ContentComponents.segments(html)
+    end
+
+    test "a marker sharing its paragraph stays in the HTML" do
+      html = "<p>Hello [[component chelekom-badge /]] world</p>"
+
+      assert ContentComponents.segments(html) == [{:html, html}]
+    end
+
+    test "a marker in a list item's text, or in code, stays in the HTML" do
+      html = "<ul><li>One [[component a /]]</li></ul><pre>[[component b /]]</pre>"
+
+      assert ContentComponents.segments(html) == [{:html, html}]
+    end
+
+    test "a paragraph inside a quote holding only a marker is a block" do
+      html = "<blockquote><p>[[component a /]]</p></blockquote>"
+
+      assert [
+               {:html, "<blockquote>"},
+               {:component, %{name: "a", source: "<p>[[component a /]]</p>"}},
+               {:html, "</blockquote>"}
+             ] = ContentComponents.segments(html)
+    end
+
+    test "joined back in order, the pieces are the content they came from" do
+      for html <- [
+            "<p>a</p>",
+            "<p>[[component a /]]</p>",
+            "<p>x</p><p> [[component a k='v']]<i>in</i>[[/component]] </p><p>y</p>",
+            "[[component a /]][[component b /]]<h2>t</h2>\n[[component c x=1 /]]",
+            "<p>inline [[component a /]]</p><p>[[component b]]open",
+            "<div><p>[[component a /]]</p></div><img src=\"x.png\"><p>[[component b /]]</p>"
+          ] do
+        assert html |> ContentComponents.segments() |> joined() == html
+      end
+    end
+
+    test "each block's marker is the marker as written" do
+      html = ~s(<p>[[component a title=&quot;Hi&quot; /]]</p>)
+
+      assert [{:component, %{marker: ~s([[component a title=&quot;Hi&quot; /]]), attrs: attrs}}] =
+               ContentComponents.segments(html)
+
+      assert attrs == %{"title" => "Hi"}
     end
   end
 end

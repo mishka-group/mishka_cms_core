@@ -42,12 +42,14 @@ defmodule MishkaCmsCore.Layouts.Nav do
       # `code_editor` publishes WHERE CodeMirror lives and downloads none of it — a meta tag of sixty
       # bytes that `assets/js/pb_code_editor.js` reads the first time a code box appears. Set for
       # every admin page rather than page by page, because the alternative is that adding a code
-      # field to a form silently gives you a plain textarea and no clue why.
+      # field to a form silently gives you a plain textarea and no clue why. `content_editor` does
+      # the same for the rich-text editor's bundle, which `assets/js/pb_content_editor.js` reads.
       |> assign(
         notification_count: notification_count(),
         admin_css: true,
         admin_fonts: true,
         code_editor: true,
+        content_editor: true,
         # THE ADMIN LOADS THE ADMIN'S JAVASCRIPT. It used to load the SITE's — the bundle the runtime
         # compiler builds for whichever site the request resolved to — and got the dashboard's own
         # hooks only because that bundle was built from `app.js` and therefore contained everything.
