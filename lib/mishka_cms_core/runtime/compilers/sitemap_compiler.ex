@@ -395,7 +395,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   defp page_urls(site_id) do
     {indexable, hidden} = PageEditions.indexable(site_id)
 
-    {literals, patterns} = Enum.split_with(indexable, &Languages.fill(&1.path, %{}))
+    {literals, patterns} = Enum.split_with(indexable, &Languages.url(&1.path, %{}, site_id))
     {swappable, pages} = Enum.split_with(patterns, &PageEditions.language_only?(&1.path))
 
     urls =

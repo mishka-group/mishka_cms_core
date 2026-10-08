@@ -442,6 +442,31 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
                "/blog/hello%20world"
     end
 
+    test "fills a capture in any segment, a rest across several, and keeps every literal", %{
+      site: site
+    } do
+      mode!(site, "prefix_all")
+
+      assert Languages.url(
+               "/docs/:lang/:section",
+               %{"lang" => "fa", "section" => "setup"},
+               site.id
+             ) ==
+               "/docs/fa/setup"
+
+      assert Languages.url(
+               "/shop/:category/:lang",
+               %{"category" => "books", "lang" => "en"},
+               site.id
+             ) ==
+               "/shop/books/en"
+
+      assert Languages.url("/files/*rest", %{"rest" => "a/b c"}, site.id) == "/files/a/b%20c"
+      assert Languages.url("/about", %{}, site.id) == "/about"
+      assert Languages.url("/", %{}, site.id) == "/"
+      refute Languages.url("/files/*rest", %{"rest" => ""}, site.id)
+    end
+
     test "url/4 builds in the mode it is given, whatever the site's", %{site: site} do
       mode!(site, "prefix_all")
 
@@ -479,15 +504,6 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
 
       refute Languages.implied(["blog"], site.id)
     end
-  end
-
-  test "fill/2 fills captures and keeps literals, nil for a capture it is not given" do
-    assert Languages.fill("/docs/:lang/*rest", %{"lang" => "fa", "rest" => "setup/linux"}) ==
-             "/docs/fa/setup/linux"
-
-    assert Languages.fill("/about", %{}) == "/about"
-    refute Languages.fill("/post/:slug", %{})
-    refute Languages.fill("/post/*rest", %{"rest" => ""})
   end
 
   test "direction/1 reads a language's primary subtag" do

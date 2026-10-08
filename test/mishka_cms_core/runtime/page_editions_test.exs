@@ -40,27 +40,6 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
     |> PageEditions.editions(site.id)
   end
 
-  describe "path/2" do
-    test "fills a capture in any segment, and a rest capture across several" do
-      assert PageEditions.path("/:lang", %{"lang" => "fa"}) == "/fa"
-
-      assert PageEditions.path("/docs/:lang/:section", %{"lang" => "ar", "section" => "setup"}) ==
-               "/docs/ar/setup"
-
-      assert PageEditions.path("/shop/:category/:lang", %{"category" => "books", "lang" => "en"}) ==
-               "/shop/books/en"
-
-      assert PageEditions.path("/files/*rest", %{"rest" => "a/b c"}) == "/files/a/b%20c"
-      assert PageEditions.path("/about", %{}) == "/about"
-      assert PageEditions.path("/", %{}) == "/"
-    end
-
-    test "is nil when the captures do not hold one the path needs" do
-      assert PageEditions.path("/post/:slug", %{"lang" => "fa"}) == nil
-      assert PageEditions.path("/files/*rest", %{"rest" => ""}) == nil
-    end
-  end
-
   describe "language/3" do
     test "is the captured lang on a page whose path captures one", %{site: site} do
       assert PageEditions.language(

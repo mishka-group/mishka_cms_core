@@ -111,16 +111,6 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   end
 
   @doc """
-  A stored path with its captures filled, or `nil` when it needs one they do not hold — see
-  `MishkaCmsCore.Runtime.Languages.fill/2`. Not a public address: `Languages.url/3` is.
-
-      PageEditions.path("/docs/:lang/*rest", %{"lang" => "fa", "rest" => "setup/linux"})
-      #=> "/docs/fa/setup/linux"
-  """
-  @spec path(String.t(), map()) :: String.t() | nil
-  defdelegate path(pattern, captured), to: Languages, as: :fill
-
-  @doc """
   The public addresses a page answers at on its site, by the rule the resolver serves it by
   (`served_languages/2`) and in the form `MishkaCmsCore.Runtime.Languages.url/3` builds — what a
   sitemap lists and what no other page may answer.

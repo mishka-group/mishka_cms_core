@@ -527,8 +527,8 @@ defmodule MishkaCmsCore.Runtime.Languages do
   `path` is what a page is stored under — a literal, or a pattern holding `:name` and `*name`
   segments. Three steps:
 
-    1. each capture is filled from `captures`, by its name as a string (`fill/2`), and a capture
-       `captures` does not hold is `nil`;
+    1. each capture is filled from `captures`, by its name as a string — percent-encoded, a
+       `*name` one segment at a time — and a capture `captures` does not hold is `nil`;
     2. a `lang` capture whose value is not one of the site's languages is `nil` — the resolver would
        refuse that address;
     3. in `"prefix_others"` (`url_mode/1`), a FIRST segment that is the primary language is
@@ -578,18 +578,9 @@ defmodule MishkaCmsCore.Runtime.Languages do
     end
   end
 
-  @doc """
-  A stored path with its captures filled, or `nil` when it needs one `captures` does not hold.
-
-  Only the filling: what `url/3` does before it holds the result to the site's languages and its
-  URL mode. A capture is percent-encoded, each segment of a `*name` one on its own; a literal
-  segment is kept as it is stored.
-
-      Languages.fill("/docs/:lang/*rest", %{"lang" => "fa", "rest" => "setup/linux"})
-      #=> "/docs/fa/setup/linux"
-  """
-  @spec fill(String.t(), map()) :: String.t() | nil
-  def fill(path, captures) do
+  # A capture is percent-encoded, each segment of a `*name` one on its own; a literal segment is kept
+  # as it is stored. `nil` when the path needs a capture `captures` does not hold.
+  defp fill(path, captures) do
     path
     |> String.split("/", trim: true)
     |> Enum.reduce_while([], fn segment, filled ->
