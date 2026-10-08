@@ -37,11 +37,35 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CommentTest do
       assert one.id =~ ~r/^c[a-z0-9]{8}$/
     end
 
-    # A note is rendered as prose, so markup in it is never wanted — and because sanitizers run
-    # first, a note that was only markup or only whitespace ends up empty and is refused.
+    # A note is rendered as prose, so markup in it is never wanted — and because the markup goes
+    # before the derives run, a note that was only markup or only whitespace ends up empty and is
+    # refused.
     test "markup is stripped out of the note" do
       assert {:ok, comment} = Comment.new(%{text: "<b>bold</b> claim"})
       assert comment.text == "bold claim"
+    end
+
+    test "the note, its author and its label are kept as typed, without markup" do
+      assert {:ok, comment} =
+               Comment.new(%{
+                 text: ~s(Tom & Jerry's <b>"cat"</b>),
+                 author: "<i>Ada</i> & co",
+                 node_label: "<h2> & <p>"
+               })
+
+      assert comment.text == ~s(Tom & Jerry's "cat")
+      assert comment.author == "Ada & co"
+      assert comment.node_label == "&"
+
+      assert {:ok, again} = Comment.new(Map.take(comment, [:text, :author, :node_label]))
+
+      assert Map.take(again, [:text, :author, :node_label]) ==
+               Map.take(comment, [:text, :author, :node_label])
+    end
+
+    test "a script never survives in a note" do
+      assert {:ok, comment} = Comment.new(%{text: "<script>alert(1)</script>Hi"})
+      assert comment.text == "alert(1)Hi"
     end
 
     test "a blank note is refused" do

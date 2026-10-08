@@ -91,6 +91,8 @@ defmodule MishkaCmsCore.MixProject do
       {:picosat_elixir, "~> 0.2"},
       {:mishka_installer, "~> 0.1"},
       {:guarded_struct, "~> 0.1"},
+      # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
+      {:html_sanitize_ex, "~> 1.5"},
       {:mishka_gervaz, path: "../mishka_gervaz"}
     ]
   end

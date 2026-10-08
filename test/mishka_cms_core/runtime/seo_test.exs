@@ -7,6 +7,9 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
   alias MishkaCmsCore.Runtime.Seo
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Settings
@@ -174,6 +177,31 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
                "image" => "#{@base}/uploads/cover.png",
                "isPartOf" => %{"@type" => "WebSite", "name" => "Acme Studio", "url" => @base}
              }
+    end
+
+    # A plain-text field holds `&` as typed (`MishkaCmsCore.PlainText`); the head is where it is
+    # escaped, once — rendered the way the host's `page_head` renders it.
+    test "writes a title with an ampersand escaped once, in the tags and in the JSON-LD", %{
+      site: site
+    } do
+      html = site |> seo(title: "MCP & AI-Ready") |> Seo.head(base: @base) |> rendered_head()
+
+      assert html =~ ~s(content="MCP &amp; AI-Ready")
+      refute html =~ "&amp;amp;"
+      assert html =~ ~S("name":"MCP \u0026 AI-Ready")
+
+      document = LazyHTML.from_fragment(html)
+
+      assert document
+             |> LazyHTML.query(~s(meta[property="og:title"]))
+             |> LazyHTML.attribute("content") ==
+               ["MCP & AI-Ready"]
+
+      assert %{"name" => "MCP & AI-Ready"} =
+               document
+               |> LazyHTML.query(~s(script[type="application/ld+json"]))
+               |> LazyHTML.text()
+               |> Jason.decode!()
     end
 
     test "is replaced whole by a stored schema", %{site: site} do
@@ -897,6 +925,17 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
   end
 
   defp meta(key, name, content), do: %{tag: "meta", attrs: %{key => name}, content: content}
+
+  defp rendered_head(head) do
+    assigns = %{seo: head}
+
+    rendered_to_string(~H"""
+    <meta :for={{"meta", attrs} <- @seo.tags} {attrs} />
+    <script :for={json <- @seo.schema} type="application/ld+json">
+      <%= Phoenix.HTML.raw(json) %>
+    </script>
+    """)
+  end
 
   defp values(head, tag, key, name) do
     for {^tag, attrs} <- head.tags,
