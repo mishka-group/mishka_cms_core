@@ -1,108 +1,73 @@
 defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   @moduledoc """
-  "Insert component" beside a Gervaz form's content field: find a component the record's site may
-  draw, fill the attributes it declares, and its marker is written at the end of the field. See
+  The server half of the content editor `MishkaCmsCoreWeb.UIAdapters.Admin.textarea/1` draws for a
+  `:textarea` field with `ui do extra %{content_editor: true} end`: the component palette, the
+  settings of a component placed in the content, and the answers the editor's hook asks for. See
   `MishkaCmsCore.Runtime.ContentComponents` for the marker and how a page draws it.
 
-  ## Wiring
+  The adapter mounts it inside the editor, so a resource adds nothing else to its form.
 
-  Two notices and the form's events, all in the resource's Gervaz form:
+  ## What the hook asks
 
-      form do
-        events MishkaCmsCoreWeb.Forms.ContentComponentEvents
+  The editor's surface carries this component's DOM id as `data-components`, and the hook pushes
+  these to it:
 
-        layout do
-          notice :content_components do
-            position {:before_group, :content}
-            render fn assigns, state -> ContentComponentPicker.picker(assigns, state, :content) end
-          end
+    * `"segments"`, `%{"html" => html}` — answered `%{segments: [...]}`: `html` as
+      `ContentComponents.segments/1` splits it, `%{type: "html", html: html}` and
+      `%{type: "component", name: name, marker: marker}`.
+    * `"build"`, `%{"name" => name, "attrs" => %{}, "inner" => html}` — answered
+      `%{name: name, marker: marker}` for a component the palette lists, with only the attributes
+      it declares, and the palette closes off the text; or `%{error: message}`, and the palette
+      stays open and says why.
+    * `"edit"`, `%{"marker" => marker}` — opens the settings of the component `marker` names, filled
+      in from it. Answered `%{ok: true}`, or `%{error: message}` when the palette does not list it.
 
-          notice :content_components_form do
-            position :form_footer
-            render fn assigns, state -> ContentComponentPicker.form_owner(assigns, state, :content) end
-          end
-        end
-      end
+  A component's preview is drawn after the answer, in the background — it runs the component's own
+  code — and pushed to the page as `"mishka:content_editor"`,
+  `%{id: editor_id, previews: [%{marker: marker, preview: html}]}`. A preview that cannot be drawn
+  is pushed as an empty one.
 
-  `picker/3` draws the control. Its inputs belong to the empty `<form>` `form_owner/3` draws after
-  the record's form, through their `form` attribute: typing in them never reaches the record's own
-  change, and Enter never saves the record. Insert submits that form to the record's form, whose
-  events (`MishkaCmsCoreWeb.Forms.ContentComponentEvents`) write the marker into the field and
-  close this.
+  Every name is checked as a string: against the names the palette lists before a marker is
+  written, and against the components the site may draw (`ContentComponents.draw/2`) before a
+  preview is. No name a request carries is made into an atom.
 
-  The list is read when the control is first opened, in the background, as the signed-in user —
-  `ContentComponents.embeddable/2`. A master's record is on the site its Site field names, else the
-  site of the record being edited; a site user's is on their own.
+  ## The palette and the settings
+
+  The palette is `ContentComponents.palette/2`, read in the background as the signed-in user the
+  first time it is opened. A master's record is on the site its Site field names, else the site of
+  the record being edited; a site user's is on their own (`site/1`).
+
+  Its inputs and the settings' belong to no form — their `form` attribute names none — so typing in
+  them never reaches the record's own change and Enter never saves the record. The hook reads the
+  settings when Apply is pressed and sends them as `"build"`.
   """
   use Phoenix.LiveComponent
   use Gettext, backend: MishkaCmsCore.Gettext
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
-  alias MishkaCmsCore.Runtime.ContentComponents
+  alias MishkaCmsCore.Runtime.{ContentComponents, Translations}
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias Phoenix.LiveView.{AsyncResult, JS}
+  alias MishkaCmsCore.Runtime.States.SiteState
+  alias Phoenix.LiveView.AsyncResult
 
   @field_class "w-full rounded-[11px] border border-[#ecebe6] bg-[#faf9f6] px-[13px] text-[12.5px] font-medium text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white focus:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]"
 
-  @doc """
-  The control, drawn by a Gervaz notice:
-  `render fn assigns, state -> picker(assigns, state, :content) end`.
-  """
-  @spec picker(map(), map(), atom()) :: Phoenix.LiveView.Rendered.t()
-  def picker(assigns, state, field) do
-    assigns =
-      assign(assigns,
-        picker_id: id(state.static.id, field),
-        picker_field: to_string(field),
-        picker_site: site(state),
-        picker_user: state.current_user
-      )
+  # A request carrying more components than this is answered with this many previews.
+  @previews 100
 
-    ~H"""
-    <.live_component
-      module={__MODULE__}
-      id={@picker_id}
-      field={@picker_field}
-      site_id={@picker_site}
-      current_user={@picker_user}
-    />
-    """
-  end
+  @event "mishka:content_editor"
 
   @doc """
-  The `<form>` the control's inputs belong to, drawn after the record's form by a `:form_footer`
-  notice: `render fn assigns, state -> form_owner(assigns, state, :content) end`. Its change goes to
-  the control; its submit to the record's form.
+  The site the record a Gervaz form `state` edits is on: for a master, the one its Site field names,
+  else the record's own; for a site user, their own. `nil` is the global components alone.
   """
-  @spec form_owner(map(), map(), atom()) :: Phoenix.LiveView.Rendered.t()
-  def form_owner(assigns, state, field) do
-    picker_id = id(state.static.id, field)
-    assigns = assign(assigns, owner_id: picker_id <> "-form", owner_picker: "#" <> picker_id)
+  @spec site(map() | nil) :: String.t() | nil
+  def site(%{master_user?: true} = state),
+    do: present(Map.get(state.field_values || %{}, :site_id)) || record_site(state.form)
 
-    ~H"""
-    <form
-      id={@owner_id}
-      phx-change={JS.push("change", target: @owner_picker)}
-      phx-submit={JS.push("insert_content_component", target: @myself)}
-      class="hidden"
-    >
-    </form>
-    """
-  end
-
-  @doc """
-  The control's DOM id for `field` on the Gervaz form `form_id` — what its two halves and the event
-  that closes it agree on.
-  """
-  @spec id(String.t(), atom() | String.t()) :: String.t()
-  def id(form_id, field), do: "#{form_id}-#{field}-components"
-
-  defp site(%{master_user?: true} = state),
-    do: present(Map.get(state.field_values, :site_id)) || record_site(state.form)
-
-  defp site(%{current_user: %{site_id: site_id}}), do: site_id
-  defp site(_state), do: nil
+  def site(%{current_user: %{site_id: site_id}}), do: site_id
+  def site(_state), do: nil
 
   defp record_site(%Phoenix.HTML.Form{source: %{data: %{site_id: site_id}}}), do: site_id
   defp record_site(_form), do: nil
@@ -118,60 +83,151 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
        components: AsyncResult.loading(),
        loaded_for: :nothing,
        query: "",
-       picked: nil,
-       values: %{},
-       inner: ""
+       settings: nil,
+       pending: nil,
+       notice: nil
      )}
   end
 
   @impl true
-  def update(%{inserted: true}, socket), do: {:ok, close(socket)}
+  def update(assigns, socket) do
+    socket = assign(socket, Map.take(assigns, [:id, :editor, :site_id, :current_user]))
 
-  def update(assigns, socket),
-    do: {:ok, assign(socket, Map.take(assigns, [:id, :field, :site_id, :current_user]))}
+    case socket.assigns.open? do
+      true -> {:ok, load(socket)}
+      false -> {:ok, socket}
+    end
+  end
 
   @impl true
-  def handle_event("open", _params, socket),
+  def handle_event("toggle", _params, %{assigns: %{open?: true}} = socket),
+    do: {:noreply, close(socket)}
+
+  def handle_event("toggle", _params, socket),
     do: {:noreply, socket |> assign(:open?, true) |> load()}
 
   def handle_event("close", _params, socket), do: {:noreply, close(socket)}
 
-  def handle_event("pick", %{"name" => name}, socket),
-    do:
-      {:noreply,
-       assign(socket, picked: find(socket.assigns.components, name), values: %{}, inner: "")}
-
   def handle_event("back", _params, socket),
-    do: {:noreply, assign(socket, picked: nil, values: %{}, inner: "")}
+    do: {:noreply, assign(socket, settings: nil, notice: nil)}
 
-  def handle_event("change", %{"content_component" => %{} = params}, socket) do
-    {:noreply,
-     assign(socket,
-       query: text(params["q"], socket.assigns.query),
-       values: attr_values(params["attrs"]),
-       inner: text(params["inner"], "")
-     )}
+  def handle_event("search", %{"value" => query}, socket) when is_binary(query),
+    do: {:noreply, assign(socket, :query, query)}
+
+  def handle_event("search", _params, socket), do: {:noreply, socket}
+
+  def handle_event("segments", %{"html" => html}, socket) when is_binary(html) do
+    segments = Enum.map(ContentComponents.segments(html), &segment/1)
+
+    markers =
+      for %{type: "component", marker: marker} <- segments, uniq: true, do: marker
+
+    {:reply, %{segments: segments}, previews(socket, Enum.take(markers, @previews))}
   end
 
-  def handle_event("change", _params, socket), do: {:noreply, socket}
+  def handle_event("segments", _params, socket), do: {:reply, %{segments: []}, socket}
+
+  def handle_event("build", %{"name" => name} = params, socket) when is_binary(name) do
+    with %{} = entry <- listed(socket.assigns.components, name),
+         marker when is_binary(marker) <-
+           ContentComponents.marker(
+             entry.name,
+             declared(entry, params["attrs"]),
+             text(params["inner"])
+           ) do
+      {:reply, %{name: entry.name, marker: marker}, socket |> close() |> previews([marker])}
+    else
+      _not_placeable ->
+        message = refused(name)
+        {:reply, %{error: message}, assign(socket, open?: true, notice: message)}
+    end
+  end
+
+  def handle_event("build", _params, socket) do
+    message = refused("")
+    {:reply, %{error: message}, assign(socket, open?: true, notice: message)}
+  end
+
+  def handle_event("edit", %{"marker" => marker}, socket) when is_binary(marker) do
+    case ContentComponents.parse(String.trim(marker)) do
+      [{:component, placed}] -> edit(socket, placed)
+      _not_one_marker -> {:reply, %{error: refused("")}, socket}
+    end
+  end
+
+  def handle_event("edit", _params, socket), do: {:reply, %{error: refused("")}, socket}
+
+  # The settings of a placed component, once the palette that says what it takes has been read.
+  defp edit(
+         %{assigns: %{components: %AsyncResult{ok?: true}, loaded_for: site, site_id: site}} =
+           socket,
+         placed
+       ) do
+    case listed(socket.assigns.components, placed.name) do
+      %{} = entry ->
+        {:reply, %{ok: true},
+         assign(socket, open?: true, notice: nil, settings: settings(entry, placed))}
+
+      nil ->
+        message = refused(placed.name)
+        {:reply, %{error: message}, assign(socket, open?: true, settings: nil, notice: message)}
+    end
+  end
+
+  defp edit(socket, placed) do
+    {:reply, %{ok: true}, socket |> assign(open?: true, pending: placed, notice: nil) |> load()}
+  end
+
+  defp settings(entry, placed) do
+    values =
+      for %{name: name} <- entry.attrs,
+          Map.has_key?(placed.attrs, name),
+          into: %{},
+          do: {name, written(Map.fetch!(placed.attrs, name))}
+
+    %{entry: entry, values: values, inner: placed.inner || ""}
+  end
+
+  defp written(true), do: "true"
+  defp written(value), do: value
 
   @impl true
-  def handle_async(:components, {:ok, {:ok, entries}}, socket),
-    do: {:noreply, assign(socket, :components, AsyncResult.ok(entries))}
+  def handle_async(:components, {:ok, {:ok, entries}}, socket) do
+    socket = assign(socket, :components, AsyncResult.ok(entries))
+
+    case socket.assigns.pending do
+      nil -> {:noreply, socket}
+      placed -> {:noreply, socket |> assign(:pending, nil) |> open_pending(placed)}
+    end
+  end
 
   def handle_async(:components, {:ok, {:error, reason}}, socket),
     do: {:noreply, failed(socket, reason)}
 
   def handle_async(:components, {:exit, reason}, socket), do: {:noreply, failed(socket, reason)}
 
+  def handle_async({:previews, markers}, {:ok, previews}, socket),
+    do: {:noreply, push_previews(socket, Enum.zip(markers, previews))}
+
+  def handle_async({:previews, markers}, {:exit, _reason}, socket),
+    do: {:noreply, push_previews(socket, Enum.map(markers, &{&1, ""}))}
+
+  defp open_pending(socket, placed) do
+    case listed(socket.assigns.components, placed.name) do
+      %{} = entry -> assign(socket, settings: settings(entry, placed))
+      nil -> assign(socket, notice: refused(placed.name))
+    end
+  end
+
   defp failed(socket, reason) do
     assign(socket,
       components: AsyncResult.failed(socket.assigns.components, reason),
-      loaded_for: :nothing
+      loaded_for: :nothing,
+      pending: nil
     )
   end
 
-  # Read once per site, when the control is first opened; a master who picks another site reads
+  # Read once per site, when the palette is first opened; a master who picks another site reads
   # that site's list on the next open.
   defp load(%{assigns: %{site_id: site_id, loaded_for: site_id}} = socket), do: socket
 
@@ -179,27 +235,80 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     %{current_user: user, site_id: site_id} = socket.assigns
 
     socket
-    |> assign(components: AsyncResult.loading(), loaded_for: site_id, picked: nil)
+    |> assign(components: AsyncResult.loading(), loaded_for: site_id, settings: nil)
     |> MishkaGervaz.Messages.start_async(:components, fn ->
-      ContentComponents.embeddable(user, site_id)
+      ContentComponents.palette(user, site_id)
     end)
   end
 
   defp close(socket),
-    do: assign(socket, open?: false, picked: nil, values: %{}, inner: "", query: "")
+    do: assign(socket, open?: false, settings: nil, notice: nil, query: "", pending: nil)
 
-  defp find(%AsyncResult{ok?: true, result: entries}, name),
+  defp listed(%AsyncResult{ok?: true, result: entries}, name) when is_binary(name),
     do: Enum.find(entries, &(&1.name == name))
 
-  defp find(_components, _name), do: nil
+  defp listed(_components, _name), do: nil
 
-  defp attr_values(%{} = values),
-    do: Map.filter(values, fn {name, value} -> is_binary(name) and is_binary(value) end)
+  # Only the attributes the component declares, as text a marker can hold.
+  defp declared(entry, %{} = attrs) do
+    for %{name: name} <- entry.attrs,
+        value = Map.get(attrs, name),
+        is_binary(value),
+        into: %{},
+        do: {name, value}
+  end
 
-  defp attr_values(_values), do: %{}
+  defp declared(_entry, _attrs), do: %{}
 
-  defp text(value, _fallback) when is_binary(value), do: value
-  defp text(_value, fallback), do: fallback
+  defp text(value) when is_binary(value), do: value
+  defp text(_value), do: nil
+
+  defp refused(name),
+    do: gettext("%{name} is not a component this site can place in content.", name: name)
+
+  defp segment({:html, html}), do: %{type: "html", html: html}
+
+  defp segment({:component, %{name: name, marker: marker}}),
+    do: %{type: "component", name: name, marker: marker}
+
+  defp previews(socket, []), do: socket
+
+  defp previews(socket, markers) do
+    %{site_id: site_id, current_user: user, editor: editor} = socket.assigns
+    site = site_name(site_id)
+
+    MishkaGervaz.Messages.start_async(socket, {:previews, markers}, fn ->
+      :ok = Translations.put_site(site_id)
+      Enum.map(markers, &preview(&1, site, user, editor))
+    end)
+  end
+
+  # Drawn as the record's site draws it — the task answers for that site — and scrubbed after,
+  # because it is shown inside the admin: no script, no event attribute and no `phx-` binding
+  # reaches the editor.
+  defp preview(marker, site, user, editor) do
+    %{html: marker, site: site, current_user: user, id: editor <> "-preview"}
+    |> ContentComponents.draw(:static)
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
+    |> HtmlSanitizeEx.html5()
+  end
+
+  defp push_previews(socket, pairs) do
+    push_event(socket, @event, %{
+      id: socket.assigns.editor,
+      previews: Enum.map(pairs, fn {marker, preview} -> %{marker: marker, preview: preview} end)
+    })
+  end
+
+  defp site_name(site_id) when is_binary(site_id) do
+    case SiteState.get(site_id) do
+      {:ok, %{name: name}} -> name
+      _unknown -> nil
+    end
+  end
+
+  defp site_name(_site_id), do: nil
 
   defp matching(entries, query) do
     case query |> String.trim() |> String.downcase() do
@@ -219,38 +328,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   defp described?(_entry, _words), do: false
 
+  defp configurable?(entry), do: entry.attrs != [] or entry.inner_block
+
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :owner, assigns.id <> "-form")
+    assigns = assign(assigns, :detached, assigns.id <> "-detached")
 
     ~H"""
-    <div id={@id} data-role="content-components" class="mb-4">
-      <div :if={!@open?} class="flex flex-wrap items-center gap-2.5">
-        <button
-          type="button"
-          id={@id <> "-open"}
-          phx-click="open"
-          phx-target={@myself}
-          class="inline-flex h-9 items-center gap-1.5 rounded-[10px] border border-[#ecebe6] bg-white px-3 text-[12px] font-semibold text-[#3a382f] hover:bg-[#f7f6f3]"
-        >
-          <.icon name="hero-squares-plus" class="size-[15px]" />
-          {gettext("Insert component")}
-        </button>
-        <span class="text-[11px] font-medium text-[#8a877f]">
-          {gettext(
-            "Writes a component's marker into the content; the page draws the component there."
-          )}
-        </span>
-      </div>
-
+    <div id={@id} data-role="content-editor-components" class="contents">
       <div
         :if={@open?}
         id={@id <> "-panel"}
-        class="rounded-[14px] border border-[#ecebe6] bg-white p-4"
+        data-role="content-editor-panel"
+        class="absolute end-2 top-[46px] z-30 flex max-h-[440px] w-[310px] max-w-[calc(100%-1rem)] flex-col rounded-[14px] border border-[#ecebe6] bg-white p-3 shadow-[0_14px_34px_rgba(27,26,24,0.13)]"
       >
-        <div class="mb-3 flex items-center gap-2">
+        <div class="mb-2.5 flex items-center gap-2">
           <button
-            :if={@picked}
+            :if={@settings}
             type="button"
             id={@id <> "-back"}
             phx-click="back"
@@ -262,9 +356,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           </button>
           <span
             class="min-w-0 flex-1 truncate text-[13px] font-bold text-[#1b1a18]"
-            dir={@picked && "ltr"}
+            dir={@settings && "ltr"}
           >
-            {(@picked && @picked.name) || gettext("Insert component")}
+            {(@settings && @settings.entry.name) || gettext("Components")}
           </span>
           <button
             type="button"
@@ -278,31 +372,31 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           </button>
         </div>
 
+        <p
+          :if={@notice}
+          id={@id <> "-notice"}
+          class="mb-2 rounded-[10px] bg-[#fbeef1] px-3 py-2 text-[11.5px] font-medium text-[#b5495f]"
+        >
+          {@notice}
+        </p>
+
         <.choose
-          :if={!@picked}
+          :if={!@settings}
           id={@id}
-          owner={@owner}
+          detached={@detached}
           query={@query}
           components={@components}
           myself={@myself}
         />
 
-        <.fill
-          :if={@picked}
-          id={@id}
-          owner={@owner}
-          field={@field}
-          entry={@picked}
-          values={@values}
-          inner={@inner}
-        />
+        <.fill :if={@settings} id={@id} detached={@detached} settings={@settings} />
       </div>
     </div>
     """
   end
 
   attr :id, :string, required: true
-  attr :owner, :string, required: true
+  attr :detached, :string, required: true
   attr :query, :string, required: true
   attr :components, AsyncResult, required: true
   attr :myself, :any, required: true
@@ -312,15 +406,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     <input
       type="search"
       id={@id <> "-query"}
-      form={@owner}
-      name="content_component[q]"
+      form={@detached}
       value={@query}
       placeholder={gettext("Search components")}
       autocomplete="off"
+      phx-keyup="search"
+      phx-target={@myself}
       phx-debounce="200"
       dir="auto"
-      class={["h-10", field_class()]}
+      class={["h-9", field_class()]}
     />
+
+    <p class="mt-2 text-[10.5px] font-medium text-[#8a877f]">
+      {gettext("Click a component to place it at the cursor, or drag it into the text.")}
+    </p>
 
     <.async_result :let={entries} assign={@components}>
       <:loading>
@@ -332,15 +431,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         </p>
       </:failed>
 
-      <ul id={@id <> "-list"} class="mt-3 flex max-h-72 flex-col gap-1 overflow-y-auto">
+      <ul id={@id <> "-list"} class="mt-2 flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto">
         <li :for={entry <- matching(entries, @query)}>
           <button
             type="button"
             id={@id <> "-pick-" <> entry.name}
-            phx-click="pick"
-            phx-value-name={entry.name}
-            phx-target={@myself}
-            class="flex w-full flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-start hover:bg-[#f6f5f2]"
+            draggable="true"
+            data-component-card={entry.name}
+            data-configurable={to_string(configurable?(entry))}
+            class="flex w-full cursor-grab flex-col items-start gap-0.5 rounded-[10px] px-3 py-2 text-start hover:bg-[#f6f5f2] active:cursor-grabbing"
           >
             <span class="flex items-center gap-1.5">
               <span dir="ltr" class="text-[12.5px] font-semibold text-[#1b1a18]">{entry.name}</span>
@@ -379,27 +478,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   end
 
   attr :id, :string, required: true
-  attr :owner, :string, required: true
-  attr :field, :string, required: true
-  attr :entry, :map, required: true
-  attr :values, :map, required: true
-  attr :inner, :string, required: true
+  attr :detached, :string, required: true
+  attr :settings, :map, required: true
 
   defp fill(assigns) do
-    assigns =
-      assign(assigns,
-        marker: ContentComponents.marker(assigns.entry.name, assigns.values, assigns.inner)
-      )
+    assigns = assign(assigns, entry: assigns.settings.entry)
 
     ~H"""
-    <input type="hidden" form={@owner} name="content_component[name]" value={@entry.name} />
-    <input type="hidden" form={@owner} name="content_component[field]" value={@field} />
+    <div
+      id={@id <> "-settings"}
+      data-content-editor-settings={@entry.name}
+      class="flex min-h-0 flex-col gap-3 overflow-y-auto"
+    >
+      <p
+        :if={@entry.attrs == [] and !@entry.inner_block}
+        class="text-[12px] font-medium text-[#8a877f]"
+      >
+        {gettext("Takes nothing a marker can set.")}
+      </p>
 
-    <p :if={@entry.attrs == []} class="text-[12px] font-medium text-[#8a877f]">
-      {gettext("Takes nothing a marker can set.")}
-    </p>
-
-    <div class="flex flex-col gap-3">
       <div :for={attr <- @entry.attrs} class="flex flex-col gap-1">
         <label
           for={@id <> "-attr-" <> attr.name}
@@ -409,9 +506,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         </label>
         <.value_input
           id={@id <> "-attr-" <> attr.name}
-          owner={@owner}
+          detached={@detached}
           attr={attr}
-          value={Map.get(@values, attr.name, "")}
+          value={Map.get(@settings.values, attr.name, "")}
         />
         <span :if={attr.doc} dir="auto" class="text-[10.5px] font-medium text-[#8a877f]">
           {attr.doc}
@@ -424,31 +521,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         </label>
         <textarea
           id={@id <> "-inner"}
-          form={@owner}
-          name="content_component[inner]"
+          form={@detached}
+          data-content-editor-inner
           rows="3"
           dir="auto"
           class={["py-2", field_class()]}
-        >{@inner}</textarea>
+        >{@settings.inner}</textarea>
       </div>
-
-      <code
-        :if={@marker}
-        id={@id <> "-marker"}
-        dir="ltr"
-        class="block break-all rounded-[10px] bg-[#f7f6f3] px-3 py-2 text-[11px] text-[#3a382f]"
-      >
-        {@marker}
-      </code>
 
       <div class="flex justify-end">
         <button
-          type="submit"
-          id={@id <> "-insert"}
-          form={@owner}
+          type="button"
+          id={@id <> "-apply"}
+          data-content-editor-apply={@entry.name}
           class="h-9 rounded-[10px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-4 text-[12px] font-bold text-white"
         >
-          {gettext("Insert")}
+          {gettext("Apply")}
         </button>
       </div>
     </div>
@@ -456,7 +544,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   end
 
   attr :id, :string, required: true
-  attr :owner, :string, required: true
+  attr :detached, :string, required: true
   attr :attr, :map, required: true
   attr :value, :string, required: true
 
@@ -464,8 +552,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     ~H"""
     <select
       id={@id}
-      form={@owner}
-      name={"content_component[attrs][#{@attr.name}]"}
+      form={@detached}
+      data-content-editor-attr={@attr.name}
       class={["h-10", field_class()]}
     >
       <option value="">{default_label(@attr)}</option>
@@ -480,8 +568,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     ~H"""
     <select
       id={@id}
-      form={@owner}
-      name={"content_component[attrs][#{@attr.name}]"}
+      form={@detached}
+      data-content-editor-attr={@attr.name}
       class={["h-10", field_class()]}
     >
       <option value="">{default_label(@attr)}</option>
@@ -498,8 +586,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     <input
       type="number"
       id={@id}
-      form={@owner}
-      name={"content_component[attrs][#{@attr.name}]"}
+      form={@detached}
+      data-content-editor-attr={@attr.name}
       value={@value}
       step={@step}
       placeholder={placeholder(@attr)}
@@ -514,8 +602,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     <input
       type="text"
       id={@id}
-      form={@owner}
-      name={"content_component[attrs][#{@attr.name}]"}
+      form={@detached}
+      data-content-editor-attr={@attr.name}
       value={@value}
       placeholder={placeholder(@attr)}
       autocomplete="off"

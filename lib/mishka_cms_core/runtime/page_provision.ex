@@ -78,6 +78,7 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
 
   require Ash.Query
 
+  alias MishkaCmsCore.Runtime.Helpers
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Page
 
@@ -259,10 +260,12 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
   @spec missing(String.t(), [attrs()], keyword()) :: plan()
   def missing(site_id, definitions, opts \\ [])
       when is_binary(site_id) and is_list(definitions) do
+    # READ OFF THE ACTION, not named here, so a second slugified attribute is compared as a slug the
+    # day one is added.
     slugifiers =
       Page
       |> Ash.Resource.Info.action(Keyword.get(opts, :action, :master_create))
-      |> slugifiers()
+      |> Helpers.slugifiers()
 
     marked = Enum.map(definitions, &marked(&1, Keyword.get(opts, :stamp)))
 
@@ -513,20 +516,6 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
         {:ok, text} when is_binary(text) -> Map.put(stored, into, Slug.slugify(text, opts))
         _nothing_to_slugify -> stored
       end
-    end)
-  end
-
-  # READ OFF THE ACTION, not named here, so a second slugified attribute is compared as a slug the
-  # day one is added — and through the change's own `init/1`, because the options are stored as they
-  # were written and it is what turns them into the ones `Slug.slugify/2` takes.
-  defp slugifiers(action) do
-    action.changes
-    |> Enum.filter(&match?(%{change: {AshSlug.Changes.Slugify, _opts}}, &1))
-    |> Enum.map(fn %{change: {slugify, opts}} ->
-      {:ok, ready} = slugify.init(opts)
-
-      {ready[:attribute], ready[:into] || ready[:attribute],
-       Keyword.drop(ready, [:attribute, :into])}
     end)
   end
 

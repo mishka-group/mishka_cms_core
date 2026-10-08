@@ -74,6 +74,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   and a template that draws content reaches exactly those. `names/1` reads them out of content, to
   store beside it when it is written.
 
+  ## The editor
+
+  The admin's content editor holds content as `segments/1` splits it: the HTML it edits, and each
+  component standing alone as a block it shows drawn. The block writes its marker back as a
+  paragraph of its own, so content saved from the editor stores what it was opened with. Its
+  palette is `palette/2`.
+
   ## Events
 
     * `runtime:render:before_content_component` — before each embedded component is drawn, with
@@ -81,6 +88,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       `%{site_id: site_id, index: n}` as meta. `attrs` is atom-keyed and already cast. A plugin
       answers the map with other `attrs` or `inner` to change what is drawn, or with
       `suppress: true` set to draw nothing.
+    * `runtime:content:editor_palette` — before the content editor's palette is shown, with
+      `%{site_id: site_id, components: entries}` (`embeddable/2`'s entries) and
+      `%{current_user: user}` as meta. A plugin answers the map with other `components` to narrow or
+      extend what an author may place; the editor places only what the palette lists.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -95,6 +106,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   alias MishkaInstaller.Event.Hook
 
   @event "runtime:render:before_content_component"
+  @palette_event "runtime:content:editor_palette"
 
   @open "[[component"
   @close "[[/component]]"
@@ -138,6 +150,23 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   @typedoc "A piece of content: HTML drawn as it is, or a marker."
   @type chunk :: {:html, String.t()} | {:component, marker()}
+
+  @typedoc """
+  A piece of content as the editor holds it: HTML, or a component standing alone. `marker` is the
+  marker as written, `source` the bytes it was cut from, the paragraph around it included.
+  """
+  @type segment ::
+          {:html, String.t()}
+          | {:component,
+             %{
+               name: String.t(),
+               attrs: %{String.t() => String.t() | true},
+               inner: String.t() | nil,
+               marker: String.t(),
+               source: String.t()
+             }}
+
+  @void ~w(area base br col embed hr img input link meta param source track wbr)
 
   @typedoc "A component an author may embed, as `embeddable/2` lists it."
   @type entry :: %{
@@ -192,6 +221,34 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   def names(_html), do: []
 
   @doc """
+  Splits `html` into the HTML the content editor edits and the components standing alone in it,
+  which it holds as blocks.
+
+  A marker stands alone when its paragraph holds nothing else — the marker `parse/1` draws without
+  the `<p>` — or when it sits inside no element at all. A marker sharing its paragraph with text
+  stays in the HTML around it. Each component's `source` is what it was cut from, so the pieces'
+  HTML and the components' `source`, joined in order, are `html` again.
+
+      segments(~s(<p>Hi</p><p>[[component chelekom-badge size="small" /]]</p>))
+      #=> [
+      #=>   {:html, "<p>Hi</p>"},
+      #=>   {:component, %{name: "chelekom-badge", attrs: %{"size" => "small"}, inner: nil,
+      #=>     marker: ~s([[component chelekom-badge size="small" /]]),
+      #=>     source: ~s(<p>[[component chelekom-badge size="small" /]]</p>)}}
+      #=> ]
+  """
+  @spec segments(String.t()) :: [segment()]
+  def segments(html) when is_binary(html) do
+    case :binary.match(html, @open) do
+      :nomatch ->
+        [{:html, html}]
+
+      _found ->
+        html |> tokens() |> pair([]) |> Enum.flat_map(&standing(&1, html)) |> pieces(html)
+    end
+  end
+
+  @doc """
   The attributes of `given` a component declaring `declared` takes, cast to their declared types.
 
   `declared` is the component's attribute declarations, as `__component_information__/1` or the
@@ -242,19 +299,6 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   def marker(_name, _attrs, _inner), do: nil
 
   @doc """
-  `content` with `marker` written after it, on a line of its own.
-  """
-  @spec append(String.t() | nil, String.t()) :: String.t()
-  def append(content, marker) when content in [nil, ""], do: marker
-
-  def append(content, marker) do
-    case String.ends_with?(content, "\n") do
-      true -> content <> marker
-      false -> content <> "\n" <> marker
-    end
-  end
-
-  @doc """
   Whether a component template draws content itself — calls `rich_content`. Such a component is
   never drawn inside content, which could hold a marker for it.
   """
@@ -288,6 +332,22 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       {:ok, %{results: rows}} -> {:ok, rows |> own_first() |> Enum.map(&entry/1)}
       {:ok, rows} when is_list(rows) -> {:ok, rows |> own_first() |> Enum.map(&entry/1)}
       {:error, _reason} = error -> error
+    end
+  end
+
+  @doc """
+  The components the content editor's palette offers on the site `site_id`, read as `actor` —
+  `embeddable/2`, as a plugin answering `runtime:content:editor_palette` leaves it.
+  """
+  @spec palette(map() | nil, String.t() | nil) :: {:ok, [entry()]} | {:error, term()}
+  def palette(actor, site_id) do
+    with {:ok, entries} <- embeddable(actor, site_id) do
+      data = %{site_id: site_id, components: entries}
+
+      case Hook.call(@palette_event, data, meta: %{current_user: actor}) do
+        %{components: components} when is_list(components) -> {:ok, components}
+        _unchanged -> {:ok, entries}
+      end
     end
   end
 
@@ -846,6 +906,53 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         marker = %{name: name, attrs: attrs, inner: inner_html(html, inner), index: index}
 
         {[{:component, marker} | html_piece(pieces, html, position, start)], stop, index + 1}
+      end)
+
+    pieces |> html_piece(html, position, byte_size(html)) |> Enum.reverse()
+  end
+
+  # A marker the editor holds as a block, as `{from, to, start, stop, name, attrs, inner}`: the
+  # bytes it is cut from, then the marker's own. Nothing for one sharing its paragraph.
+  defp standing({start, stop, name, attrs, inner} = marker, html) do
+    case unwrapped(marker, html) do
+      {^start, ^stop, _name, _attrs, _inner} -> top_level(marker, html)
+      {from, to, _name, _attrs, _inner} -> [{from, to, start, stop, name, attrs, inner}]
+    end
+  end
+
+  defp top_level({start, stop, name, attrs, inner}, html) do
+    case depth(binary_part(html, 0, start)) do
+      0 -> [{start, stop, start, stop, name, attrs, inner}]
+      _inside_an_element -> []
+    end
+  end
+
+  # How many elements are open at the end of `html`.
+  defp depth(html) do
+    @tag
+    |> Regex.scan(html)
+    |> Enum.reduce(0, fn [tag, slash, name], depth ->
+      cond do
+        String.downcase(name) in @void or String.ends_with?(tag, "/>") -> depth
+        slash == "/" -> max(depth - 1, 0)
+        true -> depth + 1
+      end
+    end)
+  end
+
+  defp pieces(standing, html) do
+    {pieces, position} =
+      Enum.reduce(standing, {[], 0}, fn {from, to, start, stop, name, attrs, inner},
+                                        {pieces, position} ->
+        segment = %{
+          name: name,
+          attrs: attrs,
+          inner: inner_html(html, inner),
+          marker: binary_part(html, start, stop - start),
+          source: binary_part(html, from, to - from)
+        }
+
+        {[{:component, segment} | html_piece(pieces, html, position, from)], to}
       end)
 
     pieces |> html_piece(html, position, byte_size(html)) |> Enum.reverse()

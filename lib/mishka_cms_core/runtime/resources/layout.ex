@@ -691,7 +691,6 @@ defmodule MishkaCmsCore.Runtime.Layout do
           ui do
             label fn -> dgettext("mishka_gervaz", "Content (JSON Object)") end
             placeholder ~s({"header": {...}, "footer": {...}})
-            span 2
           end
         end
 
@@ -709,7 +708,6 @@ defmodule MishkaCmsCore.Runtime.Layout do
             label fn -> dgettext("mishka_gervaz", "Resource Links") end
             add_label fn -> dgettext("mishka_gervaz", "+ Add Resource Link") end
             remove_label fn -> dgettext("mishka_gervaz", "Remove") end
-            span 2
           end
         end
 
@@ -718,7 +716,6 @@ defmodule MishkaCmsCore.Runtime.Layout do
             label fn -> dgettext("mishka_gervaz", "SEO Tags") end
             add_label fn -> dgettext("mishka_gervaz", "+ Add SEO Tag") end
             remove_label fn -> dgettext("mishka_gervaz", "Remove") end
-            span 2
           end
 
           nested_field :tag do

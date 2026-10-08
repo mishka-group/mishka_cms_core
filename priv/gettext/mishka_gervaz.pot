@@ -113,7 +113,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:961
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:808
-#: lib/mishka_cms_core/runtime/resources/layout.ex:750
+#: lib/mishka_cms_core/runtime/resources/layout.ex:747
 #: lib/mishka_cms_core/runtime/resources/page.ex:1139
 #, elixir-autogen, elixir-format
 msgid "+ Add Helper Function"
@@ -124,13 +124,13 @@ msgstr ""
 msgid "+ Add Info Handler"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:710
+#: lib/mishka_cms_core/runtime/resources/layout.ex:709
 #: lib/mishka_cms_core/runtime/resources/page.ex:1082
 #, elixir-autogen, elixir-format
 msgid "+ Add Resource Link"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:719
+#: lib/mishka_cms_core/runtime/resources/layout.ex:717
 #: lib/mishka_cms_core/runtime/resources/page.ex:959
 #, elixir-autogen, elixir-format
 msgid "+ Add SEO Tag"
@@ -203,7 +203,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:990
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:570
-#: lib/mishka_cms_core/runtime/resources/layout.ex:779
+#: lib/mishka_cms_core/runtime/resources/layout.ex:776
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:617
 #, elixir-autogen, elixir-format
 msgid "Add Permission"
@@ -306,7 +306,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:974
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:821
-#: lib/mishka_cms_core/runtime/resources/layout.ex:763
+#: lib/mishka_cms_core/runtime/resources/layout.ex:760
 #: lib/mishka_cms_core/runtime/resources/page.ex:1152
 #, elixir-autogen, elixir-format
 msgid "Arguments"
@@ -334,7 +334,7 @@ msgid "Assistant · annotated by %{who}"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:845
-#: lib/mishka_cms_core/runtime/resources/layout.ex:733
+#: lib/mishka_cms_core/runtime/resources/layout.ex:730
 #: lib/mishka_cms_core/runtime/resources/page.ex:981
 #, elixir-autogen, elixir-format
 msgid "Attributes"
@@ -450,7 +450,7 @@ msgid "Confirmed"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/activity_entry.ex:179
-#: lib/mishka_cms_core/runtime/resources/layout.ex:740
+#: lib/mishka_cms_core/runtime/resources/layout.ex:737
 #: lib/mishka_cms_core/runtime/resources/page.ex:988
 #: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:171
 #, elixir-autogen, elixir-format
@@ -708,7 +708,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:981
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:828
-#: lib/mishka_cms_core/runtime/resources/layout.ex:770
+#: lib/mishka_cms_core/runtime/resources/layout.ex:767
 #: lib/mishka_cms_core/runtime/resources/page.ex:1159
 #, elixir-autogen, elixir-format
 msgid "Function Body"
@@ -716,7 +716,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:967
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:814
-#: lib/mishka_cms_core/runtime/resources/layout.ex:756
+#: lib/mishka_cms_core/runtime/resources/layout.ex:753
 #: lib/mishka_cms_core/runtime/resources/page.ex:1145
 #, elixir-autogen, elixir-format
 msgid "Function Name"
@@ -786,7 +786,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:960
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:807
-#: lib/mishka_cms_core/runtime/resources/layout.ex:749
+#: lib/mishka_cms_core/runtime/resources/layout.ex:746
 #: lib/mishka_cms_core/runtime/resources/page.ex:1138
 #, elixir-autogen, elixir-format
 msgid "Helper Functions"
@@ -1204,7 +1204,7 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/user.ex:314
 #: lib/mishka_cms_core/runtime/resources/component.ex:993
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:573
-#: lib/mishka_cms_core/runtime/resources/layout.ex:782
+#: lib/mishka_cms_core/runtime/resources/layout.ex:779
 #: lib/mishka_cms_core/runtime/resources/page.ex:1180
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:365
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:620
@@ -1253,7 +1253,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:847
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:763
-#: lib/mishka_cms_core/runtime/resources/layout.ex:711
+#: lib/mishka_cms_core/runtime/resources/layout.ex:710
 #: lib/mishka_cms_core/runtime/resources/page.ex:960
 #, elixir-autogen, elixir-format
 msgid "Remove"
@@ -1264,7 +1264,7 @@ msgstr ""
 msgid "Resource"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:709
+#: lib/mishka_cms_core/runtime/resources/layout.ex:708
 #: lib/mishka_cms_core/runtime/resources/page.ex:1081
 #, elixir-autogen, elixir-format
 msgid "Resource Links"
@@ -1313,7 +1313,7 @@ msgstr ""
 msgid "Russian"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:718
+#: lib/mishka_cms_core/runtime/resources/layout.ex:716
 #: lib/mishka_cms_core/runtime/resources/page.ex:958
 #, elixir-autogen, elixir-format
 msgid "SEO Tags"
@@ -1508,7 +1508,7 @@ msgstr ""
 msgid "System"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:726
+#: lib/mishka_cms_core/runtime/resources/layout.ex:723
 #: lib/mishka_cms_core/runtime/resources/page.ex:974
 #, elixir-autogen, elixir-format
 msgid "Tag"
@@ -2853,7 +2853,7 @@ msgstr ""
 msgid "Suggestion"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:741
+#: lib/mishka_cms_core/runtime/resources/layout.ex:738
 #: lib/mishka_cms_core/runtime/resources/page.ex:989
 #, elixir-autogen, elixir-format
 msgid "Tag content text..."

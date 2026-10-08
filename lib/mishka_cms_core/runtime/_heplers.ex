@@ -140,4 +140,95 @@ defmodule MishkaCmsCore.Runtime.Helpers do
       )
 
   def writes?(_state, _type), do: false
+
+  @doc """
+  The slugify changes `action` runs, as `{from, into, options}`: each reads `from` and writes its slug
+  into `into`, made by `Slug.slugify/2` with `options`.
+
+  Read through the change's own `init/1`, because an action holds the options as they were written
+  (`lowercase?:`), and `init/1` turns them into the ones `Slug.slugify/2` takes (`lowercase:`). A
+  change wrapped in another that holds it as `change:` — AshEvents wraps every change of a resource
+  it records that way — is read as the change it holds. An action with no slugify change has none.
+  """
+  @spec slugifiers(struct()) :: [{atom(), atom(), keyword()}]
+  def slugifiers(%{changes: changes}) when is_list(changes) do
+    for %{change: change} <- changes,
+        {AshSlug.Changes.Slugify = slugify, opts} <- [held_change(change)] do
+      {:ok, ready} = slugify.init(opts)
+
+      {ready[:attribute], ready[:into] || ready[:attribute],
+       Keyword.drop(ready, [:attribute, :into])}
+    end
+  end
+
+  def slugifiers(_action_without_changes), do: []
+
+  # The change itself, or — for one that wraps another as its `change:` option — the one it holds.
+  defp held_change({_module, opts} = change) when is_list(opts) do
+    case Keyword.get(opts, :change) do
+      %{change: held} -> held_change(held)
+      _not_a_wrapper -> change
+    end
+  end
+
+  defp held_change(change), do: change
+
+  @doc """
+  Fills the slug of a record being created from its title, for a Gervaz form's `on_validate` hook.
+
+  While the slug follows — it is empty, or it is the slug of the title the form held before this
+  change — a change to the `from` field writes the new title's slug into `into`. A slug the author
+  typed themselves stops it following, until they empty it again. A record being updated keeps its
+  slug whatever happens to the title: the slug is in the record's URL.
+
+  The slug is made by the slugify change the form's action runs on `into` (`slugifiers/1`), so what
+  the author sees is what the save stores — a Persian title is transliterated as the save does it,
+  `قیمت‌گذاری` becomes `qymtgdhry`. A form whose action does not slugify `into` is left alone.
+
+  Returns the params, so it is the whole hook, or the first step of one:
+
+      hooks do
+        on_validate fn params, state ->
+          MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :title)
+        end
+      end
+
+      hooks do
+        on_validate fn params, state ->
+          params = MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :name)
+          MishkaGervaz.Helpers.validate_field_errors(state.form.source, params, state.errors)
+        end
+      end
+  """
+  @spec follow_slug(map(), map(), atom(), atom()) :: map()
+  def follow_slug(params, state, from, into \\ :slug)
+
+  def follow_slug(
+        %{"form" => %{} = typed} = params,
+        %{
+          mode: :create,
+          form: %{source: %AshPhoenix.Form{source: %{action: %{} = action}} = form}
+        },
+        from,
+        into
+      ) do
+    before = form |> AshPhoenix.Form.params() |> Map.get(to_string(from))
+
+    with title when is_binary(title) and title != before <- Map.get(typed, to_string(from)),
+         {_from, _into, options} <- Enum.find(slugifiers(action), &match?({_, ^into, _}, &1)),
+         true <- following?(Map.get(typed, to_string(into)), before, options) do
+      put_in(params, ["form", to_string(into)], slug(title, options))
+    else
+      _unchanged_or_not_following -> params
+    end
+  end
+
+  def follow_slug(params, _state, _from, _into), do: params
+
+  defp following?(slug, _before, _options) when slug in [nil, ""], do: true
+  defp following?(slug, before, options), do: slug == slug(before, options)
+
+  # `Slug.slugify/2` answers nil for a title with nothing it can spell, an emoji's for one.
+  defp slug(text, options) when is_binary(text), do: Slug.slugify(text, options) || ""
+  defp slug(_no_title, _options), do: ""
 end

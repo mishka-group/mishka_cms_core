@@ -31,7 +31,7 @@ msgstr ""
 msgid "Cannot restore version of js_hook from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1535
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1532
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of layout from another site."
 msgstr ""
@@ -167,7 +167,7 @@ msgstr ""
 msgid "account"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:323
+#: lib/mishka_cms_core/notify/notification.ex:328
 #, elixir-autogen
 msgid "actor"
 msgstr ""
@@ -251,7 +251,7 @@ msgid "language group"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/stateful_placement.ex:321
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1050
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1047
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:290
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:320
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:344
@@ -304,7 +304,7 @@ msgstr ""
 msgid "post"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:316
+#: lib/mishka_cms_core/notify/notification.ex:321
 #, elixir-autogen
 msgid "recipient"
 msgstr ""
@@ -387,7 +387,7 @@ msgstr ""
 msgid "Cannot archive global component. Global components can only be archived by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1300
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1297
 #, elixir-autogen, elixir-format
 msgid "Cannot archive global layout. Global layouts can only be archived by master users."
 msgstr ""
@@ -397,7 +397,7 @@ msgstr ""
 msgid "Cannot archive global stylesheet. Global stylesheets can only be archived by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1307
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1304
 #, elixir-autogen, elixir-format
 msgid "Cannot archive layout from another site."
 msgstr ""
@@ -437,8 +437,8 @@ msgstr ""
 msgid "Cannot edit archived error page. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:989
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1043
+#: lib/mishka_cms_core/runtime/resources/layout.ex:986
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1040
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived layout. Please unarchive it first."
 msgstr ""
@@ -486,7 +486,7 @@ msgstr ""
 msgid "Cannot modify global component. Global components can only be modified by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1002
+#: lib/mishka_cms_core/runtime/resources/layout.ex:999
 #, elixir-autogen, elixir-format
 msgid "Cannot modify global layout. Global layouts can only be modified by master users."
 msgstr ""
@@ -496,7 +496,7 @@ msgstr ""
 msgid "Cannot modify global stylesheet. Global stylesheets can only be modified by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1009
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1006
 #, elixir-autogen, elixir-format
 msgid "Cannot modify layout from another site."
 msgstr ""
@@ -526,7 +526,7 @@ msgstr ""
 msgid "Cannot permanently delete global component. Global components can only be deleted by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1356
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1353
 #, elixir-autogen, elixir-format
 msgid "Cannot permanently delete global layout. Global layouts can only be deleted by master users."
 msgstr ""
@@ -536,7 +536,7 @@ msgstr ""
 msgid "Cannot permanently delete global stylesheet. Only master users can."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1364
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1361
 #, elixir-autogen, elixir-format
 msgid "Cannot permanently delete layout from another site."
 msgstr ""
@@ -567,9 +567,9 @@ msgstr ""
 msgid "Cannot restore version of archived js_hook. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1454
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1514
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1747
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1451
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1511
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1744
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived layout. Please unarchive it first."
 msgstr ""
@@ -598,7 +598,7 @@ msgstr ""
 msgid "Cannot restore version of global js_hook. Global js_hooks can only be modified by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1439
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1436
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of global layout. Global layouts can only be modified by master users."
 msgstr ""
@@ -654,12 +654,12 @@ msgstr ""
 msgid "JS hook is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1284
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1281
 #, elixir-autogen, elixir-format
 msgid "Layout is already archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1263
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1260
 #, elixir-autogen, elixir-format
 msgid "Layout is not archived."
 msgstr ""
@@ -862,10 +862,10 @@ msgstr ""
 msgid "Version does not belong to this js_hook."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1477
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1628
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1769
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1858
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1474
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1625
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1766
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1855
 #, elixir-autogen, elixir-format
 msgid "Version does not belong to this layout."
 msgstr ""
@@ -927,7 +927,7 @@ msgstr ""
 msgid "is invalid or expired"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/translations.ex:734
+#: lib/mishka_cms_core/runtime/translations.ex:742
 #, elixir-autogen, elixir-format
 msgid "is not a language this site publishes in"
 msgstr ""
@@ -1048,11 +1048,11 @@ msgstr ""
 msgid "A component"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:898
-#: lib/mishka_cms_core/runtime/resources/layout.ex:938
-#: lib/mishka_cms_core/runtime/resources/layout.ex:977
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1030
-#: lib/mishka_cms_core/runtime/resources/layout.ex:1548
+#: lib/mishka_cms_core/runtime/resources/layout.ex:895
+#: lib/mishka_cms_core/runtime/resources/layout.ex:935
+#: lib/mishka_cms_core/runtime/resources/layout.ex:974
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1027
+#: lib/mishka_cms_core/runtime/resources/layout.ex:1545
 #, elixir-autogen, elixir-format
 msgid "A layout"
 msgstr ""
@@ -1156,12 +1156,12 @@ msgstr ""
 msgid "JS hook name must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:2248
+#: lib/mishka_cms_core/runtime/resources/layout.ex:2245
 #, elixir-autogen, elixir-format
 msgid "Layout name must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/layout.ex:2255
+#: lib/mishka_cms_core/runtime/resources/layout.ex:2252
 #, elixir-autogen, elixir-format
 msgid "Layout path must be unique within a site."
 msgstr ""
@@ -1218,7 +1218,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:2035
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:672
-#: lib/mishka_cms_core/runtime/resources/layout.ex:2262
+#: lib/mishka_cms_core/runtime/resources/layout.ex:2259
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:708
 #: lib/mishka_cms_core/runtime/resources/page.ex:2825
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:981

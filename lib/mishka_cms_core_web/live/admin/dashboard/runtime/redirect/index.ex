@@ -47,7 +47,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Redirect.Index do
   def handle_event("redirect_add", _params, socket) do
     send_update(MishkaGervaz.Form.Web.Live,
       id: MishkaGervaz.Resource.Info.Form.component_id(Redirect),
-      record_id: nil
+      record_id: nil,
+      reset: true
     )
 
     {:noreply, modal(socket, MishkaCmsCore.CoreComponents.show_modal(@form_modal))}

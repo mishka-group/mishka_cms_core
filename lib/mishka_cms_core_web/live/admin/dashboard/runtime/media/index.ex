@@ -128,7 +128,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
 
   @impl true
   def handle_event("toggle_category_form", _params, socket) do
-    send_update(MishkaGervaz.Form.Web.Live, id: category_form_component_id(), record_id: nil)
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: category_form_component_id(),
+      record_id: nil,
+      reset: true
+    )
 
     {:noreply,
      socket
@@ -144,7 +148,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
   end
 
   def handle_event("edit_category", %{"id" => id}, socket) do
-    send_update(MishkaGervaz.Form.Web.Live, id: category_form_component_id(), record_id: id)
+    send_update(MishkaGervaz.Form.Web.Live,
+      id: category_form_component_id(),
+      record_id: id,
+      reset: true
+    )
 
     {:noreply,
      socket
