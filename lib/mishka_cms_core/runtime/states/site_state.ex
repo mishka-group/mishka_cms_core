@@ -136,6 +136,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # and `RuntimeCompilerWorker.apply_component_lifecycle/3` writes or drops both.
   @components_index :mishka_sites_components_index
 
+  @tables [@main_table, @host_index, @name_index, @allowed_origins_index, @components_index]
+
   @pubsub MishkaCmsCore.PubSub
 
   # The three topics `MishkaCmsCore.Runtime.Site`'s `pub_sub` block publishes without a pkey segment.
@@ -685,14 +687,34 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   Clears all data from all tables.
   """
   def clear do
-    [@main_table, @host_index, @name_index, @allowed_origins_index, @components_index]
-    |> Enum.each(fn table ->
+    Enum.each(@tables, fn table ->
       if :ets.whereis(table) != :undefined do
         :ets.delete_all_objects(table)
       end
     end)
 
     :ok
+  end
+
+  @doc """
+  Everything the tables hold now, for `restore/1` (test helper).
+
+      snapshot = SiteState.snapshot()
+      on_exit(fn -> SiteState.restore(snapshot) end)
+  """
+  @spec snapshot() :: %{atom() => [tuple()]}
+  def snapshot, do: Map.new(@tables, &{&1, :ets.tab2list(&1)})
+
+  @doc """
+  Puts the tables back to a `snapshot/0` (test helper). It reads no database, so it works from an
+  `on_exit`, once the test's rows have rolled back and only these entries are left of them.
+  """
+  @spec restore(%{atom() => [tuple()]}) :: :ok
+  def restore(snapshot) do
+    Enum.each(snapshot, fn {table, entries} ->
+      :ets.delete_all_objects(table)
+      :ets.insert(table, entries)
+    end)
   end
 
   ####################################################################################

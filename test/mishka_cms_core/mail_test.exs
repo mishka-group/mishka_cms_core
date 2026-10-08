@@ -52,14 +52,15 @@ defmodule MishkaCmsCore.MailTest do
 
     site = create_site!(name: "acme", host: "acme.test", active: true)
 
-    SiteState.save(%{
-      id: site.id,
-      name: site.name,
-      host: site.host,
-      priority: site.priority,
-      active: site.active,
-      master: site.master
-    })
+    :ok =
+      SiteState.save(%{
+        id: site.id,
+        name: site.name,
+        host: site.host,
+        priority: site.priority,
+        active: site.active,
+        master: site.master
+      })
 
     on_exit(fn ->
       SettingsState.restore(snapshot)

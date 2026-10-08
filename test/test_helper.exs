@@ -87,6 +87,13 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
   # second failed that wait while a second suite shared the machine.
   ExUnit.configure(assert_receive_timeout: :timer.seconds(30))
 
+  # THE RUN STARTS ONCE THE CORE'S PLUGINS ARE LIVE. Each registers from its own `handle_continue`,
+  # and on a slow boot — the first run after a recompile — `mishka_installer` is not ready yet, so the
+  # plugin tries again a second later, after the first tests have already asked its event: the mail
+  # provider is not found and every test that sends fails, once. See
+  # `MishkaCmsCore.Test.PluginReadiness`.
+  MishkaCmsCore.Test.PluginReadiness.await(MishkaCmsCore.Application.plugins())
+
   ExUnit.start()
   Ecto.Adapters.SQL.Sandbox.mode(MishkaCmsCore.Repo, :manual)
 end

@@ -33,10 +33,28 @@ defmodule MishkaCmsCore.DataCase do
     :ok
   end
 
-  @doc "Checks out a sandboxed connection for the test, shared with its spawned processes unless async."
+  @doc """
+  Checks out a sandboxed connection for the test, shared with its spawned processes unless async,
+  and — for a test that is not async — puts `MishkaCmsCore.Runtime.States.SiteState` back as it
+  found it when the test ends.
+
+  A site a test creates is saved to `SiteState`, which is the node's, not the test's: the rollback
+  takes the row back and leaves the entry, and a later test that saves a site of the same name or
+  host is refused — its pages and its email then read as a site the node does not know. ExUnit runs
+  the async modules first and the others one at a time after them, so a test that is not async is
+  the only one touching the tables while it runs.
+  """
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: not tags[:async])
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    restore_sites_on_exit(tags)
+  end
+
+  defp restore_sites_on_exit(%{async: true}), do: :ok
+
+  defp restore_sites_on_exit(_tags) do
+    snapshot = MishkaCmsCore.Runtime.States.SiteState.snapshot()
+    on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.restore(snapshot) end)
   end
 
   @doc """
