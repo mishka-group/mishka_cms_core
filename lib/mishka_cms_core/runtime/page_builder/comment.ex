@@ -19,21 +19,31 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Comment do
   use Gettext, backend: MishkaCmsCore.Gettext
   use GuardedStruct
 
-  # The text is stripped of tags and trimmed before it is stored — a review note is prose, and the
-  # sheet renders it as text, so markup in it is never wanted. Sanitizers run before validators, so a
-  # note that was nothing but whitespace fails `not_empty` and is refused rather than posted, which
-  # is what makes an accidental Enter on an empty box a no-op.
+  # The text is stripped of tags, kept otherwise as typed (`MishkaCmsCore.PlainText`), and trimmed
+  # before it is stored — a review note is prose, and the sheet renders it as text, so markup in it
+  # is never wanted. The markup goes before the derives run and the trim before `not_empty`, so a
+  # note that was nothing but markup or whitespace is refused rather than posted, which is what
+  # makes an accidental Enter on an empty box a no-op.
   guardedstruct do
     field(:id, :string, enforce: true, derives: "validate(string)")
     field(:node_id, :string, derives: "validate(string, regex=^n[a-z0-9]{8}$)")
-    field(:node_label, :string, derives: "sanitize(strip_tags, trim)")
-    field(:author, :string, derives: "sanitize(strip_tags, trim)")
+
+    field(:node_label, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim)"
+    )
+
+    field(:author, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim)"
+    )
 
     field(:author_id, :string)
 
     field(:text, :string,
       enforce: true,
-      derives: "sanitize(strip_tags, trim) validate(not_empty)"
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(not_empty)"
     )
 
     field(:resolved?, :boolean, default: false)

@@ -275,8 +275,9 @@ defmodule MishkaCmsCore.Notify.Notification do
   end
 
   # GuardedStruct is the extra pre-DB layer Ash constraints don't give: it SANITIZES the
-  # user-derived text (strips HTML tags a producer may have copied from a comment/title, trims) and
-  # adds validation, wired into the write actions via `auto_wire true`. It also gives producers a
+  # user-derived text (strips HTML tags a producer may have copied from a comment/title and keeps
+  # the rest as typed — `MishkaCmsCore.PlainText` — then trims) and adds validation, wired into the
+  # write actions via `auto_wire true`. It also gives producers a
   # `builder/1` to validate+sanitize a notification as a struct BEFORE calling `deliver/3`.
   # `enforce` is deliberately omitted — Ash owns `allow_nil?` (see the pitfalls note).
   guardedstruct do
@@ -285,9 +286,13 @@ defmodule MishkaCmsCore.Notify.Notification do
     field :type, :string, derives: "sanitize(trim) validate(string, not_empty)"
 
     field :title, :string,
-      derives: "sanitize(strip_tags, trim) validate(string, not_empty, max_len=255)"
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string, not_empty, max_len=255)"
 
-    field :body, :string, derives: "sanitize(strip_tags, trim) validate(string)"
+    field :body, :string,
+      validator: {MishkaCmsCore.PlainText, :field},
+      derives: "sanitize(trim) validate(string)"
+
     field :icon, :string, derives: "sanitize(trim) validate(string)"
     field :link, :string, derives: "sanitize(trim) validate(string)"
     field :source, :string, derives: "sanitize(trim) validate(string)"
