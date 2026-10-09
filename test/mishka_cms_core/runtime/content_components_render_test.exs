@@ -300,6 +300,197 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
     end
   end
 
+  # A TEMPLATE READS EVERY ATTRIBUTE IT DECLARES. Found drawing each of the kit's 269 components from
+  # a bare marker: 26 read one that had no default and was not given — `@label`, `@name`, `@for` —
+  # and raised, which on a page takes the page down.
+  describe "rich_content/1 — attributes the marker leaves out" do
+    test "one declared with no default is handed as nil", %{site: site, n: n} do
+      note!(site, "loose-#{n}",
+        attrs: [
+          %{"name" => "label", "type" => "string", "opts" => %{}},
+          %{"name" => "items", "type" => "list", "opts" => %{}},
+          %{"name" => "size", "type" => "string", "opts" => %{"default" => "small"}}
+        ],
+        template:
+          ~S'<p class="probe-loose" data-label={@label || "none"} data-items={inspect(@items)} data-size={@size}></p>'
+      )
+
+      html = draw("[[component loose-#{n} /]]", site.name)
+
+      assert attribute(html, ".probe-loose", "data-label") == "none"
+      assert attribute(html, ".probe-loose", "data-items") == "nil"
+      assert attribute(html, ".probe-loose", "data-size") == "small"
+
+      assert attribute(
+               draw(~s([[component loose-#{n} label="Hi" /]]), site.name),
+               ".probe-loose",
+               "data-label"
+             ) ==
+               "Hi"
+    end
+
+    test "one whose default is its type's empty struct keeps it", %{site: site, n: n} do
+      note!(site, "closable-#{n}",
+        attrs: [
+          %{
+            "name" => "on_cancel",
+            "type" => "struct",
+            "struct_name" => "Phoenix.LiveView.JS",
+            "opts" => %{"default_struct" => true}
+          }
+        ],
+        template:
+          ~S|<p class="probe-closable" data-cancel={JS.exec(@on_cancel, "phx-remove")}></p>|
+      )
+
+      assert draw("[[component closable-#{n} /]]", site.name) =~ "probe-closable"
+    end
+
+    test "a guest is handed as no visitor to one declaring current_user", %{site: site, n: n} do
+      note!(site, "who-#{n}",
+        attrs: [%{"name" => "current_user", "type" => "any", "opts" => %{}}],
+        template: ~S|<p class="probe-who" data-guest={to_string(is_nil(@current_user))}></p>|
+      )
+
+      assert attribute(draw("[[component who-#{n} /]]", site.name), ".probe-who", "data-guest") ==
+               "true"
+    end
+  end
+
+  describe "rich_content/1 — markers inside markers, and slots" do
+    defp row!(site, name),
+      do:
+        note!(site, name,
+          attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+          template: ~S|<div class="probe-row">{render_slot(@inner_block)}</div>|
+        )
+
+    defp player!(site, name) do
+      note!(site, name,
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        slots: [
+          %{
+            "name" => "source",
+            "opts" => %{"required" => true},
+            "attrs" => [
+              %{"name" => "src", "type" => "string", "opts" => %{"required" => true}},
+              %{"name" => "type", "type" => "string", "opts" => %{}},
+              %{"name" => "muted", "type" => "boolean", "opts" => %{}}
+            ]
+          },
+          %{"name" => "caption", "opts" => %{}, "attrs" => []}
+        ],
+        template:
+          ~S'<div class="probe-player"><span :for={s <- @source} class="probe-source" data-src={s.src} data-type={s.type || "none"} data-muted={to_string(s.muted)}></span><div :for={c <- @caption} class="probe-caption">{render_slot(c)}</div></div>'
+      )
+    end
+
+    test "a component inside another is drawn in its inner block", %{site: site, n: n} do
+      row!(site, "row-#{n}")
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s(<p>[[component row-#{n}]]<p>[[component note-#{n} title="A" /]]</p>[[component note-#{n} title="B"]]in [[component note-#{n} title="C" /]][[/component]][[/component]]</p>),
+          site.name
+        )
+
+      assert html |> query(".probe-row > .probe-note") |> Enum.count() == 2
+
+      assert html |> query(".probe-row .probe-note") |> LazyHTML.attribute("data-title") ==
+               ["A", "B", "C"]
+
+      refute html =~ "[[component"
+      refute html =~ "<p>"
+    end
+
+    test "slot entries are passed as the slots the component declares", %{site: site, n: n} do
+      player!(site, "player-#{n}")
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s([[component player-#{n}]][[slot source src="/a.mp4" type="video/mp4" muted /]][[slot source src="/b.webm" /]][[slot caption]]Hello <b>there</b> [[component note-#{n} title="in" /]][[/slot]][[slot unknown x="1" /]][[/component]]),
+          site.name
+        )
+
+      assert html |> query(".probe-source") |> LazyHTML.attribute("data-src") == [
+               "/a.mp4",
+               "/b.webm"
+             ]
+
+      assert html |> query(".probe-source") |> LazyHTML.attribute("data-type") == [
+               "video/mp4",
+               "none"
+             ]
+
+      assert html |> query(".probe-source") |> LazyHTML.attribute("data-muted") == ["true", ""]
+      assert html |> query(".probe-caption b") |> LazyHTML.text() == "there"
+      assert attribute(html, ".probe-caption .probe-note", "data-title") == "in"
+      refute html =~ "[[slot"
+    end
+
+    test "a slot nothing fills is passed empty", %{site: site, n: n} do
+      player!(site, "player-#{n}")
+
+      html =
+        draw(~s([[component player-#{n}]][[slot source src="/a.mp4" /]][[/component]]), site.name)
+
+      assert html |> query(".probe-source") |> Enum.count() == 1
+      assert html |> query(".probe-caption") |> Enum.count() == 0
+    end
+
+    test "a required slot, or a slot's required attribute, left out draws nothing", %{
+      site: site,
+      n: n
+    } do
+      player!(site, "player-#{n}")
+
+      assert draw(~s([[component player-#{n} /]]), site.name) == ""
+      assert preview(~s([[component player-#{n} /]]), site.name) =~ "source"
+
+      without_src = ~s([[component player-#{n}]][[slot source type="video/mp4" /]][[/component]])
+
+      assert draw(without_src, site.name) == ""
+      assert preview(without_src, site.name) =~ "source.src"
+    end
+
+    test "a stateful component inside another gets an id under its parent's", %{
+      site: site,
+      n: n
+    } do
+      row!(site, "row-#{n}")
+      live!(site, "live-#{n}")
+
+      html =
+        preview(
+          ~s([[component live-#{n} /]][[component row-#{n}]][[component live-#{n} /]][[component live-#{n} /]][[/component]]),
+          site.name
+        )
+
+      assert html |> query(~s([data-role="probe-live"])) |> LazyHTML.attribute("id") ==
+               ["content-0", "content-1-0", "content-1-1"]
+    end
+
+    test "content is drawn eight markers deep, and written as it is past that", %{
+      site: site,
+      n: n
+    } do
+      row!(site, "row-#{n}")
+      note!(site, "note-#{n}")
+
+      html =
+        String.duplicate("[[component row-#{n}]]", 9) <>
+          ~s([[component note-#{n} /]]) <> String.duplicate("[[/component]]", 9)
+
+      drawn = draw(html, site.name)
+
+      assert drawn |> query(".probe-row") |> Enum.count() == 9
+      assert drawn |> query(".probe-note") |> Enum.count() == 0
+      assert drawn =~ "[[component note-#{n} /]]"
+    end
+  end
+
   describe "rich_content/1 in a preview" do
     test "says why a marker draws nothing", %{site: site, n: n} do
       html = preview("[[component nothing-#{n} /]]", site.name)
