@@ -19,15 +19,19 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
 
   # The content editor's look, written on its root because the engine and the hook build the DOM
-  # these reach: the document, a placed component's block and its code, the drag handle, the
-  # fallback box. What a preview draws is in a shadow root with the site's own stylesheet — see
+  # these reach: the document, a placed component's block and its code, the grip and lines that
+  # move what it holds, the drag handle, the fallback box. What a preview draws is in a shadow root with the site's own stylesheet — see
   # `ContentComponentPicker` — so nothing here reaches inside it.
   @content_editor_classes [
     "relative rounded-[12px] border border-[#ecebe6] bg-white transition-shadow",
     "data-[focused]:border-[#c3c1f0] data-[focused]:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]",
     "[&[data-empty]_.ProseMirror]:before:pointer-events-none [&[data-empty]_.ProseMirror]:before:float-start [&[data-empty]_.ProseMirror]:before:h-0 [&[data-empty]_.ProseMirror]:before:text-[#b3b0a8] [&[data-empty]_.ProseMirror]:before:content-[attr(data-placeholder)]",
-    "[&_[data-role=content-component]]:my-2 [&_[data-role=content-component]]:rounded-[12px] [&_[data-role=content-component]]:border [&_[data-role=content-component]]:border-dashed [&_[data-role=content-component]]:border-[#c3c1f0] [&_[data-role=content-component]]:bg-[#faf9ff] [&_[data-role=content-component]]:p-2",
+    "[&_[data-role=content-component]]:relative [&_[data-role=content-component]]:my-2 [&_[data-role=content-component]]:rounded-[12px] [&_[data-role=content-component]]:border [&_[data-role=content-component]]:border-dashed [&_[data-role=content-component]]:border-[#c3c1f0] [&_[data-role=content-component]]:bg-[#faf9ff] [&_[data-role=content-component]]:p-2",
     "[&_.ProseMirror-selectednode[data-role=content-component]]:border-solid [&_.ProseMirror-selectednode[data-role=content-component]]:border-[#6d69e6]",
+    "[&_[data-role=content-component][data-drop-inside]]:border-solid [&_[data-role=content-component][data-drop-inside]]:border-[#6d69e6] [&_[data-role=content-component][data-drop-inside]]:bg-[#f2f1fc] [&_[data-role=content-component][data-drop-inside]]:shadow-[0_0_0_3px_rgba(91,87,214,0.18)] [&_[data-drop-inside]>.prosemirror-dropcursor-block]:hidden [&_[data-drop-inside]>.prosemirror-dropcursor-inline]:hidden",
+    "[&_[data-role=content-part-outline]]:pointer-events-none [&_[data-role=content-part-outline]]:absolute [&_[data-role=content-part-outline]]:z-10 [&_[data-role=content-part-outline]]:rounded-[6px] [&_[data-role=content-part-outline]]:outline-dashed [&_[data-role=content-part-outline]]:outline-2 [&_[data-role=content-part-outline]]:outline-[#8b87ea] [&_[data-role=content-part-outline][hidden]]:hidden",
+    "[&_[data-role=content-part-line]]:pointer-events-none [&_[data-role=content-part-line]]:absolute [&_[data-role=content-part-line]]:z-20 [&_[data-role=content-part-line]]:rounded-full [&_[data-role=content-part-line]]:bg-[#4f4bcc] [&_[data-role=content-part-line][hidden]]:hidden",
+    "[&_[data-role=content-part-grip]]:absolute [&_[data-role=content-part-grip]]:z-20 [&_[data-role=content-part-grip]]:flex [&_[data-role=content-part-grip]]:size-6 [&_[data-role=content-part-grip]]:cursor-grab [&_[data-role=content-part-grip]]:touch-none [&_[data-role=content-part-grip]]:items-center [&_[data-role=content-part-grip]]:justify-center [&_[data-role=content-part-grip]]:rounded-[6px] [&_[data-role=content-part-grip]]:border [&_[data-role=content-part-grip]]:border-[#c3c1f0] [&_[data-role=content-part-grip]]:bg-white [&_[data-role=content-part-grip]]:text-[#4f4bcc] [&_[data-role=content-part-grip]]:shadow-sm [&_[data-role=content-part-grip]:active]:cursor-grabbing [&_[data-role=content-part-grip][hidden]]:hidden",
     "[&_[data-role=content-component-head]]:flex [&_[data-role=content-component-head]]:items-center [&_[data-role=content-component-head]]:gap-1 [&_[data-role=content-component-head]]:text-[11.5px] [&_[data-role=content-component-head]]:font-bold [&_[data-role=content-component-head]]:text-[#4f4bcc]",
     "[&_[data-role=content-component-name]]:me-auto [&_[data-role=content-component-name]]:truncate",
     "[&_[data-role=content-component-head]_button]:flex [&_[data-role=content-component-head]_button]:size-7 [&_[data-role=content-component-head]_button]:items-center [&_[data-role=content-component-head]_button]:justify-center [&_[data-role=content-component-head]_button]:rounded-[8px] [&_[data-role=content-component-head]_button]:text-[#5c5a54] [&_[data-role=content-component-head]_button:hover]:bg-[#efeefb]",
@@ -342,6 +346,7 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
         }
         data-label-edit={gettext("Component settings")}
         data-label-remove={gettext("Remove component")}
+        data-label-move-part={gettext("Drag to move")}
         data-label-link={gettext("Link address — leave it empty to remove the link")}
         data-label-plain={gettext("The editor did not load — this is the content's HTML.")}
         data-label-id={@label_id}

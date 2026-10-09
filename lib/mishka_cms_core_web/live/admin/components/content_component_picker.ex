@@ -41,22 +41,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       it declares and an empty entry for each slot it requires, and the palette closes; or
       `%{error: message}`, and the palette stays open and says why.
     * `"block"`, `%{"id" => id}` — a ready-made block's marker, answered as `"build"` is.
-    * `"nest"`, `%{"marker" => marker, "name" => name}` — the component `marker` names with the
-      component `name` added at the end of what it holds, answered as `"build"` is; `%{error:
-      message}` when `marker` holds nothing or either is not listed.
+    * `"nest"`, `%{"marker" => marker, "name" => name}` or `%{"marker" => marker, "block" => id}`
+      — the component `marker` names with the component `name`, or the ready-made block `id`,
+      put inside it: beside its part `"beside"` (`"r-2"`), after it when `"after"` is `true`, or
+      at the end of what it holds. Answered as `"build"` is; `%{error: message}` when `marker`
+      holds nothing or either is not listed.
+    * `"reorder"`, `%{"marker" => marker, "path" => path, "beside" => path, "after" => boolean}` —
+      the component `marker` names with its part at `path` moved before, or after, its sibling at
+      `beside`, answered as `"build"` is.
     * `"edit"`, `%{"marker" => marker, "serial" => n}` — opens the settings of the component
       `marker` names, filled in from it. Answered `%{ok: true}`, or `%{error: message}` when the
       palette does not list it. `n` comes back on what those settings write.
     * `"close"` — closes the palette, and `"settings_done"` the settings.
 
+  `"nest"` and `"reorder"` carry the `"serial"` of the settings open on that component, if they are:
+  the settings then take the change, answer `%{ok: true}` and write it back as `applied`.
+
   And this pushes `"mishka:content_editor"` to the page, `%{id: editor_id, ...}` with:
 
     * `styles: href` — the stylesheet previews are drawn with, once it is built
       (`MishkaCmsCore.Runtime.ContentEditorStyles`); `"segments"` answers it too, when known.
+    * `holders: [name]` — the components the palette lists that take others inside them, once the
+      palette is read.
     * `previews: [%{marker: marker, preview: html}]` — a component's preview, drawn in the
       background after a marker is answered or written, each in a task of its own; it runs the
       component's own code. A component that raises as it is drawn is pushed as a notice saying
-      so — the page would fail on it too.
+      so — the page would fail on it too. The parts it holds are marked in it (`marked/1`).
     * `applied: %{name: name, marker: marker}, serial: n` — the component being edited, as the
       settings now write it.
     * `done: true, serial: n` — the settings closed.
@@ -208,23 +218,46 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   def handle_event("block", _params, socket), do: refuse(socket, "")
 
-  def handle_event("nest", %{"marker" => marker, "name" => name}, socket)
-      when is_binary(marker) and is_binary(name) do
+  def handle_event("nest", %{"marker" => marker} = params, socket) when is_binary(marker) do
     components = socket.assigns.components
 
-    with {:ok, tree} <- ContentComponents.read(marker),
-         %{inner_block: true} <- listed(components, tree.name),
-         %{} = child <- listed(components, name),
-         child = arriving(child, entries(components)),
-         nested = %{tree | parts: tree.parts ++ [{:component, child}]},
-         written when is_binary(written) <- ContentComponents.write(nested) do
-      {:reply, %{name: tree.name, marker: written}, socket |> close() |> previews([written])}
+    with %{} = child <- arriving_child(params, socket),
+         {:reply, %{error: _}, _socket} = refused <-
+           reshape(socket, marker, params["serial"], fn tree ->
+             case listed(components, tree.name) do
+               %{inner_block: true} -> put_inside(tree, child, params["beside"], params["after"])
+               _holds_nothing -> nil
+             end
+           end) do
+      refused
     else
-      _not_a_place_for_it -> {:reply, %{error: refused(name)}, socket}
+      nil -> {:reply, %{error: refused(params["name"] || "")}, socket}
+      {:reply, answer, socket} -> {:reply, answer, close(socket)}
     end
   end
 
   def handle_event("nest", _params, socket), do: {:reply, %{error: refused("")}, socket}
+
+  def handle_event(
+        "reorder",
+        %{"marker" => marker, "path" => path, "beside" => beside} = params,
+        socket
+      )
+      when is_binary(marker) and is_binary(path) and is_binary(beside) do
+    at = decode(path)
+
+    reshape(socket, marker, params["serial"], fn tree ->
+      case {Enum.split(at, -1), Enum.split(decode(beside), -1)} do
+        {{parent, [i]}, {parent, [s]}} when i != s and i >= 0 and s >= 0 ->
+          move_part(tree, at, placed(i, s, params["after"] == true))
+
+        _not_siblings ->
+          nil
+      end
+    end)
+  end
+
+  def handle_event("reorder", _params, socket), do: {:reply, %{error: refused("")}, socket}
 
   def handle_event("edit", %{"marker" => marker} = params, socket) when is_binary(marker) do
     case ContentComponents.read(marker) do
@@ -448,6 +481,70 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   defp close_media(socket), do: socket
 
+  # A PLACED COMPONENT CHANGED ON ITS BLOCK — a part moved, or one dropped in. With its settings
+  # open (`serial` is theirs), the settings take the change and write it back as they write their
+  # own; else the answer is the marker it now writes. `change` answers `nil` when there is no place
+  # for it.
+  defp reshape(
+         %{assigns: %{settings: %{serial: serial} = settings}} = socket,
+         _marker,
+         serial,
+         change
+       )
+       when is_integer(serial) do
+    case change.(settings.tree) do
+      %{} = tree -> {:reply, %{ok: true}, settle(socket, tree)}
+      nil -> {:reply, %{error: refused("")}, socket}
+    end
+  end
+
+  defp reshape(socket, marker, _serial, change) do
+    with {:ok, tree} <- ContentComponents.read(marker),
+         %{} = changed <- change.(tree),
+         written when is_binary(written) <- ContentComponents.write(changed) do
+      {:reply, %{name: changed.name, marker: written}, previews(socket, [written])}
+    else
+      _no_place -> {:reply, %{error: refused("")}, socket}
+    end
+  end
+
+  # What a drop puts inside a component: one from the palette as it arrives, or a ready-made block.
+  defp arriving_child(%{"name" => name}, socket) when is_binary(name) do
+    components = socket.assigns.components
+
+    case listed(components, name) do
+      %{} = entry -> arriving(entry, entries(components))
+      nil -> nil
+    end
+  end
+
+  defp arriving_child(%{"block" => id}, socket) when is_binary(id) do
+    case Enum.find(socket.assigns.blocks, &(&1.id == id)) do
+      %{tree: tree} -> tree
+      nil -> nil
+    end
+  end
+
+  defp arriving_child(_params, _socket), do: nil
+
+  # `child` among the parts of `tree`: before its part `beside`, after it when `after` is `true`, or
+  # at the end.
+  defp put_inside(%{parts: parts} = tree, child, beside, after?) do
+    at =
+      case is_binary(beside) && decode(beside) do
+        [s] when s >= 0 and s < length(parts) -> if(after? == true, do: s + 1, else: s)
+        _the_end -> length(parts)
+      end
+
+    %{tree | parts: List.insert_at(parts, at, {:component, child})}
+  end
+
+  # Where a part at `i` goes to stand before — or after — its sibling at `s`, once it is taken out.
+  defp placed(i, s, true) when s > i, do: s
+  defp placed(i, s, false) when s > i, do: s - 1
+  defp placed(_i, s, true), do: s + 1
+  defp placed(_i, s, false), do: s
+
   # THE COMPONENT IN THE CONTENT FOLLOWS THE SETTINGS as they change: the marker they now write
   # replaces the one being edited, and its preview is drawn again.
   defp settle(socket, tree) do
@@ -472,11 +569,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   @impl true
   def handle_async(:components, {:ok, {:ok, {entries, blocks}}}, socket) do
     socket =
-      assign(socket,
+      socket
+      |> assign(
         components: AsyncResult.ok(entries),
         blocks: blocks,
         tab: socket.assigns.tab || ((blocks == [] && "components") || "blocks")
       )
+      |> push_event(@event, %{
+        id: socket.assigns.editor,
+        holders: for(%{inner_block: true, name: name} <- entries, do: name)
+      })
 
     case socket.assigns.pending do
       nil -> {:noreply, socket}
@@ -707,12 +809,65 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   # because it is shown inside the admin: no script, no event attribute and no `phx-` binding
   # reaches the editor.
   defp preview(marker, site, user, editor) do
-    %{html: marker, site: site, current_user: user, id: editor <> "-preview"}
+    %{html: marked(marker), site: site, current_user: user, id: editor <> "-preview"}
     |> ContentComponents.draw(:static)
     |> Phoenix.HTML.Safe.to_iodata()
     |> IO.iodata_to_binary()
     |> ContentPreviewScrubber.sanitize()
   end
+
+  # THE PARTS A PREVIEW DRAWS ARE MARKED, for the editor to find each one on the block — to move it
+  # there (`"reorder"`), or drop a component between them (`"nest"`): an empty `mishka-part`
+  # element before each part drawn where the component draws what it holds, `data-part` its place
+  # as the settings write it, one ending each run of them (`data-end`), and one at the start of each
+  # slot entry with content of its own, naming its slot (`data-slot`). A text that is only spacing
+  # draws nothing and is not marked, and a component holding none is left as it is. The editor takes
+  # the marks out before the preview is shown.
+  defp marked(marker) do
+    with {:ok, tree} <- ContentComponents.read(marker),
+         written when is_binary(written) <- ContentComponents.write(marks(tree, [])) do
+      written
+    else
+      _unreadable -> marker
+    end
+  end
+
+  defp marks(%{parts: parts} = node, path) do
+    placed = Enum.with_index(parts, fn part, i -> {part, path ++ [i]} end)
+    run = for {part, at} <- placed, drawn_inline?(part), do: at
+
+    marked =
+      Enum.flat_map(placed, fn
+        {{:slot, slot}, at} -> [{:slot, entry_marks(slot, at)}]
+        {{:component, child}, at} -> [mark(at), {:component, marks(child, at)}]
+        {text, at} -> if(at in run, do: [mark(at), text], else: [text])
+      end)
+
+    case run do
+      [] ->
+        %{node | parts: marked}
+
+      _drawn ->
+        %{
+          node
+          | parts: marked ++ [{:text, ~s(<mishka-part data-end="#{encode(path)}"></mishka-part>)}]
+        }
+    end
+  end
+
+  defp entry_marks(%{parts: []} = slot, _at), do: slot
+
+  defp entry_marks(slot, at) do
+    %{parts: parts} = marks(slot, at)
+    own = ~s(<mishka-part data-part="#{encode(at)}" data-slot="#{slot.name}"></mishka-part>)
+    %{slot | parts: [{:text, own} | parts]}
+  end
+
+  defp mark(at), do: {:text, ~s(<mishka-part data-part="#{encode(at)}"></mishka-part>)}
+
+  defp drawn_inline?({:component, _child}), do: true
+  defp drawn_inline?({:text, text}), do: String.trim(text) != ""
+  defp drawn_inline?(_slot), do: false
 
   defp push_previews(socket, pairs) do
     push_event(socket, @event, %{

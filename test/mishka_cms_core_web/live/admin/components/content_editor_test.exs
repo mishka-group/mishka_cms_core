@@ -789,6 +789,23 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert_reply(view, %{marker: ^marker})
     end
 
+    test "a block dropped on a placed component goes inside it", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "nest", %{
+        "marker" => ~s([[component #{ctx.own.name}]]Text[[/component]]),
+        "block" => "note-#{ctx.n}"
+      })
+
+      marker =
+        ~s([[component #{ctx.own.name}]]Text[[component #{ctx.own.name} title="Outer"]][[component #{ctx.shared.name} /]][[/component]][[/component]])
+
+      assert_reply(view, %{marker: ^marker})
+
+      ask(view, "nest", %{"marker" => marker, "block" => "nobody-#{ctx.n}"})
+      assert_reply(view, %{error: _message})
+    end
+
     test "a block nobody offers is refused", ctx do
       view = ctx |> open() |> open_palette()
 
@@ -822,6 +839,66 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert_reply(view, %{name: _name, marker: ^marker})
     end
 
+    test "puts it before or after the part it was dropped beside", ctx do
+      view = ctx |> open() |> open_palette()
+
+      marker =
+        ~s([[component #{ctx.own.name}]]Text[[component #{ctx.shared.name} /]][[/component]])
+
+      for {beside, after?, inner} <- [
+            {"r-0", false,
+             "[[component #{ctx.own.name} /]]Text[[component #{ctx.shared.name} /]]"},
+            {"r-0", true,
+             "Text[[component #{ctx.own.name} /]][[component #{ctx.shared.name} /]]"},
+            {"r-1", true,
+             "Text[[component #{ctx.shared.name} /]][[component #{ctx.own.name} /]]"},
+            {"r-9", false,
+             "Text[[component #{ctx.shared.name} /]][[component #{ctx.own.name} /]]"}
+          ] do
+        ask(view, "nest", %{
+          "marker" => marker,
+          "name" => ctx.own.name,
+          "beside" => beside,
+          "after" => after?
+        })
+
+        written = "[[component #{ctx.own.name}]]#{inner}[[/component]]"
+        assert_reply(view, %{marker: ^written})
+      end
+    end
+
+    test "with the component's settings open, the settings take it", ctx do
+      view = ctx |> open() |> open_palette()
+      marker = ~s([[component #{ctx.own.name}]]Text[[/component]])
+
+      ask(view, "edit", %{"marker" => marker, "serial" => 7})
+      assert_reply(view, %{ok: true})
+
+      ask(view, "nest", %{"marker" => marker, "name" => ctx.shared.name, "serial" => 7})
+      assert_reply(view, %{ok: true})
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{serial: 7, applied: %{marker: written}},
+        @await
+      )
+
+      assert written ==
+               ~s([[component #{ctx.own.name}]]Text[[component #{ctx.shared.name} /]][[/component]])
+
+      assert in_drawer?(view, "#{@components}-node-r-1[data-name=#{ctx.shared.name}]")
+    end
+
+    test "the editor is told which components take others, once the palette is read", ctx do
+      flat = callout!(ctx.site, "flat-#{ctx.n}", slots: [])
+      view = ctx |> open() |> open_palette()
+
+      assert_push_event(view, "mishka:content_editor", %{holders: holders}, @await)
+      assert ctx.own.name in holders
+      refute flat.name in holders
+    end
+
     test "is refused where the component holds nothing, or either is not listed", ctx do
       flat = callout!(ctx.site, "flat-#{ctx.n}", slots: [])
       view = ctx |> open() |> open_palette()
@@ -837,6 +914,143 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       end
     end
   end
+
+  describe "a preview's parts" do
+    test "are marked where the component draws them, a slot entry with content at its start",
+         ctx do
+      tabs =
+        callout!(ctx.site, "tabs-#{ctx.n}",
+          attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+          template:
+            ~S|<div><section :for={t <- @tab} class="probe-tab">{render_slot(t)}</section><div class="probe-body">{render_slot(@inner_block)}</div></div>|,
+          slots: [
+            %{"name" => "inner_block", "opts" => %{}},
+            %{"name" => "tab", "opts" => %{}, "attrs" => []}
+          ]
+        )
+
+      marker =
+        "[[component #{tabs.name}]]Intro [[component #{ctx.shared.name} /]]\n  [[slot tab]]One[[/slot]][[slot tab /]][[/component]]"
+
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>#{marker}</p>"})
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{previews: [%{marker: ^marker, preview: preview}]},
+        @await
+      )
+
+      doc = LazyHTML.from_fragment(preview)
+      body = LazyHTML.query(doc, ".probe-body > mishka-part")
+
+      assert LazyHTML.attribute(body, "data-part") == ["r-0", "r-1"]
+      assert LazyHTML.attribute(body, "data-end") == ["r"]
+      assert LazyHTML.text(LazyHTML.query(doc, ".probe-body")) =~ "Intro"
+
+      starts = LazyHTML.query(doc, ".probe-tab > mishka-part:first-child")
+
+      assert LazyHTML.attribute(starts, "data-part") == ["r-3"]
+      assert LazyHTML.attribute(starts, "data-slot") == ["tab"]
+      assert Enum.count(LazyHTML.query(doc, ".probe-tab")) == 2
+    end
+
+    test "a component holding nothing, or only spacing, is drawn unmarked", ctx do
+      view = open(ctx)
+
+      for marker <- [
+            "[[component #{ctx.own.name} /]]",
+            "[[component #{ctx.own.name}]]  [[/component]]"
+          ] do
+        ask(view, "segments", %{"html" => "<p>#{marker}</p>"})
+
+        assert_push_event(
+          view,
+          "mishka:content_editor",
+          %{previews: [%{marker: ^marker, preview: preview}]},
+          @await
+        )
+
+        refute preview =~ "mishka-part"
+      end
+    end
+  end
+
+  describe "moving a part on its block" do
+    setup ctx do
+      kids = Enum.map_join(~w(a b c), &~s([[component #{ctx.shared.name} title="#{&1}" /]]))
+      {:ok, marker: "[[component #{ctx.own.name}]]#{kids}[[/component]]"}
+    end
+
+    test "puts it before or after a sibling, as the server writes it", ctx do
+      view = open(ctx)
+
+      for {path, beside, after?, order} <- [
+            {"r-2", "r-0", false, ~w(c a b)},
+            {"r-0", "r-2", true, ~w(b c a)},
+            {"r-0", "r-1", true, ~w(b a c)},
+            {"r-2", "r-1", false, ~w(a c b)},
+            {"r-0", "r-2", false, ~w(b a c)}
+          ] do
+        ask(view, "reorder", %{
+          "marker" => ctx.marker,
+          "path" => path,
+          "beside" => beside,
+          "after" => after?
+        })
+
+        assert_reply(view, %{marker: marker})
+        assert titles(marker) == order
+
+        assert_push_event(
+          view,
+          "mishka:content_editor",
+          %{previews: [%{marker: ^marker}]},
+          @await
+        )
+      end
+    end
+
+    test "beside itself, or anything but a sibling, is refused", ctx do
+      view = open(ctx)
+
+      for {path, beside} <- [{"r-0", "r-0"}, {"r-0", "r-1-0"}, {"r", "r-0"}, {"x", "r-1"}] do
+        ask(view, "reorder", %{"marker" => ctx.marker, "path" => path, "beside" => beside})
+        assert_reply(view, %{error: _message})
+      end
+    end
+
+    test "with its settings open, the settings take it", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "edit", %{"marker" => ctx.marker, "serial" => 4})
+      assert_reply(view, %{ok: true})
+
+      ask(view, "reorder", %{
+        "marker" => ctx.marker,
+        "path" => "r-2",
+        "beside" => "r-0",
+        "after" => false,
+        "serial" => 4
+      })
+
+      assert_reply(view, %{ok: true})
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{serial: 4, applied: %{marker: marker}},
+        @await
+      )
+
+      assert titles(marker) == ~w(c a b)
+      assert in_drawer?(view, ~s(#{@components}-f-r-0-title[value="c"]))
+    end
+  end
+
+  defp titles(marker),
+    do: ~r/title="([^"]+)"/ |> Regex.scan(marker, capture: :all_but_first) |> List.flatten()
 
   # THE DRAWER IS IN A PORTAL, which `Phoenix.LiveViewTest` keeps inside the `<template>` the browser
   # moves to the body — it does not look in there. So the drawer is read out of the template, and its
