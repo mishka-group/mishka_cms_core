@@ -42,6 +42,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ExamplesTest do
       assert example.description == "kind danger"
     end
 
+    # A kit ships its sample pictures inline; the address says nothing about the example.
+    test "an address is described by the attribute that holds it" do
+      [example] =
+        Examples.for_component(
+          component([
+            alert(
+              ~s( src={"data:image/svg+xml;base64,PHN2Zy8+"} href="/a" variant="outline"),
+              "Hi"
+            )
+          ])
+        )
+
+      assert example.description == "href, src, variant outline"
+    end
+
     test "an attribute set to nothing is not something to describe" do
       [example] = Examples.for_component(component([alert(" icon={nil} variant=\"base\"", "Hi")]))
 
