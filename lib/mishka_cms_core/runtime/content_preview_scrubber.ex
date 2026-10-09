@@ -9,7 +9,9 @@ defmodule MishkaCmsCore.Runtime.ContentPreviewScrubber do
       `applet`, `base`, `meta`, `link`;
     * attributes removed: every event attribute (`on…`), every LiveView binding (`phx-…`), and an
       address — `href`, `src`, `srcset`, `action`, `formaction`, `poster`, … — that is not http(s),
-      mail, phone or the page's own; a `style` is read through `HtmlSanitizeEx.Scrubber.CSS`;
+      mail, phone or the page's own, or, for a picture's `src`, `srcset` or `poster`, a
+      `data:image/…` one (a kit's sample pictures travel as those); a `style` is read through
+      `HtmlSanitizeEx.Scrubber.CSS`;
     * comments removed.
 
   A preview is drawn inert, in a shadow root, under the admin's Content Security Policy — so a form
@@ -22,6 +24,7 @@ defmodule MishkaCmsCore.Runtime.ContentPreviewScrubber do
   @removed ~w(script style template noscript iframe frame frameset object embed applet base meta link)
   @addresses ~w(href src action formaction poster background cite longdesc data xlink:href)
   @schemes ~w(http https mailto tel)
+  @pictures ~w(src srcset poster)
 
   @doc "`html` with what a preview may not carry taken out."
   @spec sanitize(String.t() | nil) :: String.t()
@@ -49,10 +52,10 @@ defmodule MishkaCmsCore.Runtime.ContentPreviewScrubber do
         []
 
       name in @addresses ->
-        if(address?(value), do: [{name, value}], else: [])
+        if(address?(value, name), do: [{name, value}], else: [])
 
       name == "srcset" ->
-        if(Enum.all?(candidates(value), &address?/1), do: [{name, value}], else: [])
+        if(Enum.all?(candidates(value), &address?(&1, name)), do: [{name, value}], else: [])
 
       name == "style" ->
         [{name, HtmlSanitizeEx.Scrubber.CSS.scrub(value)}]
@@ -64,14 +67,18 @@ defmodule MishkaCmsCore.Runtime.ContentPreviewScrubber do
 
   # Read as a browser reads it, which ignores spaces and control characters in a scheme. An address
   # with no scheme is the page's own — a path, a query, a fragment.
-  defp address?(value) do
+  defp address?(value, name) do
     read = value |> String.replace(~r/[\x00-\x20]/, "") |> String.downcase()
 
     case Regex.run(~r/\A([a-z][a-z0-9+.\-]*):/, read) do
+      [_whole, "data"] -> name in @pictures and String.starts_with?(read, "data:image/")
       [_whole, scheme] -> scheme in @schemes
       nil -> true
     end
   end
+
+  # A `data:` address holds a comma of its own, so a srcset carrying one is read whole.
+  defp candidates("data:" <> _rest = srcset), do: [srcset]
 
   defp candidates(srcset),
     do:

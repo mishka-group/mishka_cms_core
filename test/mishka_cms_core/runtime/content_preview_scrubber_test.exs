@@ -72,9 +72,20 @@ defmodule MishkaCmsCore.Runtime.ContentPreviewScrubberTest do
              inspect(href)
     end
 
-    assert kept(~s(<img src="data:image/png;base64,AA">))
-           |> LazyHTML.query("img[src]")
-           |> Enum.empty?()
+    for {tag, attr} <- [{"img", "src"}, {"video", "poster"}, {"img", "srcset"}] do
+      assert kept(~s(<#{tag} #{attr}="data:image/svg+xml;base64,PHN2Zy8+">))
+             |> LazyHTML.query("#{tag}[#{attr}]")
+             |> Enum.count() == 1,
+             attr
+    end
+
+    for html <- [
+          ~s(<a href="data:image/svg+xml;base64,PHN2Zy8+">x</a>),
+          ~s(<img src="data:text/html;base64,PGI+">),
+          ~s(<form action="data:image/png;base64,AA"></form>)
+        ] do
+      refute ContentPreviewScrubber.sanitize(html) =~ "data:", html
+    end
 
     assert kept(~s(<img srcset="/a.png 1x, https://x.test/b.png 2x">))
            |> LazyHTML.query("img[srcset]")
