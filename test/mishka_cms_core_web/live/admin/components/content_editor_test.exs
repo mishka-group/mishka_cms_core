@@ -655,7 +655,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       block = %{
         id: "note-#{ctx.n}",
         title: "Boxed note",
-        description: "A note with a box inside",
+        component: ctx.own.name,
         category: "layout",
         tree: %{
           name: ctx.own.name,
@@ -691,6 +691,27 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert_reply(view, %{marker: ^marker})
       refute has_element?(view, "#{@components}-panel")
       assert_push_event(view, "mishka:content_editor", %{previews: [%{marker: ^marker}]}, @await)
+    end
+
+    test "are the examples the site's components carry", ctx do
+      callout!(ctx.site, "framed-#{ctx.n}",
+        examples: [
+          ~s(<.component component_name="framed-#{ctx.n}" id="framed-welcome" title="Hello">\n  Welcome <.component component_name="#{ctx.shared.name}" />\n</.component>),
+          ~s(<.component component_name="framed-#{ctx.n}">{@title}</.component>)
+        ]
+      )
+
+      view = ctx |> open() |> open_palette()
+
+      assert has_element?(view, "#{@components}-block-framed-#{ctx.n}-example-1", "Welcome")
+      refute has_element?(view, "#{@components}-block-framed-#{ctx.n}-example-2")
+
+      ask(view, "block", %{"id" => "framed-#{ctx.n}-example-1"})
+
+      marker =
+        ~s([[component framed-#{ctx.n} title="Hello"]]Welcome [[component #{ctx.shared.name} /]][[/component]])
+
+      assert_reply(view, %{marker: ^marker})
     end
 
     test "a block nobody offers is refused", ctx do
@@ -889,6 +910,96 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
       assert applied(view) ==
                ~s([[component #{player.name}]][[component #{ctx.shared.name} /]][[slot source src="/a.mp4" /]]After[[/component]])
+    end
+
+    test "file the attributes under the page builder's headings, what is filled in open", ctx do
+      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+
+      assert in_drawer?(view, "#{@components}-f-r-title")
+      refute in_drawer?(view, "details #{@components}-f-r-title")
+
+      assert in_drawer?(
+               view,
+               "details#{@components}-group-r-properties[data-group=Properties][phx-mounted] #{@components}-f-r-tone"
+             )
+    end
+
+    test "fold each part inside, saying what a folded one holds", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(
+          ~s([[component #{player.name}]][[component #{ctx.own.name} title="Inner" /]][[slot source src="/a.mp4" /]][[/component]])
+        )
+
+      for {section, part} <- [{"node", "r-0"}, {"slot", "r-1"}] do
+        id = "#{@components}-#{section}-#{part}"
+
+        assert in_drawer?(view, "#{id}[phx-mounted] > [data-part=body]")
+        assert in_drawer?(view, "#{id} > [data-part=head] button[data-part=fold][phx-click]")
+        assert drawer_html(view, "#{id} > [data-part=head] [data-part=fold]") =~ "data-collapsed"
+      end
+
+      assert drawer_html(view, "#{@components}-node-r-0 > [data-part=head]") =~ "Inner"
+      refute in_drawer?(view, "#{@components}-node-r > [data-part=head]")
+    end
+
+    test "show a text box added beside the slots at once", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{player.name}]][[slot source src="/a.mp4" /]][[/component]]))
+
+      refute in_drawer?(view, "#{@components}-text-r-1")
+      push(view, "part_add", %{"path" => "r", "kind" => "text"})
+      assert in_drawer?(view, "#{@components}-text-r-1")
+    end
+
+    test "give a component or a slot entry added inside a box for its text at once", ctx do
+      tabs =
+        callout!(ctx.site, "tabs-#{ctx.n}",
+          attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+          template:
+            ~S|<div class="probe-tabs"><div :for={t <- @tab}>{render_slot(t)}</div></div>|,
+          slots: [%{"name" => "tab", "opts" => %{"required" => true}, "attrs" => []}]
+        )
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name}]]Body[[/component]]))
+
+      push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => tabs.name})
+      assert in_drawer?(view, "#{@components}-text-r-1-0-0")
+
+      push(view, "part_add", %{"path" => "r-1", "kind" => "slot", "name" => "tab"})
+      assert in_drawer?(view, "#{@components}-text-r-1-1-0")
+    end
+
+    test "write each text box, and each line in one, as a line of its own", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name}]]One[[/component]]))
+
+      push(view, "part_add", %{"path" => "r", "kind" => "text"})
+      settings_change(view, %{"t" => %{"r-1" => "Two\r\nThree"}})
+
+      marker = ~s([[component #{ctx.own.name}]]One<br>Two<br>Three[[/component]])
+      assert applied(view) == marker
+
+      push(view, "settings_done")
+      edit(view, marker)
+
+      assert drawer_html(view, "#{@components}-text-r-0") =~ "One\nTwo\nThree"
     end
 
     test "a path that leads nowhere, or a component not listed, changes nothing", ctx do

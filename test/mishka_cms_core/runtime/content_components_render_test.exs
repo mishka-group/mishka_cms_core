@@ -440,6 +440,23 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       assert html |> query(".probe-caption") |> Enum.count() == 0
     end
 
+    test "an entry written with nothing inside draws empty, and so does all around it", %{
+      site: site,
+      n: n
+    } do
+      row!(site, "row-#{n}")
+      player!(site, "player-#{n}")
+
+      html =
+        draw(
+          ~s([[component row-#{n}]][[component player-#{n}]][[slot source src="/a.mp4" /]][[slot caption /]][[/component]][[/component]]),
+          site.name
+        )
+
+      assert html |> query(".probe-row .probe-player .probe-caption") |> Enum.count() == 1
+      assert html |> query(".probe-caption") |> LazyHTML.text() == ""
+    end
+
     test "a required slot, or a slot's required attribute, left out draws nothing", %{
       site: site,
       n: n
@@ -628,7 +645,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       site: site,
       n: n
     } do
-      note!(site, "pick-own-#{n}")
+      note!(site, "pick-own-#{n}",
+        examples: [~s(<.component component_name="pick-own-#{n}" title="Hi" />)]
+      )
+
       note!(nil, "pick-shared-#{n}")
       note!(site, "pick-off-#{n}", active: false)
       other = site!("content-elsewhere-#{n}")
@@ -655,6 +675,32 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       refute own.global
       assert Enum.map(own.attrs, & &1.name) == ["title", "count", "open", "size"]
       assert Enum.find(own.attrs, &(&1.name == "size")).values == ["small", "large"]
+      assert own.examples == [~s(<.component component_name="pick-own-#{n}" title="Hi" />)]
+
+      assert Enum.map(own.attrs, &{&1.name, &1.group, &1.media}) == [
+               {"title", "Content", false},
+               {"count", "Properties", false},
+               {"open", "Behavior", false},
+               {"size", "Layout", false}
+             ]
+    end
+
+    test "says which attributes hold a picture or a video, the page builder's way", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "pick-picture-#{n}",
+        attrs:
+          for name <- ~w(image src poster alt caption) do
+            %{"name" => name, "type" => "string", "opts" => %{}}
+          end
+      )
+
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+      {:ok, entries} = ContentComponents.embeddable(master, site.id)
+      picture = Enum.find(entries, &(&1.name == "pick-picture-#{n}"))
+
+      assert for(%{media: true, name: name} <- picture.attrs, do: name) == ~w(image src poster)
     end
 
     test "a site user is offered its own site's and the global ones", %{site: site, n: n} do

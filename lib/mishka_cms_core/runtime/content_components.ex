@@ -80,7 +80,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   A slot the component declares and the content does not fill is passed empty, and one it requires
   draws the component as nothing — as a required attribute does. A slot's attribute the marker
-  leaves out is passed as its declared default.
+  leaves out is passed as its declared default, and an entry with nothing inside it draws nothing
+  where the component renders its content.
 
   The HTML around the markers is drawn as it is given: pass only HTML that was sanitized.
 
@@ -222,6 +223,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
           global: boolean(),
           inner_block: boolean(),
           category: String.t(),
+          examples: [String.t()],
           attrs: [attr_entry()],
           slots: [
             %{
@@ -234,14 +236,20 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
           ]
         }
 
-  @typedoc "An attribute a marker can set, as `embeddable/2` lists it."
+  @typedoc """
+  An attribute a marker can set, as `embeddable/2` lists it: `group` is the heading the page
+  builder's Inspector files it under, untranslated, and `media` whether it holds a picture or a
+  video.
+  """
   @type attr_entry :: %{
           name: String.t(),
           type: String.t(),
           values: [term()],
           default: term(),
           doc: String.t() | nil,
-          required: boolean()
+          required: boolean(),
+          group: String.t(),
+          media: boolean()
         }
 
   @doc """
@@ -442,6 +450,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       :slots,
       :template,
       :helpers,
+      :examples,
       :site_id
     ])
     |> Ash.Query.sort(name: :asc)
@@ -503,7 +512,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     Enum.reject(rows, &(is_nil(&1.site_id) and MapSet.member?(own, &1.name)))
   end
 
-  defp entry(row) do
+  @doc """
+  The palette entry for a component `row` — a stored component, or anything with its fields — as
+  `embeddable/2` lists it.
+  """
+  @spec entry(map()) :: entry()
+  def entry(row) do
     %{
       name: row.name,
       description: row.description,
@@ -512,6 +526,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       global: is_nil(row.site_id),
       inner_block: Enum.any?(row.slots || [], &Inspector.inner_block?/1),
       category: category(row.name, row.type),
+      examples: Enum.filter(row.examples || [], &is_binary/1),
       attrs: attr_entries(row.attrs),
       slots:
         for slot <- Inspector.addable_slots(row) do
@@ -528,15 +543,29 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     }
   end
 
+  # THE BUILDER'S OWN READING OF AN ATTRIBUTE: the heading its Inspector files it under, and
+  # whether it is a picture or a video — the kit's `editor: "media"` hint, or the name an HTML media
+  # element gives one (`src`, `poster`, `srcset`) — so both editors ask the same question the same
+  # way, of any kit.
   defp attr_entries(attrs) do
+    groups =
+      for {group, grouped} <- Inspector.grouped(%{attrs: attrs || []}),
+          attr <- grouped,
+          into: %{},
+          do: {Inspector.name(attr), group}
+
     for attr <- attrs || [], castable?(attr) do
+      name = to_string(Inspector.name(attr))
+
       %{
-        name: to_string(Inspector.name(attr)),
+        name: name,
         type: type(attr),
         values: values(attr),
         default: Inspector.default(attr),
         doc: Inspector.doc(attr),
-        required: Inspector.required?(attr)
+        required: Inspector.required?(attr),
+        group: Map.get(groups, Inspector.name(attr), "Properties"),
+        media: Inspector.widget(attr) == :media or Inspector.element_widget("img", name) == :media
       }
     end
   end
@@ -868,7 +897,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     |> Map.merge(%{__slot__: key, inner_block: slot_content(entry.inner, child, mode)})
   end
 
-  defp slot_content(nil, _child, _mode), do: nil
+  # AN ENTRY WRITTEN WITH NOTHING INSIDE DRAWS NOTHING THERE. Phoenix raises on `render_slot` of an
+  # entry whose `inner_block` is nil, so a `[[slot trigger /]]` took down the component around it —
+  # and every component it sat inside.
+  defp slot_content(nil, _child, _mode), do: fn _changed, _arg -> "" end
 
   defp slot_content(inner, child, mode) do
     content =

@@ -87,11 +87,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   @event "mishka:content_editor"
 
-  # What an author fills in, shown first; every other attribute waits under More options.
-  @content_attrs ~w(title label text description time value src srcset alt href navigate image image_url thumbnail poster avatar name caption subtitle heading message placeholder icon link url badge step step_number type kind cols)
-
-  @media_attrs ~w(src srcset image image_url avatar thumbnail poster)
-
   @doc """
   The site the record a Gervaz form `state` edits is on: for a master, the one its Site field names,
   else the record's own; for a site user, their own. `nil` is the global components alone.
@@ -278,18 +273,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     at = decode(path)
 
     case slot_of(tree, at, name, entries(socket.assigns.components)) do
-      %{} = slot -> {:noreply, settle(socket, add_part(tree, at, {:slot, fresh_slot(slot)}))}
-      nil -> {:noreply, socket}
+      %{} = slot ->
+        part = {:slot, %{fresh_slot(slot) | parts: with_text([], slot.inner)}}
+        {:noreply, settle(socket, add_part(tree, at, part))}
+
+      nil ->
+        {:noreply, socket}
     end
   end
 
   def handle_event("part_add", %{"path" => path, "kind" => "component", "name" => name}, socket) do
     tree = socket.assigns.settings.tree
     at = decode(path)
+    entries = entries(socket.assigns.components)
 
     with %{} = entry <- listed(socket.assigns.components, name),
-         true <- takes_content?(tree, at, entries(socket.assigns.components)) do
-      tree = add_part(tree, at, {:component, fresh(entry)})
+         true <- takes_content?(tree, at, entries) do
+      tree = add_part(tree, at, {:component, writable(fresh(entry), entries)})
+
       {:noreply, socket |> update(:settings, &%{&1 | adding: nil}) |> settle(tree)}
     else
       _not_here -> {:noreply, socket}
@@ -372,13 +373,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       settings: %{
         tree: tree,
         serial: serial,
-        marker: ContentComponents.write(tree),
+        marker: written(tree),
         adding: nil,
         adding_query: "",
         media: nil
       },
       notice: nil
     )
+  end
+
+  # THE DRAWER'S TEXT BOXES ARE LINES: two boxes side by side are written as two lines, not run
+  # together into one.
+  defp written(tree), do: tree |> lined() |> ContentComponents.write()
+
+  defp lined(%{parts: parts} = container) do
+    parts =
+      parts
+      |> Enum.map(fn
+        {:component, tree} -> {:component, lined(tree)}
+        {:slot, slot} -> {:slot, lined(slot)}
+        text -> text
+      end)
+      |> Enum.reduce([], fn
+        {:text, text}, [{:text, before} | rest] -> [{:text, joined(before, text)} | rest]
+        part, acc -> [part | acc]
+      end)
+      |> Enum.reverse()
+
+    %{container | parts: parts}
+  end
+
+  defp joined(before, text) do
+    case String.trim(before) == "" or String.trim(text) == "" do
+      true -> before <> text
+      false -> before <> "<br>" <> text
+    end
   end
 
   defp close_settings(socket) do
@@ -401,7 +430,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   defp settle(socket, tree) do
     settings = socket.assigns.settings
 
-    case ContentComponents.write(tree) do
+    case written(tree) do
       marker when is_binary(marker) and marker != settings.marker ->
         socket
         |> assign(:settings, %{settings | tree: tree, marker: marker})
@@ -710,7 +739,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   defp put_text(tree, path, text) when is_binary(text) do
     update_part(tree, path, fn
-      {:text, _old} -> {:text, text}
+      {:text, _old} -> {:text, html_of(text)}
       other -> other
     end)
   end
@@ -911,8 +940,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     |> String.downcase()
   end
 
-  defp block_words(block) do
-    [block.id, block.title, block.description, ContentComponents.category_label(block.category)]
+  defp block_words(block, prefixes) do
+    [
+      block.id,
+      block.title,
+      block.component,
+      label(block.component, prefixes),
+      ContentComponents.category_label(block.category)
+    ]
     |> Enum.join(" ")
     |> String.downcase()
   end
@@ -1078,7 +1113,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           <.blocks
             :if={@tab == "blocks"}
             id={@id}
-            blocks={matching(@blocks, @query, &block_words/1)}
+            blocks={matching(@blocks, @query, &block_words(&1, @prefixes))}
+            prefixes={@prefixes}
           />
 
           <.components
@@ -1113,6 +1149,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   attr :id, :string, required: true
   attr :blocks, :list, required: true
+  attr :prefixes, :any, required: true
 
   defp blocks(assigns) do
     ~H"""
@@ -1129,8 +1166,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
             class="flex cursor-grab flex-col items-start gap-1 rounded-[12px] border border-[#ecebe6] bg-white px-3 py-2.5 text-start hover:border-[#c3c1f0] hover:bg-[#faf9ff] active:cursor-grabbing"
           >
             <span class="text-[12.5px] font-semibold text-[#1b1a18]">{block.title}</span>
-            <span dir="auto" class="line-clamp-2 text-[11px] font-medium leading-[1.4] text-[#8a877f]">
-              {block.description}
+            <span class="line-clamp-2 text-[11px] font-medium leading-[1.4] text-[#8a877f]">
+              {label(block.component, @prefixes)}
             </span>
           </button>
         </div>
@@ -1327,92 +1364,101 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
     ~H"""
     <section
+      id={@id <> "-node-" <> @key}
       data-content-node={@key}
       data-name={@tree.name}
-      class={["flex flex-col gap-3", !@root && "rounded-[12px] border border-[#ecebe6] bg-white p-3"]}
+      phx-mounted={!@root && JS.ignore_attributes(["data-collapsed"])}
+      class={[
+        "flex flex-col gap-3",
+        !@root && ["rounded-[12px] border border-[#ecebe6] bg-white p-3", collapsible()]
+      ]}
     >
       <.part_head
         :if={!@root}
         id={@id}
         key={@key}
+        section={@id <> "-node-" <> @key}
         title={label(@tree.name, @prefixes)}
         name={@tree.name}
+        hint={hint(@tree, @entry)}
         myself={@myself}
       />
 
-      <p
-        :if={!@entry}
-        class="rounded-[10px] bg-[#fbeef1] px-3 py-2 text-[11.5px] font-medium text-[#b5495f]"
-      >
-        {refused(@tree.name)}
-      </p>
-
-      <.attr_fields
-        :if={@entry}
-        id={@id}
-        key={@key}
-        attrs={@entry.attrs}
-        values={@tree.attrs}
-        myself={@myself}
-      />
-
-      <div :if={@holds} class="flex flex-col gap-2">
-        <p class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#8a877f]">
-          {gettext("Inside it")}
+      <div data-part="body" class="flex flex-col gap-3">
+        <p
+          :if={!@entry}
+          class="rounded-[10px] bg-[#fbeef1] px-3 py-2 text-[11.5px] font-medium text-[#b5495f]"
+        >
+          {refused(@tree.name)}
         </p>
 
-        <.part_fields
-          :for={{part, i} <- Enum.with_index(@tree.parts)}
-          :if={shown?(part, @tree.parts)}
+        <.attr_fields
+          :if={@entry}
           id={@id}
-          path={@path ++ [i]}
-          part={part}
-          parent={@entry}
-          entries={@entries}
-          prefixes={@prefixes}
-          adding={@adding}
-          adding_query={@adding_query}
+          key={@key}
+          attrs={@entry.attrs}
+          values={@tree.attrs}
           myself={@myself}
         />
 
-        <div class="flex flex-wrap gap-1.5">
-          <.add_button
-            :if={@entry.inner_block}
-            id={@id <> "-add-text-" <> @key}
-            text={gettext("Text")}
-            values={%{"path" => @key, "kind" => "text"}}
+        <div :if={@holds} class="flex flex-col gap-2">
+          <p class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#8a877f]">
+            {gettext("Inside it")}
+          </p>
+
+          <.part_fields
+            :for={{part, i} <- Enum.with_index(@tree.parts)}
+            :if={shown?(part, @tree.parts)}
+            id={@id}
+            path={@path ++ [i]}
+            part={part}
+            parent={@entry}
+            entries={@entries}
+            prefixes={@prefixes}
+            adding={@adding}
+            adding_query={@adding_query}
             myself={@myself}
           />
-          <button
-            :if={@entry.inner_block}
-            type="button"
-            id={@id <> "-add-component-" <> @key}
-            phx-click={(@adding == @key && "child_close") || "child_open"}
-            phx-value-path={@key}
-            phx-target={@myself}
-            class="inline-flex h-8 items-center gap-1 rounded-[9px] border border-[#dcdbf5] bg-[#f7f6fe] px-2.5 text-[11.5px] font-semibold text-[#4f4bcc] hover:bg-[#efeefb]"
-          >
-            <.icon name="hero-plus-mini" class="size-4" />{gettext("Component")}
-          </button>
-          <.add_button
-            :for={slot <- @entry.slots}
-            id={@id <> "-add-slot-" <> @key <> "-" <> slot.name}
-            text={Inspector.label(slot.name)}
-            values={%{"path" => @key, "kind" => "slot", "name" => slot.name}}
+
+          <div class="flex flex-wrap gap-1.5">
+            <.add_button
+              :if={@entry.inner_block}
+              id={@id <> "-add-text-" <> @key}
+              text={gettext("Text")}
+              values={%{"path" => @key, "kind" => "text"}}
+              myself={@myself}
+            />
+            <button
+              :if={@entry.inner_block}
+              type="button"
+              id={@id <> "-add-component-" <> @key}
+              phx-click={(@adding == @key && "child_close") || "child_open"}
+              phx-value-path={@key}
+              phx-target={@myself}
+              class="inline-flex h-8 items-center gap-1 rounded-[9px] border border-[#dcdbf5] bg-[#f7f6fe] px-2.5 text-[11.5px] font-semibold text-[#4f4bcc] hover:bg-[#efeefb]"
+            >
+              <.icon name="hero-plus-mini" class="size-4" />{gettext("Component")}
+            </button>
+            <.add_button
+              :for={slot <- @entry.slots}
+              id={@id <> "-add-slot-" <> @key <> "-" <> slot.name}
+              text={Inspector.label(slot.name)}
+              values={%{"path" => @key, "kind" => "slot", "name" => slot.name}}
+              myself={@myself}
+            />
+          </div>
+
+          <.child_picker
+            :if={@adding == @key}
+            id={@id}
+            key={@key}
+            parent={@tree.name}
+            entries={@entries}
+            prefixes={@prefixes}
+            query={@adding_query}
             myself={@myself}
           />
         </div>
-
-        <.child_picker
-          :if={@adding == @key}
-          id={@id}
-          key={@key}
-          parent={@tree.name}
-          entries={@entries}
-          prefixes={@prefixes}
-          query={@adding_query}
-          myself={@myself}
-        />
       </div>
     </section>
     """
@@ -1441,7 +1487,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         phx-debounce="300"
         placeholder={gettext("Text")}
         class={["min-h-[2.75rem] py-2", field_class()]}
-      >{@text}</textarea>
+      >{lines_of(@text)}</textarea>
       <.part_actions id={@id} key={@key} myself={@myself} />
     </div>
     """
@@ -1472,37 +1518,46 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
     ~H"""
     <section
+      id={@id <> "-slot-" <> @key}
       data-content-slot={@key}
       data-name={@slot.name}
-      class="flex flex-col gap-3 rounded-[12px] border border-dashed border-[#d9d7f3] bg-[#fbfbff] p-3"
+      phx-mounted={JS.ignore_attributes(["data-collapsed"])}
+      class={[
+        "flex flex-col gap-3 rounded-[12px] border border-dashed border-[#d9d7f3] bg-[#fbfbff] p-3",
+        collapsible()
+      ]}
     >
       <.part_head
         id={@id}
         key={@key}
+        section={@id <> "-slot-" <> @key}
         title={Inspector.label(@slot.name)}
         name={@declared && @declared.doc}
+        hint={hint(@slot, @declared)}
         myself={@myself}
       />
-      <.attr_fields
-        :if={@declared}
-        id={@id}
-        key={@key}
-        attrs={@declared.attrs}
-        values={@slot.attrs}
-        myself={@myself}
-      />
-      <.part_fields
-        :for={{part, i} <- Enum.with_index(@slot.parts)}
-        :if={shown?(part, @slot.parts)}
-        id={@id}
-        path={@path ++ [i]}
-        part={part}
-        entries={@entries}
-        prefixes={@prefixes}
-        adding={@adding}
-        adding_query={@adding_query}
-        myself={@myself}
-      />
+      <div data-part="body" class="flex flex-col gap-3">
+        <.attr_fields
+          :if={@declared}
+          id={@id}
+          key={@key}
+          attrs={@declared.attrs}
+          values={@slot.attrs}
+          myself={@myself}
+        />
+        <.part_fields
+          :for={{part, i} <- Enum.with_index(@slot.parts)}
+          :if={shown?(part, @slot.parts)}
+          id={@id}
+          path={@path ++ [i]}
+          part={part}
+          entries={@entries}
+          prefixes={@prefixes}
+          adding={@adding}
+          adding_query={@adding_query}
+          myself={@myself}
+        />
+      </div>
     </section>
     """
   end
@@ -1510,23 +1565,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   defp part_fields(assigns), do: ~H""
 
   # A text between the components a part holds that is only spacing is not shown; text standing
-  # alone is, empty or not.
+  # alone is, and an empty one — a box just added — always is.
   defp shown?({:text, text}, parts),
-    do: String.trim(text) != "" or Enum.all?(parts, &match?({:text, _}, &1))
+    do: text == "" or String.trim(text) != "" or Enum.all?(parts, &match?({:text, _}, &1))
 
   defp shown?(_part, _parts), do: true
 
   attr :id, :string, required: true
   attr :key, :string, required: true
+  attr :section, :string, required: true
   attr :title, :string, required: true
   attr :name, :string, default: nil
+  attr :hint, :string, default: nil
   attr :myself, :any, required: true
 
+  # A part's head: a button folding the part away and opening it again — in the browser alone, kept
+  # through the server's updates — its name and what it says, and its moves.
   defp part_head(assigns) do
     ~H"""
-    <div class="flex items-center gap-1.5">
+    <div data-part="head" class="flex items-center gap-1.5">
+      <button
+        type="button"
+        data-part="fold"
+        phx-click={JS.toggle_attribute({"data-collapsed", "true"}, to: "#" <> @section)}
+        aria-label={gettext("Fold or open")}
+        title={gettext("Fold or open")}
+        class="flex size-7 flex-none items-center justify-center rounded-[8px] text-[#8a877f] hover:bg-[#f2f1ec] hover:text-[#3a382f]"
+      >
+        <.icon name="hero-chevron-down-mini" class="size-4 transition-transform" />
+      </button>
       <div class="min-w-0 flex-1">
-        <p class="truncate text-[12.5px] font-bold text-[#3a382f]">{@title}</p>
+        <p class="truncate text-[12.5px] font-bold text-[#3a382f]">
+          {@title}<span :if={@hint} dir="auto" class="font-medium text-[#8a877f]"> · {@hint}</span>
+        </p>
         <p :if={@name} dir="auto" class="truncate text-[10.5px] font-medium text-[#a8a49b]">
           {@name}
         </p>
@@ -1535,6 +1606,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     </div>
     """
   end
+
+  # A folded part shows its head alone, its arrow turned.
+  defp collapsible,
+    do: [
+      "[&[data-collapsed]>[data-part=body]]:hidden",
+      "[&[data-collapsed]>[data-part=head]_[data-part=fold]>span]:-rotate-90"
+    ]
+
+  # WHAT A FOLDED PART SAYS: the first Content attribute it fills in, else the first of its words.
+  defp hint(%{attrs: attrs, parts: parts}, declared) do
+    filled =
+      for %{name: name, group: "Content"} <- (declared && declared.attrs) || [],
+          value = Map.get(attrs, name),
+          is_binary(value),
+          String.trim(value) != "",
+          do: value
+
+    words = for {:text, text} <- parts, words = plain(text), words != "", do: words
+
+    case filled ++ words do
+      [first | _] -> String.slice(first, 0, 40)
+      [] -> nil
+    end
+  end
+
+  defp plain(html),
+    do: html |> String.replace(~r/<[^>]*>/, " ") |> String.split() |> Enum.join(" ")
+
+  # A TEXT BOX HOLDS LINES; the content holds HTML. Each `<br>` is a line in the box, and each line
+  # typed there is a `<br>` in the content.
+  defp lines_of(text), do: String.replace(text, ~r{<br\s*/?>}i, "\n")
+
+  defp html_of(text), do: text |> String.replace("\r\n", "\n") |> String.replace("\n", "<br>")
 
   attr :id, :string, required: true
   attr :key, :string, required: true
@@ -1681,9 +1785,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   attr :values, :map, required: true
   attr :myself, :any, required: true
 
-  # The attributes an author fills in first, then the rest under More options.
+  # THE ATTRIBUTES UNDER THE PAGE BUILDER'S HEADINGS. What an author fills in — Content, a picture or
+  # a video, anything required — stands open; every other heading is folded, in the builder's order.
   defp attr_fields(assigns) do
-    {main, more} = Enum.split_with(assigns.attrs, &(&1.required or &1.name in @content_attrs))
+    {main, more} =
+      Enum.split_with(assigns.attrs, &(&1.required or &1.media or &1.group == "Content"))
+
+    groups = Enum.group_by(more, & &1.group)
+
+    more =
+      for group <- Inspector.groups() ++ (Map.keys(groups) -- Inspector.groups()),
+          attrs = Map.get(groups, group),
+          do: {group, attrs}
+
     assigns = assign(assigns, main: main, more: more)
 
     ~H"""
@@ -1698,17 +1812,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       />
     </div>
     <details
-      :if={@more != []}
-      id={@id <> "-more-" <> @key}
+      :for={{group, attrs} <- @more}
+      id={@id <> "-group-" <> @key <> "-" <> String.downcase(group)}
+      data-group={group}
       phx-mounted={JS.ignore_attributes(["open"])}
       class="group rounded-[10px] border border-[#f0efea] px-3 py-2"
     >
       <summary class="cursor-pointer text-[11.5px] font-semibold text-[#6d6a63]">
-        {gettext("More options")} <span class="text-[#a8a49b]">({length(@more)})</span>
+        {Gettext.gettext(MishkaCmsCore.Gettext, group)}
+        <span class="text-[#a8a49b]">({length(attrs)})</span>
       </summary>
       <div class="mt-2.5 flex flex-col gap-2.5">
         <.attr_field
-          :for={attr <- @more}
+          :for={attr <- attrs}
           id={@id}
           key={@key}
           attr={attr}
@@ -1739,7 +1855,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       assign(assigns,
         field: "#{assigns.id}-f-#{assigns.key}-#{assigns.attr.name}",
         name: "a[#{assigns.key}][#{assigns.attr.name}]",
-        media: assigns.attr.name in @media_attrs
+        media: assigns.attr.media
       )
 
     ~H"""
