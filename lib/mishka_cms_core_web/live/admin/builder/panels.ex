@@ -3947,7 +3947,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # The whole style vocabulary `Tree.Styles` can express, split the way the panel groups it. A
   # property missing here is one the author cannot reach even though the serialiser understands it —
   # a template carrying `max-w-[60ch]` would parse into an override the panel could neither show nor
-  # undo. `builder_live_test.exs` walks `Styles.properties/0` and fails if a control is missing.
+  # undo. The builder's tests (`test/mishka_cms_core_web/live/builder_live/`) walk
+  # `Styles.properties/0` and fail if a control is missing.
   # `display`, `direction`, `justify`, `align`, `wrap` and `gap` are ABSENT on purpose: they have the
   # picture controls above instead — the same properties, a control someone who does not write CSS
   # can read. Two controls writing one override is how a panel starts disagreeing with itself.

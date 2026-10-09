@@ -69,6 +69,11 @@ config :mishka_cms_core, MishkaCmsCore.Captcha.Provider,
 # Hashing is the single slowest thing in a suite that creates a user per test.
 config :bcrypt_elixir, log_rounds: 1
 
+# A property is checked against 25 generated cases rather than StreamData's 100. Each case of the
+# page properties builds a nested document and a changeset, and 100 of them made
+# `PagePropertyTest` alone take 53 s; a property that sets its own `max_runs` keeps it.
+config :stream_data, max_runs: 25
+
 config :logger, level: :warning
 config :phoenix, :plug_init_mode, :runtime
 

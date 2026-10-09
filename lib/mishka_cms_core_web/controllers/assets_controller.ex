@@ -36,6 +36,8 @@ defmodule MishkaCmsCoreWeb.AssetsController do
       admins and the masters;
     * on any other address: a master, as the page builder's canvas asks for it, and whoever holds
       a preview link of that site (`?preview=<token>`), by the same rule as its own address;
+    * the content editor's stylesheet for a site (`MishkaCmsCore.Runtime.ContentEditorStyles`): a
+      master, and an admin of that site;
     * `__shared_base__`, the base every site's bundle starts with: anyone.
 
   Anything else — a stale or unknown hash, another site's bundle, a site that is down — is a 404
@@ -147,7 +149,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
   use Phoenix.Controller, formats: [:html, :json]
   import Plug.Conn
   alias MishkaCmsCore.Accounts.Helper
-  alias MishkaCmsCore.Runtime.{DraftPreviewAssets, SiteAvailability}
+  alias MishkaCmsCore.Runtime.{ContentEditorStyles, DraftPreviewAssets, SiteAvailability}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaInstaller.Event.Hook
 
@@ -189,8 +191,19 @@ defmodule MishkaCmsCoreWeb.AssetsController do
       Helper.master_admin?(viewer, :dashboard) ->
         {:ok, @private}
 
+      editor_admin?(site, viewer) ->
+        {:ok, @private}
+
       true ->
         preview(conn.params["preview"], cached_site_id(site), viewer, type)
+    end
+  end
+
+  # The content editor's stylesheet for a site (`ContentEditorStyles`), to an admin of that site.
+  defp editor_admin?(id, viewer) do
+    case ContentEditorStyles.site_of(id) do
+      {:ok, site_id} -> Helper.site_admin?(viewer, site_id, :dashboard)
+      :error -> false
     end
   end
 

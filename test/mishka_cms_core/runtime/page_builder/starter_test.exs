@@ -212,6 +212,18 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StarterTest do
              }
     end
 
+    # A NUMBER OR A YES/NO IS NOT A WORD: `chelekom-ring-progress` does arithmetic on its `value`, and
+    # written as `value="72"` it reached the component as text.
+    test "a number or a yes/no is kept as an expression" do
+      declared = %{"attrs" => %{"value" => 72, "ratio" => 0.5, "open" => true}}
+
+      assert Starter.attrs(declaring("acme-ring", declared)) == %{
+               "value" => {:expr, 72},
+               "ratio" => {:expr, 0.5},
+               "open" => {:expr, true}
+             }
+    end
+
     # A NAME NOTHING HAS HEARD OF IS A BUNDLE FILLING THE ATOM TABLE. It costs that key its atom
     # rather than being minted from somebody else's file.
     test "an atom key for a name that does not exist stays a string" do

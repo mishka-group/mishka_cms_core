@@ -30,9 +30,28 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     * Whitespace is spaces, tabs, line breaks and the non-breaking space, written or as an entity.
 
   A marker is found only in text: never inside a tag, and never inside `<pre>` or `<code>`, so a
-  page can show the syntax. A marker that does not parse, an opening marker with another marker
-  before its closing one, and a closing marker nothing opened are left in the text as they are —
-  markers do not nest.
+  page can show the syntax. A marker that does not parse, an opening marker nothing closes and a
+  closing marker nothing opened are left in the text as they are.
+
+  ## Inside a component
+
+  `INNER` may hold markers of its own, drawn inside the component — a timeline holding its sections,
+  a card holding its title:
+
+      [[component chelekom-timeline]]
+        [[component chelekom-timeline-section title="Started" /]]
+        [[component chelekom-timeline-section title="Shipped" /]]
+      [[/component]]
+
+  and, for a component that declares named slots, a slot marker for each entry it takes:
+
+      [[component chelekom-video]][[slot source src="/intro.mp4" type="video/mp4" /]][[/component]]
+      [[slot item title="Question"]]The answer, as <b>HTML</b>[[/slot]]
+
+  A slot marker is read with the same rules as a component's, belongs to the component it sits
+  directly inside, and is passed as that slot when the component declares it — its attributes cast
+  against the slot's own. A slot marker anywhere else is text. Markers are drawn eight levels deep;
+  the content of a deeper one is drawn as it is written.
 
   A paragraph holding one marker and nothing else — whitespace and non-breaking spaces aside — is
   drawn as the component alone, without the `<p>` an editor wraps a line in: a block inside a `<p>`
@@ -49,12 +68,20 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   an attribute it requires are drawn as nothing. The same render in a preview (`MishkaCmsCore.Runtime.StaticHelpers`) draws a
   notice saying why in their place.
 
-  Only the attributes the component declares are passed, each cast to its declared type: `string`
+  Every attribute the component declares is passed — one the marker leaves out as its default, or
+  `nil` when it has none. Only the attributes the component declares are read from the marker, each
+  cast to its declared type: `string`
   and `any` as written, `boolean` from `true`/`false` or a bare key, `integer` and `float` from a
   number, and anything that declares `values` only as one of them — which is the only way an `atom`
   is taken. `id`, `site`, `component_name`, `current_user`, `rest` and any `phx-` name are never an
-  author's. A stateful component gets the id `"<id>-<n>"`, `n` counting the content's markers from
-  0, so it stays the same component across renders.
+  author's. A stateful component, and one declaring `id`, gets the id `"<id>-<n>"`, `n` counting
+  the content's markers from 0 — `"<id>-<n>-<m>"` for the `m`th inside it — so it stays the same
+  component across renders.
+
+  A slot the component declares and the content does not fill is passed empty, and one it requires
+  draws the component as nothing — as a required attribute does. A slot's attribute the marker
+  leaves out is passed as its declared default, and an entry with nothing inside it draws nothing
+  where the component renders its content.
 
   The HTML around the markers is drawn as it is given: pass only HTML that was sanitized.
 
@@ -100,8 +127,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   require Ash.Query
 
+  alias MishkaCmsCore.Builder.Furnishing
   alias MishkaCmsCore.Runtime.{Component, LiveViewHelpers, Translations}
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
+  alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.Hook
 
@@ -110,6 +139,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   @open "[[component"
   @close "[[/component]]"
+  @slot_open "[[slot"
+  @slot_close "[[/slot]]"
+
+  # How many markers deep content is drawn.
+  @depth 8
 
   @reserved ~w(id site component_name runtime_slot current_user inner_block rest)
 
@@ -152,6 +186,20 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   @type chunk :: {:html, String.t()} | {:component, marker()}
 
   @typedoc """
+  One component marker read apart, as `read/1` gives it and `write/1` takes it: its name, its
+  attributes, and what it holds, in order — text, the components inside it, and its slot entries.
+  """
+  @type tree :: %{
+          name: String.t(),
+          attrs: %{String.t() => String.t() | true},
+          parts: [
+            {:text, String.t()}
+            | {:component, tree()}
+            | {:slot, %{name: String.t(), attrs: map(), parts: list()}}
+          ]
+        }
+
+  @typedoc """
   A piece of content as the editor holds it: HTML, or a component standing alone. `marker` is the
   marker as written, `source` the bytes it was cut from, the paragraph around it included.
   """
@@ -176,16 +224,47 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
           stateful: boolean(),
           global: boolean(),
           inner_block: boolean(),
-          attrs: [
+          category: String.t(),
+          examples: [String.t()],
+          furnishing: Furnishing.t() | nil,
+          switches: switches(),
+          attrs: [attr_entry()],
+          slots: [
             %{
               name: String.t(),
-              type: String.t(),
-              values: [term()],
-              default: term(),
               doc: String.t() | nil,
-              required: boolean()
+              required: boolean(),
+              inner: boolean(),
+              attrs: [attr_entry()]
             }
           ]
+        }
+
+  @typedoc """
+  Which clause of each of a component's helpers draws it: one list of clauses per helper, in order,
+  each the attributes and the values it matches — `%{}` matching any — or `:unknown` when it matches
+  on something no attribute holds; and the attributes whose every use in the template is through
+  those helpers.
+  """
+  @type switches :: %{
+          helpers: [[%{String.t() => [String.t()]} | :unknown]],
+          through: [String.t()]
+        }
+
+  @typedoc """
+  An attribute a marker can set, as `embeddable/2` lists it: `group` is the heading the page
+  builder's Inspector files it under, untranslated, and `media` whether it holds a picture or a
+  video.
+  """
+  @type attr_entry :: %{
+          name: String.t(),
+          type: String.t(),
+          values: [term()],
+          default: term(),
+          doc: String.t() | nil,
+          required: boolean(),
+          group: String.t(),
+          media: boolean()
         }
 
   @doc """
@@ -197,28 +276,68 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       #=>   {:component, %{name: "chelekom-badge", attrs: %{"size" => "small"}, inner: nil, index: 0}}
       #=> ]
 
-  Content with no `[[component` in it is one `{:html, html}`, found with a single binary match.
+  Content with no `[[component` in it is one `{:html, html}`, found with a single binary match. Only
+  the outermost markers are pieces: a marker inside another is part of that one's `inner`.
   """
   @spec parse(String.t()) :: [chunk()]
   def parse(html) when is_binary(html) do
     case :binary.match(html, @open) do
       :nomatch -> [{:html, html}]
-      _found -> html |> tokens() |> pair([]) |> Enum.map(&unwrapped(&1, html)) |> chunks(html)
+      _found -> html |> outermost() |> Enum.map(&unwrapped(&1, html)) |> chunks(html)
     end
   end
 
   @doc """
-  The component names the markers in `html` name, each once, in the order they first appear — what
-  a resource stores beside its content when it is written, for the site's stylesheet.
+  The component names the markers in `html` name, each once, in the order they first appear — those
+  inside other markers too — what a resource stores beside its content when it is written, for the
+  site's stylesheet.
 
-      names(~s([[component chelekom-alert /]]<p>x</p>[[component chelekom-alert]]y[[/component]]))
-      #=> ["chelekom-alert"]
+      names(~s([[component chelekom-alert /]]<p>x</p>[[component chelekom-card]][[component chelekom-alert /]][[/component]]))
+      #=> ["chelekom-alert", "chelekom-card"]
   """
   @spec names(String.t() | nil) :: [String.t()]
-  def names(html) when is_binary(html),
-    do: for({:component, %{name: name}} <- parse(html), uniq: true, do: name)
+  def names(html) when is_binary(html) do
+    case :binary.match(html, @open) do
+      :nomatch -> []
+      _found -> html |> tree() |> named([]) |> Enum.reverse() |> Enum.uniq()
+    end
+  end
 
   def names(_html), do: []
+
+  @doc """
+  One component marker read apart into a `t:tree/0` — what the content editor's settings edit.
+  `:error` when `marker` is not exactly one component marker.
+
+      read(~s([[component chelekom-card]][[component chelekom-card-title title="Hi" /]]Text[[/component]]))
+      #=> {:ok, %{name: "chelekom-card", attrs: %{}, parts: [
+      #=>   {:component, %{name: "chelekom-card-title", attrs: %{"title" => "Hi"}, parts: []}},
+      #=>   {:text, "Text"}
+      #=> ]}}
+  """
+  @spec read(String.t()) :: {:ok, tree()} | :error
+  def read(marker) when is_binary(marker) do
+    case parse(String.trim(marker)) do
+      [{:component, top}] -> {:ok, tree_of(top, 0)}
+      _not_one_marker -> :error
+    end
+  end
+
+  def read(_marker), do: :error
+
+  @doc """
+  The marker for `tree`, with every component and slot inside it — `read/1` the other way. `nil`
+  when a name or a key in it could not be read back (`marker/3`).
+  """
+  @spec write(tree()) :: String.t() | nil
+  def write(%{name: name, attrs: attrs, parts: parts}) do
+    case written_parts(parts) do
+      inner when is_binary(inner) -> marker(name, attrs, inner)
+      nil -> nil
+    end
+  end
+
+  def write(_tree), do: nil
 
   @doc """
   Splits `html` into the HTML the content editor edits and the components standing alone in it,
@@ -240,11 +359,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   @spec segments(String.t()) :: [segment()]
   def segments(html) when is_binary(html) do
     case :binary.match(html, @open) do
-      :nomatch ->
-        [{:html, html}]
-
-      _found ->
-        html |> tokens() |> pair([]) |> Enum.flat_map(&standing(&1, html)) |> pieces(html)
+      :nomatch -> [{:html, html}]
+      _found -> html |> outermost() |> Enum.flat_map(&standing(&1, html)) |> pieces(html)
     end
   end
 
@@ -283,7 +399,20 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       #=> ~s([[component chelekom-alert title="Heads up"]]Read <b>this</b>[[/component]])
   """
   @spec marker(String.t(), map() | nil, String.t() | nil) :: String.t() | nil
-  def marker(name, attrs, inner) when is_binary(name) and (is_map(attrs) or is_nil(attrs)) do
+  def marker(name, attrs, inner), do: written({@open, @close}, name, attrs, inner)
+
+  @doc """
+  The slot marker for the slot `name` with `attrs` and `inner` content, written as `marker/3` writes
+  a component's.
+
+      slot_marker("source", %{"src" => "/a.mp4", "type" => "video/mp4"}, nil)
+      #=> ~s([[slot source src="/a.mp4" type="video/mp4" /]])
+  """
+  @spec slot_marker(String.t(), map() | nil, String.t() | nil) :: String.t() | nil
+  def slot_marker(name, attrs, inner), do: written({@slot_open, @slot_close}, name, attrs, inner)
+
+  defp written(tags, name, attrs, inner)
+       when is_binary(name) and (is_map(attrs) or is_nil(attrs)) do
     written =
       (attrs || %{})
       |> Enum.map(fn {key, value} -> {to_string(key), written_value(value)} end)
@@ -291,12 +420,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       |> Enum.sort()
 
     case Regex.match?(@name, name) and Enum.all?(written, fn {key, _} -> key?(key) end) do
-      true -> written_marker(name, Enum.map(written, &written_attr/1), blank_to_nil(inner))
+      true -> written_marker(tags, name, Enum.map(written, &written_attr/1), blank_to_nil(inner))
       false -> nil
     end
   end
 
-  def marker(_name, _attrs, _inner), do: nil
+  defp written(_tags, _name, _attrs, _inner), do: nil
 
   @doc """
   Whether a component template draws content itself — calls `rich_content`. Such a component is
@@ -312,10 +441,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   The components an author may embed on the site `site_id`, with the attributes a marker can set —
   what the editor's picker offers. `nil` is the global components alone.
 
-  Active components of the site and global ones, read as `actor` through
+  Active components of the site and global ones, every one of them, read as `actor` through
   `:for_tenant_with_globals`; a site's own component hides the global one of the same name, as it
-  does when drawn. Components that draw content themselves are left out, and so is every attribute
-  `cast/2` would drop.
+  does when drawn. Components that draw content themselves are left out, and so are those requiring
+  an attribute no marker can hold — a list, a map, a struct — and every attribute `cast/2` would
+  drop.
   """
   @spec embeddable(map() | nil, String.t() | nil) :: {:ok, [entry()]} | {:error, term()}
   def embeddable(actor, site_id) do
@@ -325,12 +455,45 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     |> Ash.Query.for_read(:for_tenant_with_globals, arguments, actor: actor, tenant: tenant)
     |> Ash.Query.filter(active == true and not contains(template, "rich_content"))
     |> within(site_id)
-    |> Ash.Query.select([:id, :name, :description, :type, :stateful, :attrs, :slots, :site_id])
+    |> Ash.Query.select([
+      :id,
+      :name,
+      :description,
+      :type,
+      :stateful,
+      :attrs,
+      :slots,
+      :template,
+      :helpers,
+      :examples,
+      :site_id
+    ])
+    |> Ash.Query.load(:furnishing)
     |> Ash.Query.sort(name: :asc)
-    |> Ash.read(page: [limit: 1000])
+    |> every([], 0)
     |> case do
-      {:ok, %{results: rows}} -> {:ok, rows |> own_first() |> Enum.map(&entry/1)}
-      {:ok, rows} when is_list(rows) -> {:ok, rows |> own_first() |> Enum.map(&entry/1)}
+      {:ok, rows} -> {:ok, rows |> own_first() |> Enum.filter(&settable?/1) |> Enum.map(&entry/1)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  # A COMPONENT THAT REQUIRES WHAT NO MARKER CAN HOLD — a list, a map, a struct — could never be
+  # drawn in content, so it is never offered. The ones a marker fills itself are not counted.
+  defp settable?(row) do
+    Enum.all?(row.attrs || [], fn attr ->
+      name = to_string(Inspector.name(attr))
+      not Inspector.required?(attr) or name in @reserved or castable?(attr)
+    end)
+  end
+
+  # EVERY PAGE OF IT. The read pages at most 250 rows, and a site's own components with a kit's came
+  # to more — the ones past the 250th by name were never offered.
+  @page 250
+
+  defp every(query, read, offset) do
+    case Ash.read(query, page: [limit: @page, offset: offset]) do
+      {:ok, %{results: rows, more?: true}} -> every(query, [rows | read], offset + @page)
+      {:ok, %{results: rows}} -> {:ok, [rows | read] |> Enum.reverse() |> Enum.concat()}
       {:error, _reason} = error -> error
     end
   end
@@ -365,7 +528,172 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     Enum.reject(rows, &(is_nil(&1.site_id) and MapSet.member?(own, &1.name)))
   end
 
-  defp entry(row) do
+  # What the component says it arrives with, when it says anything a block can be made of.
+  defp furnishing(declared) do
+    case Furnishing.build(declared) do
+      {:ok, furnishing} -> if(Furnishing.empty?(furnishing), do: nil, else: furnishing)
+      :none -> nil
+    end
+  end
+
+  # A KIT'S HELPER PICKS ITS CLASSES BY THE VALUES IT IS CALLED WITH, and says which values each of
+  # its clauses matches: `color_variant("base", _)` matches every colour, so under the `base` variant
+  # the colour draws nothing. The clauses are read here once, by attribute.
+  defp switches(row) do
+    template = Map.get(row, :template) || ""
+    helpers = Enum.map(Map.get(row, :helpers) || [], &plain_map/1)
+
+    bindings =
+      UiKitHandler.axis_bindings(%{
+        "name" => row.name,
+        "template" => template,
+        "helpers" => helpers,
+        "attrs" => Enum.map(Map.get(row, :attrs) || [], &plain_map/1)
+      })
+
+    clauses =
+      helpers
+      |> Enum.group_by(& &1["name"])
+      |> Enum.filter(fn {_name, clauses} -> Enum.any?(clauses, &(&1["discriminators"] != [])) end)
+      |> Map.new(fn {name, clauses} -> {name, Enum.map(clauses, &clause(&1, bindings))} end)
+
+    %{helpers: Map.values(clauses), through: through(template, Map.keys(clauses))}
+  end
+
+  defp clause(helper, bindings) do
+    Enum.reduce_while(helper["discriminators"] || [], %{}, fn discriminator, clause ->
+      discriminator = plain_map(discriminator)
+
+      case Map.fetch(bindings, discriminator["axis"]) do
+        {:ok, attr} ->
+          {:cont, Map.put(clause, attr, Enum.map(discriminator["values"], &to_string/1))}
+
+        :error ->
+          {:halt, :unknown}
+      end
+    end)
+  end
+
+  # The attributes the template hands to those helpers and to nothing else.
+  defp through(template, helper_names) do
+    expressions = Markup.expressions(template)
+
+    used =
+      for expression <- expressions,
+          {called, args} <- CodeReads.calls(expression),
+          Atom.to_string(called) in helper_names,
+          {:@, _meta, [{name, _name_meta, context}]} <- args,
+          is_atom(name) and is_atom(context),
+          uniq: true,
+          do: Atom.to_string(name)
+
+    Enum.filter(used, fn attr ->
+      Enum.all?(expressions, &(uses(&1, attr) == handed(&1, attr, helper_names)))
+    end)
+  end
+
+  defp uses(expression, attr), do: length(Regex.scan(~r/@#{Regex.escape(attr)}\b/, expression))
+
+  defp handed(expression, attr, helper_names) do
+    for {called, args} <- CodeReads.calls(expression),
+        Atom.to_string(called) in helper_names,
+        {:@, _meta, [{name, _name_meta, _context}]} <- args,
+        Atom.to_string(name) == attr,
+        reduce: 0,
+        do: (count -> count + 1)
+  end
+
+  defp plain_map(%_struct{} = struct), do: struct |> Map.from_struct() |> plain_map()
+  defp plain_map(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
+  defp plain_map(other), do: other
+
+  @doc """
+  Whether the attribute `name` of the palette `entry` draws nothing with the other attributes at
+  `values` — the marker's, the rest at their defaults: the values of the other attributes that pick
+  a clause of every helper it goes to that matches all of its own values alike, or `nil` when it
+  draws something, or when that cannot be told.
+
+      inert(blockquote, "color", %{"variant" => "base"})
+      #=> %{"variant" => "base"}
+  """
+  @spec inert(entry(), String.t(), map()) :: %{String.t() => String.t()} | nil
+  def inert(%{switches: %{helpers: helpers, through: through}, attrs: attrs}, name, values) do
+    governing = Enum.filter(helpers, fn clauses -> Enum.any?(clauses, &matches_on?(&1, name)) end)
+
+    with true <- name in through,
+         [_ | _] <- governing,
+         false <- Enum.any?(governing, &(:unknown in &1)),
+         %{values: [_ | _] = choices} <- Enum.find(attrs, &(&1.name == name)) do
+      current = current(attrs, values)
+
+      governing
+      |> Enum.map(&chosen(&1, name, choices, current))
+      |> Enum.reduce_while(%{}, fn
+        %{} = clause, reason ->
+          {:cont, Map.merge(reason, Map.new(clause, &{elem(&1, 0), current[elem(&1, 0)]}))}
+
+        nil, _reason ->
+          {:halt, nil}
+      end)
+      |> case do
+        reason when map_size(reason) > 0 -> reason
+        _none -> nil
+      end
+    else
+      _cannot_tell -> nil
+    end
+  end
+
+  def inert(_entry, _name, _values), do: nil
+
+  defp matches_on?(%{} = clause, name), do: Map.has_key?(clause, name)
+  defp matches_on?(:unknown, _name), do: false
+
+  # The one clause every value of `name` reaches, when it is one that does not match on it.
+  defp chosen(clauses, name, choices, current) do
+    case choices
+         |> Enum.map(&first_clause(clauses, Map.put(current, name, to_string(&1))))
+         |> Enum.uniq() do
+      [%{} = clause] -> if(Map.has_key?(clause, name), do: nil, else: clause)
+      _several_or_none -> nil
+    end
+  end
+
+  defp first_clause(clauses, current) do
+    Enum.find(clauses, fn clause ->
+      Enum.all?(clause, fn {attr, accepted} -> current[attr] in accepted end)
+    end)
+  end
+
+  defp current(attrs, values) do
+    Map.new(attrs, fn attr ->
+      case Map.get(values, attr.name) do
+        value when is_binary(value) and value != "" -> {attr.name, value}
+        true -> {attr.name, "true"}
+        _unset -> {attr.name, written_default(attr.default)}
+      end
+    end)
+  end
+
+  defp written_default(value) when is_binary(value), do: value
+  defp written_default(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)
+  defp written_default(value) when is_number(value), do: to_string(value)
+  defp written_default(_none_or_data), do: nil
+
+  @doc """
+  The classes a preview's notice is drawn with — a marker that draws nothing, or a component that
+  could not be drawn — for whatever builds the stylesheet a preview is drawn with.
+  """
+  @spec unavailable_class() :: String.t()
+  def unavailable_class,
+    do: "inline-block rounded border border-red-300 px-2 py-1 text-sm text-red-600"
+
+  @doc """
+  The palette entry for a component `row` — a stored component, or anything with its fields — as
+  `embeddable/2` lists it.
+  """
+  @spec entry(map()) :: entry()
+  def entry(row) do
     %{
       name: row.name,
       description: row.description,
@@ -373,19 +701,160 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       stateful: row.stateful == true,
       global: is_nil(row.site_id),
       inner_block: Enum.any?(row.slots || [], &Inspector.inner_block?/1),
-      attrs:
-        for attr <- row.attrs || [], castable?(attr) do
+      category: category(row.name, row.type),
+      examples: Enum.filter(row.examples || [], &is_binary/1),
+      furnishing: furnishing(Map.get(row, :furnishing)),
+      switches: switches(row),
+      attrs: attr_entries(row.attrs),
+      slots:
+        for slot <- Inspector.addable_slots(row) do
+          name = slot_name(slot)
+
           %{
-            name: Inspector.name(attr),
-            type: type(attr),
-            values: values(attr),
-            default: Inspector.default(attr),
-            doc: Inspector.doc(attr),
-            required: Inspector.required?(attr)
+            name: name,
+            doc: Inspector.doc(slot),
+            required: Inspector.required?(slot),
+            inner: Inspector.renders_slot?(row, name),
+            attrs: attr_entries(Inspector.attrs(slot))
           }
         end
     }
   end
+
+  # THE BUILDER'S OWN READING OF AN ATTRIBUTE: the heading its Inspector files it under, and
+  # whether it is a picture or a video — the kit's `editor: "media"` hint, or the name an HTML media
+  # element gives one (`src`, `poster`, `srcset`) — so both editors ask the same question the same
+  # way, of any kit.
+  defp attr_entries(attrs) do
+    groups =
+      for {group, grouped} <- Inspector.grouped(%{attrs: attrs || []}),
+          attr <- grouped,
+          into: %{},
+          do: {Inspector.name(attr), group}
+
+    for attr <- attrs || [], castable?(attr) do
+      name = to_string(Inspector.name(attr))
+
+      %{
+        name: name,
+        type: type(attr),
+        values: values(attr),
+        default: Inspector.default(attr),
+        doc: Inspector.doc(attr),
+        required: Inspector.required?(attr),
+        group: Map.get(groups, Inspector.name(attr), "Properties"),
+        media: Inspector.widget(attr) == :media or Inspector.element_widget("img", name) == :media
+      }
+    end
+  end
+
+  # THE PALETTE'S HEADINGS, TEXT FIRST — what a post needs most. A kit's own `type` names the group
+  # when it is one of these, under one spelling; a component typed `general`, or not at all, is
+  # placed by the words its name is made of, read in order; a type of the kit's own that is none of
+  # these keeps its name; and what nothing places is Other.
+  @category_order ~w(text media layout buttons data disclosure feedback navigation overlays forms)
+
+  @category_types %{
+    "text" => "text",
+    "typography" => "text",
+    "media" => "media",
+    "layout" => "layout",
+    "button" => "buttons",
+    "buttons" => "buttons",
+    "actions" => "buttons",
+    "data" => "data",
+    "data display" => "data",
+    "data-display" => "data",
+    "disclosure" => "disclosure",
+    "feedback" => "feedback",
+    "nav" => "navigation",
+    "navigation" => "navigation",
+    "navigations" => "navigation",
+    "overlay" => "overlays",
+    "overlays" => "overlays",
+    "form" => "forms",
+    "forms" => "forms"
+  }
+
+  @category_words [
+    {"text",
+     ~w(h1 h2 h3 h4 h5 h6 heading headline p paragraph typography strong em mark small s u del ins abbr cite blockquote quote kbd keyboard code highlight link anchor list ul ol li dl dt dd table tr td th divider hr separator figcaption caption)},
+    {"media", ~w(image img avatar video audio gallery carousel icon figure picture media embed)},
+    {"layout",
+     ~w(flex grid card jumbotron container wrapper stack row columns section timeline stepper stat accordion tabs collapse collapsible spoiler mockup shape scroller splitter)},
+    {"buttons", ~w(button btn fab burger clipboard)},
+    {"feedback",
+     ~w(alert banner toast flash progress spinner skeleton meter rating badge indicator)},
+    {"navigation", ~w(breadcrumb pagination navbar menu nav sidebar footer header dock)},
+    {"overlays", ~w(modal drawer dialog popover tooltip overlay)},
+    {"forms",
+     ~w(form field input select checkbox radio textarea toggle switch slider range combobox autocomplete calendar otp fieldset)}
+  ]
+
+  @doc """
+  The palette heading a component is listed under — `"text"`, `"media"`, `"layout"`, `"buttons"`,
+  `"data"`, `"disclosure"`, `"feedback"`, `"navigation"`, `"overlays"`, `"forms"`, a kit's own
+  type, or `"other"` — from its kit `type` and the words of its `name`.
+
+      category("chelekom-h2", "general")   #=> "text"
+      category("chelekom-video", "media")  #=> "media"
+      category("acme-hero", "marketing")   #=> "marketing"
+  """
+  @spec category(String.t(), String.t() | nil) :: String.t()
+  def category(name, type) do
+    kind = type |> to_string() |> String.downcase() |> String.trim()
+
+    case Map.fetch(@category_types, kind) do
+      {:ok, category} -> category
+      :error -> named_category(to_string(name)) || kit_category(kind)
+    end
+  end
+
+  defp named_category(name) do
+    name
+    |> String.downcase()
+    |> String.split(["-", "_"])
+    |> Enum.find_value(fn word ->
+      Enum.find_value(@category_words, fn {category, words} -> word in words && category end)
+    end)
+  end
+
+  defp kit_category(kind) when kind in ["", "general", "misc", "other"], do: "other"
+  defp kit_category(kind), do: kind
+
+  @doc """
+  `categories`' names in the order the palette shows them: text first, the ones above in their
+  order, a kit's own after them by name, and Other last.
+  """
+  @spec sort_categories([String.t()]) :: [String.t()]
+  def sort_categories(categories) do
+    categories
+    |> Enum.uniq()
+    |> Enum.sort_by(fn category ->
+      case Enum.find_index(@category_order, &(&1 == category)) do
+        nil when category == "other" -> {2, category}
+        nil -> {1, category}
+        index -> {0, index}
+      end
+    end)
+  end
+
+  @doc "A palette heading's name, in the reader's language."
+  @spec category_label(String.t()) :: String.t()
+  def category_label("text"), do: gettext("Text")
+  def category_label("media"), do: gettext("Media")
+  def category_label("layout"), do: gettext("Layout")
+  def category_label("buttons"), do: gettext("Buttons")
+  def category_label("data"), do: gettext("Data")
+  def category_label("disclosure"), do: gettext("Disclosure")
+  def category_label("feedback"), do: gettext("Feedback")
+  def category_label("navigation"), do: gettext("Navigation")
+  def category_label("overlays"), do: gettext("Overlays")
+  def category_label("forms"), do: gettext("Forms")
+  def category_label("other"), do: gettext("Other")
+
+  def category_label(kit),
+    do: kit |> to_string() |> String.replace(["-", "_"], " ") |> String.capitalize()
 
   @doc """
   Draws `assigns.html` with its markers drawn as components — the body of `rich_content/1`.
@@ -398,14 +867,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     context = %{
       site: assigns[:site],
       prefix: assigns[:id] || "content",
-      current_user: assigns[:current_user]
+      current_user: assigns[:current_user],
+      level: 0
     }
 
-    assigns = %{parts: Enum.map(parse(html), &part(&1, context, mode))}
-
-    # NOT FORMATTED, because the formatter would put each part on a line of its own, and the
-    # whitespace between them would be drawn into the content.
-    ~H"<%= for part <- @parts do %>{part}<% end %>"noformat
+    html |> parse() |> drawn_parts(context, mode)
   end
 
   def draw(_assigns, _mode) do
@@ -413,22 +879,73 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     ~H""
   end
 
+  defp drawn_parts(chunks, context, mode) do
+    assigns = %{parts: Enum.map(chunks, &part(&1, context, mode))}
+
+    # NOT FORMATTED, because the formatter would put each part on a line of its own, and the
+    # whitespace between them would be drawn into the content.
+    ~H"<%= for part <- @parts do %>{part}<% end %>"noformat
+  end
+
   defp part({:html, html}, _context, _mode), do: Phoenix.HTML.raw(html)
 
   defp part({:component, marker}, context, mode) do
     with {:ok, module, site} <- reach(marker.name, context.site),
          :ok <- placeable(module),
-         declared = declared_attrs(module),
+         %{component: component} = information <- module.__component_information__(),
+         declared = List.wrap(component.attrs),
          {:ok, attrs, inner} <- before_draw(marker, site, cast(declared, marker.attrs)),
-         :ok <- required(declared, attrs) do
-      module
-      |> component_assigns(marker, site, attrs, inner, context)
+         {content, entries} = held(inner, context.level),
+         slots = List.wrap(component.slots),
+         :ok <- required(declared, attrs, slots, entries) do
+      child = %{context | prefix: "#{context.prefix}-#{marker.index}", level: context.level + 1}
+
+      declared
+      |> unset(attrs)
+      |> Map.merge(attrs)
+      |> Map.merge(%{component_name: marker.name, site: site, __changed__: nil})
+      |> inner_block(Enum.any?(slots, &Inspector.inner_block?/1), content, child, mode)
+      |> named_slots(slots, entries, child, mode)
+      |> with_id(information.private[:stateful] == true or declares_id?(declared), child.prefix)
+      |> visitor(
+        Enum.any?(declared, &(Inspector.name(&1) == "current_user")),
+        context.current_user
+      )
       |> drawn(mode)
     else
       :refused -> nil
       reason -> unavailable(marker.name, reason, mode)
     end
   end
+
+  # EVERY ATTRIBUTE IS THERE, `nil` when the marker leaves out one that has no default — what a
+  # template is handed for `attr={nil}`. Phoenix sets no assign for an attribute declared without a
+  # default and not given, so a template reading `@label` raised, and a component placed with only
+  # some of its attributes took the page down with it.
+  defp unset(declared, attrs) do
+    for attr <- declared,
+        name = to_string(Inspector.name(attr)),
+        name not in @reserved,
+        not String.starts_with?(name, "phx"),
+        not defaulted?(attr),
+        key = String.to_existing_atom(name),
+        not Map.has_key?(attrs, key),
+        into: %{},
+        do: {key, nil}
+  end
+
+  # A default written as a value, or as the empty struct of the attribute's type — a `JS`
+  # attribute's `%JS{}`.
+  defp defaulted?(attr) do
+    opts = Inspector.opts(attr)
+    Map.has_key?(opts, "default") or opts["default_struct"] == true
+  end
+
+  # What one component holds: the content its `inner_block` draws, and its slot entries. Past
+  # `@depth` the content is drawn as it is written.
+  defp held(nil, _level), do: {[], []}
+  defp held(inner, level) when level >= @depth, do: {[{:html, inner}], []}
+  defp held(inner, _level), do: inner |> inside() |> Enum.split_with(&(elem(&1, 0) != :slot))
 
   # THE SITE'S OWN COMPONENT FIRST, THEN THE GLOBAL ONE — a site that installed its own
   # `chelekom-alert` sees its own in its posts, and every other site the shared one. Each is asked
@@ -461,9 +978,6 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  defp declared_attrs(module),
-    do: List.wrap(module.__component_information__([:component, :attrs]))
-
   defp before_draw(marker, site, attrs) do
     data = %{component_name: marker.name, site: site, attrs: attrs, inner: marker.inner}
 
@@ -474,14 +988,18 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  defp required(declared, attrs) do
+  # The attributes and slots the component requires and the marker left out — a slot entry's
+  # required attributes as `slot.attribute`.
+  defp required(declared, attrs, slots, entries) do
     missing =
-      for attr <- declared,
-          Inspector.required?(attr),
-          name = Inspector.name(attr),
-          name not in @reserved,
-          not Map.has_key?(attrs, String.to_existing_atom(name)),
-          do: name
+      for(
+        attr <- declared,
+        Inspector.required?(attr),
+        name = Inspector.name(attr),
+        name not in @reserved,
+        not Map.has_key?(attrs, String.to_existing_atom(name)),
+        do: name
+      ) ++ Enum.flat_map(named(slots), &missing_slot(&1, entries))
 
     case missing do
       [] -> :ok
@@ -489,36 +1007,105 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  defp component_assigns(module, marker, site, attrs, inner, context) do
-    information = module.__component_information__()
-    declared = Enum.map(information.component.attrs || [], &Inspector.name/1)
+  defp missing_slot(slot, entries) do
+    name = slot_name(slot)
 
-    attrs
-    |> Map.merge(%{component_name: marker.name, site: site, __changed__: nil})
-    |> inner_block(Enum.any?(information.component.slots || [], &Inspector.inner_block?/1), inner)
-    |> stateful_id(information.private[:stateful] == true, "#{context.prefix}-#{marker.index}")
-    |> visitor("current_user" in declared, context.current_user)
+    case for({:slot, %{name: ^name} = entry} <- entries, do: entry) do
+      [] ->
+        (Inspector.required?(slot) && [name]) || []
+
+      given ->
+        for entry <- given,
+            attr <- Inspector.attrs(slot),
+            Inspector.required?(attr),
+            not Map.has_key?(entry.attrs, Inspector.name(attr)),
+            uniq: true,
+            do: name <> "." <> Inspector.name(attr)
+    end
   end
 
-  defp inner_block(assigns, false, _inner), do: assigns
-  defp inner_block(assigns, true, nil), do: Map.put(assigns, :inner_block, [])
+  # The slots a marker fills with slot markers: every one declared but `inner_block`.
+  defp named(slots), do: Enum.reject(slots, &Inspector.inner_block?/1)
 
-  defp inner_block(assigns, true, inner) do
+  defp slot_name(slot), do: to_string(Inspector.name(slot))
+
+  defp inner_block(assigns, false, _content, _child, _mode), do: assigns
+  defp inner_block(assigns, true, [], _child, _mode), do: Map.put(assigns, :inner_block, [])
+
+  defp inner_block(assigns, true, content, child, mode) do
     Map.put(assigns, :inner_block, [
       %{
         __slot__: :inner_block,
-        inner_block: fn _changed, _argument -> Phoenix.HTML.raw(inner) end
+        inner_block: fn _changed, _arg -> drawn_parts(content, child, mode) end
       }
     ])
   end
 
-  defp stateful_id(assigns, true, id), do: Map.put(assigns, :id, id)
-  defp stateful_id(assigns, false, _id), do: assigns
+  # EVERY SLOT THE COMPONENT DECLARES IS PASSED, an empty list when the content fills none of it —
+  # a template reads `@source` whether or not anything was written for it. Each entry carries the
+  # attributes the slot declares, cast as a component's are, a declared one left out as its default,
+  # and its own content drawn as content. The slot's name becomes an atom only as the declaration
+  # spells it.
+  defp named_slots(assigns, slots, entries, child, mode) do
+    Enum.reduce(named(slots), assigns, fn slot, assigns ->
+      name = slot_name(slot)
+      key = String.to_existing_atom(name)
 
-  defp visitor(assigns, true, user) when not is_nil(user),
-    do: Map.put(assigns, :current_user, user)
+      given =
+        for {:slot, %{name: ^name} = entry} <- entries,
+            do: slot_entry(key, slot, entry, child, mode)
 
-  defp visitor(assigns, _declared, _user), do: assigns
+      Map.put(assigns, key, given)
+    end)
+  end
+
+  # A SLOT ENTRY HOLDS WHAT WAS WRITTEN ON IT, as Phoenix's does: an attribute left out is absent,
+  # not nil. A kit hands its entries on whole — `chelekom-list` spreads each `item` into a
+  # `chelekom-li` — and a nil put there for every declared attribute overrode the li's own default,
+  # or answered a `Map.get(entry, key, default)` with nil: a list, a carousel and a combobox that
+  # arrived filled in drew nothing.
+  defp slot_entry(key, slot, entry, child, mode) do
+    declared = Inspector.attrs(slot)
+
+    defaults =
+      for attr <- declared,
+          castable?(attr),
+          default = Inspector.default(attr),
+          not is_nil(default),
+          into: %{},
+          do: {attr |> Inspector.name() |> to_string() |> String.to_existing_atom(), default}
+
+    defaults
+    |> Map.merge(cast(declared, entry.attrs))
+    |> Map.merge(%{__slot__: key, inner_block: slot_content(entry.inner, child, mode)})
+  end
+
+  # AN ENTRY WRITTEN WITH NOTHING INSIDE DRAWS NOTHING THERE. Phoenix raises on `render_slot` of an
+  # entry whose `inner_block` is nil, so a `[[slot trigger /]]` took down the component around it —
+  # and every component it sat inside.
+  defp slot_content(nil, _child, _mode), do: fn _changed, _arg -> "" end
+
+  defp slot_content(inner, child, mode) do
+    content =
+      case child.level >= @depth do
+        true -> [{:html, inner}]
+        false -> parse(inner)
+      end
+
+    fn _changed, _arg -> drawn_parts(content, child, mode) end
+  end
+
+  # AN ID FROM ITS PLACE IN THE CONTENT, never from the marker, for a stateful component and for one
+  # declaring `id` — a hook needs one — so it is the same element across renders and unique on the
+  # page.
+  defp with_id(assigns, true, id), do: Map.put(assigns, :id, id)
+  defp with_id(assigns, false, _id), do: assigns
+
+  defp declares_id?(declared), do: Enum.any?(declared, &(Inspector.name(&1) == "id"))
+
+  # The visitor, `nil` for a guest, to a component that declares `current_user`.
+  defp visitor(assigns, true, user), do: Map.put(assigns, :current_user, user)
+  defp visitor(assigns, false, _user), do: assigns
 
   defp drawn(assigns, :live), do: LiveViewHelpers.component(assigns)
   defp drawn(assigns, :static), do: LiveViewHelpers.static_component(assigns)
@@ -526,13 +1113,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp unavailable(_name, _reason, :live), do: nil
 
   defp unavailable(name, reason, :static) do
-    assigns = %{message: unavailable_message(name, reason)}
+    assigns = %{message: unavailable_message(name, reason), class: unavailable_class()}
 
     ~H"""
-    <span
-      data-role="content-component-unavailable"
-      class="inline-block rounded border border-red-300 px-2 py-1 text-sm text-red-600"
-    >
+    <span data-role="content-component-unavailable" class={@class}>
       {@message}
     </span>
     """
@@ -654,10 +1238,58 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  defp written_marker(name, attrs, nil), do: Enum.join([@open, name | attrs] ++ ["/]]"], " ")
+  defp written_marker({open, _close}, name, attrs, nil),
+    do: Enum.join([open, name | attrs] ++ ["/]]"], " ")
 
-  defp written_marker(name, attrs, inner),
-    do: Enum.join([@open, name | attrs], " ") <> "]]" <> inner <> @close
+  defp written_marker({open, close}, name, attrs, inner),
+    do: Enum.join([open, name | attrs], " ") <> "]]" <> inner <> close
+
+  defp written_parts(parts) when is_list(parts) do
+    Enum.reduce_while(parts, "", fn part, written ->
+      case written_part(part) do
+        text when is_binary(text) -> {:cont, written <> text}
+        nil -> {:halt, nil}
+      end
+    end)
+  end
+
+  defp written_parts(_parts), do: nil
+
+  defp written_part({:text, text}) when is_binary(text), do: text
+  defp written_part({:component, tree}), do: write(tree)
+
+  defp written_part({:slot, %{name: name, attrs: attrs, parts: parts}}) do
+    case written_parts(parts) do
+      inner when is_binary(inner) -> slot_marker(name, attrs, inner)
+      nil -> nil
+    end
+  end
+
+  defp written_part(_part), do: nil
+
+  # The pieces of one marker's inner content, as `read/1` hands them out; content past `@depth` is
+  # text.
+  defp tree_of(%{name: name, attrs: attrs, inner: inner}, level),
+    do: %{name: name, attrs: attrs, parts: tree_parts(inner, level)}
+
+  # A slot's own content holds components and no slots of its own, as it is drawn.
+  defp tree_parts(inner, level, read \\ &inside/1)
+  defp tree_parts(nil, _level, _read), do: []
+  defp tree_parts(inner, level, _read) when level >= @depth, do: [{:text, inner}]
+
+  defp tree_parts(inner, level, read) do
+    Enum.map(read.(inner), fn
+      {:html, html} ->
+        {:text, html}
+
+      {:component, marker} ->
+        {:component, tree_of(marker, level + 1)}
+
+      {:slot, slot} ->
+        {:slot,
+         %{name: slot.name, attrs: slot.attrs, parts: tree_parts(slot.inner, level + 1, &parse/1)}}
+    end)
+  end
 
   defp key?(key),
     do: Regex.match?(@key, key) and key not in @reserved and not String.starts_with?(key, "phx")
@@ -712,30 +1344,38 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     text = binary_part(html, offset, length)
 
     text
-    |> :binary.matches([@open, @close])
+    |> :binary.matches([@open, @close, @slot_open, @slot_close])
     |> Enum.reduce({[], 0}, fn {at, size}, {found, consumed} ->
-      cond do
-        at < consumed ->
-          {found, consumed}
-
-        size == byte_size(@close) ->
-          {[{offset + at, offset + at + size, :close} | found], at + size}
-
-        true ->
-          rest = binary_part(text, at + size, byte_size(text) - at - size)
-
-          case opening(rest) do
-            {:ok, kind, name, attrs, used} ->
-              stop = at + size + used
-              {[{offset + at, offset + stop, {kind, name, attrs}} | found], stop}
-
-            :error ->
-              {found, consumed}
-          end
+      case at < consumed do
+        true -> {found, consumed}
+        false -> token(text, offset, at, size, found, consumed)
       end
     end)
     |> elem(0)
     |> Enum.reverse()
+  end
+
+  defp token(text, offset, at, size, found, consumed) do
+    case binary_part(text, at, size) do
+      @close ->
+        {[{offset + at, offset + at + size, {:close, :component}} | found], at + size}
+
+      @slot_close ->
+        {[{offset + at, offset + at + size, {:close, :slot}} | found], at + size}
+
+      opener ->
+        of = (opener == @open && :component) || :slot
+        rest = binary_part(text, at + size, byte_size(text) - at - size)
+
+        case opening(rest) do
+          {:ok, kind, name, attrs, used} ->
+            stop = at + size + used
+            {[{offset + at, offset + stop, {kind, of, name, attrs}} | found], stop}
+
+          :error ->
+            {found, consumed}
+        end
+    end
   end
 
   defp opening(rest) do
@@ -870,59 +1510,129 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  # An opening marker pairs with the closing one right after it; anything else between them, or a
-  # closing marker with nothing open, stays text.
-  defp pair(
-         [{start, open_stop, {:open, name, attrs}}, {close_start, stop, :close} | rest],
-         found
-       ),
-       do: pair(rest, [{start, stop, name, attrs, {open_stop, close_start}} | found])
+  # THE MARKERS AS A TREE. An opening marker holds everything up to the closing marker of its own
+  # kind that closes it; one nothing closes is text, and what it held belongs to the marker around
+  # it. A closing marker with nothing of its kind open is text. Each node is
+  # `%{from, to, start, stop, kind, name, attrs, inner, children}`: the bytes it is cut from (`from`,
+  # `to`, its paragraph's once `unwrapped/2` takes it), the marker's own (`start`, `stop`), and its
+  # inner content's (`inner`, `nil` for a self-closing one).
+  defp tree(html), do: html |> tokens() |> Enum.reduce([{nil, []}], &nest/2) |> unwind()
 
-  defp pair([{start, stop, {:self, name, attrs}} | rest], found),
-    do: pair(rest, [{start, stop, name, attrs, nil} | found])
+  defp nest({start, stop, {:self, kind, name, attrs}}, [{open, children} | frames]),
+    do: [{open, [node(start, stop, kind, name, attrs, nil, []) | children]} | frames]
 
-  defp pair([_unpaired | rest], found), do: pair(rest, found)
-  defp pair([], found), do: Enum.reverse(found)
+  defp nest({_start, _stop, {:open, _kind, _name, _attrs}} = open, frames),
+    do: [{open, []} | frames]
+
+  defp nest({start, stop, {:close, kind}}, frames) do
+    case Enum.split_while(frames, &(not open?(&1, kind))) do
+      {_above, []} ->
+        frames
+
+      {above, [{{open_start, open_stop, {:open, kind, name, attrs}}, children} | below]} ->
+        held = Enum.reverse(promoted(above) ++ children)
+        closed = node(open_start, stop, kind, name, attrs, {open_stop, start}, held)
+        [{parent, siblings} | rest] = below
+
+        [{parent, [closed | siblings]} | rest]
+    end
+  end
+
+  defp open?({{_start, _stop, {:open, kind, _name, _attrs}}, _children}, kind), do: true
+  defp open?(_frame, _kind), do: false
+
+  # What markers left open held, newest first, for the marker around them.
+  defp promoted(frames), do: Enum.flat_map(frames, fn {_open, children} -> children end)
+
+  defp unwind(frames), do: frames |> promoted() |> Enum.reverse()
+
+  defp node(start, stop, kind, name, attrs, inner, children) do
+    %{
+      from: start,
+      to: stop,
+      start: start,
+      stop: stop,
+      kind: kind,
+      name: name,
+      attrs: attrs,
+      inner: inner,
+      children: children
+    }
+  end
+
+  # The outermost component markers. A slot marker outside any component is text, and the
+  # components inside it are outermost themselves.
+  defp outermost(html), do: html |> tree() |> components()
+
+  defp components(nodes) do
+    Enum.flat_map(nodes, fn
+      %{kind: :component} = node -> [node]
+      %{kind: :slot, children: children} -> components(children)
+    end)
+  end
+
+  defp named(nodes, found) do
+    Enum.reduce(nodes, found, fn
+      %{kind: :component, name: name, children: children}, found ->
+        named(children, [name | found])
+
+      %{children: children}, found ->
+        named(children, found)
+    end)
+  end
+
+  # One component's inner content: the HTML drawn as it is, the components inside it, and its slot
+  # entries — a slot marker belongs to the component it sits directly inside.
+  defp inside(inner) do
+    case :binary.match(inner, [@open, @slot_open]) do
+      :nomatch -> [{:html, inner}]
+      _found -> inner |> tree() |> Enum.map(&unwrapped(&1, inner)) |> chunks(inner)
+    end
+  end
 
   # A PARAGRAPH HOLDING ONLY THIS MARKER is taken with it, so the component is not drawn inside a
   # `<p>` — which a block element cannot be. Only the few bytes either side are read.
-  defp unwrapped({start, stop, name, attrs, inner} = marker, html) do
+  defp unwrapped(%{start: start, stop: stop} = node, html) do
     from = max(start - @paragraph_reach, 0)
     before = binary_part(html, from, start - from)
     after_marker = binary_part(html, stop, min(@paragraph_reach, byte_size(html) - stop))
 
     with [{opens_at, _length}] <- Regex.run(@paragraph_open, before, return: :index),
          [{0, closes}] <- Regex.run(@paragraph_close, after_marker, return: :index) do
-      {from + opens_at, stop + closes, name, attrs, inner}
+      %{node | from: from + opens_at, to: stop + closes}
     else
-      _shares_its_paragraph -> marker
+      _shares_its_paragraph -> node
     end
   end
 
-  defp chunks(markers, html) do
-    {pieces, position, _index} =
-      Enum.reduce(markers, {[], 0, 0}, fn {start, stop, name, attrs, inner},
-                                          {pieces, position, index} ->
-        marker = %{name: name, attrs: attrs, inner: inner_html(html, inner), index: index}
+  defp chunks(nodes, html) do
+    {pieces, position, _counts} =
+      Enum.reduce(nodes, {[], 0, %{component: 0, slot: 0}}, fn node, {pieces, position, counts} ->
+        marker = %{
+          name: node.name,
+          attrs: node.attrs,
+          inner: inner_html(html, node.inner),
+          index: Map.fetch!(counts, node.kind)
+        }
 
-        {[{:component, marker} | html_piece(pieces, html, position, start)], stop, index + 1}
+        {[{node.kind, marker} | html_piece(pieces, html, position, node.from)], node.to,
+         Map.update!(counts, node.kind, &(&1 + 1))}
       end)
 
     pieces |> html_piece(html, position, byte_size(html)) |> Enum.reverse()
   end
 
-  # A marker the editor holds as a block, as `{from, to, start, stop, name, attrs, inner}`: the
-  # bytes it is cut from, then the marker's own. Nothing for one sharing its paragraph.
-  defp standing({start, stop, name, attrs, inner} = marker, html) do
-    case unwrapped(marker, html) do
-      {^start, ^stop, _name, _attrs, _inner} -> top_level(marker, html)
-      {from, to, _name, _attrs, _inner} -> [{from, to, start, stop, name, attrs, inner}]
+  # A marker the editor holds as a block. Nothing for one sharing its paragraph.
+  defp standing(%{start: start, stop: stop} = node, html) do
+    case unwrapped(node, html) do
+      %{from: ^start, to: ^stop} -> top_level(node, html)
+      wrapped -> [wrapped]
     end
   end
 
-  defp top_level({start, stop, name, attrs, inner}, html) do
+  defp top_level(%{start: start} = node, html) do
     case depth(binary_part(html, 0, start)) do
-      0 -> [{start, stop, start, stop, name, attrs, inner}]
+      0 -> [node]
       _inside_an_element -> []
     end
   end
@@ -942,17 +1652,16 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   defp pieces(standing, html) do
     {pieces, position} =
-      Enum.reduce(standing, {[], 0}, fn {from, to, start, stop, name, attrs, inner},
-                                        {pieces, position} ->
+      Enum.reduce(standing, {[], 0}, fn node, {pieces, position} ->
         segment = %{
-          name: name,
-          attrs: attrs,
-          inner: inner_html(html, inner),
-          marker: binary_part(html, start, stop - start),
-          source: binary_part(html, from, to - from)
+          name: node.name,
+          attrs: node.attrs,
+          inner: inner_html(html, node.inner),
+          marker: binary_part(html, node.start, node.stop - node.start),
+          source: binary_part(html, node.from, node.to - node.from)
         }
 
-        {[{:component, segment} | html_piece(pieces, html, position, from)], to}
+        {[{:component, segment} | html_piece(pieces, html, position, node.from)], node.to}
       end)
 
     pieces |> html_piece(html, position, byte_size(html)) |> Enum.reverse()

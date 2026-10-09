@@ -5,8 +5,8 @@ defmodule MishkaCmsCore.Builder.EventsTest do
 
   The gates matter most. A `builder:save:before` hook that cannot actually stop a write would be
   decoration, and the whole point of putting content lint and link checking there is that a refusal
-  is binding. That is asserted end to end against the live editor in `builder_live_test.exs`; here
-  the contract itself is pinned down.
+  is binding. That is asserted end to end against the live editor in the `builder_live/` tests;
+  here the contract itself is pinned down.
   """
   use MishkaCmsCore.DataCase, async: false
 

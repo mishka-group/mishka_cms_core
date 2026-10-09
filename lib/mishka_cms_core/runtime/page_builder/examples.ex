@@ -151,12 +151,24 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Examples do
 
     description =
       cond do
-        attrs != [] -> Enum.map_join(attrs, ", ", fn {name, value} -> "#{name} #{value}" end)
+        attrs != [] -> Enum.map_join(attrs, ", ", &phrase/1)
         example.base? -> gettext("The component with nothing set")
         true -> gettext("The component as it ships")
       end
 
     %{example | description: description}
+  end
+
+  # AN ADDRESS IS NOT AN OPTION. A picture's `src` is the sample the kit ships, written inline as
+  # `data:image/…` — "src data:image/svg+xml;base64,PHN2Zy…" told the reader nothing but which
+  # attribute was set, so that is all it says.
+  defp phrase({name, value}) do
+    case value
+         |> String.trim(~s("))
+         |> String.starts_with?(["data:", "http://", "https://", "/"]) do
+      true -> name
+      false -> "#{name} #{value}"
+    end
   end
 
   defp attributes(source) do

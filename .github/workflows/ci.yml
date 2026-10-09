@@ -5,22 +5,20 @@ on:
     branches: [master]
   pull_request:
 
+# A newer push to the same branch or pull request makes the run in progress pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  test:
+  # Compiled once; the jobs below start from this build.
+  #
+  # A cache entry can never be changed once saved, so the key carries the commit: each run saves the
+  # build it made, and the next one starts from the nearest one before it (`restore-keys`) and
+  # compiles only what changed. Keyed on mix.lock alone, the first build ever saved was restored
+  # forever and every run compiled the whole project again.
+  build:
     runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
-    env:
-      POSTGRES_HOST: localhost
 
     defaults:
       run:
@@ -49,15 +47,105 @@ jobs:
           path: |
             mishka_cms_core/deps
             mishka_cms_core/_build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mishka_cms_core/mix.lock', 'mishka_cms_core/.tool-versions') }}
+          key: ${{ runner.os }}-mix-${{ hashFiles('mishka_cms_core/mix.lock', 'mishka_cms_core/.tool-versions') }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-mix-${{ hashFiles('mishka_cms_core/mix.lock', 'mishka_cms_core/.tool-versions') }}-
 
       - run: mix deps.get
 
       - run: MIX_ENV=test mix compile --warnings-as-errors
 
+  # Beside the tests rather than in front of them.
+  format:
+    needs: build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mishka_cms_core
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: mishka_cms_core
+
+      - uses: actions/checkout@v7
+        with:
+          repository: mishka-group/mishka_gervaz
+          ref: ${{ vars.GERVAZ_REF || 'master' }}
+          path: mishka_gervaz
+
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: mishka_cms_core/.tool-versions
+          version-type: strict
+
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            mishka_cms_core/deps
+            mishka_cms_core/_build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mishka_cms_core/mix.lock', 'mishka_cms_core/.tool-versions') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
       # The formatter takes the DSL's paren-free calls (`table "pages"`, `reference :site, ...`)
       # from the dependencies in .formatter.exs's import_deps, so it runs once they are fetched.
       - run: MIX_ENV=test mix format --check-formatted
+
+  # FOUR MACHINES, A QUARTER OF THE TEST FILES EACH. Three quarters of the suite is `async: false` —
+  # it shares the runtime's global state — and runs one module at a time, so more cores do not make
+  # it faster and more machines do. Mix deals the test files out by `--partitions`, and each
+  # partition has its own Postgres and its own database (`config/test.exs` names it after
+  # MIX_TEST_PARTITION).
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        partition: [1, 2, 3, 4]
+
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+
+    env:
+      POSTGRES_HOST: localhost
+      MIX_TEST_PARTITION: ${{ matrix.partition }}
+
+    defaults:
+      run:
+        working-directory: mishka_cms_core
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          path: mishka_cms_core
+
+      - uses: actions/checkout@v7
+        with:
+          repository: mishka-group/mishka_gervaz
+          ref: ${{ vars.GERVAZ_REF || 'master' }}
+          path: mishka_gervaz
+
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: mishka_cms_core/.tool-versions
+          version-type: strict
+
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            mishka_cms_core/deps
+            mishka_cms_core/_build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mishka_cms_core/mix.lock', 'mishka_cms_core/.tool-versions') }}-${{ github.sha }}
+          fail-on-cache-miss: true
 
       # The migrations are generated, not in git: generate them before the test alias's `ash.setup`
       # migrates the test database.
@@ -65,5 +153,6 @@ jobs:
 
       # `mix test`, not `MIX_ENV=test mix test`: mishka_installer decides at dep-compile time
       # whether to start its plugin engine, and an exported MIX_ENV outranks the `project_env`
-      # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files.
-      - run: mix test --warnings-as-errors
+      # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files,
+      # each in the partition that compiles it.
+      - run: mix test --warnings-as-errors --partitions 4

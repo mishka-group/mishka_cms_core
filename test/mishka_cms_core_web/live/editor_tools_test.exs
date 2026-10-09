@@ -3,11 +3,11 @@ defmodule MishkaCmsCoreWeb.Test.EditorToolsTest do
   The panels an author reaches for — the palettes, the pickers, the Studio and the bulk bar — asked
   of all four sections rather than of a page.
 
-  `MishkaCmsCoreWeb.Test.BuilderLiveTest` covers every one of these in depth, and covers them on a
-  PAGE. That is the shape of every bug the section matrix has found so far: a feature that works,
-  and works in one column. These are the tools whose scope is a SITE — a class, a snippet, a preset,
-  the media library — which is exactly the axis a global layout or component changes, because such a
-  document belongs to no site at all.
+  The `MishkaCmsCoreWeb.Test.BuilderLive.*` tests cover every one of these in depth, and cover them
+  on a PAGE. That is the shape of every bug the section matrix has found so far: a feature that
+  works, and works in one column. These are the tools whose scope is a SITE — a class, a snippet, a
+  preset, the media library — which is exactly the axis a global layout or component changes,
+  because such a document belongs to no site at all.
 
   The second describe is that case on its own: a master editing a shared document, where
   `editor.site_id` is nil and every site-scoped read has to mean "the shared ones" rather than

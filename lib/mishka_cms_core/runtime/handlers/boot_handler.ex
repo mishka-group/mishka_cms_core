@@ -1441,8 +1441,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
   @doc """
   Aggregates every class-bearing field of a Component into one blob for
-  Tailwind to scan: `template`, `body`, helper code, and the templates
-  + bodies of multi-clause variants stored in `extra.clauses`.
+  Tailwind to scan: `template`, `body`, helper code, the templates
+  + bodies of multi-clause variants stored in `extra.clauses`, and the content
+  an author places with it — its `examples` and the `extra.furnishing` it
+  arrives with, which the content editor offers as ready blocks.
 
   It ends with the attribute lines the CSS closure reads to follow a component named through an
   attribute — `MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks/1`.
@@ -1467,6 +1469,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       field(component, :body),
       helpers_to_text(field(component, :helpers)),
       clauses_blob,
+      placed_to_text(field(component, :examples), field(extra, :furnishing)),
       defaults_to_text(field(component, :attrs)),
       defaults_to_text(field(component, :slots)),
       MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks(component)
@@ -1536,4 +1539,20 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   end
 
   defp helpers_to_text(_), do: ""
+
+  # What the content editor places with a component: its examples, and the body and slot entries of
+  # the furnishing it arrives with — HTML carrying classes of its own, which a page drawing that
+  # content needs as much as the component's.
+  defp placed_to_text(examples, furnishing) do
+    slots =
+      case field(furnishing, :slots) do
+        list when is_list(list) -> Enum.map(list, &field(&1, :body))
+        _none -> []
+      end
+
+    [field(furnishing, :body) | slots]
+    |> Enum.concat(List.wrap(examples))
+    |> Enum.filter(&is_binary/1)
+    |> Enum.join("\n\n")
+  end
 end

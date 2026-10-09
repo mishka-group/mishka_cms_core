@@ -18,8 +18,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
   import Phoenix.LiveViewTest
 
   alias MishkaCmsCore.Runtime.{ContentComponents, Translations}
-  alias MishkaCmsCore.Runtime.States.SiteState
-  alias MishkaCmsCore.Test.Plugins.ContentEditorPalette
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
+  alias MishkaCmsCore.Test.Plugins.{ContentEditorBlocks, ContentEditorPalette}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
 
   @moduletag :integration
 
@@ -28,6 +29,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
   @editor "post_form-form_content-editor"
   @components "#post_form-form_content-editor-components"
+  @picker "post_form-form_content-editor-components"
 
   defmodule Host do
     use Phoenix.LiveView
@@ -100,9 +102,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
   end
 
   # A component the site may draw, known to `SiteState` as the compile worker would make it.
-  defp callout!(site, name) do
+  defp callout!(site, name, overrides \\ []) do
     component =
-      create_component!(
+      [
         name: name,
         site_id: site && site.id,
         active: true,
@@ -120,7 +122,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
           %{"name" => "rest", "type" => "global", "opts" => %{}}
         ],
         slots: [%{"name" => "inner_block", "opts" => %{}}]
-      )
+      ]
+      |> Keyword.merge(overrides)
+      |> create_component!()
 
     :ok = SiteState.put_component(component.site_id, component.name)
     on_exit(fn -> SiteState.delete_component(component.site_id, component.name) end)
@@ -306,6 +310,41 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       refute Enum.any?(entries, &(&1.name == hidden.name))
     end
 
+    # The read under it pages by 250; a site past that lost the end of the alphabet — the issue's
+    # "searching video finds nothing" on a site whose kit and own components came to 308.
+    test "lists every component, past one page of them", ctx do
+      for i <- 1..251 do
+        create_component!(
+          name: "many-#{ctx.n}-#{String.pad_leading(to_string(i), 3, "0")}",
+          site_id: nil,
+          active: true,
+          precompile: false
+        )
+      end
+
+      last = callout!(nil, "zz-last-#{ctx.n}")
+
+      assert {:ok, entries} = ContentComponents.palette(ctx.user, ctx.site.id)
+      assert Enum.any?(entries, &(&1.name == last.name))
+      assert Enum.count(entries, &String.starts_with?(&1.name, "many-#{ctx.n}-")) == 251
+    end
+
+    test "leaves out a component that requires what no marker can hold", ctx do
+      needy =
+        callout!(ctx.site, "needs-list-#{ctx.n}",
+          attrs: [%{"name" => "rows", "type" => "list", "opts" => %{"required" => true}}]
+        )
+
+      fine =
+        callout!(ctx.site, "needs-id-#{ctx.n}",
+          attrs: [%{"name" => "id", "type" => "string", "opts" => %{"required" => true}}]
+        )
+
+      assert {:ok, entries} = ContentComponents.palette(ctx.user, ctx.site.id)
+      refute Enum.any?(entries, &(&1.name == needy.name))
+      assert Enum.any?(entries, &(&1.name == fine.name))
+    end
+
     test "with no plugin, is every component the site may embed", ctx do
       hidden = callout!(ctx.site, "kept-unlisted-#{ctx.n}")
 
@@ -345,6 +384,32 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert preview =~ "Read <b>this</b>"
     end
 
+    # The admin's stylesheet holds none of a kit's colours or variants, so a blockquote turned
+    # `secondary` previewed as it was; the previews are drawn with this instead.
+    test "tells the editor the stylesheet its previews are drawn with, once it is built", ctx do
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>[[component #{ctx.own.name} /]]</p>"})
+      assert_reply(view, %{styles: nil})
+
+      key = MishkaCmsCore.Runtime.ContentEditorStyles.key(ctx.site.id)
+      assert_push_event(view, "mishka:content_editor", %{id: @editor, styles: href}, 30_000)
+      assert href == "/assets/css/#{key}/#{AssetsState.hash(key, "css")}"
+
+      ask(view, "segments", %{"html" => "<p>x</p>"})
+      assert_reply(view, %{styles: ^href})
+    end
+
+    test "a record with no site is previewed with the base and the global components", ctx do
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+      view = open(ctx, %{"user" => master})
+      ask(view, "segments", %{"html" => "<p>x</p>"})
+
+      key = MishkaCmsCore.Runtime.ContentEditorStyles.key(nil)
+      assert_push_event(view, "mishka:content_editor", %{id: @editor, styles: href}, 30_000)
+      assert href == "/assets/css/#{key}/#{AssetsState.hash(key, "css")}"
+      on_exit(fn -> AssetsState.delete(key, "css") end)
+    end
+
     test "a preview never carries a script, an event attribute or a LiveView binding", ctx do
       danger =
         create_component!(
@@ -368,6 +433,66 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       refute preview =~ "phx-click"
       refute preview =~ "onclick"
       refute preview =~ "<script"
+    end
+
+    # A button's own element carries every setting of it, and a definition list's terms are its
+    # list's: the previews kept their text and dropped the elements around it.
+    test "a preview keeps every element a component draws, a button and a form among them", ctx do
+      drawn =
+        create_component!(
+          name: "drawn-#{ctx.n}",
+          site_id: ctx.site.id,
+          active: true,
+          precompile: false,
+          template:
+            ~S|<form class="probe-form"><button type="button" class="probe-button">Go</button></form><dl class="probe-dl"><dt>T</dt><dd>D</dd></dl><figure class="probe-figure"><figcaption>C</figcaption></figure>|
+        )
+
+      :ok = SiteState.put_component(drawn.site_id, drawn.name)
+      on_exit(fn -> SiteState.delete_component(drawn.site_id, drawn.name) end)
+
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>[[component #{drawn.name} /]]</p>"})
+
+      assert_push_event(view, "mishka:content_editor", %{previews: [%{preview: preview}]}, @await)
+
+      doc = LazyHTML.from_fragment(preview)
+
+      for selector <-
+            ~w(form.probe-form>button.probe-button dl.probe-dl>dt dl.probe-dl>dd figure.probe-figure>figcaption),
+          do: assert(doc |> LazyHTML.query(selector) |> Enum.count() == 1, selector)
+    end
+
+    test "a component that raises as it is drawn previews as a notice, the others still drawn",
+         ctx do
+      broken =
+        callout!(ctx.site, "broken-#{ctx.n}",
+          template: ~S|<p>{String.to_integer("not a number")}</p>|
+        )
+
+      bad = "[[component #{broken.name} /]]"
+      good = ~s([[component #{ctx.own.name} title="Fine" /]])
+
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>#{bad}</p><p>#{good}</p>"})
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{previews: [%{marker: ^good, preview: drawn}]},
+        @await
+      )
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{previews: [%{marker: ^bad, preview: notice}]},
+        @await
+      )
+
+      assert drawn =~ ~s(data-title="Fine")
+      assert notice =~ "could not be drawn with these settings"
+      assert notice =~ broken.name
     end
 
     test "and the pieces, written back in order, are the content as it was stored", ctx do
@@ -420,6 +545,31 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert_push_event(view, "mishka:content_editor", %{previews: [%{marker: ^marker}]}, @await)
     end
 
+    test "a component that says how it arrives arrives so, placed, dropped in or added", ctx do
+      callout!(ctx.site, "furnished-#{ctx.n}",
+        extra: %{"furnishing" => %{"body" => "Sample", "attrs" => %{"tone" => "warn"}}}
+      )
+
+      name = "furnished-#{ctx.n}"
+      arrives = ~s([[component #{name} tone="warn"]]Sample[[/component]])
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "build", %{"name" => name})
+      assert_reply(view, %{marker: ^arrives})
+
+      ask(view, "build", %{"name" => name, "attrs" => %{"title" => "Mine"}})
+      own = ~s([[component #{name} title="Mine" /]])
+      assert_reply(view, %{marker: ^own})
+
+      ask(view, "nest", %{"marker" => "[[component #{ctx.own.name} /]]", "name" => name})
+      nested = "[[component #{ctx.own.name}]]#{arrives}[[/component]]"
+      assert_reply(view, %{marker: ^nested})
+
+      view = edit(view, "[[component #{ctx.own.name} /]]")
+      push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => name})
+      assert applied(view) == nested
+    end
+
     test "a component placed closes the palette, off the text", ctx do
       view = ctx |> open() |> open_palette()
       assert has_element?(view, "#{@components}-panel")
@@ -430,15 +580,22 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       refute has_element?(view, "#{@components}-panel")
     end
 
-    test "and so does Apply in a placed component's settings", ctx do
+    test "and so does opening a placed component's settings", ctx do
       view = ctx |> open() |> open_palette()
       ask(view, "edit", %{"marker" => "[[component #{ctx.own.name} /]]"})
-      assert has_element?(view, "#{@components}-settings")
-
-      ask(view, "build", %{"name" => ctx.own.name, "attrs" => %{"title" => "T"}, "inner" => ""})
-      assert_reply(view, %{marker: _marker})
 
       refute has_element?(view, "#{@components}-panel")
+      assert in_drawer?(view, "#{@components}-drawer")
+    end
+
+    test "a component that requires a slot is written with an empty entry for it", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "build", %{"name" => player.name, "attrs" => %{}, "inner" => ""})
+
+      expected = "[[component #{player.name}]][[slot source /]][[/component]]"
+      assert_reply(view, %{marker: ^expected})
     end
 
     test "a refusal keeps the palette open, and says why", ctx do
@@ -494,30 +651,460 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
   end
 
-  describe "a placed component's settings" do
-    test "open filled in from its marker", ctx do
+  describe "the palette's headings" do
+    test "are text first, a kit's own after the known ones, and Other last", ctx do
+      callout!(ctx.site, "words-#{ctx.n}", type: "typography")
+      callout!(ctx.site, "hero-#{ctx.n}", type: "marketing")
+
       view = ctx |> open() |> open_palette()
 
-      ask(view, "edit", %{
-        "marker" => ~s([[component #{ctx.own.name} title="Hi" tone="warn"]]Body[[/component]])
+      assert category_ids(view) ==
+               Enum.map(~w(all text marketing other), &"#{@picker}-category-#{&1}")
+
+      assert section_titles(view) == ["Text", "Marketing", "Other"]
+    end
+
+    test "narrow the list to one heading", ctx do
+      callout!(ctx.site, "words-#{ctx.n}", type: "typography")
+      view = ctx |> open() |> open_palette()
+
+      view |> element("#{@components}-category-text") |> render_click()
+
+      assert has_element?(view, "#{@components}-pick-words-#{ctx.n}")
+      refute has_element?(view, "#{@components}-pick-#{ctx.own.name}")
+    end
+
+    test "are searched by their name", ctx do
+      callout!(ctx.site, "words-#{ctx.n}", type: "typography")
+      view = ctx |> open() |> open_palette()
+
+      view |> element("#{@components}-query") |> render_keyup(%{"value" => "text"})
+
+      assert has_element?(view, "#{@components}-pick-words-#{ctx.n}")
+      refute has_element?(view, "#{@components}-pick-#{ctx.own.name}")
+    end
+
+    test "the search box is cleared by its own button", ctx do
+      view = ctx |> open() |> open_palette()
+      view |> element("#{@components}-query") |> render_keyup(%{"value" => "zzz-nothing"})
+      refute has_element?(view, "#{@components}-pick-#{ctx.own.name}")
+
+      view |> element("#{@components}-query-clear") |> render_click()
+
+      assert has_element?(view, "#{@components}-pick-#{ctx.own.name}")
+      refute has_element?(view, "#{@components}-query-clear")
+    end
+  end
+
+  defp category_ids(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#{@components}-categories button")
+    |> LazyHTML.attribute("id")
+  end
+
+  defp section_titles(view) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query("#{@components}-list section > div > span:first-child")
+    |> Enum.map(&LazyHTML.text/1)
+  end
+
+  describe "ready blocks" do
+    setup ctx do
+      register_plugin(ContentEditorBlocks, "runtime:content:editor_blocks")
+
+      block = %{
+        id: "note-#{ctx.n}",
+        title: "Boxed note",
+        component: ctx.own.name,
+        category: "layout",
+        tree: %{
+          name: ctx.own.name,
+          attrs: %{"title" => "Outer"},
+          parts: [{:component, %{name: ctx.shared.name, attrs: %{}, parts: []}}]
+        }
+      }
+
+      unplaceable = %{block | id: "theirs-#{ctx.n}", tree: %{block.tree | name: ctx.theirs.name}}
+
+      :persistent_term.put(:__content_editor_blocks__, [block, unplaceable])
+      on_exit(fn -> :persistent_term.erase(:__content_editor_blocks__) end)
+
+      {:ok, block: block}
+    end
+
+    test "open first, offering the blocks whose components the site may place", ctx do
+      view = ctx |> open() |> open_palette()
+
+      assert has_element?(view, "#{@components}-tab-blocks[aria-selected=true]")
+      assert has_element?(view, "#{@components}-block-note-#{ctx.n}[data-block-card][draggable]")
+      refute has_element?(view, "#{@components}-block-theirs-#{ctx.n}")
+    end
+
+    test "a block is written by the server, components inside it", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "block", %{"id" => "note-#{ctx.n}"})
+
+      marker =
+        ~s([[component #{ctx.own.name} title="Outer"]][[component #{ctx.shared.name} /]][[/component]])
+
+      assert_reply(view, %{marker: ^marker})
+      refute has_element?(view, "#{@components}-panel")
+      assert_push_event(view, "mishka:content_editor", %{previews: [%{marker: ^marker}]}, @await)
+    end
+
+    test "are the examples the site's components carry", ctx do
+      callout!(ctx.site, "framed-#{ctx.n}",
+        examples: [
+          ~s(<.component component_name="framed-#{ctx.n}" id="framed-welcome" title="Hello">\n  Welcome <.component component_name="#{ctx.shared.name}" />\n</.component>),
+          ~s(<.component component_name="framed-#{ctx.n}">{@title}</.component>)
+        ]
+      )
+
+      view = ctx |> open() |> open_palette()
+
+      assert has_element?(view, "#{@components}-block-framed-#{ctx.n}-example-1", "Welcome")
+      refute has_element?(view, "#{@components}-block-framed-#{ctx.n}-example-2")
+
+      ask(view, "block", %{"id" => "framed-#{ctx.n}-example-1"})
+
+      marker =
+        ~s([[component framed-#{ctx.n} title="Hello"]]Welcome [[component #{ctx.shared.name} /]][[/component]])
+
+      assert_reply(view, %{marker: ^marker})
+    end
+
+    test "a component's plain drop is a block, named after the component", ctx do
+      callout!(ctx.site, "plain-#{ctx.n}", extra: %{"furnishing" => %{"body" => "Fill me in"}})
+      view = ctx |> open() |> open_palette()
+
+      assert has_element?(view, "#{@components}-block-plain-#{ctx.n}-plain", "Plain, to fill in")
+
+      ask(view, "block", %{"id" => "plain-#{ctx.n}-plain"})
+      marker = "[[component plain-#{ctx.n}]]Fill me in[[/component]]"
+      assert_reply(view, %{marker: ^marker})
+    end
+
+    test "a block dropped on a placed component goes inside it", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "nest", %{
+        "marker" => ~s([[component #{ctx.own.name}]]Text[[/component]]),
+        "block" => "note-#{ctx.n}"
+      })
+
+      marker =
+        ~s([[component #{ctx.own.name}]]Text[[component #{ctx.own.name} title="Outer"]][[component #{ctx.shared.name} /]][[/component]][[/component]])
+
+      assert_reply(view, %{marker: ^marker})
+
+      ask(view, "nest", %{"marker" => marker, "block" => "nobody-#{ctx.n}"})
+      assert_reply(view, %{error: _message})
+    end
+
+    test "a block nobody offers is refused", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "block", %{"id" => "theirs-#{ctx.n}"})
+      assert_reply(view, %{error: _message})
+    end
+
+    test "the Components tab lists the components, and its search searches them", ctx do
+      view = ctx |> open() |> open_palette()
+
+      view |> element("#{@components}-tab-components") |> render_click()
+
+      assert has_element?(view, "#{@components}-tab-components[aria-selected=true]")
+      assert has_element?(view, "#{@components}-pick-#{ctx.own.name}")
+      refute has_element?(view, "#{@components}-block-note-#{ctx.n}")
+    end
+  end
+
+  describe "dropping a component on a placed one" do
+    test "puts it inside, at the end", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "nest", %{
+        "marker" => ~s([[component #{ctx.own.name}]]Text[[/component]]),
+        "name" => ctx.shared.name
+      })
+
+      marker =
+        ~s([[component #{ctx.own.name}]]Text[[component #{ctx.shared.name} /]][[/component]])
+
+      assert_reply(view, %{name: _name, marker: ^marker})
+    end
+
+    test "puts it before or after the part it was dropped beside", ctx do
+      view = ctx |> open() |> open_palette()
+
+      marker =
+        ~s([[component #{ctx.own.name}]]Text[[component #{ctx.shared.name} /]][[/component]])
+
+      for {beside, after?, inner} <- [
+            {"r-0", false,
+             "[[component #{ctx.own.name} /]]Text[[component #{ctx.shared.name} /]]"},
+            {"r-0", true,
+             "Text[[component #{ctx.own.name} /]][[component #{ctx.shared.name} /]]"},
+            {"r-1", true,
+             "Text[[component #{ctx.shared.name} /]][[component #{ctx.own.name} /]]"},
+            {"r-9", false,
+             "Text[[component #{ctx.shared.name} /]][[component #{ctx.own.name} /]]"}
+          ] do
+        ask(view, "nest", %{
+          "marker" => marker,
+          "name" => ctx.own.name,
+          "beside" => beside,
+          "after" => after?
+        })
+
+        written = "[[component #{ctx.own.name}]]#{inner}[[/component]]"
+        assert_reply(view, %{marker: ^written})
+      end
+    end
+
+    test "with the component's settings open, the settings take it", ctx do
+      view = ctx |> open() |> open_palette()
+      marker = ~s([[component #{ctx.own.name}]]Text[[/component]])
+
+      ask(view, "edit", %{"marker" => marker, "serial" => 7})
+      assert_reply(view, %{ok: true})
+
+      ask(view, "nest", %{"marker" => marker, "name" => ctx.shared.name, "serial" => 7})
+      assert_reply(view, %{ok: true})
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{serial: 7, applied: %{marker: written}},
+        @await
+      )
+
+      assert written ==
+               ~s([[component #{ctx.own.name}]]Text[[component #{ctx.shared.name} /]][[/component]])
+
+      assert in_drawer?(view, "#{@components}-node-r-1[data-name=#{ctx.shared.name}]")
+    end
+
+    test "the editor is told which components take others, once the palette is read", ctx do
+      flat = callout!(ctx.site, "flat-#{ctx.n}", slots: [])
+      view = ctx |> open() |> open_palette()
+
+      assert_push_event(view, "mishka:content_editor", %{holders: holders}, @await)
+      assert ctx.own.name in holders
+      refute flat.name in holders
+    end
+
+    test "is refused where the component holds nothing, or either is not listed", ctx do
+      flat = callout!(ctx.site, "flat-#{ctx.n}", slots: [])
+      view = ctx |> open() |> open_palette()
+
+      for {marker, name} <- [
+            {"[[component #{flat.name} /]]", ctx.shared.name},
+            {"[[component #{ctx.own.name} /]]", ctx.theirs.name},
+            {"[[component #{ctx.theirs.name} /]]", ctx.own.name},
+            {"<p>not a marker</p>", ctx.own.name}
+          ] do
+        ask(view, "nest", %{"marker" => marker, "name" => name})
+        assert_reply(view, %{error: _message})
+      end
+    end
+  end
+
+  describe "a preview's parts" do
+    test "are marked where the component draws them, a slot entry with content at its start",
+         ctx do
+      tabs =
+        callout!(ctx.site, "tabs-#{ctx.n}",
+          attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+          template:
+            ~S|<div><section :for={t <- @tab} class="probe-tab">{render_slot(t)}</section><div class="probe-body">{render_slot(@inner_block)}</div></div>|,
+          slots: [
+            %{"name" => "inner_block", "opts" => %{}},
+            %{"name" => "tab", "opts" => %{}, "attrs" => []}
+          ]
+        )
+
+      marker =
+        "[[component #{tabs.name}]]Intro [[component #{ctx.shared.name} /]]\n  [[slot tab]]One[[/slot]][[slot tab /]][[/component]]"
+
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>#{marker}</p>"})
+
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{previews: [%{marker: ^marker, preview: preview}]},
+        @await
+      )
+
+      doc = LazyHTML.from_fragment(preview)
+      body = LazyHTML.query(doc, ".probe-body > mishka-part")
+
+      assert LazyHTML.attribute(body, "data-part") == ["r-0", "r-1"]
+      assert LazyHTML.attribute(body, "data-end") == ["r"]
+      assert LazyHTML.text(LazyHTML.query(doc, ".probe-body")) =~ "Intro"
+
+      starts = LazyHTML.query(doc, ".probe-tab > mishka-part:first-child")
+
+      assert LazyHTML.attribute(starts, "data-part") == ["r-3"]
+      assert LazyHTML.attribute(starts, "data-slot") == ["tab"]
+      assert Enum.count(LazyHTML.query(doc, ".probe-tab")) == 2
+    end
+
+    test "a component holding nothing, or only spacing, is drawn unmarked", ctx do
+      view = open(ctx)
+
+      for marker <- [
+            "[[component #{ctx.own.name} /]]",
+            "[[component #{ctx.own.name}]]  [[/component]]"
+          ] do
+        ask(view, "segments", %{"html" => "<p>#{marker}</p>"})
+
+        assert_push_event(
+          view,
+          "mishka:content_editor",
+          %{previews: [%{marker: ^marker, preview: preview}]},
+          @await
+        )
+
+        refute preview =~ "mishka-part"
+      end
+    end
+  end
+
+  describe "moving a part on its block" do
+    setup ctx do
+      kids = Enum.map_join(~w(a b c), &~s([[component #{ctx.shared.name} title="#{&1}" /]]))
+      {:ok, marker: "[[component #{ctx.own.name}]]#{kids}[[/component]]"}
+    end
+
+    test "puts it before or after a sibling, as the server writes it", ctx do
+      view = open(ctx)
+
+      for {path, beside, after?, order} <- [
+            {"r-2", "r-0", false, ~w(c a b)},
+            {"r-0", "r-2", true, ~w(b c a)},
+            {"r-0", "r-1", true, ~w(b a c)},
+            {"r-2", "r-1", false, ~w(a c b)},
+            {"r-0", "r-2", false, ~w(b a c)}
+          ] do
+        ask(view, "reorder", %{
+          "marker" => ctx.marker,
+          "path" => path,
+          "beside" => beside,
+          "after" => after?
+        })
+
+        assert_reply(view, %{marker: marker})
+        assert titles(marker) == order
+
+        assert_push_event(
+          view,
+          "mishka:content_editor",
+          %{previews: [%{marker: ^marker}]},
+          @await
+        )
+      end
+    end
+
+    test "beside itself, or anything but a sibling, is refused", ctx do
+      view = open(ctx)
+
+      for {path, beside} <- [{"r-0", "r-0"}, {"r-0", "r-1-0"}, {"r", "r-0"}, {"x", "r-1"}] do
+        ask(view, "reorder", %{"marker" => ctx.marker, "path" => path, "beside" => beside})
+        assert_reply(view, %{error: _message})
+      end
+    end
+
+    test "with its settings open, the settings take it", ctx do
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "edit", %{"marker" => ctx.marker, "serial" => 4})
+      assert_reply(view, %{ok: true})
+
+      ask(view, "reorder", %{
+        "marker" => ctx.marker,
+        "path" => "r-2",
+        "beside" => "r-0",
+        "after" => false,
+        "serial" => 4
       })
 
       assert_reply(view, %{ok: true})
 
-      assert has_element?(
+      assert_push_event(
+        view,
+        "mishka:content_editor",
+        %{serial: 4, applied: %{marker: marker}},
+        @await
+      )
+
+      assert titles(marker) == ~w(c a b)
+      assert in_drawer?(view, ~s(#{@components}-f-r-0-title[value="c"]))
+    end
+  end
+
+  defp titles(marker),
+    do: ~r/title="([^"]+)"/ |> Regex.scan(marker, capture: :all_but_first) |> List.flatten()
+
+  # THE DRAWER IS IN A PORTAL, which `Phoenix.LiveViewTest` keeps inside the `<template>` the browser
+  # moves to the body — it does not look in there. So the drawer is read out of the template, and its
+  # events are sent to the picker it belongs to, as the browser does.
+  defp drawer(view) do
+    html = render(view)
+
+    case Regex.run(~r{<template id="#{@picker}-drawer-portal"[^>]*>(.*?)</template>}s, html) do
+      [_template, inside] -> LazyHTML.from_fragment(inside)
+      nil -> LazyHTML.from_fragment("")
+    end
+  end
+
+  defp in_drawer?(view, selector), do: view |> drawer() |> LazyHTML.query(selector) |> Enum.any?()
+
+  defp drawer_html(view, selector),
+    do: view |> drawer() |> LazyHTML.query(selector) |> LazyHTML.to_html()
+
+  defp push(view, event, params \\ %{}),
+    do: view |> with_target(@components) |> render_click(event, params)
+
+  defp edit(view, marker) do
+    ask(view, "edit", %{"marker" => marker})
+    assert_reply(view, %{ok: true})
+    view
+  end
+
+  defp settings_change(view, params), do: push(view, "settings_change", params)
+
+  defp applied(view) do
+    assert_push_event(view, "mishka:content_editor", %{applied: %{marker: marker}}, @await)
+    marker
+  end
+
+  describe "a placed component's settings" do
+    test "open in a drawer of their own, filled in from its marker", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name} title="Hi" tone="warn"]]Body[[/component]]))
+
+      assert in_drawer?(view, "#{@components}-drawer[data-editor=#{@editor}]")
+
+      assert in_drawer?(
                view,
-               "#{@components}-settings[data-content-editor-settings=#{ctx.own.name}]"
+               "form#{@components}-settings[phx-change=settings_change][phx-submit=settings_done]"
              )
 
-      assert has_element?(
-               view,
-               "#{@components}-attr-title[data-content-editor-attr=title][value=Hi]"
-             )
-
-      assert has_element?(view, "#{@components}-attr-tone option[value=warn][selected]")
-      assert view |> element("#{@components}-inner") |> render() =~ "Body"
-      assert has_element?(view, "#{@components}-apply[data-content-editor-apply=#{ctx.own.name}]")
-      refute has_element?(view, "#{@components}-attr-rest")
+      assert in_drawer?(view, "#{@components}-f-r-title[name='a[r][title]'][value=Hi]")
+      assert in_drawer?(view, "#{@components}-f-r-tone option[value=warn][selected]")
+      assert drawer_html(view, "#{@components}-text-r-0") =~ "Body"
+      refute in_drawer?(view, "#{@components}-f-r-rest")
+      refute has_element?(view, "#{@components}-settings")
     end
 
     test "open once the palette is read, when it had not been", ctx do
@@ -527,19 +1114,331 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert_reply(view, %{ok: true})
       render_async(view, @await)
 
-      assert has_element?(view, "#{@components}-attr-title[value=Late]")
+      assert in_drawer?(view, "#{@components}-f-r-title[value=Late]")
     end
 
-    test "belong to no form, so typing in them never reaches the record's", ctx do
-      view = ctx |> open() |> open_palette()
-      ask(view, "edit", %{"marker" => "[[component #{ctx.own.name} /]]"})
+    test "write each change back into the component, as it is typed", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name} title="Hi"]]Body[[/component]]))
 
-      assert has_element?(
+      settings_change(view, %{
+        "a" => %{"r" => %{"title" => "Bye", "tone" => "warn"}},
+        "t" => %{"r-0" => "New"}
+      })
+
+      assert applied(view) ==
+               ~s([[component #{ctx.own.name} title="Bye" tone="warn"]]New[[/component]])
+
+      assert_push_event(view, "mishka:content_editor", %{previews: [%{marker: _marker}]}, @await)
+    end
+
+    test "take only the attributes the component declares", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{ctx.own.name} /]]")
+
+      settings_change(view, %{
+        "a" => %{"r" => %{"title" => "T", "onclick" => "x", "phx-click" => "y"}}
+      })
+
+      assert applied(view) == ~s([[component #{ctx.own.name} title="T" /]])
+    end
+
+    test "an emptied field leaves the attribute to its default", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name} title="Hi" /]]))
+
+      settings_change(view, %{"a" => %{"r" => %{"title" => ""}}})
+
+      assert applied(view) == "[[component #{ctx.own.name} /]]"
+    end
+
+    test "add text, a component and a slot entry inside, remove one and move one", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{player.name}]][[slot source src=\"/a.mp4\" /]][[/component]]")
+
+      assert in_drawer?(view, "#{@components}-add-slot-r-source")
+      push(view, "part_add", %{"path" => "r", "kind" => "slot", "name" => "source"})
+      assert applied(view) =~ ~s([[slot source src="/a.mp4" /]][[slot source /]])
+
+      assert in_drawer?(view, "#{@components}-add-component-r")
+      push(view, "child_open", %{"path" => "r"})
+      assert in_drawer?(view, "#{@components}-child-r-#{ctx.shared.name}")
+      push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => ctx.shared.name})
+
+      assert applied(view) ==
+               ~s([[component #{player.name}]][[slot source src="/a.mp4" /]][[slot source /]][[component #{ctx.shared.name} /]][[/component]])
+
+      refute in_drawer?(view, "#{@components}-children-r")
+
+      push(view, "part_remove", %{"path" => "r-1"})
+
+      assert applied(view) ==
+               ~s([[component #{player.name}]][[slot source src="/a.mp4" /]][[component #{ctx.shared.name} /]][[/component]])
+
+      push(view, "part_move", %{"path" => "r-1", "by" => "-1"})
+
+      assert applied(view) ==
+               ~s([[component #{player.name}]][[component #{ctx.shared.name} /]][[slot source src="/a.mp4" /]][[/component]])
+
+      push(view, "part_add", %{"path" => "r", "kind" => "text"})
+      settings_change(view, %{"t" => %{"r-2" => "After"}})
+
+      assert applied(view) ==
+               ~s([[component #{player.name}]][[component #{ctx.shared.name} /]][[slot source src="/a.mp4" /]]After[[/component]])
+    end
+
+    test "a part dragged beside another goes there, and an arrow passes over spacing", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+      entries = Enum.map_join(~w(a b c), &~s(\n  [[slot source src="/#{&1}.mp4" /]]))
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{player.name}]]#{entries}\n[[/component]]")
+
+      assert in_drawer?(
                view,
-               "#{@components}-attr-title[form='#{@components |> String.trim_leading("#")}-detached']"
+               "#{@components}-parts-r[phx-hook=ContentParts] [data-content-part=r-1] [data-part=grip]"
              )
 
-      refute has_element?(view, "form##{@components |> String.trim_leading("#")}-detached")
+      push(view, "part_move", %{"path" => "r-1", "to" => "r-5"})
+      assert sources(applied(view)) == ~w(/b.mp4 /c.mp4 /a.mp4)
+
+      push(view, "part_move", %{"path" => "r-5", "by" => "-1"})
+      assert sources(applied(view)) == ~w(/b.mp4 /a.mp4 /c.mp4)
+
+      push(view, "part_move", %{"path" => "r-2", "by" => "1"})
+      assert sources(applied(view)) == ~w(/a.mp4 /b.mp4 /c.mp4)
+    end
+
+    test "file the attributes under the page builder's headings, what is filled in open", ctx do
+      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+
+      assert in_drawer?(view, "#{@components}-f-r-title")
+      refute in_drawer?(view, "details #{@components}-f-r-title")
+
+      assert in_drawer?(
+               view,
+               "details#{@components}-group-r-properties[data-group=Properties][phx-mounted] #{@components}-f-r-tone"
+             )
+    end
+
+    test "fold each part inside, saying what a folded one holds", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(
+          ~s([[component #{player.name}]][[component #{ctx.own.name} title="Inner" /]][[slot source src="/a.mp4" /]][[/component]])
+        )
+
+      for {section, part} <- [{"node", "r-0"}, {"slot", "r-1"}] do
+        id = "#{@components}-#{section}-#{part}"
+
+        assert in_drawer?(view, "#{id}[phx-mounted] > [data-part=body]")
+        assert in_drawer?(view, "#{id} > [data-part=head] button[data-part=fold][phx-click]")
+        assert drawer_html(view, "#{id} > [data-part=head] [data-part=fold]") =~ "data-collapsed"
+      end
+
+      assert drawer_html(view, "#{@components}-node-r-0 > [data-part=head]") =~ "Inner"
+      refute in_drawer?(view, "#{@components}-node-r > [data-part=head]")
+    end
+
+    test "show a text box added beside the slots at once", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{player.name}]][[slot source src="/a.mp4" /]][[/component]]))
+
+      refute in_drawer?(view, "#{@components}-text-r-1")
+      push(view, "part_add", %{"path" => "r", "kind" => "text"})
+      assert in_drawer?(view, "#{@components}-text-r-1")
+    end
+
+    test "give a component or a slot entry added inside a box for its text at once", ctx do
+      tabs =
+        callout!(ctx.site, "tabs-#{ctx.n}",
+          attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+          template:
+            ~S|<div class="probe-tabs"><div :for={t <- @tab}>{render_slot(t)}</div></div>|,
+          slots: [%{"name" => "tab", "opts" => %{"required" => true}, "attrs" => []}]
+        )
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name}]]Body[[/component]]))
+
+      push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => tabs.name})
+      assert in_drawer?(view, "#{@components}-text-r-1-0-0")
+
+      push(view, "part_add", %{"path" => "r-1", "kind" => "slot", "name" => "tab"})
+      assert in_drawer?(view, "#{@components}-text-r-1-1-0")
+    end
+
+    test "write each text box, and each line in one, as a line of its own", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit(~s([[component #{ctx.own.name}]]One[[/component]]))
+
+      push(view, "part_add", %{"path" => "r", "kind" => "text"})
+      settings_change(view, %{"t" => %{"r-1" => "Two\r\nThree"}})
+
+      marker = ~s([[component #{ctx.own.name}]]One<br>Two<br>Three[[/component]])
+      assert applied(view) == marker
+
+      push(view, "settings_done")
+      edit(view, marker)
+
+      assert drawer_html(view, "#{@components}-text-r-0") =~ "One\nTwo\nThree"
+    end
+
+    test "say when a setting draws nothing with the others as they are", ctx do
+      helper = fn args, code, discriminators ->
+        %{
+          "name" => "tone_class",
+          "args" => args,
+          "code" => code,
+          "discriminators" =>
+            for({axis, values} <- discriminators, do: %{"axis" => axis, "values" => values})
+        }
+      end
+
+      toned =
+        callout!(ctx.site, "toned-#{ctx.n}",
+          template:
+            ~S|<aside class={tone_class(@variant, @tone)}>{render_slot(@inner_block)}</aside>|,
+          attrs: [
+            %{
+              "name" => "variant",
+              "type" => "string",
+              "opts" => %{"default" => "base", "values" => ["base", "filled"]}
+            },
+            %{
+              "name" => "tone",
+              "type" => "string",
+              "opts" => %{"default" => "info", "values" => ["info", "warn"]}
+            }
+          ],
+          helpers: [
+            helper.(~s("base", _), ~s("probe-base"), [{"variant", ["base"]}]),
+            helper.(~s("filled", "info"), ~s("probe-info"), [
+              {"variant", ["filled"]},
+              {"tone", ["info"]}
+            ]),
+            helper.(~s("filled", "warn"), ~s("probe-warn"), [
+              {"variant", ["filled"]},
+              {"tone", ["warn"]}
+            ]),
+            helper.("_, _", ~s(""), [])
+          ]
+        )
+
+      view = ctx |> open() |> open_palette() |> edit("[[component #{toned.name} /]]")
+
+      assert drawer_html(view, "#{@components}-f-r-tone-inert") =~ "Variant is base"
+      refute in_drawer?(view, "#{@components}-f-r-variant-inert")
+
+      settings_change(view, %{"a" => %{"r" => %{"variant" => "filled"}}})
+      assert applied(view) == ~s([[component #{toned.name} variant="filled" /]])
+      refute in_drawer?(view, "#{@components}-f-r-tone-inert")
+    end
+
+    test "say when a change drew what was drawn before", ctx do
+      quiet =
+        callout!(ctx.site, "quiet-#{ctx.n}",
+          template: ~S|<p class="probe-quiet">{@title}</p>|,
+          attrs: [
+            %{"name" => "title", "type" => "string", "opts" => %{"default" => "Hi"}},
+            %{"name" => "mood", "type" => "string", "opts" => %{"values" => ["calm", "loud"]}}
+          ],
+          slots: []
+        )
+
+      view = ctx |> open() |> open_palette() |> edit("[[component #{quiet.name} /]]")
+      assert_push_event(view, "mishka:content_editor", %{previews: [_drawn]}, @await)
+
+      settings_change(view, %{"a" => %{"r" => %{"mood" => "loud"}}})
+      assert applied(view) == ~s([[component #{quiet.name} mood="loud" /]])
+      assert_push_event(view, "mishka:content_editor", %{previews: [_same]}, @await)
+
+      assert in_drawer?(view, "#{@components}-f-r-mood-still")
+      refute in_drawer?(view, "#{@components}-f-r-title-still")
+
+      settings_change(view, %{"a" => %{"r" => %{"mood" => "loud", "title" => "Bye"}}})
+      assert applied(view) =~ ~s(title="Bye")
+      assert_push_event(view, "mishka:content_editor", %{previews: [_other]}, @await)
+
+      refute in_drawer?(view, "#{@components}-f-r-mood-still")
+      refute in_drawer?(view, "#{@components}-f-r-title-still")
+    end
+
+    test "a path that leads nowhere, or a component not listed, changes nothing", ctx do
+      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+
+      push(view, "part_remove", %{"path" => "r-9"})
+      push(view, "part_remove", %{"path" => "r--1"})
+      push(view, "part_remove", %{"path" => "r"})
+      push(view, "part_move", %{"path" => "r-0", "by" => "1"})
+      push(view, "part_move", %{"path" => "r-0", "to" => "r"})
+      push(view, "part_move", %{"path" => "r", "to" => "r-0"})
+      push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => ctx.theirs.name})
+      push(view, "part_add", %{"path" => "r", "kind" => "slot", "name" => "nope"})
+      push(view, "part_add", %{"path" => "nowhere", "kind" => "text"})
+
+      refute_push_event(view, "mishka:content_editor", %{applied: _})
+    end
+
+    test "a slot entry's attributes are its own", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{player.name}]][[slot source /]][[/component]]")
+
+      assert in_drawer?(view, "[data-content-slot=r-0][data-name=source]")
+
+      settings_change(view, %{
+        "a" => %{"r-0" => %{"src" => "/b.mp4", "type" => "video/mp4", "x" => "y"}}
+      })
+
+      assert applied(view) ==
+               ~s([[component #{player.name}]][[slot source src="/b.mp4" type="video/mp4" /]][[/component]])
+    end
+
+    test "Done closes them and tells the editor", ctx do
+      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+
+      assert in_drawer?(view, "#{@components}-drawer-close[phx-click=settings_done]")
+      push(view, "settings_done")
+
+      refute in_drawer?(view, "#{@components}-drawer")
+      assert_push_event(view, "mishka:content_editor", %{id: @editor, done: true})
     end
 
     test "say so for a component this site may not place", ctx do
@@ -548,6 +1447,132 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
       assert_reply(view, %{error: _message})
       assert has_element?(view, "#{@components}-notice")
+      refute in_drawer?(view, "#{@components}-drawer")
     end
   end
+
+  describe "a picture from the media library" do
+    setup ctx do
+      picture =
+        callout!(ctx.site, "picture-#{ctx.n}",
+          attrs: [%{"name" => "src", "type" => "string", "opts" => %{}}],
+          template: ~S|<img class="probe-picture" src={@src} />|,
+          slots: []
+        )
+
+      {:ok, picture: picture}
+    end
+
+    test "is chosen in the library, opened for the field", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{ctx.picture.name} /]]")
+
+      assert in_drawer?(
+               view,
+               "#{@components}-f-r-src-choose[phx-click=media_open][phx-value-path=r][phx-value-attr=src]"
+             )
+
+      push(view, "media_open", %{"path" => "r", "attr" => "src"})
+
+      assert in_drawer?(view, "#{@components}-media[data-role=content-media-chooser]")
+      assert in_drawer?(view, "#{@components}-settings[inert]")
+
+      Phoenix.LiveView.send_update(view.pid, ContentComponentPicker,
+        id: @picker,
+        media: %{url: "/uploads/a.png"}
+      )
+
+      assert applied(view) == ~s([[component #{ctx.picture.name} src="/uploads/a.png" /]])
+      assert in_drawer?(view, "#{@components}-settings:not([inert])")
+      refute in_drawer?(view, "#{@components}-media")
+    end
+
+    test "Back returns to the settings, changing nothing", ctx do
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{ctx.picture.name} /]]")
+
+      push(view, "media_open", %{"path" => "r", "attr" => "src"})
+      Phoenix.LiveView.send_update(view.pid, ContentComponentPicker, id: @picker, media: :closed)
+
+      assert in_drawer?(view, "#{@components}-settings:not([inert])")
+      refute in_drawer?(view, "#{@components}-media")
+      refute_push_event(view, "mishka:content_editor", %{applied: _})
+    end
+
+    test "a pick that arrives after the library closed changes nothing", ctx do
+      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.picture.name} /]]")
+
+      Phoenix.LiveView.send_update(view.pid, ContentComponentPicker,
+        id: @picker,
+        media: %{url: "/late.png"}
+      )
+
+      assert in_drawer?(view, "#{@components}-settings")
+      refute_push_event(view, "mishka:content_editor", %{applied: _})
+    end
+
+    test "a file chosen for a source sets its kind", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{player.name}]][[slot source /]][[/component]]")
+
+      for {file, kind} <- [{"/u/clip.webm", "video/webm"}, {"/u/clip.mp4", "video/mp4"}] do
+        push(view, "media_open", %{"path" => "r-0", "attr" => "src"})
+
+        Phoenix.LiveView.send_update(view.pid, ContentComponentPicker,
+          id: @picker,
+          media: %{url: file}
+        )
+
+        assert applied(view) ==
+                 ~s([[component #{player.name}]][[slot source src="#{file}" type="#{kind}" /]][[/component]])
+      end
+    end
+
+    test "a video's file is chosen among the videos", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{player.name}]][[slot source /]][[/component]]")
+
+      push(view, "media_open", %{"path" => "r-0", "attr" => "src"})
+
+      assert drawer_html(view, "#{@components}-media") =~ "Choose a video"
+    end
+  end
+
+  defp sources(marker),
+    do: ~r/src="([^"]+)"/ |> Regex.scan(marker, capture: :all_but_first) |> List.flatten()
+
+  defp player!(site, name),
+    do:
+      callout!(site, name,
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        template:
+          ~S|<div class="probe-player"><span :for={s <- @source} data-src={s.src}></span>{render_slot(@inner_block)}</div>|,
+        slots: [
+          %{"name" => "inner_block", "opts" => %{}},
+          %{
+            "name" => "source",
+            "opts" => %{"required" => true},
+            "attrs" => [
+              %{"name" => "src", "type" => "string", "opts" => %{"required" => true}},
+              %{"name" => "type", "type" => "string", "opts" => %{}}
+            ]
+          }
+        ]
+      )
 end

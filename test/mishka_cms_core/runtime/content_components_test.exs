@@ -108,13 +108,34 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
       assert ContentComponents.parse(html) == [{:html, html}]
     end
 
-    # MARKERS DO NOT NEST. The outer opening marker would hold another marker, so it is text; the
-    # inner block is drawn; the closing marker left over is text.
-    test "a nested marker leaves the outer one as text" do
-      html = "[[component outer]] x [[component inner]]y[[/component]] z [[/component]]"
+    test "a marker inside another is part of the outer one's inner content" do
+      html = "<p>a</p>[[component outer]] x [[component inner]]y[[/component]] z [[/component]]"
 
-      assert [%{name: "inner", inner: "y"}] = markers(html)
-      assert texts(html) == ["[[component outer]] x ", " z [[/component]]"]
+      assert [%{name: "outer", inner: " x [[component inner]]y[[/component]] z "}] =
+               markers(html)
+
+      assert texts(html) == ["<p>a</p>"]
+    end
+
+    test "an opening marker nothing closes is text, and what it held is outermost" do
+      html = "[[component open]] x [[component inner]]y[[/component]] z"
+
+      assert [%{name: "inner", inner: "y", index: 0}] = markers(html)
+      assert texts(html) == ["[[component open]] x ", " z"]
+    end
+
+    test "a closing marker closes what is open of its kind" do
+      html = "[[component a]][[slot s]]x[[/component]]"
+
+      assert [%{name: "a", inner: "[[slot s]]x"}] = markers(html)
+    end
+
+    test "a slot marker outside a component is text, and what it holds is outermost" do
+      html = "[[slot item]]a [[component b /]][[/slot]][[slot x /]]"
+
+      assert [%{name: "b", index: 0}] = markers(html)
+      assert texts(html) == ["[[slot item]]a ", "[[/slot]][[slot x /]]"]
+      assert ContentComponents.parse("[[slot x /]]") == [{:html, "[[slot x /]]"}]
     end
 
     test "a closing marker nothing opened is text" do
@@ -162,6 +183,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
         "[[component b /]]<p>[[component a]]x[[/component]]</p>[[component b /]]<code>[[component c /]]</code>"
 
       assert ContentComponents.names(html) == ["b", "a"]
+    end
+
+    test "the components inside other markers and inside slot markers too" do
+      html =
+        "[[component card]][[component title /]][[slot item]][[component badge /]][[/slot]][[/component]][[component title /]]"
+
+      assert ContentComponents.names(html) == ["card", "title", "badge"]
     end
 
     test "nothing for content with no marker, or none at all" do
@@ -297,6 +325,195 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     end
   end
 
+  describe "category/2 — the palette heading a component is listed under" do
+    test "a kit's own type names it, under one spelling" do
+      assert ContentComponents.category("acme-x", "forms") == "forms"
+      assert ContentComponents.category("acme-x", "form") == "forms"
+      assert ContentComponents.category("acme-x", "Navigations") == "navigation"
+      assert ContentComponents.category("acme-x", "data display") == "data"
+      assert ContentComponents.category("acme-x", "data-display") == "data"
+      assert ContentComponents.category("chelekom-headless-code", "typography") == "text"
+    end
+
+    test "a general one is placed by the words of its name, read in order" do
+      assert ContentComponents.category("chelekom-h2", "general") == "text"
+      assert ContentComponents.category("chelekom-list-group", "general") == "text"
+      assert ContentComponents.category("chelekom-table-content", "general") == "text"
+      assert ContentComponents.category("chelekom-card-title", "general") == "layout"
+      assert ContentComponents.category("chelekom-avatar-group", "general") == "media"
+      assert ContentComponents.category("chelekom-button-link", nil) == "buttons"
+      assert ContentComponents.category("chelekom-form-wrapper", "misc") == "forms"
+    end
+
+    test "a type of the kit's own keeps its name, and what nothing places is Other" do
+      assert ContentComponents.category("acme-hero", "marketing") == "marketing"
+      assert ContentComponents.category("acme-thing", "general") == "other"
+      assert ContentComponents.category("acme-thing", nil) == "other"
+    end
+
+    test "sort_categories/1 puts text first, a kit's own after the known ones, Other last" do
+      assert ContentComponents.sort_categories(~w(other forms zebra marketing media text forms)) ==
+               ~w(text media forms marketing zebra other)
+    end
+
+    test "category_label/1 names a kit's own heading from its words" do
+      assert ContentComponents.category_label("text") == "Text"
+      assert ContentComponents.category_label("data_display") == "Data display"
+    end
+  end
+
+  describe "slot_marker/3" do
+    test "writes a slot entry as a component marker is written" do
+      assert ContentComponents.slot_marker("source", %{"src" => "/a.mp4", "type" => ""}, nil) ==
+               ~s([[slot source src="/a.mp4" /]])
+
+      assert ContentComponents.slot_marker("item", %{"title" => "Q"}, "The <b>answer</b>") ==
+               ~s([[slot item title="Q"]]The <b>answer</b>[[/slot]])
+
+      assert ContentComponents.slot_marker("bad name", %{}, nil) == nil
+    end
+  end
+
+  describe "inert/3 — a setting the others switch off" do
+    defp clause(helper, discriminators),
+      do: %{
+        "name" => helper,
+        "discriminators" =>
+          for({axis, values} <- discriminators, do: %{"axis" => axis, "values" => values})
+      }
+
+    defp boxed(template) do
+      ContentComponents.entry(%{
+        name: "probe-box",
+        description: nil,
+        type: nil,
+        stateful: false,
+        site_id: nil,
+        examples: [],
+        template: template,
+        slots: [%{"name" => "inner_block", "opts" => %{}}],
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "base", "values" => ~w(base default)}
+          },
+          %{
+            "name" => "color",
+            "type" => "string",
+            "opts" => %{"default" => "white", "values" => ~w(white dark)}
+          },
+          %{
+            "name" => "size",
+            "type" => "string",
+            "opts" => %{"default" => "small", "values" => ~w(small large)}
+          }
+        ],
+        helpers: [
+          clause("color_variant", [{"variant", ["base"]}]),
+          clause("color_variant", [{"variant", ["default"]}, {"color", ["white"]}]),
+          clause("color_variant", [{"variant", ["default"]}, {"color", ["dark"]}]),
+          clause("color_variant", []),
+          clause("size_class", [{"size", ["small"]}]),
+          clause("size_class", [{"size", ["large"]}])
+        ]
+      })
+    end
+
+    @template ~S|<div class={[color_variant(@variant, @color), size_class(@size)]}>{render_slot(@inner_block)}</div>|
+
+    test "is the clause the others pick, when it matches every value of the setting alike" do
+      box = boxed(@template)
+
+      assert ContentComponents.inert(box, "color", %{}) == %{"variant" => "base"}
+
+      assert ContentComponents.inert(box, "color", %{"variant" => "base", "size" => "large"}) ==
+               %{"variant" => "base"}
+
+      assert ContentComponents.inert(box, "color", %{"variant" => "default"}) == nil
+      assert ContentComponents.inert(box, "variant", %{}) == nil
+      assert ContentComponents.inert(box, "size", %{}) == nil
+    end
+
+    test "is nothing it cannot tell: a setting the template uses anywhere else" do
+      box =
+        boxed(
+          ~S|<div class={[color_variant(@variant, @color), size_class(@size)]} data-c={@color}></div>|
+        )
+
+      assert ContentComponents.inert(box, "color", %{}) == nil
+    end
+
+    test "is nothing a component with no such helpers can say" do
+      plain = %{boxed(@template) | switches: %{helpers: [], through: []}}
+
+      assert ContentComponents.inert(plain, "color", %{}) == nil
+      assert ContentComponents.inert(%{}, "color", %{}) == nil
+    end
+  end
+
+  describe "read/1 and write/1 — a marker as a tree" do
+    @card ~s([[component card padding="small"]][[component card-title title="Hi" /]]Some <b>text</b>[[slot item label="One"]]first [[component badge /]][[/slot]][[slot item /]][[/component]])
+
+    test "reads the components and slot entries a marker holds, in order" do
+      assert {:ok,
+              %{
+                name: "card",
+                attrs: %{"padding" => "small"},
+                parts: [
+                  {:component, %{name: "card-title", attrs: %{"title" => "Hi"}, parts: []}},
+                  {:text, "Some <b>text</b>"},
+                  {:slot,
+                   %{
+                     name: "item",
+                     attrs: %{"label" => "One"},
+                     parts: [
+                       {:text, "first "},
+                       {:component, %{name: "badge", attrs: %{}, parts: []}}
+                     ]
+                   }},
+                  {:slot, %{name: "item", attrs: %{}, parts: []}}
+                ]
+              }} = ContentComponents.read(@card)
+    end
+
+    test "writes back the marker it read" do
+      {:ok, tree} = ContentComponents.read(@card)
+
+      assert ContentComponents.write(tree) == @card
+      assert ContentComponents.read("<p>" <> @card <> "</p>") == {:ok, tree}
+    end
+
+    test "a changed tree writes the change" do
+      {:ok, tree} = ContentComponents.read(~s([[component row]][[component a /]][[/component]]))
+
+      tree = %{
+        tree
+        | parts: tree.parts ++ [{:component, %{name: "b", attrs: %{"k" => "v"}, parts: []}}]
+      }
+
+      assert ContentComponents.write(tree) ==
+               ~s([[component row]][[component a /]][[component b k="v" /]][[/component]])
+    end
+
+    test "is not one marker" do
+      assert ContentComponents.read("<p>text</p>") == :error
+      assert ContentComponents.read("[[component a /]][[component b /]]") == :error
+      assert ContentComponents.read("text [[component a /]]") == :error
+      assert ContentComponents.read(nil) == :error
+    end
+
+    test "a tree holding a name a marker cannot carry writes nothing" do
+      tree = %{
+        name: "row",
+        attrs: %{},
+        parts: [{:component, %{name: "bad name", attrs: %{}, parts: []}}]
+      }
+
+      assert ContentComponents.write(tree) == nil
+    end
+  end
+
   describe "segments/1 — what the editor holds as blocks" do
     defp joined(segments),
       do:
@@ -370,6 +587,15 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
           ] do
         assert html |> ContentComponents.segments() |> joined() == html
       end
+    end
+
+    test "a marker holding others is one block, its marker the whole of it" do
+      marker = "[[component row]][[component a /]][[component b]]x[[/component]][[/component]]"
+
+      assert [
+               {:html, "<p>i</p>"},
+               {:component, %{name: "row", marker: ^marker, source: ^marker}}
+             ] = ContentComponents.segments("<p>i</p>" <> marker)
     end
 
     test "each block's marker is the marker as written" do

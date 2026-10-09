@@ -2,11 +2,11 @@ defmodule MishkaCmsCoreWeb.Test.EditorSectionsTest do
   @moduledoc """
   One editor, four documents — and the same battery run against each of them.
 
-  `MishkaCmsCoreWeb.Test.BuilderLiveTest` covers the editor in depth on a PAGE, which is the section
-  every feature was built against. That is exactly why the other three kept shipping with holes in
-  them: a layout's root was not in the frame, an error page's status strip moved the tab and not the
-  document, and nothing had ever asked whether a component could be edited at all. Each of those was
-  a feature that works — on a page.
+  The `MishkaCmsCoreWeb.Test.BuilderLive.*` tests cover the editor in depth on a PAGE, which is the
+  section every feature was built against. That is exactly why the other three kept shipping with
+  holes in them: a layout's root was not in the frame, an error page's status strip moved the tab
+  and not the document, and nothing had ever asked whether a component could be edited at all. Each
+  of those was a feature that works — on a page.
 
   So this file is deliberately a MATRIX rather than a set of section tests. Every describe below runs
   the identical sequence against `page`, `layout`, `error-page` and `component`, on the same markup,
