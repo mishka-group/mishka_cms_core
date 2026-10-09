@@ -813,7 +813,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   defp translate_dsl(other), do: other
 
   @doc """
-  A whole card page: the count and view switch, the filter row, the bulk bar, the stream and its pager.
+  A whole card page: the count, the order and the view switch, the filter row, the bulk bar, the stream
+  and its pager.
 
   This is the layout the blog card pages share — a list or a grid of records with the same furniture
   around it. What differs between them is only what a card is called and how its records are laid out,
@@ -860,6 +861,13 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
           <span class="text-[12.5px] font-semibold text-[#8a877f]">
             {total_label(@state, dgettext("mishka_gervaz", "0 items"))}
           </span>
+
+          <.sort_control
+            :if={:sort in @static.features and @static.sortable_columns != []}
+            static={@static}
+            state={@state}
+            myself={@myself}
+          />
 
           <Gervaz.render_template_switcher
             :if={@show_switcher}
@@ -923,4 +931,89 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     </div>
     """
   end
+
+  attr :static, :map, required: true
+  attr :state, :map, required: true
+  attr :myself, :any, required: true
+
+  # THE ORDER A CARD PAGE IS IN, chosen as a table's column headers choose it — a sortable column, and
+  # which way — since a page of cards has no headers to click. Both go to the table as `sort_by`.
+  defp sort_control(assigns) do
+    columns =
+      for %{name: name} = column <- assigns.static.columns,
+          name in assigns.static.sortable_columns,
+          do:
+            {to_string(name), MishkaGervaz.Helpers.resolve_label(column.label) || to_string(name)}
+
+    {column, order} = current_sort(assigns.static, assigns.state)
+
+    assigns =
+      assign(assigns,
+        columns: columns,
+        column: column,
+        order: order,
+        form_id: "#{assigns.static.id}-sort"
+      )
+
+    ~H"""
+    <form
+      id={@form_id}
+      phx-change="sort_by"
+      phx-target={@myself}
+      class="ms-auto flex items-center gap-1.5"
+    >
+      <label for={@form_id <> "-column"} class="text-[12px] font-semibold text-[#8a877f]">
+        {dgettext("mishka_gervaz", "Sort by")}
+      </label>
+      <select
+        id={@form_id <> "-column"}
+        name="column"
+        class="h-8 rounded-[9px] border border-[#ecebe6] bg-white ps-2.5 pe-7 text-[12px] font-semibold text-[#3a382f] outline-none focus:border-[#c3c1f0]"
+      >
+        <option :if={is_nil(@column)} value="" selected>
+          {dgettext("mishka_gervaz", "Default")}
+        </option>
+        <option :for={{name, label} <- @columns} value={name} selected={name == @column}>
+          {label}
+        </option>
+      </select>
+      <input type="hidden" name="order" value={@order} />
+      <button
+        :if={@column}
+        type="button"
+        id={@form_id <> "-order"}
+        phx-click={
+          JS.push("sort_by", value: %{column: @column, order: flip(@order)}, target: @myself)
+        }
+        aria-label={order_label(@order)}
+        title={order_label(@order)}
+        data-order={@order}
+        class="flex size-8 items-center justify-center rounded-[9px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]"
+      >
+        <.icon
+          name={(@order == "desc" && "hero-bars-arrow-down") || "hero-bars-arrow-up"}
+          class="size-4"
+        />
+      </button>
+    </form>
+    """
+  end
+
+  # The column the table is sorted by now, and which way: the first sort field's column.
+  defp current_sort(static, %{sort_fields: [{field, order} | _]}) do
+    column =
+      Enum.find(static.sortable_columns, fn name ->
+        field in Map.get(static.sort_field_map || %{}, name, [name])
+      end)
+
+    {column && to_string(column), to_string(order)}
+  end
+
+  defp current_sort(_static, _state), do: {nil, "desc"}
+
+  defp flip("desc"), do: "asc"
+  defp flip(_asc), do: "desc"
+
+  defp order_label("desc"), do: dgettext("mishka_gervaz", "Descending — click for ascending")
+  defp order_label(_asc), do: dgettext("mishka_gervaz", "Ascending — click for descending")
 end
