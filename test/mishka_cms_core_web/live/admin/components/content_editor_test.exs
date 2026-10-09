@@ -18,7 +18,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
   import Phoenix.LiveViewTest
 
   alias MishkaCmsCore.Runtime.{ContentComponents, Translations}
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Test.Plugins.{ContentEditorBlocks, ContentEditorPalette}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
 
@@ -382,6 +382,21 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
       assert preview =~ ~s(data-title="Hi")
       assert preview =~ "Read <b>this</b>"
+    end
+
+    # The admin's stylesheet holds none of a kit's colours or variants, so a blockquote turned
+    # `secondary` previewed as it was; the previews are drawn with this instead.
+    test "tells the editor the stylesheet its previews are drawn with, once it is built", ctx do
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>[[component #{ctx.own.name} /]]</p>"})
+      assert_reply(view, %{styles: nil})
+
+      key = MishkaCmsCore.Runtime.ContentEditorStyles.key(ctx.site.id)
+      assert_push_event(view, "mishka:content_editor", %{id: @editor, styles: href}, 30_000)
+      assert href == "/assets/css/#{key}/#{AssetsState.hash(key, "css")}"
+
+      ask(view, "segments", %{"html" => "<p>x</p>"})
+      assert_reply(view, %{styles: ^href})
     end
 
     test "a preview never carries a script, an event attribute or a LiveView binding", ctx do

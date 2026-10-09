@@ -31,7 +31,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   The editor's surface carries this component's DOM id as `data-components`, and the hook pushes
   these to it:
 
-    * `"segments"`, `%{"html" => html}` — answered `%{segments: [...]}`: `html` as
+    * `"segments"`, `%{"html" => html}` — answered `%{segments: [...], styles: href | nil}`: `html` as
       `ContentComponents.segments/1` splits it, `%{type: "html", html: html}` and
       `%{type: "component", name: name, marker: marker}`.
     * `"build"`, `%{"name" => name, "attrs" => %{}, "inner" => html}` — answered
@@ -49,6 +49,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   And this pushes `"mishka:content_editor"` to the page, `%{id: editor_id, ...}` with:
 
+    * `styles: href` — the stylesheet previews are drawn with, once it is built
+      (`MishkaCmsCore.Runtime.ContentEditorStyles`); `"segments"` answers it too, when known.
     * `previews: [%{marker: marker, preview: html}]` — a component's preview, drawn in the
       background after a marker is answered or written, each in a task of its own; it runs the
       component's own code. A component that raises as it is drawn is pushed as a notice saying
@@ -66,9 +68,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
-  alias MishkaCmsCore.Runtime.{ContentBlocks, ContentComponents, Translations}
+  alias MishkaCmsCore.Runtime.{
+    ContentBlocks,
+    ContentComponents,
+    ContentEditorStyles,
+    Translations
+  }
+
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser
   alias Phoenix.LiveView.{AsyncResult, JS}
 
@@ -114,7 +122,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
        loaded_for: :nothing,
        settings: nil,
        pending: nil,
-       notice: nil
+       notice: nil,
+       styles: nil,
+       styles_for: :nothing
      )}
   end
 
@@ -169,7 +179,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     markers =
       for %{type: "component", marker: marker} <- segments, uniq: true, do: marker
 
-    {:reply, %{segments: segments}, previews(socket, Enum.take(markers, @previews))}
+    socket = socket |> previews(Enum.take(markers, @previews)) |> styles()
+
+    {:reply, %{segments: segments, styles: socket.assigns.styles}, socket}
   end
 
   def handle_event("segments", _params, socket), do: {:reply, %{segments: []}, socket}
@@ -425,6 +437,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   def handle_async(:components, {:exit, reason}, socket), do: {:noreply, failed(socket, reason)}
 
+  def handle_async(:styles, {:ok, {:ok, href}}, socket) do
+    {:noreply,
+     socket
+     |> assign(:styles, href)
+     |> push_event(@event, %{id: socket.assigns.editor, styles: href})}
+  end
+
+  def handle_async(:styles, _not_built, socket), do: {:noreply, socket}
+
   def handle_async({:preview, marker}, {:ok, preview}, socket),
     do: {:noreply, push_previews(socket, [{marker, preview}])}
 
@@ -454,6 +475,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     %{current_user: user, site_id: site_id} = socket.assigns
 
     socket
+    |> styles()
     |> assign(components: AsyncResult.loading(), loaded_for: site_id, blocks: [])
     |> MishkaGervaz.Messages.start_async(:components, fn ->
       with {:ok, entries} <- ContentComponents.palette(user, site_id) do
@@ -521,6 +543,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   defp segment({:component, %{name: name, marker: marker}}),
     do: %{type: "component", name: name, marker: marker}
+
+  # THE PREVIEWS ARE DRAWN WITH THE SITE'S STYLESHEET and every component its palette offers —
+  # `ContentEditorStyles` — built in the background once per site, and the editor told where it is.
+  # The admin's own stylesheet holds none of a kit's colours or variants. A record with no site is
+  # previewed with the base every site starts from.
+  defp styles(%{assigns: %{site_id: site_id, styles_for: site_id}} = socket), do: socket
+
+  defp styles(socket) do
+    %{current_user: user, site_id: site_id} = socket.assigns
+
+    socket
+    |> assign(styles_for: site_id)
+    |> MishkaGervaz.Messages.start_async(:styles, fn -> stylesheet(user, site_id) end)
+  end
+
+  defp stylesheet(_user, nil) do
+    case AssetsState.hash("__shared_base__", "css") do
+      hash when is_binary(hash) -> {:ok, ContentEditorStyles.href("__shared_base__", hash)}
+      nil -> {:error, :not_built}
+    end
+  end
+
+  defp stylesheet(user, site_id) do
+    with {:ok, entries} <- ContentComponents.palette(user, site_id),
+         do: ContentEditorStyles.ensure(site_id, Enum.map(entries, & &1.name))
+  end
 
   defp previews(socket, []), do: socket
 
