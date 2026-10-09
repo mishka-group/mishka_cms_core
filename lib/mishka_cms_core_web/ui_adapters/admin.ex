@@ -3,8 +3,8 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   UI adapter for the admin card pages, extending the Tailwind adapter.
 
   Only the pieces the design redraws differ — the row-action `button`, the `nav_link`, and its
-  `glyph` — and `textarea/1`, which is a code editor or a rich-text editor when the field asks for
-  one. Everything else falls back, including the view switcher (`template_switcher/1`), which now
+  `glyph` — `textarea/1`, which is a code editor or a rich-text editor when the field asks for one,
+  and `text_input/1`, which is a picture from the media library when the field asks for one. Everything else falls back, including the view switcher (`template_switcher/1`), which now
   lives in the Tailwind adapter as the single switcher every admin page shares.
 
   Declared via `presentation do ui_adapter … end` by the resources across the extensions whose pages
@@ -16,7 +16,7 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{ContentComponentPicker, MediaField}
 
   # The content editor's look, written on its root because the engine and the hook build the DOM
   # these reach: the document, a placed component's block and its code, the grip and lines that
@@ -374,6 +374,55 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   # other plain textarea in the admin, would raise `FunctionClauseError`. It reaches the fallback
   # with no default of this module's in it, so the box is exactly the Tailwind adapter's.
   def textarea(assigns), do: super(assigns)
+
+  @doc """
+  A text field, and a picture from the site's media library when the field asks for one.
+
+  `ui do extra %{media: :images} end` on a `:text` field holding an address draws
+  `MishkaCmsCoreWeb.Live.Admin.Components.MediaField`: the address, a preview of it, and the library
+  under it to upload a picture to or choose one from — `folder: "name"` files the uploads in that
+  folder. The library is the site's the form's Site field names, as the content editor's is. Every
+  other text field is the fallback's.
+  """
+  def text_input(%{extra: %{media: kind}} = assigns) when kind in [:images, :videos] do
+    state = assigns[:state]
+
+    assigns =
+      assign(assigns,
+        media_id: "#{assigns[:id] || assigns[:name]}-media",
+        kind: kind,
+        folder: Map.get(assigns.extra, :folder),
+        site_id: ContentComponentPicker.site(state),
+        user: state && Map.get(state, :current_user),
+        field_name: assigns[:field] && assigns.field.field,
+        input_class: assigns[:class] || MishkaGervaz.UIAdapters.Tailwind.input_class(false),
+        off?: assigns[:disabled] == true or assigns[:readonly] == true,
+        placeholder: assigns[:placeholder],
+        debounce: assigns[:phx_debounce]
+      )
+
+    ~H"""
+    <.live_component
+      module={MediaField}
+      id={@media_id}
+      input_id={@id}
+      name={@name}
+      value={@value}
+      field={@field_name}
+      form={@myself}
+      site_id={@site_id}
+      current_user={@user}
+      accepts={@kind}
+      folder={@folder}
+      placeholder={@placeholder}
+      disabled={@off?}
+      debounce={@debounce}
+      class={@input_class}
+    />
+    """
+  end
+
+  def text_input(assigns), do: super(assigns)
 
   attr :command, :string, required: true
   attr :label, :string, required: true

@@ -7,9 +7,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
   A pick goes back to the settings that opened this as
   `send_update(ContentComponentPicker, id: target, media: %{url: url})`, and Back as
-  `media: :closed`. The library is read as the signed-in user — a master's on the record's site, a
-  site user's on their own — and an upload is the `Media` resource's own `upload` (or
-  `master_upload`) action, so its checks are the library's.
+  `media: :closed` — or to the component `notify` names, a form's picture field
+  (`MishkaCmsCoreWeb.Live.Admin.Components.MediaField`). The library is read as the signed-in user —
+  a master's on the record's site, a site user's on their own — and an upload is the `Media`
+  resource's own `upload` (or `master_upload`) action, so its checks are the library's.
+
+  Given a `folder` name, an upload is filed in the folder of that name at the top of the site's
+  library, made on the first upload. `library: :closed` shows the upload alone, and the library
+  only once it is asked for; `back: false` leaves out Back; `in_form: true` is for a library drawn
+  inside another form, whose upload must not be a form inside it.
 
   It is its own component because it reads its own query, in the background.
   """
@@ -20,7 +26,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
   require Ash.Query
 
-  alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Runtime.{Media, MediaCategory}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
   alias Phoenix.LiveView.AsyncResult
 
@@ -29,21 +35,43 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
   @impl true
   def mount(socket) do
-    {:ok, assign(socket, query: "", library: AsyncResult.loading(), failure: nil)}
+    {:ok,
+     assign(socket,
+       query: "",
+       library: AsyncResult.loading(),
+       failure: nil,
+       notify: ContentComponentPicker,
+       folder: nil,
+       back?: true,
+       in_form?: false,
+       browsing?: nil
+     )}
   end
 
   @impl true
   def update(assigns, socket) do
     socket =
       socket
-      |> assign(Map.take(assigns, [:id, :target, :site_id, :current_user, :accepts]))
+      |> assign(
+        Map.take(assigns, [:id, :target, :site_id, :current_user, :accepts, :notify, :folder])
+      )
+      |> assign(:back?, Map.get(assigns, :back, socket.assigns.back?))
+      |> assign(:in_form?, Map.get(assigns, :in_form, socket.assigns.in_form?))
+      |> browsing(assigns)
       |> allow()
 
     case socket.assigns.library do
       %AsyncResult{loading: nil, ok?: true} -> {:ok, socket}
-      _first -> {:ok, load(socket)}
+      _first when socket.assigns.browsing? -> {:ok, load(socket)}
+      _closed -> {:ok, socket}
     end
   end
+
+  # Whether the library is shown: as the opener asks the first time, then as the author leaves it.
+  defp browsing(%{assigns: %{browsing?: nil}} = socket, assigns),
+    do: assign(socket, :browsing?, Map.get(assigns, :library, :open) == :open)
+
+  defp browsing(socket, _assigns), do: socket
 
   defp allow(%{assigns: %{uploads: %{file: _}}} = socket), do: socket
 
@@ -64,14 +92,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   def handle_event("search", _params, socket), do: {:noreply, socket}
 
   def handle_event("pick", %{"url" => url}, socket) when is_binary(url) do
-    send_update(ContentComponentPicker, id: socket.assigns.target, media: %{url: url})
+    send_update(socket.assigns.notify, id: socket.assigns.target, media: %{url: url})
     {:noreply, socket}
   end
 
   def handle_event("back", _params, socket) do
-    send_update(ContentComponentPicker, id: socket.assigns.target, media: :closed)
+    send_update(socket.assigns.notify, id: socket.assigns.target, media: :closed)
     {:noreply, socket}
   end
+
+  def handle_event("browse", _params, socket),
+    do: {:noreply, socket |> assign(:browsing?, true) |> load()}
 
   def handle_event("upload_validate", _params, socket), do: {:noreply, socket}
   def handle_event("upload_save", _params, socket), do: {:noreply, socket}
@@ -92,16 +123,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   # The file is the library's once the action has stored it; picking it is what the author came for.
   defp handle_progress(:file, %{done?: true}, socket) do
     %{current_user: user, site_id: site_id} = socket.assigns
+    folder = folder_id(user, site_id, socket.assigns.folder)
 
     [result] =
       consume_uploaded_entries(socket, :file, fn %{path: path}, entry ->
-        {:ok, upload(user, site_id, path, entry.client_name)}
+        {:ok, upload(user, site_id, path, entry.client_name, folder)}
       end)
 
     case result do
       {:ok, %{relative_path: path}} ->
-        send_update(ContentComponentPicker, id: socket.assigns.target, media: %{url: href(path)})
-        {:noreply, socket |> assign(:failure, nil) |> load()}
+        send_update(socket.assigns.notify, id: socket.assigns.target, media: %{url: href(path)})
+        {:noreply, socket |> assign(:failure, nil) |> reload()}
 
       {:error, _reason} ->
         {:noreply,
@@ -111,26 +143,76 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
   defp handle_progress(:file, _entry, socket), do: {:noreply, socket}
 
-  defp upload(%{site_id: nil} = user, site_id, path, name) do
+  defp upload(%{site_id: nil} = user, site_id, path, name, folder) do
     Media
     |> Ash.ActionInput.for_action(
       :master_upload,
-      %{file: Ash.Type.File.from_path(path), original_filename: name, site_id: site_id},
+      %{
+        file: Ash.Type.File.from_path(path),
+        original_filename: name,
+        site_id: site_id,
+        media_category_id: folder
+      },
       actor: user
     )
     |> Ash.run_action()
   end
 
-  defp upload(user, site_id, path, name) do
+  defp upload(user, site_id, path, name, folder) do
     Media
     |> Ash.ActionInput.for_action(
       :upload,
-      %{file: Ash.Type.File.from_path(path), original_filename: name},
+      %{file: Ash.Type.File.from_path(path), original_filename: name, media_category_id: folder},
       actor: user,
       tenant: site_id
     )
     |> Ash.run_action()
   end
+
+  # THE FOLDER UPLOADS ARE FILED IN, at the top of the site's library, read as the uploader and made
+  # by them the first time. One that cannot be read or made — a user who may not make folders — files
+  # the upload at the top, as an upload with no folder is.
+  defp folder_id(_user, _site_id, nil), do: nil
+
+  defp folder_id(user, site_id, name) do
+    case existing_folder(user, site_id, name) do
+      {:ok, %{id: id}} ->
+        id
+
+      _none ->
+        case new_folder(user, site_id, name) do
+          {:ok, %{id: id}} -> id
+          {:error, _reason} -> nil
+        end
+    end
+  end
+
+  defp existing_folder(%{site_id: nil} = user, site_id, name) do
+    MediaCategory
+    |> Ash.Query.for_read(:master_read, %{}, actor: user)
+    |> Ash.Query.filter(site_id == ^site_id and name == ^name and is_nil(parent_id))
+    |> Ash.read_one(page: false)
+  end
+
+  defp existing_folder(user, site_id, name) do
+    MediaCategory
+    |> Ash.Query.for_read(:read, %{}, actor: user, tenant: site_id)
+    |> Ash.Query.filter(name == ^name and is_nil(parent_id))
+    |> Ash.read_one()
+  end
+
+  defp new_folder(%{site_id: nil} = user, site_id, name),
+    do:
+      Ash.create(MediaCategory, %{name: name, site_id: site_id},
+        action: :master_create,
+        actor: user
+      )
+
+  defp new_folder(user, site_id, name),
+    do: Ash.create(MediaCategory, %{name: name}, action: :create, actor: user, tenant: site_id)
+
+  defp reload(%{assigns: %{browsing?: true}} = socket), do: load(socket)
+  defp reload(socket), do: socket
 
   defp load(%{assigns: %{site_id: nil}} = socket),
     do: assign(socket, :library, AsyncResult.ok([]))
@@ -192,7 +274,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
       data-role="content-media-chooser"
       class="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4"
     >
-      <div class="flex items-center gap-2">
+      <div :if={@back?} class="flex items-center gap-2">
         <button
           type="button"
           id={@id <> "-back"}
@@ -216,50 +298,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
       </p>
 
       <form
-        :if={@site_id}
+        :if={@site_id && !@in_form?}
         id={@id <> "-upload"}
         phx-change="upload_validate"
         phx-submit="upload_save"
         phx-target={@myself}
       >
-        <label
-          for={@uploads.file.ref}
-          phx-drop-target={@uploads.file.ref}
-          class="flex cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-dashed border-[#c3c1f0] bg-[#faf9ff] px-3 py-3 text-[12.5px] font-semibold text-[#4f4bcc] hover:bg-[#f2f1fc]"
-        >
-          <.icon name="hero-arrow-up-tray-mini" class="size-4" />
-          {gettext("Upload a file, or drop it here")}
-        </label>
-        <.live_file_input upload={@uploads.file} class="sr-only" />
-
-        <div
-          :for={entry <- @uploads.file.entries}
-          class="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-[#5c5a54]"
-        >
-          <span class="min-w-0 flex-1 truncate" dir="ltr">{entry.client_name}</span>
-          <span>{entry.progress}%</span>
-          <button
-            type="button"
-            phx-click="upload_cancel"
-            phx-value-ref={entry.ref}
-            phx-target={@myself}
-            aria-label={gettext("Cancel")}
-            class="text-[#8a877f] hover:text-[#b5495f]"
-          >
-            <.icon name="hero-x-mark-mini" class="size-4" />
-          </button>
-        </div>
-
-        <p
-          :for={error <- upload_errors(@uploads.file)}
-          class="mt-2 text-[11.5px] font-medium text-[#b5495f]"
-        >
-          {upload_error(error)}
-        </p>
-        <p :if={@failure} class="mt-2 text-[11.5px] font-medium text-[#b5495f]">{@failure}</p>
+        <.upload_zone uploads={@uploads} failure={@failure} myself={@myself} />
       </form>
 
-      <div :if={@site_id} class="relative">
+      <div :if={@site_id && @in_form?}>
+        <.upload_zone uploads={@uploads} failure={@failure} myself={@myself} form={@id <> "-upload"} />
+        <.portal id={@id <> "-upload-portal"} target="body">
+          <form
+            id={@id <> "-upload"}
+            phx-change="upload_validate"
+            phx-submit="upload_save"
+            phx-target={@myself}
+          >
+          </form>
+        </.portal>
+      </div>
+
+      <button
+        :if={@site_id && !@browsing?}
+        type="button"
+        id={@id <> "-browse"}
+        phx-click="browse"
+        phx-target={@myself}
+        class="inline-flex h-9 items-center gap-1.5 self-start rounded-[10px] border border-[#dcdbf5] bg-[#f2f1fc] px-3 text-[12px] font-semibold text-[#4f4bcc] hover:bg-[#e9e7fb]"
+      >
+        <.icon name="hero-photo-mini" class="size-4" />
+        {gettext("Choose from the library")}
+      </button>
+
+      <div :if={@site_id && @browsing?} class="relative">
         <.icon
           name="hero-magnifying-glass-mini"
           class="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-[#a8a49b]"
@@ -279,7 +352,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
         />
       </div>
 
-      <.async_result :let={files} :if={@site_id} assign={@library}>
+      <.async_result :let={files} :if={@site_id && @browsing?} assign={@library}>
         <:loading>
           <p class="text-[12px] font-medium text-[#8a877f]">{gettext("Loading the library…")}</p>
         </:loading>
@@ -326,6 +399,54 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
         </ul>
       </.async_result>
     </div>
+    """
+  end
+
+  attr :uploads, :map, required: true
+  attr :failure, :string, default: nil
+  attr :myself, :any, required: true
+  attr :form, :string, default: nil
+
+  # Where a file is dropped or picked, its progress and what went wrong. Inside another form the
+  # upload's own form is drawn at the end of the page — a form inside a form is dropped by the
+  # browser, and the file went to the outer one — and the input names it (`form`).
+  defp upload_zone(assigns) do
+    ~H"""
+    <label
+      for={@uploads.file.ref}
+      phx-drop-target={@uploads.file.ref}
+      class="flex cursor-pointer items-center justify-center gap-2 rounded-[12px] border border-dashed border-[#c3c1f0] bg-[#faf9ff] px-3 py-3 text-[12.5px] font-semibold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+    >
+      <.icon name="hero-arrow-up-tray-mini" class="size-4" />
+      {gettext("Upload a file, or drop it here")}
+    </label>
+    <.live_file_input upload={@uploads.file} form={@form} class="sr-only" />
+
+    <div
+      :for={entry <- @uploads.file.entries}
+      class="mt-2 flex items-center gap-2 text-[11.5px] font-medium text-[#5c5a54]"
+    >
+      <span class="min-w-0 flex-1 truncate" dir="ltr">{entry.client_name}</span>
+      <span>{entry.progress}%</span>
+      <button
+        type="button"
+        phx-click="upload_cancel"
+        phx-value-ref={entry.ref}
+        phx-target={@myself}
+        aria-label={gettext("Cancel")}
+        class="text-[#8a877f] hover:text-[#b5495f]"
+      >
+        <.icon name="hero-x-mark-mini" class="size-4" />
+      </button>
+    </div>
+
+    <p
+      :for={error <- upload_errors(@uploads.file)}
+      class="mt-2 text-[11.5px] font-medium text-[#b5495f]"
+    >
+      {upload_error(error)}
+    </p>
+    <p :if={@failure} class="mt-2 text-[11.5px] font-medium text-[#b5495f]">{@failure}</p>
     """
   end
 

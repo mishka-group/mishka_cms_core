@@ -31,7 +31,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
        assign(socket,
          user: session["user"],
          site_id: session["site_id"],
-         accepts: session["accepts"] || :images
+         accepts: session["accepts"] || :images,
+         library: session["library"] || :open,
+         folder: session["folder"]
        )}
     end
 
@@ -45,6 +47,8 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
           site_id={@site_id}
           current_user={@user}
           accepts={@accepts}
+          library={@library}
+          folder={@folder}
         />
         <.live_component
           module={ContentComponentPicker}
@@ -54,6 +58,74 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
           current_user={@user}
         />
       </div>
+      """
+    end
+  end
+
+  # A FORM'S PICTURE FIELD, inside a form as the admin adapter draws it: the library's upload cannot
+  # be a form of its own there.
+  defmodule FieldHost do
+    use Phoenix.LiveView
+
+    alias MishkaCmsCoreWeb.Live.Admin.Components.MediaField
+
+    def mount(_params, session, socket),
+      do: {:ok, assign(socket, user: session["user"], site_id: session["site_id"])}
+
+    def render(assigns) do
+      ~H"""
+      <form id="record-form" phx-change="validate">
+        <.live_component
+          module={MediaField}
+          id="cover-media"
+          input_id="record-cover"
+          name="form[cover]"
+          value="/uploads/old.png"
+          field={:cover}
+          form="#record-form"
+          site_id={@site_id}
+          current_user={@user}
+          accepts={:images}
+          folder="blog"
+          placeholder="https://"
+          disabled={false}
+          debounce={300}
+          class="field"
+        />
+      </form>
+      """
+    end
+
+    def handle_event("validate", _params, socket), do: {:noreply, socket}
+  end
+
+  # The admin adapter drawing a text field, as a Gervaz form hands it one.
+  defmodule AdapterHost do
+    use Phoenix.LiveView
+
+    import MishkaGervaz.Helpers, only: [dynamic_component: 1]
+
+    def mount(_params, session, socket),
+      do: {:ok, assign(socket, user: session["user"], extra: session["extra"])}
+
+    def render(assigns) do
+      ~H"""
+      <form id="record-form">
+        <.dynamic_component
+          module={MishkaCmsCoreWeb.UIAdapters.Admin}
+          function={:text_input}
+          name="form[cover]"
+          id="record-cover"
+          value=""
+          type="text"
+          extra={@extra}
+          field={%{field: :cover}}
+          myself="#record-form"
+          readonly={false}
+          disabled={false}
+          state={%{master_user?: false, current_user: @user, field_values: %{}}}
+        />
+      </form>
       """
     end
   end
@@ -189,6 +261,93 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
 
     assert {:error, [[_ref, :not_accepted]]} = render_upload(file, "notes.pdf")
     assert Ash.read!(Media, tenant: ctx.site.id, authorize?: false) == []
+  end
+
+  test "closed, it shows the upload alone, and the library once it is asked for", ctx do
+    own = picture!(ctx.site, "own-#{ctx.n}")
+    view = open(ctx, %{"library" => :closed})
+
+    assert has_element?(view, "#chooser-upload")
+    assert has_element?(view, "#chooser-browse")
+    refute has_element?(view, "#chooser-file-#{own.id}")
+
+    view |> element("#chooser-browse") |> render_click()
+    render_async(view, @await)
+
+    assert has_element?(view, "#chooser-file-#{own.id}")
+    refute has_element?(view, "#chooser-browse")
+  end
+
+  test "given a folder, an upload is filed in it, made on the first upload", ctx do
+    view = open(ctx, %{"folder" => "blog"})
+
+    for name <- ["one.png", "two.png"] do
+      view
+      |> file_input("#chooser-upload", :file, [
+        %{name: name, content: name, type: "image/png"}
+      ])
+      |> render_upload(name)
+
+      render_async(view, @await)
+    end
+
+    [folder] =
+      Ash.read!(MishkaCmsCore.Runtime.MediaCategory, tenant: ctx.site.id, authorize?: false)
+
+    assert folder.name == "blog"
+    assert is_nil(folder.parent_id)
+
+    files = Ash.read!(Media, tenant: ctx.site.id, authorize?: false)
+    assert length(files) == 2
+    assert Enum.all?(files, &(&1.media_category_id == folder.id))
+  end
+
+  test "a form's picture field shows its address, and hands a pick to the form", ctx do
+    own = picture!(ctx.site, "own-#{ctx.n}")
+
+    {:ok, view, html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), FieldHost,
+        session: %{"user" => ctx.user, "site_id" => ctx.site.id}
+      )
+
+    assert has_element?(
+             view,
+             "#record-form input#record-cover[name='form[cover]'][value='/uploads/old.png']"
+           )
+
+    assert has_element?(view, "#cover-media-preview img[src='/uploads/old.png']")
+    assert has_element?(view, "#cover-media-library-browse")
+
+    # The upload's own form is drawn at the end of the page, and its input names it.
+    assert has_element?(view, "#record-form input[type=file][form='cover-media-library-upload']")
+    assert html =~ ~s(id="cover-media-library-upload")
+
+    view |> element("#cover-media-library-browse") |> render_click()
+    render_async(view, @await)
+    view |> element("#cover-media-library-file-#{own.id}") |> render_click()
+
+    pick = view |> element("#cover-media-pick-1") |> render()
+    assert pick =~ "combobox_select"
+    assert pick =~ "/uploads/own-#{ctx.n}.png"
+    assert pick =~ "record-form"
+  end
+
+  test "the admin adapter draws a picture field for a text field asking for one, else a text box",
+       ctx do
+    {:ok, view, _html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), AdapterHost,
+        session: %{"user" => ctx.user, "extra" => %{media: :images, folder: "blog"}}
+      )
+
+    assert has_element?(view, "#record-cover-media[data-role=media-field] input#record-cover")
+
+    {:ok, view, _html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), AdapterHost,
+        session: %{"user" => ctx.user, "extra" => %{dir: "ltr"}}
+      )
+
+    assert has_element?(view, "input#record-cover[name='form[cover]']")
+    refute has_element?(view, "[data-role=media-field]")
   end
 
   test "with no site, there is no library to choose from", ctx do
