@@ -44,10 +44,36 @@ defmodule MishkaCmsCore.DataCase do
   the async modules first and the others one at a time after them, so a test that is not async is
   the only one touching the tables while it runs.
   """
+  def setup_sandbox(%{module_sandbox: pid} = tags) when is_pid(pid),
+    do: restore_sites_on_exit(tags)
+
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: not tags[:async])
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
     restore_sites_on_exit(tags)
+  end
+
+  @doc """
+  One sandboxed connection for a whole module, opened in its `setup_all` and shared with every test
+  and every process they spawn; what the module wrote is rolled back after its last test.
+
+  For a module whose tests only READ what one slow setup writes — a UI kit installed into the
+  database, seconds each time — so it is written once instead of before every test:
+
+      setup_all do
+        context = module_sandbox()
+        UiKitHandler.install_chelekom!(site_id: nil)
+        context
+      end
+
+  A test in such a module sees what the tests before it wrote, so keep them to reading. Only for a
+  module that is not async.
+  """
+  @spec module_sandbox() :: %{module_sandbox: pid()}
+  def module_sandbox do
+    pid = Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: true)
+    ExUnit.Callbacks.on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    %{module_sandbox: pid}
   end
 
   defp restore_sites_on_exit(%{async: true}), do: :ok

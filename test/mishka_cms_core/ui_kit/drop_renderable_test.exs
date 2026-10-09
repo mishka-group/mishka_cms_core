@@ -113,12 +113,15 @@ defmodule MishkaCmsCore.UiKit.DropRenderableTest do
     {component.name, outcome, markup}
   end
 
-  describe "every component the palette can place" do
-    setup do
-      UiKitHandler.install_chelekom!(site_id: nil)
-      :ok
-    end
+  # INSTALLED ONCE FOR THE MODULE: every test here only reads what the install wrote, and the install
+  # takes seconds — it was run before each test.
+  setup_all do
+    context = module_sandbox()
+    UiKitHandler.install_chelekom!(site_id: nil)
+    context
+  end
 
+  describe "every component the palette can place" do
     test "is really there to check" do
       assert length(installed()) >= 100
     end
