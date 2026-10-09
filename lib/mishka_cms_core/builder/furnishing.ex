@@ -113,8 +113,8 @@ defmodule MishkaCmsCore.Builder.Furnishing do
 
   # A NAME IS A NAME, AND A VALUE IS DATA. The name is written into HEEx verbatim, so it has to be
   # one — anything else is a kit writing markup through a data field. The value may be a word, which
-  # is written as `name="value"`, or a list or a map, which is written as the expression the
-  # component actually takes: `chelekom-filterable-gallery` holds its pictures in a list, and there
+  # is written as `name="value"`, or a number, a yes/no, a list or a map, which is written as the
+  # expression the component actually takes: `chelekom-filterable-gallery` holds its pictures in a list, and there
   # is no string that means one.
   #
   # `Literal.data?/1` is the test for the second kind — the same one the editor applies to anything
@@ -142,6 +142,10 @@ defmodule MishkaCmsCore.Builder.Furnishing do
       false -> value
     end
   end
+
+  # A NUMBER OR A YES/NO IS NOT A WORD. `chelekom-ring-progress` arrives at `value={72}`, and written as
+  # `value="72"` it reached the component as text and its arithmetic raised.
+  defp keep_value(value) when is_number(value) or is_boolean(value), do: {:expr, value}
 
   defp keep_value(value) when is_list(value) or is_map(value) do
     term = atomized(value)

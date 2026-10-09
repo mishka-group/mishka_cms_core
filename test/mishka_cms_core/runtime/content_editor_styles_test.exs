@@ -33,7 +33,7 @@ defmodule MishkaCmsCore.Runtime.ContentEditorStylesTest do
 
     File.write!(
       Path.join([dir, "component", "probe-#{n}.template"]),
-      ~S|<div class={["bg-[#a1b2c3]", @variant == "shadow" && "shadow-[0_2px_3px_#b1c2d3]"]}></div>|
+      ~S|<div class={["bg-[#a1b2c3] after:content-['']", @variant == "shadow" && "shadow-[0_2px_3px_#b1c2d3]"]}></div>|
     )
 
     on_exit(fn ->
@@ -55,6 +55,7 @@ defmodule MishkaCmsCore.Runtime.ContentEditorStylesTest do
     assert css =~ "a1b2c3"
     assert css =~ "b1c2d3"
     refute css =~ ~r/:root\{/
+    assert css =~ ".border-red-300"
   end
 
   test "is built once, and again only when what it is built from changes", ctx do
@@ -71,6 +72,43 @@ defmodule MishkaCmsCore.Runtime.ContentEditorStylesTest do
   test "names nothing it could not write into a template", ctx do
     assert {:ok, _href} = ContentEditorStyles.ensure(ctx.site.id, [~s(x" onload="y), ctx.probe])
     refute AssetsState.get_value(ContentEditorStyles.key(ctx.site.id), "css") =~ "onload"
+  end
+
+  test "declares what @property registers where a shadow root reads it, below every utility",
+       ctx do
+    assert {:ok, _href} = ContentEditorStyles.ensure(ctx.site.id, [ctx.probe])
+    css = AssetsState.get_value(ContentEditorStyles.key(ctx.site.id), "css")
+
+    assert css =~ "@property --tw-shadow"
+
+    assert [_whole, starting] =
+             Regex.run(
+               ~r/@layer properties\{:host,\*,:before,:after,::backdrop\{([^}]*)\}\}\z/,
+               css
+             )
+
+    assert starting =~ "--tw-shadow:0 0 #0000"
+    assert starting =~ "--tw-content:\"\""
+  end
+
+  test "a record with no site is previewed with the base and the global components", ctx do
+    dir = Path.join([:code.priv_dir(:mishka_cms_core), "static", "temp", "runtime", "__global__"])
+    File.mkdir_p!(Path.join(dir, "component"))
+    template = Path.join([dir, "component", "#{ctx.probe}-global.template"])
+    File.write!(template, ~S|<p class="text-[#c4d5e6] after:content-['']"></p>|)
+
+    on_exit(fn ->
+      File.rm(template)
+      AssetsState.delete(ContentEditorStyles.key(nil), "css")
+    end)
+
+    assert {:ok, href} = ContentEditorStyles.ensure(nil, [ctx.probe <> "-global"])
+    assert href =~ "/assets/css/content-editor-__global__/"
+
+    css = AssetsState.get_value(ContentEditorStyles.key(nil), "css")
+    assert css =~ "c4d5e6"
+    refute css =~ "a1b2c3"
+    assert ContentEditorStyles.site_of(ContentEditorStyles.key(nil)) == :error
   end
 
   test "is no stylesheet for a site nobody knows" do

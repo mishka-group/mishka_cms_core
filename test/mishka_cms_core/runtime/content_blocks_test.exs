@@ -6,6 +6,7 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
   """
   use ExUnit.Case, async: true
 
+  alias MishkaCmsCore.Builder.Furnishing
   alias MishkaCmsCore.Runtime.{ContentBlocks, ContentComponents}
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
 
@@ -29,7 +30,8 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
         helpers: row["helpers"] || [],
         attrs: row["attrs"] || [],
         slots: row["slots"] || [],
-        examples: row["examples"] || []
+        examples: row["examples"] || [],
+        furnishing: get_in(row, ["extra", "furnishing"])
       })
     end)
   end
@@ -44,9 +46,17 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
       inner_block: Keyword.get(opts, :inner_block, true),
       category: Keyword.get(opts, :category, "other"),
       examples: Keyword.get(opts, :examples, []),
+      furnishing: furnishing(Keyword.get(opts, :furnishing)),
       attrs: Enum.map(Keyword.get(opts, :attrs, []), &attr/1),
       slots: Keyword.get(opts, :slots, [])
     }
+  end
+
+  defp furnishing(nil), do: nil
+
+  defp furnishing(declared) do
+    {:ok, furnishing} = Furnishing.build(declared)
+    furnishing
   end
 
   defp attr(name),
@@ -91,6 +101,23 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
       refute Map.has_key?(hd(sections).attrs, "site")
     end
 
+    test "and their furnishings are the plain blocks, named after their components", %{kit: kit} do
+      blocks = blocks(kit)
+      plain = Enum.find(blocks, &(&1.id == "chelekom-timeline-plain"))
+
+      assert plain.title == nil
+      assert plain.component == "chelekom-timeline"
+
+      assert Enum.map(plain.tree.parts, fn {:component, section} -> section.attrs["title"] end) ==
+               ["Order placed", "Packed and labelled", "Out for delivery"]
+
+      timeline =
+        blocks |> Enum.filter(&(&1.component == "chelekom-timeline")) |> Enum.map(& &1.id)
+
+      assert hd(timeline) == "chelekom-timeline-plain"
+      assert "chelekom-timeline-example-1" in timeline
+    end
+
     test "carry none of the template's indentation as text", %{kit: kit} do
       for block <- blocks(kit), text <- texts(block.tree) do
         refute text =~ "\n", block.id
@@ -125,6 +152,19 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
 
       assert [%{title: "Example 1", marker: marker}] = blocks([player])
       assert marker == ~S|[[component player]][[slot source src="/a.mp4" /]][[/component]]|
+    end
+
+    test "an expression that is a literal is written as the value it is" do
+      badge =
+        entry("badge",
+          attrs: ~w(pill count ratio),
+          examples: [
+            ~S|<.component component_name="badge" pill={false} count={3} ratio={0.5} />|
+          ]
+        )
+
+      assert [%{marker: ~S|[[component badge count="3" pill="false" ratio="0.5" /]]|}] =
+               blocks([badge])
     end
 
     test "a bare attribute it declares is written true" do
@@ -166,6 +206,34 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
                {"box-example-3", "Example 3"}
              ]
     end
+  end
+
+  test "a component's furnishing is its plain block, first, with what a marker can hold" do
+    player =
+      entry("player",
+        attrs: ~w(color volume),
+        slots: [slot("source", ~w(src))],
+        furnishing: %{
+          "body" => "<p>Watch it</p>",
+          "attrs" => %{"color" => "dark", "items" => [1], "volume" => 7},
+          "slots" => [%{"name" => "source", "body" => "", "attrs" => %{"src" => "/a.mp4"}}]
+        },
+        examples: [~S|<.component component_name="player" id="player-tour">Tour</.component>|]
+      )
+
+    assert [plain, example] = blocks([player])
+
+    assert %{id: "player-plain", title: nil, component: "player"} = plain
+
+    assert plain.marker ==
+             ~S|[[component player color="dark" volume="7"]]<p>Watch it</p>[[slot source src="/a.mp4" /]][[/component]]|
+
+    assert example.id == "player-example-1"
+  end
+
+  test "a furnishing a marker cannot hold is no block" do
+    box = entry("box", furnishing: %{"body" => "<.component component_name=\"ghost\" />"})
+    assert blocks([box]) == []
   end
 
   test "an example is named by its id, less the words naming its component" do

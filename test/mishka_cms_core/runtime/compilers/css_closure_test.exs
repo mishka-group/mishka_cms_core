@@ -574,6 +574,29 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
 
       assert content =~ ~s|<%!-- css-closure attr=card default="kit-a" --%>|
     end
+
+    # The content editor offers both as ready blocks, and the HTML they place carries its own classes.
+    test "boot writes what the component is placed with: its examples and its furnishing" do
+      content =
+        BootHandler.build_component_class_content(%{
+          template: "<div></div>",
+          examples: [
+            ~s|<.component component_name="kit-hero"><h1 class="py-16">Hi</h1></.component>|
+          ],
+          extra: %{
+            "furnishing" => %{
+              "body" => ~s|<p class="tracking-tight">Body</p>|,
+              "slots" => [
+                %{"name" => "actions", "body" => ~s|<span class="opacity-70">Go</span>|}
+              ]
+            }
+          }
+        })
+
+      assert content =~ "py-16"
+      assert content =~ "tracking-tight"
+      assert content =~ "opacity-70"
+    end
   end
 
   describe "roots the caller supplies" do

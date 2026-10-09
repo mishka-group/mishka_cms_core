@@ -399,6 +399,17 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert_reply(view, %{styles: ^href})
     end
 
+    test "a record with no site is previewed with the base and the global components", ctx do
+      master = create_user_with_permissions!(["admin:dashboard:*"])
+      view = open(ctx, %{"user" => master})
+      ask(view, "segments", %{"html" => "<p>x</p>"})
+
+      key = MishkaCmsCore.Runtime.ContentEditorStyles.key(nil)
+      assert_push_event(view, "mishka:content_editor", %{id: @editor, styles: href}, 30_000)
+      assert href == "/assets/css/#{key}/#{AssetsState.hash(key, "css")}"
+      on_exit(fn -> AssetsState.delete(key, "css") end)
+    end
+
     test "a preview never carries a script, an event attribute or a LiveView binding", ctx do
       danger =
         create_component!(
@@ -422,6 +433,34 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       refute preview =~ "phx-click"
       refute preview =~ "onclick"
       refute preview =~ "<script"
+    end
+
+    # A button's own element carries every setting of it, and a definition list's terms are its
+    # list's: the previews kept their text and dropped the elements around it.
+    test "a preview keeps every element a component draws, a button and a form among them", ctx do
+      drawn =
+        create_component!(
+          name: "drawn-#{ctx.n}",
+          site_id: ctx.site.id,
+          active: true,
+          precompile: false,
+          template:
+            ~S|<form class="probe-form"><button type="button" class="probe-button">Go</button></form><dl class="probe-dl"><dt>T</dt><dd>D</dd></dl><figure class="probe-figure"><figcaption>C</figcaption></figure>|
+        )
+
+      :ok = SiteState.put_component(drawn.site_id, drawn.name)
+      on_exit(fn -> SiteState.delete_component(drawn.site_id, drawn.name) end)
+
+      view = open(ctx)
+      ask(view, "segments", %{"html" => "<p>[[component #{drawn.name} /]]</p>"})
+
+      assert_push_event(view, "mishka:content_editor", %{previews: [%{preview: preview}]}, @await)
+
+      doc = LazyHTML.from_fragment(preview)
+
+      for selector <-
+            ~w(form.probe-form>button.probe-button dl.probe-dl>dt dl.probe-dl>dd figure.probe-figure>figcaption),
+          do: assert(doc |> LazyHTML.query(selector) |> Enum.count() == 1, selector)
     end
 
     test "a component that raises as it is drawn previews as a notice, the others still drawn",
@@ -504,6 +543,31 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert name == ctx.own.name
 
       assert_push_event(view, "mishka:content_editor", %{previews: [%{marker: ^marker}]}, @await)
+    end
+
+    test "a component that says how it arrives arrives so, placed, dropped in or added", ctx do
+      callout!(ctx.site, "furnished-#{ctx.n}",
+        extra: %{"furnishing" => %{"body" => "Sample", "attrs" => %{"tone" => "warn"}}}
+      )
+
+      name = "furnished-#{ctx.n}"
+      arrives = ~s([[component #{name} tone="warn"]]Sample[[/component]])
+      view = ctx |> open() |> open_palette()
+
+      ask(view, "build", %{"name" => name})
+      assert_reply(view, %{marker: ^arrives})
+
+      ask(view, "build", %{"name" => name, "attrs" => %{"title" => "Mine"}})
+      own = ~s([[component #{name} title="Mine" /]])
+      assert_reply(view, %{marker: ^own})
+
+      ask(view, "nest", %{"marker" => "[[component #{ctx.own.name} /]]", "name" => name})
+      nested = "[[component #{ctx.own.name}]]#{arrives}[[/component]]"
+      assert_reply(view, %{marker: ^nested})
+
+      view = edit(view, "[[component #{ctx.own.name} /]]")
+      push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => name})
+      assert applied(view) == nested
     end
 
     test "a component placed closes the palette, off the text", ctx do
@@ -711,6 +775,17 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       marker =
         ~s([[component framed-#{ctx.n} title="Hello"]]Welcome [[component #{ctx.shared.name} /]][[/component]])
 
+      assert_reply(view, %{marker: ^marker})
+    end
+
+    test "a component's plain drop is a block, named after the component", ctx do
+      callout!(ctx.site, "plain-#{ctx.n}", extra: %{"furnishing" => %{"body" => "Fill me in"}})
+      view = ctx |> open() |> open_palette()
+
+      assert has_element?(view, "#{@components}-block-plain-#{ctx.n}-plain", "Plain, to fill in")
+
+      ask(view, "block", %{"id" => "plain-#{ctx.n}-plain"})
+      marker = "[[component plain-#{ctx.n}]]Fill me in[[/component]]"
       assert_reply(view, %{marker: ^marker})
     end
 
@@ -1000,6 +1075,86 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       edit(view, marker)
 
       assert drawer_html(view, "#{@components}-text-r-0") =~ "One\nTwo\nThree"
+    end
+
+    test "say when a setting draws nothing with the others as they are", ctx do
+      helper = fn args, code, discriminators ->
+        %{
+          "name" => "tone_class",
+          "args" => args,
+          "code" => code,
+          "discriminators" =>
+            for({axis, values} <- discriminators, do: %{"axis" => axis, "values" => values})
+        }
+      end
+
+      toned =
+        callout!(ctx.site, "toned-#{ctx.n}",
+          template:
+            ~S|<aside class={tone_class(@variant, @tone)}>{render_slot(@inner_block)}</aside>|,
+          attrs: [
+            %{
+              "name" => "variant",
+              "type" => "string",
+              "opts" => %{"default" => "base", "values" => ["base", "filled"]}
+            },
+            %{
+              "name" => "tone",
+              "type" => "string",
+              "opts" => %{"default" => "info", "values" => ["info", "warn"]}
+            }
+          ],
+          helpers: [
+            helper.(~s("base", _), ~s("probe-base"), [{"variant", ["base"]}]),
+            helper.(~s("filled", "info"), ~s("probe-info"), [
+              {"variant", ["filled"]},
+              {"tone", ["info"]}
+            ]),
+            helper.(~s("filled", "warn"), ~s("probe-warn"), [
+              {"variant", ["filled"]},
+              {"tone", ["warn"]}
+            ]),
+            helper.("_, _", ~s(""), [])
+          ]
+        )
+
+      view = ctx |> open() |> open_palette() |> edit("[[component #{toned.name} /]]")
+
+      assert drawer_html(view, "#{@components}-f-r-tone-inert") =~ "Variant is base"
+      refute in_drawer?(view, "#{@components}-f-r-variant-inert")
+
+      settings_change(view, %{"a" => %{"r" => %{"variant" => "filled"}}})
+      assert applied(view) == ~s([[component #{toned.name} variant="filled" /]])
+      refute in_drawer?(view, "#{@components}-f-r-tone-inert")
+    end
+
+    test "say when a change drew what was drawn before", ctx do
+      quiet =
+        callout!(ctx.site, "quiet-#{ctx.n}",
+          template: ~S|<p class="probe-quiet">{@title}</p>|,
+          attrs: [
+            %{"name" => "title", "type" => "string", "opts" => %{"default" => "Hi"}},
+            %{"name" => "mood", "type" => "string", "opts" => %{"values" => ["calm", "loud"]}}
+          ],
+          slots: []
+        )
+
+      view = ctx |> open() |> open_palette() |> edit("[[component #{quiet.name} /]]")
+      assert_push_event(view, "mishka:content_editor", %{previews: [_drawn]}, @await)
+
+      settings_change(view, %{"a" => %{"r" => %{"mood" => "loud"}}})
+      assert applied(view) == ~s([[component #{quiet.name} mood="loud" /]])
+      assert_push_event(view, "mishka:content_editor", %{previews: [_same]}, @await)
+
+      assert in_drawer?(view, "#{@components}-f-r-mood-still")
+      refute in_drawer?(view, "#{@components}-f-r-title-still")
+
+      settings_change(view, %{"a" => %{"r" => %{"mood" => "loud", "title" => "Bye"}}})
+      assert applied(view) =~ ~s(title="Bye")
+      assert_push_event(view, "mishka:content_editor", %{previews: [_other]}, @await)
+
+      refute in_drawer?(view, "#{@components}-f-r-mood-still")
+      refute in_drawer?(view, "#{@components}-f-r-title-still")
     end
 
     test "a path that leads nowhere, or a component not listed, changes nothing", ctx do

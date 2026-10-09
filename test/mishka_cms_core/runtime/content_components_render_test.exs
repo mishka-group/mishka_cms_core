@@ -381,7 +381,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
           %{"name" => "caption", "opts" => %{}, "attrs" => []}
         ],
         template:
-          ~S'<div class="probe-player"><span :for={s <- @source} class="probe-source" data-src={s.src} data-type={s.type || "none"} data-muted={to_string(s.muted)}></span><div :for={c <- @caption} class="probe-caption">{render_slot(c)}</div></div>'
+          ~S'<div class="probe-player"><span :for={s <- @source} class="probe-source" data-src={s.src} data-type={s[:type] || "none"} data-muted={to_string(s[:muted])}></span><div :for={c <- @caption} class="probe-caption">{render_slot(c)}</div></div>'
       )
     end
 
@@ -428,6 +428,40 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       assert html |> query(".probe-caption b") |> LazyHTML.text() == "there"
       assert attribute(html, ".probe-caption .probe-note", "data-title") == "in"
       refute html =~ "[[slot"
+    end
+
+    test "an entry holds only the attributes written on it, as a Phoenix slot entry does", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "steps-#{n}",
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        slots: [
+          %{
+            "name" => "item",
+            "opts" => %{},
+            "attrs" => [%{"name" => "position", "type" => "string", "opts" => %{}}]
+          }
+        ],
+        template:
+          ~S'<ol><li :for={i <- @item} class="probe-step" data-written={to_string(Map.has_key?(i, :position))} data-position={Map.get(i, :position, "start")}>{render_slot(i)}</li></ol>'
+      )
+
+      html =
+        draw(
+          ~s([[component steps-#{n}]][[slot item]]One[[/slot]][[slot item position="end"]]Two[[/slot]][[/component]]),
+          site.name
+        )
+
+      assert html |> query(".probe-step") |> LazyHTML.attribute("data-written") == [
+               "false",
+               "true"
+             ]
+
+      assert html |> query(".probe-step") |> LazyHTML.attribute("data-position") == [
+               "start",
+               "end"
+             ]
     end
 
     test "a slot nothing fills is passed empty", %{site: site, n: n} do

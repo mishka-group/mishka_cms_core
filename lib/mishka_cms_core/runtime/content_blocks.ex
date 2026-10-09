@@ -13,13 +13,18 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
   its component does not declare — is not offered. Only the attributes a component declares and a
   marker can carry are kept; the rest of an example's attributes are left to their defaults.
 
+  A component that declares how it arrives when dropped — the `furnishing` the page builder places
+  (`MishkaCmsCore.Builder.Furnishing`) — is offered that way too, first among its blocks: the plain
+  one, an author's starting point, named after the component itself.
+
   Nothing here names a kit or a component: a site offers exactly the blocks its components bring.
 
   ## Events
 
     * `runtime:content:editor_blocks` — before the blocks are offered, with
       `%{site_id: site_id, blocks: blocks}` and `%{current_user: user}` as meta. Each block is
-      `%{id, title, component, category, tree}`, `tree` a `t:MishkaCmsCore.Runtime.ContentComponents.tree/0`.
+      `%{id, title, component, category, tree}`, `tree` a `t:MishkaCmsCore.Runtime.ContentComponents.tree/0`
+      and `title` `nil` for the plain one, which is named after its component.
       A plugin answers the map with other `blocks` to add its own or take some away; the editor
       offers only those whose components the palette lists.
   """
@@ -34,10 +39,10 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
 
   @void ~w(area base br col embed hr img input link meta param source track wbr)
 
-  @typedoc "A block the editor offers, its marker written."
+  @typedoc "A block the editor offers, its marker written; `title` is `nil` for the plain one."
   @type block :: %{
           id: String.t(),
-          title: String.t(),
+          title: String.t() | nil,
           component: String.t(),
           category: String.t(),
           tree: ContentComponents.tree(),
@@ -52,7 +57,7 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
   @spec available([ContentComponents.entry()], String.t() | nil, map() | nil) :: [block()]
   def available(entries, site_id, actor) do
     listed = Map.new(entries, &{&1.name, &1})
-    blocks = Enum.flat_map(entries, &examples(&1, listed))
+    blocks = Enum.flat_map(entries, &(plain(&1, listed) ++ examples(&1, listed)))
 
     %{site_id: site_id, blocks: blocks}
     |> then(&Hook.call(@event, &1, meta: %{current_user: actor}))
@@ -97,6 +102,58 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
   end
 
   def examples(_entry, _listed), do: []
+
+  @doc """
+  The plain block of one palette entry, `listed` the palette by name: the component as its
+  `furnishing` says it arrives, when it says so and a marker can hold it.
+  """
+  @spec plain(ContentComponents.entry(), %{String.t() => ContentComponents.entry()}) :: [map()]
+  def plain(%{furnishing: %{} = furnishing, name: name} = entry, listed) do
+    source =
+      ~s(<.component component_name="#{name}"#{attributes(furnishing.attrs)}>) <>
+        furnishing.body <> Enum.map_join(furnishing.slots, &slot_source/1) <> "</.component>"
+
+    case example(source, listed) do
+      {:ok, %{name: ^name} = tree, _id} ->
+        [
+          %{
+            id: name <> "-plain",
+            title: nil,
+            component: name,
+            category: entry.category,
+            tree: tree
+          }
+        ]
+
+      _not_a_marker ->
+        []
+    end
+  end
+
+  def plain(_entry, _listed), do: []
+
+  defp slot_source(%{name: name, body: body, attrs: attrs}) do
+    case Regex.match?(~r/\A[a-z_][a-z0-9_]*\z/, name) do
+      true -> "<:#{name}#{attributes(attrs)}>#{body}</:#{name}>"
+      false -> ""
+    end
+  end
+
+  # A word, a number or a yes/no is written as the marker writes it; a list or a map a marker cannot
+  # hold is left to the component's default.
+  defp attributes(attrs) do
+    for {name, value} <- attrs || %{},
+        is_binary(name),
+        Regex.match?(~r/\A[a-z_][a-z0-9_-]*\z/, name),
+        text = written(value),
+        is_binary(text),
+        into: "",
+        do: ~s( #{name}="#{escape(text)}")
+  end
+
+  defp written(value) when is_binary(value), do: value
+  defp written({:expr, value}) when is_number(value) or is_boolean(value), do: to_string(value)
+  defp written(_data), do: nil
 
   # One example as a marker tree: one component at its root and nothing a marker cannot hold.
   defp example(source, listed) when is_binary(source) do
@@ -207,6 +264,15 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
 
   defp literal({:string, value}), do: value
   defp literal(:boolean), do: "true"
+
+  # `default={true}`, `size={3}`: an expression that is a literal is the value it writes.
+  defp literal({:expr, code}) when is_binary(code) do
+    case Regex.run(~r/\A\s*(true|false|-?\d+(?:\.\d+)?)\s*\z/, code) do
+      [_whole, value] -> value
+      nil -> nil
+    end
+  end
+
   defp literal(_expression), do: nil
 
   defp open_tag(%{tag: tag, attrs: attrs}) do

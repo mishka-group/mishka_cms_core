@@ -127,8 +127,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   require Ash.Query
 
+  alias MishkaCmsCore.Builder.Furnishing
   alias MishkaCmsCore.Runtime.{Component, LiveViewHelpers, Translations}
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
+  alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.Hook
 
@@ -224,6 +226,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
           inner_block: boolean(),
           category: String.t(),
           examples: [String.t()],
+          furnishing: Furnishing.t() | nil,
+          switches: switches(),
           attrs: [attr_entry()],
           slots: [
             %{
@@ -234,6 +238,17 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
               attrs: [attr_entry()]
             }
           ]
+        }
+
+  @typedoc """
+  Which clause of each of a component's helpers draws it: one list of clauses per helper, in order,
+  each the attributes and the values it matches — `%{}` matching any — or `:unknown` when it matches
+  on something no attribute holds; and the attributes whose every use in the template is through
+  those helpers.
+  """
+  @type switches :: %{
+          helpers: [[%{String.t() => [String.t()]} | :unknown]],
+          through: [String.t()]
         }
 
   @typedoc """
@@ -453,6 +468,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       :examples,
       :site_id
     ])
+    |> Ash.Query.load(:furnishing)
     |> Ash.Query.sort(name: :asc)
     |> every([], 0)
     |> case do
@@ -512,6 +528,166 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     Enum.reject(rows, &(is_nil(&1.site_id) and MapSet.member?(own, &1.name)))
   end
 
+  # What the component says it arrives with, when it says anything a block can be made of.
+  defp furnishing(declared) do
+    case Furnishing.build(declared) do
+      {:ok, furnishing} -> if(Furnishing.empty?(furnishing), do: nil, else: furnishing)
+      :none -> nil
+    end
+  end
+
+  # A KIT'S HELPER PICKS ITS CLASSES BY THE VALUES IT IS CALLED WITH, and says which values each of
+  # its clauses matches: `color_variant("base", _)` matches every colour, so under the `base` variant
+  # the colour draws nothing. The clauses are read here once, by attribute.
+  defp switches(row) do
+    template = Map.get(row, :template) || ""
+    helpers = Enum.map(Map.get(row, :helpers) || [], &plain_map/1)
+
+    bindings =
+      UiKitHandler.axis_bindings(%{
+        "name" => row.name,
+        "template" => template,
+        "helpers" => helpers,
+        "attrs" => Enum.map(Map.get(row, :attrs) || [], &plain_map/1)
+      })
+
+    clauses =
+      helpers
+      |> Enum.group_by(& &1["name"])
+      |> Enum.filter(fn {_name, clauses} -> Enum.any?(clauses, &(&1["discriminators"] != [])) end)
+      |> Map.new(fn {name, clauses} -> {name, Enum.map(clauses, &clause(&1, bindings))} end)
+
+    %{helpers: Map.values(clauses), through: through(template, Map.keys(clauses))}
+  end
+
+  defp clause(helper, bindings) do
+    Enum.reduce_while(helper["discriminators"] || [], %{}, fn discriminator, clause ->
+      discriminator = plain_map(discriminator)
+
+      case Map.fetch(bindings, discriminator["axis"]) do
+        {:ok, attr} ->
+          {:cont, Map.put(clause, attr, Enum.map(discriminator["values"], &to_string/1))}
+
+        :error ->
+          {:halt, :unknown}
+      end
+    end)
+  end
+
+  # The attributes the template hands to those helpers and to nothing else.
+  defp through(template, helper_names) do
+    expressions = Markup.expressions(template)
+
+    used =
+      for expression <- expressions,
+          {called, args} <- CodeReads.calls(expression),
+          Atom.to_string(called) in helper_names,
+          {:@, _meta, [{name, _name_meta, context}]} <- args,
+          is_atom(name) and is_atom(context),
+          uniq: true,
+          do: Atom.to_string(name)
+
+    Enum.filter(used, fn attr ->
+      Enum.all?(expressions, &(uses(&1, attr) == handed(&1, attr, helper_names)))
+    end)
+  end
+
+  defp uses(expression, attr), do: length(Regex.scan(~r/@#{Regex.escape(attr)}\b/, expression))
+
+  defp handed(expression, attr, helper_names) do
+    for {called, args} <- CodeReads.calls(expression),
+        Atom.to_string(called) in helper_names,
+        {:@, _meta, [{name, _name_meta, _context}]} <- args,
+        Atom.to_string(name) == attr,
+        reduce: 0,
+        do: (count -> count + 1)
+  end
+
+  defp plain_map(%_struct{} = struct), do: struct |> Map.from_struct() |> plain_map()
+  defp plain_map(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
+  defp plain_map(other), do: other
+
+  @doc """
+  Whether the attribute `name` of the palette `entry` draws nothing with the other attributes at
+  `values` — the marker's, the rest at their defaults: the values of the other attributes that pick
+  a clause of every helper it goes to that matches all of its own values alike, or `nil` when it
+  draws something, or when that cannot be told.
+
+      inert(blockquote, "color", %{"variant" => "base"})
+      #=> %{"variant" => "base"}
+  """
+  @spec inert(entry(), String.t(), map()) :: %{String.t() => String.t()} | nil
+  def inert(%{switches: %{helpers: helpers, through: through}, attrs: attrs}, name, values) do
+    governing = Enum.filter(helpers, fn clauses -> Enum.any?(clauses, &matches_on?(&1, name)) end)
+
+    with true <- name in through,
+         [_ | _] <- governing,
+         false <- Enum.any?(governing, &(:unknown in &1)),
+         %{values: [_ | _] = choices} <- Enum.find(attrs, &(&1.name == name)) do
+      current = current(attrs, values)
+
+      governing
+      |> Enum.map(&chosen(&1, name, choices, current))
+      |> Enum.reduce_while(%{}, fn
+        %{} = clause, reason ->
+          {:cont, Map.merge(reason, Map.new(clause, &{elem(&1, 0), current[elem(&1, 0)]}))}
+
+        nil, _reason ->
+          {:halt, nil}
+      end)
+      |> case do
+        reason when map_size(reason) > 0 -> reason
+        _none -> nil
+      end
+    else
+      _cannot_tell -> nil
+    end
+  end
+
+  def inert(_entry, _name, _values), do: nil
+
+  defp matches_on?(%{} = clause, name), do: Map.has_key?(clause, name)
+  defp matches_on?(:unknown, _name), do: false
+
+  # The one clause every value of `name` reaches, when it is one that does not match on it.
+  defp chosen(clauses, name, choices, current) do
+    case choices
+         |> Enum.map(&first_clause(clauses, Map.put(current, name, to_string(&1))))
+         |> Enum.uniq() do
+      [%{} = clause] -> if(Map.has_key?(clause, name), do: nil, else: clause)
+      _several_or_none -> nil
+    end
+  end
+
+  defp first_clause(clauses, current) do
+    Enum.find(clauses, fn clause ->
+      Enum.all?(clause, fn {attr, accepted} -> current[attr] in accepted end)
+    end)
+  end
+
+  defp current(attrs, values) do
+    Map.new(attrs, fn attr ->
+      case Map.get(values, attr.name) do
+        value when is_binary(value) and value != "" -> {attr.name, value}
+        true -> {attr.name, "true"}
+        _unset -> {attr.name, written_default(attr.default)}
+      end
+    end)
+  end
+
+  defp written_default(value) when is_binary(value), do: value
+  defp written_default(value) when is_atom(value) and not is_nil(value), do: Atom.to_string(value)
+  defp written_default(value) when is_number(value), do: to_string(value)
+  defp written_default(_none_or_data), do: nil
+
+  @doc """
+  The classes a preview's notice is drawn with — a marker that draws nothing, or a component that
+  could not be drawn — for whatever builds the stylesheet a preview is drawn with.
+  """
+  @spec unavailable_class() :: String.t()
+  def unavailable_class,
+    do: "inline-block rounded border border-red-300 px-2 py-1 text-sm text-red-600"
+
   @doc """
   The palette entry for a component `row` — a stored component, or anything with its fields — as
   `embeddable/2` lists it.
@@ -527,6 +703,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       inner_block: Enum.any?(row.slots || [], &Inspector.inner_block?/1),
       category: category(row.name, row.type),
       examples: Enum.filter(row.examples || [], &is_binary/1),
+      furnishing: furnishing(Map.get(row, :furnishing)),
+      switches: switches(row),
       attrs: attr_entries(row.attrs),
       slots:
         for slot <- Inspector.addable_slots(row) do
@@ -881,16 +1059,21 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end)
   end
 
+  # A SLOT ENTRY HOLDS WHAT WAS WRITTEN ON IT, as Phoenix's does: an attribute left out is absent,
+  # not nil. A kit hands its entries on whole — `chelekom-list` spreads each `item` into a
+  # `chelekom-li` — and a nil put there for every declared attribute overrode the li's own default,
+  # or answered a `Map.get(entry, key, default)` with nil: a list, a carousel and a combobox that
+  # arrived filled in drew nothing.
   defp slot_entry(key, slot, entry, child, mode) do
     declared = Inspector.attrs(slot)
 
     defaults =
       for attr <- declared,
           castable?(attr),
+          default = Inspector.default(attr),
+          not is_nil(default),
           into: %{},
-          do:
-            {attr |> Inspector.name() |> to_string() |> String.to_existing_atom(),
-             Inspector.default(attr)}
+          do: {attr |> Inspector.name() |> to_string() |> String.to_existing_atom(), default}
 
     defaults
     |> Map.merge(cast(declared, entry.attrs))
@@ -930,13 +1113,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp unavailable(_name, _reason, :live), do: nil
 
   defp unavailable(name, reason, :static) do
-    assigns = %{message: unavailable_message(name, reason)}
+    assigns = %{message: unavailable_message(name, reason), class: unavailable_class()}
 
     ~H"""
-    <span
-      data-role="content-component-unavailable"
-      class="inline-block rounded border border-red-300 px-2 py-1 text-sm text-red-600"
-    >
+    <span data-role="content-component-unavailable" class={@class}>
       {@message}
     </span>
     """

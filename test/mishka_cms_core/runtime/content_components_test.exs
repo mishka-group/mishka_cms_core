@@ -374,6 +374,84 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     end
   end
 
+  describe "inert/3 — a setting the others switch off" do
+    defp clause(helper, discriminators),
+      do: %{
+        "name" => helper,
+        "discriminators" =>
+          for({axis, values} <- discriminators, do: %{"axis" => axis, "values" => values})
+      }
+
+    defp boxed(template) do
+      ContentComponents.entry(%{
+        name: "probe-box",
+        description: nil,
+        type: nil,
+        stateful: false,
+        site_id: nil,
+        examples: [],
+        template: template,
+        slots: [%{"name" => "inner_block", "opts" => %{}}],
+        attrs: [
+          %{
+            "name" => "variant",
+            "type" => "string",
+            "opts" => %{"default" => "base", "values" => ~w(base default)}
+          },
+          %{
+            "name" => "color",
+            "type" => "string",
+            "opts" => %{"default" => "white", "values" => ~w(white dark)}
+          },
+          %{
+            "name" => "size",
+            "type" => "string",
+            "opts" => %{"default" => "small", "values" => ~w(small large)}
+          }
+        ],
+        helpers: [
+          clause("color_variant", [{"variant", ["base"]}]),
+          clause("color_variant", [{"variant", ["default"]}, {"color", ["white"]}]),
+          clause("color_variant", [{"variant", ["default"]}, {"color", ["dark"]}]),
+          clause("color_variant", []),
+          clause("size_class", [{"size", ["small"]}]),
+          clause("size_class", [{"size", ["large"]}])
+        ]
+      })
+    end
+
+    @template ~S|<div class={[color_variant(@variant, @color), size_class(@size)]}>{render_slot(@inner_block)}</div>|
+
+    test "is the clause the others pick, when it matches every value of the setting alike" do
+      box = boxed(@template)
+
+      assert ContentComponents.inert(box, "color", %{}) == %{"variant" => "base"}
+
+      assert ContentComponents.inert(box, "color", %{"variant" => "base", "size" => "large"}) ==
+               %{"variant" => "base"}
+
+      assert ContentComponents.inert(box, "color", %{"variant" => "default"}) == nil
+      assert ContentComponents.inert(box, "variant", %{}) == nil
+      assert ContentComponents.inert(box, "size", %{}) == nil
+    end
+
+    test "is nothing it cannot tell: a setting the template uses anywhere else" do
+      box =
+        boxed(
+          ~S|<div class={[color_variant(@variant, @color), size_class(@size)]} data-c={@color}></div>|
+        )
+
+      assert ContentComponents.inert(box, "color", %{}) == nil
+    end
+
+    test "is nothing a component with no such helpers can say" do
+      plain = %{boxed(@template) | switches: %{helpers: [], through: []}}
+
+      assert ContentComponents.inert(plain, "color", %{}) == nil
+      assert ContentComponents.inert(%{}, "color", %{}) == nil
+    end
+  end
+
   describe "read/1 and write/1 — a marker as a tree" do
     @card ~s([[component card padding="small"]][[component card-title title="Hi" /]]Some <b>text</b>[[slot item label="One"]]first [[component badge /]][[/slot]][[slot item /]][[/component]])
 

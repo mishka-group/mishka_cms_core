@@ -72,11 +72,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     ContentBlocks,
     ContentComponents,
     ContentEditorStyles,
+    ContentPreviewScrubber,
     Translations
   }
 
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
+  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser
   alias Phoenix.LiveView.{AsyncResult, JS}
 
@@ -183,7 +184,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   def handle_event("build", %{"name" => name} = params, socket) when is_binary(name) do
     with %{} = entry <- listed(socket.assigns.components, name),
-         marker when is_binary(marker) <- built(entry, params["attrs"], params["inner"]) do
+         marker when is_binary(marker) <-
+           built(entry, params["attrs"], params["inner"], entries(socket.assigns.components)) do
       {:reply, %{name: entry.name, marker: marker}, socket |> close() |> previews([marker])}
     else
       _not_placeable -> refuse(socket, name)
@@ -211,7 +213,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     with {:ok, tree} <- ContentComponents.read(marker),
          %{inner_block: true} <- listed(components, tree.name),
          %{} = child <- listed(components, name),
-         nested = %{tree | parts: tree.parts ++ [{:component, fresh(child)}]},
+         child = arriving(child, entries(components)),
+         nested = %{tree | parts: tree.parts ++ [{:component, child}]},
          written when is_binary(written) <- ContentComponents.write(nested) do
       {:reply, %{name: tree.name, marker: written}, socket |> close() |> previews([written])}
     else
@@ -239,14 +242,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   def handle_event("settings_change", params, socket) do
     entries = entries(socket.assigns.components)
-    tree = socket.assigns.settings.tree
+    before = socket.assigns.settings.tree
 
     tree =
       params
       |> Map.get("a", %{})
-      |> Enum.reduce(tree, fn {path, values}, tree ->
+      |> Enum.reduce(before, fn {path, values}, tree ->
         put_attrs(tree, decode(path), declared_values(tree, decode(path), values, entries))
       end)
+
+    socket = update(socket, :settings, &%{&1 | changed: changed(before, tree), unchanged: []})
 
     tree =
       params
@@ -289,7 +294,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
     with %{} = entry <- listed(socket.assigns.components, name),
          true <- takes_content?(tree, at, entries) do
-      tree = add_part(tree, at, {:component, writable(fresh(entry), entries)})
+      tree = add_part(tree, at, {:component, writable(arriving(entry, entries), entries)})
 
       {:noreply, socket |> update(:settings, &%{&1 | adding: nil}) |> settle(tree)}
     else
@@ -376,10 +381,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         marker: written(tree),
         adding: nil,
         adding_query: "",
-        media: nil
+        media: nil,
+        drawn: nil,
+        changed: [],
+        unchanged: []
       },
       notice: nil
     )
+    |> previews([written(tree)])
   end
 
   # THE DRAWER'S TEXT BOXES ARE LINES: two boxes side by side are written as two lines, not run
@@ -476,10 +485,49 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   def handle_async(:styles, _not_built, socket), do: {:noreply, socket}
 
   def handle_async({:preview, marker}, {:ok, preview}, socket),
-    do: {:noreply, push_previews(socket, [{marker, preview}])}
+    do: {:noreply, socket |> compared(marker, preview) |> push_previews([{marker, preview}])}
 
   def handle_async({:preview, marker}, {:exit, _reason}, socket),
     do: {:noreply, push_previews(socket, [{marker, failed(marker)}])}
+
+  # A CHANGE THAT DRAWS WHAT WAS DRAWN BEFORE SAYS SO, on the setting changed: whatever stops it — the
+  # other settings, a component that draws nothing without its data — an author who saw nothing
+  # happen is told rather than left to try again.
+  defp compared(%{assigns: %{settings: %{marker: marker} = settings}} = socket, marker, preview) do
+    unchanged =
+      case settings do
+        %{drawn: ^preview, changed: [_ | _] = changed} -> changed
+        _drawn_otherwise -> []
+      end
+
+    assign(socket, :settings, %{settings | drawn: preview, changed: [], unchanged: unchanged})
+  end
+
+  defp compared(socket, _marker, _preview), do: socket
+
+  # Every attribute, by part, that holds another value than it did.
+  defp changed(before, tree), do: changed_at(before, tree, [])
+
+  defp changed_at(%{attrs: was, parts: was_parts}, %{attrs: now, parts: now_parts}, path) do
+    own =
+      for name <- Enum.uniq(Map.keys(was) ++ Map.keys(now)),
+          Map.get(was, name) != Map.get(now, name),
+          do: {encode(path), to_string(name)}
+
+    inside =
+      was_parts
+      |> Enum.zip(now_parts)
+      |> Enum.with_index()
+      |> Enum.flat_map(fn
+        {{{kind, was_part}, {kind, now_part}}, i} when kind in [:component, :slot] ->
+          changed_at(was_part, now_part, path ++ [i])
+
+        _text_or_moved ->
+          []
+      end)
+
+    own ++ inside
+  end
 
   defp open_pending(socket, tree, serial) do
     case listed(socket.assigns.components, tree.name) do
@@ -531,7 +579,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   # A component from the palette: only the attributes it declares, and an empty entry for each slot
   # it requires, so it is drawn as soon as those are filled.
-  defp built(entry, attrs, inner) do
+  # Placed as it is, a component arrives as it says it does; given attributes or text, it is built
+  # around them.
+  defp built(entry, attrs, inner, entries) when attrs in [nil, %{}] and inner in [nil, ""],
+    do: entry |> arriving(entries) |> ContentComponents.write()
+
+  defp built(entry, attrs, inner, _entries) do
     tree = fresh(entry)
     inner = text(inner)
 
@@ -542,6 +595,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       end
 
     ContentComponents.write(%{tree | attrs: declared(entry.attrs, attrs), parts: parts})
+  end
+
+  # A COMPONENT ARRIVES AS ITS KIT SAYS IT DOES WHEN DROPPED — its furnishing, what the page builder
+  # places too — and empty when it says nothing. Placed empty, a heading or a timeline drew nothing at
+  # all, and every setting changed on it changed nothing an author could see.
+  defp arriving(entry, entries) do
+    case ContentBlocks.plain(entry, entries) do
+      [%{tree: tree}] -> tree
+      [] -> fresh(entry)
+    end
   end
 
   defp fresh(entry) do
@@ -576,7 +639,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   # THE PREVIEWS ARE DRAWN WITH THE SITE'S STYLESHEET and every component its palette offers —
   # `ContentEditorStyles` — built in the background once per site, and the editor told where it is.
   # The admin's own stylesheet holds none of a kit's colours or variants. A record with no site is
-  # previewed with the base every site starts from.
+  # previewed with the base every site starts from and the global components.
   defp styles(%{assigns: %{site_id: site_id, styles_for: site_id}} = socket), do: socket
 
   defp styles(socket) do
@@ -585,13 +648,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     socket
     |> assign(styles_for: site_id)
     |> MishkaGervaz.Messages.start_async(:styles, fn -> stylesheet(user, site_id) end)
-  end
-
-  defp stylesheet(_user, nil) do
-    case AssetsState.hash("__shared_base__", "css") do
-      hash when is_binary(hash) -> {:ok, ContentEditorStyles.href("__shared_base__", hash)}
-      nil -> {:error, :not_built}
-    end
   end
 
   defp stylesheet(user, site_id) do
@@ -629,7 +685,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         name: name
       )
 
-    ~s(<span data-role="content-component-unavailable" class="inline-block rounded border border-red-300 px-2 py-1 text-sm text-red-600">) <>
+    ~s(<span data-role="content-component-unavailable" class="#{ContentComponents.unavailable_class()}">) <>
       (message |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()) <> "</span>"
   end
 
@@ -641,7 +697,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     |> ContentComponents.draw(:static)
     |> Phoenix.HTML.Safe.to_iodata()
     |> IO.iodata_to_binary()
-    |> HtmlSanitizeEx.html5()
+    |> ContentPreviewScrubber.sanitize()
   end
 
   defp push_previews(socket, pairs) do
@@ -1165,9 +1221,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
             data-block-card={block.id}
             class="flex cursor-grab flex-col items-start gap-1 rounded-[12px] border border-[#ecebe6] bg-white px-3 py-2.5 text-start hover:border-[#c3c1f0] hover:bg-[#faf9ff] active:cursor-grabbing"
           >
-            <span class="text-[12.5px] font-semibold text-[#1b1a18]">{block.title}</span>
+            <span class="text-[12.5px] font-semibold text-[#1b1a18]">
+              {block.title || label(block.component, @prefixes)}
+            </span>
             <span class="line-clamp-2 text-[11px] font-medium leading-[1.4] text-[#8a877f]">
-              {label(block.component, @prefixes)}
+              {(block.title && label(block.component, @prefixes)) || gettext("Plain, to fill in")}
             </span>
           </button>
         </div>
@@ -1317,6 +1375,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           prefixes={@prefixes}
           adding={@settings.adding}
           adding_query={@settings.adding_query}
+          unchanged={@settings.unchanged}
           myself={@myself}
         />
       </form>
@@ -1348,6 +1407,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   attr :prefixes, :any, required: true
   attr :adding, :string, default: nil
   attr :adding_query, :string, default: ""
+  attr :unchanged, :list, default: []
   attr :myself, :any, required: true
 
   # One component's settings: its attributes, then what it holds.
@@ -1398,6 +1458,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           key={@key}
           attrs={@entry.attrs}
           values={@tree.attrs}
+          entry={@entry}
+          unchanged={@unchanged}
           myself={@myself}
         />
 
@@ -1417,6 +1479,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
             prefixes={@prefixes}
             adding={@adding}
             adding_query={@adding_query}
+            unchanged={@unchanged}
             myself={@myself}
           />
 
@@ -1472,6 +1535,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   attr :prefixes, :any, required: true
   attr :adding, :string, default: nil
   attr :adding_query, :string, default: ""
+  attr :unchanged, :list, default: []
   attr :myself, :any, required: true
 
   defp part_fields(%{part: {:text, text}} = assigns) do
@@ -1505,6 +1569,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       prefixes={@prefixes}
       adding={@adding}
       adding_query={@adding_query}
+      unchanged={@unchanged}
       myself={@myself}
     />
     """
@@ -1543,6 +1608,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           key={@key}
           attrs={@declared.attrs}
           values={@slot.attrs}
+          unchanged={@unchanged}
           myself={@myself}
         />
         <.part_fields
@@ -1555,6 +1621,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           prefixes={@prefixes}
           adding={@adding}
           adding_query={@adding_query}
+          unchanged={@unchanged}
           myself={@myself}
         />
       </div>
@@ -1783,6 +1850,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   attr :key, :string, required: true
   attr :attrs, :list, required: true
   attr :values, :map, required: true
+  attr :entry, :map, default: nil
+  attr :unchanged, :list, default: []
   attr :myself, :any, required: true
 
   # THE ATTRIBUTES UNDER THE PAGE BUILDER'S HEADINGS. What an author fills in — Content, a picture or
@@ -1808,6 +1877,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         key={@key}
         attr={attr}
         value={value_of(@values, attr.name)}
+        inert={@entry && ContentComponents.inert(@entry, attr.name, @values)}
+        still={{@key, attr.name} in @unchanged}
         myself={@myself}
       />
     </div>
@@ -1829,6 +1900,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           key={@key}
           attr={attr}
           value={value_of(@values, attr.name)}
+          inert={@entry && ContentComponents.inert(@entry, attr.name, @values)}
+          still={{@key, attr.name} in @unchanged}
           myself={@myself}
         />
       </div>
@@ -1848,6 +1921,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   attr :key, :string, required: true
   attr :attr, :map, required: true
   attr :value, :string, required: true
+  attr :inert, :map, default: nil
+  attr :still, :boolean, default: false
   attr :myself, :any, required: true
 
   defp attr_field(assigns) do
@@ -1879,11 +1954,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           <.icon name="hero-photo-mini" class="size-4" />{gettext("Choose")}
         </button>
       </div>
+      <span
+        :if={@inert}
+        id={@field <> "-inert"}
+        data-inert
+        class="rounded-[8px] bg-[#fdf6e8] px-2 py-1 text-[10.5px] font-semibold text-[#9a6200]"
+      >
+        {inert_note(@inert)}
+      </span>
+      <span
+        :if={@still and !@inert}
+        id={@field <> "-still"}
+        data-still
+        class="rounded-[8px] bg-[#f2f1ec] px-2 py-1 text-[10.5px] font-semibold text-[#6d6a63]"
+      >
+        {gettext("That made no visible difference with the other settings as they are.")}
+      </span>
       <span :if={@attr.doc} dir="auto" class="text-[10.5px] font-medium text-[#8a877f]">
         {@attr.doc}
       </span>
     </div>
     """
+  end
+
+  # A SETTING THE OTHERS SWITCH OFF SAYS SO: chosen under the `base` variant, a colour draws nothing,
+  # and an author changing it saw nothing change.
+  defp inert_note(reason) do
+    settings =
+      Enum.map_join(reason, ", ", fn {attr, value} ->
+        gettext("%{setting} is %{value}", setting: Inspector.label(attr), value: value || "—")
+      end)
+
+    gettext("No effect while %{settings} — choose another to use it.", settings: settings)
   end
 
   attr :id, :string, required: true
