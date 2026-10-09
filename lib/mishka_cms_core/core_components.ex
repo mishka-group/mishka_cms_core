@@ -745,6 +745,10 @@ defmodule MishkaCmsCore.CoreComponents do
 
   Open programmatically: `JS.show(to: "#my-modal")`.
   Close programmatically: `JS.exec("data-cancel", to: "#my-modal")`.
+
+  Its rounded box clips what it holds, but not while a control inside is expanded
+  (`aria-expanded="true"`): a form's relation list opened on the last field ran past the box's
+  bottom edge, and the box cut it off.
   """
   attr :id, :string, required: true
   attr :show, :boolean, default: false
@@ -784,6 +788,7 @@ defmodule MishkaCmsCore.CoreComponents do
               phx-click-away={JS.exec("data-cancel", to: "##{@id}")}
               class={[
                 "shadow-zinc-700/10 ring-zinc-700/10 relative hidden overflow-hidden rounded-2xl bg-white shadow-lg ring-1 transition",
+                "[&:has([aria-expanded=true])]:overflow-visible",
                 @padding_class
               ]}
             >
