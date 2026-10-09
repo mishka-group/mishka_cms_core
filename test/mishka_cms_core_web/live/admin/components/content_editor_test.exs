@@ -987,6 +987,31 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
                ~s([[component #{player.name}]][[component #{ctx.shared.name} /]][[slot source src="/a.mp4" /]]After[[/component]])
     end
 
+    test "a part dragged beside another goes there, and an arrow passes over spacing", ctx do
+      player = player!(ctx.site, "player-#{ctx.n}")
+      entries = Enum.map_join(~w(a b c), &~s(\n  [[slot source src="/#{&1}.mp4" /]]))
+
+      view =
+        ctx
+        |> open()
+        |> open_palette()
+        |> edit("[[component #{player.name}]]#{entries}\n[[/component]]")
+
+      assert in_drawer?(
+               view,
+               "#{@components}-parts-r[phx-hook=ContentParts] [data-content-part=r-1] [data-part=grip]"
+             )
+
+      push(view, "part_move", %{"path" => "r-1", "to" => "r-5"})
+      assert sources(applied(view)) == ~w(/b.mp4 /c.mp4 /a.mp4)
+
+      push(view, "part_move", %{"path" => "r-5", "by" => "-1"})
+      assert sources(applied(view)) == ~w(/b.mp4 /a.mp4 /c.mp4)
+
+      push(view, "part_move", %{"path" => "r-2", "by" => "1"})
+      assert sources(applied(view)) == ~w(/a.mp4 /b.mp4 /c.mp4)
+    end
+
     test "file the attributes under the page builder's headings, what is filled in open", ctx do
       view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
 
@@ -1164,6 +1189,8 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       push(view, "part_remove", %{"path" => "r--1"})
       push(view, "part_remove", %{"path" => "r"})
       push(view, "part_move", %{"path" => "r-0", "by" => "1"})
+      push(view, "part_move", %{"path" => "r-0", "to" => "r"})
+      push(view, "part_move", %{"path" => "r", "to" => "r-0"})
       push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => ctx.theirs.name})
       push(view, "part_add", %{"path" => "r", "kind" => "slot", "name" => "nope"})
       push(view, "part_add", %{"path" => "nowhere", "kind" => "text"})
@@ -1237,7 +1264,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       push(view, "media_open", %{"path" => "r", "attr" => "src"})
 
       assert in_drawer?(view, "#{@components}-media[data-role=content-media-chooser]")
-      refute in_drawer?(view, "#{@components}-settings")
+      assert in_drawer?(view, "#{@components}-settings[inert]")
 
       Phoenix.LiveView.send_update(view.pid, ContentComponentPicker,
         id: @picker,
@@ -1245,7 +1272,8 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       )
 
       assert applied(view) == ~s([[component #{ctx.picture.name} src="/uploads/a.png" /]])
-      assert in_drawer?(view, "#{@components}-settings")
+      assert in_drawer?(view, "#{@components}-settings:not([inert])")
+      refute in_drawer?(view, "#{@components}-media")
     end
 
     test "Back returns to the settings, changing nothing", ctx do
@@ -1258,7 +1286,8 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       push(view, "media_open", %{"path" => "r", "attr" => "src"})
       Phoenix.LiveView.send_update(view.pid, ContentComponentPicker, id: @picker, media: :closed)
 
-      assert in_drawer?(view, "#{@components}-settings")
+      assert in_drawer?(view, "#{@components}-settings:not([inert])")
+      refute in_drawer?(view, "#{@components}-media")
       refute_push_event(view, "mishka:content_editor", %{applied: _})
     end
 
@@ -1310,6 +1339,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert drawer_html(view, "#{@components}-media") =~ "Choose a video"
     end
   end
+
+  defp sources(marker),
+    do: ~r/src="([^"]+)"/ |> Regex.scan(marker, capture: :all_but_first) |> List.flatten()
 
   defp player!(site, name),
     do:

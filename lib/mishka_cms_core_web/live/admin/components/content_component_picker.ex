@@ -19,12 +19,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   ## The settings
 
   A component being placed or edited opens its settings in a drawer at the side of the page — its
-  attributes, the text and components inside it, and its slot entries, each of those with its own
-  — through a portal, so the drawer's form is a form of its own and not part of the record's. Every
-  change is written straight back into the component in the content, as the author types, and the
-  drawer is closed with Done, a click outside it, or Escape. A picture or a video is chosen from the
-  site's media library, or uploaded to it, in
-  `MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser`.
+  attributes, the text and components inside it, and its slot entries, each of those with its own,
+  put in another order with their arrows or dragged there by their grips — through a portal, so the
+  drawer's form is a form of its own and not part of the record's. Every change is written straight
+  back into the component in the content, as the author types, and the drawer is closed with Done, a
+  click outside it, or Escape. A picture or a video is chosen from the site's media library, or
+  uploaded to it, in `MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser`, which opens over
+  the settings and leaves them as they were — scrolled to the field it was opened for, with the same
+  parts open.
 
   ## What the hook asks
 
@@ -310,13 +312,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   end
 
   def handle_event("part_move", %{"path" => path, "by" => by}, socket) when by in ["-1", "1"] do
-    case decode(path) do
-      [] ->
-        {:noreply, socket}
+    tree = socket.assigns.settings.tree
+    at = decode(path)
 
-      at ->
-        {:noreply,
-         settle(socket, move_part(socket.assigns.settings.tree, at, String.to_integer(by)))}
+    case beside(tree, at, String.to_integer(by)) do
+      nil -> {:noreply, socket}
+      to -> {:noreply, settle(socket, move_part(tree, at, to))}
+    end
+  end
+
+  # A part dragged to another place among its siblings: `to` is the one it was dropped beside.
+  def handle_event("part_move", %{"path" => path, "to" => to}, socket) when is_binary(to) do
+    at = decode(path)
+
+    case {Enum.split(at, -1), Enum.split(decode(to), -1)} do
+      {{parent, [_i]}, {parent, [to]}} ->
+        {:noreply, settle(socket, move_part(socket.assigns.settings.tree, at, to))}
+
+      _not_siblings ->
+        {:noreply, socket}
     end
   end
 
@@ -824,21 +838,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     end)
   end
 
-  defp move_part(tree, path, by) do
+  # The part at `path` taken out and put at `to` among its siblings — after the one there when it
+  # moves down, before it when it moves up.
+  defp move_part(tree, path, to) do
     {parent, [i]} = Enum.split(path, -1)
 
     update_part(tree, parent, fn
       {kind, %{parts: parts} = node} when kind in [:component, :slot] ->
-        to = i + by
-
         case i >= 0 and to >= 0 and to < length(parts) and i < length(parts) do
           true ->
-            moved =
-              parts
-              |> List.replace_at(i, Enum.at(parts, to))
-              |> List.replace_at(to, Enum.at(parts, i))
-
-            {kind, %{node | parts: moved}}
+            {part, rest} = List.pop_at(parts, i)
+            {kind, %{node | parts: List.insert_at(rest, to, part)}}
 
           false ->
             {kind, node}
@@ -847,6 +857,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       other ->
         other
     end)
+  end
+
+  # Where a move by one takes the part at `path`: beside the nearest part shown that way, passing
+  # over a text that is only spacing, which the drawer does not show; `nil` when there is none.
+  defp beside(tree, path, by) do
+    with {parent, [i]} <- Enum.split(path, -1),
+         {kind, %{parts: parts}} when kind in [:component, :slot] <- part_at(tree, parent) do
+      parts
+      |> Enum.with_index()
+      |> Enum.filter(fn {part, j} -> (j - i) * by > 0 and shown?(part, parts) end)
+      |> Enum.min_by(fn {_part, j} -> abs(j - i) end, fn -> {nil, nil} end)
+      |> elem(1)
+    else
+      _nowhere -> nil
+    end
   end
 
   # The values a form sent for the part at `path`, only for the attributes it declares.
@@ -1349,53 +1374,56 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
         </button>
       </header>
 
-      <.live_component
-        :if={@settings.media}
-        module={ContentMediaChooser}
-        id={@id <> "-media"}
-        target={@id}
-        site_id={@site_id}
-        current_user={@current_user}
-        accepts={@settings.media.accepts}
-      />
-
-      <form
-        :if={!@settings.media}
-        id={@id <> "-settings"}
-        phx-change="settings_change"
-        phx-submit="settings_done"
-        phx-target={@myself}
-        class="min-h-0 flex-1 overflow-y-auto px-4 py-4"
-      >
-        <.node_fields
-          id={@id}
-          path={[]}
-          tree={@tree}
-          entries={@entries}
-          prefixes={@prefixes}
-          adding={@settings.adding}
-          adding_query={@settings.adding_query}
-          unchanged={@settings.unchanged}
-          myself={@myself}
-        />
-      </form>
-
-      <footer
-        :if={!@settings.media}
-        class="flex items-center gap-3 border-t border-[#f0efea] px-4 py-3"
-      >
-        <span class="min-w-0 flex-1 text-[11px] font-medium text-[#8a877f]">
-          {gettext("Changes show in the editor as you type.")}
-        </span>
-        <button
-          type="submit"
-          form={@id <> "-settings"}
-          id={@id <> "-drawer-done"}
-          class="h-9 rounded-[10px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-5 text-[12.5px] font-bold text-white"
+      <div class="relative flex min-h-0 flex-1 flex-col">
+        <form
+          id={@id <> "-settings"}
+          inert={@settings.media != nil}
+          phx-change="settings_change"
+          phx-submit="settings_done"
+          phx-target={@myself}
+          class="min-h-0 flex-1 overflow-y-auto px-4 py-4"
         >
-          {gettext("Done")}
-        </button>
-      </footer>
+          <.node_fields
+            id={@id}
+            path={[]}
+            tree={@tree}
+            entries={@entries}
+            prefixes={@prefixes}
+            adding={@settings.adding}
+            adding_query={@settings.adding_query}
+            unchanged={@settings.unchanged}
+            myself={@myself}
+          />
+        </form>
+
+        <footer
+          inert={@settings.media != nil}
+          class="flex items-center gap-3 border-t border-[#f0efea] px-4 py-3"
+        >
+          <span class="min-w-0 flex-1 text-[11px] font-medium text-[#8a877f]">
+            {gettext("Changes show in the editor as you type.")}
+          </span>
+          <button
+            type="submit"
+            form={@id <> "-settings"}
+            id={@id <> "-drawer-done"}
+            class="h-9 rounded-[10px] bg-[linear-gradient(140deg,#6d69e6,#4f4bcc)] px-5 text-[12.5px] font-bold text-white"
+          >
+            {gettext("Done")}
+          </button>
+        </footer>
+
+        <div :if={@settings.media} class="absolute inset-0 flex flex-col bg-white">
+          <.live_component
+            module={ContentMediaChooser}
+            id={@id <> "-media"}
+            target={@id}
+            site_id={@site_id}
+            current_user={@current_user}
+            accepts={@settings.media.accepts}
+          />
+        </div>
+      </div>
     </aside>
     """
   end
@@ -1426,6 +1454,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     <section
       id={@id <> "-node-" <> @key}
       data-content-node={@key}
+      data-content-part={!@root && @key}
       data-name={@tree.name}
       phx-mounted={!@root && JS.ignore_attributes(["data-collapsed"])}
       class={[
@@ -1468,20 +1497,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
             {gettext("Inside it")}
           </p>
 
-          <.part_fields
-            :for={{part, i} <- Enum.with_index(@tree.parts)}
-            :if={shown?(part, @tree.parts)}
-            id={@id}
-            path={@path ++ [i]}
-            part={part}
-            parent={@entry}
-            entries={@entries}
-            prefixes={@prefixes}
-            adding={@adding}
-            adding_query={@adding_query}
-            unchanged={@unchanged}
-            myself={@myself}
-          />
+          <.parts id={@id} key={@key} gap="gap-2" any?={@tree.parts != []}>
+            <.part_fields
+              :for={{part, i} <- Enum.with_index(@tree.parts)}
+              :if={shown?(part, @tree.parts)}
+              id={@id}
+              path={@path ++ [i]}
+              part={part}
+              parent={@entry}
+              entries={@entries}
+              prefixes={@prefixes}
+              adding={@adding}
+              adding_query={@adding_query}
+              unchanged={@unchanged}
+              myself={@myself}
+            />
+          </.parts>
 
           <div class="flex flex-wrap gap-1.5">
             <.add_button
@@ -1542,7 +1573,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     assigns = assign(assigns, text: text, key: encode(assigns.path))
 
     ~H"""
-    <div class="flex items-start gap-1.5">
+    <div data-content-part={@key} class="flex items-start gap-1.5">
       <textarea
         id={@id <> "-text-" <> @key}
         name={"t[" <> @key <> "]"}
@@ -1585,6 +1616,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     <section
       id={@id <> "-slot-" <> @key}
       data-content-slot={@key}
+      data-content-part={@key}
       data-name={@slot.name}
       phx-mounted={JS.ignore_attributes(["data-collapsed"])}
       class={[
@@ -1611,25 +1643,50 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
           unchanged={@unchanged}
           myself={@myself}
         />
-        <.part_fields
-          :for={{part, i} <- Enum.with_index(@slot.parts)}
-          :if={shown?(part, @slot.parts)}
-          id={@id}
-          path={@path ++ [i]}
-          part={part}
-          entries={@entries}
-          prefixes={@prefixes}
-          adding={@adding}
-          adding_query={@adding_query}
-          unchanged={@unchanged}
-          myself={@myself}
-        />
+        <.parts id={@id} key={@key} gap="gap-3" any?={@slot.parts != []}>
+          <.part_fields
+            :for={{part, i} <- Enum.with_index(@slot.parts)}
+            :if={shown?(part, @slot.parts)}
+            id={@id}
+            path={@path ++ [i]}
+            part={part}
+            entries={@entries}
+            prefixes={@prefixes}
+            adding={@adding}
+            adding_query={@adding_query}
+            unchanged={@unchanged}
+            myself={@myself}
+          />
+        </.parts>
       </div>
     </section>
     """
   end
 
   defp part_fields(assigns), do: ~H""
+
+  attr :id, :string, required: true
+  attr :key, :string, required: true
+  attr :gap, :string, required: true
+  attr :any?, :boolean, required: true
+  slot :inner_block, required: true
+
+  # THE PARTS ONE PART HOLDS, in their order, dragged by their grips to another place among
+  # themselves (`ContentParts` in the admin's hooks), which sends `part_move` with the part dropped
+  # beside.
+  defp parts(assigns) do
+    ~H"""
+    <div
+      :if={@any?}
+      id={@id <> "-parts-" <> @key}
+      phx-hook="ContentParts"
+      data-target={"#" <> @id}
+      class={["flex flex-col", @gap]}
+    >
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
 
   # A text between the components a part holds that is only spacing is not shown; text standing
   # alone is, and an empty one — a box just added — always is.
@@ -1714,6 +1771,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   defp part_actions(assigns) do
     ~H"""
     <div class="flex flex-none items-center">
+      <span
+        data-part="grip"
+        title={gettext("Drag to move")}
+        class="flex size-7 cursor-grab items-center justify-center rounded-[8px] text-[#a8a49b] hover:bg-[#f2f1ec] hover:text-[#3a382f] active:cursor-grabbing"
+      >
+        <.icon name="hero-bars-2-mini" class="size-4" />
+      </span>
       <button
         :for={
           {by, icon, label} <- [
