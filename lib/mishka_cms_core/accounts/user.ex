@@ -566,6 +566,12 @@ defmodule MishkaCmsCore.Accounts.User do
           end
         end
       end
+
+      # A CANCEL CLOSES THE MODAL. Gervaz sends `{:form_cancelled, resource}` to the page only when
+      # this hook exists; without it Cancel emptied the form and left the modal open.
+      hooks do
+        on_cancel fn state -> state end
+      end
     end
   end
 

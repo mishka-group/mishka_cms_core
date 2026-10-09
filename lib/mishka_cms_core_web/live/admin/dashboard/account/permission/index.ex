@@ -88,16 +88,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index do
      |> put_flash(:info, gettext("Permission saved successfully"))}
   end
 
+  # Cancel closes the modal, as on every other page — opened from a row's Edit or from the details.
+  # Going back to the details would show them over a form Gervaz has already emptied.
   @impl true
-  def handle_info({:form_cancelled, _resource}, socket) do
-    modal = socket.assigns.permission_modal
-
-    if modal.record do
-      {:noreply, assign(socket, :permission_modal, %{modal | edit_mode?: false})}
-    else
-      {:noreply, close_permission_modal(socket)}
-    end
-  end
+  def handle_info({:form_cancelled, _resource}, socket),
+    do: {:noreply, close_permission_modal(socket)}
 
   @impl true
   def handle_info(_msg, socket), do: {:noreply, socket}
