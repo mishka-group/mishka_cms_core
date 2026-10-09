@@ -1211,7 +1211,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSessionTest do
     # WHAT THE NEXT SAVE DOES WITH IT. `live_rules/2` is what the save rewrites the stylesheet row
     # to hold, and it asks `Tree.scope/2`, which answers with the FIRST class it finds — so a target
     # wearing the source's name loses its own hand-written CSS to the next save. Asserted through
-    # the save itself in `builder_live_test.exs`; this is the same question without a database.
+    # the save itself in the `builder_live/` tests; this is the same question without a database.
     test "and the hand-written CSS on both of them survives the save" do
       session = named()
       rules = %{"pb-aaaaaaaa" => "color: red;", "pb-bbbbbbbb" => "color: blue;"}
