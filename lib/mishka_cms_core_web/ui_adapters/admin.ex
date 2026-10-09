@@ -19,7 +19,8 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
 
   # The content editor's look, written on its root because the engine and the hook build the DOM
-  # these reach: the document, a placed component's block, the drag handle, the fallback box.
+  # these reach: the document, a placed component's block and its code, the drag handle, the
+  # fallback box. A picture not chosen yet is drawn in a preview as an empty tinted square.
   @content_editor_classes [
     "relative rounded-[12px] border border-[#ecebe6] bg-white transition-shadow",
     "data-[focused]:border-[#c3c1f0] data-[focused]:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]",
@@ -30,6 +31,10 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
     "[&_[data-role=content-component-name]]:me-auto [&_[data-role=content-component-name]]:truncate",
     "[&_[data-role=content-component-head]_button]:flex [&_[data-role=content-component-head]_button]:size-7 [&_[data-role=content-component-head]_button]:items-center [&_[data-role=content-component-head]_button]:justify-center [&_[data-role=content-component-head]_button]:rounded-[8px] [&_[data-role=content-component-head]_button]:text-[#5c5a54] [&_[data-role=content-component-head]_button:hover]:bg-[#efeefb]",
     "[&_[data-role=content-component-preview]]:mt-1.5 [&_[data-role=content-component-preview]]:overflow-hidden [&_[data-role=content-component-preview]]:rounded-[8px] [&_[data-role=content-component-preview]]:bg-white [&_[data-role=content-component-preview]]:p-2 [&_[data-role=content-component-preview]:empty]:hidden",
+    "[&_[data-role=content-component-preview]_img:not([src])]:min-h-16 [&_[data-role=content-component-preview]_img:not([src])]:min-w-16 [&_[data-role=content-component-preview]_img:not([src])]:rounded-[8px] [&_[data-role=content-component-preview]_img:not([src])]:bg-[#ecebf7]",
+    "[&_[data-code]_[data-role=content-component-preview]]:hidden [&_[data-role=content-component-head]_button[aria-pressed=true]]:bg-[#e9e7fb] [&_[data-role=content-component-head]_button[aria-pressed=true]]:text-[#4f4bcc]",
+    "[&_[data-role=content-component-code]]:mt-1.5 [&_[data-role=content-component-code]]:block [&_[data-role=content-component-code]]:min-h-[6rem] [&_[data-role=content-component-code]]:w-full [&_[data-role=content-component-code]]:resize-y [&_[data-role=content-component-code]]:rounded-[8px] [&_[data-role=content-component-code]]:border-0 [&_[data-role=content-component-code]]:bg-[#17161a] [&_[data-role=content-component-code]]:p-3 [&_[data-role=content-component-code]]:font-mono [&_[data-role=content-component-code]]:text-[12.5px] [&_[data-role=content-component-code]]:leading-[1.6] [&_[data-role=content-component-code]]:text-[#e8e6ef] [&_[data-role=content-component-code]]:outline-none [&_[data-role=content-component-code][hidden]]:hidden",
+    "[&_[data-role=content-component-code-error]]:mt-1.5 [&_[data-role=content-component-code-error]]:rounded-[8px] [&_[data-role=content-component-code-error]]:bg-[#fbeef1] [&_[data-role=content-component-code-error]]:px-2.5 [&_[data-role=content-component-code-error]]:py-1.5 [&_[data-role=content-component-code-error]]:text-[11.5px] [&_[data-role=content-component-code-error]]:font-medium [&_[data-role=content-component-code-error]]:text-[#b5495f] [&_[data-role=content-component-code-error][hidden]]:hidden",
     "[&_[data-role=content-drag-handle]]:flex [&_[data-role=content-drag-handle]]:h-6 [&_[data-role=content-drag-handle]]:w-5 [&_[data-role=content-drag-handle]]:cursor-grab [&_[data-role=content-drag-handle]]:items-center [&_[data-role=content-drag-handle]]:justify-center [&_[data-role=content-drag-handle]]:rounded-[6px] [&_[data-role=content-drag-handle]]:text-[#b3b0a8] [&_[data-role=content-drag-handle]:hover]:bg-[#f2f1ec] [&_[data-role=content-drag-handle]:hover]:text-[#5c5a54]",
     "[&_[data-role=content-editor-plain]]:min-h-[14rem] [&_[data-role=content-editor-plain]]:w-full [&_[data-role=content-editor-plain]]:rounded-[10px] [&_[data-role=content-editor-plain]]:border [&_[data-role=content-editor-plain]]:border-[#ecebe6] [&_[data-role=content-editor-plain]]:p-3 [&_[data-role=content-editor-plain]]:font-mono [&_[data-role=content-editor-plain]]:text-[12.5px]"
   ]
@@ -329,6 +334,12 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
         data-editable={@editable}
         data-debounce={@debounce}
         data-components={"#" <> @components}
+        data-label-code={gettext("Edit as code")}
+        data-label-code-error={
+          gettext(
+            "This is not one component — check the [[component …]] marker, then press Code again."
+          )
+        }
         data-label-edit={gettext("Component settings")}
         data-label-remove={gettext("Remove component")}
         data-label-link={gettext("Link address — leave it empty to remove the link")}
