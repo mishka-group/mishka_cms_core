@@ -154,6 +154,20 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       end
     end
 
+    # NO ADDRESS ONLY THE OLD MARKETING PROJECT HAD. `/mish-*` pages exist on no installed site; the
+    # footer's Docs and Support lead to Mishka's own site.
+    test "no sign-in link leads to an address no site has", %{site: site} do
+      StarterContent.ensure_auth!(site)
+
+      for record <- [auth_layout(site) | auth_pages(site)], source <- sources(record) do
+        refute source =~ "/mish-", record.path
+      end
+
+      template = auth_layout(site).template
+      assert template =~ ~s(href="https://mishka.tools/cms/extensions/documentation")
+      assert template =~ ~s(href="https://mishka.tools/hire-us")
+    end
+
     # EDITABLE IN THE BUILDER, which reads a template through its own parser.
     test "the builder can read every sign-in template", %{site: site} do
       StarterContent.ensure_auth!(site)
