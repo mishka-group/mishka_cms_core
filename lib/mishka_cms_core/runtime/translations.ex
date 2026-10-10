@@ -29,6 +29,12 @@ defmodule MishkaCmsCore.Runtime.Translations do
   registered when its template is saved, `t(@label)` cannot be — its value does not exist until the
   page renders. The same limit Gettext has, for the same reason.
 
+  ## The site's own name
+
+  The `site.title` setting is a key of its site too: `MishkaCmsCore.Runtime.Seo.site_name/2` reads
+  its translation for a page's head and share card. `sync/1` registers it, and `used_keys/1` counts
+  it, so **Remove unused** keeps it.
+
   ## Where keys are read from
 
   A component, page or layout asks for a key in its `template` and in the `code` of its
@@ -343,6 +349,7 @@ defmodule MishkaCmsCore.Runtime.Translations do
     @sources
     |> Enum.flat_map(&asked(&1, usage(site_id)))
     |> Enum.flat_map(fn {_site_id, keys} -> keys end)
+    |> Enum.concat(site_title(site_id))
     |> MapSet.new()
   end
 
@@ -359,8 +366,15 @@ defmodule MishkaCmsCore.Runtime.Translations do
     |> Enum.flat_map(&asked(&1, scope))
     |> Enum.group_by(&elem(&1, 0), &elem(&1, 1))
     |> Enum.each(fn {site_id, keys} ->
-      register(site_id, keys |> Enum.concat() |> Enum.uniq())
+      register(site_id, keys |> Enum.concat() |> Enum.concat(site_title(site_id)) |> Enum.uniq())
     end)
+  end
+
+  defp site_title(site_id) do
+    case Settings.get("site.title", nil, site_id) do
+      title when is_binary(title) and title != "" -> [title]
+      _no_title -> []
+    end
   end
 
   @doc """

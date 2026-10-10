@@ -880,6 +880,30 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
     end
   end
 
+  # `Seo.site_name/2` reads the title's translation, so it is a key of its site like any other.
+  describe "the site's title" do
+    setup do
+      site = site_in!(["en", "fa"])
+      title = unique("Studio")
+      forget_settings(~w(site.title), [site.id])
+      {:ok, _} = Settings.put("site.title", title, site_id: site.id)
+      create_component!(site_id: site.id, template: template([unique("Any")]))
+      unregister!([title])
+
+      %{site: site, title: title}
+    end
+
+    test "sync/1 registers it in each of the site's languages", %{site: site, title: title} do
+      :ok = Translations.sync(site.id)
+
+      assert shape(rows([title])) == [{site.id, title, "en", nil}, {site.id, title, "fa", nil}]
+    end
+
+    test "used_keys/1 counts it, so Remove unused keeps it", %{site: site, title: title} do
+      assert title in Translations.used_keys(site.id)
+    end
+  end
+
   describe "purge_unused/2" do
     setup do
       site = site_in!(["en", "fa"])
