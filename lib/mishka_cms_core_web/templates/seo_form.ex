@@ -28,8 +28,9 @@ defmodule MishkaCmsCoreWeb.Templates.SeoForm do
 
   import MishkaCmsCoreWeb.Live.Admin.Builder.Panels, only: [icon: 1]
 
+  alias MishkaCmsCore.Runtime.{Page, PageDraft, Seo}
   alias MishkaCmsCore.Runtime.PageBuilder.SeoSettings
-  alias MishkaCmsCore.Runtime.Seo
+  alias MishkaCmsCoreWeb.Live.Admin.Components.ShareCardField
 
   @impl true
   def name, do: :seo_settings
@@ -83,6 +84,7 @@ defmodule MishkaCmsCoreWeb.Templates.SeoForm do
           <div class="min-w-0">
             <div class="flex flex-col gap-3 min-[980px]:sticky min-[980px]:top-4">
               <.seo_previews seo={@seo} target={@myself} />
+              <.seo_share_card seo={@seo} />
             </div>
           </div>
         </div>
@@ -205,6 +207,42 @@ defmodule MishkaCmsCoreWeb.Templates.SeoForm do
   end
 
   @views [{"google", "Google"}, {"x", "X"}, {"facebook", "Facebook"}]
+
+  attr(:seo, :map, required: true)
+
+  # THE PAGE'S SHARE CARD, as drawn, and Regenerate. The published page's: a draft names it by its
+  # source. A page that shows records leaves each record its own, in that record's modal.
+  defp seo_share_card(assigns) do
+    document = assigns.seo.document
+
+    assigns =
+      assign(assigns,
+        page_id: share_page_id(document),
+        site_id: Map.get(document, :site_id)
+      )
+
+    ~H"""
+    <section
+      :if={@page_id && @site_id && is_nil(@seo.record)}
+      id="pb-seo-share-card"
+      class="flex flex-col gap-2 rounded-[12px] border border-[#ecebe6] bg-white p-3"
+    >
+      <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#6d6a63]">
+        {gettext("Share image")}
+      </span>
+      <.live_component
+        module={ShareCardField}
+        id="pb-seo-share-card-field"
+        site_id={@site_id}
+        target={{:page, @page_id}}
+      />
+    </section>
+    """
+  end
+
+  defp share_page_id(%Page{id: id}), do: id
+  defp share_page_id(%PageDraft{source_page_id: id}), do: id
+  defp share_page_id(_other), do: nil
 
   attr(:seo, :map, required: true)
   attr(:target, :any, required: true)
