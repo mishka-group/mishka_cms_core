@@ -14,9 +14,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
   each file in the gallery moves too, through
   `MishkaCmsCoreWeb.Live.Admin.Components.MediaMove`.
 
-  At the top level the gallery shows only the files in no folder, as a folder shows only its own —
-  until a search or a filter, which looks through every folder; each card names its folder by the
-  whole path to it.
+  At the top level, All media, the gallery shows every file of every folder, newest first; a folder
+  shows only its own. Each card names its folder by the whole path to it.
 
   The folder is the only thing the rail reads again for: the gallery's own filters, sort and page
   patch the same URL and leave it as it is.
@@ -91,23 +90,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
   @impl true
   def handle_params(params, uri, socket) do
     folder_id = blank_to_nil(Map.get(params, "filter_media_category_id"))
-    url_state = params |> UrlSync.decode(uri, Media) |> library_scope(folder_id)
+    url_state = UrlSync.decode(params, uri, Media)
 
     {:noreply,
      socket
      |> assign(:url_state, url_state)
      |> open_folder(folder_id)}
   end
-
-  # AT THE TOP LEVEL THE GALLERY SHOWS ONLY THE FILES IN NO FOLDER, until a search or a filter looks
-  # through every folder — `Media`'s table `on_load` reads `library_top_level`, a path param that
-  # names no attribute and filters nothing by itself. In a folder, the folder filter is the scope.
-  defp library_scope(%{} = url_state, nil),
-    do: Map.update(url_state, :path_params, %{library_top_level: true}, &top_level/1)
-
-  defp library_scope(url_state, _folder_id), do: url_state
-
-  defp top_level(path_params), do: Map.put(path_params || %{}, :library_top_level, true)
 
   # The rail and the breadcrumb are read when the folder changes, and once the socket connects.
   defp open_folder(%{assigns: %{folder_id: folder_id, folder_read?: true}} = socket, folder_id),

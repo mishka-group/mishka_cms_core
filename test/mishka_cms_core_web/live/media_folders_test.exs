@@ -189,9 +189,9 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
       refute has_element?(view, "button[title='Move'][phx-value-values*='#{elsewhere.id}']")
     end
 
-    # JOOMLA'S TOP LEVEL: the folders, and only the files that are in none of them. A file in a folder
-    # is seen by opening that folder.
-    test "the top level shows only the files in no folder", %{
+    # ALL MEDIA IS ALL OF IT: the newest file first, wherever it is filed, and each card says where its
+    # file is by the whole path to it.
+    test "the top level shows every file, the ones in folders too, newest first", %{
       conn: conn,
       site: site,
       year: year
@@ -202,11 +202,41 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
       view = conn |> tenant_conn(site) |> open()
 
       assert has_element?(view, move_button(loose))
-      refute has_element?(view, move_button(filed)), "a file in a folder is not at the top level"
+      assert has_element?(view, move_button(filed)), "a file in a folder is left out of All media"
+      assert has_element?(view, "#media-table_media-#{filed.id}", "photos / 2024")
+
+      html = render(view)
+      {newest, _} = :binary.match(html, "media-table_media-#{filed.id}")
+      {older, _} = :binary.match(html, "media-table_media-#{loose.id}")
+      assert newest < older
     end
 
-    # …until the reader searches, or filters: then every folder is looked through, and each card says
-    # where its file is by the whole path to it.
+    test "Up one level shows the files of the level above, for a site's admin and a master", %{
+      conn: conn,
+      site: site,
+      photos: photos
+    } do
+      loose = create_media!(site_id: site.id, name: "loose")
+      filed = create_media!(site_id: site.id, media_category_id: photos.id, name: "filed")
+      master = log_in(conn, create_admin("master@example.com"))
+
+      for conn <- [tenant_conn(conn, site), master] do
+        {:ok, view, _html} = live(conn, "#{@path}?sort=inserted_at%3Adesc")
+        render_async(view)
+
+        view |> element("#category-open-#{photos.id}") |> render_click()
+        render_async(view)
+        assert has_element?(view, move_button(filed))
+        refute has_element?(view, move_button(loose)), "the folder shows a file filed elsewhere"
+
+        view |> element("#media-folder-up") |> render_click()
+        render_async(view)
+        assert has_element?(view, move_button(loose)), "Up one level kept the folder's files"
+        assert has_element?(view, move_button(filed))
+        refute has_element?(view, "#media-folder-up")
+      end
+    end
+
     test "a search or a filter at the top level finds a file in any folder, with its path", %{
       conn: conn,
       site: site,
