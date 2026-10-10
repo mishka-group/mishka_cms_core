@@ -216,6 +216,64 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
     assert Settings.get("site.title") == global_before
   end
 
+  describe "the site's logo and favicon" do
+    test "a site's view offers Media Manager under each address; Global takes an address alone",
+         %{conn: conn, site: site} do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      {:ok, view, _html} = live(conn, @path <> "?tab=general")
+
+      for key <- ~w(site-logo site-favicon) do
+        assert has_element?(view, "#set-#{key}")
+        refute has_element?(view, "#media-#{key}-library")
+      end
+
+      view |> form("#scope-form") |> render_change(%{"scope" => site.id})
+
+      for key <- ~w(site-logo site-favicon) do
+        assert has_element?(view, "#set-#{key}")
+        assert has_element?(view, "#media-#{key}-library")
+      end
+    end
+
+    test "a picture picked reaches the form as the field's own change, and is saved", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      {:ok, view, _html} = live(conn, @path <> "?tab=general")
+      view |> form("#scope-form") |> render_change(%{"scope" => site.id})
+      logo = "/uploads/#{site.id}/media/brand/logo.svg"
+
+      # What a pick in Media Manager pushes (`MediaField`'s `select`).
+      render_hook(view, "validate", %{"settings" => %{"site.logo" => logo}})
+      assert view |> element("#set-site-logo") |> render() =~ ~s(value="#{logo}")
+      assert view |> element("#media-site-logo-preview img") |> render() =~ logo
+
+      view |> form("#settings-form") |> render_submit()
+      assert Settings.get("site.logo", nil, site.id) == logo
+
+      # ✕ empties it the same way.
+      view |> element("#media-site-logo-clear") |> render_click()
+      view |> form("#settings-form") |> render_submit()
+      assert Settings.get("site.logo", nil, site.id) == ""
+    end
+
+    test "an address that is neither a path nor a web address is not saved", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      {:ok, view, _html} = live(conn, @path <> "?tab=general")
+      view |> form("#scope-form") |> render_change(%{"scope" => site.id})
+
+      view
+      |> form("#settings-form", settings: %{"site.favicon" => "javascript:alert(1)"})
+      |> render_submit()
+
+      refute Settings.get("site.favicon", nil, site.id) == "javascript:alert(1)"
+    end
+  end
+
   # A LIST IS TYPED AS TEXT. Drawn as a list, HEEx joins it with spaces, and the save that followed
   # would split on commas and store one entry, `"en fa"`, which is no language at all.
   test "a site's languages are shown comma-separated and saved as a list", %{

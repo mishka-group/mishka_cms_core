@@ -99,7 +99,7 @@ defmodule MishkaCmsCore.Settings do
     visible: true
   }
 
-  @type input_type :: :string | :text | :boolean | :integer | :select | :list | :secret
+  @type input_type :: :string | :text | :boolean | :integer | :select | :list | :secret | :image
   @type scope :: :global | :site | :both | :master | :user
   @type definition :: %{
           key: String.t(),
@@ -460,6 +460,19 @@ defmodule MishkaCmsCore.Settings do
 
   defp cast_type(%{type: :secret}, value) when is_binary(value), do: {:ok, String.trim(value)}
 
+  # A picture: a path on the site (`/uploads/…`, `/images/…`) or an `http(s)://` address; empty
+  # for none.
+  defp cast_type(%{type: :image}, value) when is_binary(value) do
+    value = String.trim(value)
+
+    cond do
+      value == "" -> {:ok, ""}
+      String.starts_with?(value, "//") -> :error
+      String.starts_with?(value, ["/", "https://", "http://"]) -> {:ok, value}
+      true -> :error
+    end
+  end
+
   defp cast_type(%{type: :list}, value) when is_binary(value),
     do: cast_type(%{type: :list}, String.split(value, ","))
 
@@ -642,6 +655,26 @@ defmodule MishkaCmsCore.Settings do
         scope: :both,
         label: gettext_noop("Site title"),
         description: gettext_noop("Shown in the browser tab and anywhere the site names itself.")
+      ),
+      define("site.logo", :image,
+        default: "",
+        category: "general",
+        scope: :both,
+        label: gettext_noop("Site logo"),
+        description:
+          gettext_noop(
+            "From Media, or an address. Share images draw it on a white tile, so a logo made for a light background works, square or wide."
+          )
+      ),
+      define("site.favicon", :image,
+        default: "",
+        category: "general",
+        scope: :both,
+        label: gettext_noop("Favicon"),
+        description:
+          gettext_noop(
+            "The small picture a browser tab and a search result show for the site's pages: a square PNG or SVG, from Media or an address."
+          )
       ),
       define("site.languages", :list,
         default: MishkaCmsCore.Runtime.Languages.default(),
