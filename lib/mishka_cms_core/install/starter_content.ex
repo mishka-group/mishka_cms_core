@@ -1327,10 +1327,22 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <div class="relative z-[1] mt-auto flex flex-wrap items-center gap-[14px] text-[11.5px] font-semibold text-[#6d6a63] max-[620px]:justify-center!">
           <span>© {Date.utc_today().year} MishkaCMS</span>
           <span class="flex-1 max-[620px]:hidden!"></span>
-          <.link href="/mish-cms/extensions/documentation" class="hover:text-[#4f4bcc]">
+          <.link
+            href="https://mishka.tools/cms/extensions/documentation"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:text-[#4f4bcc]"
+          >
             {t("Docs")}
           </.link>
-          <.link href="/mish-hire-us" class="hover:text-[#4f4bcc]">{t("Support")}</.link>
+          <.link
+            href="https://mishka.tools/hire-us"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="hover:text-[#4f4bcc]"
+          >
+            {t("Support")}
+          </.link>
         </div>
       </div>
 
