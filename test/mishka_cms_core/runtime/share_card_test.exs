@@ -12,9 +12,11 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
   @repo Application.compile_env!(:mishka_cms_core, :repo)
   use Oban.Testing, repo: @repo
 
-  alias MishkaCmsCore.Runtime.{Seo, ShareCard}
-  alias MishkaCmsCore.Runtime.States.{SettingsState, TranslationsState}
+  alias MishkaCmsCore.Runtime.{PageShareCard, Seo, ShareCard}
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState, TranslationsState}
+  alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
   alias MishkaCmsCore.Settings
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @base "https://cards.test"
 
@@ -232,6 +234,154 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
 
       assert link(Seo.head(seo(site), base: @base), "icon") ==
                "#{@base}/uploads/#{site.id}/media/a/icon.png"
+    end
+  end
+
+  # A site the runtime knows, as a booted one is — `specs/2` reads its host from `SiteState`.
+  defp cached!(site) do
+    :ok =
+      SiteState.save(%{
+        id: site.id,
+        name: site.name,
+        host: "cards.test",
+        priority: site.priority,
+        active: true,
+        master: site.master
+      })
+
+    on_exit(fn -> SiteState.delete(site.id) end)
+    site
+  end
+
+  describe "refresh/3" do
+    test "queues one look a burst of saves shares, a moment later", %{site: site} do
+      for _save <- 1..3, do: assert(:ok = ShareCard.refresh(site.id, {:page, "p1"}))
+
+      assert [job] = all_enqueued(worker: ShareCardRefreshWorker)
+      assert job.args == %{"site_id" => site.id, "target" => %{"page" => "p1"}, "force" => false}
+      assert DateTime.compare(job.scheduled_at, DateTime.utc_now()) == :gt
+    end
+
+    test "with force, looks now, for a record as well as a page", %{site: site} do
+      target = {:record, "blog:post", %{"slug" => "hello", "lang" => "en"}}
+      :ok = ShareCard.refresh(site.id, target, force: true)
+
+      assert [job] = all_enqueued(worker: ShareCardRefreshWorker)
+      assert job.args["force"]
+      assert ShareCard.decode(job.args["target"]) == target
+      assert DateTime.compare(job.scheduled_at, DateTime.utc_now()) != :gt
+    end
+  end
+
+  describe "specs/2" do
+    setup %{site: site}, do: %{site: cached!(site)}
+
+    test "is what a visit to the page puts on its card", %{site: site} do
+      page =
+        create_page!(
+          site_id: site.id,
+          path: "/about-#{System.unique_integer([:positive])}",
+          title: "About us",
+          description: "What we make.",
+          language: "en"
+        )
+
+      assert [spec] = ShareCard.specs(site.id, {:page, page.id})
+      assert spec.title == "About us"
+      assert spec.description == "What we make."
+      assert spec.site == "Acme Studio"
+      assert spec.host == "cards.test"
+    end
+
+    test "leaves a page that shows records to them, and shows none for a private page", %{
+      site: site
+    } do
+      records =
+        create_page!(site_id: site.id, path: "/things/:slug", extra: %{"record" => "test:thing"})
+
+      private = create_page!(site_id: site.id, path: "/members", permissions: ["members:read"])
+
+      assert ShareCard.specs(site.id, {:page, records.id}) == []
+      assert ShareCard.specs(site.id, {:page, private.id}) == []
+
+      assert [%{title: title}] =
+               ShareCard.specs(site.id, {:record, "test:thing", %{"slug" => "one"}})
+
+      assert title == records.title
+      assert ShareCard.specs(site.id, {:record, "test:other", %{"slug" => "one"}}) == []
+    end
+
+    test "is nothing for a site the runtime does not know" do
+      assert ShareCard.specs(Ecto.UUID.generate(), {:page, Ecto.UUID.generate()}) == []
+    end
+  end
+
+  describe "the refresh job" do
+    setup %{site: site} do
+      site = cached!(site)
+      page = create_page!(site_id: site.id, path: "/team", title: "The team", language: "en")
+      %{site: site, page: page}
+    end
+
+    test "queues the card's drawing when it is not drawn, and nothing once it is", %{
+      site: site,
+      page: page
+    } do
+      args = %{site_id: site.id, target: %{"page" => page.id}, force: false}
+
+      :ok = perform_job(ShareCardRefreshWorker, args)
+      assert [draw] = all_enqueued(worker: ShareCard)
+      assert [%{drawn_at: nil, title: "The team"}] = ShareCard.cards(site.id, {:page, page.id})
+
+      :ok = perform_job(ShareCard, draw.args)
+      assert [%{drawn_at: drawn_at}] = ShareCard.cards(site.id, {:page, page.id})
+      assert is_integer(drawn_at)
+
+      :ok = perform_job(ShareCardRefreshWorker, args)
+      assert [^draw] = all_enqueued(worker: ShareCard)
+    end
+
+    test "with force, draws it again over the file drawn before", %{site: site, page: page} do
+      [spec] = ShareCard.specs(site.id, {:page, page.id})
+      :ok = perform_job(ShareCard, %{site_id: site.id, key: ShareCard.key(spec), card: spec})
+      [%{url: url}] = ShareCard.cards(site.id, {:page, page.id})
+      file = Path.join(Application.get_env(:mishka_cms_core, :media_static_dir), url)
+      File.touch!(file, 0)
+
+      :ok =
+        perform_job(ShareCardRefreshWorker, %{
+          site_id: site.id,
+          target: %{"page" => page.id},
+          force: true
+        })
+
+      assert [redraw] = all_enqueued(worker: ShareCard)
+      :ok = perform_job(ShareCard, redraw.args)
+      assert [%{drawn_at: drawn_at}] = ShareCard.cards(site.id, {:page, page.id})
+      assert drawn_at > 0
+    end
+  end
+
+  describe "the page plugin" do
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: PageShareCard,
+          event: PageShareCard.config(:__event__),
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile(PageShareCard.config(:__event__), :start, false)
+      on_exit(fn -> Event.unregister(:name, PageShareCard, false) end)
+    end
+
+    test "looks at a page's card again once the page is saved", %{site: site} do
+      page = create_page!(site_id: site.id, title: "Saved")
+
+      assert [job] = all_enqueued(worker: ShareCardRefreshWorker)
+      assert job.args["target"] == %{"page" => page.id}
+      assert job.args["site_id"] == site.id
     end
   end
 

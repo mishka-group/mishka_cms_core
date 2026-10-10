@@ -41,6 +41,13 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   old one stays where it is. It is stored at `/uploads/<site_id>/share/<key>.jpg`, served as the
   site's other files are.
 
+  ## Ready before the first visit
+
+  `refresh/3` looks at a page's or a record's card in the background — the plugins on the
+  after-save events call it — and queues its drawing when it is not drawn yet, so it is there for
+  the first visitor. A save that leaves what the card shows alone finds it drawn and draws nothing.
+  `refresh(site_id, target, force: true)` draws it again over the old file: the Regenerate button.
+
   Drawn by libvips in a separate process (`MishkaCmsCore.Isolated`), so a file that crashes it ends
   that process, never the server.
   """
@@ -53,11 +60,13 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       states: [:available, :scheduled, :executing, :retryable]
     ]
 
+  require Ash.Query
   require Logger
 
   alias MishkaCmsCore.Isolated
-  alias MishkaCmsCore.Runtime.Media
-  alias MishkaCmsCore.Runtime.States.AssetsState
+  alias MishkaCmsCore.Runtime.{Languages, Layout, Media, Page, PageEditions, Seo}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
+  alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
   alias Vix.Vips.Image, as: VImage
   alias Vix.Vips.Operation, as: Op
 
@@ -91,6 +100,179 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   end
 
   def image(_site_id, _card), do: nil
+
+  @typedoc """
+  What a refresh is for: one page, by its id, or the pages that show records of a kind
+  (`MishkaCmsCore.Runtime.Seo.record_of/1`), with the captures that name one record —
+  `{:record, "blog:post", %{"slug" => "hello", "lang" => "en"}}`.
+  """
+  @type target :: {:page, String.t()} | {:record, String.t(), map()}
+
+  @doc """
+  Queues a look, in the background, at the card `target` shows now, and its drawing when it is not
+  drawn yet. Saves within two seconds of each other are one look.
+
+  `force: true` looks now and draws the card again even when it is drawn, over the old file.
+  """
+  @spec refresh(String.t(), target(), keyword()) :: :ok | {:error, term()}
+  def refresh(site_id, target, opts \\ []) when is_binary(site_id) do
+    force = Keyword.get(opts, :force, false)
+    later = if force, do: [], else: [schedule_in: 2]
+
+    %{site_id: site_id, target: encode(target), force: force}
+    |> ShareCardRefreshWorker.new(later)
+    |> Oban.insert()
+    |> case do
+      {:ok, _job} -> :ok
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
+  Each card `target`'s pages show now: `%{title:, url:, drawn_at:}`, `drawn_at` the Unix time its
+  file was written, `nil` until it is drawn. A page kept out of an index, or storing an `og:image`
+  of its own, shows none.
+  """
+  @spec cards(String.t(), target()) :: [
+          %{title: String.t(), url: String.t(), drawn_at: integer() | nil}
+        ]
+  def cards(site_id, target) do
+    for spec <- specs(site_id, target),
+        %{"title" => title} = card <- [normalize(spec)],
+        key = key(card),
+        do: %{title: title, url: url(site_id, key), drawn_at: drawn_at(site_id, key)}
+  end
+
+  defp drawn_at(site_id, key) do
+    case File.stat(disk_path(site_id, key), time: :posix) do
+      {:ok, %{type: :regular, mtime: mtime}} -> mtime
+      _not_drawn -> nil
+    end
+  end
+
+  @doc """
+  What each page that shows `target` puts on its share card, as `Seo.head/2` builds it for a visit
+  to it: the same card, with the same name. The pages are read as the system, as the sitemap reads
+  them — a job has no visitor.
+  """
+  @spec specs(String.t(), target()) :: [map()]
+  def specs(site_id, target) when is_binary(site_id) do
+    case SiteState.get(site_id) do
+      {:ok, %{host: host}} when is_binary(host) ->
+        base = Seo.base(host)
+
+        for {page, params} <- pages(site_id, target),
+            %{card: %{} = spec} <- [head(page, params, site_id, base)],
+            do: spec
+
+      _unknown ->
+        []
+    end
+  end
+
+  @doc """
+  Queues `card` to be drawn again, over the file drawn before; `:ok` for a card with no title.
+  """
+  @spec redraw(String.t(), card()) :: :ok | {:error, term()}
+  def redraw(site_id, card) when is_binary(site_id) do
+    case normalize(card) do
+      %{"title" => _} = card ->
+        key = key(card)
+
+        case Oban.insert(new(%{site_id: site_id, key: key, card: card})) do
+          {:ok, _job} -> mark(site_id, "share_card:" <> key, :queued)
+          {:error, reason} -> {:error, reason}
+        end
+
+      _no_title ->
+        :ok
+    end
+  end
+
+  @page_fields [
+    :id,
+    :title,
+    :path,
+    :section,
+    :language,
+    :language_group_id,
+    :description,
+    :seo_tags,
+    :schema,
+    :permissions,
+    :extra,
+    :layout_id,
+    :updated_at
+  ]
+
+  defp pages(site_id, target) do
+    Page
+    |> Ash.Query.filter(active == true)
+    |> only(target)
+    |> Ash.Query.select(@page_fields)
+    |> Ash.Query.load(tenant_layout: Ash.Query.select(Layout, [:seo_tags]))
+    |> Ash.read!(tenant: site_id, authorize?: false, page: false)
+    |> Enum.flat_map(&editions(&1, target, site_id))
+  end
+
+  defp only(query, {:page, id}), do: Ash.Query.filter(query, id == ^id)
+  defp only(query, {:record, _kind, _params}), do: query
+
+  # A page at one address in each language it answers; a page that shows records is left to them.
+  defp editions(page, {:page, _id}, site_id) do
+    cond do
+      Seo.record_of(page.extra) ->
+        []
+
+      Languages.captures?(page.path) ->
+        for language <- PageEditions.served_languages(page, site_id),
+            do: {page, %{Languages.capture() => language}}
+
+      true ->
+        [{page, %{}}]
+    end
+  end
+
+  defp editions(page, {:record, kind, params}, _site_id) do
+    if Seo.record_of(page.extra) == kind, do: [{page, params}], else: []
+  end
+
+  # The head a visit to `page` with `params` gets, with the card's spec and nothing asked for.
+  defp head(page, params, site_id, base) do
+    language = Map.get(params, Languages.capture()) || page.language
+
+    Seo.resolve(
+      %{
+        title: page.title,
+        path: page.path,
+        section: page.section,
+        language: language,
+        language_group_id: page.language_group_id,
+        timestamp: page.updated_at,
+        seo: %{description: page.description, meta_tags: page.seo_tags, schema: page.schema}
+      },
+      site_id: site_id,
+      url: page.path |> Languages.url(params, site_id) |> Seo.absolute(base),
+      params: params,
+      record: Seo.record_of(page.extra),
+      base: base,
+      restricted?: Seo.noindex?(page.permissions, page.extra),
+      layers: [layout_tags(page.tenant_layout), List.wrap(page.seo_tags)],
+      card: :spec
+    )
+  end
+
+  defp layout_tags(%{seo_tags: tags}), do: List.wrap(tags)
+  defp layout_tags(_no_layout), do: []
+
+  @doc false
+  # A target as a job stores it, and back.
+  def encode({:page, id}), do: %{"page" => id}
+  def encode({:record, kind, params}), do: %{"record" => kind, "params" => params}
+
+  @doc false
+  def decode(%{"page" => id}), do: {:page, id}
+  def decode(%{"record" => kind, "params" => params}), do: {:record, kind, params}
 
   defp lookup(site_id, card) do
     key = key(card)

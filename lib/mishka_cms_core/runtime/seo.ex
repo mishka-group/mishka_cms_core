@@ -161,6 +161,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
           description: String.t() | nil,
           image: String.t() | nil,
           url: String.t() | nil,
+          card: map() | nil,
           tags: [tag()],
           schema: [String.t()],
           var_docs: [map()],
@@ -971,13 +972,15 @@ defmodule MishkaCmsCore.Runtime.Seo do
     * `:page_number` — the page of a list this address shows (`page_number/1`); past the first,
       the title says so, `Blog – Page 2`, so no two pages of a list share one
     * `:card` — whether a page with no stored `og:image` shows its share card (`ShareCard.image/2`),
-      `false` by default: a preview asks for none
+      `false` by default: a preview asks for none; `:spec` returns what the card would show in
+      `card` without asking for it
 
   A stored `title` replaces `title`, and a stored `og:image` replaces `image`, else the share card
   does once it is drawn. The `description` has its variables filled; empty, or naming one that does
   not resolve, a stored `description` meta stands in.
 
-  Returns the resolved `title`, `description`, `image` and `url`, the `tags` to render as
+  Returns the resolved `title`, `description`, `image` and `url`, the share `card`'s spec (with
+  `:card`), the `tags` to render as
   `{name, attributes}`, the `schema` as JSON strings safe inside `<script>`, and the `var_docs` and
   `permissions` a plugin answered.
   """
@@ -1021,7 +1024,9 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
     description = description || meta_value(stored, "name", "description")
     stored_image = absolute(meta_value(stored, "property", "og:image"), base)
-    card = !stored_image && share_card(seo, description, site_title, base, opts)
+
+    {spec, card} =
+      if stored_image, do: {nil, nil}, else: share_card(seo, description, site_title, base, opts)
 
     resolved =
       Map.put(
@@ -1042,6 +1047,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       description: resolved.description,
       image: resolved.image,
       url: url,
+      card: spec,
       tags:
         [tags(defaults(resolved, site_title, base, opts)), stored]
         |> stack()
@@ -1204,15 +1210,15 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   defp card_size(_no_card), do: []
 
-  # The share card of a public page, from what the head resolved and what the plugin added; `nil`
-  # until it is drawn, for a page kept out of an index, and when nobody asked for one.
+  # What the share card of a public page shows — from what the head resolved and what the plugin
+  # added — and the card itself once drawn (`card: true` asks for it); `{nil, nil}` for a page kept
+  # out of an index, and when nobody asked.
   defp share_card(seo, description, site_title, base, opts) do
-    with true <- Keyword.get(opts, :card, false),
+    with mode when mode in [true, :spec] <- Keyword.get(opts, :card, false),
          false <- Keyword.get(opts, :restricted?, false),
          %{} = card <- seo.card,
          %URI{host: host} when is_binary(host) <- base && URI.parse(base) do
-      ShareCard.image(
-        seo.site_id,
+      spec =
         Map.merge(
           %{
             title: seo.title,
@@ -1224,9 +1230,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
           },
           card
         )
-      )
+
+      {spec, mode == true && ShareCard.image(seo.site_id, spec)}
     else
-      _no_card -> nil
+      _no_card -> {nil, nil}
     end
   end
 
