@@ -535,6 +535,33 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DocumentsTest do
       Enum.find(record.seo_tags, &(Map.get(&1.attrs, attr) == name))
     end
 
+    test "shows the page's share card with Regenerate; a page of records leaves it to them", %{
+      conn: conn,
+      site: site
+    } do
+      page = create_page!(site_id: site.id, title: "Shared studio", template: @template)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_seo(view)
+      _settled = render_async(view)
+
+      assert has_element?(view, "#pb-seo-share-card")
+      assert seo_text(view, "#pb-seo-share-card") =~ "Shared studio"
+      assert has_element?(view, "#pb-seo-share-card-field-regenerate")
+
+      records =
+        create_page!(
+          site_id: site.id,
+          path: "/notes/:slug",
+          template: @template,
+          extra: %{"record" => "test:note"}
+        )
+
+      {:ok, view, _html} = open_builder(conn, records)
+      open_seo(view)
+
+      refute has_element?(view, "#pb-seo-share-card")
+    end
+
     test "opens on a page beside General, its previews drawn from the page", %{
       conn: conn,
       site: site

@@ -287,6 +287,30 @@
                                 "This key was saved under an older server key (SECRET_KEY_BASE) and can no longer be read, so nothing uses it. Type it again and save."
                               )}
                             </p>
+                          <% definition.type == :image -> %>
+                            <%!-- A picture: the address, and Media Manager to pick or upload one
+                                  for the site in view. The Global view has no site's files to
+                                  offer, so it takes an address alone. --%>
+                            <.live_component
+                              module={MediaField}
+                              id={"media-#{dom_id(definition.key)}"}
+                              input_id={"set-#{dom_id(definition.key)}"}
+                              name={field_name(definition)}
+                              value={@form[definition.key].value}
+                              field={definition.key}
+                              form={nil}
+                              site_id={@active_scope}
+                              current_user={@current_user}
+                              accepts={:images}
+                              folder="site"
+                              placeholder="/uploads/…"
+                              disabled={!editable}
+                              debounce="300"
+                              class={[input_class(), "h-[46px] px-[15px]"]}
+                              opened={nil}
+                              library={is_binary(@active_scope)}
+                              select={pick(definition.key)}
+                            />
                           <% definition.type == :text -> %>
                             <textarea
                               id={"set-#{dom_id(definition.key)}"}

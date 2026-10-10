@@ -37,6 +37,12 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Runtime.PageBuilder.CardPreviewInvalidator
   ]
 
+  # A page's share card refreshed after the page is saved, on `cms_core:page:after_save` — the same
+  # event an extension's plugin would listen on (`MishkaCmsCore.Runtime.ShareCard`).
+  @share_card_plugins [
+    MishkaCmsCore.Runtime.PageShareCard
+  ]
+
   # `settings:register` plugins — the core widgets' settings under the General tab, and every
   # sidebar entry's position/visibility switches under the Sidebar tab.
   @settings_plugins [
@@ -99,7 +105,8 @@ defmodule MishkaCmsCore.Application do
       @dashboard_widgets ++
         @notify_producers ++
         @settings_plugins ++
-        @cache_plugins ++ @mail_providers ++ @captcha_providers ++ @account_notices
+        @cache_plugins ++
+        @share_card_plugins ++ @mail_providers ++ @captcha_providers ++ @account_notices
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

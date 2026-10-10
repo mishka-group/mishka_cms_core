@@ -45,7 +45,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   alias MishkaCmsCore.Mail
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
-  alias MishkaCmsCoreWeb.Live.Admin.Components.SecurityCards
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{MediaField, SecurityCards}
+  alias Phoenix.LiveView.JS
 
   @badge_class "rounded-md border px-[7px] py-0.5 text-[9px] font-bold uppercase tracking-[0.08em]"
 
@@ -545,6 +546,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   defp master?(_), do: false
 
   defp field_name(definition), do: "settings[#{definition.key}]"
+
+  # A picture chosen in Media Manager, or cleared, reaches the form as the field's own change does.
+  defp pick(key), do: &JS.push("validate", value: %{"settings" => %{key => &1}})
 
   defp dom_id(key), do: String.replace(key, ".", "-")
 

@@ -14,6 +14,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
   `opened` is the count of the form it is in (`MishkaGervaz.Form.Web.State`): a form opened again
   drops a pick it has not taken, and draws the library closed again.
 
+  Outside a Gervaz form — the Settings page — `select` is how a pick or a clear reaches the form:
+  a function of the new address returning the `Phoenix.LiveView.JS` to run, and `library: false`
+  leaves the library out, for a field with no site to take files from.
+
   It is its own component because it keeps which pick the form has yet to take.
   """
   use Phoenix.LiveComponent
@@ -25,7 +29,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
   alias Phoenix.LiveView.JS
 
   @impl true
-  def mount(socket), do: {:ok, assign(socket, pick: nil, picks: 0, opened: nil)}
+  def mount(socket),
+    do: {:ok, assign(socket, pick: nil, picks: 0, opened: nil, select: nil, library: true)}
 
   @impl true
   def update(%{media: %{url: url}}, socket) when is_binary(url),
@@ -53,7 +58,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
          :disabled,
          :debounce,
          :class,
-         :opened
+         :opened,
+         :select,
+         :library
        ])
      )}
   end
@@ -66,7 +73,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
 
   @impl true
   def render(assigns) do
-    assigns = assign(assigns, :shown?, is_binary(assigns.value) and assigns.value != "")
+    assigns =
+      assign(assigns,
+        shown?: is_binary(assigns.value) and assigns.value != "",
+        select:
+          assigns.select ||
+            (&JS.push("combobox_select",
+               value: %{field: assigns.field, value: &1},
+               target: assigns.form
+             ))
+      )
 
     ~H"""
     <div id={@id} data-role="media-field" class="flex min-w-0 flex-col gap-2">
@@ -94,7 +110,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
           :if={@shown? && !@disabled}
           type="button"
           id={@id <> "-clear"}
-          phx-click={JS.push("combobox_select", value: %{field: @field, value: ""}, target: @form)}
+          phx-click={@select.("")}
           aria-label={gettext("Remove the picture")}
           title={gettext("Remove the picture")}
           class="flex size-9 flex-none items-center justify-center rounded-[10px] text-[#8a877f] hover:bg-[#fbeef1] hover:text-[#b5495f]"
@@ -104,7 +120,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
       </div>
 
       <div
-        :if={!@disabled}
+        :if={!@disabled && @library}
         class="flex min-w-0 flex-col rounded-[14px] border border-[#ecebe6] bg-white [&_[data-role=content-media-chooser]_ul]:max-h-[18rem]"
       >
         <.live_component
@@ -127,7 +143,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
         :if={@pick}
         id={"#{@id}-pick-#{@picks}"}
         hidden
-        phx-mounted={JS.push("combobox_select", value: %{field: @field, value: @pick}, target: @form)}
+        phx-mounted={@select.(@pick)}
       ></span>
     </div>
     """

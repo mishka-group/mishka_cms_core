@@ -16,7 +16,11 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCoreWeb.Live.Admin.Components.{ContentComponentPicker, MediaField}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{
+    ContentComponentPicker,
+    MediaField,
+    ShareCardField
+  }
 
   # The content editor's look, written on its root because the engine and the hook build the DOM
   # these reach: the document, a placed component's block and its code, the grip and lines that
@@ -381,9 +385,40 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   `ui do extra %{media: :images} end` on a `:text` field holding an address draws
   `MishkaCmsCoreWeb.Live.Admin.Components.MediaField`: the address, a preview of it, and the library
   under it to upload a picture to or choose one from — `folder: "name"` files the uploads in that
-  folder. The library is the site's the form's Site field names, as the content editor's is. Every
-  other text field is the fallback's.
+  folder. The library is the site's the form's Site field names, as the content editor's is.
+
+  `ui do extra %{share_card: &MyExtension.ShareCards.target/1} end` on a virtual field draws the
+  record's share card and its Regenerate button
+  (`MishkaCmsCoreWeb.Live.Admin.Components.ShareCardField`): the function is handed the record the
+  form edits and returns the `t:MishkaCmsCore.Runtime.ShareCard.target/0` its card is drawn for, or
+  `nil`. A create form has no record, and draws the note that there is no share image yet.
+
+  Every other text field is the fallback's.
   """
+  def text_input(%{extra: %{share_card: target}} = assigns) when is_function(target, 1) do
+    record = edited(assigns[:state])
+
+    assigns =
+      assign(assigns,
+        card_id: "#{assigns[:id] || assigns[:name]}-share-card",
+        site_id: record && Map.get(record, :site_id),
+        record: record,
+        target_of: target,
+        off?: assigns[:disabled] == true
+      )
+
+    ~H"""
+    <.live_component
+      module={ShareCardField}
+      id={@card_id}
+      site_id={@site_id}
+      record={@record}
+      target_of={@target_of}
+      disabled={@off?}
+    />
+    """
+  end
+
   def text_input(%{extra: %{media: kind}} = assigns) when kind in [:images, :videos] do
     state = assigns[:state]
 
@@ -425,6 +460,10 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
   end
 
   def text_input(assigns), do: super(assigns)
+
+  # The record an update form edits; `nil` on a create form.
+  defp edited(%{form: %Phoenix.HTML.Form{source: %{data: %{__struct__: _} = record}}}), do: record
+  defp edited(_state), do: nil
 
   attr :command, :string, required: true
   attr :label, :string, required: true

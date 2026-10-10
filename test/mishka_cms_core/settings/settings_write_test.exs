@@ -155,6 +155,22 @@ defmodule MishkaCmsCore.SettingsWriteTest do
       assert Settings.cast(definition, "6 posts") == :error
     end
 
+    test "takes a picture as a path on the site or a web address, and nothing else" do
+      definition = Settings.define("k", :image, default: "")
+
+      assert Settings.cast(definition, " /uploads/site/media/logo.svg ") ==
+               {:ok, "/uploads/site/media/logo.svg"}
+
+      assert Settings.cast(definition, "https://cdn.test/logo.png") ==
+               {:ok, "https://cdn.test/logo.png"}
+
+      assert Settings.cast(definition, "") == {:ok, ""}
+      assert Settings.cast(definition, "//elsewhere.test/logo.png") == :error
+      assert Settings.cast(definition, "javascript:alert(1)") == :error
+      assert Settings.cast(definition, "logo.png") == :error
+      assert Settings.cast(definition, nil) == :error
+    end
+
     test "reads a checkbox, treating anything absent as false" do
       definition = Settings.define("k", :boolean, default: true)
 

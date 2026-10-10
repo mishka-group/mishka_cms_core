@@ -927,7 +927,7 @@ msgstr ""
 msgid "is invalid or expired"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/translations.ex:742
+#: lib/mishka_cms_core/runtime/translations.ex:756
 #, elixir-autogen, elixir-format
 msgid "is not a language this site publishes in"
 msgstr ""
@@ -1101,17 +1101,17 @@ msgstr ""
 msgid "Error page name must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:2490
+#: lib/mishka_cms_core/runtime/resources/media.ex:2495
 #, elixir-autogen, elixir-format
 msgid "Failed to replace file: %{reason}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:2444
+#: lib/mishka_cms_core/runtime/resources/media.ex:2449
 #, elixir-autogen, elixir-format
 msgid "Failed to save file: %{reason}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:2439
+#: lib/mishka_cms_core/runtime/resources/media.ex:2444
 #, elixir-autogen, elixir-format
 msgid "Failed to save file: not a folder of its site's own"
 msgstr ""
