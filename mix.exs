@@ -76,7 +76,6 @@ defmodule MishkaCmsCore.MixProject do
       {:swoosh, "~> 1.28"},
       # The captcha providers' verify requests — see `MishkaCmsCore.Captcha.Provider.siteverify/2`.
       {:req, "~> 0.7"},
-      {:ash_cloak, "~> 0.4"},
       {:ash_slug, "~> 0.2"},
 
       # Logger/Metrics Prod Stuff
