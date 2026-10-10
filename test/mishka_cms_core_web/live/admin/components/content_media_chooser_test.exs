@@ -33,9 +33,14 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
          site_id: session["site_id"],
          accepts: session["accepts"] || :images,
          library: session["library"] || :open,
-         folder: session["folder"]
+         folder: session["folder"],
+         opened: 0
        )}
     end
+
+    # The form the chooser is drawn in, opened again.
+    def handle_info(:reopen, socket),
+      do: {:noreply, Phoenix.Component.update(socket, :opened, &(&1 + 1))}
 
     def render(assigns) do
       ~H"""
@@ -49,6 +54,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
           accepts={@accepts}
           library={@library}
           folder={@folder}
+          opened={@opened}
         />
         <.live_component
           module={ContentComponentPicker}
@@ -70,7 +76,10 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
     alias MishkaCmsCoreWeb.Live.Admin.Components.MediaField
 
     def mount(_params, session, socket),
-      do: {:ok, assign(socket, user: session["user"], site_id: session["site_id"])}
+      do: {:ok, assign(socket, user: session["user"], site_id: session["site_id"], opened: 0)}
+
+    def handle_info(:reopen, socket),
+      do: {:noreply, Phoenix.Component.update(socket, :opened, &(&1 + 1))}
 
     def render(assigns) do
       ~H"""
@@ -91,6 +100,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
           disabled={false}
           debounce={300}
           class="field"
+          opened={@opened}
         />
       </form>
       """
@@ -355,5 +365,178 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
 
     assert render(view) =~ "site first — files belong to a site"
     refute has_element?(view, "#chooser-upload")
+  end
+
+  describe "Load more" do
+    test "brings the next files after the first 48, newest first, until there are none", ctx do
+      files = for i <- 1..50, do: picture!(ctx.site, "pic-#{i}-#{ctx.n}")
+      view = open(ctx, %{})
+
+      shown = fn -> Enum.count(files, &has_element?(view, "#chooser-file-#{&1.id}")) end
+
+      assert shown.() == 48
+      assert has_element?(view, "#chooser-more", "Load more")
+
+      view |> element("#chooser-more") |> render_click()
+      render_async(view, @await)
+
+      assert shown.() == 50
+      refute has_element?(view, "#chooser-more")
+    end
+
+    test "keeps to the search", ctx do
+      covers = for i <- 1..49, do: picture!(ctx.site, "cover-#{i}-#{ctx.n}")
+      logo = picture!(ctx.site, "logo-#{ctx.n}")
+
+      view = open(ctx, %{})
+      view |> element("#chooser-query") |> render_keyup(%{"value" => "cover"})
+      render_async(view, @await)
+      view |> element("#chooser-more") |> render_click()
+      render_async(view, @await)
+
+      assert Enum.all?(covers, &has_element?(view, "#chooser-file-#{&1.id}"))
+      refute has_element?(view, "#chooser-file-#{logo.id}")
+      refute has_element?(view, "#chooser-more")
+    end
+  end
+
+  describe "where an upload goes" do
+    defp upload(view, name) do
+      view
+      |> file_input("#chooser-upload", :file, [%{name: name, content: name, type: "image/png"}])
+      |> render_upload(name)
+
+      render_async(view, @await)
+    end
+
+    defp choose_folders(view) do
+      view |> element("#chooser-change-folder") |> render_click()
+      render_async(view, @await)
+    end
+
+    defp uploaded(site), do: Ash.read!(Media, tenant: site.id, authorize?: false)
+
+    test "says the opener's folder, and lists the site's folders by path to pick another", ctx do
+      photos = create_media_category!(site_id: ctx.site.id, name: "photos")
+      year = create_media_category!(site_id: ctx.site.id, name: "2024", parent_id: photos.id)
+      theirs = create_media_category!(site_id: ctx.other.id, name: "theirs")
+
+      view = open(ctx, %{"folder" => "blog"})
+      assert has_element?(view, "#chooser-destination-name", "blog")
+
+      choose_folders(view)
+
+      refute has_element?(view, "#chooser-folder option[value=''][selected]")
+
+      assert has_element?(view, "#chooser-folder option[value=default][selected]", "blog")
+      assert has_element?(view, "#chooser-folder option[value='#{year.id}']", "photos / 2024")
+      assert has_element?(view, "#chooser-folder option[value=new]")
+      refute has_element?(view, "#chooser-folder option[value='#{theirs.id}']")
+
+      view |> element("#chooser-folder") |> render_change(%{"folder" => year.id})
+      assert has_element?(view, "#chooser-destination-name", "photos / 2024")
+
+      upload(view, "one.png")
+      assert [%{media_category_id: id}] = uploaded(ctx.site)
+      assert id == year.id
+    end
+
+    test "No folder files it at the top, and makes no folder", ctx do
+      view = open(ctx, %{"folder" => "blog"})
+      choose_folders(view)
+      view |> element("#chooser-folder") |> render_change(%{"folder" => ""})
+
+      assert has_element?(view, "#chooser-destination-name", "No folder")
+
+      upload(view, "one.png")
+      assert [%{media_category_id: nil}] = uploaded(ctx.site)
+
+      assert Ash.read!(MishkaCmsCore.Runtime.MediaCategory,
+               tenant: ctx.site.id,
+               authorize?: false
+             ) ==
+               []
+    end
+
+    test "a new folder is made on the record's site, and the upload goes into it", ctx do
+      master = create_user_with_permissions!(["*"])
+
+      for {user, site} <- [{ctx.user, ctx.site}, {master, ctx.other}] do
+        view = open(%{ctx | user: user, site: site}, %{"site_id" => site.id})
+        choose_folders(view)
+        view |> element("#chooser-folder") |> render_change(%{"folder" => "new"})
+        assert has_element?(view, "#chooser-folder-name")
+
+        view |> element("#chooser-folder-form") |> render_submit(%{"name" => "Team Photos"})
+        assert has_element?(view, "#chooser-destination-name", "team-photos")
+
+        upload(view, "one.png")
+
+        [folder] =
+          Ash.read!(MishkaCmsCore.Runtime.MediaCategory, tenant: site.id, authorize?: false)
+
+        assert folder.name == "team-photos"
+        assert folder.site_id == site.id
+        assert [%{media_category_id: id}] = uploaded(site)
+        assert id == folder.id
+      end
+    end
+
+    test "a name taken beside it, or none, is refused and says so", ctx do
+      create_media_category!(site_id: ctx.site.id, name: "covers")
+      view = open(ctx, %{})
+      choose_folders(view)
+      view |> element("#chooser-folder") |> render_change(%{"folder" => "new"})
+
+      view |> element("#chooser-folder-form") |> render_submit(%{"name" => "  "})
+      assert render(view) =~ "Name the folder first."
+
+      view |> element("#chooser-folder-form") |> render_submit(%{"name" => "covers"})
+      assert render(view) =~ "its name may be taken here"
+      assert has_element?(view, "#chooser-folder-name")
+    end
+  end
+
+  describe "the form it is in, opened again" do
+    test "draws it closed again, as its opener asks", ctx do
+      own = picture!(ctx.site, "own-#{ctx.n}")
+      view = open(ctx, %{"library" => :closed})
+
+      view |> element("#chooser-browse") |> render_click()
+      render_async(view, @await)
+      view |> element("#chooser-query") |> render_keyup(%{"value" => "own"})
+      render_async(view, @await)
+      assert has_element?(view, "#chooser-file-#{own.id}")
+
+      send(view.pid, :reopen)
+      render_async(view, @await)
+
+      assert has_element?(view, "#chooser-browse", "Choose from Media Manager")
+      refute has_element?(view, "#chooser-file-#{own.id}")
+
+      view |> element("#chooser-browse") |> render_click()
+      render_async(view, @await)
+      assert view |> element("#chooser-query") |> render() =~ ~s(value="")
+    end
+
+    test "drops a picture field's pick the form has not taken", ctx do
+      own = picture!(ctx.site, "own-#{ctx.n}")
+
+      {:ok, view, _html} =
+        live_isolated(Phoenix.ConnTest.build_conn(), FieldHost,
+          session: %{"user" => ctx.user, "site_id" => ctx.site.id}
+        )
+
+      view |> element("#cover-media-library-browse") |> render_click()
+      render_async(view, @await)
+      view |> element("#cover-media-library-file-#{own.id}") |> render_click()
+      assert has_element?(view, "#cover-media-pick-1")
+
+      send(view.pid, :reopen)
+      render_async(view, @await)
+
+      refute has_element?(view, "[id^=cover-media-pick-]")
+      assert has_element?(view, "#cover-media-library-browse")
+    end
   end
 end

@@ -11,6 +11,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
   `MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser`, the content editor's own, closed
   until it is asked for.
 
+  `opened` is the count of the form it is in (`MishkaGervaz.Form.Web.State`): a form opened again
+  drops a pick it has not taken, and draws the library closed again.
+
   It is its own component because it keeps which pick the form has yet to take.
   """
   use Phoenix.LiveComponent
@@ -22,7 +25,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
   alias Phoenix.LiveView.JS
 
   @impl true
-  def mount(socket), do: {:ok, assign(socket, pick: nil, picks: 0)}
+  def mount(socket), do: {:ok, assign(socket, pick: nil, picks: 0, opened: nil)}
 
   @impl true
   def update(%{media: %{url: url}}, socket) when is_binary(url),
@@ -32,8 +35,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
 
   def update(assigns, socket) do
     {:ok,
-     assign(
-       socket,
+     socket
+     |> start_over(assigns)
+     |> assign(
        Map.take(assigns, [
          :id,
          :input_id,
@@ -48,10 +52,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
          :placeholder,
          :disabled,
          :debounce,
-         :class
+         :class,
+         :opened
        ])
      )}
   end
+
+  defp start_over(%{assigns: %{opened: seen}} = socket, %{opened: opened})
+       when not is_nil(seen) and opened != seen,
+       do: assign(socket, :pick, nil)
+
+  defp start_over(socket, _assigns), do: socket
 
   @impl true
   def render(assigns) do
@@ -108,6 +119,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
           library={:closed}
           back={false}
           in_form={true}
+          opened={@opened}
         />
       </div>
 

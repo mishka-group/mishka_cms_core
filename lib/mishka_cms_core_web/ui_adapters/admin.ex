@@ -398,7 +398,8 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
         input_class: assigns[:class] || MishkaGervaz.UIAdapters.Tailwind.input_class(false),
         off?: assigns[:disabled] == true or assigns[:readonly] == true,
         placeholder: assigns[:placeholder],
-        debounce: assigns[:phx_debounce]
+        debounce: assigns[:phx_debounce],
+        opened: state && Map.get(state, :opened)
       )
 
     ~H"""
@@ -418,6 +419,7 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
       disabled={@off?}
       debounce={@debounce}
       class={@input_class}
+      opened={@opened}
     />
     """
   end

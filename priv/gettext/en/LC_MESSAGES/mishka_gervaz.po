@@ -549,7 +549,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:549
 #: lib/mishka_cms_core/runtime/resources/layout.ex:675
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:260
-#: lib/mishka_cms_core/runtime/resources/media.ex:800
+#: lib/mishka_cms_core/runtime/resources/media.ex:790
 #: lib/mishka_cms_core/runtime/resources/media_category.ex:170
 #: lib/mishka_cms_core/runtime/resources/page.ex:924
 #: lib/mishka_cms_core/runtime/resources/redirect.ex:429
@@ -655,7 +655,7 @@ msgstr ""
 msgid "Extra (JSON)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:808
+#: lib/mishka_cms_core/runtime/resources/media.ex:798
 #, elixir-autogen, elixir-format
 msgid "Featured"
 msgstr ""
@@ -670,7 +670,7 @@ msgstr ""
 msgid "File Uploads"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:914
+#: lib/mishka_cms_core/runtime/resources/media.ex:904
 #, elixir-autogen, elixir-format
 msgid "Files"
 msgstr ""
@@ -1173,7 +1173,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:225
 #: lib/mishka_cms_core/runtime/resources/layout.ex:620
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:237
-#: lib/mishka_cms_core/runtime/resources/media.ex:861
+#: lib/mishka_cms_core/runtime/resources/media.ex:851
 #: lib/mishka_cms_core/runtime/resources/page.ex:748
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:268
 #, elixir-autogen, elixir-format
@@ -1374,7 +1374,7 @@ msgstr ""
 msgid "Select Site first"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:779
+#: lib/mishka_cms_core/runtime/resources/media.ex:769
 #, elixir-autogen, elixir-format
 msgid "Select site..."
 msgstr ""
@@ -1426,7 +1426,7 @@ msgstr ""
 msgid "Size"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/media.ex:842
+#: lib/mishka_cms_core/runtime/resources/media.ex:832
 #, elixir-autogen, elixir-format
 msgid "Size (bytes)"
 msgstr ""
