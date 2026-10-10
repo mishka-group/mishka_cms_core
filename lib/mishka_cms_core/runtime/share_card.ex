@@ -1,0 +1,688 @@
+defmodule MishkaCmsCore.Runtime.ShareCard do
+  @moduledoc """
+  The picture a link to a page shows where it is shared — X, Telegram, WhatsApp, LinkedIn,
+  Slack, Discord — drawn from what the page is: 1200×630 JPEG, the size every one of them shows
+  large.
+
+  `MishkaCmsCore.Runtime.Seo` asks for one (`image/2`) for a public page whose head has no image of
+  its own to show: nothing stored in its `og:image`. A plugin on `MishkaCmsCore.Runtime.Seo.event/0`
+  fills what the card shows of its record through `card`, and its `image` is the card's picture.
+
+  ## What a card shows
+
+  `card` is a map; every key but `title` may be left out:
+
+    * `title` — the page's title, up to three lines, smaller as it grows, then cut with `…`
+    * `description` — up to two lines, when there is room under the title
+    * `eyebrow` — a short label above the title: a post's category, "Team", "Author"
+    * `site`, `host` — the site's name, in the page's language, and its address
+    * `logo` — the `site.logo` setting, on a white tile; the site's first letter without one
+    * `people` — `[%{name: name, image: path}]`: round photos, the names beside them; up to four
+    * `byline`, `meta` — a line under the names: a team, a date, a reading time
+    * `picture` — a picture behind the card, darkened under the text
+
+  A picture is a file of the site's own: a `/uploads/<site_id>/media/…` path of its media
+  (`MishkaCmsCore.Runtime.Media.storage_paths/2`), or a `/…` path under the host's static
+  folder. An `http(s)://` address is never fetched. A photo is read only when it is a JPEG, PNG,
+  WebP or GIF; the logo may be an SVG too. One it cannot read is left out, and the card is drawn
+  without it.
+
+  Text written right to left — Persian, Arabic, Hebrew — puts everything on the right. The fonts
+  are in `priv/share_card`: Plus Jakarta Sans for Latin text and Vazirmatn for Arabic script, both
+  under the SIL Open Font License 1.1 (`priv/share_card/OFL.txt`).
+
+  ## When it is drawn
+
+  Never in a request. `image/2` answers from ETS (`MishkaCmsCore.Runtime.States.AssetsState`), and
+  the first time a card is asked for it is queued: this module is the Oban worker, on `:assets`,
+  one job per card. Until it is drawn, the page shows its own image, or none.
+
+  A card is named by what it shows (`key/1`): a page whose title changes asks for a new card, and the
+  old one stays where it is. It is stored at `/uploads/<site_id>/share/<key>.jpg`, served as the
+  site's other files are.
+
+  Drawn by libvips in a separate process (`MishkaCmsCore.Isolated`), so a file that crashes it ends
+  that process, never the server.
+  """
+  use Oban.Worker,
+    queue: :assets,
+    max_attempts: 3,
+    unique: [
+      period: :infinity,
+      keys: [:site_id, :key],
+      states: [:available, :scheduled, :executing, :retryable]
+    ]
+
+  require Logger
+
+  alias MishkaCmsCore.Isolated
+  alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Runtime.States.AssetsState
+  alias Vix.Vips.Image, as: VImage
+  alias Vix.Vips.Operation, as: Op
+
+  # Raise it when what a card looks like changes: every card is drawn again under a new key.
+  @version 1
+
+  @width 1200
+  @height 630
+  @margin 72
+  @background [10, 9, 18]
+  @avatar 60
+  @logo 52
+
+  @texts ~w(title description eyebrow site host logo byline picture)
+
+  @typedoc "What a card shows; see the module doc."
+  @type card :: %{optional(atom() | String.t()) => term()}
+
+  @doc """
+  The card `card` names, for the site `site_id`: `%{url:, width:, height:, type:}` once it is
+  drawn, `nil` until then — the first ask queues it.
+
+  `nil` for a card with no title, and for a site with no id.
+  """
+  @spec image(String.t() | nil, card()) :: map() | nil
+  def image(site_id, card) when is_binary(site_id) and is_map(card) do
+    case normalize(card) do
+      %{"title" => _} = card -> lookup(site_id, card)
+      _no_title -> nil
+    end
+  end
+
+  def image(_site_id, _card), do: nil
+
+  defp lookup(site_id, card) do
+    key = key(card)
+    entry = "share_card:" <> key
+
+    case AssetsState.get_value(site_id, entry) do
+      :ready ->
+        found(site_id, key)
+
+      :queued ->
+        nil
+
+      nil ->
+        case File.regular?(disk_path(site_id, key)) do
+          true ->
+            mark(site_id, entry, :ready)
+            found(site_id, key)
+
+          false ->
+            queue(site_id, key, card, entry)
+            nil
+        end
+    end
+  end
+
+  defp found(site_id, key),
+    do: %{url: url(site_id, key), width: @width, height: @height, type: "image/jpeg"}
+
+  defp queue(site_id, key, card, entry) do
+    case Oban.insert(new(%{site_id: site_id, key: key, card: card})) do
+      {:ok, _job} -> mark(site_id, entry, :queued)
+      {:error, reason} -> Logger.warning("[ShareCard] not queued: #{inspect(reason)}")
+    end
+  end
+
+  defp mark(site_id, entry, state),
+    do:
+      AssetsState.save(%{
+        id: site_id,
+        type: entry,
+        value: state,
+        hash: nil,
+        updated_at: DateTime.utc_now()
+      })
+
+  @doc """
+  The name of the card that shows `card`: the same for the same card, another when anything on it
+  changes.
+  """
+  @spec key(card()) :: String.t()
+  def key(card) do
+    {@version, normalize(card)}
+    |> :erlang.term_to_binary([:deterministic])
+    |> then(&:crypto.hash(:sha256, &1))
+    |> Base.encode16(case: :lower)
+    |> binary_part(0, 32)
+  end
+
+  @doc "Where the card `key` of the site `site_id` is served."
+  @spec url(String.t(), String.t()) :: String.t()
+  def url(site_id, key), do: "/uploads/#{site_id}/share/#{key}.jpg"
+
+  defp disk_path(site_id, key),
+    do: Path.join([Media.static_dir(), "uploads", site_id, "share", key <> ".jpg"])
+
+  # String keys, as the job stores it; empty and unknown values left out.
+  defp normalize(card) do
+    texts =
+      for key <- @texts,
+          value = text(field(card, key)),
+          is_binary(value),
+          into: %{},
+          do: {key, value}
+
+    people =
+      for person <- List.wrap(field(card, "people")),
+          is_map(person),
+          name = text(field(person, "name")),
+          is_binary(name),
+          do: %{"name" => name, "image" => text(field(person, "image"))}
+
+    meta =
+      for value <- List.wrap(field(card, "meta")), text = text(value), is_binary(text), do: text
+
+    texts
+    |> put_list("people", Enum.take(people, 4))
+    |> put_list("meta", Enum.take(meta, 3))
+  end
+
+  defp put_list(map, _key, []), do: map
+  defp put_list(map, key, list), do: Map.put(map, key, list)
+
+  # A key as a string or an atom: a plugin's card has atoms, a stored job strings.
+  defp field(map, key) when is_map(map) do
+    Map.get_lazy(map, key, fn ->
+      Enum.find_value(map, fn {name, value} ->
+        is_atom(name) and Atom.to_string(name) == key and value
+      end)
+    end)
+  end
+
+  defp text(value) when is_binary(value) do
+    case value |> String.replace(~r/\s+/u, " ") |> String.trim() do
+      "" -> nil
+      text -> text
+    end
+  end
+
+  defp text(_not_text), do: nil
+
+  @impl Oban.Worker
+  def perform(%Oban.Job{args: %{"site_id" => site_id, "key" => key, "card" => card}}) do
+    target = disk_path(site_id, key)
+    card = with_files(card, site_id)
+
+    with {:ok, {:ok, jpeg}} <-
+           Isolated.run(__MODULE__, :draw, [card], env: env(), timeout: 60_000),
+         :ok <- File.mkdir_p(Path.dirname(target)),
+         :ok <- File.write(target <> ".part", jpeg),
+         :ok <- File.rename(target <> ".part", target) do
+      mark(site_id, "share_card:" <> key, :ready)
+      :ok
+    else
+      {:ok, {:error, reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # The site's own files a card names, as paths on disk; anything else is left out.
+  defp with_files(card, site_id) do
+    people =
+      for person <- Map.get(card, "people", []),
+          do: Map.put(person, "image", file(person["image"], site_id))
+
+    card
+    |> Map.put("picture", file(card["picture"], site_id))
+    |> Map.put("logo", file(card["logo"], site_id))
+    |> Map.put("people", people)
+  end
+
+  defp file("/uploads/" <> _ = path, site_id) do
+    with {:ok, %{active: active}} <- Media.storage_paths(path, site_id),
+         true <- File.regular?(active) do
+      active
+    else
+      _not_a_file -> nil
+    end
+  end
+
+  defp file("/" <> relative, _site_id) do
+    with {:ok, clean} <- Path.safe_relative(relative),
+         false <- String.starts_with?(clean, "uploads"),
+         path = Path.join(Media.static_dir(), clean),
+         true <- File.regular?(path) do
+      path
+    else
+      _not_a_file -> nil
+    end
+  end
+
+  defp file(_not_a_path, _site_id), do: nil
+
+  # The fonts in `priv/share_card`, found through fontconfig on every system — macOS included,
+  # whose own text backend cannot load a font file — and every loader allowed: only the formats
+  # `image?/2` checked are read.
+  defp env do
+    [
+      {~c"FONTCONFIG_FILE",
+       String.to_charlist(Application.app_dir(:mishka_cms_core, "priv/share_card/fonts.conf"))},
+      {~c"PANGOCAIRO_BACKEND", ~c"fc"},
+      {~c"XDG_CACHE_HOME", String.to_charlist(System.tmp_dir!())},
+      {~c"VIPS_BLOCK_UNTRUSTED", false}
+    ]
+  end
+
+  @doc false
+  # Runs in the separate process `perform/1` starts; `card` is what `with_files/2` made of it.
+  @spec draw(map()) :: {:ok, binary()} | {:error, term()}
+  def draw(card) do
+    rtl? = rtl?(card["title"])
+    picture = picture(card["picture"], rtl?)
+    text_width = if picture, do: 700, else: @width - 2 * @margin
+
+    (picture || backdrop())
+    |> compose(grid(), 0, 0)
+    |> compose(accent_line(), 0, @height - 6)
+    |> header(card, rtl?)
+    |> footer(card, rtl?)
+    |> body(card, rtl?, text_width)
+    |> Image.write(:memory, suffix: ".jpg", quality: 88, strip_metadata: true)
+  end
+
+  # --- the parts ---------------------------------------------------------------------------------
+
+  defp header(canvas, card, rtl?) do
+    {mark, wide?} = brand(card["logo"], card["site"])
+    mark_x = edge(rtl?, width(mark))
+    mark_y = 56 + div(@logo - height(mark), 2)
+    canvas = compose(canvas, mark, mark_x, mark_y)
+
+    case {wide?, card["site"]} do
+      {false, site} when is_binary(site) ->
+        site = text!(site, "Bold", 26, "#eeeaff", 760)
+        x = if rtl?, do: mark_x - 16 - width(site), else: mark_x + width(mark) + 16
+        compose(canvas, site, x, 56 + div(@logo - height(site), 2))
+
+      _wordmark_or_nameless ->
+        canvas
+    end
+  end
+
+  defp footer(canvas, %{"people" => [_ | _] = people} = card, rtl?) do
+    stack = avatar_stack(people)
+    names = people |> Enum.map(& &1["name"]) |> Enum.join(if(rtl?, do: "، ", else: ", "))
+    names = text!(names, "Bold", 24, "#f1eeff", 620)
+    second = byline(card)
+    second = second && text!(second, "Regular", 21, "#a7a2cc", 620)
+
+    top = @height - @margin - @avatar
+    stack_x = edge(rtl?, width(stack))
+
+    text_x = fn img ->
+      if rtl?, do: stack_x - 18 - width(img), else: stack_x + width(stack) + 18
+    end
+
+    lines = height(names) + if(second, do: 4 + height(second), else: 0)
+    names_y = top + div(@avatar - lines, 2)
+
+    canvas
+    |> compose(stack, stack_x, top)
+    |> compose(names, text_x.(names), names_y)
+    |> compose_if(second, &compose(&1, second, text_x.(second), names_y + height(names) + 4))
+    |> host(card, rtl?)
+  end
+
+  defp footer(canvas, card, rtl?) do
+    middle = @height - @margin - div(@avatar, 2)
+
+    case byline(card) do
+      nil ->
+        host(canvas, card, rtl?)
+
+      line ->
+        line = text!(line, "Regular", 22, "#a7a2cc", 700)
+
+        canvas
+        |> compose(line, edge(rtl?, width(line)), middle - div(height(line), 2))
+        |> host(card, rtl?)
+    end
+  end
+
+  defp byline(card) do
+    case Enum.reject([card["byline"] | Map.get(card, "meta", [])], &is_nil/1) do
+      [] -> nil
+      parts -> Enum.join(parts, "  ·  ")
+    end
+  end
+
+  # The host is an address: left to right, on the side the text does not start from.
+  defp host(canvas, %{"host" => host}, rtl?) when is_binary(host) do
+    host = text!(host, "Regular", 22, "#8f8ab8", 400)
+    x = if rtl?, do: @margin, else: @width - @margin - width(host)
+    compose(canvas, host, x, @height - @margin - div(@avatar, 2) - div(height(host), 2))
+  end
+
+  defp host(canvas, _card, _rtl?), do: canvas
+
+  defp body(canvas, card, rtl?, text_width) do
+    top = 140
+    bottom = @height - @margin - @avatar - 40
+
+    eyebrow =
+      card["eyebrow"] &&
+        text!(String.upcase(card["eyebrow"]), "Bold", 21, "#b69cff", text_width)
+
+    room = bottom - top - if(eyebrow, do: height(eyebrow) + 18, else: 0)
+    title = fit(card["title"], [60, 52, 44], "Bold", "#ffffff", text_width, 3)
+    left = room - height(title) - 22
+
+    description =
+      card["description"] && left > 40 &&
+        clipped(card["description"], "Regular", 27, "#b9b4dc", text_width, min(2, div(left, 40)))
+
+    blocks = Enum.filter([{eyebrow, 18}, {title, 22}, {description, 0}], &elem(&1, 0))
+    total = blocks |> Enum.map(fn {block, gap} -> height(block) + gap end) |> Enum.sum()
+    start = top + max(div(bottom - top - total, 2), 0)
+
+    {canvas, _y} =
+      Enum.reduce(blocks, {canvas, start}, fn {block, gap}, {canvas, y} ->
+        {compose(canvas, block, edge(rtl?, width(block)), y), y + height(block) + gap}
+      end)
+
+    canvas
+  end
+
+  # --- text --------------------------------------------------------------------------------------
+
+  # The largest of `sizes` that fits `lines` lines, else the smallest, cut to fit.
+  defp fit(string, sizes, weight, color, width, lines) do
+    Enum.find_value(sizes, fn size ->
+      img = text!(string, weight, size, color, width)
+      if height(img) <= tallest(string, weight, size, lines), do: img
+    end) || clipped(string, weight, List.last(sizes), color, width, lines)
+  end
+
+  defp clipped(string, weight, size, color, width, lines) do
+    img = text!(string, weight, size, color, width)
+    limit = tallest(string, weight, size, lines)
+
+    if height(img) <= limit do
+      img
+    else
+      words = String.split(string)
+
+      Enum.find_value((length(words) - 1)..1//-1, img, fn count ->
+        img = text!(Enum.join(Enum.take(words, count), " ") <> "…", weight, size, color, width)
+        if height(img) <= limit, do: img
+      end)
+    end
+  end
+
+  # How tall `lines` lines are, in the script `string` is written in — Arabic script stands taller.
+  defp tallest(string, weight, size, lines) do
+    sample = if rtl?(string), do: "سلام", else: "Ag"
+
+    sample
+    |> List.duplicate(max(lines, 1))
+    |> Enum.join("\n")
+    |> text!(weight, size, "#fff", 2000)
+    |> height()
+    |> Kernel.+(2)
+  end
+
+  defp text!(string, weight, size, color, width) do
+    {:ok, {img, _flags}} =
+      Op.text(~s(<span foreground="#{color}">#{escape(string)}</span>),
+        font: "Plus Jakarta Sans, Vazirmatn #{weight} #{size}",
+        width: width,
+        rgba: true,
+        wrap: :VIPS_TEXT_WRAP_WORD_CHAR
+      )
+
+    img
+  end
+
+  defp escape(string) do
+    string
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
+  end
+
+  defp rtl?(string) when is_binary(string),
+    do: Regex.match?(~r/^[^\p{L}]*[\p{Arabic}\p{Hebrew}]/u, string)
+
+  defp rtl?(_no_text), do: false
+
+  # --- pictures ----------------------------------------------------------------------------------
+
+  defp picture(path, rtl?) do
+    with true <- image?(path, false),
+         {:ok, img} <- Image.thumbnail(path, "#{@width}x#{@height}", crop: :attention),
+         {:ok, img} <- opaque(img) do
+      # Solid behind the text, fading out over the far half of the other side.
+      {slope, start} = if rtl?, do: {0.3, 408 - 0.3 * @width}, else: {-0.3, 408.0}
+      alpha = @width |> ramp(@height, slope, start) |> scale(235 / 255)
+      compose(img, layer(@background, alpha), 0, 0)
+    else
+      _unreadable -> nil
+    end
+  end
+
+  # The logo on a white tile, and whether it is a wordmark that names the site itself; the site's
+  # first letter when there is none.
+  defp brand(path, site) do
+    case image?(path, true) && logo(path) do
+      %VImage{} = logo ->
+        wide? = width(logo) > height(logo) * 1.6
+        padding = 8
+        tile_w = width(logo) + 2 * padding
+        tile = layer([255, 255, 255], rounded_mask(tile_w, @logo, 14))
+        {compose(tile, logo, padding, div(@logo - height(logo), 2)), wide?}
+
+      _no_logo ->
+        {initial(site, @logo, 14), false}
+    end
+  end
+
+  defp logo(path) do
+    inner = @logo - 16
+
+    with {:ok, img} <- Image.thumbnail(path, "#{inner * 5}x#{inner}"),
+         {:ok, img} <- with_alpha(img) do
+      img
+    else
+      _unreadable -> nil
+    end
+  end
+
+  defp avatar_stack(people) do
+    ring = @avatar + 6
+    step = @avatar - 14
+    w = ring + step * (length(people) - 1)
+
+    people
+    |> Enum.with_index()
+    |> Enum.reverse()
+    |> Enum.reduce(layer(@background, solid(w, ring, 0)), fn {person, i}, canvas ->
+      x = i * step
+
+      canvas
+      |> compose(layer(@background, rounded_mask(ring, ring, ring / 2)), x, 0)
+      |> compose(avatar(person), x + 3, 3)
+    end)
+    |> Op.extract_area!(0, 3, w, @avatar)
+  end
+
+  defp avatar(%{"name" => name} = person) do
+    path = person["image"]
+
+    with true <- image?(path, false),
+         {:ok, img} <- Image.thumbnail(path, @avatar, crop: :attention),
+         {:ok, img} <- opaque(img),
+         {:ok, img} <- Op.bandjoin([img, rounded_mask(@avatar, @avatar, @avatar / 2)]) do
+      img
+    else
+      _unreadable -> initial(name, @avatar, @avatar / 2)
+    end
+  end
+
+  defp initial(name, size, radius) do
+    letter =
+      name |> to_string() |> String.trim() |> String.first() |> to_string() |> String.upcase()
+
+    disc = layer([124, 77, 255], rounded_mask(size, size, radius))
+
+    case letter do
+      "" ->
+        disc
+
+      letter ->
+        letter = text!(letter, "Bold", round(size * 0.42), "#ffffff", size)
+        compose(disc, letter, div(size - width(letter), 2), div(size - height(letter), 2))
+    end
+  end
+
+  # Only the formats a card reads: a photo is a JPEG, PNG, WebP or GIF, and a logo may be an SVG.
+  defp image?(path, svg?) when is_binary(path) do
+    case File.open(path, [:read, :binary], &IO.binread(&1, 256)) do
+      {:ok, <<0xFF, 0xD8, 0xFF, _::binary>>} -> true
+      {:ok, <<0x89, "PNG", _::binary>>} -> true
+      {:ok, <<"RIFF", _::binary-size(4), "WEBP", _::binary>>} -> true
+      {:ok, <<"GIF8", _::binary>>} -> true
+      {:ok, head} when is_binary(head) -> svg? and svg?(head)
+      _unreadable -> false
+    end
+  end
+
+  defp image?(_no_path, _svg?), do: false
+
+  defp svg?(head), do: head |> String.trim_leading() |> String.starts_with?(["<svg", "<?xml"])
+
+  defp opaque(img) do
+    img = srgb(img)
+
+    if Image.has_alpha?(img),
+      do: Image.flatten(img, background_color: @background),
+      else: {:ok, img}
+  end
+
+  defp with_alpha(img) do
+    img = srgb(img)
+    if Image.has_alpha?(img), do: {:ok, img}, else: Image.add_alpha(img, 255)
+  end
+
+  defp srgb(img) do
+    if VImage.bands(img) in [1, 2],
+      do: Op.colourspace!(img, :VIPS_INTERPRETATION_sRGB),
+      else: img
+  end
+
+  # --- drawing, with libvips arithmetic: SVG is not loaded for anything a card draws itself ------
+
+  defp backdrop do
+    Image.new!(@width, @height, color: @background)
+    |> compose(glow({1060, 40}, 720, [124, 77, 255], 0.55), 0, 0)
+    |> compose(glow({0, 630}, 640, [47, 107, 255], 0.28), 0, 0)
+  end
+
+  defp glow({cx, cy}, radius, color, strength) do
+    {x, y} = axes(@width, @height)
+    dx = Op.linear!(x, [1.0], [-cx])
+    dy = Op.linear!(y, [1.0], [-cy])
+
+    distance =
+      Op.math2_const!(
+        Op.add!(Op.multiply!(dx, dx), Op.multiply!(dy, dy)),
+        :VIPS_OPERATION_MATH2_POW,
+        [0.5]
+      )
+
+    # 1 - distance / radius, clipped to 0..1, then squared for a soft edge.
+    near =
+      distance |> Op.linear!([-255 / radius], [255.0]) |> uchar() |> Op.linear!([1 / 255], [0.0])
+
+    alpha = Op.multiply!(near, near) |> Op.linear!([255 * strength], [0.0]) |> uchar()
+    layer(color, alpha)
+  end
+
+  defp grid do
+    {x, y} = axes(@width, @height)
+
+    on_x =
+      Op.relational_const!(Op.remainder_const!(x, [48]), :VIPS_OPERATION_RELATIONAL_EQUAL, [0])
+
+    on_y =
+      Op.relational_const!(Op.remainder_const!(y, [48]), :VIPS_OPERATION_RELATIONAL_EQUAL, [0])
+
+    lines = Op.boolean!(on_x, on_y, :VIPS_OPERATION_BOOLEAN_OR)
+    layer([255, 255, 255], lines |> Op.linear!([9 / 255], [0.0]) |> uchar())
+  end
+
+  defp accent_line do
+    {x, _y} = axes(@width, 6)
+    gradient(Op.linear!(x, [1 / (@width - 1)], [0.0]), [139, 92, 246], [34, 211, 238])
+  end
+
+  defp gradient(t, from, to) do
+    t
+    |> Op.linear!(Enum.zip_with(to, from, &(&1 - &2)), from)
+    |> uchar()
+    |> Op.copy!(interpretation: :VIPS_INTERPRETATION_sRGB)
+  end
+
+  defp ramp(w, h, slope, start) do
+    {x, _y} = axes(w, h)
+    x |> Op.linear!([slope], [start]) |> uchar()
+  end
+
+  defp scale(alpha, factor), do: alpha |> Op.linear!([factor], [0.0]) |> uchar()
+
+  # 255 inside a `w`×`h` rectangle with corners of `radius`, antialiased at the edge.
+  defp rounded_mask(w, h, radius) do
+    {x, y} = axes(w, h)
+    dx = outside(x, (w - 1) / 2, w / 2 - radius)
+    dy = outside(y, (h - 1) / 2, h / 2 - radius)
+
+    distance =
+      Op.math2_const!(
+        Op.add!(Op.multiply!(dx, dx), Op.multiply!(dy, dy)),
+        :VIPS_OPERATION_MATH2_POW,
+        [0.5]
+      )
+
+    distance |> Op.linear!([-255.0], [255.0 * (radius + 0.5)]) |> uchar()
+  end
+
+  # How far past the straight part of an edge a coordinate is; 0 along it.
+  defp outside(v, centre, half) do
+    past = v |> Op.linear!([1.0], [-centre]) |> Op.abs!() |> Op.linear!([1.0], [-half])
+
+    positive =
+      past
+      |> Op.relational_const!(:VIPS_OPERATION_RELATIONAL_MORE, [0])
+      |> Op.linear!([1 / 255], [0.0])
+
+    Op.multiply!(past, positive)
+  end
+
+  defp axes(w, h) do
+    xyz = Op.xyz!(w, h)
+    {Op.extract_band!(xyz, 0), Op.extract_band!(xyz, 1)}
+  end
+
+  defp uchar(img), do: Op.cast!(img, :VIPS_FORMAT_UCHAR)
+
+  defp solid(w, h, value), do: Image.new!(w, h, color: [value], bands: 1)
+
+  defp layer(color, alpha) do
+    rgb = Image.new!(width(alpha), height(alpha), color: color)
+    Op.bandjoin!([rgb, alpha])
+  end
+
+  defp compose(base, overlay, x, y),
+    do: Op.composite2!(base, overlay, :VIPS_BLEND_MODE_OVER, x: round(x), y: round(y))
+
+  defp compose_if(canvas, nil, _fun), do: canvas
+  defp compose_if(canvas, _part, fun), do: fun.(canvas)
+
+  defp edge(false, _w), do: @margin
+  defp edge(true, w), do: @width - @margin - w
+
+  defp width(img), do: VImage.width(img)
+  defp height(img), do: VImage.height(img)
+end

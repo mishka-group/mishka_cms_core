@@ -15,7 +15,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
     * the title is a stored `title` tag, the page's over the layout's, else the plugin's `title`,
       else the page's own;
     * the description is the page's own, else the plugin's, else a stored `description` meta;
-    * the image is a stored `og:image`, else the plugin's;
+    * the image is a stored `og:image`, else the page's share card, else the plugin's;
     * the JSON-LD is the page's stored `schema` when it holds an object, else the plugin's, else one
       `WebPage`.
 
@@ -29,6 +29,17 @@ defmodule MishkaCmsCore.Runtime.Seo do
   The record's own `permissions` come back in the answer: `MishkaCmsWeb.RuntimeLive` opens the
   address only for whoever holds one of them, after the page's own, and the head keeps it out of an
   index.
+
+  ## Share cards
+
+  A public page whose head stores no `og:image` shows a share card, 1200×630, where a link to it is
+  shared (`MishkaCmsCore.Runtime.ShareCard`): its title, description, the site's name and logo
+  (`site_name/2`, the `site.logo` setting), and the plugin's `image` as its picture. A plugin adds what
+  its record has to show through `card` — `eyebrow`, `people`, `byline`, `meta`, `picture` — and
+  `card: false` keeps a page to the plugin's own image. Asked for only when `resolve/2` is given
+  `card: true`; until it is drawn the head shows the plugin's image.
+
+  The page's `<link rel="icon">` is the `site.favicon` setting, when it is set.
 
   ## Layers
 
@@ -87,7 +98,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Helpers
-  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.{Languages, ShareCard}
+  alias MishkaCmsCore.Runtime.States.TranslationsState
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
@@ -126,7 +138,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
     vars: %{},
     var_docs: [],
     permissions: [],
-    site_id: nil
+    site_id: nil,
+    card: %{}
   }
 
   @texts [:title, :type, :language]
@@ -247,6 +260,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       vars: %{},
       var_docs: [],
       permissions: [],
+      card: %{},
       page: page,
       site_id: Keyword.get(opts, :site_id),
       params: Keyword.get(opts, :params, %{}),
@@ -485,7 +499,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       %{
         key: "site.name",
         label: gettext("Site name"),
-        help: gettext("The site title setting.")
+        help: gettext("The site title setting, in the page's language when Translations has it.")
       },
       %{
         key: "site.url",
@@ -843,7 +857,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
     |> stand_ins(Keyword.get(opts, :stand_ins, false))
     |> head(
       opts
-      |> Keyword.take([:base, :languages, :restricted?, :layers])
+      |> Keyword.take([:base, :languages, :restricted?, :layers, :card])
       |> Keyword.put(:page_description?, set?(given.description))
       |> Keyword.put(:page_number, page_number(given.params))
     )
@@ -914,6 +928,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
     do: Enum.filter(value, &is_binary/1)
 
   defp accepted(:vars, {:ok, %{} = value}, _given) when not is_struct(value), do: value
+  defp accepted(:card, {:ok, %{} = value}, _given) when not is_struct(value), do: value
+  defp accepted(:card, {:ok, false}, _given), do: false
   defp accepted(_key, _returned, given), do: given
 
   @doc """
@@ -930,10 +946,12 @@ defmodule MishkaCmsCore.Runtime.Seo do
     * `:page_description?` — whether `description` is the page's own rather than a plugin's
     * `:page_number` — the page of a list this address shows (`page_number/1`); past the first,
       the title says so, `Blog – Page 2`, so no two pages of a list share one
+    * `:card` — whether a page with no stored `og:image` shows its share card (`ShareCard.image/2`),
+      `false` by default: a preview asks for none
 
-  A stored `title` replaces `title`, and a stored `og:image` replaces `image`. The `description` has
-  its variables filled; empty, or naming one that does not resolve, a stored `description` meta
-  stands in.
+  A stored `title` replaces `title`, and a stored `og:image` replaces `image`, else the share card
+  does once it is drawn. The `description` has its variables filled; empty, or naming one that does
+  not resolve, a stored `description` meta stands in.
 
   Returns the resolved `title`, `description`, `image` and `url`, the `tags` to render as
   `{name, attributes}`, the `schema` as JSON strings safe inside `<script>`, and the `var_docs` and
@@ -947,7 +965,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       Keyword.update(opts, :restricted?, seo.permissions != [], &(&1 or seo.permissions != []))
 
     base = Keyword.get(opts, :base)
-    site_title = presence(Settings.get("site.title", nil, seo.site_id))
+    site_title = site_name(seo.site_id, seo.language)
     url = absolute(seo.url, base)
     layers = [seo.tags | Keyword.get(opts, :layers, [])]
 
@@ -977,14 +995,23 @@ defmodule MishkaCmsCore.Runtime.Seo do
     owned = owned(stack(own), Keyword.get(opts, :page_description?, false))
     stored = stack([Enum.reject(plugin, &MapSet.member?(owned, identity(&1))) | own])
 
-    resolved = %{
-      seo
-      | title: numbered(title_value(stored) || seo.title, Keyword.get(opts, :page_number)),
-        description: description || meta_value(stored, "name", "description"),
-        image:
-          absolute(meta_value(stored, "property", "og:image"), base) || absolute(seo.image, base),
-        url: url
-    }
+    description = description || meta_value(stored, "name", "description")
+    stored_image = absolute(meta_value(stored, "property", "og:image"), base)
+    card = !stored_image && share_card(seo, description, site_title, base, opts)
+
+    resolved =
+      Map.put(
+        %{
+          seo
+          | title: numbered(title_value(stored) || seo.title, Keyword.get(opts, :page_number)),
+            description: description,
+            image:
+              stored_image || (card && absolute(card.url, base)) || absolute(seo.image, base),
+            url: url
+        },
+        :share_card,
+        card
+      )
 
     %{
       title: resolved.title,
@@ -1127,11 +1154,14 @@ defmodule MishkaCmsCore.Runtime.Seo do
       meta("property", "og:locale", locale(seo.language)),
       Enum.map(others, &meta("property", "og:locale:alternate", locale(&1))),
       meta("property", "og:image", image),
+      card_size(seo[:share_card]),
       meta("property", "og:image:alt", image && title),
       meta("name", "twitter:card", if(image, do: "summary_large_image", else: "summary")),
       meta("name", "twitter:title", title),
       meta("name", "twitter:description", description),
       meta("name", "twitter:image", image),
+      meta("name", "twitter:image:alt", image && title),
+      link(%{"rel" => "icon"}, absolute(Settings.get("site.favicon", nil, seo.site_id), base)),
       alternate_links(languages, base, seo.site_id)
     ])
   end
@@ -1140,6 +1170,59 @@ defmodule MishkaCmsCore.Runtime.Seo do
     do: [%{tag: "meta", attrs: %{key => name, "content" => value}}]
 
   defp meta(_key, _name, _no_value), do: []
+
+  defp card_size(%{width: width, height: height, type: type}),
+    do: [
+      meta("property", "og:image:width", Integer.to_string(width)),
+      meta("property", "og:image:height", Integer.to_string(height)),
+      meta("property", "og:image:type", type)
+    ]
+
+  defp card_size(_no_card), do: []
+
+  # The share card of a public page, from what the head resolved and what the plugin added; `nil`
+  # until it is drawn, for a page kept out of an index, and when nobody asked for one.
+  defp share_card(seo, description, site_title, base, opts) do
+    with true <- Keyword.get(opts, :card, false),
+         false <- Keyword.get(opts, :restricted?, false),
+         %{} = card <- seo.card,
+         %URI{host: host} when is_binary(host) <- base && URI.parse(base) do
+      ShareCard.image(
+        seo.site_id,
+        Map.merge(
+          %{
+            title: seo.title,
+            description: description,
+            site: site_title,
+            host: host,
+            logo: Settings.get("site.logo", nil, seo.site_id),
+            picture: seo.image
+          },
+          card
+        )
+      )
+    else
+      _no_card -> nil
+    end
+  end
+
+  @doc """
+  The site's name in `language`: the `site.title` setting, translated when the site's Translations
+  hold that title in `language` (`MishkaCmsCore.Runtime.States.TranslationsState`), `nil` when the
+  setting is empty.
+
+      site_name(site_id, "fa") #=> "میشکا"
+  """
+  @spec site_name(String.t() | nil, String.t() | nil) :: String.t() | nil
+  def site_name(site_id, language) do
+    case presence(Settings.get("site.title", nil, site_id)) do
+      title when is_binary(title) and is_binary(language) ->
+        presence(TranslationsState.lookup(site_id, language, title)) || title
+
+      title ->
+        title
+    end
+  end
 
   defp link(attrs, href) when is_binary(href) and href != "",
     do: [%{tag: "link", attrs: Map.put(attrs, "href", href)}]

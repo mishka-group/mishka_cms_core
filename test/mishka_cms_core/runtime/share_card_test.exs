@@ -1,0 +1,280 @@
+defmodule MishkaCmsCore.Runtime.ShareCardTest do
+  @moduledoc """
+  `MishkaCmsCore.Runtime.ShareCard`: the picture a shared link to a page shows. Asked for, it is
+  queued, never drawn in the request; its job draws it in a separate process, where it is then
+  served; and a page's head shows it where nothing of the page's own takes its place.
+
+  `:media_static_dir` points the files at the test's own folder; `async: false` — `AssetsState`,
+  the settings cache and that folder are process-global.
+  """
+  use MishkaCmsCore.DataCase, async: false
+
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
+  use Oban.Testing, repo: @repo
+
+  alias MishkaCmsCore.Runtime.{Seo, ShareCard}
+  alias MishkaCmsCore.Runtime.States.{SettingsState, TranslationsState}
+  alias MishkaCmsCore.Settings
+
+  @base "https://cards.test"
+
+  setup do
+    dir = Path.join(System.tmp_dir!(), "share_card_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    Application.put_env(:mishka_cms_core, :media_static_dir, dir)
+    snapshot = SettingsState.snapshot()
+
+    on_exit(fn ->
+      Application.delete_env(:mishka_cms_core, :media_static_dir)
+      SettingsState.restore(snapshot)
+      File.rm_rf(dir)
+    end)
+
+    site = create_site!(active: true)
+    {:ok, _} = Settings.put("site.title", "Acme Studio", site_id: site.id)
+
+    %{site: site, dir: dir}
+  end
+
+  describe "image/2" do
+    test "queues a card the first time, once, and answers it when it is drawn", %{site: site} do
+      card = %{title: "Launch week", description: "Five releases in five days.", site: "Acme"}
+      key = ShareCard.key(card)
+
+      assert ShareCard.image(site.id, card) == nil
+      assert ShareCard.image(site.id, card) == nil
+      assert [job] = all_enqueued(worker: ShareCard)
+      assert job.args["key"] == key
+      assert job.args["site_id"] == site.id
+
+      assert :ok = perform_job(ShareCard, job.args)
+
+      assert ShareCard.image(site.id, card) == %{
+               url: "/uploads/#{site.id}/share/#{key}.jpg",
+               width: 1200,
+               height: 630,
+               type: "image/jpeg"
+             }
+    end
+
+    test "a card drawn before is found on disk, with nothing queued", %{site: site, dir: dir} do
+      card = %{title: "Drawn on another node"}
+      key = ShareCard.key(card)
+      path = Path.join([dir, "uploads", site.id, "share", key <> ".jpg"])
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, "jpeg")
+
+      assert %{url: url} = ShareCard.image(site.id, card)
+      assert url == "/uploads/#{site.id}/share/#{key}.jpg"
+      assert all_enqueued(worker: ShareCard) == []
+    end
+
+    test "a card with no title, or no site, is nothing and queues nothing", %{site: site} do
+      assert ShareCard.image(site.id, %{title: "  ", description: "only this"}) == nil
+      assert ShareCard.image(nil, %{title: "No site"}) == nil
+      assert all_enqueued(worker: ShareCard) == []
+    end
+  end
+
+  describe "key/1" do
+    test "names what the card shows, whichever way its keys and spaces are written" do
+      assert ShareCard.key(%{title: "Launch  week", meta: ["Mar 3"]}) ==
+               ShareCard.key(%{"title" => " Launch week ", "meta" => ["Mar 3", ""]})
+
+      refute ShareCard.key(%{title: "Launch week"}) == ShareCard.key(%{title: "Launch day"})
+
+      refute ShareCard.key(%{title: "Launch week"}) ==
+               ShareCard.key(%{title: "Launch week", logo: "/images/new-logo.png"})
+    end
+  end
+
+  describe "the drawing" do
+    test "is a 1200×630 JPEG", %{site: site} do
+      card = %{
+        "title" => "Introducing the share card, a title long enough to take more than one line",
+        "description" => "What a link to this page shows where it is shared.",
+        "eyebrow" => "Release",
+        "site" => "Acme",
+        "host" => "cards.test",
+        "people" => [%{"name" => "Mona", "image" => nil}, %{"name" => "Shahryar"}],
+        "byline" => "Core team",
+        "meta" => ["Mar 3, 2025", "5 min read"]
+      }
+
+      assert {:ok, image} = drawn(site, card)
+      assert {Image.width(image), Image.height(image)} == {1200, 630}
+    end
+
+    test "draws right-to-left text", %{site: site} do
+      card = %{
+        "title" => "معرفی میشکا چلکم",
+        "site" => "میشکا",
+        "people" => [%{"name" => "مونا"}]
+      }
+
+      assert {:ok, image} = drawn(site, card)
+      assert Image.width(image) == 1200
+    end
+
+    test "draws the site's own pictures and leaves out what it cannot read", %{
+      site: site,
+      dir: dir
+    } do
+      folder = Path.join([dir, "uploads", site.id, "media", "covers"])
+      File.mkdir_p!(folder)
+      Image.write!(Image.new!(64, 64, color: :purple), Path.join(folder, "cover.png"))
+      File.write!(Path.join(folder, "broken.jpg"), "not a picture at all")
+      File.write!(Path.join(folder, "logo.svg"), ~s(<svg xmlns="http://www.w3.org/2000/svg"/>))
+
+      for picture <- [
+            "/uploads/#{site.id}/media/covers/cover.png",
+            "/uploads/#{site.id}/media/covers/broken.jpg",
+            "/uploads/#{site.id}/media/../../../etc/passwd",
+            "https://elsewhere.test/cover.png"
+          ] do
+        card = %{
+          "title" => "With a picture",
+          "picture" => picture,
+          "logo" => "/uploads/#{site.id}/media/covers/logo.svg",
+          "people" => [%{"name" => "Mona", "image" => picture}]
+        }
+
+        assert {:ok, image} = drawn(site, card), "#{picture} was not drawn around"
+        assert Image.width(image) == 1200
+      end
+    end
+  end
+
+  describe "a page's head" do
+    test "shows the card of a public page with no image of its own, once drawn", %{site: site} do
+      seo = seo(site, description: "What we make.")
+
+      head = Seo.head(seo, base: @base, card: true)
+      assert value(head, "property", "og:image") == nil
+      assert [job] = all_enqueued(worker: ShareCard)
+
+      assert job.args["card"] == %{
+               "title" => "About the studio",
+               "description" => "What we make.",
+               "site" => "Acme Studio",
+               "host" => "cards.test"
+             }
+
+      :ok = perform_job(ShareCard, job.args)
+      head = Seo.head(seo, base: @base, card: true)
+      url = "#{@base}/uploads/#{site.id}/share/#{job.args["key"]}.jpg"
+
+      assert head.image == url
+      assert value(head, "property", "og:image") == url
+      assert value(head, "property", "og:image:width") == "1200"
+      assert value(head, "property", "og:image:height") == "630"
+      assert value(head, "property", "og:image:type") == "image/jpeg"
+      assert value(head, "name", "twitter:card") == "summary_large_image"
+      assert value(head, "name", "twitter:image") == url
+      assert value(head, "name", "twitter:image:alt") == "About the studio"
+    end
+
+    test "draws what the plugin adds, over the plugin's image, with the site's logo", %{
+      site: site
+    } do
+      {:ok, _} = Settings.put("site.logo", "/images/acme.svg", site_id: site.id)
+
+      seo =
+        seo(site,
+          image: "/uploads/#{site.id}/media/a/cover.jpg",
+          card: %{eyebrow: "News", people: [%{name: "Mona", image: nil}], meta: ["Mar 3"]}
+        )
+
+      head = Seo.head(seo, base: @base, card: true)
+
+      assert head.image == "#{@base}/uploads/#{site.id}/media/a/cover.jpg"
+      assert [%{args: %{"card" => card}}] = all_enqueued(worker: ShareCard)
+      assert card["eyebrow"] == "News"
+      assert card["people"] == [%{"name" => "Mona", "image" => nil}]
+      assert card["meta"] == ["Mar 3"]
+      assert card["picture"] == "/uploads/#{site.id}/media/a/cover.jpg"
+      assert card["logo"] == "/images/acme.svg"
+    end
+
+    test "asks for no card when the page stores an image, is kept out of an index, the plugin says no, or nobody asked",
+         %{site: site} do
+      stored = [[%{tag: "meta", attrs: %{"property" => "og:image"}, content: "/own.png"}]]
+
+      Seo.head(seo(site), base: @base, card: true, layers: stored)
+      Seo.head(seo(site), base: @base, card: true, restricted?: true)
+      Seo.head(seo(site, card: false, image: "/plugin.png"), base: @base, card: true)
+      Seo.head(seo(site), base: @base)
+
+      assert all_enqueued(worker: ShareCard) == []
+      head = Seo.head(seo(site, card: false, image: "/plugin.png"), base: @base, card: true)
+      assert head.image == "#{@base}/plugin.png"
+    end
+
+    test "names the site in the page's language when Translations has its title", %{site: site} do
+      TranslationsState.put(site.id, "fa", "Acme Studio", "استودیو آکمه")
+
+      fa = Seo.head(seo(site, language: "fa"), base: @base, card: true)
+      en = Seo.head(seo(site), base: @base, card: true)
+
+      assert value(fa, "property", "og:site_name") == "استودیو آکمه"
+      assert value(en, "property", "og:site_name") == "Acme Studio"
+      assert Seo.site_name(site.id, "fa") == "استودیو آکمه"
+
+      sites = for %{args: %{"card" => card}} <- all_enqueued(worker: ShareCard), do: card["site"]
+      assert Enum.sort(sites) == ["Acme Studio", "استودیو آکمه"]
+    end
+
+    test "links the site.favicon setting as the page's icon", %{site: site} do
+      assert link(Seo.head(seo(site), base: @base), "icon") == nil
+
+      {:ok, _} =
+        Settings.put("site.favicon", "/uploads/#{site.id}/media/a/icon.png", site_id: site.id)
+
+      assert link(Seo.head(seo(site), base: @base), "icon") ==
+               "#{@base}/uploads/#{site.id}/media/a/icon.png"
+    end
+  end
+
+  # What `perform/1` draws for `card`, read back.
+  defp drawn(site, card) do
+    key = ShareCard.key(card)
+    :ok = perform_job(ShareCard, %{site_id: site.id, key: key, card: card})
+
+    [Application.get_env(:mishka_cms_core, :media_static_dir), "uploads", site.id, "share"]
+    |> Path.join()
+    |> Path.join(key <> ".jpg")
+    |> Image.open()
+  end
+
+  defp seo(site, overrides \\ []) do
+    Map.merge(
+      %{
+        title: "About the studio",
+        description: nil,
+        image: nil,
+        type: "website",
+        url: "#{@base}/en/about",
+        language: "en",
+        tags: [],
+        schema: [],
+        vars: %{},
+        site_id: site.id
+      },
+      Map.new(overrides)
+    )
+  end
+
+  defp value(head, key, name) do
+    Enum.find_value(head.tags, fn
+      {"meta", attrs} -> {key, name} in attrs && List.keyfind(attrs, "content", 0) |> elem(1)
+      _other -> nil
+    end)
+  end
+
+  defp link(head, rel) do
+    Enum.find_value(head.tags, fn
+      {"link", attrs} -> {"rel", rel} in attrs && List.keyfind(attrs, "href", 0) |> elem(1)
+      _other -> nil
+    end)
+  end
+end

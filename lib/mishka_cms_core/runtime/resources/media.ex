@@ -2328,7 +2328,12 @@ defmodule MishkaCmsCore.Runtime.Media do
   # `uploads_archived/<site_id>/media/` while its row is archived. `relative_path` is the file's URL,
   # `/uploads/<site_id>/media/<category>/<file>`, which the endpoint serves while the site is up.
   # `:media_static_dir` points the folder both sit in elsewhere, as tests do.
-  defp static_dir, do: Application.get_env(:mishka_cms_core, :media_static_dir, "priv/static")
+  @doc """
+  The host's static folder, which `/uploads` and the other public files are served from: the
+  `:media_static_dir` setting of `:mishka_cms_core`, `priv/static` by default.
+  """
+  @spec static_dir() :: Path.t()
+  def static_dir, do: Application.get_env(:mishka_cms_core, :media_static_dir, "priv/static")
 
   defp media_folder(tree, site_id), do: Path.join([static_dir(), tree, site_id, "media"])
 
