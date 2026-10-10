@@ -23,6 +23,15 @@ defmodule MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook do
   One event is one action. A master user runs the action's `master_*` twin, which fires its own
   event (`"blog:blog_post:after_master_publish"`), so reacting to both takes a plugin on each.
 
+  ## After any save
+
+  A `create` or `update` action — whatever its name, a master's twin included — also fires
+  `"<app>:<resource>:after_save"` (`save_event_name/1`), after its own event, with the same record
+  and `meta`. A plugin that reacts to the record being written, however it was written, listens
+  there once:
+
+      use MishkaInstaller.Event.Hook, event: PluginHook.save_event_name(MishkaBlog.BlogPost)
+
   Because notifiers run **after the transaction commits**, the action stays **atomic** — adding this
   changes no authorization or atomicity behaviour (no `require_atomic? false`, no 403→404). This is why
   it works uniformly for `destroy` actions too.
@@ -47,6 +56,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook do
       return: false
     )
 
+    if action.type in [:create, :update] do
+      MishkaInstaller.Event.Hook.call(save_event_name(resource), record,
+        meta: meta,
+        return: false
+      )
+    end
+
     :ok
   end
 
@@ -67,6 +83,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook do
     res = segments |> List.last() |> Macro.underscore()
     "#{app}:#{res}:after_#{action_name}"
   end
+
+  @doc """
+  The event fired after any `create` or `update` action on `resource`:
+  `save_event_name(MishkaBlog.BlogPost)` is `"blog:blog_post:after_save"`.
+  """
+  @spec save_event_name(module()) :: String.t()
+  def save_event_name(resource), do: event_name(resource, :save)
 
   defp tenant(%{tenant: tenant}), do: tenant
   defp tenant(_), do: nil

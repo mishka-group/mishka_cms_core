@@ -13,11 +13,13 @@ defmodule MishkaCmsCore.PluginHooksTest do
   alias MishkaCmsCore.Test.Plugins.{
     AccountsUserAfterRegister,
     AuthAccountWithheld,
-    CorePageAfterCreate
+    CorePageAfterCreate,
+    CorePageAfterSave
   }
 
   @probes [
     {CorePageAfterCreate, "cms_core:page:after_create"},
+    {CorePageAfterSave, "cms_core:page:after_save"},
     {AccountsUserAfterRegister, "cms_core:user:after_register_with_password"},
     {AuthAccountWithheld, "auth:account:withheld"}
   ]
@@ -39,6 +41,34 @@ defmodule MishkaCmsCore.PluginHooksTest do
     id = page.id
 
     assert_receive {:core_page_after_create, ^id, _meta}, 5000
+  end
+
+  describe "cms_core:page:after_save" do
+    test "follows a create, with the record and its site" do
+      site = create_site!()
+      page = create_page!(site_id: site.id, title: "Made")
+      {id, site_id} = {page.id, site.id}
+
+      assert_receive {:core_page_after_save, ^id, "Made", %{site_id: ^site_id}}, 5000
+    end
+
+    test "follows an update too, whatever the action is called" do
+      page = create_page!(title: "Before")
+      id = page.id
+      assert_receive {:core_page_after_save, ^id, "Before", _meta}, 5000
+
+      page
+      |> Ash.Changeset.for_update(:master_update, %{title: "After"}, authorize?: false)
+      |> Ash.update!()
+
+      assert_receive {:core_page_after_save, ^id, "After", _meta}, 5000
+    end
+
+    test "is named for any resource by save_event_name/1" do
+      alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+
+      assert PluginHook.save_event_name(MishkaCmsCore.Runtime.Page) == "cms_core:page:after_save"
+    end
   end
 
   test "accounts: user registration dispatches cms_core:user:after_register_with_password" do
