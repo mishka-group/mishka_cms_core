@@ -2116,7 +2116,7 @@ msgid "Awaiting review"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:634
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:468
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:566
 #, elixir-autogen, elixir-format
 msgid "Back"
 msgstr ""
@@ -2445,7 +2445,7 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:11836
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:12299
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:13549
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:771
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:975
 #: lib/mishka_cms_core_web/live/admin/components/media_move.ex:340
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:922
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:962
@@ -2511,7 +2511,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/history.ex:130
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:13283
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:657
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:763
 #, elixir-autogen, elixir-format
 msgid "Change"
 msgstr ""
@@ -3576,7 +3576,7 @@ msgid "Domain not found"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1567
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:705
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:817
 #: lib/mishka_cms_core_web/live/admin/components/runtime_status_timeline.ex:277
 #: lib/mishka_cms_core_web/live/admin/dashboard/home/index.html.heex:44
 #, elixir-autogen, elixir-format
@@ -5584,7 +5584,7 @@ msgstr ""
 msgid "Load Time"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:618
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:724
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:376
 #, elixir-autogen, elixir-format
 msgid "Load more"
@@ -5640,7 +5640,7 @@ msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:8208
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1341
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:618
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:724
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:58
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:364
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:1073
@@ -14747,6 +14747,8 @@ msgstr ""
 msgid "+ Value"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:873
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:881
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:39
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:43
 #, elixir-autogen, elixir-format
@@ -14793,6 +14795,7 @@ msgstr ""
 msgid "Folder deleted for good."
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:860
 #: lib/mishka_cms_core_web/live/admin/components/media_move.ex:229
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:29
 #, elixir-autogen, elixir-format
@@ -15092,7 +15095,7 @@ msgstr ""
 msgid "%{name} could not be drawn with these settings, and the page would fail on it too — change its settings, or remove it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:790
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:994
 #, elixir-autogen, elixir-format
 msgid "Add one file at a time."
 msgstr ""
@@ -15122,12 +15125,12 @@ msgstr ""
 msgid "Choose"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:474
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:572
 #, elixir-autogen, elixir-format
 msgid "Choose a picture"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:474
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:572
 #, elixir-autogen, elixir-format
 msgid "Choose a video"
 msgstr ""
@@ -15182,12 +15185,12 @@ msgstr ""
 msgid "No block matches — try All components."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:574
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:680
 #, elixir-autogen, elixir-format
 msgid "Nothing here yet — upload the first one."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:482
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:580
 #, elixir-autogen, elixir-format
 msgid "Pick the record's site first — files belong to a site."
 msgstr ""
@@ -15207,12 +15210,12 @@ msgstr ""
 msgid "Search to find more."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:791
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:995
 #, elixir-autogen, elixir-format
 msgid "The file could not be uploaded."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:788
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:992
 #, elixir-autogen, elixir-format
 msgid "The file is larger than 50 MB."
 msgstr ""
@@ -15222,12 +15225,12 @@ msgstr ""
 msgid "This is not one component — check the [[component …]] marker, then press Code again."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:789
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:993
 #, elixir-autogen, elixir-format
 msgid "This kind of file cannot be used here."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:756
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:960
 #, elixir-autogen, elixir-format
 msgid "Upload a file, or drop it here"
 msgstr ""
@@ -15275,85 +15278,87 @@ msgstr ""
 msgid "That made no visible difference with the other settings as they are."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:688
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:795
 #, elixir-autogen, elixir-format
 msgid "%{name} (made on the first upload)"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:540
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:638
 #, elixir-autogen, elixir-format
 msgid "Choose from Media Manager"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:727
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:839
 #, elixir-autogen, elixir-format
 msgid "Create"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:565
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:671
 #, elixir-autogen, elixir-format
 msgid "Loading Media Manager…"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:663
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:769
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:911
 #, elixir-autogen, elixir-format
 msgid "Loading folders…"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:569
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:675
 #, elixir-autogen, elixir-format
 msgid "Media Manager could not be read."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:172
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:206
 #, elixir-autogen, elixir-format
 msgid "Name the folder first."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:716
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:828
 #, elixir-autogen, elixir-format
 msgid "New folder's name"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:697
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:804
 #, elixir-autogen, elixir-format
 msgid "New folder…"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:312
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:313
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:682
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:358
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:359
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:789
 #, elixir-autogen, elixir-format
 msgid "No folder"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:553
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:659
 #, elixir-autogen, elixir-format
 msgid "Search Media Manager"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:257
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:303
 #, elixir-autogen, elixir-format
 msgid "The file could not be added to Media Manager."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:184
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:218
 #, elixir-autogen, elixir-format
 msgid "The folder could not be made — its name may be taken here."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:667
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:773
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:915
 #, elixir-autogen, elixir-format
 msgid "The folders could not be read."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:225
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:259
 #, elixir-autogen, elixir-format
 msgid "The next files could not be read."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:646
-#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:672
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:752
+#: lib/mishka_cms_core_web/live/admin/components/content_media_chooser.ex:778
 #, elixir-autogen, elixir-format
 msgid "Uploads go to"
 msgstr ""

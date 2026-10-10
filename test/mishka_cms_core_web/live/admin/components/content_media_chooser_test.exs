@@ -400,6 +400,81 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
     end
   end
 
+  describe "browsing by folder" do
+    setup ctx do
+      photos = create_media_category!(site_id: ctx.site.id, name: "photos")
+      year = create_media_category!(site_id: ctx.site.id, name: "2024", parent_id: photos.id)
+      theirs = create_media_category!(site_id: ctx.other.id, name: "theirs")
+
+      %{photos: photos, year: year, theirs: theirs}
+    end
+
+    defp filed!(site, name, folder),
+      do: create_media!(site_id: site.id, type: :images, name: name, media_category_id: folder.id)
+
+    test "All media lists every folder's files and the top folders; a folder, its own and the way back",
+         ctx do
+      loose = picture!(ctx.site, "loose-#{ctx.n}")
+      in_photos = filed!(ctx.site, "in-photos-#{ctx.n}", ctx.photos)
+      in_year = filed!(ctx.site, "in-year-#{ctx.n}", ctx.year)
+      shown? = fn view, file -> has_element?(view, "#chooser-file-#{file.id}") end
+
+      view = open(ctx, %{})
+
+      assert Enum.all?([loose, in_photos, in_year], &shown?.(view, &1))
+      assert has_element?(view, "#chooser-trail-root[aria-current=page]", "All media")
+      assert has_element?(view, "#chooser-open-#{ctx.photos.id}", "photos")
+      refute has_element?(view, "#chooser-open-#{ctx.year.id}")
+      refute has_element?(view, "#chooser-open-#{ctx.theirs.id}")
+
+      view |> element("#chooser-open-#{ctx.photos.id}") |> render_click()
+      render_async(view, @await)
+
+      assert shown?.(view, in_photos)
+      refute shown?.(view, loose)
+      refute shown?.(view, in_year)
+      assert has_element?(view, "#chooser-trail-#{ctx.photos.id}[aria-current=page]", "photos")
+      assert has_element?(view, "#chooser-open-#{ctx.year.id}", "2024")
+
+      view |> element("#chooser-open-#{ctx.year.id}") |> render_click()
+      render_async(view, @await)
+      assert shown?.(view, in_year)
+      refute shown?.(view, in_photos)
+
+      view |> element("button#chooser-trail-#{ctx.photos.id}") |> render_click()
+      render_async(view, @await)
+      assert shown?.(view, in_photos)
+      refute shown?.(view, in_year)
+
+      view |> element("button#chooser-trail-root") |> render_click()
+      render_async(view, @await)
+      assert Enum.all?([loose, in_photos, in_year], &shown?.(view, &1))
+    end
+
+    test "Load more keeps to the folder open", ctx do
+      inside = for i <- 1..50, do: filed!(ctx.site, "inside-#{i}-#{ctx.n}", ctx.photos)
+      outside = picture!(ctx.site, "outside-#{ctx.n}")
+
+      view = open(ctx, %{})
+      view |> element("#chooser-open-#{ctx.photos.id}") |> render_click()
+      render_async(view, @await)
+      view |> element("#chooser-more") |> render_click()
+      render_async(view, @await)
+
+      assert Enum.all?(inside, &has_element?(view, "#chooser-file-#{&1.id}"))
+      refute has_element?(view, "#chooser-file-#{outside.id}")
+      refute has_element?(view, "#chooser-more")
+    end
+
+    test "a master browses the record's site's folders", ctx do
+      master = create_user_with_permissions!(["*"])
+      view = open(%{ctx | user: master}, %{})
+
+      assert has_element?(view, "#chooser-open-#{ctx.photos.id}")
+      refute has_element?(view, "#chooser-open-#{ctx.theirs.id}")
+    end
+  end
+
   describe "where an upload goes" do
     defp upload(view, name) do
       view

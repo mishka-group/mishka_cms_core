@@ -69,7 +69,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
     assigns = assign(assigns, :shown?, is_binary(assigns.value) and assigns.value != "")
 
     ~H"""
-    <div id={@id} data-role="media-field" class="flex flex-col gap-2">
+    <div id={@id} data-role="media-field" class="flex min-w-0 flex-col gap-2">
       <div class="flex items-center gap-2">
         <span
           id={@id <> "-preview"}
@@ -105,7 +105,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaField do
 
       <div
         :if={!@disabled}
-        class="flex flex-col rounded-[14px] border border-[#ecebe6] bg-white [&_[data-role=content-media-chooser]_ul]:max-h-[18rem]"
+        class="flex min-w-0 flex-col rounded-[14px] border border-[#ecebe6] bg-white [&_[data-role=content-media-chooser]_ul]:max-h-[18rem]"
       >
         <.live_component
           module={ContentMediaChooser}

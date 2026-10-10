@@ -3,7 +3,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   Media Manager inside the content editor's settings
   (`MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker`): the pictures, or the videos,
   of the site the record is on, newest first, 48 at a time with Load more for the next, searchable
-  by name, and an upload that adds a file to the site's media and picks it.
+  by name, and an upload that adds a file to the site's media and picks it. At the top, All media,
+  every folder's files are listed and the folders beside them; a folder opened lists only its own,
+  and the folders inside it, with the way back up above.
 
   A pick goes back to the settings that opened this as
   `send_update(ContentComponentPicker, id: target, media: %{url: url})`, and Back as
@@ -53,6 +55,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
       folder: socket.assigns[:folder],
       destination: :default,
       folders: nil,
+      trail: [],
+      subfolders: nil,
       choosing_folder?: false,
       naming_folder?: false,
       folder_failure: nil,
@@ -116,7 +120,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
   @impl true
   def handle_event("search", %{"value" => query}, socket) when is_binary(query),
-    do: {:noreply, socket |> assign(:query, String.trim(query)) |> load()}
+    do: {:noreply, socket |> assign(:query, String.trim(query)) |> load_files()}
 
   def handle_event("search", _params, socket), do: {:noreply, socket}
 
@@ -136,16 +140,46 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   def handle_event("more", _params, %{assigns: %{library: %AsyncResult{ok?: true}}} = socket) do
     %{current_user: user, site_id: site_id, accepts: accepts, query: query} = socket.assigns
     offset = length(socket.assigns.library.result)
+    folder = open_folder_id(socket.assigns)
 
     {:noreply,
      socket
      |> assign(:loading_more?, true)
      |> MishkaGervaz.Messages.start_async(:more, fn ->
-       {query, read(user, site_id, accepts, query, offset)}
+       {{query, folder}, read(user, site_id, accepts, query, folder, offset)}
      end)}
   end
 
   def handle_event("more", _params, socket), do: {:noreply, socket}
+
+  def handle_event(
+        "open_folder",
+        %{"id" => id},
+        %{assigns: %{subfolders: %AsyncResult{ok?: true}}} = socket
+      ) do
+    case List.keyfind(socket.assigns.subfolders.result, id, 0) do
+      {id, name} ->
+        {:noreply, socket |> assign(:trail, socket.assigns.trail ++ [{id, name}]) |> load()}
+
+      nil ->
+        {:noreply, socket}
+    end
+  end
+
+  def handle_event("open_folder", _params, socket), do: {:noreply, socket}
+
+  def handle_event("folder_up", %{"to" => ""}, socket),
+    do: {:noreply, socket |> assign(:trail, []) |> load()}
+
+  def handle_event("folder_up", %{"to" => id}, socket) do
+    case Enum.find_index(socket.assigns.trail, &(elem(&1, 0) == id)) do
+      nil ->
+        {:noreply, socket}
+
+      at ->
+        {:noreply, socket |> assign(:trail, Enum.take(socket.assigns.trail, at + 1)) |> load()}
+    end
+  end
 
   def handle_event("choose_folder", _params, socket) do
     %{current_user: user, site_id: site_id} = socket.assigns
@@ -207,14 +241,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   def handle_async(:library, {:exit, reason}, socket),
     do: {:noreply, assign(socket, :library, AsyncResult.failed(socket.assigns.library, reason))}
 
-  # A page read for a search since replaced is dropped.
-  def handle_async(
-        :more,
-        {:ok, {query, {:ok, {files, more?}}}},
-        %{assigns: %{query: query}} = socket
-      ) do
-    library = AsyncResult.ok(socket.assigns.library, socket.assigns.library.result ++ files)
-    {:noreply, assign(socket, library: library, more?: more?, loading_more?: false)}
+  # A page read for a search or a folder since left is dropped.
+  def handle_async(:more, {:ok, {scope, {:ok, {files, more?}}}}, socket) do
+    if scope == {socket.assigns.query, open_folder_id(socket.assigns)} do
+      library = AsyncResult.ok(socket.assigns.library, socket.assigns.library.result ++ files)
+      {:noreply, assign(socket, library: library, more?: more?, loading_more?: false)}
+    else
+      {:noreply, assign(socket, :loading_more?, false)}
+    end
   end
 
   def handle_async(:more, {:ok, {_query, {:error, _reason}}}, socket),
@@ -227,6 +261,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
   def handle_async(:more, _stale_or_exit, socket),
     do: {:noreply, assign(socket, :loading_more?, false)}
+
+  def handle_async(:subfolders, {:ok, {parent, {:ok, folders}}}, socket) do
+    if parent == open_folder_id(socket.assigns),
+      do: {:noreply, assign(socket, :subfolders, AsyncResult.ok(folders))},
+      else: {:noreply, socket}
+  end
+
+  def handle_async(:subfolders, {:ok, {_parent, {:error, reason}}}, socket),
+    do: {:noreply, assign(socket, :subfolders, AsyncResult.failed(%AsyncResult{}, reason))}
+
+  def handle_async(:subfolders, {:exit, reason}, socket),
+    do: {:noreply, assign(socket, :subfolders, AsyncResult.failed(%AsyncResult{}, reason))}
 
   def handle_async(:folders, {:ok, {:ok, folders}}, socket),
     do: {:noreply, assign(socket, :folders, AsyncResult.ok(folders))}
@@ -389,24 +435,44 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   defp reload(%{assigns: %{browsing?: true}} = socket), do: load(socket)
   defp reload(socket), do: socket
 
+  # The open folder's files and the folders inside it.
   defp load(%{assigns: %{site_id: nil}} = socket),
-    do: assign(socket, library: AsyncResult.ok([]), more?: false)
+    do: assign(socket, library: AsyncResult.ok([]), more?: false, subfolders: AsyncResult.ok([]))
 
   defp load(socket) do
+    %{current_user: user, site_id: site_id} = socket.assigns
+    parent = open_folder_id(socket.assigns)
+
+    socket
+    |> load_files()
+    |> MishkaGervaz.Messages.start_async(:subfolders, fn ->
+      {parent, read_subfolders(user, site_id, parent)}
+    end)
+  end
+
+  defp load_files(%{assigns: %{site_id: nil}} = socket), do: socket
+
+  defp load_files(socket) do
     %{current_user: user, site_id: site_id, accepts: accepts, query: query} = socket.assigns
+    folder = open_folder_id(socket.assigns)
 
     socket
     |> assign(:loading_more?, false)
     |> MishkaGervaz.Messages.start_async(:library, fn ->
-      read(user, site_id, accepts, query, 0)
+      read(user, site_id, accepts, query, folder, 0)
     end)
   end
 
-  # A page of 48 from `offset`, newest first, and whether there are more after it.
-  defp read(user, site_id, accepts, query, offset) do
+  defp open_folder_id(%{trail: []}), do: nil
+  defp open_folder_id(%{trail: trail}), do: trail |> List.last() |> elem(0)
+
+  # A page of 48 from `offset`, newest first, and whether there are more after it: every folder's at
+  # the top, one folder's own inside it.
+  defp read(user, site_id, accepts, query, folder, offset) do
     user
     |> library(site_id)
     |> Ash.Query.filter(type == ^accepts)
+    |> in_folder(folder)
     |> named(query)
     |> Ash.Query.sort(inserted_at: :desc, id: :desc)
     |> page(user, offset)
@@ -438,6 +504,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   defp page(query, _user, offset),
     do: query |> Ash.Query.limit(@shown + 1) |> Ash.Query.offset(offset) |> Ash.read()
 
+  defp in_folder(query, nil), do: query
+  defp in_folder(query, folder), do: Ash.Query.filter(query, media_category_id == ^folder)
+
+  # THE FOLDERS DIRECTLY INSIDE `parent` — at the top for none — by name, read as `read_folders/2`
+  # reads.
+  defp read_subfolders(%{site_id: nil} = user, site_id, parent) do
+    MediaCategory
+    |> Ash.Query.for_read(:master_read, %{}, actor: user)
+    |> Ash.Query.filter(site_id == ^site_id)
+    |> beneath(parent)
+    |> Ash.Query.sort(name: :asc)
+    |> Ash.read(page: [limit: @folders_shown])
+    |> named_folders()
+  end
+
+  defp read_subfolders(user, site_id, parent) do
+    MediaCategory
+    |> Ash.Query.for_read(:read, %{}, actor: user, tenant: site_id)
+    |> beneath(parent)
+    |> Ash.Query.sort(name: :asc)
+    |> Ash.Query.limit(@folders_shown)
+    |> Ash.read()
+    |> named_folders()
+  end
+
+  defp beneath(query, nil), do: Ash.Query.filter(query, is_nil(parent_id))
+  defp beneath(query, parent), do: Ash.Query.filter(query, parent_id == ^parent)
+
+  defp named_folders({:ok, %{results: folders}}), do: named_folders({:ok, folders})
+  defp named_folders({:ok, folders}), do: {:ok, Enum.map(folders, &{&1.id, &1.name})}
+  defp named_folders({:error, _reason} = error), do: error
+
   defp named(query, ""), do: query
 
   defp named(query, words) do
@@ -457,7 +555,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
     <div
       id={@id}
       data-role="content-media-chooser"
-      class="flex min-h-0 flex-1 flex-col gap-3 px-4 py-4"
+      class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 px-4 py-4"
     >
       <div :if={@back?} class="flex items-center gap-2">
         <button
@@ -539,6 +637,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
         <.icon name="hero-photo-mini" class="size-4" />
         {gettext("Choose from Media Manager")}
       </button>
+
+      <.folder_browser
+        :if={@site_id && @browsing?}
+        id={@id}
+        myself={@myself}
+        trail={@trail}
+        subfolders={@subfolders}
+      />
 
       <div :if={@site_id && @browsing?} class="relative">
         <.icon
@@ -670,32 +776,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
 
         <div class="flex flex-wrap items-center gap-1.5 text-[11.5px] font-medium text-[#8a877f]">
           <label for={@id <> "-folder"}>{gettext("Uploads go to")}</label>
-          <select
-            id={@id <> "-folder"}
-            name="folder"
-            form={@id <> "-folder-form"}
-            phx-change="folder"
-            phx-target={@myself}
-            dir="auto"
-            class="h-8 min-w-0 max-w-full rounded-[9px] border border-[#ecebe6] bg-[#faf9f6] px-2 text-[12px] font-semibold text-[#1b1a18] outline-none focus:border-[#c3c1f0]"
-          >
-            <option value="" selected={@destination == :none}>{gettext("No folder")}</option>
-            <option
-              :if={@folder && !Enum.any?(folders, &(elem(&1, 1) == @folder))}
-              value="default"
-              selected={@destination == :default}
+          <div class="relative min-w-0 max-w-full">
+            <select
+              id={@id <> "-folder"}
+              name="folder"
+              form={@id <> "-folder-form"}
+              phx-change="folder"
+              phx-target={@myself}
+              dir="auto"
+              class="h-8 w-full min-w-0 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-[#faf9f6] ps-2.5 pe-8 text-[12px] font-semibold text-[#1b1a18] outline-none focus:border-[#c3c1f0] focus:bg-white"
             >
-              {gettext("%{name} (made on the first upload)", name: @folder)}
-            </option>
-            <option
-              :for={{id, path} <- folders}
-              value={id}
-              selected={chosen?(@destination, @folder, id, path)}
-            >
-              {path}
-            </option>
-            <option value="new">{gettext("New folder…")}</option>
-          </select>
+              <option value="" selected={@destination == :none}>{gettext("No folder")}</option>
+              <option
+                :if={@folder && !Enum.any?(folders, &(elem(&1, 1) == @folder))}
+                value="default"
+                selected={@destination == :default}
+              >
+                {gettext("%{name} (made on the first upload)", name: @folder)}
+              </option>
+              <option
+                :for={{id, path} <- folders}
+                value={id}
+                selected={chosen?(@destination, @folder, id, path)}
+              >
+                {path}
+              </option>
+              <option value="new">{gettext("New folder…")}</option>
+            </select>
+            <.icon
+              name="hero-chevron-down-mini"
+              class="pointer-events-none absolute end-2.5 top-1/2 size-3.5 -translate-y-1/2 text-[#a8a5a0]"
+            />
+          </div>
           <button
             type="button"
             phx-click="cancel_folder"
@@ -729,6 +841,102 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
       </div>
 
       <p :if={@failure} class="text-[11.5px] font-medium text-[#b5495f]">{@failure}</p>
+    </div>
+    """
+  end
+
+  attr :id, :string, required: true
+  attr :myself, :any, required: true
+  attr :trail, :list, required: true
+  attr :subfolders, :any, default: nil
+
+  # Where the files listed are, as the Media page says it — All media, then each folder down to the
+  # one open, any of them a way back up — and the folders inside it, each opening its own files.
+  defp folder_browser(assigns) do
+    ~H"""
+    <div id={@id <> "-browser"} class="flex min-w-0 flex-col gap-2">
+      <nav
+        id={@id <> "-trail"}
+        aria-label={gettext("Folder path")}
+        class="flex flex-wrap items-center gap-1 rounded-[11px] border border-[#ecebe6] bg-white px-2 py-1.5 text-[12px] font-semibold"
+      >
+        <.icon name="hero-folder-open" class="size-4 flex-none text-[#8a877f]" />
+        <button
+          :if={@trail != []}
+          type="button"
+          id={@id <> "-trail-root"}
+          phx-click="folder_up"
+          phx-value-to=""
+          phx-target={@myself}
+          class="rounded-[7px] px-1.5 py-0.5 text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+        >
+          {gettext("All media")}
+        </button>
+        <span
+          :if={@trail == []}
+          id={@id <> "-trail-root"}
+          aria-current="page"
+          class="px-1.5 py-0.5 text-[#1b1a18]"
+        >
+          {gettext("All media")}
+        </span>
+        <%= for {{folder_id, name}, index} <- Enum.with_index(@trail) do %>
+          <.icon name="hero-chevron-right" class="size-3 flex-none text-[#a8a5a0] rtl:rotate-180" />
+          <button
+            :if={index < length(@trail) - 1}
+            type="button"
+            id={@id <> "-trail-" <> folder_id}
+            phx-click="folder_up"
+            phx-value-to={folder_id}
+            phx-target={@myself}
+            dir="auto"
+            class="max-w-[160px] truncate rounded-[7px] px-1.5 py-0.5 text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+          >
+            {name}
+          </button>
+          <span
+            :if={index == length(@trail) - 1}
+            id={@id <> "-trail-" <> folder_id}
+            aria-current="page"
+            dir="auto"
+            class="max-w-[160px] truncate px-1.5 py-0.5 text-[#1b1a18]"
+          >
+            {name}
+          </span>
+        <% end %>
+      </nav>
+
+      <.async_result :let={folders} :if={@subfolders} assign={@subfolders}>
+        <:loading>
+          <p class="text-[11.5px] font-medium text-[#8a877f]">{gettext("Loading folders…")}</p>
+        </:loading>
+        <:failed>
+          <p class="text-[11.5px] font-medium text-[#b5495f]">
+            {gettext("The folders could not be read.")}
+          </p>
+        </:failed>
+
+        <ul
+          :if={folders != []}
+          id={@id <> "-folders"}
+          class="flex min-w-0 gap-1.5 overflow-x-auto pb-1"
+        >
+          <li :for={{folder_id, name} <- folders} class="flex-none">
+            <button
+              type="button"
+              id={@id <> "-open-" <> folder_id}
+              phx-click="open_folder"
+              phx-value-id={folder_id}
+              phx-target={@myself}
+              dir="auto"
+              class="flex items-center gap-1.5 whitespace-nowrap rounded-[10px] border border-[#eceae4] bg-[#faf9f6] px-3 py-[7px] text-[12px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f2f1fc] hover:text-[#4f4bcc]"
+            >
+              <.icon name="hero-folder" class="size-[15px] flex-none text-[#8a877f]" />
+              {name}
+            </button>
+          </li>
+        </ul>
+      </.async_result>
     </div>
     """
   end
