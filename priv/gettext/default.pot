@@ -1996,7 +1996,7 @@ msgid "Are you sure you want to restore this version? Current data will be repla
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:99
-#: lib/mishka_cms_core/runtime/seo.ex:551
+#: lib/mishka_cms_core/runtime/seo.ex:575
 #: lib/mishka_cms_core_web/templates/seo_form.ex:1140
 #, elixir-autogen, elixir-format
 msgid "Article"
@@ -3472,7 +3472,7 @@ msgid "Describe a change — e.g. “add a testimonials section under the hero�
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/seo.ex:303
-#: lib/mishka_cms_core/runtime/seo.ex:533
+#: lib/mishka_cms_core/runtime/seo.ex:557
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:92
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:552
 #: lib/mishka_cms_core_web/templates/seo_form.ex:344
@@ -4838,7 +4838,7 @@ msgid "If the connection drops for a moment, what they typed is put back."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:275
-#: lib/mishka_cms_core/runtime/seo.ex:534
+#: lib/mishka_cms_core/runtime/seo.ex:558
 #, elixir-autogen, elixir-format
 msgid "Image"
 msgstr ""
@@ -6113,8 +6113,8 @@ msgstr ""
 msgid "Moved its fields to %{form}. The empty form was removed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:531
-#: lib/mishka_cms_core/runtime/seo.ex:532
+#: lib/mishka_cms_core/runtime/seo.ex:555
+#: lib/mishka_cms_core/runtime/seo.ex:556
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:83
 #, elixir-autogen, elixir-format
 msgid "Name"
@@ -7560,8 +7560,8 @@ msgstr ""
 msgid "Publish — this will make the page visible to visitors"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:427
-#: lib/mishka_cms_core/runtime/seo.ex:535
+#: lib/mishka_cms_core/runtime/seo.ex:451
+#: lib/mishka_cms_core/runtime/seo.ex:559
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14757
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14808
 #, elixir-autogen, elixir-format
@@ -12681,7 +12681,7 @@ msgstr ""
 msgid "✕ whole document"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:456
+#: lib/mishka_cms_core/runtime/seo.ex:480
 #, elixir-autogen, elixir-format
 msgid "A word an article is about, one tag each."
 msgstr ""
@@ -12691,28 +12691,28 @@ msgstr ""
 msgid "Add an og:image tag so link previews show a picture."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:443
+#: lib/mishka_cms_core/runtime/seo.ex:467
 #, elixir-autogen, elixir-format
 msgid "Article author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:451
+#: lib/mishka_cms_core/runtime/seo.ex:475
 #, elixir-autogen, elixir-format
 msgid "Article section"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:455
+#: lib/mishka_cms_core/runtime/seo.ex:479
 #, elixir-autogen, elixir-format
 msgid "Article tag"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:389
-#: lib/mishka_cms_core/runtime/seo.ex:536
+#: lib/mishka_cms_core/runtime/seo.ex:404
+#: lib/mishka_cms_core/runtime/seo.ex:560
 #, elixir-autogen, elixir-format
 msgid "Author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:401
+#: lib/mishka_cms_core/runtime/seo.ex:416
 #, elixir-autogen, elixir-format
 msgid "Author's X account"
 msgstr ""
@@ -12733,7 +12733,7 @@ msgstr ""
 msgid "How X (Twitter) draws a link preview: with a small or a large picture."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:418
+#: lib/mishka_cms_core/runtime/seo.ex:433
 #, elixir-autogen, elixir-format
 msgid "Image height"
 msgstr ""
@@ -12743,18 +12743,18 @@ msgstr ""
 msgid "Image text"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:409
+#: lib/mishka_cms_core/runtime/seo.ex:424
 #, elixir-autogen, elixir-format
 msgid "Image width"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:410
-#: lib/mishka_cms_core/runtime/seo.ex:419
+#: lib/mishka_cms_core/runtime/seo.ex:425
+#: lib/mishka_cms_core/runtime/seo.ex:434
 #, elixir-autogen, elixir-format
 msgid "In pixels, so a preview can be drawn before the picture loads."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:382
+#: lib/mishka_cms_core/runtime/seo.ex:397
 #, elixir-autogen, elixir-format
 msgid "Language version"
 msgstr ""
@@ -12764,7 +12764,7 @@ msgstr ""
 msgid "Locale"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:435
+#: lib/mishka_cms_core/runtime/seo.ex:459
 #, elixir-autogen, elixir-format
 msgid "Modified"
 msgstr ""
@@ -12799,27 +12799,27 @@ msgstr ""
 msgid "Other locales"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:485
+#: lib/mishka_cms_core/runtime/seo.ex:509
 #, elixir-autogen, elixir-format
 msgid "Page address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:480
+#: lib/mishka_cms_core/runtime/seo.ex:504
 #, elixir-autogen, elixir-format
 msgid "Page description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:495
+#: lib/mishka_cms_core/runtime/seo.ex:519
 #, elixir-autogen, elixir-format
 msgid "Page image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:490
+#: lib/mishka_cms_core/runtime/seo.ex:514
 #, elixir-autogen, elixir-format
 msgid "Page language"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:475
+#: lib/mishka_cms_core/runtime/seo.ex:499
 #, elixir-autogen, elixir-format
 msgid "Page title"
 msgstr ""
@@ -12829,18 +12829,18 @@ msgstr ""
 msgid "Robots"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:506
+#: lib/mishka_cms_core/runtime/seo.ex:530
 #, elixir-autogen, elixir-format
 msgid "Site address"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/seo.ex:337
-#: lib/mishka_cms_core/runtime/seo.ex:501
+#: lib/mishka_cms_core/runtime/seo.ex:525
 #, elixir-autogen, elixir-format
 msgid "Site name"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:393
+#: lib/mishka_cms_core/runtime/seo.ex:408
 #, elixir-autogen, elixir-format
 msgid "Site's X account"
 msgstr ""
@@ -12850,22 +12850,22 @@ msgstr ""
 msgid "The address a link preview opens. Absolute, https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:444
+#: lib/mishka_cms_core/runtime/seo.ex:468
 #, elixir-autogen, elixir-format
 msgid "The address of the author's profile."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:402
+#: lib/mishka_cms_core/runtime/seo.ex:417
 #, elixir-autogen, elixir-format
 msgid "The author's @username on X (Twitter)."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:486
+#: lib/mishka_cms_core/runtime/seo.ex:510
 #, elixir-autogen, elixir-format
 msgid "The canonical address of this page, with https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:491
+#: lib/mishka_cms_core/runtime/seo.ex:515
 #, elixir-autogen, elixir-format
 msgid "The language code of this address, such as en."
 msgstr ""
@@ -12875,7 +12875,7 @@ msgstr ""
 msgid "The one address search engines should index this page under. Absolute, https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:481
+#: lib/mishka_cms_core/runtime/seo.ex:505
 #, elixir-autogen, elixir-format
 msgid "The page's description. Empty leaves out whatever uses it."
 msgstr ""
@@ -12890,7 +12890,7 @@ msgstr ""
 msgid "The picture a link preview shows. An https address or a path on the site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:497
+#: lib/mishka_cms_core/runtime/seo.ex:521
 #, elixir-autogen, elixir-format
 msgid "The picture a plugin set for this address. Empty leaves out whatever uses it."
 msgstr ""
@@ -12900,7 +12900,7 @@ msgstr ""
 msgid "The picture an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:452
+#: lib/mishka_cms_core/runtime/seo.ex:476
 #, elixir-autogen, elixir-format
 msgid "The section an article belongs to, such as Technology."
 msgstr ""
@@ -12910,12 +12910,12 @@ msgstr ""
 msgid "The site a link preview names. The site title setting, unless set here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:394
+#: lib/mishka_cms_core/runtime/seo.ex:409
 #, elixir-autogen, elixir-format
 msgid "The site's @username on X (Twitter)."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:507
+#: lib/mishka_cms_core/runtime/seo.ex:531
 #, elixir-autogen, elixir-format
 msgid "The site's https address, with no path."
 msgstr ""
@@ -12945,12 +12945,12 @@ msgstr ""
 msgid "The title an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:476
+#: lib/mishka_cms_core/runtime/seo.ex:500
 #, elixir-autogen, elixir-format
 msgid "The title this address shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:384
+#: lib/mishka_cms_core/runtime/seo.ex:399
 #, elixir-autogen, elixir-format
 msgid "This page in another language, with its language code in hreflang, or x-default for the one to show when none matches."
 msgstr ""
@@ -12985,12 +12985,12 @@ msgstr ""
 msgid "What the preview picture shows, for people who cannot see it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:436
+#: lib/mishka_cms_core/runtime/seo.ex:460
 #, elixir-autogen, elixir-format
 msgid "When an article last changed, as an ISO 8601 date."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:428
+#: lib/mishka_cms_core/runtime/seo.ex:452
 #, elixir-autogen, elixir-format
 msgid "When an article was first published, as an ISO 8601 date."
 msgstr ""
@@ -13000,7 +13000,7 @@ msgstr ""
 msgid "Whether search engines may index this page and follow its links. A page that needs a permission is never indexed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:390
+#: lib/mishka_cms_core/runtime/seo.ex:405
 #, elixir-autogen, elixir-format
 msgid "Who wrote the page."
 msgstr ""
@@ -13020,9 +13020,9 @@ msgstr ""
 msgid "Add a tag…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:637
-#: lib/mishka_cms_core/runtime/seo.ex:646
-#: lib/mishka_cms_core/runtime/seo.ex:657
+#: lib/mishka_cms_core/runtime/seo.ex:661
+#: lib/mishka_cms_core/runtime/seo.ex:670
+#: lib/mishka_cms_core/runtime/seo.ex:681
 #, elixir-autogen, elixir-format
 msgid "Address"
 msgstr ""
@@ -13048,22 +13048,22 @@ msgstr ""
 msgid "Best between %{min} and %{max} characters"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:556
+#: lib/mishka_cms_core/runtime/seo.ex:580
 #, elixir-autogen, elixir-format
 msgid "Blog post"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:564
+#: lib/mishka_cms_core/runtime/seo.ex:588
 #, elixir-autogen, elixir-format
 msgid "Brand"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:650
+#: lib/mishka_cms_core/runtime/seo.ex:674
 #, elixir-autogen, elixir-format
 msgid "City"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:545
+#: lib/mishka_cms_core/runtime/seo.ex:569
 #, elixir-autogen, elixir-format
 msgid "Currency"
 msgstr ""
@@ -13088,12 +13088,12 @@ msgstr ""
 msgid "Empty: search engines pick a passage from the page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:624
+#: lib/mishka_cms_core/runtime/seo.ex:648
 #, elixir-autogen, elixir-format
 msgid "Event"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:530
+#: lib/mishka_cms_core/runtime/seo.ex:554
 #, elixir-autogen, elixir-format
 msgid "Headline"
 msgstr ""
@@ -13108,17 +13108,17 @@ msgstr ""
 msgid "Hide from search engines"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:659
+#: lib/mishka_cms_core/runtime/seo.ex:683
 #, elixir-autogen, elixir-format
 msgid "Job title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:643
+#: lib/mishka_cms_core/runtime/seo.ex:667
 #, elixir-autogen, elixir-format
 msgid "Local business"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:638
+#: lib/mishka_cms_core/runtime/seo.ex:662
 #, elixir-autogen, elixir-format
 msgid "Logo"
 msgstr ""
@@ -13143,27 +13143,27 @@ msgstr ""
 msgid "Open Graph"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:635
+#: lib/mishka_cms_core/runtime/seo.ex:659
 #, elixir-autogen, elixir-format
 msgid "Organization"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:655
+#: lib/mishka_cms_core/runtime/seo.ex:679
 #, elixir-autogen, elixir-format
 msgid "Person"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:630
+#: lib/mishka_cms_core/runtime/seo.ex:654
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:544
+#: lib/mishka_cms_core/runtime/seo.ex:568
 #, elixir-autogen, elixir-format
 msgid "Price"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:563
+#: lib/mishka_cms_core/runtime/seo.ex:587
 #, elixir-autogen, elixir-format
 msgid "Product"
 msgstr ""
@@ -13173,7 +13173,7 @@ msgstr ""
 msgid "Question"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:560
+#: lib/mishka_cms_core/runtime/seo.ex:584
 #, elixir-autogen, elixir-format
 msgid "Questions and answers"
 msgstr ""
@@ -13184,12 +13184,12 @@ msgstr ""
 msgid "Share image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:629
+#: lib/mishka_cms_core/runtime/seo.ex:653
 #, elixir-autogen, elixir-format
 msgid "Starts"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:649
+#: lib/mishka_cms_core/runtime/seo.ex:673
 #, elixir-autogen, elixir-format
 msgid "Street"
 msgstr ""
@@ -13204,7 +13204,7 @@ msgstr ""
 msgid "Tags"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:648
+#: lib/mishka_cms_core/runtime/seo.ex:672
 #, elixir-autogen, elixir-format
 msgid "Telephone"
 msgstr ""
@@ -13321,7 +13321,7 @@ msgstr ""
 msgid "%{count} reviews"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:1426
+#: lib/mishka_cms_core/runtime/seo.ex:1449
 #, elixir-autogen, elixir-format
 msgid "%{title} – Page %{number}"
 msgstr ""
@@ -13338,17 +13338,17 @@ msgstr[1] ""
 msgid "A list of objects, each with an \"@type\". Values may use the variables above."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:600
+#: lib/mishka_cms_core/runtime/seo.ex:624
 #, elixir-autogen, elixir-format
 msgid "Application"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:593
+#: lib/mishka_cms_core/runtime/seo.ex:617
 #, elixir-autogen, elixir-format
 msgid "Book"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:604
+#: lib/mishka_cms_core/runtime/seo.ex:628
 #, elixir-autogen, elixir-format
 msgid "Category"
 msgstr ""
@@ -13364,7 +13364,7 @@ msgstr ""
 msgid "Click the box to choose a picture from Media."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:585
+#: lib/mishka_cms_core/runtime/seo.ex:609
 #, elixir-autogen, elixir-format
 msgid "Course"
 msgstr ""
@@ -13384,7 +13384,7 @@ msgstr ""
 msgid "Hide the address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:594
+#: lib/mishka_cms_core/runtime/seo.ex:618
 #, elixir-autogen, elixir-format
 msgid "ISBN"
 msgstr ""
@@ -13394,12 +13394,12 @@ msgstr ""
 msgid "JSON-LD"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:619
+#: lib/mishka_cms_core/runtime/seo.ex:643
 #, elixir-autogen, elixir-format
 msgid "Length (PT2M30S)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:540
+#: lib/mishka_cms_core/runtime/seo.ex:564
 #, elixir-autogen, elixir-format
 msgid "Number of ratings"
 msgstr ""
@@ -13414,7 +13414,7 @@ msgstr ""
 msgid "Preview with"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:539
+#: lib/mishka_cms_core/runtime/seo.ex:563
 #, elixir-autogen, elixir-format
 msgid "Rating (out of 5)"
 msgstr ""
@@ -13424,12 +13424,12 @@ msgstr ""
 msgid "Rating: %{value}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:571
+#: lib/mishka_cms_core/runtime/seo.ex:595
 #, elixir-autogen, elixir-format
 msgid "Recipe"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:605
+#: lib/mishka_cms_core/runtime/seo.ex:629
 #, elixir-autogen, elixir-format
 msgid "Runs on"
 msgstr ""
@@ -13439,12 +13439,12 @@ msgstr ""
 msgid "Search results may show its rating as stars. A rating can name a variable, such as {{post.rating}}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:578
+#: lib/mishka_cms_core/runtime/seo.ex:602
 #, elixir-autogen, elixir-format
 msgid "Serves"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:586
+#: lib/mishka_cms_core/runtime/seo.ex:610
 #, elixir-autogen, elixir-format
 msgid "Taught by"
 msgstr ""
@@ -13459,17 +13459,17 @@ msgstr ""
 msgid "The picture a link share shows. Click it to choose another."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:616
+#: lib/mishka_cms_core/runtime/seo.ex:640
 #, elixir-autogen, elixir-format
 msgid "Thumbnail"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:577
+#: lib/mishka_cms_core/runtime/seo.ex:601
 #, elixir-autogen, elixir-format
 msgid "Total time (PT45M)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:617
+#: lib/mishka_cms_core/runtime/seo.ex:641
 #, elixir-autogen, elixir-format
 msgid "Uploaded"
 msgstr ""
@@ -13479,12 +13479,12 @@ msgstr ""
 msgid "Use an address or a variable"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:612
+#: lib/mishka_cms_core/runtime/seo.ex:636
 #, elixir-autogen, elixir-format
 msgid "Video"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:618
+#: lib/mishka_cms_core/runtime/seo.ex:642
 #, elixir-autogen, elixir-format
 msgid "Video address"
 msgstr ""
@@ -15358,6 +15358,7 @@ msgstr ""
 msgid "Uploads go to"
 msgstr ""
 
+#: lib/mishka_cms_core/runtime/seo.ex:391
 #: lib/mishka_cms_core/settings.ex:673
 #, elixir-autogen, elixir-format
 msgid "Favicon"
@@ -15373,7 +15374,7 @@ msgstr ""
 msgid "Site logo"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:502
+#: lib/mishka_cms_core/runtime/seo.ex:526
 #, elixir-autogen, elixir-format
 msgid "The site title setting, in the page's language when Translations has it."
 msgstr ""
@@ -15381,4 +15382,29 @@ msgstr ""
 #: lib/mishka_cms_core/settings.ex:675
 #, elixir-autogen, elixir-format
 msgid "The small picture a browser tab and a search result show for the site's pages: a square PNG or SVG, from Media or an address."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:442
+#, elixir-autogen, elixir-format
+msgid "Image type"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:443
+#, elixir-autogen, elixir-format
+msgid "The picture's format, such as image/jpeg. A share card says it itself."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:393
+#, elixir-autogen, elixir-format
+msgid "The small picture a browser tab and a search result show for this page. The site's Favicon setting by default."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:386
+#, elixir-autogen, elixir-format
+msgid "Twitter image text"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:388
+#, elixir-autogen, elixir-format
+msgid "What the X (Twitter) preview picture shows, for people who cannot see it."
 msgstr ""

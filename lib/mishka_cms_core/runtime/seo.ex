@@ -379,6 +379,21 @@ defmodule MishkaCmsCore.Runtime.Seo do
         help: gettext("The picture an X (Twitter) preview shows."),
         default: "{{page.image}}"
       ),
+      entry(
+        "twitter:image:alt",
+        "meta",
+        %{"name" => "twitter:image:alt"},
+        gettext("Twitter image text"),
+        help:
+          gettext("What the X (Twitter) preview picture shows, for people who cannot see it."),
+        default: "{{page.title}}"
+      ),
+      entry("icon", "link", %{"rel" => "icon"}, gettext("Favicon"),
+        help:
+          gettext(
+            "The small picture a browser tab and a search result show for this page. The site's Favicon setting by default."
+          )
+      ),
       entry("alternate", "link", %{"rel" => "alternate"}, gettext("Language version"),
         help:
           gettext(
@@ -419,6 +434,15 @@ defmodule MishkaCmsCore.Runtime.Seo do
         help: gettext("In pixels, so a preview can be drawn before the picture loads."),
         default?: false,
         default: "630"
+      ),
+      entry(
+        "og:image:type",
+        "meta",
+        %{"property" => "og:image:type"},
+        gettext("Image type"),
+        help: gettext("The picture's format, such as image/jpeg. A share card says it itself."),
+        default?: false,
+        default: "image/jpeg"
       ),
       entry(
         "article:published_time",
