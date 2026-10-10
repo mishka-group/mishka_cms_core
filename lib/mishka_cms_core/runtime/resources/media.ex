@@ -727,24 +727,14 @@ defmodule MishkaCmsCore.Runtime.Media do
       # that are up: a file of an inactive or offline site would not load for anyone else. The editor
       # asks with `editor_open_only` in `path_params`, which matches no attribute and filters nothing
       # on its own.
-      #
-      # THE LIBRARY'S TOP LEVEL HOLDS THE FILES IN NO FOLDER, as a folder holds only its own; a search
-      # or a filter there looks through every folder. The Media page asks with `library_top_level`,
-      # another path param that filters nothing on its own.
       hooks do
         on_load fn query, state ->
-          query =
-            if state.path_params[:editor_open_only] do
-              open = MishkaCmsCore.Runtime.SiteAvailability.open_site_ids()
-              Ash.Query.filter(query, site_id in ^open)
-            else
-              query
-            end
-
-          if state.path_params[:library_top_level] == true and
-               not MishkaCmsCore.Runtime.Media.narrowed?(state.filter_values),
-             do: {:cont, Ash.Query.filter(query, is_nil(media_category_id))},
-             else: {:cont, query}
+          if state.path_params[:editor_open_only] do
+            open = MishkaCmsCore.Runtime.SiteAvailability.open_site_ids()
+            {:cont, Ash.Query.filter(query, site_id in ^open)}
+          else
+            {:cont, query}
+          end
         end
       end
     end
@@ -2208,15 +2198,6 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
     end)
   end
-
-  @doc """
-  Whether a table's filter values narrow what it shows — a search typed, or any filter set.
-  """
-  @spec narrowed?(map() | nil) :: boolean()
-  def narrowed?(filter_values) when is_map(filter_values),
-    do: Enum.any?(filter_values, fn {_filter, value} -> value not in [nil, "", [], false] end)
-
-  def narrowed?(_none), do: false
 
   @allowed_extensions %{
     images: ~w(.jpg .jpeg .png .gif .webp .svg),
