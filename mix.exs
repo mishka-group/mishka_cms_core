@@ -43,6 +43,7 @@ defmodule MishkaCmsCore.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
+      {:decimal, "~> 3.2", override: true},
       {:bcrypt_elixir, "~> 3.3"},
       {:sourceror, "~> 1.12", only: [:dev, :test]},
       {:open_api_spex, "~> 3.22"},
