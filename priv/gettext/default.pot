@@ -59,7 +59,7 @@ msgstr ""
 msgid "%{category} settings"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5502
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5509
 #, elixir-autogen, elixir-format
 msgid "%{changes} · %{time}"
 msgstr ""
@@ -69,17 +69,17 @@ msgstr ""
 msgid "%{code} · %{reason}"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:112
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:113
 #, elixir-autogen, elixir-format
 msgid "%{count} Active"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:117
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:118
 #, elixir-autogen, elixir-format
 msgid "%{count} Inactive"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:98
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:99
 #, elixir-autogen, elixir-format
 msgid "%{count} active"
 msgstr ""
@@ -103,7 +103,7 @@ msgstr[1] ""
 msgid "%{count} blocks"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5511
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5518
 #, elixir-autogen, elixir-format
 msgid "%{count} change"
 msgid_plural "%{count} changes"
@@ -380,7 +380,7 @@ msgstr[1] ""
 msgid "%{count} task(s) compiling…"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:76
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:77
 #, elixir-autogen, elixir-format
 msgid "%{count} total"
 msgstr ""
@@ -644,7 +644,7 @@ msgstr ""
 msgid "%{label} compiled on first request"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5641
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5648
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14573
 #, elixir-autogen, elixir-format
 msgid "%{label} copy"
@@ -774,7 +774,7 @@ msgstr ""
 msgid "%{name} enabled"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7091
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7098
 #, elixir-autogen, elixir-format
 msgid "%{name} goes back to the kit's default."
 msgstr ""
@@ -840,7 +840,7 @@ msgstr ""
 msgid "%{path} — %{reason}, so it was created as %{name}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3371
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3378
 #, elixir-autogen, elixir-format
 msgid "%{preset} is a marketplace preset. Connect a registry under Studio → Settings to apply it."
 msgstr ""
@@ -860,12 +860,12 @@ msgstr ""
 msgid "%{removed} unused translation(s) removed"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6629
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6636
 #, elixir-autogen, elixir-format
 msgid "%{said} Held in this editing session — it goes live when you publish."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6162
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6169
 #, elixir-autogen, elixir-format
 msgid "%{saved} The element styles were kept, not published — try publishing again."
 msgstr ""
@@ -947,7 +947,7 @@ msgstr ""
 msgid "%{value} (default)"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widget.ex:872
+#: lib/mishka_cms_core/dashboard/widget.ex:877
 #, elixir-autogen, elixir-format
 msgid "%{widget} — %{setting}"
 msgstr ""
@@ -1147,7 +1147,7 @@ msgid_plural "%{count} drafts"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6083
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6090
 #, elixir-autogen, elixir-format
 msgid "1 element live"
 msgid_plural "%{count} elements live"
@@ -1473,7 +1473,7 @@ msgstr ""
 msgid "A template should not contain <html>"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6983
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6990
 #, elixir-autogen, elixir-format
 msgid "A token needs a value."
 msgstr ""
@@ -1499,8 +1499,8 @@ msgstr ""
 msgid "AI Assistant"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:133
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:255
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:134
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:256
 #, elixir-autogen, elixir-format
 msgid "API Only"
 msgstr ""
@@ -1535,7 +1535,7 @@ msgstr ""
 msgid "Account settings"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:71
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:72
 #, elixir-autogen, elixir-format
 msgid "Across docs"
 msgstr ""
@@ -1550,8 +1550,8 @@ msgstr ""
 msgid "Activate"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:70
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:65
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:71
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:66
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:475
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:566
 #: lib/mishka_cms_core_web/live/admin/components/runtime_status_timeline.ex:241
@@ -1575,7 +1575,7 @@ msgstr ""
 msgid "Active on this site"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:78
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:79
 #, elixir-autogen, elixir-format
 msgid "Active site"
 msgstr ""
@@ -1619,7 +1619,7 @@ msgstr ""
 msgid "Add a class"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5401
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5408
 #, elixir-autogen, elixir-format
 msgid "Add a submit button to this form."
 msgstr ""
@@ -1629,7 +1629,7 @@ msgstr ""
 msgid "Add a testimonials section"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5371
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5378
 #, elixir-autogen, elixir-format
 msgid "Add a top-level heading to this page."
 msgstr ""
@@ -1705,7 +1705,7 @@ msgstr ""
 msgid "Admin console"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:141
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:142
 #, elixir-autogen, elixir-format
 msgid "Admins"
 msgstr ""
@@ -1775,7 +1775,7 @@ msgstr ""
 msgid "All files"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:66
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:67
 #, elixir-autogen, elixir-format
 msgid "All live"
 msgstr ""
@@ -1813,7 +1813,7 @@ msgid "An anchor. Set where it goes in the Inspector."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/containment.ex:248
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7216
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7223
 #, elixir-autogen, elixir-format
 msgid "An element cannot be moved inside itself."
 msgstr ""
@@ -1940,7 +1940,7 @@ msgid "Are you sure you want to restore this version? Current data will be repla
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:99
-#: lib/mishka_cms_core/runtime/seo.ex:576
+#: lib/mishka_cms_core/runtime/seo.ex:577
 #: lib/mishka_cms_core_web/templates/seo_form.ex:1178
 #, elixir-autogen, elixir-format
 msgid "Article"
@@ -2033,17 +2033,17 @@ msgstr ""
 msgid "Autosave"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2607
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2614
 #, elixir-autogen, elixir-format
 msgid "Autosave is failing. Your edits are still here, but nothing is saved."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:140
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:141
 #, elixir-autogen, elixir-format
 msgid "Average bundle size"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:68
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:69
 #, elixir-autogen, elixir-format
 msgid "Awaiting review"
 msgstr ""
@@ -2054,12 +2054,12 @@ msgstr ""
 msgid "Back"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5685
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5692
 #, elixir-autogen, elixir-format
 msgid "Back on the live page. Your draft is still in the list."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5689
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5696
 #, elixir-autogen, elixir-format
 msgid "Back on the live page. Your draft is still in the list. The element styles you applied are still held for your next publish."
 msgstr ""
@@ -2185,7 +2185,7 @@ msgstr ""
 msgid "Blog posts"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:70
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:71
 #, elixir-autogen, elixir-format
 msgid "Bloggers"
 msgstr ""
@@ -2196,7 +2196,7 @@ msgid "Blur"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/tree/styles.ex:332
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:299
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:303
 #, elixir-autogen, elixir-format
 msgid "Bold"
 msgstr ""
@@ -2274,7 +2274,7 @@ msgid "Builder"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:249
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:303
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:307
 #, elixir-autogen, elixir-format
 msgid "Bulleted list"
 msgstr ""
@@ -2290,7 +2290,7 @@ msgstr ""
 msgid "Bundle Size"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:84
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:85
 #, elixir-autogen, elixir-format
 msgid "Bundle size"
 msgstr ""
@@ -2459,7 +2459,7 @@ msgstr ""
 msgid "Changed an interaction"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4271
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4278
 #, elixir-autogen, elixir-format
 msgid "Changed where a form sends"
 msgstr ""
@@ -2491,7 +2491,7 @@ msgstr ""
 msgid "Check for updates first."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5399
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5406
 #, elixir-autogen, elixir-format
 msgid "Check this form as the visitor types, not only on send."
 msgstr ""
@@ -2506,7 +2506,7 @@ msgstr ""
 msgid "Checkbox"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4018
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4025
 #, elixir-autogen, elixir-format
 msgid "Checks re-run against the current document."
 msgstr ""
@@ -2633,19 +2633,19 @@ msgstr ""
 msgid "Clear this page’s editing history"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4315
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4322
 #, elixir-autogen, elixir-format
 msgid "Cleared %{count} recorded change."
 msgid_plural "Cleared %{count} recorded changes."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4986
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4993
 #, elixir-autogen, elixir-format
 msgid "Click action removed."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4989
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4996
 #, elixir-autogen, elixir-format
 msgid "Click action set."
 msgstr ""
@@ -2913,12 +2913,12 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:1682
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14817
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/component/index.html.heex:3
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:320
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:324
 #, elixir-autogen, elixir-format
 msgid "Components"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4957
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4964
 #, elixir-autogen, elixir-format
 msgid "Condition set."
 msgstr ""
@@ -3009,7 +3009,7 @@ msgstr ""
 msgid "Content beside the main thread — a sidebar."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5628
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5635
 #, elixir-autogen, elixir-format
 msgid "Copied to “%{label}”."
 msgstr ""
@@ -3094,7 +3094,7 @@ msgstr ""
 msgid "Could not refresh the component list — try again in a moment."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4732
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4739
 #, elixir-autogen, elixir-format
 msgid "Could not reload the live page — you are still in the draft."
 msgstr ""
@@ -3271,7 +3271,7 @@ msgstr ""
 msgid "Deactivate this site? It will stop serving requests."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6852
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6859
 #, elixir-autogen, elixir-format
 msgid "Declared — every page using this component reads it."
 msgstr ""
@@ -3393,8 +3393,8 @@ msgstr ""
 msgid "Describe a change — e.g. “add a testimonials section under the hero”"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:304
-#: lib/mishka_cms_core/runtime/seo.ex:558
+#: lib/mishka_cms_core/runtime/seo.ex:305
+#: lib/mishka_cms_core/runtime/seo.ex:559
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:92
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:552
 #: lib/mishka_cms_core_web/templates/seo_form.ex:382
@@ -3459,7 +3459,7 @@ msgid "Discard this draft? This cannot be undone."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:184
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:307
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:311
 #, elixir-autogen, elixir-format
 msgid "Divider"
 msgstr ""
@@ -3523,7 +3523,7 @@ msgid "Downloaded"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/sources/runtime_draft.ex:133
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5641
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5648
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14734
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14785
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:668
@@ -3532,7 +3532,7 @@ msgstr ""
 msgid "Draft"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4663
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4670
 #, elixir-autogen, elixir-format
 msgid "Draft deleted."
 msgstr ""
@@ -3548,7 +3548,7 @@ msgstr ""
 msgid "Draft history"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2629
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2636
 #, elixir-autogen, elixir-format
 msgid "Draft mode: every change is kept as you make it."
 msgstr ""
@@ -3563,7 +3563,7 @@ msgstr ""
 msgid "Draft — kept aside, not in front of visitors"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:68
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:69
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14503
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:221
 #, elixir-autogen, elixir-format
@@ -3578,7 +3578,7 @@ msgstr ""
 #: lib/mishka_cms_core/dashboard/widget.ex:418
 #: lib/mishka_cms_core/dashboard/widget.ex:461
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1931
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:353
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:359
 #, elixir-autogen, elixir-format
 msgid "Drag to move"
 msgstr ""
@@ -3758,7 +3758,7 @@ msgstr ""
 msgid "Editing at %{device}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4617
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4624
 #, elixir-autogen, elixir-format
 msgid "Editing draft “%{label}”. Saves go here as you work."
 msgstr ""
@@ -3917,7 +3917,7 @@ msgstr ""
 msgid "Every %{bucket} override on this element is gone — it falls back to the base styles."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7098
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7105
 #, elixir-autogen, elixir-format
 msgid "Every %{name} placed here will start this way."
 msgstr ""
@@ -4176,17 +4176,17 @@ msgstr ""
 msgid "Fix"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5403
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5410
 #, elixir-autogen, elixir-format
 msgid "Fix the %{rule} issue on this page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5368
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5375
 #, elixir-autogen, elixir-format
 msgid "Fix the heading order so it does not skip a level."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5357
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5364
 #, elixir-autogen, elixir-format
 msgid "Fixed %{rule}"
 msgstr ""
@@ -4353,17 +4353,17 @@ msgstr ""
 msgid "Gateway Timeout"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5215
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5222
 #, elixir-autogen, elixir-format
 msgid "Gave a form its Send button"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5352
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5359
 #, elixir-autogen, elixir-format
 msgid "Gave a form its own handlers"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5355
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5362
 #, elixir-autogen, elixir-format
 msgid "Gave a form its own place to keep values"
 msgstr ""
@@ -4390,7 +4390,7 @@ msgstr ""
 msgid "Generated output"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4629
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4636
 #, elixir-autogen, elixir-format
 msgid "Give the draft a name."
 msgstr ""
@@ -4400,12 +4400,12 @@ msgstr ""
 msgid "Give the snippet a name first."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5365
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5372
 #, elixir-autogen, elixir-format
 msgid "Give this button a label."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5377
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5384
 #, elixir-autogen, elixir-format
 msgid "Give this field a name to submit under."
 msgstr ""
@@ -4415,22 +4415,22 @@ msgstr ""
 msgid "Give this form a name above to write code for it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5382
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5389
 #, elixir-autogen, elixir-format
 msgid "Give this form a name of its own."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5391
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5398
 #, elixir-autogen, elixir-format
 msgid "Give this form event names no other form on this page shares."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5394
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5401
 #, elixir-autogen, elixir-format
 msgid "Give this form its own place to keep what is typed into it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5364
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5371
 #, elixir-autogen, elixir-format
 msgid "Give this link visible text."
 msgstr ""
@@ -4647,12 +4647,12 @@ msgstr ""
 msgid "Home"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6303
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6310
 #, elixir-autogen, elixir-format
 msgid "Hook attached."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6306
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6313
 #, elixir-autogen, elixir-format
 msgid "Hook removed."
 msgstr ""
@@ -4707,8 +4707,8 @@ msgstr ""
 msgid "How many times one signed-in account may try its current password to change it, right or wrong, before it waits for the 15 minutes to pass. Each site counts its own accounts; masters are counted together."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:135
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:257
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:136
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:258
 #, elixir-autogen, elixir-format
 msgid "Hybrid"
 msgstr ""
@@ -4739,7 +4739,7 @@ msgid "If the connection drops for a moment, what they typed is put back."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:275
-#: lib/mishka_cms_core/runtime/seo.ex:559
+#: lib/mishka_cms_core/runtime/seo.ex:560
 #, elixir-autogen, elixir-format
 msgid "Image"
 msgstr ""
@@ -4789,7 +4789,7 @@ msgstr ""
 msgid "In use"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:65
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:66
 #: lib/mishka_cms_core/runtime/runtime_status.ex:148
 #: lib/mishka_cms_core/runtime/site_health.ex:116
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:475
@@ -4950,7 +4950,7 @@ msgstr ""
 msgid "It has nothing to send."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5227
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5234
 #, elixir-autogen, elixir-format
 msgid "It is a working form now. Its fields are checked and sent."
 msgstr ""
@@ -4990,7 +4990,7 @@ msgstr ""
 msgid "Its fields go in front of that form's Send button, and this form is removed."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6951
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6958
 #, elixir-autogen, elixir-format
 msgid "Its handlers were renamed with the form."
 msgstr ""
@@ -5080,8 +5080,8 @@ msgstr ""
 msgid "Justify"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:177
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:197
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:178
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:198
 #, elixir-autogen, elixir-format
 msgid "KB"
 msgstr ""
@@ -5121,7 +5121,7 @@ msgstr ""
 msgid "Kept as a draft. Publish is still the live page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3784
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3791
 #, elixir-autogen, elixir-format
 msgid "Kept as “%{label}”."
 msgstr ""
@@ -5311,7 +5311,7 @@ msgstr ""
 msgid "Let it close again"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5380
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5387
 #, elixir-autogen, elixir-format
 msgid "Let this field's binding decide the key it sends."
 msgstr ""
@@ -5341,13 +5341,13 @@ msgstr ""
 msgid "Line %{line}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7513
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7520
 #, elixir-autogen, elixir-format
 msgid "Line %{line}, column %{column}: %{message}"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/code_check.ex:162
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7520
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7527
 #, elixir-autogen, elixir-format
 msgid "Line %{line}: %{message}"
 msgstr ""
@@ -5358,7 +5358,7 @@ msgid "Line height"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:242
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:301
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:305
 #, elixir-autogen, elixir-format
 msgid "Link"
 msgstr ""
@@ -5567,13 +5567,13 @@ msgstr ""
 msgid "M"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5214
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5346
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5221
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5353
 #, elixir-autogen, elixir-format
 msgid "Made a form work as they type"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5224
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5231
 #, elixir-autogen, elixir-format
 msgid "Made it a working form"
 msgstr ""
@@ -5609,7 +5609,7 @@ msgstr ""
 msgid "Make it work as they type"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5370
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5377
 #, elixir-autogen, elixir-format
 msgid "Make the first heading on this page an h1."
 msgstr ""
@@ -5644,7 +5644,7 @@ msgstr ""
 msgid "Manage user accounts and permissions."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:168
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:169
 #, elixir-autogen, elixir-format
 msgid "Manage users"
 msgstr ""
@@ -5711,7 +5711,7 @@ msgstr ""
 msgid "Marketing"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:98
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:99
 #, elixir-autogen, elixir-format
 msgid "Master"
 msgstr ""
@@ -5907,7 +5907,7 @@ msgstr ""
 msgid "Move to controls"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6671
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6678
 #, elixir-autogen, elixir-format
 msgid "Moved %{property} to the controls."
 msgstr ""
@@ -5953,8 +5953,8 @@ msgstr ""
 msgid "Moved its fields to %{form}. The empty form was removed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:556
 #: lib/mishka_cms_core/runtime/seo.ex:557
+#: lib/mishka_cms_core/runtime/seo.ex:558
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:83
 #, elixir-autogen, elixir-format
 msgid "Name"
@@ -5985,7 +5985,7 @@ msgstr ""
 msgid "Name, email and message, checked as the visitor types."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5350
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5357
 #, elixir-autogen, elixir-format
 msgid "Named a field"
 msgstr ""
@@ -6022,7 +6022,7 @@ msgstr ""
 msgid "Needs attention"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:69
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:70
 #, elixir-autogen, elixir-format
 msgid "Needs triage"
 msgstr ""
@@ -6375,17 +6375,17 @@ msgstr ""
 msgid "Not on this site"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5957
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5964
 #, elixir-autogen, elixir-format
 msgid "Not published — nothing on this layout renders @inner_content, so every page using it would come out empty."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5925
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5932
 #, elixir-autogen, elixir-format
 msgid "Not published — this markup will not compile. %{reason}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6002
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6009
 #, elixir-autogen, elixir-format
 msgid "Not saved — %{fields} is required and empty."
 msgid_plural "Not saved — %{fields} are required and empty."
@@ -6407,7 +6407,7 @@ msgstr ""
 msgid "Not used by any component"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3292
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3299
 #, elixir-autogen, elixir-format
 msgid "Note deleted."
 msgstr ""
@@ -6536,7 +6536,7 @@ msgstr[1] ""
 msgid "Nothing was changed — this editor has no assistant connected yet."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5485
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5492
 #, elixir-autogen, elixir-format
 msgid "Nothing was changed. %{reason}"
 msgstr ""
@@ -6569,7 +6569,7 @@ msgid "Now"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:257
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:304
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:308
 #, elixir-autogen, elixir-format
 msgid "Numbered list"
 msgstr ""
@@ -6718,7 +6718,7 @@ msgstr ""
 msgid "Only a plain HTML form can be replaced."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7219
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7226
 #, elixir-autogen, elixir-format
 msgid "Only elements sitting side by side can be wrapped together."
 msgstr ""
@@ -6733,7 +6733,7 @@ msgstr ""
 msgid "Only you are editing this page"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widget.ex:884
+#: lib/mishka_cms_core/dashboard/widget.ex:889
 #, elixir-autogen, elixir-format
 msgid "Only you see this. Also editable from the %{widget} card's gear on the dashboard."
 msgstr ""
@@ -6780,7 +6780,7 @@ msgstr ""
 msgid "Open in a new tab"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:69
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:70
 #, elixir-autogen, elixir-format
 msgid "Open issues"
 msgstr ""
@@ -6816,7 +6816,7 @@ msgstr ""
 msgid "Open with this markup"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4612
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4619
 #, elixir-autogen, elixir-format
 msgid "Opening “%{label}”…"
 msgstr ""
@@ -6893,7 +6893,7 @@ msgstr ""
 msgid "Overlays"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:36
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:37
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:60
 #: lib/mishka_cms_core_web/live/admin/components/site_details_modal.ex:32
 #, elixir-autogen, elixir-format
@@ -7018,7 +7018,7 @@ msgid "Pages"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:235
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:294
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:298
 #, elixir-autogen, elixir-format
 msgid "Paragraph"
 msgstr ""
@@ -7115,7 +7115,7 @@ msgstr ""
 msgid "Permission Details"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:108
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:109
 #, elixir-autogen, elixir-format
 msgid "Permission access"
 msgstr ""
@@ -7137,8 +7137,8 @@ msgstr ""
 msgid "Permissions can only be created, edited, or deleted by master administrators."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:134
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:256
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:135
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:257
 #, elixir-autogen, elixir-format
 msgid "Phoenix Only"
 msgstr ""
@@ -7199,7 +7199,7 @@ msgstr ""
 msgid "Plugins"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5385
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5392
 #, elixir-autogen, elixir-format
 msgid "Point this form at a page assign to hold what is typed."
 msgstr ""
@@ -7358,7 +7358,7 @@ msgstr ""
 msgid "Publish mode — these changes are not being saved. Publish to make them live, or keep them as a draft."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2623
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2630
 #, elixir-autogen, elixir-format
 msgid "Publish mode: changes are recorded but not saved to the page. It goes live when you press Publish."
 msgstr ""
@@ -7373,15 +7373,15 @@ msgstr ""
 msgid "Publish — this will make the page visible to visitors"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:452
-#: lib/mishka_cms_core/runtime/seo.ex:560
+#: lib/mishka_cms_core/runtime/seo.ex:453
+#: lib/mishka_cms_core/runtime/seo.ex:561
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14733
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14784
 #, elixir-autogen, elixir-format
 msgid "Published"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6066
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6073
 #, elixir-autogen, elixir-format
 msgid "Published %{name}"
 msgstr ""
@@ -7401,7 +7401,7 @@ msgstr ""
 msgid "Published to the live page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6069
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6076
 #, elixir-autogen, elixir-format
 msgid "Published to the live page. The changes behind this are recorded but no longer restorable."
 msgstr ""
@@ -7431,12 +7431,12 @@ msgstr ""
 msgid "Put this class on the selected element"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5376
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5383
 #, elixir-autogen, elixir-format
 msgid "Put this field inside a form."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5402
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5409
 #, elixir-autogen, elixir-format
 msgid "Put this submit button inside a form."
 msgstr ""
@@ -7447,7 +7447,7 @@ msgid "Quick actions"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:265
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:305
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:309
 #, elixir-autogen, elixir-format
 msgid "Quote"
 msgstr ""
@@ -7584,12 +7584,12 @@ msgstr[1] ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:474
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:811
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:310
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:314
 #, elixir-autogen, elixir-format
 msgid "Redo"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:67
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:68
 #, elixir-autogen, elixir-format
 msgid "Registered"
 msgstr ""
@@ -7624,7 +7624,7 @@ msgstr ""
 msgid "Reload the canvas?"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4717
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4724
 #, elixir-autogen, elixir-format
 msgid "Reloading the live page…"
 msgstr ""
@@ -7655,7 +7655,7 @@ msgstr ""
 msgid "Remove attribute"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5374
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5381
 #, elixir-autogen, elixir-format
 msgid "Remove the nested <html> element from this template."
 msgstr ""
@@ -7685,13 +7685,13 @@ msgstr ""
 msgid "Removed wrapper"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5388
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5395
 #, elixir-autogen, elixir-format
 msgid "Rename this form so no other form shares its name."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5296
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5351
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5303
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5358
 #, elixir-autogen, elixir-format
 msgid "Renamed a form"
 msgstr ""
@@ -7731,7 +7731,7 @@ msgstr ""
 msgid "Reopen the panel to try again."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3240
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3247
 #, elixir-autogen, elixir-format
 msgid "Reopened."
 msgstr ""
@@ -7756,7 +7756,7 @@ msgstr ""
 msgid "Replace it with Form from Blocks › Forms."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5362
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5369
 #, elixir-autogen, elixir-format
 msgid "Replace this empty alt with a real description."
 msgstr ""
@@ -7857,7 +7857,7 @@ msgstr ""
 msgid "Resolved by %{name}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3236
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3243
 #, elixir-autogen, elixir-format
 msgid "Resolved."
 msgstr ""
@@ -7880,7 +7880,7 @@ msgstr ""
 msgid "Restored in the editor. The live page does not change until you publish."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4351
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4358
 #, elixir-autogen, elixir-format
 msgid "Restoring…"
 msgstr ""
@@ -7912,12 +7912,12 @@ msgstr ""
 msgid "Reuse this on any page"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4367
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4374
 #, elixir-autogen, elixir-format
 msgid "Reverted to \"%{label}\""
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4366
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4373
 #, elixir-autogen, elixir-format
 msgid "Reverting to “%{label}”…"
 msgstr ""
@@ -7928,7 +7928,7 @@ msgstr ""
 msgid "Review"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7659
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7666
 #, elixir-autogen, elixir-format
 msgid "Rewrote %{label}"
 msgstr ""
@@ -8117,7 +8117,7 @@ msgstr ""
 msgid "Saved as draft — preview or publish it from the bar above."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5739
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5746
 #, elixir-autogen, elixir-format
 msgid "Saved as “%{label}”."
 msgstr ""
@@ -8138,7 +8138,7 @@ msgstr ""
 msgid "Saved to the %{label} itself. The design you have open is untouched."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6873
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6880
 #, elixir-autogen, elixir-format
 msgid "Saved to the %{noun}."
 msgstr ""
@@ -8273,7 +8273,7 @@ msgstr ""
 msgid "Select an element on the canvas to edit it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5819
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5826
 #, elixir-autogen, elixir-format
 msgid "Select an element on the page first."
 msgstr ""
@@ -8748,7 +8748,7 @@ msgstr ""
 msgid "Site is deactivated — not serving requests."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:89
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:90
 #, elixir-autogen, elixir-format
 msgid "Site not found."
 msgstr ""
@@ -8758,9 +8758,9 @@ msgstr ""
 msgid "Site offline"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:36
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:60
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:96
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:37
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:61
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:97
 #, elixir-autogen, elixir-format
 msgid "Site overview"
 msgstr ""
@@ -8785,14 +8785,14 @@ msgstr ""
 msgid "Sitemap"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:66
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:67
 #: lib/mishka_cms_core/sidebar.ex:279
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/site/index.html.heex:3
 #, elixir-autogen, elixir-format
 msgid "Sites"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:126
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:127
 #, elixir-autogen, elixir-format
 msgid "Sites by mode"
 msgstr ""
@@ -8802,7 +8802,7 @@ msgstr ""
 msgid "Sites offline on their own"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:43
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:44
 #, elixir-autogen, elixir-format
 msgid "Sites, users, drafts, issues, bloggers and versions at a glance."
 msgstr ""
@@ -8832,7 +8832,7 @@ msgstr ""
 msgid "Slots"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3151
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3158
 #, elixir-autogen, elixir-format
 msgid "Snippet deleted."
 msgstr ""
@@ -9074,7 +9074,7 @@ msgstr ""
 msgid "Style"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2783
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2790
 #, elixir-autogen, elixir-format
 msgid "Style applied."
 msgstr ""
@@ -9191,7 +9191,7 @@ msgstr ""
 msgid "Take every site offline (maintenance mode)"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5396
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5403
 #, elixir-autogen, elixir-format
 msgid "Take this form out of the form around it."
 msgstr ""
@@ -9226,7 +9226,7 @@ msgstr ""
 msgid "Templates scanned — every key they ask for has a row now"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:90
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:91
 #, elixir-autogen, elixir-format
 msgid "Tenant"
 msgstr ""
@@ -9314,34 +9314,34 @@ msgstr ""
 msgid "That CSS has an unmatched { or }."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4996
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5003
 #, elixir-autogen, elixir-format
 msgid "That action needs a class to toggle or words to say, or is one this editor cannot write. Nothing was changed."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7250
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7257
 #: lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:1083
 #, elixir-autogen, elixir-format
 msgid "That change could not be applied."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7238
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7245
 #, elixir-autogen, elixir-format
 msgid "That change could not be applied: %{message}."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6812
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6819
 #, elixir-autogen, elixir-format
 msgid "That code could not be saved."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3793
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3800
 #, elixir-autogen, elixir-format
 msgid "That could not be saved, so you are still here with your changes."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4577
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4648
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4584
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4655
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:819
 #, elixir-autogen, elixir-format
 msgid "That draft is no longer there."
@@ -9352,7 +9352,7 @@ msgstr ""
 msgid "That drop target no longer exists."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7210
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7217
 #, elixir-autogen, elixir-format
 msgid "That element cannot hold content."
 msgstr ""
@@ -9367,7 +9367,7 @@ msgstr ""
 msgid "That element has no style scope."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7213
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7220
 #, elixir-autogen, elixir-format
 msgid "That element holds nothing a link could go around."
 msgstr ""
@@ -9382,19 +9382,19 @@ msgstr ""
 msgid "That element is locked."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5003
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6323
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7208
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7563
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5010
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6330
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7215
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7570
 #, elixir-autogen, elixir-format
 msgid "That element is no longer on the page."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2130
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7721
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7744
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7769
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7789
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7728
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7751
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7776
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7796
 #, elixir-autogen, elixir-format
 msgid "That file is no longer in the library."
 msgstr ""
@@ -9412,22 +9412,22 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/page_builder/page_forms/_form_placement.ex:201
 #: lib/mishka_cms_core/runtime/page_builder/page_forms/_form_placement.ex:1431
 #: lib/mishka_cms_core/runtime/page_builder/page_forms/_form_placement.ex:1571
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4259
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4266
 #, elixir-autogen, elixir-format
 msgid "That form is no longer on the page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4323
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4330
 #, elixir-autogen, elixir-format
 msgid "That history could not be cleared."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6311
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6318
 #, elixir-autogen, elixir-format
 msgid "That hook is no longer available on this site."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7215
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7222
 #, elixir-autogen, elixir-format
 msgid "That is a link already, or sits inside one."
 msgstr ""
@@ -9442,7 +9442,7 @@ msgstr ""
 msgid "That is not a site this page can update."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6984
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6991
 #, elixir-autogen, elixir-format
 msgid "That is not a value a stylesheet can hold."
 msgstr ""
@@ -9452,7 +9452,7 @@ msgstr ""
 msgid "That is not an http:// or https:// address."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7503
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7510
 #, elixir-autogen, elixir-format
 msgid "That is not markup this editor can read: %{reason}"
 msgstr ""
@@ -9462,12 +9462,12 @@ msgstr ""
 msgid "That is over %{limit} characters for one class. Split it in two."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7224
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7231
 #, elixir-autogen, elixir-format
 msgid "That is the document itself — put content inside it rather than around it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2813
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:2820
 #, elixir-autogen, elixir-format
 msgid "That line is no longer there — reopen the panel."
 msgstr ""
@@ -9477,18 +9477,18 @@ msgstr ""
 msgid "That markup does not parse, so it could not be saved."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7221
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7228
 #, elixir-autogen, elixir-format
 msgid "That note belongs to another site."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3311
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3318
 #, elixir-autogen, elixir-format
 msgid "That note is about the whole page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3250
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7834
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3257
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7841
 #, elixir-autogen, elixir-format
 msgid "That note is no longer here."
 msgstr ""
@@ -9503,22 +9503,22 @@ msgstr ""
 msgid "That response is not a mishka.ui_kit.bundle.v3 — it needs a \"$schema\", a \"name\" and a \"components\" list."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3162
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3169
 #, elixir-autogen, elixir-format
 msgid "That snippet belongs to another site."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3165
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3172
 #, elixir-autogen, elixir-format
 msgid "That snippet is no longer there."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3158
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3165
 #, elixir-autogen, elixir-format
 msgid "That snippet is shared with every site — only a master can delete it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3141
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3148
 #, elixir-autogen, elixir-format
 msgid "That snippet no longer exists."
 msgstr ""
@@ -9529,7 +9529,7 @@ msgstr ""
 msgid "That step could not be restored."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4373
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4380
 #, elixir-autogen, elixir-format
 msgid "That step is no longer available."
 msgstr ""
@@ -9539,7 +9539,7 @@ msgstr ""
 msgid "That step's document is no longer kept."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6985
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6992
 #, elixir-autogen, elixir-format
 msgid "That value is too long for a token."
 msgstr ""
@@ -9628,7 +9628,7 @@ msgstr ""
 msgid "The duplicate did not finish."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3318
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3325
 #, elixir-autogen, elixir-format
 msgid "The element that note was on is no longer on this page."
 msgstr ""
@@ -9741,7 +9741,7 @@ msgstr ""
 msgid "The text visitors read on the built-in holding page while the site is offline. A site whose Error Page has an Offline entry shows that page instead."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6994
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7001
 #, elixir-autogen, elixir-format
 msgid "The token could not be saved."
 msgstr ""
@@ -9858,7 +9858,7 @@ msgstr ""
 msgid "This editing session belongs to another site. Open the document from your own list to edit it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7209
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7216
 #, elixir-autogen, elixir-format
 msgid "This editing session expired. Reload the builder."
 msgstr ""
@@ -9889,7 +9889,7 @@ msgstr ""
 msgid "This element holds text only — select the element around it to give it CSS."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4956
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4963
 #, elixir-autogen, elixir-format
 msgid "This element is always on the page."
 msgstr ""
@@ -10068,8 +10068,8 @@ msgstr ""
 msgid "This record no longer exists."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5631
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5742
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5638
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5749
 #, elixir-autogen, elixir-format
 msgid "This section does not keep drafts."
 msgstr ""
@@ -10092,7 +10092,7 @@ msgstr ""
 msgid "This site already has everything the %{noun} ships. Nothing to add."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6986
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6993
 #, elixir-autogen, elixir-format
 msgid "This site does not declare that token."
 msgstr ""
@@ -10170,7 +10170,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/dashboard/widget.ex:443
 #: lib/mishka_cms_core/dashboard/widget.ex:486
-#: lib/mishka_cms_core/dashboard/widget.ex:812
+#: lib/mishka_cms_core/dashboard/widget.ex:817
 #, elixir-autogen, elixir-format
 msgid "This widget could not load."
 msgstr ""
@@ -10221,7 +10221,7 @@ msgid "Times used across this site"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/tree/styles.ex:345
-#: lib/mishka_cms_core/runtime/seo.ex:292
+#: lib/mishka_cms_core/runtime/seo.ex:293
 #: lib/mishka_cms_core_web/templates/seo_form.ex:375
 #: lib/mishka_cms_core_web/templates/seo_form.ex:585
 #, elixir-autogen, elixir-format
@@ -10497,14 +10497,14 @@ msgstr ""
 msgid "Under the %{size} budget for this template."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4009
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4016
 #, elixir-autogen, elixir-format
 msgid "Undid %{revision} — the document is back to before that request."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:469
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:802
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:309
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:313
 #, elixir-autogen, elixir-format
 msgid "Undo"
 msgstr ""
@@ -10546,7 +10546,7 @@ msgstr ""
 msgid "Unsaved edit — a static preview of your changes. Save it as a draft for the full live-lifecycle preview."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4750
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:4757
 #, elixir-autogen, elixir-format
 msgid "Unsaved work discarded."
 msgstr ""
@@ -10572,7 +10572,7 @@ msgstr ""
 msgid "Unused"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:156
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:157
 #, elixir-autogen, elixir-format
 msgid "Unused permissions"
 msgstr ""
@@ -10694,9 +10694,9 @@ msgstr ""
 msgid "User permissions updated"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:67
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:41
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:74
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:68
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:42
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:75
 #: lib/mishka_cms_core/sidebar.ex:406
 #: lib/mishka_cms_core_web/live/admin/dashboard/account/user/index.ex:41
 #: lib/mishka_cms_core_web/live/admin/dashboard/account/user/index.html.heex:12
@@ -10745,7 +10745,7 @@ msgstr ""
 msgid "Version restored."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:71
+#: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:72
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14909
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:63
 #, elixir-autogen, elixir-format
@@ -10782,8 +10782,8 @@ msgstr ""
 msgid "View all logs →"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:90
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:144
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:91
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:145
 #, elixir-autogen, elixir-format
 msgid "View all sites"
 msgstr ""
@@ -11081,12 +11081,12 @@ msgstr ""
 msgid "Width"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:120
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:121
 #, elixir-autogen, elixir-format
 msgid "With permissions"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:128
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:129
 #, elixir-autogen, elixir-format
 msgid "Without permissions"
 msgstr ""
@@ -11139,7 +11139,7 @@ msgid_plural "Wrapped %{count} elements in <%{tag}>"
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5349
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5356
 #, elixir-autogen, elixir-format
 msgid "Wrapped a field in a form"
 msgstr ""
@@ -11159,7 +11159,7 @@ msgstr ""
 msgid "Write about the whole page instead"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5359
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5366
 #, elixir-autogen, elixir-format
 msgid "Write an alt attribute describing this image."
 msgstr ""
@@ -11240,7 +11240,7 @@ msgstr ""
 msgid "You are now signed out"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3864
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3871
 #, elixir-autogen, elixir-format
 msgid "You cannot install for that site."
 msgstr ""
@@ -11250,8 +11250,8 @@ msgstr ""
 msgid "You cannot scan the templates."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6989
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6992
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6996
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6999
 #, elixir-autogen, elixir-format
 msgid "You do not have permission to change design tokens here."
 msgstr ""
@@ -11539,12 +11539,12 @@ msgstr ""
 msgid "data"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:111
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:112
 #, elixir-autogen, elixir-format
 msgid "defined"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:163
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:164
 #, elixir-autogen, elixir-format
 msgid "defined but never assigned"
 msgstr ""
@@ -11707,7 +11707,7 @@ msgstr ""
 msgid "healthy"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:147
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:148
 #, elixir-autogen, elixir-format
 msgid "hold an admin permission, one area included"
 msgstr ""
@@ -12082,7 +12082,7 @@ msgstr ""
 msgid "site"
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:109
+#: lib/mishka_cms_core/dashboard/widgets/site_overview.ex:110
 #, elixir-autogen, elixir-format
 msgid "sites total"
 msgstr ""
@@ -12125,7 +12125,7 @@ msgid "tailwind.config.js theme.extend"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/editor_session/journal.ex:372
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5514
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5521
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:15851
 #, elixir-autogen, elixir-format
 msgid "text"
@@ -12317,7 +12317,7 @@ msgstr ""
 msgid "use Preview ▸ Open in a new tab to click through a saved draft."
 msgstr ""
 
-#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:84
+#: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:85
 #, elixir-autogen, elixir-format
 msgid "users total"
 msgstr ""
@@ -12387,12 +12387,12 @@ msgstr ""
 msgid "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers and _ only."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7695
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7702
 #, elixir-autogen, elixir-format
 msgid "“%{name}” is a document, and this field takes a picture. It is saved in the library."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7702
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7709
 #, elixir-autogen, elixir-format
 msgid "“%{name}” is a video, and this field takes a picture. It is saved in the library."
 msgstr ""
@@ -12402,7 +12402,7 @@ msgstr ""
 msgid "“%{name}” is declared twice."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7709
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:7716
 #, elixir-autogen, elixir-format
 msgid "“%{name}” is not a picture, and this field takes a picture. It is saved in the library."
 msgstr ""
@@ -12422,7 +12422,7 @@ msgstr ""
 msgid "✕ whole document"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:481
+#: lib/mishka_cms_core/runtime/seo.ex:482
 #, elixir-autogen, elixir-format
 msgid "A word an article is about, one tag each."
 msgstr ""
@@ -12432,316 +12432,316 @@ msgstr ""
 msgid "Add an og:image tag so link previews show a picture."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:468
+#: lib/mishka_cms_core/runtime/seo.ex:469
 #, elixir-autogen, elixir-format
 msgid "Article author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:476
+#: lib/mishka_cms_core/runtime/seo.ex:477
 #, elixir-autogen, elixir-format
 msgid "Article section"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:480
+#: lib/mishka_cms_core/runtime/seo.ex:481
 #, elixir-autogen, elixir-format
 msgid "Article tag"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:405
-#: lib/mishka_cms_core/runtime/seo.ex:561
+#: lib/mishka_cms_core/runtime/seo.ex:406
+#: lib/mishka_cms_core/runtime/seo.ex:562
 #, elixir-autogen, elixir-format
 msgid "Author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:417
+#: lib/mishka_cms_core/runtime/seo.ex:418
 #, elixir-autogen, elixir-format
 msgid "Author's X account"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:299
+#: lib/mishka_cms_core/runtime/seo.ex:300
 #: lib/mishka_cms_core_web/templates/seo_form.ex:1097
 #, elixir-autogen, elixir-format
 msgid "Canonical address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:350
+#: lib/mishka_cms_core/runtime/seo.ex:351
 #, elixir-autogen, elixir-format
 msgid "Each other language the page is published in, one tag each."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:363
+#: lib/mishka_cms_core/runtime/seo.ex:364
 #, elixir-autogen, elixir-format
 msgid "How X (Twitter) draws a link preview: with a small or a large picture."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:434
+#: lib/mishka_cms_core/runtime/seo.ex:435
 #, elixir-autogen, elixir-format
 msgid "Image height"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:358
+#: lib/mishka_cms_core/runtime/seo.ex:359
 #, elixir-autogen, elixir-format
 msgid "Image text"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:425
+#: lib/mishka_cms_core/runtime/seo.ex:426
 #, elixir-autogen, elixir-format
 msgid "Image width"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:426
-#: lib/mishka_cms_core/runtime/seo.ex:435
+#: lib/mishka_cms_core/runtime/seo.ex:427
+#: lib/mishka_cms_core/runtime/seo.ex:436
 #, elixir-autogen, elixir-format
 msgid "In pixels, so a preview can be drawn before the picture loads."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:398
+#: lib/mishka_cms_core/runtime/seo.ex:399
 #, elixir-autogen, elixir-format
 msgid "Language version"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:342
+#: lib/mishka_cms_core/runtime/seo.ex:343
 #, elixir-autogen, elixir-format
 msgid "Locale"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:460
+#: lib/mishka_cms_core/runtime/seo.ex:461
 #, elixir-autogen, elixir-format
 msgid "Modified"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:334
+#: lib/mishka_cms_core/runtime/seo.ex:335
 #, elixir-autogen, elixir-format
 msgid "Open Graph address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:330
+#: lib/mishka_cms_core/runtime/seo.ex:331
 #, elixir-autogen, elixir-format
 msgid "Open Graph description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:353
+#: lib/mishka_cms_core/runtime/seo.ex:354
 #, elixir-autogen, elixir-format
 msgid "Open Graph image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:322
+#: lib/mishka_cms_core/runtime/seo.ex:323
 #, elixir-autogen, elixir-format
 msgid "Open Graph title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:317
+#: lib/mishka_cms_core/runtime/seo.ex:318
 #, elixir-autogen, elixir-format
 msgid "Open Graph type"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:349
+#: lib/mishka_cms_core/runtime/seo.ex:350
 #, elixir-autogen, elixir-format
 msgid "Other locales"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:510
+#: lib/mishka_cms_core/runtime/seo.ex:511
 #, elixir-autogen, elixir-format
 msgid "Page address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:505
+#: lib/mishka_cms_core/runtime/seo.ex:506
 #, elixir-autogen, elixir-format
 msgid "Page description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:520
+#: lib/mishka_cms_core/runtime/seo.ex:521
 #, elixir-autogen, elixir-format
 msgid "Page image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:515
+#: lib/mishka_cms_core/runtime/seo.ex:516
 #, elixir-autogen, elixir-format
 msgid "Page language"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:500
+#: lib/mishka_cms_core/runtime/seo.ex:501
 #, elixir-autogen, elixir-format
 msgid "Page title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:308
+#: lib/mishka_cms_core/runtime/seo.ex:309
 #, elixir-autogen, elixir-format
 msgid "Robots"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:531
+#: lib/mishka_cms_core/runtime/seo.ex:532
 #, elixir-autogen, elixir-format
 msgid "Site address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:338
-#: lib/mishka_cms_core/runtime/seo.ex:526
+#: lib/mishka_cms_core/runtime/seo.ex:339
+#: lib/mishka_cms_core/runtime/seo.ex:527
 #, elixir-autogen, elixir-format
 msgid "Site name"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:409
+#: lib/mishka_cms_core/runtime/seo.ex:410
 #, elixir-autogen, elixir-format
 msgid "Site's X account"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:335
+#: lib/mishka_cms_core/runtime/seo.ex:336
 #, elixir-autogen, elixir-format
 msgid "The address a link preview opens. Absolute, https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:469
+#: lib/mishka_cms_core/runtime/seo.ex:470
 #, elixir-autogen, elixir-format
 msgid "The address of the author's profile."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:418
+#: lib/mishka_cms_core/runtime/seo.ex:419
 #, elixir-autogen, elixir-format
 msgid "The author's @username on X (Twitter)."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:511
+#: lib/mishka_cms_core/runtime/seo.ex:512
 #, elixir-autogen, elixir-format
 msgid "The canonical address of this page, with https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:516
+#: lib/mishka_cms_core/runtime/seo.ex:517
 #, elixir-autogen, elixir-format
 msgid "The language code of this address, such as en."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:301
+#: lib/mishka_cms_core/runtime/seo.ex:302
 #, elixir-autogen, elixir-format
 msgid "The one address search engines should index this page under. Absolute, https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:506
+#: lib/mishka_cms_core/runtime/seo.ex:507
 #, elixir-autogen, elixir-format
 msgid "The page's description. Empty leaves out whatever uses it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:343
+#: lib/mishka_cms_core/runtime/seo.ex:344
 #, elixir-autogen, elixir-format
 msgid "The page's language, as en or pt_BR."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:355
+#: lib/mishka_cms_core/runtime/seo.ex:356
 #, elixir-autogen, elixir-format
 msgid "The picture a link preview shows. An https address or a path on the site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:522
+#: lib/mishka_cms_core/runtime/seo.ex:523
 #, elixir-autogen, elixir-format
 msgid "The picture a plugin set for this address. Empty leaves out whatever uses it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:380
+#: lib/mishka_cms_core/runtime/seo.ex:381
 #, elixir-autogen, elixir-format
 msgid "The picture an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:477
+#: lib/mishka_cms_core/runtime/seo.ex:478
 #, elixir-autogen, elixir-format
 msgid "The section an article belongs to, such as Technology."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:339
+#: lib/mishka_cms_core/runtime/seo.ex:340
 #, elixir-autogen, elixir-format
 msgid "The site a link preview names. The site title setting, unless set here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:410
+#: lib/mishka_cms_core/runtime/seo.ex:411
 #, elixir-autogen, elixir-format
 msgid "The site's @username on X (Twitter)."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:532
+#: lib/mishka_cms_core/runtime/seo.ex:533
 #, elixir-autogen, elixir-format
 msgid "The site's https address, with no path."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:305
+#: lib/mishka_cms_core/runtime/seo.ex:306
 #, elixir-autogen, elixir-format
 msgid "The summary a search result shows under the title."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:331
+#: lib/mishka_cms_core/runtime/seo.ex:332
 #, elixir-autogen, elixir-format
 msgid "The text a link preview shows under its title."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:376
+#: lib/mishka_cms_core/runtime/seo.ex:377
 #, elixir-autogen, elixir-format
 msgid "The text an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:323
+#: lib/mishka_cms_core/runtime/seo.ex:324
 #, elixir-autogen, elixir-format
 msgid "The title a link preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:368
+#: lib/mishka_cms_core/runtime/seo.ex:369
 #, elixir-autogen, elixir-format
 msgid "The title an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:501
+#: lib/mishka_cms_core/runtime/seo.ex:502
 #, elixir-autogen, elixir-format
 msgid "The title this address shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:400
+#: lib/mishka_cms_core/runtime/seo.ex:401
 #, elixir-autogen, elixir-format
 msgid "This page in another language, with its language code in hreflang, or x-default for the one to show when none matches."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:362
+#: lib/mishka_cms_core/runtime/seo.ex:363
 #, elixir-autogen, elixir-format
 msgid "Twitter card"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:375
+#: lib/mishka_cms_core/runtime/seo.ex:376
 #, elixir-autogen, elixir-format
 msgid "Twitter description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:379
+#: lib/mishka_cms_core/runtime/seo.ex:380
 #, elixir-autogen, elixir-format
 msgid "Twitter image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:367
+#: lib/mishka_cms_core/runtime/seo.ex:368
 #, elixir-autogen, elixir-format
 msgid "Twitter title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:318
+#: lib/mishka_cms_core/runtime/seo.ex:319
 #, elixir-autogen, elixir-format
 msgid "What the page is to a link preview: a website, an article, a profile…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:359
+#: lib/mishka_cms_core/runtime/seo.ex:360
 #, elixir-autogen, elixir-format
 msgid "What the preview picture shows, for people who cannot see it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:461
+#: lib/mishka_cms_core/runtime/seo.ex:462
 #, elixir-autogen, elixir-format
 msgid "When an article last changed, as an ISO 8601 date."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:453
+#: lib/mishka_cms_core/runtime/seo.ex:454
 #, elixir-autogen, elixir-format
 msgid "When an article was first published, as an ISO 8601 date."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:310
+#: lib/mishka_cms_core/runtime/seo.ex:311
 #, elixir-autogen, elixir-format
 msgid "Whether search engines may index this page and follow its links. A page that needs a permission is never indexed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:406
+#: lib/mishka_cms_core/runtime/seo.ex:407
 #, elixir-autogen, elixir-format
 msgid "Who wrote the page."
 msgstr ""
@@ -12761,9 +12761,9 @@ msgstr ""
 msgid "Add a tag…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:662
-#: lib/mishka_cms_core/runtime/seo.ex:671
-#: lib/mishka_cms_core/runtime/seo.ex:682
+#: lib/mishka_cms_core/runtime/seo.ex:663
+#: lib/mishka_cms_core/runtime/seo.ex:672
+#: lib/mishka_cms_core/runtime/seo.ex:683
 #, elixir-autogen, elixir-format
 msgid "Address"
 msgstr ""
@@ -12789,22 +12789,22 @@ msgstr ""
 msgid "Best between %{min} and %{max} characters"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:581
+#: lib/mishka_cms_core/runtime/seo.ex:582
 #, elixir-autogen, elixir-format
 msgid "Blog post"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:589
+#: lib/mishka_cms_core/runtime/seo.ex:590
 #, elixir-autogen, elixir-format
 msgid "Brand"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:675
+#: lib/mishka_cms_core/runtime/seo.ex:676
 #, elixir-autogen, elixir-format
 msgid "City"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:570
+#: lib/mishka_cms_core/runtime/seo.ex:571
 #, elixir-autogen, elixir-format
 msgid "Currency"
 msgstr ""
@@ -12829,12 +12829,12 @@ msgstr ""
 msgid "Empty: search engines pick a passage from the page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:649
+#: lib/mishka_cms_core/runtime/seo.ex:650
 #, elixir-autogen, elixir-format
 msgid "Event"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:555
+#: lib/mishka_cms_core/runtime/seo.ex:556
 #, elixir-autogen, elixir-format
 msgid "Headline"
 msgstr ""
@@ -12849,17 +12849,17 @@ msgstr ""
 msgid "Hide from search engines"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:684
+#: lib/mishka_cms_core/runtime/seo.ex:685
 #, elixir-autogen, elixir-format
 msgid "Job title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:668
+#: lib/mishka_cms_core/runtime/seo.ex:669
 #, elixir-autogen, elixir-format
 msgid "Local business"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:663
+#: lib/mishka_cms_core/runtime/seo.ex:664
 #, elixir-autogen, elixir-format
 msgid "Logo"
 msgstr ""
@@ -12884,27 +12884,27 @@ msgstr ""
 msgid "Open Graph"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:660
+#: lib/mishka_cms_core/runtime/seo.ex:661
 #, elixir-autogen, elixir-format
 msgid "Organization"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:680
+#: lib/mishka_cms_core/runtime/seo.ex:681
 #, elixir-autogen, elixir-format
 msgid "Person"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:655
+#: lib/mishka_cms_core/runtime/seo.ex:656
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:569
+#: lib/mishka_cms_core/runtime/seo.ex:570
 #, elixir-autogen, elixir-format
 msgid "Price"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:588
+#: lib/mishka_cms_core/runtime/seo.ex:589
 #, elixir-autogen, elixir-format
 msgid "Product"
 msgstr ""
@@ -12914,24 +12914,24 @@ msgstr ""
 msgid "Question"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:585
+#: lib/mishka_cms_core/runtime/seo.ex:586
 #, elixir-autogen, elixir-format
 msgid "Questions and answers"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3226
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:3233
 #: lib/mishka_cms_core_web/templates/seo_form.ex:231
 #: lib/mishka_cms_core_web/templates/seo_form.ex:623
 #, elixir-autogen, elixir-format
 msgid "Share image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:654
+#: lib/mishka_cms_core/runtime/seo.ex:655
 #, elixir-autogen, elixir-format
 msgid "Starts"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:674
+#: lib/mishka_cms_core/runtime/seo.ex:675
 #, elixir-autogen, elixir-format
 msgid "Street"
 msgstr ""
@@ -12946,7 +12946,7 @@ msgstr ""
 msgid "Tags"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:673
+#: lib/mishka_cms_core/runtime/seo.ex:674
 #, elixir-autogen, elixir-format
 msgid "Telephone"
 msgstr ""
@@ -13048,7 +13048,7 @@ msgstr ""
 msgid "The browser tab and the headline of a search result. Empty uses the one shown."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:294
+#: lib/mishka_cms_core/runtime/seo.ex:295
 #, elixir-autogen, elixir-format
 msgid "The browser tab and the headline of a search result. Empty uses the record's title, else the page's."
 msgstr ""
@@ -13063,7 +13063,7 @@ msgstr ""
 msgid "%{count} reviews"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:1469
+#: lib/mishka_cms_core/runtime/seo.ex:1499
 #, elixir-autogen, elixir-format
 msgid "%{title} – Page %{number}"
 msgstr ""
@@ -13080,17 +13080,17 @@ msgstr[1] ""
 msgid "A list of objects, each with an \"@type\". Values may use the variables above."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:625
+#: lib/mishka_cms_core/runtime/seo.ex:626
 #, elixir-autogen, elixir-format
 msgid "Application"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:618
+#: lib/mishka_cms_core/runtime/seo.ex:619
 #, elixir-autogen, elixir-format
 msgid "Book"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:629
+#: lib/mishka_cms_core/runtime/seo.ex:630
 #, elixir-autogen, elixir-format
 msgid "Category"
 msgstr ""
@@ -13106,7 +13106,7 @@ msgstr ""
 msgid "Click the box to choose a picture from Media."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:610
+#: lib/mishka_cms_core/runtime/seo.ex:611
 #, elixir-autogen, elixir-format
 msgid "Course"
 msgstr ""
@@ -13126,7 +13126,7 @@ msgstr ""
 msgid "Hide the address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:619
+#: lib/mishka_cms_core/runtime/seo.ex:620
 #, elixir-autogen, elixir-format
 msgid "ISBN"
 msgstr ""
@@ -13136,12 +13136,12 @@ msgstr ""
 msgid "JSON-LD"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:644
+#: lib/mishka_cms_core/runtime/seo.ex:645
 #, elixir-autogen, elixir-format
 msgid "Length (PT2M30S)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:565
+#: lib/mishka_cms_core/runtime/seo.ex:566
 #, elixir-autogen, elixir-format
 msgid "Number of ratings"
 msgstr ""
@@ -13156,7 +13156,7 @@ msgstr ""
 msgid "Preview with"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:564
+#: lib/mishka_cms_core/runtime/seo.ex:565
 #, elixir-autogen, elixir-format
 msgid "Rating (out of 5)"
 msgstr ""
@@ -13166,12 +13166,12 @@ msgstr ""
 msgid "Rating: %{value}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:596
+#: lib/mishka_cms_core/runtime/seo.ex:597
 #, elixir-autogen, elixir-format
 msgid "Recipe"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:630
+#: lib/mishka_cms_core/runtime/seo.ex:631
 #, elixir-autogen, elixir-format
 msgid "Runs on"
 msgstr ""
@@ -13181,12 +13181,12 @@ msgstr ""
 msgid "Search results may show its rating as stars. A rating can name a variable, such as {{post.rating}}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:603
+#: lib/mishka_cms_core/runtime/seo.ex:604
 #, elixir-autogen, elixir-format
 msgid "Serves"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:611
+#: lib/mishka_cms_core/runtime/seo.ex:612
 #, elixir-autogen, elixir-format
 msgid "Taught by"
 msgstr ""
@@ -13201,17 +13201,17 @@ msgstr ""
 msgid "The picture a link share shows. Click it to choose another."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:641
+#: lib/mishka_cms_core/runtime/seo.ex:642
 #, elixir-autogen, elixir-format
 msgid "Thumbnail"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:602
+#: lib/mishka_cms_core/runtime/seo.ex:603
 #, elixir-autogen, elixir-format
 msgid "Total time (PT45M)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:642
+#: lib/mishka_cms_core/runtime/seo.ex:643
 #, elixir-autogen, elixir-format
 msgid "Uploaded"
 msgstr ""
@@ -13221,17 +13221,17 @@ msgstr ""
 msgid "Use an address or a variable"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:637
+#: lib/mishka_cms_core/runtime/seo.ex:638
 #, elixir-autogen, elixir-format
 msgid "Video"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:643
+#: lib/mishka_cms_core/runtime/seo.ex:644
 #, elixir-autogen, elixir-format
 msgid "Video address"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6147
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6154
 #, elixir-autogen, elixir-format
 msgid "%{saved} 1 hidden element was left out."
 msgid_plural "%{saved} %{count} hidden elements were left out."
@@ -13293,12 +13293,12 @@ msgstr ""
 msgid "Shown to visitors"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6959
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6966
 #, elixir-autogen, elixir-format
 msgid "%{section} published."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6962
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6969
 #, elixir-autogen, elixir-format
 msgid "%{section} saved."
 msgstr ""
@@ -13308,7 +13308,7 @@ msgstr ""
 msgid "@inner_content is inside an element hidden from visitors — show it, or every page on this layout loses its content."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5948
+#: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5955
 #, elixir-autogen, elixir-format
 msgid "Not published — @inner_content is inside an element hidden from visitors, so every page using this layout would come out empty. Show it first."
 msgstr ""
@@ -14766,63 +14766,63 @@ msgstr ""
 msgid "%{name} is not a component this site can place in content."
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:306
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:310
 #, elixir-autogen, elixir-format
 msgid "Code block"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1509
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:351
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:357
 #, elixir-autogen, elixir-format
 msgid "Component settings"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:290
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:294
 #, elixir-autogen, elixir-format
 msgid "Formatting"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:295
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:299
 #, elixir-autogen, elixir-format
 msgid "Heading 2"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:296
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:300
 #, elixir-autogen, elixir-format
 msgid "Heading 3"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:297
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:301
 #, elixir-autogen, elixir-format
 msgid "Heading 4"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:300
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:304
 #, elixir-autogen, elixir-format
 msgid "Italic"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:354
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:360
 #, elixir-autogen, elixir-format
 msgid "Link address — leave it empty to remove the link"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:360
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:366
 #, elixir-autogen, elixir-format
 msgid "Loading the editor…"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:352
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:358
 #, elixir-autogen, elixir-format
 msgid "Remove component"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:355
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:361
 #, elixir-autogen, elixir-format
 msgid "The editor did not load — this is the content's HTML."
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:280
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:284
 #, elixir-autogen, elixir-format
 msgid "Write here — or place a component from Components."
 msgstr ""
@@ -14892,7 +14892,7 @@ msgstr ""
 msgid "Disclosure"
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:345
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:349
 #, elixir-autogen, elixir-format
 msgid "Edit as code"
 msgstr ""
@@ -14957,7 +14957,7 @@ msgstr ""
 msgid "The file is larger than 50 MB."
 msgstr ""
 
-#: lib/mishka_cms_core_web/ui_adapters/admin.ex:347
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:351
 #, elixir-autogen, elixir-format
 msgid "This is not one component — check the [[component …]] marker, then press Code again."
 msgstr ""
@@ -15100,7 +15100,7 @@ msgstr ""
 msgid "Uploads go to"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:392
+#: lib/mishka_cms_core/runtime/seo.ex:393
 #: lib/mishka_cms_core/settings.ex:673
 #, elixir-autogen, elixir-format
 msgid "Favicon"
@@ -15116,7 +15116,7 @@ msgstr ""
 msgid "Site logo"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:527
+#: lib/mishka_cms_core/runtime/seo.ex:528
 #, elixir-autogen, elixir-format
 msgid "The site title setting, in the page's language when Translations has it."
 msgstr ""
@@ -15126,27 +15126,27 @@ msgstr ""
 msgid "The small picture a browser tab and a search result show for the site's pages: a square PNG or SVG, from Media or an address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:443
+#: lib/mishka_cms_core/runtime/seo.ex:444
 #, elixir-autogen, elixir-format
 msgid "Image type"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:444
+#: lib/mishka_cms_core/runtime/seo.ex:445
 #, elixir-autogen, elixir-format
 msgid "The picture's format, such as image/jpeg. A share card says it itself."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:394
+#: lib/mishka_cms_core/runtime/seo.ex:395
 #, elixir-autogen, elixir-format
 msgid "The small picture a browser tab and a search result show for this page. The site's Favicon setting by default."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:387
+#: lib/mishka_cms_core/runtime/seo.ex:388
 #, elixir-autogen, elixir-format
 msgid "Twitter image text"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:389
+#: lib/mishka_cms_core/runtime/seo.ex:390
 #, elixir-autogen, elixir-format
 msgid "What the X (Twitter) preview picture shows, for people who cannot see it."
 msgstr ""
@@ -15179,4 +15179,14 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/share_card_field.ex:153
 #, elixir-autogen, elixir-format
 msgid "The share image could not be read."
+msgstr ""
+
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:355
+#, elixir-autogen, elixir-format
+msgid "Code language"
+msgstr ""
+
+#: lib/mishka_cms_core_web/ui_adapters/admin.ex:356
+#, elixir-autogen, elixir-format
+msgid "Plain text"
 msgstr ""

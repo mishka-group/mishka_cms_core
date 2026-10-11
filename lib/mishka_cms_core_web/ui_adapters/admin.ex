@@ -55,6 +55,10 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
     "[&_.ProseMirror_ul]:my-2 [&_.ProseMirror_ul]:list-disc [&_.ProseMirror_ul]:ps-6 [&_.ProseMirror_ol]:my-2 [&_.ProseMirror_ol]:list-decimal [&_.ProseMirror_ol]:ps-6 [&_.ProseMirror_li_p]:my-0.5",
     "[&_.ProseMirror_blockquote]:my-3 [&_.ProseMirror_blockquote]:border-s-[3px] [&_.ProseMirror_blockquote]:border-[#c3c1f0] [&_.ProseMirror_blockquote]:ps-4 [&_.ProseMirror_blockquote]:text-[#5c5a54]",
     "[&_.ProseMirror_pre]:my-3 [&_.ProseMirror_pre]:overflow-x-auto [&_.ProseMirror_pre]:rounded-[10px] [&_.ProseMirror_pre]:bg-[#17161a] [&_.ProseMirror_pre]:p-3 [&_.ProseMirror_pre]:font-mono [&_.ProseMirror_pre]:text-[12.5px] [&_.ProseMirror_pre]:text-[#e8e6ef]",
+    "[&_[data-role=content-code]]:my-3 [&_[data-role=content-code]]:overflow-hidden [&_[data-role=content-code]]:rounded-[10px] [&_[data-role=content-code]]:bg-[#17161a]",
+    "[&_[data-role=content-code-head]]:flex [&_[data-role=content-code-head]]:justify-end [&_[data-role=content-code-head]]:px-2 [&_[data-role=content-code-head]]:pt-2",
+    "[&_[data-role=content-code-language]]:h-7 [&_[data-role=content-code-language]]:cursor-pointer [&_[data-role=content-code-language]]:rounded-[7px] [&_[data-role=content-code-language]]:border [&_[data-role=content-code-language]]:border-white/15 [&_[data-role=content-code-language]]:bg-[#232129] [&_[data-role=content-code-language]]:px-2 [&_[data-role=content-code-language]]:text-[11.5px] [&_[data-role=content-code-language]]:font-semibold [&_[data-role=content-code-language]]:text-[#e8e6ef] [&_[data-role=content-code-language]]:outline-none [&_[data-role=content-code-language]]:[color-scheme:dark] [&_[data-role=content-code-language]:hover]:border-white/30 [&_[data-role=content-code-language]:focus-visible]:border-[#8b87ea] [&_[data-role=content-code-language]:disabled]:cursor-default [&_[data-role=content-code-language]:disabled]:opacity-60",
+    "[&_.ProseMirror_[data-role=content-code]_pre]:my-0 [&_.ProseMirror_[data-role=content-code]_pre]:rounded-none [&_.ProseMirror_[data-role=content-code]_pre]:bg-transparent [&_.ProseMirror_[data-role=content-code]_pre]:pt-1.5",
     "[&_.ProseMirror_code]:rounded [&_.ProseMirror_code]:bg-[#f0efea] [&_.ProseMirror_code]:px-1 [&_.ProseMirror_code]:font-mono [&_.ProseMirror_code]:text-[12.5px] [&_.ProseMirror_pre_code]:bg-transparent [&_.ProseMirror_pre_code]:p-0",
     "[&_.ProseMirror_a]:text-[#4f4bcc] [&_.ProseMirror_a]:underline [&_.ProseMirror_hr]:my-4 [&_.ProseMirror_hr]:border-[#e4e2dc]"
   ]
@@ -348,6 +352,8 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
             "This is not one component — check the [[component …]] marker, then press Code again."
           )
         }
+        data-label-code-language={gettext("Code language")}
+        data-label-code-plain={gettext("Plain text")}
         data-label-edit={gettext("Component settings")}
         data-label-remove={gettext("Remove component")}
         data-label-move-part={gettext("Drag to move")}
