@@ -29,6 +29,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.PaletteEntry
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.PageBuilder.CardPreview
   alias MishkaCmsCore.Runtime.PageBuilder.Strict
 
@@ -2507,14 +2508,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       )
 
   defp session_draft_label do
-    gettext("Draft · %{time}",
-      time:
-        Calendar.strftime(
-          DateTime.utc_now(),
-          "%d %b %Y, %H:%M",
-          MishkaCmsCore.Activity.Helpers.strftime_names()
-        )
-    )
+    gettext("Draft · %{time}", time: Localized.datetime(DateTime.utc_now(), :yMMMdHm))
   end
 
   defp autosave(%{assigns: %{stage: :published}} = socket), do: socket
@@ -5507,7 +5501,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     do:
       gettext("%{changes} · %{time}",
         changes: changes(ops),
-        time: Calendar.strftime(DateTime.utc_now(), "%H:%M")
+        time: Localized.time(DateTime.utc_now(), :Hm)
       )
 
   # What the run did, in the rail's note and in the history row's own title.

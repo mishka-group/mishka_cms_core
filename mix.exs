@@ -98,6 +98,10 @@ defmodule MishkaCmsCore.MixProject do
       # Share images (`MishkaCmsCore.Runtime.ShareCard`), drawn with libvips in a separate OS process
       # (`MishkaCmsCore.Isolated`). Vix brings a precompiled libvips: nothing to install.
       {:image, "~> 0.72"},
+      # Dates, times, numbers, lists and language names in the reader's language, from Unicode CLDR
+      # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
+      # is read.
+      {:localize, "~> 1.3"},
       {:mishka_gervaz, path: "../mishka_gervaz"}
     ]
   end

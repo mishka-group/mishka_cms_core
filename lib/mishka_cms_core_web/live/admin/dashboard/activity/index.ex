@@ -116,15 +116,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index do
   """
   def delimited(number) when is_integer(number) do
     suffix = if number >= Query.max_cap(), do: "+", else: ""
-
-    number
-    |> Integer.to_string()
-    |> String.graphemes()
-    |> Enum.reverse()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
-    |> Kernel.<>(suffix)
+    MishkaCmsCore.Localized.number(number) <> suffix
   end
 
   def delimited(_number), do: "0"

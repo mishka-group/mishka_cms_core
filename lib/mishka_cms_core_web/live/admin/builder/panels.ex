@@ -23,6 +23,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.PaletteEntry
   alias Phoenix.LiveView.JS
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.PageBuilder.AiBackend
   alias MishkaCmsCore.Runtime.PageBuilder.Blocks
   alias MishkaCmsCore.Runtime.PageBuilder.CodeFlags
@@ -14657,7 +14658,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   end
 
   @doc """
-  How long ago, in the words the rest of the editor uses — "2h ago", "yesterday 18:04".
+  How long ago, in the reader's language — "2h ago", "yesterday" — and past two days the day and
+  time, "Jul 3, 18:04".
 
   A draft picker is a list of moments, and a bare timestamp makes the reader do the arithmetic.
   Anything that is not a `DateTime` answers `""`, so a row with no timestamp shortens rather than
@@ -14665,38 +14667,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   """
   @spec ago(DateTime.t() | term()) :: String.t()
   def ago(%DateTime{} = at) do
-    case DateTime.diff(DateTime.utc_now(), at, :second) do
-      seconds when seconds < 60 ->
-        gettext("just now")
-
-      seconds when seconds < 3600 ->
-        gettext("%{minutes}m ago", minutes: div(seconds, 60))
-
-      seconds when seconds < 86_400 ->
-        gettext("%{hours}h ago", hours: div(seconds, 3600))
-
-      seconds when seconds < 172_800 ->
-        gettext("yesterday %{time}", time: Calendar.strftime(at, "%H:%M"))
-
-      _older ->
-        Calendar.strftime(at, "%d %b %H:%M", abbreviated_month_names: &short_month_name/1)
-    end
+    if DateTime.diff(DateTime.utc_now(), at, :second) < 172_800,
+      do: Localized.ago(at, format: :narrow),
+      else: Localized.datetime(at, :MMMdHm)
   end
 
   def ago(_missing), do: ""
-
-  defp short_month_name(1), do: gettext("Jan")
-  defp short_month_name(2), do: gettext("Feb")
-  defp short_month_name(3), do: gettext("Mar")
-  defp short_month_name(4), do: gettext("Apr")
-  defp short_month_name(5), do: gettext("May")
-  defp short_month_name(6), do: gettext("Jun")
-  defp short_month_name(7), do: gettext("Jul")
-  defp short_month_name(8), do: gettext("Aug")
-  defp short_month_name(9), do: gettext("Sep")
-  defp short_month_name(10), do: gettext("Oct")
-  defp short_month_name(11), do: gettext("Nov")
-  defp short_month_name(12), do: gettext("Dec")
 
   # ONE BAR, TWO ARRIVALS, and the live page is underneath both of them — reopening a document
   # DETACHES the session from whatever draft it was in (`detach_draft/4` in `BuilderLive`), so the
@@ -14815,7 +14791,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp autosave_title(%{updated_at: %DateTime{} = at}),
     do:
       gettext("Saving as you work — kept %{time} · click to change status",
-        time: Calendar.strftime(at, "%H:%M")
+        time: Localized.time(at, :Hm)
       )
 
   defp autosave_title(_draft),

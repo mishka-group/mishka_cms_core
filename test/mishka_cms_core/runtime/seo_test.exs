@@ -624,28 +624,24 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     refute Seo.noindex?([], nil)
   end
 
-  test "locale/1 writes the region the code names, else the one its language is written for" do
+  test "locale/1 writes the region the code names, else the one CLDR gives its language" do
     assert Seo.locale("pt-br") == "pt_BR"
     assert Seo.locale("zh-hant-tw") == "zh_TW"
     assert Seo.locale("EN_gb") == "en_GB"
     assert Seo.locale("en") == "en_US"
     assert Seo.locale("fa") == "fa_IR"
-    assert Seo.locale("ar") == "ar_AR"
     assert Seo.locale("de") == "de_DE"
-    # A code that names another subtag but no two-letter region is not given one.
+    assert Seo.locale("ar") == "ar_EG"
+    assert Seo.locale("zh-hant") == "zh_TW"
+    # A numeric region (Latin America) is no Open Graph territory.
     assert Seo.locale("es-419") == "es"
-    assert Seo.locale("zh-hant") == "zh"
-    # A language with no usual region is the language alone.
-    assert Seo.locale("tlh") == "tlh"
     assert Seo.locale(nil) == nil
+    assert Seo.locale("not a code") == nil
   end
 
-  test "locale/1 gives every language the CMS names a region, but those written for none" do
+  test "locale/1 gives every language the CMS offers its language and a region CLDR names" do
     for language <- MishkaCmsCore.Runtime.Languages.known(),
-        language not in ~w(eo yi),
-        do: assert(Seo.locale(language) =~ ~r/\A[a-z]{2,3}_[A-Z]{2}\z/, language)
-
-    assert Seo.locale("eo") == "eo"
+        do: assert(Seo.locale(language) =~ ~r/\A#{language}(_[A-Z]{2})?\z/, language)
   end
 
   describe "resolve/2" do

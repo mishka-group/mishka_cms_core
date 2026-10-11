@@ -187,44 +187,6 @@ defmodule MishkaCmsCore.Activity.Helpers do
     do: {action |> to_string() |> String.upcase() |> translate(), :slate}
 
   @doc """
-  The `Calendar.strftime/3` options that write the short month names, the short weekday names and
-  AM/PM in the Gettext locale of the calling process.
-
-      Calendar.strftime(at, "%b %-d", Helpers.strftime_names())
-  """
-  @spec strftime_names() :: keyword()
-  def strftime_names,
-    do: [
-      abbreviated_month_names: &short_month_name/1,
-      abbreviated_day_of_week_names: &short_day_name/1,
-      am_pm_names: &am_pm_name/1
-    ]
-
-  defp short_month_name(1), do: gettext("Jan")
-  defp short_month_name(2), do: gettext("Feb")
-  defp short_month_name(3), do: gettext("Mar")
-  defp short_month_name(4), do: gettext("Apr")
-  defp short_month_name(5), do: gettext("May")
-  defp short_month_name(6), do: gettext("Jun")
-  defp short_month_name(7), do: gettext("Jul")
-  defp short_month_name(8), do: gettext("Aug")
-  defp short_month_name(9), do: gettext("Sep")
-  defp short_month_name(10), do: gettext("Oct")
-  defp short_month_name(11), do: gettext("Nov")
-  defp short_month_name(12), do: gettext("Dec")
-
-  defp short_day_name(1), do: gettext("Mon")
-  defp short_day_name(2), do: gettext("Tue")
-  defp short_day_name(3), do: gettext("Wed")
-  defp short_day_name(4), do: gettext("Thu")
-  defp short_day_name(5), do: gettext("Fri")
-  defp short_day_name(6), do: gettext("Sat")
-  defp short_day_name(7), do: gettext("Sun")
-
-  defp am_pm_name(:am), do: gettext("AM")
-  defp am_pm_name(:pm), do: gettext("PM")
-
-  @doc """
   Whose activity `viewer` may see: `:everything` for a master (a user whose `site_id` is nil),
   `{:site, site_id}` for a site user, and `:nothing` for no viewer or anything that is not a user.
 

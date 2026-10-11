@@ -3,6 +3,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index do
 
   alias MishkaCmsCore.Accounts.SecondFactor
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
 
   @impl true
   def mount(_params, _session, socket) do
@@ -201,33 +202,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index do
   end
 
   @doc false
-  def date_str do
-    Calendar.strftime(Date.utc_today(), "%A, %B %-d",
-      day_of_week_names: &day_name/1,
-      month_names: &month_name/1
-    )
-  end
-
-  defp day_name(1), do: gettext("Monday")
-  defp day_name(2), do: gettext("Tuesday")
-  defp day_name(3), do: gettext("Wednesday")
-  defp day_name(4), do: gettext("Thursday")
-  defp day_name(5), do: gettext("Friday")
-  defp day_name(6), do: gettext("Saturday")
-  defp day_name(7), do: gettext("Sunday")
-
-  defp month_name(1), do: gettext("January")
-  defp month_name(2), do: gettext("February")
-  defp month_name(3), do: gettext("March")
-  defp month_name(4), do: gettext("April")
-  defp month_name(5), do: gettext("May")
-  defp month_name(6), do: gettext("June")
-  defp month_name(7), do: gettext("July")
-  defp month_name(8), do: gettext("August")
-  defp month_name(9), do: gettext("September")
-  defp month_name(10), do: gettext("October")
-  defp month_name(11), do: gettext("November")
-  defp month_name(12), do: gettext("December")
+  def date_str, do: Localized.date(Date.utc_today(), :full)
 
   # A user with no site_id is the master (sees every site); one bound to a site is a tenant admin;
   # anybody else is greeted without a role.

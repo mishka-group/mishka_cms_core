@@ -26,6 +26,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCore.Sidebar.Group
@@ -625,17 +626,11 @@ defmodule MishkaCmsCore.Layouts do
     user |> user_email() |> String.first() |> String.upcase()
   end
 
-  # Compact relative time, matching the React reference ("just now", "5m", "11h", "3d", then "Jul 10").
+  # Compact relative time in the reader's language ("now", "5m ago", "3d ago"), then the day ("Jul 10").
   defp notif_time(%DateTime{} = dt) do
-    diff = DateTime.diff(DateTime.utc_now(), dt, :second)
-
-    cond do
-      diff < 60 -> gettext("just now")
-      diff < 3600 -> gettext("%{count}m", count: div(diff, 60))
-      diff < 86_400 -> gettext("%{count}h", count: div(diff, 3600))
-      diff < 604_800 -> gettext("%{count}d", count: div(diff, 86_400))
-      true -> Calendar.strftime(dt, "%b %d", MishkaCmsCore.Activity.Helpers.strftime_names())
-    end
+    if DateTime.diff(DateTime.utc_now(), dt, :second) < 604_800,
+      do: Localized.ago(dt, format: :narrow),
+      else: Localized.date(dt, :MMMd)
   end
 
   defp notif_time(%NaiveDateTime{} = dt), do: notif_time(DateTime.from_naive!(dt, "Etc/UTC"))

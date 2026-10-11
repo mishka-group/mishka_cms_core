@@ -151,6 +151,10 @@ jobs:
       # migrates the test database.
       - run: MIX_ENV=test mix ash.codegen ci
 
+      # The CLDR data the tests read in a language other than English, downloaded once here rather
+      # than by four partitions at the same time.
+      - run: MIX_ENV=test mix localize.download_locales fa
+
       # `mix test`, not `MIX_ENV=test mix test`: mishka_installer decides at dep-compile time
       # whether to start its plugin engine, and an exported MIX_ENV outranks the `project_env`
       # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files,

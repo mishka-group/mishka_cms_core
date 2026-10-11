@@ -327,8 +327,8 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
       error = refusal(master, action: :destroy, tenant: site.id, actor: tenant_user)
 
       assert error.message ==
-               "[fa] This is the original [fa] English version. " <>
-                 "[fa] Its translations in [fa] [fa] Persian and [fa] French are still live, so it " <>
+               "[fa] This is the original انگلیسی version. " <>
+                 "[fa] Its translations in فارسی و فرانسوی are still live, so it " <>
                  "can't be deleted yet. Archive or delete those translations first, then this one."
     end
 
@@ -397,7 +397,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
 
     test "reads a language it has no name for as its code, and an original with none as unnamed" do
       assert PreventMasterLanguageDeletion.message(nil, ["xx", "fa-IR"]) ==
-               "This is the original version. Its translations in Persian (IR) and XX are still " <>
+               "This is the original version. Its translations in Persian (Iran) and XX are still " <>
                  "live, so it can't be deleted yet. Archive or delete those translations first, " <>
                  "then this one."
     end
@@ -552,8 +552,8 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
       assert Enum.any?(
                errors,
                &(&1.message ==
-                   "[fa] This is the [fa] Persian translation. " <>
-                     "[fa] Its original [fa] English version is archived, so it can't be restored " <>
+                   "[fa] This is the فارسی translation. " <>
+                     "[fa] Its original انگلیسی version is archived, so it can't be restored " <>
                      "yet. Restore the original first, then this one.")
              )
     end

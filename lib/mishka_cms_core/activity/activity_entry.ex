@@ -123,8 +123,8 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
           # The day heading above the row already carries the year; the row only needs the day.
           render fn record ->
             assigns = %{
-              time: Calendar.strftime(record.inserted_at, "%H:%M"),
-              day: Calendar.strftime(record.inserted_at, "%b %-d", Helpers.strftime_names())
+              time: MishkaCmsCore.Localized.time(record.inserted_at, :Hm),
+              day: MishkaCmsCore.Localized.date(record.inserted_at, :MMMd)
             }
 
             ~H"""

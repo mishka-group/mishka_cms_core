@@ -22,6 +22,9 @@ mishka_cms_core_resources-*.tar
 # Temporary files, for example, from tests.
 /tmp/
 
+# CLDR data `Localize` downloads for a language other than English.
+/priv/localize/
+
 # Derived by `mix ash.codegen`, never written by hand — a local build artifact, not source.
 /priv/repo/migrations/
 /priv/resource_snapshots/

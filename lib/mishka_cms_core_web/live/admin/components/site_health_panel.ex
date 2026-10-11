@@ -358,19 +358,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SiteHealthPanel do
   defp severity_badge(:warn), do: "bg-[#fbf1df] text-[#a5691a]"
   defp severity_badge(_), do: "bg-[#eef1fc] text-[#4f4bcc]"
 
-  defp ago(%DateTime{} = dt), do: relative(DateTime.diff(DateTime.utc_now(), dt))
-  defp ago(%NaiveDateTime{} = dt), do: relative(NaiveDateTime.diff(NaiveDateTime.utc_now(), dt))
+  defp ago(%struct{} = at) when struct in [DateTime, NaiveDateTime],
+    do: MishkaCmsCore.Localized.ago(at, format: :narrow)
+
   defp ago(_other), do: "—"
-
-  defp relative(seconds) when seconds < 60, do: gettext("just now")
-
-  defp relative(seconds) when seconds < 3600,
-    do: gettext("%{minutes}m ago", minutes: div(seconds, 60))
-
-  defp relative(seconds) when seconds < 86_400,
-    do: gettext("%{hours}h ago", hours: div(seconds, 3600))
-
-  defp relative(seconds), do: gettext("%{days}d ago", days: div(seconds, 86_400))
 
   defp severity_dot(:error), do: "bg-[#e5484d]"
   defp severity_dot(:warn), do: "bg-[#cf8a24]"

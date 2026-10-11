@@ -22,6 +22,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.OverviewMetrics do
   import Phoenix.Component
 
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
 
   @impl true
   def call(%{widgets: widgets} = data), do: {:reply, %{data | widgets: widgets ++ [widget()]}}
@@ -141,6 +142,6 @@ defmodule MishkaCmsCore.Dashboard.Widgets.OverviewMetrics do
   defp pick(_data, _keys), do: nil
 
   defp display(nil), do: "—"
-  defp display(n) when is_integer(n), do: Integer.to_string(n)
+  defp display(n) when is_integer(n), do: Localized.number(n)
   defp display(other), do: to_string(other)
 end

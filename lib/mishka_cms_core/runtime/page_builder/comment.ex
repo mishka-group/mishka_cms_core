@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Comment do
 
     * `new/1` — the validated constructor, including the id shape and the sanitising of a note's
       text. Still the only place a note's fields are described in one piece.
-    * `ago/2` — "just now" / "4m" / "3h" / "2d". Coarse on purpose: a review is read in the order it
+    * `ago/2` — "now" / "4m ago" / "3h ago" / "yesterday", in the reader's language. Coarse on purpose: a review is read in the order it
       was written, and a timestamp to the second is noise beside a sentence.
 
   It used to be the storage as well: a list on the `EditorSession` in ETS, swept after a day idle.
@@ -82,20 +82,15 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Comment do
   def open(comments), do: Enum.reject(comments, & &1.resolved?)
 
   @doc """
-  A short, human relative time for the sheet — "just now", "4m", "3h", "2d".
+  A short, human relative time for the sheet, in the reader's language — "now", "4m ago", "3h ago",
+  "yesterday" (`MishkaCmsCore.Localized.ago/2`).
 
   Deliberately coarse: a review thread wants "roughly when", and a coarse label does not need the
   page to re-render every second to stay honest.
   """
   @spec ago(t(), DateTime.t()) :: String.t()
-  def ago(%{at: %DateTime{} = at}, now) do
-    now |> DateTime.diff(at, :second) |> label()
-  end
+  def ago(%{at: %DateTime{} = at}, now),
+    do: MishkaCmsCore.Localized.ago(at, relative_to: now, format: :narrow)
 
   def ago(_comment, _now), do: ""
-
-  defp label(seconds) when seconds < 60, do: gettext("just now")
-  defp label(seconds) when seconds < 3_600, do: gettext("%{count}m", count: div(seconds, 60))
-  defp label(seconds) when seconds < 86_400, do: gettext("%{count}h", count: div(seconds, 3_600))
-  defp label(seconds), do: gettext("%{count}d", count: div(seconds, 86_400))
 end

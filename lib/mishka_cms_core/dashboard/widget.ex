@@ -62,6 +62,7 @@ defmodule MishkaCmsCore.Dashboard.Widget do
   use Gettext, backend: MishkaCmsCore.Gettext
   require Logger
 
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Settings
   alias Phoenix.LiveView.JS
 
@@ -765,10 +766,15 @@ defmodule MishkaCmsCore.Dashboard.Widget do
         <span :if={@icon} class={[@icon, "size-3.5 shrink-0", stat_tone(@tone)]} />
         <p class="truncate">{@label}</p>
       </div>
-      <p class="mt-1 font-['Space_Grotesk'] text-[22px] font-semibold text-[#17161a]">{@value}</p>
+      <p class="mt-1 font-['Space_Grotesk'] text-[22px] font-semibold text-[#17161a]">
+        {shown(@value)}
+      </p>
     </div>
     """
   end
+
+  defp shown(value) when is_number(value), do: Localized.number(value)
+  defp shown(value), do: value
 
   @doc "A consistent empty state for list widgets."
   attr(:icon, :string, default: "hero-inbox")
@@ -783,17 +789,12 @@ defmodule MishkaCmsCore.Dashboard.Widget do
     """
   end
 
-  @doc ~S(Compact "how long ago" label for feed rows — "just now", "12m ago", "3h ago", "Jul 03".)
+  @doc ~S(Compact "how long ago" label for feed rows, in the reader's language — "now", "12m ago", "3h ago", then the day, "Jul 3".)
   @spec relative_time(DateTime.t() | term()) :: String.t()
   def relative_time(%DateTime{} = at) do
-    diff = DateTime.diff(DateTime.utc_now(), at, :second)
-
-    cond do
-      diff < 60 -> gettext("just now")
-      diff < 3600 -> gettext("%{minutes}m ago", minutes: div(diff, 60))
-      diff < 86_400 -> gettext("%{hours}h ago", hours: div(diff, 3600))
-      true -> Calendar.strftime(at, "%b %d", MishkaCmsCore.Activity.Helpers.strftime_names())
-    end
+    if DateTime.diff(DateTime.utc_now(), at, :second) < 86_400,
+      do: Localized.ago(at, format: :narrow),
+      else: Localized.date(at, :MMMd)
   end
 
   def relative_time(_at), do: ""
