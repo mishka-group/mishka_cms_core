@@ -24,6 +24,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
   import Ecto.Query
 
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Settings
 
@@ -83,7 +84,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
       <div class="flex items-baseline justify-between">
         <div>
           <span class="font-['Space_Grotesk'] text-[26px] font-semibold tracking-[-0.03em] text-[#17161a]">
-            {@data.compiles.total}
+            {Localized.number(@data.compiles.total)}
           </span>
           <span class="ms-1.5 text-[11.5px] font-medium text-[#8a877f]">
             {gettext("compiles this week")}
@@ -159,14 +160,14 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
         "font-['Space_Grotesk'] text-[14px] font-semibold",
         if(@data.sites_offline > 0, do: "text-[#b3433a]", else: "text-[#1b1a18]")
       ]}>
-        {@data.sites_offline}
+        {Localized.number(@data.sites_offline)}
       </span>
     </div>
 
     <div class="flex items-center justify-between border-b border-[#f4f3ef] py-[9px]">
       <span class="text-[12.5px] font-medium text-[#5c5a54]">{gettext("Pending compiles")}</span>
       <span class="font-['Space_Grotesk'] text-[14px] font-semibold text-[#1b1a18]">
-        {@data.pending}
+        {Localized.number(@data.pending)}
       </span>
     </div>
 
@@ -176,7 +177,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
         "font-['Space_Grotesk'] text-[14px] font-semibold",
         if(@data.missing > 0, do: "text-[#a5691a]", else: "text-[#1b1a18]")
       ]}>
-        {@data.missing}
+        {Localized.number(@data.missing)}
       </span>
     </div>
 
@@ -189,7 +190,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
           <span class="size-1.5 rounded-full bg-[#1f9d6b]" />{gettext("Running")}
         </div>
         <div class="mt-1 font-['Space_Grotesk'] text-[20px] font-semibold text-[#177a53]">
-          {@data.running}
+          {Localized.number(@data.running)}
         </div>
       </div>
       <div class="rounded-xl bg-[#fbf1df] px-3 py-[11px]">
@@ -197,7 +198,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
           <span class="size-1.5 rounded-full bg-[#cf8a24]" />{gettext("Retrying")}
         </div>
         <div class="mt-1 font-['Space_Grotesk'] text-[20px] font-semibold text-[#a5691a]">
-          {@data.retrying}
+          {Localized.number(@data.retrying)}
         </div>
       </div>
       <div class="rounded-xl bg-[#fbe9e7] px-3 py-[11px]">
@@ -205,7 +206,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
           <span class="size-1.5 rounded-full bg-[#d5544b]" />{gettext("Failed")}
         </div>
         <div class="mt-1 font-['Space_Grotesk'] text-[20px] font-semibold text-[#b3433a]">
-          {@data.failed}
+          {Localized.number(@data.failed)}
         </div>
       </div>
     </div>
@@ -263,7 +264,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.CmsStatus do
   defp weekday_initial(date),
     do:
       date
-      |> Calendar.strftime("%a", MishkaCmsCore.Activity.Helpers.strftime_names())
+      |> Localized.date(:E)
       |> String.first()
 
   defp jobs_by_day(nil, start) do

@@ -20,6 +20,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.SiteOverview do
   import Phoenix.Component
 
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.States.SiteState
 
@@ -103,7 +104,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.SiteOverview do
       <div class="flex-none border-e border-[#f0efea] pe-[22px]">
         <div class="flex items-baseline gap-1.5">
           <span class="font-['Space_Grotesk'] text-[44px] font-semibold leading-none tracking-[-0.03em] text-[#17161a]">
-            {@data.total}
+            {Localized.number(@data.total)}
           </span>
         </div>
         <div class="mt-1 text-[12px] font-medium text-[#8a877f]">{gettext("sites total")}</div>
@@ -152,7 +153,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.SiteOverview do
         <span class={["size-2 rounded-[3px]", dot_class(@color)]} />{@label}
       </span>
       <span class="font-['Space_Grotesk'] text-[12.5px] font-semibold text-[#17161a]">
-        {@count}
+        {Localized.number(@count)}
       </span>
     </div>
     """

@@ -44,14 +44,14 @@ defmodule MishkaCmsCore.Runtime.Languages do
   ## Names
 
   `name/1` and `names/1` put a code into a sentence a person reads, in the locale of the calling
-  process: `"fa"` is "Persian", and `["fa", "fr"]` is "French and Persian". The names, the region
-  template and the "and" are in the `mishka_gervaz` Gettext domain.
+  process: `"fa"` is "Persian", and `["fa", "fr"]` is "French and Persian". The names, their
+  alphabetical order and the "and" are Unicode CLDR's, through `MishkaCmsCore.Localized`; nothing
+  is translated by hand.
 
   See `MishkaCmsCore.Runtime.PageEditions` for what a page does with its language.
   """
 
-  use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
-
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
 
@@ -72,97 +72,12 @@ defmodule MishkaCmsCore.Runtime.Languages do
   # Written right to left, by the primary subtag — `fa-ir` is Persian as much as `fa` is.
   @right_to_left ~w(ar arc ckb dv fa he ps sd ug ur yi)
 
-  # A language's name, by its primary subtag. `name/1` translates it.
-  @names %{
-    "af" => dgettext_noop("mishka_gervaz", "Afrikaans"),
-    "am" => dgettext_noop("mishka_gervaz", "Amharic"),
-    "ar" => dgettext_noop("mishka_gervaz", "Arabic"),
-    "az" => dgettext_noop("mishka_gervaz", "Azerbaijani"),
-    "be" => dgettext_noop("mishka_gervaz", "Belarusian"),
-    "bg" => dgettext_noop("mishka_gervaz", "Bulgarian"),
-    "bn" => dgettext_noop("mishka_gervaz", "Bengali"),
-    "bs" => dgettext_noop("mishka_gervaz", "Bosnian"),
-    "ca" => dgettext_noop("mishka_gervaz", "Catalan"),
-    "ckb" => dgettext_noop("mishka_gervaz", "Central Kurdish"),
-    "cs" => dgettext_noop("mishka_gervaz", "Czech"),
-    "cy" => dgettext_noop("mishka_gervaz", "Welsh"),
-    "da" => dgettext_noop("mishka_gervaz", "Danish"),
-    "de" => dgettext_noop("mishka_gervaz", "German"),
-    "el" => dgettext_noop("mishka_gervaz", "Greek"),
-    "en" => dgettext_noop("mishka_gervaz", "English"),
-    "eo" => dgettext_noop("mishka_gervaz", "Esperanto"),
-    "es" => dgettext_noop("mishka_gervaz", "Spanish"),
-    "et" => dgettext_noop("mishka_gervaz", "Estonian"),
-    "eu" => dgettext_noop("mishka_gervaz", "Basque"),
-    "fa" => dgettext_noop("mishka_gervaz", "Persian"),
-    "fi" => dgettext_noop("mishka_gervaz", "Finnish"),
-    "fil" => dgettext_noop("mishka_gervaz", "Filipino"),
-    "fr" => dgettext_noop("mishka_gervaz", "French"),
-    "ga" => dgettext_noop("mishka_gervaz", "Irish"),
-    "gl" => dgettext_noop("mishka_gervaz", "Galician"),
-    "gu" => dgettext_noop("mishka_gervaz", "Gujarati"),
-    "ha" => dgettext_noop("mishka_gervaz", "Hausa"),
-    "he" => dgettext_noop("mishka_gervaz", "Hebrew"),
-    "hi" => dgettext_noop("mishka_gervaz", "Hindi"),
-    "hr" => dgettext_noop("mishka_gervaz", "Croatian"),
-    "hu" => dgettext_noop("mishka_gervaz", "Hungarian"),
-    "hy" => dgettext_noop("mishka_gervaz", "Armenian"),
-    "id" => dgettext_noop("mishka_gervaz", "Indonesian"),
-    "is" => dgettext_noop("mishka_gervaz", "Icelandic"),
-    "it" => dgettext_noop("mishka_gervaz", "Italian"),
-    "ja" => dgettext_noop("mishka_gervaz", "Japanese"),
-    "ka" => dgettext_noop("mishka_gervaz", "Georgian"),
-    "kk" => dgettext_noop("mishka_gervaz", "Kazakh"),
-    "km" => dgettext_noop("mishka_gervaz", "Khmer"),
-    "kn" => dgettext_noop("mishka_gervaz", "Kannada"),
-    "ko" => dgettext_noop("mishka_gervaz", "Korean"),
-    "ku" => dgettext_noop("mishka_gervaz", "Kurdish"),
-    "ky" => dgettext_noop("mishka_gervaz", "Kyrgyz"),
-    "lo" => dgettext_noop("mishka_gervaz", "Lao"),
-    "lt" => dgettext_noop("mishka_gervaz", "Lithuanian"),
-    "lv" => dgettext_noop("mishka_gervaz", "Latvian"),
-    "mk" => dgettext_noop("mishka_gervaz", "Macedonian"),
-    "ml" => dgettext_noop("mishka_gervaz", "Malayalam"),
-    "mn" => dgettext_noop("mishka_gervaz", "Mongolian"),
-    "mr" => dgettext_noop("mishka_gervaz", "Marathi"),
-    "ms" => dgettext_noop("mishka_gervaz", "Malay"),
-    "mt" => dgettext_noop("mishka_gervaz", "Maltese"),
-    "my" => dgettext_noop("mishka_gervaz", "Burmese"),
-    "nb" => dgettext_noop("mishka_gervaz", "Norwegian Bokmål"),
-    "ne" => dgettext_noop("mishka_gervaz", "Nepali"),
-    "nl" => dgettext_noop("mishka_gervaz", "Dutch"),
-    "no" => dgettext_noop("mishka_gervaz", "Norwegian"),
-    "pa" => dgettext_noop("mishka_gervaz", "Punjabi"),
-    "pl" => dgettext_noop("mishka_gervaz", "Polish"),
-    "ps" => dgettext_noop("mishka_gervaz", "Pashto"),
-    "pt" => dgettext_noop("mishka_gervaz", "Portuguese"),
-    "ro" => dgettext_noop("mishka_gervaz", "Romanian"),
-    "ru" => dgettext_noop("mishka_gervaz", "Russian"),
-    "sd" => dgettext_noop("mishka_gervaz", "Sindhi"),
-    "si" => dgettext_noop("mishka_gervaz", "Sinhala"),
-    "sk" => dgettext_noop("mishka_gervaz", "Slovak"),
-    "sl" => dgettext_noop("mishka_gervaz", "Slovenian"),
-    "so" => dgettext_noop("mishka_gervaz", "Somali"),
-    "sq" => dgettext_noop("mishka_gervaz", "Albanian"),
-    "sr" => dgettext_noop("mishka_gervaz", "Serbian"),
-    "sv" => dgettext_noop("mishka_gervaz", "Swedish"),
-    "sw" => dgettext_noop("mishka_gervaz", "Swahili"),
-    "ta" => dgettext_noop("mishka_gervaz", "Tamil"),
-    "te" => dgettext_noop("mishka_gervaz", "Telugu"),
-    "tg" => dgettext_noop("mishka_gervaz", "Tajik"),
-    "th" => dgettext_noop("mishka_gervaz", "Thai"),
-    "tk" => dgettext_noop("mishka_gervaz", "Turkmen"),
-    "tr" => dgettext_noop("mishka_gervaz", "Turkish"),
-    "ug" => dgettext_noop("mishka_gervaz", "Uyghur"),
-    "uk" => dgettext_noop("mishka_gervaz", "Ukrainian"),
-    "ur" => dgettext_noop("mishka_gervaz", "Urdu"),
-    "uz" => dgettext_noop("mishka_gervaz", "Uzbek"),
-    "vi" => dgettext_noop("mishka_gervaz", "Vietnamese"),
-    "yi" => dgettext_noop("mishka_gervaz", "Yiddish"),
-    "yo" => dgettext_noop("mishka_gervaz", "Yoruba"),
-    "zh" => dgettext_noop("mishka_gervaz", "Chinese"),
-    "zu" => dgettext_noop("mishka_gervaz", "Zulu")
-  }
+  # The languages a list of choices offers, by their codes. CLDR names each one in every language
+  # (`name/1`).
+  @known ~w(af am ar az be bg bn bs ca ckb cs cy da de el en eo es et eu fa fi fil fr ga gl gu ha
+           he hi hr hu hy id is it ja ka kk km kn ko ku ky lo lt lv mk ml mn mr ms mt my nb ne nl
+           no pa pl ps pt ro ru sd si sk sl so sq sr sv sw ta te tg th tk tr ug uk ur uz vi yi yo
+           zh zu)
 
   @doc "What a site publishes in when nothing says otherwise."
   @spec default() :: [String.t()]
@@ -334,12 +249,13 @@ defmodule MishkaCmsCore.Runtime.Languages do
   def direction(_language), do: "ltr"
 
   @doc """
-  A language's name, translated in the `mishka_gervaz` domain, for a sentence a person reads. A
-  region follows through the `"%{language} (%{region})"` template; a code with no name here reads as
-  the code itself, upper-cased.
+  A language's name in the language of the calling process, for a sentence a person reads — CLDR's
+  (`MishkaCmsCore.Localized.language/2`). A code CLDR does not name reads as the code itself,
+  upper-cased.
 
       Languages.name("fa")    #=> "Persian"
-      Languages.name("pt-BR") #=> "Portuguese (BR)"
+      Languages.name("pt-BR") #=> "Brazilian Portuguese"
+      Languages.name("fa-IR") #=> "Persian (Iran)"
       Languages.name("xx")    #=> "XX"
       Languages.name(nil)     #=> nil
   """
@@ -348,25 +264,11 @@ defmodule MishkaCmsCore.Runtime.Languages do
   def name(language) when is_atom(language), do: language |> Atom.to_string() |> name()
 
   def name(language) when is_binary(language) do
-    case language |> clean() |> String.split("-") do
-      [""] -> nil
-      [primary | subtags] -> named(Map.get(@names, primary), subtags, clean(language))
+    case clean(language) do
+      "" -> nil
+      code -> Localized.language(code) || String.upcase(code)
     end
   end
-
-  defp named(nil, _subtags, code), do: String.upcase(code)
-  defp named(name, [], _code), do: translated(name)
-
-  defp named(name, subtags, _code) do
-    dgettext("mishka_gervaz", "%{language} (%{region})",
-      language: translated(name),
-      region: subtags |> Enum.join("-") |> String.upcase()
-    )
-  end
-
-  defp translated(name), do: Gettext.dgettext(MishkaCmsCore.Gettext, "mishka_gervaz", name)
-
-  @known @names |> Map.keys() |> Enum.sort()
 
   @doc """
   Every language code `name/1` has a name for, in the order of the codes: the languages a list of
@@ -378,15 +280,11 @@ defmodule MishkaCmsCore.Runtime.Languages do
   def known, do: @known
 
   @doc """
-  Several languages as one phrase: each named by `name/1`, once, in alphabetical order of those
-  names, joined by `join/1`.
-
-  The alphabet is the `"alphabet"` message of the `mishka_gervaz` domain, every letter in order, so
-  each language sorts by its own. A letter it does not hold sorts as its letter without accents,
-  else after every letter it holds.
+  Several languages as one phrase: each named by `name/1`, once, in the alphabetical order of the
+  reader's language, joined as that language joins a list (`join/1`).
 
       Languages.names(["fa", "fr"])       #=> "French and Persian"
-      Languages.names(["de", "fa", "fr"]) #=> "French, German and Persian"
+      Languages.names(["de", "fa", "fr"]) #=> "French, German, and Persian"
       Languages.names([])                 #=> ""
   """
   @spec names([String.t() | atom() | nil]) :: String.t()
@@ -395,61 +293,18 @@ defmodule MishkaCmsCore.Runtime.Languages do
     |> Enum.map(&name/1)
     |> Enum.reject(&is_nil/1)
     |> Enum.uniq()
-    |> alphabetical()
+    |> Localized.sort()
     |> join()
   end
 
-  defp alphabetical(names) do
-    gettext_comment(
-      "Every letter of the alphabet, in lower case and in order, with no spaces. Lists of names, such as of languages, are sorted by it."
-    )
-
-    rank =
-      "mishka_gervaz"
-      |> dpgettext("alphabet", "abcdefghijklmnopqrstuvwxyz")
-      |> String.graphemes()
-      |> Enum.with_index()
-      |> Map.new()
-
-    Enum.sort_by(names, &sort_key(&1, rank))
-  end
-
-  defp sort_key(name, rank) do
-    name
-    |> String.downcase()
-    |> String.graphemes()
-    |> Enum.map(fn letter ->
-      Map.get(rank, letter) || Map.get(rank, unaccented(letter)) ||
-        map_size(rank) + first_codepoint(letter)
-    end)
-  end
-
-  defp unaccented(letter) do
-    <<base::utf8, _marks::binary>> = :unicode.characters_to_nfd_binary(letter)
-    <<base::utf8>>
-  end
-
-  defp first_codepoint(<<codepoint::utf8, _rest::binary>>), do: codepoint
-
   @doc """
-  Phrases as one, in the order given: all but the last joined by the `"list separator"` `", "`,
-  and the last added through the `"%{rest} and %{last}"` template, both in the `mishka_gervaz`
-  domain.
+  Phrases as one, in the order given, joined as the reader's language joins a list
+  (`MishkaCmsCore.Localized.list/2`).
 
-      Languages.join(["a", "b", "c"]) #=> "a, b and c"
+      Languages.join(["a", "b", "c"]) #=> "a, b, and c"
   """
   @spec join([String.t()]) :: String.t()
-  def join([]), do: ""
-  def join([only]), do: only
-
-  def join(phrases) do
-    {rest, [last]} = Enum.split(phrases, -1)
-
-    dgettext("mishka_gervaz", "%{rest} and %{last}",
-      rest: Enum.join(rest, dpgettext("mishka_gervaz", "list separator", ", ")),
-      last: last
-    )
-  end
+  def join(phrases) when is_list(phrases), do: Localized.list(phrases)
 
   @doc """
   The language a site answers in when a request names none — the FIRST of its list.

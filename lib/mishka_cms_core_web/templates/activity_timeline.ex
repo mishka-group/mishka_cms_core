@@ -405,48 +405,24 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
     date = DateTime.to_date(at)
 
     if date == Date.utc_today(),
-      do: dgettext("mishka_gervaz", "Today · %{date}", date: upcase(at, "%b %-d")),
-      else: upcase(at, "%b %-d, %Y")
+      do: dgettext("mishka_gervaz", "Today · %{date}", date: upcase(at, :MMMd)),
+      else: upcase(at, :yMMMd)
   end
 
-  defp upcase(at, format),
-    do:
-      at
-      |> Calendar.strftime(format, abbreviated_month_names: &short_month_name/1)
-      |> String.upcase()
-
-  defp short_month_name(1), do: gettext("Jan")
-  defp short_month_name(2), do: gettext("Feb")
-  defp short_month_name(3), do: gettext("Mar")
-  defp short_month_name(4), do: gettext("Apr")
-  defp short_month_name(5), do: gettext("May")
-  defp short_month_name(6), do: gettext("Jun")
-  defp short_month_name(7), do: gettext("Jul")
-  defp short_month_name(8), do: gettext("Aug")
-  defp short_month_name(9), do: gettext("Sep")
-  defp short_month_name(10), do: gettext("Oct")
-  defp short_month_name(11), do: gettext("Nov")
-  defp short_month_name(12), do: gettext("Dec")
+  defp upcase(at, format), do: at |> MishkaCmsCore.Localized.date(format) |> String.upcase()
 
   # "15 events". A day that filled the read's scan cap is only a floor, so it says so rather than
   # naming a total it never actually reached.
   defp event_count(count, max_cap) when is_integer(count) and count >= 0 do
     if is_integer(max_cap) and count >= max_cap,
-      do: dgettext("mishka_gervaz", "%{count}+ events", count: delimited(max_cap)),
+      do:
+        dgettext("mishka_gervaz", "%{count}+ events",
+          count: MishkaCmsCore.Localized.number(max_cap)
+        ),
       else: dngettext("mishka_gervaz", "%{count} event", "%{count} events", count)
   end
 
   defp event_count(_count, _max_cap), do: nil
-
-  defp delimited(number) do
-    number
-    |> Integer.to_string()
-    |> String.graphemes()
-    |> Enum.reverse()
-    |> Enum.chunk_every(3)
-    |> Enum.map_join(",", &Enum.join/1)
-    |> String.reverse()
-  end
 
   # One switch's worth of `{label, value, dot}`, the "all" pseudo-option first. A track whose options
   # are colour-coded names that option just "All" — the dots already say what the track is about, and
@@ -604,7 +580,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
 
     dgettext("mishka_gervaz", "%{shown} of %{total} shown",
       shown: shown,
-      total: delimited(total) <> capped_suffix(total, max_cap)
+      total: MishkaCmsCore.Localized.number(total) <> capped_suffix(total, max_cap)
     )
   end
 

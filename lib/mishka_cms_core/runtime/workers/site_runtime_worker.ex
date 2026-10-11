@@ -1,7 +1,8 @@
 defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
   @moduledoc """
   Gives a site created in the admin its sign-in content, and recompiles or purges a site's
-  dependent parts when the site is activated / deactivated / renamed / archived / unarchived.
+  dependent parts when the site is activated / deactivated / renamed / rehosted / archived /
+  unarchived.
   Enqueued by `MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime` on the dedicated
   `:maintenance` queue, deduped per `site_id`.
 
@@ -11,6 +12,8 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
       now: compiling those pages queues its CSS and sitemap, but nothing else builds a new site's
       JS until a JS hook is saved, and without it no page of the site connects.
     * `"recompile"` (activate / unarchive) → `BootHandler.compile_site/2`
+    * `"rehost"` (a new host) → unload the site's modules, which are compiled for its host
+      (`SiteRuntime.unload_modules/2`) → `BootHandler.compile_site/2`
     * `"purge"` (deactivate / archive) → `SiteRuntime.purge_parts/3` (keep templates)
     * `"rename"` → purge under the OLD name (drop templates) → recompile under the new name
 
@@ -85,6 +88,11 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
   end
 
   defp dispatch("recompile", site_id, site_name, _old_name) do
+    BootHandler.compile_site(site_id, site_name)
+  end
+
+  defp dispatch("rehost", site_id, site_name, _old_name) do
+    SiteRuntime.unload_modules(site_name, SiteRuntime.module_specs(site_id))
     BootHandler.compile_site(site_id, site_name)
   end
 

@@ -24,6 +24,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
 
   alias MishkaCmsCore.Accounts.{Permission, User}
   alias MishkaCmsCore.Dashboard.Widget
+  alias MishkaCmsCore.Localized
 
   require Ash.Query
 
@@ -79,7 +80,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
 
     <div class="mb-3.5 flex items-baseline gap-2">
       <span class="font-['Space_Grotesk'] text-[44px] font-semibold leading-none tracking-[-0.03em] text-[#17161a]">
-        {@data.total}
+        {Localized.number(@data.total)}
       </span>
       <span class="text-[12.5px] font-medium text-[#8a877f]">{gettext("users total")}</span>
     </div>
@@ -90,7 +91,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
           <span class="size-[7px] rounded-[3px] bg-[#5b57d6]" />{gettext("Tenant")}
         </div>
         <div class="mt-1 font-['Space_Grotesk'] text-[22px] font-semibold text-[#17161a]">
-          {@data.tenants}
+          {Localized.number(@data.tenants)}
         </div>
       </div>
       <div class="rounded-xl border border-[#f0efea] bg-[#faf9f6] px-[13px] py-[11px]">
@@ -98,7 +99,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
           <span class="size-[7px] rounded-[3px] bg-[#17161a]" />{gettext("Master")}
         </div>
         <div class="mt-1 font-['Space_Grotesk'] text-[22px] font-semibold text-[#17161a]">
-          {@data.masters}
+          {Localized.number(@data.masters)}
         </div>
       </div>
     </div>
@@ -120,7 +121,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
         <span class="size-2 rounded-[3px] bg-[#5b57d6]" />{gettext("With permissions")}
       </span>
       <span class="font-['Space_Grotesk'] text-[12.5px] font-semibold text-[#17161a]">
-        {@data.with_perms}
+        {Localized.number(@data.with_perms)}
       </span>
     </div>
     <div class="flex items-center justify-between py-[3px]">
@@ -128,7 +129,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
         <span class="size-2 rounded-[3px] bg-[#dcdad3]" />{gettext("Without permissions")}
       </span>
       <span class="font-['Space_Grotesk'] text-[12.5px] font-semibold text-[#17161a]">
-        {@data.without_perms}
+        {Localized.number(@data.without_perms)}
       </span>
     </div>
 
@@ -141,7 +142,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
           <span class="text-[11px] font-semibold text-[#a5691a]">{gettext("Admins")}</span>
         </div>
         <div class="mt-[9px] font-['Space_Grotesk'] text-[24px] font-semibold text-[#17161a]">
-          {@data.admins}
+          {Localized.number(@data.admins)}
         </div>
         <div class="mt-0.5 text-[10.5px] font-medium text-[#8a877f]">
           {gettext("hold an admin permission, one area included")}
@@ -157,7 +158,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.UsersSummary do
           </span>
         </div>
         <div class="mt-[9px] font-['Space_Grotesk'] text-[24px] font-semibold text-[#17161a]">
-          {@data.unused}
+          {Localized.number(@data.unused)}
         </div>
         <div class="mt-0.5 text-[10.5px] font-medium text-[#8a877f]">
           {gettext("defined but never assigned")}

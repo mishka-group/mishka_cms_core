@@ -1,7 +1,7 @@
 defmodule MishkaCmsCoreWeb.SeoController do
   @moduledoc """
-  A site's `/robots.txt` and `/sitemap.xml`, with the `/sitemap-00001.xml.gz`… files it lists, each
-  its own, answered on the site's own address.
+  A site's `/robots.txt`, `/favicon.ico` and `/sitemap.xml`, with the `/sitemap-00001.xml.gz`…
+  files it lists, each its own, answered on the site's own address.
 
   All are routed through `MishkaCmsCoreWeb.Routes`' `:public` list, so the site is the one the
   request's host resolved to (`conn.assigns.current_site`), and an offline site answers them with
@@ -24,6 +24,14 @@ defmodule MishkaCmsCoreWeb.SeoController do
     4. a blank line and `Sitemap: <the site's /sitemap.xml>`.
 
   Sent as `text/plain`.
+
+  ## favicon.ico
+
+  A redirect to the site's favicon, the picture its pages name in `<link rel="icon">`
+  (`MishkaCmsCore.Runtime.Seo.favicon/1`): a `/…` path on the site itself, or an `http://…` or
+  `https://…` address. A browser asks for it on a page that names none, such as an admin page. A
+  site with no favicon, or one set to anything else, is a 404 no cache keeps. Answers whatever
+  `Accept` a browser sends.
 
   ## sitemap.xml and its files
 
@@ -60,6 +68,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
+  alias MishkaCmsCore.Runtime.Seo
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
@@ -78,6 +87,16 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   def robots(%{assigns: %{current_site: %{} = site}} = conn, _params),
     do: answer(conn, site, "text/plain", robots_txt(site))
+
+  def favicon(%{assigns: %{current_site: %{} = site}} = conn, _params) do
+    case Seo.favicon(site.id) do
+      "/" <> _ = path -> conn |> cache_control(site) |> redirect(to: path)
+      url when is_binary(url) -> conn |> cache_control(site) |> redirect(external: url)
+      nil -> refused(conn, :no_favicon)
+    end
+  end
+
+  def favicon(conn, _params), do: refused(conn, :no_site)
 
   def sitemap(%{assigns: %{current_site: %{} = site}} = conn, _params) do
     case stored(site) do
@@ -107,13 +126,17 @@ defmodule MishkaCmsCoreWeb.SeoController do
     do: conn |> put_resp_header("x-robots-tag", "noindex") |> answer(site, type, body)
 
   defp answer(conn, site, type, body) do
+    conn
+    |> put_resp_content_type(type, charset(type))
+    |> cache_control(site, transform(type))
+    |> send_resp(200, body)
+  end
+
+  defp cache_control(conn, site, extra \\ "") do
     cache_control =
       if Settings.offline?(site), do: "private, no-store", else: "private, max-age=60"
 
-    conn
-    |> put_resp_content_type(type, charset(type))
-    |> put_resp_header("cache-control", cache_control <> transform(type))
-    |> send_resp(200, body)
+    put_resp_header(conn, "cache-control", cache_control <> extra)
   end
 
   # A gzipped file is bytes, so it names no charset.

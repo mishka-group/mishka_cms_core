@@ -146,3 +146,7 @@ config :mishka_cms_core, :official_ui_kits, [
 # A message the locale has no translation for reads as its text behind a `"[<locale>] "` marker, so a
 # test sees a word go through `MishkaCmsCore.Gettext` in the reader's locale without a `.po` for it.
 config :mishka_cms_core, :gettext_marks_untranslated, true
+
+# CLDR data for a language other than English (`MishkaCmsCore.Localized`) is downloaded into
+# priv/localize/locales the first time a test reads it; CI downloads it before the suite.
+config :localize, otp_app: :mishka_cms_core, allow_runtime_locale_download: true

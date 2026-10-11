@@ -39,7 +39,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `card: false` keeps a page to the plugin's own image. Asked for only when `resolve/2` is given
   `card: true`; until it is drawn the head shows the plugin's image.
 
-  The page's `<link rel="icon">` is the `site.favicon` setting, when it is set.
+  The page's `<link rel="icon">` is the `site.favicon` setting, when it is set (`favicon/1`): a
+  `/…` path stays a path, so the browser asks the host it is on.
 
   ## Layers
 
@@ -844,23 +845,36 @@ defmodule MishkaCmsCore.Runtime.Seo do
   def noindex?(permissions, extra), do: permissions not in [nil, []] or sign_in?(extra)
 
   @doc """
-  A language code as Open Graph writes a locale: `ll_RR` where the code names a two-letter region,
-  the primary subtag otherwise.
+  A language code as Open Graph writes a locale, `ll_RR`: its language and the two-letter region
+  the code names, else the one CLDR's likely subtags give the language; the language alone when
+  CLDR gives none, or only a numeric region. `nil` for what is no language code.
 
-      locale("pt-br") #=> "pt_BR"
-      locale("fa")    #=> "fa"
+      locale("pt-br")  #=> "pt_BR"
+      locale("en")     #=> "en_US"
+      locale("fa")     #=> "fa_IR"
+      locale("es-419") #=> "es"
   """
   @spec locale(String.t() | nil) :: String.t() | nil
   def locale(language) when is_binary(language) do
-    [primary | subtags] = language |> String.downcase() |> String.split(["-", "_"])
+    case Localize.validate_locale(language) do
+      {:ok, %{language: code} = tag} when is_atom(code) and not is_nil(code) ->
+        og_locale(Atom.to_string(code), tag.territory)
 
-    case Enum.find(subtags, &String.match?(&1, ~r/\A[a-z]{2}\z/)) do
-      nil -> presence(primary)
-      region -> primary <> "_" <> String.upcase(region)
+      _no_code ->
+        nil
     end
   end
 
   def locale(_no_language), do: nil
+
+  defp og_locale(code, territory) when is_atom(territory) and not is_nil(territory) do
+    case Atom.to_string(territory) do
+      <<a, b>> = region when a in ?A..?Z and b in ?A..?Z -> code <> "_" <> region
+      _numeric -> code
+    end
+  end
+
+  defp og_locale(code, _no_territory), do: code
 
   @doc """
   The head `page` renders at one address: `given/2`, then the plugins on `event/0`, `accept/2` and
@@ -1191,7 +1205,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       meta("name", "twitter:description", description),
       meta("name", "twitter:image", image),
       meta("name", "twitter:image:alt", image && title),
-      link(%{"rel" => "icon"}, absolute(Settings.get("site.favicon", nil, seo.site_id), base)),
+      link(%{"rel" => "icon"}, favicon(seo.site_id)),
       alternate_links(languages, base, seo.site_id)
     ])
   end
@@ -1236,6 +1250,35 @@ defmodule MishkaCmsCore.Runtime.Seo do
       _no_card -> {nil, nil}
     end
   end
+
+  @doc """
+  The site's favicon as a page or a redirect names it — its `site.favicon` setting, its own value
+  else the global one — read off the address `URI.new/1` parses, never off its text: a path on the
+  site (no scheme, host or user info, starting with one `/`) as it is, or an `http`/`https` address
+  with a host and no user info. `nil` for no favicon and for anything else — `//host/…`, a `\\`
+  a browser would read as `/`, `javascript:`, `data:`.
+
+      favicon(site_id) #=> "/uploads/<site>/media/icon.png"
+  """
+  @spec favicon(String.t() | nil) :: String.t() | nil
+  def favicon(site_id), do: "site.favicon" |> Settings.get(nil, site_id) |> favicon_address()
+
+  defp favicon_address(value) when is_binary(value) do
+    case URI.new(String.trim(value)) do
+      {:ok, %URI{scheme: nil, host: nil, userinfo: nil, path: "/" <> rest} = uri}
+      when rest != "" ->
+        URI.to_string(uri)
+
+      {:ok, %URI{scheme: scheme, host: host, userinfo: nil} = uri}
+      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+        URI.to_string(uri)
+
+      _not_an_address ->
+        nil
+    end
+  end
+
+  defp favicon_address(_not_text), do: nil
 
   @doc """
   The site's name in `language`: the `site.title` setting, translated when the site's Translations

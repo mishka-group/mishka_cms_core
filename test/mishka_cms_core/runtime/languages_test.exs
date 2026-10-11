@@ -182,8 +182,10 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
       assert Languages.name(:fr) == "French"
     end
 
-    test "puts a region in brackets" do
-      assert Languages.name("pt-br") == "Portuguese (BR)"
+    test "names a regional language as CLDR does" do
+      assert Languages.name("pt-br") == "Brazilian Portuguese"
+      assert Languages.name("en-GB") == "British English"
+      assert Languages.name("fa-ir") == "Persian (Iran)"
     end
 
     test "is the code itself for a language it has no name for, and nothing for no code" do
@@ -194,10 +196,10 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
   end
 
   describe "names/1 — several codes as one phrase" do
-    test "names each language once, in alphabetical order, the last two joined by and" do
+    test "names each language once, in alphabetical order, joined as English joins a list" do
       assert Languages.names(["fa"]) == "Persian"
       assert Languages.names(["fa", "fr"]) == "French and Persian"
-      assert Languages.names(["fa", "de", "fr", "fa"]) == "French, German and Persian"
+      assert Languages.names(["fa", "de", "fr", "fa"]) == "French, German, and Persian"
     end
 
     test "is empty for no languages" do
@@ -206,44 +208,30 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
     end
   end
 
-  # A locale with no catalogue reads every message behind its `"[fa] "` marker, and the message the
-  # alphabet is read from in reverse, so these tests tell a name that went through Gettext from one
-  # that did not, and an order that follows the reader's alphabet from one that follows the code or
-  # the English name.
+  # The names, their order and the joining words are CLDR's for the reader's language — Persian
+  # here, whose data a test downloads the first time it reads it — not Gettext messages.
   describe "names in the reader's language" do
     setup do
       Gettext.put_locale(MishkaCmsCore.Gettext, "fa")
       :ok
     end
 
-    test "a language's name is translated" do
-      assert Languages.name("fa") == "[fa] Persian"
+    test "a language's name is the reader's language's" do
+      assert Languages.name("fa") == "فارسی"
+      assert Languages.name("pt-br") == "پرتغالی برزیل"
       assert Languages.name("xx") == "XX"
     end
 
-    test "a region follows through the translated template" do
-      assert Languages.name("pt-br") == "[fa] [fa] Portuguese (BR)"
-    end
-
-    test "several are joined by the translated separator and \"and\"" do
-      assert Languages.names(["fa", "fr"]) == "[fa] [fa] Persian and [fa] French"
-
-      assert Languages.names(["fa", "de", "fr"]) ==
-               "[fa] [fa] Persian[fa] , [fa] German and [fa] French"
-    end
-
-    test "several are put in the order of the reader's alphabet, not of the English one" do
-      assert Languages.names(["pt", "fr"]) == "[fa] [fa] Portuguese and [fa] French"
-
-      assert Languages.names(["fr", "pt", "de"]) ==
-               "[fa] [fa] Portuguese[fa] , [fa] German and [fa] French"
+    test "several are put in the reader's alphabetical order and joined as it joins a list" do
+      assert Languages.names(["fr", "fa"]) == "فارسی و فرانسوی"
+      assert Languages.names(["fr", "pt", "de"]) == "آلمانی،‏ پرتغالی، و فرانسوی"
     end
 
     test "the same languages are put in the English order when the reader's language is English" do
       Gettext.put_locale(MishkaCmsCore.Gettext, "en")
 
       assert Languages.names(["pt", "fr"]) == "French and Portuguese"
-      assert Languages.names(["fr", "pt", "de"]) == "French, German and Portuguese"
+      assert Languages.names(["fr", "pt", "de"]) == "French, German, and Portuguese"
     end
   end
 

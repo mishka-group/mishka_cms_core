@@ -510,11 +510,5 @@ defmodule MishkaCmsCore.Accounts.Permission do
 
   defp permission_date(nil), do: nil
 
-  defp permission_date(datetime),
-    do:
-      Calendar.strftime(
-        datetime,
-        "%b %-d, %Y, %I:%M %p",
-        MishkaCmsCore.Activity.Helpers.strftime_names()
-      )
+  defp permission_date(datetime), do: MishkaCmsCore.Localized.datetime(datetime, :yMMMdjm)
 end

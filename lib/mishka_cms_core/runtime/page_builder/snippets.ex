@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Snippets do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.PageBuilder.Section
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.Snippet
@@ -207,15 +208,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Snippets do
   defp ago(nil), do: gettext("just now")
 
   defp ago(at) do
-    seconds = DateTime.diff(DateTime.utc_now(), at)
-
-    cond do
-      seconds < 60 -> gettext("just now")
-      seconds < 3600 -> gettext("%{minutes}m ago", minutes: div(seconds, 60))
-      seconds < 86_400 -> gettext("%{hours}h ago", hours: div(seconds, 3600))
-      seconds < 2_592_000 -> gettext("%{days}d ago", days: div(seconds, 86_400))
-      true -> Calendar.strftime(at, "%d %b %Y", MishkaCmsCore.Activity.Helpers.strftime_names())
-    end
+    if DateTime.diff(DateTime.utc_now(), at) < 2_592_000,
+      do: Localized.ago(at, format: :narrow),
+      else: Localized.date(at, :yMMMd)
   end
 
   # Top-level nodes, which is what "3 blocks" means to someone looking at the canvas — not every

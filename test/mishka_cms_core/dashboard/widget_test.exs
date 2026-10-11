@@ -433,6 +433,16 @@ defmodule MishkaCmsCore.Dashboard.WidgetTest do
     end
   end
 
+  describe "stat/1" do
+    test "writes a count in the reader's digits, and anything else as it is" do
+      Gettext.put_locale(MishkaCmsCore.Gettext, "fa")
+      on_exit(fn -> Gettext.put_locale(MishkaCmsCore.Gettext, "en") end)
+
+      assert render_component(&Widget.stat/1, label: "Users", value: 1284) =~ "۱٬۲۸۴"
+      assert render_component(&Widget.stat/1, label: "Users", value: "—") =~ "—"
+    end
+  end
+
   describe "card/1" do
     test "shows a skeleton while loading" do
       html =

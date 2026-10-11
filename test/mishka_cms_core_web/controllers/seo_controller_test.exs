@@ -234,6 +234,65 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
     end
   end
 
+  describe "favicon.ico" do
+    @browser_accept "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
+
+    test "sends a browser to the site's own favicon, on the site", %{site: site} do
+      {:ok, _} =
+        Settings.put("site.favicon", "/uploads/#{site.id}/media/icon.png", site_id: site.id)
+
+      conn = fetch(site, "/favicon.ico", accept: @browser_accept)
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["/uploads/#{site.id}/media/icon.png"]
+      assert get_resp_header(conn, "cache-control") == ["private, max-age=60"]
+    end
+
+    test "takes the global favicon, and an address as it is, for a site with none of its own", %{
+      site: site
+    } do
+      {:ok, _} = Settings.put("site.favicon", " HTTPS://cdn.example.com/icon.png?v=2 ")
+
+      conn = fetch(site, "/favicon.ico")
+
+      assert conn.status == 302
+      assert get_resp_header(conn, "location") == ["https://cdn.example.com/icon.png?v=2"]
+    end
+
+    test "is a 404 no cache keeps for a site with no favicon, or one that is no address", %{
+      site: site
+    } do
+      for value <- [
+            "",
+            "icon.png",
+            "//evil.example/icon.png",
+            "/\\evil.example/icon.png",
+            "\\\\evil.example/icon.png",
+            "javascript:alert(1)",
+            "data:image/png;base64,AAAA",
+            "ftp://cdn.example.com/icon.png",
+            "https://user:secret@evil.example/icon.png",
+            "https:///icon.png"
+          ] do
+        {:ok, _} = Settings.put("site.favicon", value, site_id: site.id)
+        conn = fetch(site, "/favicon.ico")
+
+        assert conn.status == 404, inspect(value)
+        assert get_resp_header(conn, "location") == []
+        assert get_resp_header(conn, "cache-control") == ["no-store"]
+      end
+    end
+
+    test "is kept by no cache while the site is offline", %{site: site} do
+      {:ok, _} = Settings.put("site.favicon", "/icon.png", site_id: site.id)
+      {:ok, _} = Settings.put("cms.offline", true, site_id: site.id)
+
+      assert fetch(site, "/favicon.ico") |> get_resp_header("cache-control") == [
+               "private, no-store"
+             ]
+    end
+  end
+
   describe "sitemap.xml" do
     test "is the index of the site's files beside it, on its own address, built when", %{
       site: site
