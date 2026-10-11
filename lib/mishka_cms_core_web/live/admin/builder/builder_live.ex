@@ -2563,6 +2563,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # AND THE ROW IT MADE IS ADOPTED HERE, not waited for. `mark_saved/2` puts `draft_id` on the
   # session, but the socket's copy of the editor is the one the next write reads — left stale, a
   # retry saw no draft to update and made a second row for the same sitting.
+  #
+  # SO IS WHAT THE WRITE SETTLED. `dirty?` and `saved_at` come from the session this write stored,
+  # in the same answer that takes `keeping_draft?` down. Left to the session's broadcast, which
+  # arrives a message later, a render in between read a document still dirty with no write holding
+  # the publish bar back — and "Keep as a draft" put the bar back up over work it had just kept.
   defp autosaved(socket, {:ok, draft}) do
     {:ok, editor} =
       EditorSession.mark_saved(socket.assigns.editor.token,
@@ -2575,6 +2580,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     socket
     |> adopt_history(draft)
     |> assign(:editor, editor)
+    |> assign(:dirty?, editor.dirty?)
+    |> assign(:saved_at, editor.saved_at)
     |> assign(:draft, draft)
     |> assign(:autosave_failed?, false)
   end
