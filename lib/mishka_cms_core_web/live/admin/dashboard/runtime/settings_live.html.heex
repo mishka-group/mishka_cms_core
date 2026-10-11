@@ -70,7 +70,7 @@
     <div class="grid grid-cols-[290px_minmax(0,1fr)] items-start gap-[22px] max-[980px]:block!">
       <nav
         id="settings-tabs"
-        class="sticky top-0 flex flex-col gap-2.5 max-[980px]:z-30 max-[980px]:-mx-[15px] max-[980px]:-mt-2 max-[980px]:mb-4 max-[980px]:flex-row! max-[980px]:gap-2! max-[980px]:overflow-x-auto max-[980px]:overflow-y-hidden max-[980px]:border-b max-[980px]:border-[#e6e4de] max-[980px]:bg-[#f6f5f2] max-[980px]:px-[15px]! max-[980px]:py-2.5! max-[980px]:[scrollbar-width:none] max-[980px]:[&::-webkit-scrollbar]:hidden"
+        class="sticky top-0 flex flex-col gap-2.5 min-[981px]:-mx-3 min-[981px]:max-h-[calc(100dvh-66px)] min-[981px]:overflow-y-auto min-[981px]:px-3 min-[981px]:pt-1 min-[981px]:pb-6 min-[981px]:[scrollbar-width:none] min-[981px]:[&::-webkit-scrollbar]:hidden max-[980px]:z-30 max-[980px]:-mx-[15px] max-[980px]:-mt-2 max-[980px]:mb-4 max-[980px]:flex-row! max-[980px]:gap-2! max-[980px]:overflow-x-auto max-[980px]:overflow-y-hidden max-[980px]:border-b max-[980px]:border-[#e6e4de] max-[980px]:bg-[#f6f5f2] max-[980px]:px-[15px]! max-[980px]:py-2.5! max-[980px]:[scrollbar-width:none] max-[980px]:[&::-webkit-scrollbar]:hidden"
       >
         <.link
           :for={category <- @categories}
