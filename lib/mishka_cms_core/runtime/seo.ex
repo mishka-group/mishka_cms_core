@@ -149,6 +149,97 @@ defmodule MishkaCmsCore.Runtime.Seo do
   # What a page sets itself, and a plugin fills only when the page left it empty.
   @page_first [:description, :schema]
 
+  # The region a language is written for when its code names none, for `og:locale` — the locales
+  # Facebook reads (`en_US`, `ar_AR`, `fa_IR`), by the primary subtag.
+  @regions %{
+    "af" => "ZA",
+    "am" => "ET",
+    "ar" => "AR",
+    "az" => "AZ",
+    "be" => "BY",
+    "bg" => "BG",
+    "bn" => "IN",
+    "bs" => "BA",
+    "ca" => "ES",
+    "ckb" => "IQ",
+    "cs" => "CZ",
+    "cy" => "GB",
+    "da" => "DK",
+    "de" => "DE",
+    "el" => "GR",
+    "en" => "US",
+    "es" => "ES",
+    "et" => "EE",
+    "eu" => "ES",
+    "fa" => "IR",
+    "fi" => "FI",
+    "fil" => "PH",
+    "fr" => "FR",
+    "ga" => "IE",
+    "gl" => "ES",
+    "gu" => "IN",
+    "ha" => "NG",
+    "he" => "IL",
+    "hi" => "IN",
+    "hr" => "HR",
+    "hu" => "HU",
+    "hy" => "AM",
+    "id" => "ID",
+    "is" => "IS",
+    "it" => "IT",
+    "ja" => "JP",
+    "ka" => "GE",
+    "kk" => "KZ",
+    "km" => "KH",
+    "kn" => "IN",
+    "ko" => "KR",
+    "ku" => "TR",
+    "ky" => "KG",
+    "lo" => "LA",
+    "lt" => "LT",
+    "lv" => "LV",
+    "mk" => "MK",
+    "ml" => "IN",
+    "mn" => "MN",
+    "mr" => "IN",
+    "ms" => "MY",
+    "mt" => "MT",
+    "my" => "MM",
+    "nb" => "NO",
+    "ne" => "NP",
+    "nl" => "NL",
+    "no" => "NO",
+    "pa" => "IN",
+    "pl" => "PL",
+    "ps" => "AF",
+    "pt" => "BR",
+    "ro" => "RO",
+    "ru" => "RU",
+    "sd" => "PK",
+    "si" => "LK",
+    "sk" => "SK",
+    "sl" => "SI",
+    "so" => "SO",
+    "sq" => "AL",
+    "sr" => "RS",
+    "sv" => "SE",
+    "sw" => "KE",
+    "ta" => "IN",
+    "te" => "IN",
+    "tg" => "TJ",
+    "th" => "TH",
+    "tk" => "TM",
+    "tr" => "TR",
+    "ug" => "CN",
+    "uk" => "UA",
+    "ur" => "PK",
+    "uz" => "UZ",
+    "vi" => "VN",
+    "yo" => "NG",
+    "zh" => "CN",
+    "zu" => "ZA"
+  }
+
   @robots ~w(index noindex follow nofollow noarchive nosnippet noimageindex
              max-image-preview:none max-image-preview:standard max-image-preview:large)
   @og_types ~w(website article profile product book video.other)
@@ -844,23 +935,34 @@ defmodule MishkaCmsCore.Runtime.Seo do
   def noindex?(permissions, extra), do: permissions not in [nil, []] or sign_in?(extra)
 
   @doc """
-  A language code as Open Graph writes a locale: `ll_RR` where the code names a two-letter region,
-  the primary subtag otherwise.
+  A language code as Open Graph writes a locale, `ll_RR`: with the two-letter region the code
+  names, else — for a code that is the language alone — the region it is usually written for, as
+  Facebook reads it, else the language alone.
 
-      locale("pt-br") #=> "pt_BR"
-      locale("fa")    #=> "fa"
+      locale("pt-br")   #=> "pt_BR"
+      locale("en")      #=> "en_US"
+      locale("fa")      #=> "fa_IR"
+      locale("es-419")  #=> "es"
   """
   @spec locale(String.t() | nil) :: String.t() | nil
   def locale(language) when is_binary(language) do
     [primary | subtags] = language |> String.downcase() |> String.split(["-", "_"])
 
-    case Enum.find(subtags, &String.match?(&1, ~r/\A[a-z]{2}\z/)) do
-      nil -> presence(primary)
-      region -> primary <> "_" <> String.upcase(region)
+    case {Enum.find(subtags, &String.match?(&1, ~r/\A[a-z]{2}\z/)), subtags} do
+      {nil, []} -> region(primary)
+      {nil, _no_region} -> presence(primary)
+      {region, _subtags} -> primary <> "_" <> String.upcase(region)
     end
   end
 
   def locale(_no_language), do: nil
+
+  defp region(primary) do
+    case Map.fetch(@regions, primary) do
+      {:ok, region} -> primary <> "_" <> region
+      :error -> presence(primary)
+    end
+  end
 
   @doc """
   The head `page` renders at one address: `given/2`, then the plugins on `event/0`, `accept/2` and

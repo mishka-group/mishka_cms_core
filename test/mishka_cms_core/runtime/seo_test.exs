@@ -38,7 +38,7 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert value(head, "meta", "property", "og:title") == "About the studio"
       assert value(head, "meta", "property", "og:url") == "#{@base}/en/about"
       assert value(head, "meta", "property", "og:site_name") == "Acme Studio"
-      assert value(head, "meta", "property", "og:locale") == "en"
+      assert value(head, "meta", "property", "og:locale") == "en_US"
       assert value(head, "meta", "name", "twitter:card") == "summary"
       assert value(head, "meta", "name", "twitter:title") == "About the studio"
 
@@ -93,8 +93,8 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
                {"x-default", "#{@base}/en/about"}
              ]
 
-      assert value(head, "meta", "property", "og:locale") == "fa"
-      assert value(head, "meta", "property", "og:locale:alternate") == "en"
+      assert value(head, "meta", "property", "og:locale") == "fa_IR"
+      assert value(head, "meta", "property", "og:locale:alternate") == "en_US"
     end
 
     test "names no alternate for a page in one language", %{site: site} do
@@ -624,12 +624,28 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     refute Seo.noindex?([], nil)
   end
 
-  test "locale/1 writes a region where the code names one" do
+  test "locale/1 writes the region the code names, else the one its language is written for" do
     assert Seo.locale("pt-br") == "pt_BR"
     assert Seo.locale("zh-hant-tw") == "zh_TW"
-    assert Seo.locale("fa") == "fa"
+    assert Seo.locale("EN_gb") == "en_GB"
+    assert Seo.locale("en") == "en_US"
+    assert Seo.locale("fa") == "fa_IR"
+    assert Seo.locale("ar") == "ar_AR"
+    assert Seo.locale("de") == "de_DE"
+    # A code that names another subtag but no two-letter region is not given one.
     assert Seo.locale("es-419") == "es"
+    assert Seo.locale("zh-hant") == "zh"
+    # A language with no usual region is the language alone.
+    assert Seo.locale("tlh") == "tlh"
     assert Seo.locale(nil) == nil
+  end
+
+  test "locale/1 gives every language the CMS names a region, but those written for none" do
+    for language <- MishkaCmsCore.Runtime.Languages.known(),
+        language not in ~w(eo yi),
+        do: assert(Seo.locale(language) =~ ~r/\A[a-z]{2,3}_[A-Z]{2}\z/, language)
+
+    assert Seo.locale("eo") == "eo"
   end
 
   describe "resolve/2" do
