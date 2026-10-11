@@ -196,6 +196,19 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert has_element?(view, @components)
     end
 
+    test "a code block's language picker is named, and offers plain text, in the reader's words",
+         ctx do
+      view = open(ctx)
+
+      assert has_element?(
+               view,
+               "##{@editor}-surface[data-label-code-language='Code language'][data-label-code-plain='Plain text']"
+             )
+
+      assert view |> element("##{@editor}-surface") |> render() =~
+               "[&amp;_[data-role=content-code-language]]:"
+    end
+
     test "an empty field with no placeholder of its own says what to do", ctx do
       view = open(ctx, %{"value" => nil, "placeholder" => nil})
 
