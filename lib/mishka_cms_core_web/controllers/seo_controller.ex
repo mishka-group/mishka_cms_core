@@ -27,11 +27,11 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   ## favicon.ico
 
-  A redirect to the site's `site.favicon` setting — its own value, else the global one — the
-  picture its pages name in `<link rel="icon">` (`MishkaCmsCore.Runtime.Seo`): a `/…` path on the
-  site itself, or an `http://…` or `https://…` address as it is. A browser asks for it on a page
-  that names none, such as an admin page. A site with no favicon, or one set to any other value,
-  is a 404 no cache keeps. Answers whatever `Accept` a browser sends.
+  A redirect to the site's favicon, the picture its pages name in `<link rel="icon">`
+  (`MishkaCmsCore.Runtime.Seo.favicon/1`): a `/…` path on the site itself, or an `http://…` or
+  `https://…` address. A browser asks for it on a page that names none, such as an admin page. A
+  site with no favicon, or one set to anything else, is a 404 no cache keeps. Answers whatever
+  `Accept` a browser sends.
 
   ## sitemap.xml and its files
 
@@ -68,6 +68,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
+  alias MishkaCmsCore.Runtime.Seo
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
@@ -88,35 +89,14 @@ defmodule MishkaCmsCoreWeb.SeoController do
     do: answer(conn, site, "text/plain", robots_txt(site))
 
   def favicon(%{assigns: %{current_site: %{} = site}} = conn, _params) do
-    case "site.favicon" |> Settings.get(nil, site.id) |> favicon_address() do
-      {:path, path} -> conn |> cache_control(site) |> redirect(to: path)
-      {:external, url} -> conn |> cache_control(site) |> redirect(external: url)
+    case Seo.favicon(site.id) do
+      "/" <> _ = path -> conn |> cache_control(site) |> redirect(to: path)
+      url when is_binary(url) -> conn |> cache_control(site) |> redirect(external: url)
       nil -> refused(conn, :no_favicon)
     end
   end
 
   def favicon(conn, _params), do: refused(conn, :no_site)
-
-  # Where the setting sends a browser, read off the address as `URI.new/1` parses it, never off its
-  # text: a path on the site has no scheme, host or user info and starts with `/` (`//host/…`
-  # parses as a host, and a `\` a browser would read as `/` is no valid address at all); an address
-  # elsewhere is `http` or `https`, with a host and no user info. Anything else is `nil`.
-  defp favicon_address(value) when is_binary(value) do
-    case URI.new(String.trim(value)) do
-      {:ok, %URI{scheme: nil, host: nil, userinfo: nil, path: "/" <> rest} = uri}
-      when rest != "" ->
-        {:path, URI.to_string(uri)}
-
-      {:ok, %URI{scheme: scheme, host: host, userinfo: nil} = uri}
-      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
-        {:external, URI.to_string(uri)}
-
-      _not_an_address ->
-        nil
-    end
-  end
-
-  defp favicon_address(_not_text), do: nil
 
   def sitemap(%{assigns: %{current_site: %{} = site}} = conn, _params) do
     case stored(site) do

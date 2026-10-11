@@ -39,7 +39,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `card: false` keeps a page to the plugin's own image. Asked for only when `resolve/2` is given
   `card: true`; until it is drawn the head shows the plugin's image.
 
-  The page's `<link rel="icon">` is the `site.favicon` setting, when it is set.
+  The page's `<link rel="icon">` is the `site.favicon` setting, when it is set (`favicon/1`): a
+  `/…` path stays a path, so the browser asks the host it is on.
 
   ## Layers
 
@@ -1204,7 +1205,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       meta("name", "twitter:description", description),
       meta("name", "twitter:image", image),
       meta("name", "twitter:image:alt", image && title),
-      link(%{"rel" => "icon"}, absolute(Settings.get("site.favicon", nil, seo.site_id), base)),
+      link(%{"rel" => "icon"}, favicon(seo.site_id)),
       alternate_links(languages, base, seo.site_id)
     ])
   end
@@ -1249,6 +1250,35 @@ defmodule MishkaCmsCore.Runtime.Seo do
       _no_card -> {nil, nil}
     end
   end
+
+  @doc """
+  The site's favicon as a page or a redirect names it — its `site.favicon` setting, its own value
+  else the global one — read off the address `URI.new/1` parses, never off its text: a path on the
+  site (no scheme, host or user info, starting with one `/`) as it is, or an `http`/`https` address
+  with a host and no user info. `nil` for no favicon and for anything else — `//host/…`, a `\\`
+  a browser would read as `/`, `javascript:`, `data:`.
+
+      favicon(site_id) #=> "/uploads/<site>/media/icon.png"
+  """
+  @spec favicon(String.t() | nil) :: String.t() | nil
+  def favicon(site_id), do: "site.favicon" |> Settings.get(nil, site_id) |> favicon_address()
+
+  defp favicon_address(value) when is_binary(value) do
+    case URI.new(String.trim(value)) do
+      {:ok, %URI{scheme: nil, host: nil, userinfo: nil, path: "/" <> rest} = uri}
+      when rest != "" ->
+        URI.to_string(uri)
+
+      {:ok, %URI{scheme: scheme, host: host, userinfo: nil} = uri}
+      when scheme in ["http", "https"] and is_binary(host) and host != "" ->
+        URI.to_string(uri)
+
+      _not_an_address ->
+        nil
+    end
+  end
+
+  defp favicon_address(_not_text), do: nil
 
   @doc """
   The site's name in `language`: the `site.title` setting, translated when the site's Translations

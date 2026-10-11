@@ -226,14 +226,30 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
       assert Enum.sort(sites) == ["Acme Studio", "استودیو آکمه"]
     end
 
-    test "links the site.favicon setting as the page's icon", %{site: site} do
+    test "links the site.favicon setting as the page's icon, a path on the host it is read on", %{
+      site: site
+    } do
       assert link(Seo.head(seo(site), base: @base), "icon") == nil
 
       {:ok, _} =
         Settings.put("site.favicon", "/uploads/#{site.id}/media/a/icon.png", site_id: site.id)
 
       assert link(Seo.head(seo(site), base: @base), "icon") ==
-               "#{@base}/uploads/#{site.id}/media/a/icon.png"
+               "/uploads/#{site.id}/media/a/icon.png"
+
+      {:ok, _} =
+        Settings.put("site.favicon", "https://cdn.example.com/icon.png", site_id: site.id)
+
+      assert link(Seo.head(seo(site), base: @base), "icon") == "https://cdn.example.com/icon.png"
+
+      for refused <- [
+            "//evil.example/icon.png",
+            "javascript:alert(1)",
+            "https://u:p@evil.example/i.png"
+          ] do
+        {:ok, _} = Settings.put("site.favicon", refused, site_id: site.id)
+        assert link(Seo.head(seo(site), base: @base), "icon") == nil, refused
+      end
     end
   end
 
