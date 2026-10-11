@@ -324,6 +324,90 @@ defmodule MishkaCmsCore.Runtime.ComponentLifecycleTest do
     end
   end
 
+  # A KIT INSTALLED OR UPGRADED WRITES ITS ROWS IN ONE BATCH, with no job per row
+  # (`defer_runtime`), and `BootHandler.compile_components/1` passes over a module that is already
+  # loaded — so a component a page had rendered before the upgrade kept the old row's code until the
+  # node restarted. `RuntimeCompilerWorker.refresh_after_bulk/1` is what the batch owes each row it
+  # wrote, the rest of what a single save of it does; the kit installer hands it every one through
+  # `RuntimeOrchestrator.sync_after_bulk/1`.
+  describe "a component a kit's bulk write rewrote" do
+    defp rewrite!(component, attrs) do
+      component
+      |> Ash.Changeset.for_update(:master_update, attrs,
+        authorize?: false,
+        tenant: component.site_id,
+        context: %{defer_runtime: true}
+      )
+      |> Ash.update!()
+    end
+
+    defp written(component),
+      do: %{
+        "name" => component.name,
+        "site_id" => component.site_id,
+        "active" => component.active
+      }
+
+    test "is drawn from the new row although a render had built it from the old", %{site: site} do
+      component = make_component(tag: "upgraded", site_id: site.id)
+      assert render(component.name, site.name) =~ "hello"
+
+      upgraded = rewrite!(component, %{template: ~s(<div class="lifecycle-probe">upgraded</div>)})
+      assert render(component.name, site.name) =~ "hello", "the old module is still loaded"
+
+      assert :ok = RuntimeCompilerWorker.refresh_after_bulk(written(upgraded))
+
+      assert render(component.name, site.name) =~ "upgraded"
+    end
+
+    test "and so is a precompiled one", %{site: site} do
+      component = make_component(tag: "upgraded-pre", site_id: site.id, precompile: true)
+      assert :ok = BootHandler.compile_components(site.id)
+      assert Helpers.loaded?(module_for(component.name, site.id))
+
+      upgraded = rewrite!(component, %{template: ~s(<div class="lifecycle-probe">upgraded</div>)})
+      assert :ok = RuntimeCompilerWorker.refresh_after_bulk(written(upgraded))
+
+      assert render(component.name, site.name) =~ "upgraded"
+    end
+
+    test "one no render built yet is left for its first render to build", %{site: site} do
+      component = make_component(tag: "upgraded-lazy", site_id: site.id)
+      module = module_for(component.name, site.id)
+
+      upgraded = rewrite!(component, %{template: ~s(<div class="lifecycle-probe">upgraded</div>)})
+      assert :ok = RuntimeCompilerWorker.refresh_after_bulk(written(upgraded))
+
+      refute Helpers.loaded?(module)
+      assert render(component.name, site.name) =~ "upgraded"
+    end
+
+    test "one the write switched off is unloaded, and its name forgotten", %{site: site} do
+      component = make_component(tag: "upgraded-off", site_id: site.id)
+      module = module_for(component.name, site.id)
+      assert render(component.name, site.name) =~ "hello"
+      SiteState.put_component(site.id, component.name)
+
+      off = rewrite!(component, %{active: false})
+      assert :ok = RuntimeCompilerWorker.refresh_after_bulk(written(off))
+
+      refute Helpers.loaded?(module)
+      refute SiteState.component?(site.id, component.name)
+    end
+
+    test "a name a render had found nothing for is asked again", %{site: site} do
+      component = make_component(tag: "upgraded-found", site_id: site.id)
+      module = module_for(component.name, site.id)
+      CompileFailureState.record(module, :not_found)
+      on_exit(fn -> CompileFailureState.clear(module) end)
+
+      assert :ok = RuntimeCompilerWorker.refresh_after_bulk(written(component))
+
+      refute CompileFailureState.failed?(module)
+      assert render(component.name, site.name) =~ "hello"
+    end
+  end
+
   describe "the names a site's components are known by" do
     test "the compile worker remembers an active component's name and forgets a purged one", %{
       site: site
