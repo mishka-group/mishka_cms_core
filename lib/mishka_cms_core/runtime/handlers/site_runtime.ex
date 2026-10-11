@@ -51,14 +51,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.SiteRuntime do
       return: false
     )
 
-    unloaded =
-      Enum.count(module_specs, fn %{"type" => type, "key" => key} ->
-        module = Helpers.module_name(key, site_name, type)
-        loaded? = Helpers.loaded?(module)
-        ModuleCompiler.unload(module)
-        loaded?
-      end)
-
+    unloaded = unload_modules(site_name, module_specs)
     assets = AssetsState.delete_by_site(site_name)
     routes = WebRunTimeMetaDataState.delete_by_site(site_name)
 
@@ -75,5 +68,20 @@ defmodule MishkaCmsCore.Runtime.Handlers.SiteRuntime do
     )
 
     result
+  end
+
+  @doc """
+  Unloads the given module specs of the site `site_name`, and nothing else — its cached CSS/JS,
+  routing and templates stay. Returns how many were loaded. A module is compiled for its site's
+  name and host, so a new host needs new ones: `BootHandler.compile_site/2` builds them again, and
+  a lazy one is built by the first request for it.
+  """
+  def unload_modules(site_name, module_specs) do
+    Enum.count(module_specs, fn %{"type" => type, "key" => key} ->
+      module = Helpers.module_name(key, site_name, type)
+      loaded? = Helpers.loaded?(module)
+      ModuleCompiler.unload(module)
+      loaded?
+    end)
   end
 end

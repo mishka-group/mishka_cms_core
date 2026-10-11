@@ -1,13 +1,18 @@
 defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorkerTest do
   @moduledoc """
   The site runtime worker purges a site's dependent parts (deactivate/archive) and
-  recompiles them (activate/unarchive) — keyed by site name, streaming the rows.
+  recompiles them (activate/unarchive), and rebuilds them for a new host — keyed by site name,
+  streaming the rows.
   """
   use MishkaCmsCore.DataCase
   use ExUnit.Case, async: false
 
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
+  use Oban.Testing, repo: @repo
+
+  alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker, as: Worker
-  alias MishkaCmsCore.Runtime.States.{AssetsState, WebRunTimeMetaDataState}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState, WebRunTimeMetaDataState}
 
   defp job(transition, site) do
     %Oban.Job{
@@ -61,5 +66,54 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorkerTest do
     assert :ok = Worker.perform(job("recompile", site))
 
     assert WebRunTimeMetaDataState.count_by_site(site.name) == 1
+  end
+
+  describe "a site's host" do
+    test "changed, rebuilds the site's pages for it" do
+      host = "rehost-#{System.unique_integer([:positive])}.test"
+      site = create_site!(name: host, host: host, active: true)
+      page = create_page!(site_id: site.id, precompile: true)
+      module = Helpers.module_name(page.id, site.name, "Page")
+
+      on_exit(fn ->
+        SiteState.delete(site.id)
+        :code.purge(module)
+        :code.delete(module)
+      end)
+
+      assert :ok = Worker.perform(job("recompile", site))
+      assert module.__page_information__(:private).host == host
+
+      jobs_on()
+
+      moved =
+        site
+        |> Ash.Changeset.for_update(:update, %{host: "moved-" <> host}, authorize?: false)
+        |> Ash.update!()
+
+      assert [rehost] = all_enqueued(worker: Worker)
+      assert rehost.args == job("rehost", site).args
+
+      assert :ok = perform_job(Worker, rehost.args)
+      assert module.__page_information__(:private).host == moved.host
+    end
+
+    test "left alone, rebuilds nothing" do
+      host = "rehost-#{System.unique_integer([:positive])}.test"
+      site = create_site!(name: host, host: host, active: true)
+      on_exit(fn -> SiteState.delete(site.id) end)
+      jobs_on()
+
+      site
+      |> Ash.Changeset.for_update(:update, %{priority: site.priority + 1}, authorize?: false)
+      |> Ash.update!()
+
+      assert all_enqueued(worker: Worker) == []
+    end
+  end
+
+  defp jobs_on do
+    Application.put_env(:mishka_cms_core, :env_test?, false)
+    on_exit(fn -> Application.put_env(:mishka_cms_core, :env_test?, true) end)
   end
 end

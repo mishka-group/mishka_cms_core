@@ -11,8 +11,10 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime do
     * **rename** (name changed) → purge the OLD-name artifacts, recompile under the new name
     * **deactivate** (active → false) / **archive** → purge the parts (free RAM)
     * **activate** / **unarchive** → recompile the parts
-    * host/mode/priority/etc. change, or create → just update `SiteState`; a host change also
-      rebuilds the site's sitemap, every address of which is on that host
+    * **host** change → rebuild the parts, which are compiled for the site's host — the address a
+      page answers on and writes into its head — and the sitemap, every address of which is on
+      that host
+    * mode/priority/etc. change, or create → just update `SiteState`
     * create → also **provision**, which gives the new site its sign-in pages, unless the
       changeset context carries `auth_pages: :inline` (the caller writes them itself)
 
@@ -89,10 +91,14 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime do
     end
   end
 
-  # EVERY ADDRESS IN A SITEMAP IS ON THE SITE'S HOST. `SiteState` is saved just before, so the job
-  # is enqueued for the site as it now is.
+  # A COMPILED PART AND EVERY ADDRESS IN A SITEMAP ARE ON THE SITE'S HOST. `SiteState` is saved
+  # just before, so both jobs are enqueued for the site as it now is.
   defp rehost(host, %{host: host}), do: :ok
-  defp rehost(_old_host, record), do: SitemapCompiler.schedule(record.id)
+
+  defp rehost(_old_host, record) do
+    SitemapCompiler.schedule(record.id)
+    enqueue(record.id, record.name, record.name, "rehost")
+  end
 
   defp classify(:unarchive, _old_name, _old_active, _record), do: :unarchive
 
