@@ -26,6 +26,7 @@ defmodule MishkaCmsCore.MixProject do
   # they exist only to run the suite on its own.
   defp package do
     [
+      licenses: ["Apache-2.0"],
       files:
         ~w(lib priv/cms_ui_kits priv/dev_seed_media priv/share_card .formatter.exs mix.exs LICENSE README*)
     ]
