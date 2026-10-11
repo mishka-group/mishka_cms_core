@@ -78,6 +78,7 @@ defmodule MishkaCmsCoreWeb.Routes do
       {:get, "/assets/css/:site/:hash", MishkaCmsCoreWeb.AssetsController, :css},
       {:get, "/assets/js/:site/:hash", MishkaCmsCoreWeb.AssetsController, :js},
       {:get, "/robots.txt", MishkaCmsCoreWeb.SeoController, :robots, private: @file_formats},
+      {:get, "/favicon.ico", MishkaCmsCoreWeb.SeoController, :favicon, private: @stored_file},
       {:get, "/sitemap.xml", MishkaCmsCoreWeb.SeoController, :sitemap, private: @file_formats},
       {:get, "/sitemap-:file", MishkaCmsCoreWeb.SeoController, :sitemap_file,
        private: @stored_file}
