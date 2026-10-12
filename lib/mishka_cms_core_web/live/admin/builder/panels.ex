@@ -1870,7 +1870,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                     )
                 }
                 class={[
-                  "relative flex h-[86px] w-full cursor-grab flex-col items-center gap-2 rounded-[12px] border px-2 pb-[11px] pt-[13px]",
+                  "relative flex h-[92px] w-full cursor-grab flex-col items-center gap-2 rounded-[12px] border px-2 pb-[11px] pt-[13px]",
                   "shadow-[0_1px_2px_rgba(30,28,24,.04)] hover:border-[#dcdbf5] hover:shadow-[0_4px_12px_rgba(30,28,24,.07)]",
                   (@picked == entry.name && "border-[#4f4bcc] bg-[#f2f1fc]") ||
                     ((entry.global? && "border-[#ecebe6] bg-white") || "border-[#f0e6cd] bg-white")
@@ -1910,7 +1910,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                     <.icon name={:bolt} size={8} />
                   </span>
                 </span>
-                <span class="line-clamp-2 w-full text-center text-[10.5px] font-semibold leading-[1.3] text-[#3a382f] [word-break:break-word]">
+                <span class="line-clamp-2 w-full flex-none text-center text-[10.5px] font-semibold leading-[1.3] text-[#3a382f] [word-break:break-word]">
                   {short_label(entry, @kit_prefixes)}
                 </span>
               </button>
@@ -1969,7 +1969,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                   <div
                     :for={tile <- 1..4}
                     id={"pb-palette-skel-#{group}-#{tile}"}
-                    class="h-[74px] animate-pulse rounded-[13px] border border-[#f0efea] bg-[#faf9f6]"
+                    class="h-[92px] animate-pulse rounded-[13px] border border-[#f0efea] bg-[#faf9f6]"
                   >
                   </div>
                 </div>

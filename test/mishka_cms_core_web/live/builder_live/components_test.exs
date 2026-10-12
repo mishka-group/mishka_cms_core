@@ -2885,8 +2885,12 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
       assert Panels.entry_icon(entry(view, "kit-zzz")) == :image
     end
 
-    # Every card is the same box whatever its name is; one wrapping label must not make its row grow.
-    test "every palette card is the same fixed height", %{conn: conn, page: page} do
+    # Every card is the same box whatever its name is; one wrapping label must not make its row grow,
+    # and the box holds two lines of it: the label never shrinks to one and cuts the second off.
+    test "every palette card is the same fixed height, tall enough for a two-line name", %{
+      conn: conn,
+      page: page
+    } do
       create_component!(name: "kit-x")
       create_component!(name: "kit-with-a-very-long-name-that-wraps-twice")
 
@@ -2897,12 +2901,12 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
         for name <- ~w(kit-x kit-with-a-very-long-name-that-wraps-twice) do
           [_before, after_id] = String.split(html, ~s(id="pb-comp-#{name}"), parts: 2)
           [tag, _rest] = String.split(after_id, ">", parts: 2)
-          tag =~ "h-[86px]"
+          tag =~ "h-[92px]"
         end
 
       assert short
       assert long
-      assert html =~ "line-clamp-2"
+      assert html =~ "line-clamp-2 w-full flex-none"
     end
 
     # The kit's own name is on every one of its components, so printing it on every card spends the
