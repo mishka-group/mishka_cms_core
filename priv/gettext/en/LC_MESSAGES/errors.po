@@ -179,23 +179,41 @@ msgstr ""
 msgid "author"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:967
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:990
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1151
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1220
+#, elixir-autogen, elixir-format
 msgid "auto-posting configuration"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2523
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2602
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2714
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2785
+#, elixir-autogen, elixir-format
 msgid "blog post"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/post_blogger.ex:113
+#: ../mishka_blog/lib/mishka_blog/resources/team_member.ex:114
+#, elixir-autogen, elixir-format
 msgid "blogger"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1515
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1590
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1699
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1770
+#, elixir-autogen, elixir-format
 msgid "blogger profile"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1683
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1730
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1788
+#: ../mishka_blog/lib/mishka_blog/resources/post_collection.ex:101
+#, elixir-autogen, elixir-format
 msgid "collection"
 msgstr ""
 
@@ -229,11 +247,14 @@ msgstr ""
 msgid "error page"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/blogger_follower.ex:150
+#: ../mishka_blog/lib/mishka_blog/resources/team_follower.ex:180
+#, elixir-autogen, elixir-format
 msgid "follower"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:634
+#, elixir-autogen, elixir-format
 msgid "issue"
 msgstr ""
 
@@ -288,19 +309,25 @@ msgstr ""
 msgid "page"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1922
+#, elixir-autogen, elixir-format
 msgid "parent collection"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1609
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1634
+#, elixir-autogen, elixir-format
 msgid "parent comment"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1675
+#, elixir-autogen, elixir-format
 msgid "parent tag"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1602
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1626
+#, elixir-autogen, elixir-format
 msgid "post"
 msgstr ""
 
@@ -315,11 +342,27 @@ msgstr ""
 msgid "resolver"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_document/lib/mishka_document/resources/__changes/set_section_lineage_id.ex:71
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:1099
+#: ../mishka_document/lib/mishka_document/resources/note.ex:718
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1437
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1471
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1941
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1957
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1964
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1973
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1979
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1566
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1574
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1600
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1606
+#, elixir-autogen, elixir-format
 msgid "section"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1445
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1477
+#, elixir-autogen, elixir-format
 msgid "section draft"
 msgstr ""
 
@@ -328,27 +371,55 @@ msgstr ""
 msgid "stylesheet"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/post_tag.ex:100
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1440
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1491
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1549
+#: ../mishka_document/lib/mishka_document/resources/section_tag.ex:119
+#, elixir-autogen, elixir-format
 msgid "tag"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1492
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1569
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1656
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1728
+#, elixir-autogen, elixir-format
 msgid "team"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1855
+#: ../mishka_blog/lib/mishka_blog/resources/comment_vote.ex:179
+#: ../mishka_blog/lib/mishka_blog/resources/post_bookmark.ex:142
+#: ../mishka_blog/lib/mishka_blog/resources/post_rating.ex:169
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:1107
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:642
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1461
+#: ../mishka_document/lib/mishka_document/resources/section_bookmark.ex:142
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1590
+#: ../mishka_document/lib/mishka_document/resources/section_view.ex:99
+#: ../mishka_document/lib/mishka_document/resources/workspace_follower.ex:182
+#, elixir-autogen, elixir-format
 msgid "user"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1429
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1933
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1558
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:949
+#: ../mishka_document/lib/mishka_document/resources/workspace_version_lineage.ex:406
+#: ../mishka_document/lib/mishka_document/resources/workspace_version_lineage.ex:414
+#, elixir-autogen, elixir-format
 msgid "version"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_blog/lib/mishka_blog/resources/post_view.ex:100
+#, elixir-autogen, elixir-format
 msgid "viewer"
 msgstr ""
 
-#. A record's name, the %{label} of a refusal such as "That %{label} is not one this site can use."
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:941
+#, elixir-autogen, elixir-format
 msgid "workspace"
 msgstr ""
 
@@ -1576,4 +1647,720 @@ msgstr ""
 #: ../mishka_gervaz/lib/mishka_gervaz/form/templates/standard.ex:1969
 #, elixir-autogen, elixir-format
 msgid "is required"
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3357
+#, elixir-autogen, elixir-format
+msgid "A blog post with this language already exists in this language group."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2234
+#, elixir-autogen, elixir-format
+msgid "A collection with this language already exists in this language group."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1942
+#, elixir-autogen, elixir-format
+msgid "A tag with this language already exists in this language group."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:761
+#, elixir-autogen, elixir-format
+msgid "Auto-posting configuration is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:811
+#, elixir-autogen, elixir-format
+msgid "Auto-posting configuration is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2292
+#, elixir-autogen, elixir-format
+msgid "Blog post is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2353
+#, elixir-autogen, elixir-format
+msgid "Blog post is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3349
+#, elixir-autogen, elixir-format
+msgid "Blog post slug must be unique within a site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger_follower.ex:78
+#: ../mishka_blog/lib/mishka_blog/resources/post_blogger.ex:104
+#: ../mishka_blog/lib/mishka_blog/resources/team_member.ex:105
+#, elixir-autogen, elixir-format
+msgid "Blogger not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1318
+#, elixir-autogen, elixir-format
+msgid "Blogger profile is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1365
+#, elixir-autogen, elixir-format
+msgid "Blogger profile is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:2128
+#, elixir-autogen, elixir-format
+msgid "Blogger slug must be unique within a site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:591
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:609
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived auto-posting configuration. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1714
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1819
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived blog post. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1075
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1111
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived blogger profile. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1252
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1286
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived collection. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1190
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1399
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:361
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived comment. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1017
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1048
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:593
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:619
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived tag. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1014
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1052
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived team. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:958
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:981
+#, elixir-autogen, elixir-format
+msgid "Cannot restore version of archived auto-posting configuration. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1020
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1070
+#, elixir-autogen, elixir-format
+msgid "Cannot restore version of archived auto-posting. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2514
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2558
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2593
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2636
+#, elixir-autogen, elixir-format
+msgid "Cannot restore version of archived blog post. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1506
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1545
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1581
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:1619
+#, elixir-autogen, elixir-format
+msgid "Cannot restore version of archived blogger profile. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1431
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1482
+#, elixir-autogen, elixir-format
+msgid "Cannot restore version of archived tag. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1483
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1522
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1560
+#, elixir-autogen, elixir-format
+msgid "Cannot restore version of archived team. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1265
+#, elixir-autogen, elixir-format
+msgid "Collection cannot be its own parent."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1469
+#, elixir-autogen, elixir-format
+msgid "Collection is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1531
+#, elixir-autogen, elixir-format
+msgid "Collection is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/post_collection.ex:92
+#, elixir-autogen, elixir-format
+msgid "Collection not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2226
+#, elixir-autogen, elixir-format
+msgid "Collection slug must be unique within a site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1203
+#, elixir-autogen, elixir-format
+msgid "Comment cannot be its own parent."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:120
+#, elixir-autogen, elixir-format
+msgid "Comment content cannot be empty."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1362
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:469
+#, elixir-autogen, elixir-format
+msgid "Comment is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1445
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:543
+#, elixir-autogen, elixir-format
+msgid "Comment is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment_vote.ex:77
+#: ../mishka_blog/lib/mishka_blog/resources/comment_vote.ex:85
+#: ../mishka_blog/lib/mishka_blog/resources/comment_vote.ex:100
+#, elixir-autogen, elixir-format
+msgid "Comment not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:118
+#, elixir-autogen, elixir-format
+msgid "Display name must be between 1 and 255 characters."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:130
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:110
+#, elixir-autogen, elixir-format
+msgid "Display order must be non-negative."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1514
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1707
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1191
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1245
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:960
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1010
+#, elixir-autogen, elixir-format
+msgid "Language group not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1182
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1235
+#, elixir-autogen, elixir-format
+msgid "Parent collection not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1151
+#, elixir-autogen, elixir-format
+msgid "Parent comment must belong to the same post."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1080
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1183
+#, elixir-autogen, elixir-format
+msgid "Parent comment not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1156
+#, elixir-autogen, elixir-format
+msgid "Parent comment not found."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:954
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1003
+#, elixir-autogen, elixir-format
+msgid "Parent tag not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:91
+#, elixir-autogen, elixir-format
+msgid "Plugin must be between 1 and 255 characters."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1074
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1121
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1129
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1176
+#: ../mishka_blog/lib/mishka_blog/resources/post_blogger.ex:97
+#: ../mishka_blog/lib/mishka_blog/resources/post_bookmark.ex:67
+#: ../mishka_blog/lib/mishka_blog/resources/post_bookmark.ex:75
+#: ../mishka_blog/lib/mishka_blog/resources/post_collection.ex:85
+#: ../mishka_blog/lib/mishka_blog/resources/post_rating.ex:81
+#: ../mishka_blog/lib/mishka_blog/resources/post_rating.ex:89
+#: ../mishka_blog/lib/mishka_blog/resources/post_tag.ex:85
+#: ../mishka_blog/lib/mishka_blog/resources/post_view.ex:71
+#, elixir-autogen, elixir-format
+msgid "Post not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:144
+#, elixir-autogen, elixir-format
+msgid "Published posts must have published_at, scheduled posts must have scheduled_publish_at."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/post_rating.ex:48
+#, elixir-autogen, elixir-format
+msgid "Rating must be between 1 and 5 stars."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1563
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1764
+#, elixir-autogen, elixir-format
+msgid "Scheduled publish time is required for scheduled posts."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:136
+#, elixir-autogen, elixir-format
+msgid "Scheduled publish time must be in the future."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:132
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:114
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:126
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:108
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:117
+#: ../mishka_document/lib/mishka_document/resources/section.ex:130
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:110
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:61
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:106
+#, elixir-autogen, elixir-format
+msgid "Slug cannot be empty."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:128
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:110
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:122
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:104
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:113
+#: ../mishka_document/lib/mishka_document/resources/section.ex:126
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:106
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:57
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:102
+#, elixir-autogen, elixir-format
+msgid "Slug must be between 1 and 255 characters."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1027
+#, elixir-autogen, elixir-format
+msgid "Tag cannot be its own parent."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1218
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:780
+#, elixir-autogen, elixir-format
+msgid "Tag is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1270
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:850
+#, elixir-autogen, elixir-format
+msgid "Tag is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/post_tag.ex:91
+#, elixir-autogen, elixir-format
+msgid "Tag not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1934
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:1085
+#, elixir-autogen, elixir-format
+msgid "Tag slug must be unique within a site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1289
+#, elixir-autogen, elixir-format
+msgid "Team is already archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1344
+#, elixir-autogen, elixir-format
+msgid "Team is not archived."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/team_follower.ex:79
+#: ../mishka_blog/lib/mishka_blog/resources/team_member.ex:98
+#: ../mishka_blog/lib/mishka_blog/resources/team_permission.ex:69
+#, elixir-autogen, elixir-format
+msgid "Team not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:1997
+#, elixir-autogen, elixir-format
+msgid "Team slug must be unique within a site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1411
+#, elixir-autogen, elixir-format
+msgid "This plugin already has a configuration for this site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:2135
+#, elixir-autogen, elixir-format
+msgid "User already has a blogger profile in this site."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/__changes/restore_version.ex:76
+#, elixir-autogen, elixir-format
+msgid "Version does not belong to this %{label}."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:2006
+#, elixir-autogen, elixir-format
+msgid "A page cannot be both its document's front page and a group."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:2585
+#, elixir-autogen, elixir-format
+msgid "A section with this language already exists in this language group."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2071
+#, elixir-autogen, elixir-format
+msgid "A workspace with this language already exists in this language group."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2083
+#, elixir-autogen, elixir-format
+msgid "Another document in this language is read at this address."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:2574
+#, elixir-autogen, elixir-format
+msgid "Another page of this version is already its front page."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:2559
+#, elixir-autogen, elixir-format
+msgid "Another section under the same parent already has this slug."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:247
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:293
+#, elixir-autogen, elixir-format
+msgid "Cannot add comments to a closed issue."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:252
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:298
+#, elixir-autogen, elixir-format
+msgid "Cannot add comments to a resolved issue."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:835
+#, elixir-autogen, elixir-format
+msgid "Cannot delete the latest version. Mark another version as latest first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__changes/auto_apply_note_draft.ex:126
+#, elixir-autogen, elixir-format
+msgid "Cannot determine section for note"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:730
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived issue. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1220
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived note draft. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note.ex:441
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived note. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1310
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived section draft. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:1152
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:1181
+#, elixir-autogen, elixir-format
+msgid "Cannot edit archived workspace. Please unarchive it first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1032
+#, elixir-autogen, elixir-format
+msgid "Cannot specify both section_id and section_draft_id."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version_lineage.ex:71
+#, elixir-autogen, elixir-format
+msgid "Cloned at timestamp cannot be in the future."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:86
+#, elixir-autogen, elixir-format
+msgid "Description cannot be empty."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/document_address.ex:69
+#, elixir-autogen, elixir-format
+msgid "Documents without an address of their own are read under /docs. Choose an address outside it, such as /product/docs."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:932
+#, elixir-autogen, elixir-format
+msgid "Issue is already archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:1003
+#, elixir-autogen, elixir-format
+msgid "Issue is not archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:612
+#, elixir-autogen, elixir-format
+msgid "Issue must reference either a note or a section (or both)."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:91
+#, elixir-autogen, elixir-format
+msgid "Issue must reference either a note or a section."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:237
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:338
+#, elixir-autogen, elixir-format
+msgid "Issue not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1027
+#, elixir-autogen, elixir-format
+msgid "Must specify either section_id or section_draft_id."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1298
+#, elixir-autogen, elixir-format
+msgid "Note draft is already archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1356
+#, elixir-autogen, elixir-format
+msgid "Note draft is not archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note.ex:546
+#, elixir-autogen, elixir-format
+msgid "Note is already archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note.ex:628
+#, elixir-autogen, elixir-format
+msgid "Note is not archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:631
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:707
+#, elixir-autogen, elixir-format
+msgid "Note not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1993
+#, elixir-autogen, elixir-format
+msgid "Only a page with no parent may be its document's front page."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note.ex:76
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:120
+#: ../mishka_document/lib/mishka_document/resources/section.ex:134
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:114
+#, elixir-autogen, elixir-format
+msgid "Order position must be non-negative."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1468
+#, elixir-autogen, elixir-format
+msgid "Section cannot be its own parent."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1172
+#, elixir-autogen, elixir-format
+msgid "Section draft cannot be its own parent."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1411
+#, elixir-autogen, elixir-format
+msgid "Section draft is already archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1479
+#, elixir-autogen, elixir-format
+msgid "Section draft is not archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1062
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1151
+#, elixir-autogen, elixir-format
+msgid "Section draft not found."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1757
+#, elixir-autogen, elixir-format
+msgid "Section is already archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1840
+#, elixir-autogen, elixir-format
+msgid "Section is not archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:624
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:700
+#: ../mishka_document/lib/mishka_document/resources/section_bookmark.ex:65
+#: ../mishka_document/lib/mishka_document/resources/section_bookmark.ex:73
+#, elixir-autogen, elixir-format
+msgid "Section not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:80
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:525
+#, elixir-autogen, elixir-format
+msgid "Stable versions must have published_at timestamp."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/same_workspace_version.ex:157
+#, elixir-autogen, elixir-format
+msgid "That %{label} belongs to another workspace version. Choose one from the same version."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/same_workspace_version.ex:136
+#, elixir-autogen, elixir-format
+msgid "That %{label} is no longer here."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/same_workspace_version.ex:168
+#, elixir-autogen, elixir-format
+msgid "That %{label} is not in another version of this workspace."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/document_address.ex:56
+#, elixir-autogen, elixir-format
+msgid "The document %{name} is read at %{address}. Choose an address that is not that one, above it or under it."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/section_address.ex:83
+#, elixir-autogen, elixir-format
+msgid "The page %{title} of this version is read at /%{address} too. Choose another slug or parent."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__changes/ensure_address_pages.ex:49
+#, elixir-autogen, elixir-format
+msgid "This address needs its pages written, which needs %{names}. Ask an admin who holds them, or leave the address empty."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/master_comment_read_only.ex:49
+#, elixir-autogen, elixir-format
+msgid "This comment was written by a master admin and can only be changed by a master."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version_lineage.ex:468
+#, elixir-autogen, elixir-format
+msgid "This version already has a lineage record."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:82
+#: ../mishka_document/lib/mishka_document/resources/note.ex:68
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:112
+#, elixir-autogen, elixir-format
+msgid "Title cannot be empty."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version_lineage.ex:128
+#, elixir-autogen, elixir-format
+msgid "Version cannot be cloned from itself."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:779
+#, elixir-autogen, elixir-format
+msgid "Version is already published."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1056
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1145
+#, elixir-autogen, elixir-format
+msgid "Version must match parent section draft version."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:72
+#, elixir-autogen, elixir-format
+msgid "Version number cannot be empty."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:76
+#, elixir-autogen, elixir-format
+msgid "Version number must be between 1 and 50 characters."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:1114
+#, elixir-autogen, elixir-format
+msgid "Version number must be unique within a workspace."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:1310
+#, elixir-autogen, elixir-format
+msgid "Workspace is already archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:1397
+#, elixir-autogen, elixir-format
+msgid "Workspace is not archived."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:508
+#, elixir-autogen, elixir-format
+msgid "Workspace not found in your tenant."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_follower.ex:81
+#: ../mishka_document/lib/mishka_document/resources/workspace_follower.ex:89
+#, elixir-autogen, elixir-format
+msgid "Workspace not found or does not belong to your site."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2063
+#, elixir-autogen, elixir-format
+msgid "Workspace slug must be unique within a site."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__validates/document_address.ex:79
+#, elixir-autogen, elixir-format
+msgid "Write an address of this site, such as /product/docs: lower-case letters, digits and dashes between slashes, and :lang at most once."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:226
+#, elixir-autogen, elixir-format
+msgid "contributor is required"
 msgstr ""
