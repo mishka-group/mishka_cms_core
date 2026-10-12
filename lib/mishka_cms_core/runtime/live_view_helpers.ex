@@ -65,7 +65,6 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   import Phoenix.Component
-  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.ContentComponents
@@ -75,6 +74,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
+  alias MishkaInstaller.Event.Hook
 
   @renders [component: 1, component: 2, captcha: 1, rich_content: 1]
   @translates [t: 1, t: 2]
@@ -550,7 +550,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     meta = %{component_name: name, site: assigns[:site], site_id: Translations.site()}
     assigns = %{}
 
-    PluginEvent.call("runtime:render:component_unavailable", ~H"", meta: meta)
+    Hook.call("runtime:render:component_unavailable", ~H"", meta: meta)
   end
 
   defp render_component(false, _module, _name, assigns) do

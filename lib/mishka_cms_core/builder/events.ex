@@ -14,9 +14,9 @@ defmodule MishkaCmsCore.Builder.Events do
       `[]`, always the core set first — and `Enum.uniq_by/2` keeps the first declaration, so a plugin
       can add but never silently redefine a core entry. Precedent: `sidebar:menus`.
     * **Transforms** pass the value itself and honour the return, so a plugin can rewrite or veto.
-      Precedent: `runtime:compile:css`. While a transform's plugins cannot run
-      (`MishkaCmsCore.PluginEvent.cannot_run?/1`), one that can veto — its payload carries `:error`,
-      or `:allowed?` — refuses, and any other goes on with its payload unchanged.
+      Precedent: `runtime:compile:css`. While a transform's plugins cannot run, one that can veto —
+      its payload carries `:error`, or `:allowed?` — refuses through its `cannot_run:` answer, and
+      any other goes on with its payload unchanged.
     * **Announcements** pass a summary map with `return: false`. Precedent: `runtime:site:after_purge`.
 
   ## Catalog
@@ -125,7 +125,6 @@ defmodule MishkaCmsCore.Builder.Events do
   require Logger
   require MishkaCmsCore.Runtime.PageBuilder.Strict
 
-  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.PageBuilder.Strict
 
   alias MishkaCmsCore.Builder.Descriptor
@@ -303,14 +302,9 @@ defmodule MishkaCmsCore.Builder.Events do
   """
   @spec transform(String.t(), map()) :: map()
   def transform(event, payload) when is_map(payload) do
-    case MishkaInstaller.Event.Hook.call(event, payload) do
-      %{} = returned ->
-        returned
-
-      answer ->
-        if PluginEvent.cannot_run?(answer),
-          do: refused(payload),
-          else: inert(event, answer, payload)
+    case MishkaInstaller.Event.Hook.call(event, payload, cannot_run: refused(payload)) do
+      %{} = returned -> returned
+      answer -> inert(event, answer, payload)
     end
   end
 

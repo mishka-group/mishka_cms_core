@@ -12,12 +12,11 @@ defmodule MishkaCmsCore.ProviderRegistry do
   module that implements the kind's behaviour, the first of each id. Stopping a provider's plugin in
   the installer takes it out of the list. Nothing is cached: the event is asked each time.
 
-  An event whose plugins cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`) cannot say which
-  providers are installed: `all/2` and `offered/2` list none, and `fetch/3` answers
-  `{:error, :cannot_run}` rather than `{:error, :unknown_provider}`.
+  An event whose plugins cannot run — one of them is not loaded, so `Hook.call/3` answers its
+  `cannot_run:` option — cannot say which providers are installed: `all/2` and `offered/2` list
+  none, and `fetch/3` answers `{:error, :cannot_run}` rather than `{:error, :unknown_provider}`.
   """
 
-  alias MishkaCmsCore.PluginEvent
   alias MishkaInstaller.Event.Hook
 
   @doc false
@@ -81,12 +80,15 @@ defmodule MishkaCmsCore.ProviderRegistry do
   defp provider?(_other, _behaviour), do: false
 
   defp registered(event, behaviour) do
-    case Hook.call(event, %{providers: []}) do
+    case Hook.call(event, %{providers: []}, cannot_run: :cannot_run) do
       %{providers: providers} when is_list(providers) ->
         {:ok, providers |> Enum.filter(&provider?(&1, behaviour)) |> Enum.uniq_by(& &1.id())}
 
-      answer ->
-        if PluginEvent.cannot_run?(answer), do: {:error, :cannot_run}, else: {:ok, []}
+      :cannot_run ->
+        {:error, :cannot_run}
+
+      _not_an_answer ->
+        {:ok, []}
     end
   end
 

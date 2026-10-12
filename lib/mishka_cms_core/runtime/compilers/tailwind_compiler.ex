@@ -252,11 +252,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   require Logger
   require Ash.Query
-  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Stylesheet
+  alias MishkaInstaller.Event.Hook
 
   # Track if Tailwind binary is verified (avoid repeated install checks)
   @tailwind_verified_key :tailwind_binary_verified
@@ -835,7 +835,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     case compile(site_name) do
       {:ok, css} ->
         css =
-          PluginEvent.call("runtime:compile:css", css, meta: %{site: site_name})
+          Hook.call("runtime:compile:css", css, meta: %{site: site_name})
 
         {brotli, gzip} = Helpers.compress_asset(css)
         updated_at = DateTime.utc_now()

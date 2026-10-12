@@ -94,7 +94,7 @@ defmodule MishkaCmsCore.MixProject do
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
-      {:mishka_installer, "~> 0.1"},
+      {:mishka_installer, "~> 0.1.13"},
       {:guarded_struct, "~> 0.1"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},

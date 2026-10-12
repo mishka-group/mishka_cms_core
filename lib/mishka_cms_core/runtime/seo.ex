@@ -29,8 +29,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   The record's own `permissions` come back in the answer: `MishkaCmsWeb.RuntimeLive` opens the
   address only for whoever holds one of them, after the page's own, and the head keeps it out of an
   index. A plugin answers for each kind it owns even when it finds no record, so an answer the
-  plugins left untouched on a page that shows one — none of them answered: one raised, or cannot run
-  (`MishkaCmsCore.PluginEvent.cannot_run?/1`) — means the record's lock could not be read, and the
+  plugins left untouched on a page that shows one — none of them answered: one raised, or the event
+  cannot run and hands back what it was given — means the record's lock could not be read, and the
   page opens only for whoever holds `*`.
 
   ## Share cards
@@ -101,7 +101,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.{Helpers, PluginEvent}
+  alias MishkaCmsCore.Helpers
   alias MishkaCmsCore.Runtime.{Languages, ShareCard}
   alias MishkaCmsCore.Runtime.States.TranslationsState
   alias MishkaCmsCore.Settings
@@ -919,20 +919,13 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   def page_number(_params), do: nil
 
-  # The plugins' answer; on a page that shows a record, an answer no plugin touched — or none at all,
-  # when they cannot run — locks it to `*`: no plugin read the record to say it is open.
-  defp answered(answer, given) do
-    cond do
-      is_binary(given.record) and (answer == given or PluginEvent.cannot_run?(answer)) ->
-        %{given | permissions: ["*"]}
+  # The plugins' answer; on a page that shows a record, an answer no plugin touched — the event
+  # cannot run, or none of its plugins answered — locks it to `*`: no plugin read the record to say
+  # it is open.
+  defp answered(given, %{record: record} = given) when is_binary(record),
+    do: %{given | permissions: ["*"]}
 
-      PluginEvent.cannot_run?(answer) ->
-        given
-
-      true ->
-        accept(answer, given)
-    end
-  end
+  defp answered(answer, given), do: accept(answer, given)
 
   defp stand_ins(seo, true) do
     shown = for %{key: key} when is_binary(key) <- seo.var_docs, into: %{}, do: {key, "{#{key}}"}

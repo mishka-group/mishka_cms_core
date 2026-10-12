@@ -16,8 +16,8 @@ defmodule MishkaCmsCoreWeb.AdminLanguageController do
   use Phoenix.Controller, formats: [:html]
   import Plug.Conn
 
-  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaInstaller.Event.Hook
 
   @dashboard "/admin/dashboard"
 
@@ -32,9 +32,7 @@ defmodule MishkaCmsCoreWeb.AdminLanguageController do
     if language in Languages.admin_choices(site_id) do
       conn
       |> put_session(Languages.admin_session(), language)
-      |> then(
-        &PluginEvent.call("web:request:admin_language_chosen", &1, meta: %{language: language})
-      )
+      |> then(&Hook.call("web:request:admin_language_chosen", &1, meta: %{language: language}))
     else
       conn
     end

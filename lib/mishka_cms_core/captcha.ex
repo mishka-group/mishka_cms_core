@@ -8,8 +8,8 @@ defmodule MishkaCmsCore.Captcha do
   sign-in. Providers are `mishka_installer` plugins (`MishkaCmsCore.Captcha.Provider`), the core's
   own — Cloudflare Turnstile, Google reCAPTCHA and hCaptcha — included. A scope with no provider
   (None) or with one missing a key asks nothing. A scope whose chosen provider does not answer — its
-  plugin is gone, raised, or cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`) — refuses every
-  check until it chooses another or None.
+  plugin is gone, raised, or cannot run (`MishkaCmsCore.ProviderRegistry`) — refuses every check
+  until it chooses another or None.
 
   ## Where
 

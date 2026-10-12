@@ -34,7 +34,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug do
   import Plug.Conn
 
   alias MishkaCmsCore.Accounts.AuthRateLimit
-  alias MishkaCmsCore.PluginEvent
+  alias MishkaInstaller.Event.Hook
 
   def init(opts), do: opts
 
@@ -55,7 +55,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug do
       conn
       |> put_refusal_headers(limited.retry_after)
       |> then(
-        &PluginEvent.call("auth:request:rate_limited", &1,
+        &Hook.call("auth:request:rate_limited", &1,
           meta: Map.put(limited, :site, conn.assigns[:current_site])
         )
       )

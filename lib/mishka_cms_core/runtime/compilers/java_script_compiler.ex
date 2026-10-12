@@ -103,11 +103,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   require Logger
   require Ash.Query
-  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.States.{AssetsState, CompileFailureState, SiteState}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.NpmPackages
   alias IgniterJs.Parsers.Javascript.{Parser, Formatter}
+  alias MishkaInstaller.Event.Hook
 
   @esbuild_verified_key :mishka_cms_esbuild_verified
   @shared_base_id "__shared_base__"
@@ -397,7 +397,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   end
 
   defp store_compiled(id, {:ok, js}) do
-    js = PluginEvent.call("runtime:compile:js", js, meta: %{site: id})
+    js = Hook.call("runtime:compile:js", js, meta: %{site: id})
 
     {brotli, gzip} = Helpers.compress_asset(js)
     updated_at = DateTime.utc_now()

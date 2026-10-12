@@ -40,9 +40,9 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   import Plug.Conn
 
   alias MishkaCmsCore.Captcha
-  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.CspNonce
   alias MishkaCmsCore.Settings
+  alias MishkaInstaller.Event.Hook
 
   @nonce_bytes 18
 
@@ -64,7 +64,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
       [:mishka_cms, :runtime, :plugs, :security_headers],
       %{path: conn.request_path, method: conn.method},
       fn ->
-        conn = PluginEvent.call("web:request:before_response", conn)
+        conn = Hook.call("web:request:before_response", conn)
         nonce = nonce()
         :ok = CspNonce.put(nonce)
 
@@ -77,7 +77,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
           |> put_resp_header("referrer-policy", "strict-origin-when-cross-origin")
           |> put_resp_header("permissions-policy", "geolocation=(), microphone=(), camera=()")
           |> put_csp(nonce)
-          |> then(&PluginEvent.call("web:response:before_security_headers", &1))
+          |> then(&Hook.call("web:response:before_security_headers", &1))
 
         {result, %{}}
       end
