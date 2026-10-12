@@ -107,6 +107,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   `MishkaCmsCore.Runtime.Compilers.TailwindCompiler.content_icons/1` — and `icons/1` reads them out
   of content.
 
+  Nor are the classes content writes: a `<div class="bg-[#282828]">` in the HTML, a marker's
+  `class`, its `*_class` attributes, and the attributes its component takes a class string in. The
+  same event answers them as `classes` — see
+  `MishkaCmsCore.Runtime.Compilers.TailwindCompiler.content_classes/1` — and `site_classes/2` reads
+  them out of content.
+
   ## The editor
 
   The admin's content editor holds content as `segments/1` splits it: the HTML it edits, and each
@@ -179,6 +185,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   @entity ~r/&(#[0-9]{1,7}|#[xX][0-9a-fA-F]{1,6}|[A-Za-z]+);/
   @key ~r/\A[A-Za-z_][A-Za-z0-9_-]*\z/
   @name ~r/\A[A-Za-z0-9][A-Za-z0-9_-]*\z/
+
+  # What `classes/2` keeps: how many tokens, how long each, and the bytes a class is made of.
+  @class_cap 1000
+  @class_length 160
+  @class_token ~r/\A[A-Za-z0-9!#$%&'()*+,.\/:=>?@\[\]^_|~-]+\z/
+  @tag_with_attrs ~r{<[A-Za-z][A-Za-z0-9-]*\s[^<>]*>}
+  @class_attr ~r/\sclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i
 
   @typedoc "One marker, as `parse/1` found it."
   @type marker :: %{
@@ -328,6 +341,80 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     do: html |> Icons.classes_in() |> Enum.filter(&Icons.known?/1)
 
   def icons(_html), do: []
+
+  @doc """
+  The class tokens `html` names, each once — what a resource stores beside its content when it is
+  written, for the site's stylesheet. The HTML's own class lists come first, then the markers':
+
+    * every `class="…"` of an HTML tag, entities decoded;
+    * a component's or a slot's `class` attribute, and every attribute named `*_class`;
+    * a component's attribute `open` names for it — `%{"chelekom-badge" => ["size", "variant"]}`,
+      what `open_attrs/2` reads off the components a site reaches: an attribute that takes one of
+      its examples or a class string of the author's own.
+
+  A token is kept when it could be a class: at most 160 bytes, printable ASCII holding a letter,
+  its brackets and parentheses balanced, and none of `"`, `\\`, `{`, `}`, `<`, `;` or a backtick in
+  it. At most 1000 are kept.
+
+      classes(~s(<p class="text-sm bg-[#282828]">x</p>[[component chelekom-badge size="py-2 px-4" class="ml-1" /]]),
+        %{"chelekom-badge" => ["size"]})
+      #=> ["text-sm", "bg-[#282828]", "py-2", "px-4", "ml-1"]
+  """
+  @spec classes(String.t() | nil, %{String.t() => [String.t()]}) :: [String.t()]
+  def classes(html, open \\ %{})
+
+  def classes(html, open) when is_binary(html) and is_map(open) do
+    html
+    |> html_class_values()
+    |> Stream.concat(marker_class_values(html, open))
+    |> Stream.flat_map(&String.split/1)
+    |> Stream.filter(&class_token?/1)
+    |> Stream.uniq()
+    |> Enum.take(@class_cap)
+  end
+
+  def classes(_html, _open), do: []
+
+  @doc """
+  The attributes each component `names` names takes a class string in — one declaring `examples`
+  and no `values`, a `string` or an `any` — as `classes/2` takes them. Read off the active
+  components of the site `site_id` and the global ones, a site's own hiding the global one of the
+  same name, as the system: the stylesheet is the same whoever wrote the content.
+
+      open_attrs(["chelekom-badge"], site_id)
+      #=> %{"chelekom-badge" => ["size", "variant", "rounded"]}
+  """
+  @spec open_attrs([String.t()], String.t() | nil) :: %{String.t() => [String.t()]}
+  def open_attrs([], _site_id), do: %{}
+
+  def open_attrs(names, site_id) when is_list(names) do
+    Component
+    |> Ash.Query.for_read(:for_tenant_with_globals, %{}, tenant: site_id, authorize?: false)
+    |> Ash.Query.filter(active == true and name in ^names)
+    |> within(site_id)
+    |> Ash.Query.select([:name, :attrs, :site_id])
+    |> every([], 0, authorize?: false)
+    |> case do
+      {:ok, rows} ->
+        rows
+        |> own_first()
+        |> Map.new(fn row -> {row.name, open_names(row.attrs)} end)
+        |> Map.reject(fn {_name, attrs} -> attrs == [] end)
+
+      {:error, _reason} ->
+        %{}
+    end
+  end
+
+  @doc """
+  The class tokens `html` names on the site `site_id` — `classes/2`, with the attributes the
+  components it names take a class string in (`open_attrs/2`).
+  """
+  @spec site_classes(String.t() | nil, String.t() | nil) :: [String.t()]
+  def site_classes(html, site_id) when is_binary(html),
+    do: classes(html, open_attrs(names(html), site_id))
+
+  def site_classes(_html, _site_id), do: []
 
   @doc """
   One component marker read apart into a `t:tree/0` — what the content editor's settings edit.
@@ -514,9 +601,9 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   # to more — the ones past the 250th by name were never offered.
   @page 250
 
-  defp every(query, read, offset) do
-    case Ash.read(query, page: [limit: @page, offset: offset]) do
-      {:ok, %{results: rows, more?: true}} -> every(query, [rows | read], offset + @page)
+  defp every(query, read, offset, opts \\ []) do
+    case Ash.read(query, Keyword.put(opts, :page, limit: @page, offset: offset)) do
+      {:ok, %{results: rows, more?: true}} -> every(query, [rows | read], offset + @page, opts)
       {:ok, %{results: rows}} -> {:ok, [rows | read] |> Enum.reverse() |> Enum.concat()}
       {:error, _reason} = error -> error
     end
@@ -1235,6 +1322,66 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       true -> {:ok, value}
       false -> :error
     end
+  end
+
+  ####################################################################################
+  ############################ (▰˘◡˘▰) Classes (▰˘◡˘▰) ###############################
+  ####################################################################################
+
+  defp html_class_values(html) do
+    case :binary.match(html, "class") do
+      :nomatch ->
+        []
+
+      _found ->
+        @tag_with_attrs
+        |> Regex.scan(html, capture: :first)
+        |> Stream.flat_map(fn [tag] -> Regex.scan(@class_attr, tag, capture: :all_but_first) end)
+        |> Stream.map(fn captured -> captured |> Enum.join() |> decode() end)
+    end
+  end
+
+  defp marker_class_values(html, open) do
+    case :binary.match(html, [@open, @slot_open]) do
+      :nomatch -> []
+      _found -> html |> tree() |> marker_values(open)
+    end
+  end
+
+  defp marker_values(nodes, open) do
+    Enum.flat_map(nodes, fn %{kind: kind, name: name, attrs: attrs, children: children} ->
+      takes = (kind == :component && Map.get(open, name)) || []
+
+      own =
+        for {key, value} when is_binary(value) <- Enum.sort(attrs),
+            class_key?(key) or key in takes,
+            do: value
+
+      own ++ marker_values(children, open)
+    end)
+  end
+
+  defp class_key?(key), do: key == "class" or String.ends_with?(key, "_class")
+
+  defp class_token?(token) do
+    byte_size(token) <= @class_length and Regex.match?(@class_token, token) and
+      Regex.match?(~r/[A-Za-z]/, token) and balanced?(token, ?[, ?]) and
+      balanced?(token, ?(, ?))
+  end
+
+  defp balanced?(token, open, close), do: count(token, open) == count(token, close)
+
+  defp count(token, char), do: for(<<byte <- token>>, byte == char, reduce: 0, do: (n -> n + 1))
+
+  defp open_names(attrs) do
+    for attr <- attrs || [],
+        name = Inspector.name(attr),
+        is_binary(name),
+        type(attr) in ["string", "any"],
+        opts = Inspector.opts(attr),
+        match?([_ | _], opts["examples"]),
+        not match?([_ | _], opts["values"]),
+        do: name
   end
 
   ####################################################################################
