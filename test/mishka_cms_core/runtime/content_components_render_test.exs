@@ -15,7 +15,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
   alias MishkaCmsCore.Runtime.{ContentComponents, LiveViewHelpers, StaticHelpers, Translations}
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.States.{CompileFailureState, SiteState}
-  alias MishkaCmsCore.Test.Plugins.ContentComponentBeforeDraw
+  alias MishkaCmsCore.Test.Plugins.{ContentComponentBeforeDraw, ContentComponentSlotArg}
 
   @moduletag :integration
 
@@ -590,6 +590,125 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
         )
 
       assert html |> query(".probe-note") |> LazyHTML.attribute("data-title") == ["KEPT-1"]
+    end
+  end
+
+  describe "runtime:render:before_content_component — what a component hands its content" do
+    setup do
+      register_plugin(ContentComponentSlotArg, "runtime:render:before_content_component")
+    end
+
+    defp giver!(site, name, opts \\ []) do
+      note!(
+        site,
+        name,
+        Keyword.merge(
+          [
+            template:
+              ~S|<section class="probe-giver">{render_slot(@inner_block, %{tag: @title})}</section>|
+          ],
+          opts
+        )
+      )
+    end
+
+    defp titles(html), do: html |> query(".probe-note") |> LazyHTML.attribute("data-title")
+
+    test "reaches the markers inside, at any depth, nearest first, and none outside", %{
+      site: site,
+      n: n
+    } do
+      giver!(site, "giver-#{n}")
+      row!(site, "row-#{n}")
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s([[component giver-#{n} title="outer"]][[component note-#{n} probe="seen" label="a" /]][[component row-#{n}]][[component note-#{n} probe="seen" label="b" /]][[component giver-#{n} title="inner"]][[component note-#{n} probe="seen" /]][[/component]][[/component]][[/component]][[component note-#{n} probe="seen" label="c" /]]),
+          site.name
+        )
+
+      assert titles(html) == ["outer|outer|a", "outer|outer|b", "inner|inner,outer|", "none||c"]
+    end
+
+    test "a slot entry's value reaches the markers in that entry", %{site: site, n: n} do
+      note!(site, "note-#{n}")
+
+      note!(site, "slotted-#{n}",
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        slots: [%{"name" => "item", "opts" => %{}, "attrs" => []}],
+        template:
+          ~S'<ul><li :for={i <- @item} class="probe-item">{render_slot(i, %{tag: "item"})}</li></ul>'
+      )
+
+      html =
+        draw(
+          ~s([[component slotted-#{n}]][[slot item]][[component note-#{n} probe="seen" /]][[/slot]][[/component]][[component note-#{n} probe="seen" /]]),
+          site.name
+        )
+
+      assert titles(html) == ["item|item|", "none||"]
+    end
+
+    test "a component that hands nothing draws its content as before", %{site: site, n: n} do
+      row!(site, "row-#{n}")
+      note!(site, "note-#{n}")
+
+      html =
+        draw(
+          ~s([[component row-#{n}]][[component note-#{n} probe="seen" /]][[component note-#{n} title="kept" /]][[/component]]),
+          site.name
+        )
+
+      assert titles(html) == ["none||", "kept"]
+      assert html |> query(".probe-row > .probe-note") |> Enum.count() == 2
+    end
+
+    test "reaches the markers inside a live component, from its own render", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "note-#{n}")
+
+      giver!(site, "live-giver-#{n}",
+        stateful: true,
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        template:
+          ~S|<section id={@id} class="probe-giver">{render_slot(@inner_block, %{tag: "live-#{@n}"})}</section>|,
+        helpers: [
+          %{
+            "name" => "mount",
+            "args" => "socket",
+            "code" => "{:ok, Phoenix.Component.assign(socket, :n, 7)}"
+          }
+        ]
+      )
+
+      view =
+        mount_page(
+          site,
+          ~s([[component live-giver-#{n}]][[component note-#{n} probe="seen" /]][[/component]][[component note-#{n} probe="seen" /]])
+        )
+
+      assert has_element?(view, "#post-body-0 .probe-note[data-title='live-7|live-7|']")
+      assert has_element?(view, "#host .probe-note[data-title='none||']")
+    end
+
+    test "a plugin leaves an attribute out altogether with unset", %{site: site, n: n} do
+      note!(site, "probe-#{n}",
+        attrs: [%{"name" => "label", "type" => "string", "opts" => %{}}],
+        slots: [],
+        template:
+          ~S|<i class="probe-unset" data-has={to_string(Map.has_key?(assigns, :label))}></i>|
+      )
+
+      html =
+        draw(
+          ~s([[component probe-#{n} label="x" probe="unset" /]][[component probe-#{n} /]]),
+          site.name
+        )
+
+      assert html |> query(".probe-unset") |> LazyHTML.attribute("data-has") == ["false", "true"]
     end
   end
 
