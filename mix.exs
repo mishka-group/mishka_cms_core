@@ -12,7 +12,9 @@ defmodule MishkaCmsCore.MixProject do
       aliases: aliases(),
       elixirc_paths: elixirc_paths(Mix.env()),
       package: package(),
-      gettext: [excluded_refs_from_purging: ~r{^\.\./mishka_gervaz/}]
+      # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
+      # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
+      gettext: [excluded_refs_from_purging: ~r{^\.\./}]
     ]
   end
 
