@@ -156,11 +156,15 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Icons do
   def svg(_name, _size), do: nil
 
   @doc """
-  CSS rules for these classes, each from the set that owns it.
+  CSS rules for these classes, each from the set that owns it, inside Tailwind's `components` layer.
 
   The canvas emits these for the icons it is about to render: the site's compiled stylesheet is
   generated from the classes its own pages RENDER, so a component's default icon — or one used only
   by an example in the modal — has no rule and draws as an empty box.
+
+  In the `components` layer so any utility on the icon (`size-3`, `[&_.icon]:size-5`) beats the
+  set's default size. Opens with `layer_order/0`, so the block keeps that order wherever it lands
+  first; put it ahead of any CSS that may declare a layer. `""` when no set ships any of them.
   """
   @spec css([String.t()]) :: String.t()
   def css(names) do
@@ -168,8 +172,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Icons do
     |> Enum.uniq()
     |> Enum.group_by(&library_for/1)
     |> Enum.reject(fn {library, _names} -> is_nil(library) end)
-    |> Enum.map_join("\n", fn {library, owned} -> library.css(owned) end)
+    |> Enum.map(fn {library, owned} -> library.css(owned) end)
+    |> Enum.reject(&(&1 == ""))
+    |> layered()
   end
+
+  defp layered([]), do: ""
+  defp layered(rules), do: "#{layer_order()}\n@layer components{\n#{Enum.join(rules, "\n")}\n}"
+
+  @doc """
+  Tailwind's own cascade-layer order, the statement `@import "tailwindcss"` opens with.
+
+  For CSS that declares layers before any Tailwind stylesheet does; after one it changes nothing.
+  """
+  @spec layer_order() :: String.t()
+  def layer_order, do: "@layer theme, base, components, utilities;"
 
   @doc """
   The icons matching a query, capped, across every registered set.

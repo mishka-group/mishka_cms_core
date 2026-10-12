@@ -1520,7 +1520,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     <%!-- The heroicon classes this document needs. The site's compiled stylesheet is generated from
           the classes its own pages RENDER, so a component's DEFAULT icon — which appears in no page's
           HTML — has no rule, and `chelekom-alert` drew an empty 28px box where its icon belongs.
-          These are the plugin's own rules for the handful of icons actually in front of the reader. --%>
+          These are the plugin's own rules for the handful of icons actually in front of the reader,
+          in the `components` layer so a size utility on an icon wins (`Icons.css/1`). --%>
     <style :if={@icon_css != ""} id="pb-canvas-icons" nonce={assigns[:csp_nonce]}>
       <%= style_body(@icon_css) %>
     </style>

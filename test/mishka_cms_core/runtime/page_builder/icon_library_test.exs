@@ -39,7 +39,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       assert Icons.variants() == Heroicons.variants()
       assert Icons.available?()
       assert Icons.known?("hero-bell")
-      assert Icons.css(["hero-bell"]) == Heroicons.css(["hero-bell"])
+      assert Icons.css(["hero-bell"]) =~ Heroicons.css(["hero-bell"])
     end
 
     test "a class no set claims is unknown, and draws nothing" do
@@ -69,7 +69,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       assert {:safe, _svg} = Icons.svg("fake-star", 15)
 
       # And heroicons is untouched by its presence.
-      assert Icons.css(["hero-bell"]) == Heroicons.css(["hero-bell"])
+      assert Icons.css(["hero-bell"]) =~ Heroicons.css(["hero-bell"])
     end
 
     test "a search spans both, and the cap applies to the merged list" do
@@ -199,9 +199,48 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
     test "the sets do not tread on each other" do
       register([Heroicons])
 
-      assert Icons.css(["hero-bell"]) == Heroicons.css(["hero-bell"])
+      assert Icons.css(["hero-bell"]) =~ Heroicons.css(["hero-bell"])
       refute Icons.known?("zzz-nothing")
     end
+
+    # AN UNLAYERED RULE BEATS EVERY LAYERED ONE, so `size-3` on an icon never applied.
+    test "every set's rules sit inside the components layer, after Tailwind's layer order" do
+      register([Heroicons, MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake])
+
+      assert Enum.sort(Icons.libraries()) ==
+               Enum.sort([
+                 Heroicons,
+                 MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake,
+                 Bundled
+               ])
+
+      for names <- [
+            ["hero-bell"],
+            ["fake-star"],
+            ["zzz-rocket"],
+            ["hero-bell", "fake-star", "zzz-rocket"]
+          ] do
+        css = Icons.css(names)
+
+        assert [order, "@layer components{" <> body] = String.split(css, "\n", parts: 2)
+        assert order == Icons.layer_order()
+        assert closes_at(body) == byte_size(body) - 1, "a rule escaped the block: #{css}"
+        for name <- names, do: assert(body =~ ".#{name}{")
+      end
+    end
+  end
+
+  # Where the `{` already open at the start of `body` closes.
+  defp closes_at(body) do
+    body
+    |> :binary.bin_to_list()
+    |> Enum.with_index()
+    |> Enum.reduce_while(1, fn
+      {?{, _at}, depth -> {:cont, depth + 1}
+      {?}, at}, 1 -> {:halt, at}
+      {?}, _at}, depth -> {:cont, depth - 1}
+      _char, depth -> {:cont, depth}
+    end)
   end
 
   # Chelekom's bundle ships the `hero-` set so that a host WITHOUT `deps/heroicons` can still draw a

@@ -688,6 +688,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     {site_pre, post_tailwind} = read_site_stylesheets(site_name)
 
     """
+    #{layer_order()}
     #{global_pre}
     #{site_pre}
 
@@ -1684,6 +1685,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     |> MishkaCmsCore.Runtime.PageBuilder.Icons.css()
   end
 
+  # FIRST in a site or preview input. Those import Tailwind piecemeal, declaring `theme` and
+  # `utilities` only, so without it the chunk ranks the icons' `components` layer above utilities.
+  defp layer_order, do: MishkaCmsCore.Runtime.PageBuilder.Icons.layer_order()
+
   # SCOPED TO THIS SITE even when the walk gave up: `runtime/*/component/*` matched every OTHER
   # site's component directory too, so one site's icons rode into another's stylesheet.
   defp icon_scan_paths(:unbounded, site_name) do
@@ -1858,6 +1863,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     {site_pre, post_tailwind} = read_site_stylesheets(site_name)
 
     """
+    #{layer_order()}
     #{global_pre}
     #{site_pre}
 

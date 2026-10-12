@@ -10,6 +10,7 @@ defmodule MishkaCmsCoreWeb.Runtime.ComponentExamplesTest do
   import Phoenix.LiveViewTest
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaCmsCore.Runtime.RuntimePreview
+  alias MishkaCmsCore.Runtime.PageBuilder.Icons
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
@@ -23,6 +24,22 @@ defmodule MishkaCmsCoreWeb.Runtime.ComponentExamplesTest do
       assert String.downcase(doc) =~ "<!doctype html>"
       assert doc =~ ~s(class="x")
       assert doc =~ "hi there"
+    end
+
+    # In a `<style>` of their own right after the chrome's, so their layer order precedes any a
+    # stylesheet row or the browser generator declares.
+    test "carries its icons layered, ahead of the stylesheet rows and the generator" do
+      {doc, _note} = RuntimePreview.render_example(~S|<span class="hero-bell size-3"></span>|)
+
+      styles =
+        doc
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("head style")
+        |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+
+      assert [_chrome, icons | _rest] = styles
+      assert String.starts_with?(icons, Icons.layer_order() <> "\n@layer components{")
+      assert icons =~ ".hero-bell{"
     end
 
     test "invokes the component system for <.component> — missing component degrades, never crashes" do

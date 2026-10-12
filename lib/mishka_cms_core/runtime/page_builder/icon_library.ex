@@ -62,7 +62,11 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibrary do
   @doc "One icon as inline SVG at `size` pixels, or `nil` when this set does not ship it."
   @callback svg(String.t(), pos_integer()) :: {:safe, iodata()} | nil
 
-  @doc "CSS rules for these classes, mirroring what the set's own Tailwind plugin emits."
+  @doc """
+  CSS rules for these classes, mirroring what the set's own Tailwind plugin emits.
+
+  Bare rules: `MishkaCmsCore.Runtime.PageBuilder.Icons.css/1` puts them in the `components` layer.
+  """
   @callback css([String.t()]) :: String.t()
 
   @doc "The classes matching a query in one variant, capped by `:limit`."

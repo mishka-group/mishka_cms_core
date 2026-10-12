@@ -750,4 +750,83 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       end)
     end
   end
+
+  # AN UNLAYERED RULE BEATS EVERY LAYERED ONE, so the icon's own `width:1.5rem` beat `size-3`.
+  describe "an icon with a size utility on it" do
+    setup do
+      site = "icon-size-#{System.unique_integer([:positive])}"
+
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<span class="hero-bell size-3"></span>)
+      )
+
+      on_exit(fn ->
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+      end)
+
+      %{site: site}
+    end
+
+    test "is sized by the utility: the icon rule is in components, ranked below utilities", %{
+      site: site
+    } do
+      assert {:ok, css} = TailwindCompiler.compile(site)
+      [_shared, own] = String.split(css, "/* Site: #{site} */", parts: 2)
+
+      # The site's chunk orders its layers itself, not only through the shared base before it.
+      for stylesheet <- [css, own] do
+        assert ranked_layers(stylesheet) == ~w(theme base components utilities)
+      end
+
+      assert layers_around(own, ".hero-bell{") == ["components"]
+      assert layers_around(own, ".size-3{") == ["utilities"]
+    end
+  end
+
+  # Tailwind's four layers in the order the stylesheet first names them, which is their rank.
+  defp ranked_layers(css) do
+    ~r/@layer\s*([\w\s,-]+?)\s*[;{]/
+    |> Regex.scan(css, capture: :all_but_first)
+    |> Enum.flat_map(fn [names] -> String.split(names, ",", trim: true) end)
+    |> Enum.map(&String.trim/1)
+    |> Enum.uniq()
+    |> Enum.filter(&(&1 in ~w(theme base components utilities)))
+  end
+
+  # The `@layer` blocks open where the first rule starting with `needle` is, outermost first.
+  defp layers_around(css, needle) do
+    {at, _length} = :binary.match(css, needle)
+
+    for "@layer " <> name <- css |> binary_part(0, at) |> open_blocks("", []), do: name
+  end
+
+  defp open_blocks(<<>>, _prelude, stack), do: Enum.reverse(stack)
+
+  defp open_blocks(<<"/*", rest::binary>>, prelude, stack),
+    do: rest |> :binary.split("*/") |> List.last() |> open_blocks(prelude, stack)
+
+  defp open_blocks(<<?\\, _escaped, rest::binary>>, prelude, stack),
+    do: open_blocks(rest, prelude, stack)
+
+  defp open_blocks(<<quote, rest::binary>>, prelude, stack) when quote in [?", ?'],
+    do: rest |> after_string(quote) |> open_blocks(prelude, stack)
+
+  defp open_blocks(<<?{, rest::binary>>, prelude, stack),
+    do: open_blocks(rest, "", [String.trim(prelude) | stack])
+
+  defp open_blocks(<<?}, rest::binary>>, _prelude, [_closed | stack]),
+    do: open_blocks(rest, "", stack)
+
+  defp open_blocks(<<?;, rest::binary>>, _prelude, stack), do: open_blocks(rest, "", stack)
+
+  defp open_blocks(<<char, rest::binary>>, prelude, stack),
+    do: open_blocks(rest, <<prelude::binary, char>>, stack)
+
+  defp after_string(<<?\\, _escaped, rest::binary>>, quote), do: after_string(rest, quote)
+  defp after_string(<<quote, rest::binary>>, quote), do: rest
+  defp after_string(<<_char, rest::binary>>, quote), do: after_string(rest, quote)
+  defp after_string(<<>>, _quote), do: <<>>
 end

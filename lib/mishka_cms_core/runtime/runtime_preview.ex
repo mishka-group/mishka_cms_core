@@ -766,9 +766,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
       engine ->
         sheets = stylesheet_source(site_id)
 
+        # The icons FIRST and in a `<style>` of their own, so their layer order comes before any layer
+        # a stylesheet row declares, and a row's `@import` stays first in its own `<style>`.
         """
-        <style#{nonce_attr(nonce)}>#{sheets}
-        #{body |> Icons.classes_in() |> Icons.css()}</style>
+        <style#{nonce_attr(nonce)}>#{body |> Icons.classes_in() |> Icons.css()}</style>
+            <style#{nonce_attr(nonce)}>#{sheets}</style>
             <style type="text/tailwindcss"#{nonce_attr(nonce)}>#{theme_blocks(sheets)}</style>
             <script#{nonce_attr(nonce)}>
               (() => {

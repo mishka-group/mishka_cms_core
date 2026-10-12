@@ -1370,6 +1370,19 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
       assert html =~ "pb-canvas-icons"
       assert html =~ ".hero-bell{"
       assert html =~ "background-color:currentColor"
+
+      # …inside Tailwind's `components` layer, so a size utility on the icon wins over it.
+      icons =
+        html
+        |> LazyHTML.from_document()
+        |> LazyHTML.query("#pb-canvas-icons")
+        |> LazyHTML.text()
+        |> String.trim()
+
+      layered = MishkaCmsCore.Runtime.PageBuilder.Icons.layer_order() <> "\n@layer components{"
+
+      assert String.starts_with?(icons, layered)
+      assert String.ends_with?(icons, "}")
     end
 
     test "an icon set on a node reaches the canvas stylesheet too", %{
