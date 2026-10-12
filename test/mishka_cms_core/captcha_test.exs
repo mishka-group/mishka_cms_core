@@ -98,10 +98,14 @@ defmodule MishkaCmsCore.CaptchaTest do
       assert Settings.secret_hint("security.captcha.turnstile.secret_key", site.id) == :unreadable
     end
 
-    test "a provider whose plugin is gone asks nothing", %{site: site} do
+    test "a provider whose plugin is gone refuses every check, until the scope chooses None",
+         %{site: site} do
       put!(site, "security.captcha.provider", "gone")
 
       assert Captcha.provider(site.id) == {:error, :unknown_provider}
+      assert {:error, {:failed, _detail}} = Captcha.check(token("pass"), site.id, :sign_in, %{})
+
+      put!(site, "security.captcha.provider", "none")
       assert Captcha.check(nil, site.id, :sign_in, %{}) == :ok
     end
 

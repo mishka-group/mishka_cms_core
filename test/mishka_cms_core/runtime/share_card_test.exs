@@ -1,3 +1,11 @@
+defmodule MishkaCmsCore.Runtime.ShareCardTest.ThingSeo do
+  @moduledoc false
+  def call(%{record: "test:thing"} = seo),
+    do: {:reply, :halt, %{seo | var_docs: [%{key: "thing.title"}]}}
+
+  def call(seo), do: {:reply, seo}
+end
+
 defmodule MishkaCmsCore.Runtime.ShareCardTest do
   @moduledoc """
   `MishkaCmsCore.Runtime.ShareCard`: the picture a shared link to a page shows. Asked for, it is
@@ -13,6 +21,7 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
   use Oban.Testing, repo: @repo
 
   alias MishkaCmsCore.Runtime.{PageShareCard, Seo, ShareCard}
+  alias MishkaCmsCore.Runtime.ShareCardTest.ThingSeo
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState, TranslationsState}
   alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
   alias MishkaCmsCore.Settings
@@ -312,6 +321,8 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
     test "leaves a page that shows records to them, and shows none for a private page", %{
       site: site
     } do
+      answers!(ThingSeo)
+
       records =
         create_page!(site_id: site.id, path: "/things/:slug", extra: %{"record" => "test:thing"})
 
@@ -325,6 +336,12 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
 
       assert title == records.title
       assert ShareCard.specs(site.id, {:record, "test:other", %{"slug" => "one"}}) == []
+    end
+
+    test "shows none for a record no plugin answers for: its lock cannot be read", %{site: site} do
+      create_page!(site_id: site.id, path: "/things/:slug", extra: %{"record" => "test:thing"})
+
+      assert ShareCard.specs(site.id, {:record, "test:thing", %{"slug" => "one"}}) == []
     end
 
     test "is nothing for a site the runtime does not know" do
@@ -399,6 +416,24 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
       assert job.args["target"] == %{"page" => page.id}
       assert job.args["site_id"] == site.id
     end
+  end
+
+  # A plugin on the head's event answering for `test:thing`, as an extension answers for its kinds.
+  defp answers!(plugin) do
+    {:ok, _} =
+      Event.write(%{
+        name: plugin,
+        event: Seo.event(),
+        extension: :mishka_installer,
+        status: :started
+      })
+
+    :ok = EventHandler.do_compile(Seo.event(), :start, false)
+
+    on_exit(fn ->
+      Event.unregister(:name, plugin, false)
+      EventHandler.do_compile(Seo.event(), :start, false)
+    end)
   end
 
   # What `perform/1` draws for `card`, read back.

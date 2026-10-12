@@ -6,10 +6,10 @@ defmodule MishkaCmsCore.Captcha do
   Each scope picks a provider on the settings page's Security tab (`security.captcha.provider`) and
   sets that provider's keys there, for itself alone (`resolve: :own`): Global is the masters' own
   sign-in. Providers are `mishka_installer` plugins (`MishkaCmsCore.Captcha.Provider`), the core's
-  own — Cloudflare Turnstile, Google reCAPTCHA and hCaptcha — included. A scope with no provider,
-  with one whose plugin is gone, or with one missing a key asks nothing. A scope that chose one while
-  the providers' plugins cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`) refuses every check:
-  nobody can tell whether its provider is there.
+  own — Cloudflare Turnstile, Google reCAPTCHA and hCaptcha — included. A scope with no provider
+  (None) or with one missing a key asks nothing. A scope whose chosen provider does not answer — its
+  plugin is gone, raised, or cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`) — refuses every
+  check until it chooses another or None.
 
   ## Where
 
@@ -165,9 +165,8 @@ defmodule MishkaCmsCore.Captcha do
   @doc """
   Checks `token`, sent with `form` to `site_id`: `:ok` when it passed or the scope asks none;
   `{:error, :missing}` without one; `{:error, {:failed, detail}}` when it was used before, the
-  provider refused it, it was solved on another address, or the scope chose a provider while the
-  providers' plugins cannot run; `{:error, {:unavailable, detail}}` when the provider could not be
-  asked.
+  provider refused it, it was solved on another address, or the provider the scope chose does not
+  answer; `{:error, {:unavailable, detail}}` when the provider could not be asked.
   """
   @spec check(String.t() | nil, site_id(), form(), request()) :: answer()
   def check(token, site_id, form, request) do
@@ -175,8 +174,8 @@ defmodule MishkaCmsCore.Captcha do
       {:ok, provider} ->
         with {:ok, _answer} <- verify(provider, token, site_id, form, request), do: :ok
 
-      {:error, :cannot_run} ->
-        {:error, {:failed, "the captcha providers' plugins are not loaded"}}
+      {:error, missing} when missing in [:unknown_provider, :cannot_run] ->
+        {:error, {:failed, "the chosen captcha provider did not answer"}}
 
       {:error, _asks_none} ->
         :ok
@@ -229,7 +228,10 @@ defmodule MishkaCmsCore.Captcha do
   defp not_asked(:off), do: gettext("No captcha is chosen for this scope: choose one and save.")
 
   defp not_asked(:unknown_provider),
-    do: gettext("The captcha chosen for this scope is not installed any more.")
+    do:
+      gettext(
+        "The captcha chosen for this scope is not installed any more, so every check is refused: choose another or None."
+      )
 
   defp not_asked(:not_ready), do: gettext("Enter both keys and save, then test.")
 

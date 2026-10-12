@@ -28,8 +28,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   The record's own `permissions` come back in the answer: `MishkaCmsWeb.RuntimeLive` opens the
   address only for whoever holds one of them, after the page's own, and the head keeps it out of an
-  index. When the plugins cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`), the record's lock
-  cannot be read either, and the page that shows one opens only for whoever holds `*`.
+  index. A plugin answers for each kind it owns even when it finds no record, so an answer the
+  plugins left untouched on a page that shows one — none of them answered: one raised, or cannot run
+  (`MishkaCmsCore.PluginEvent.cannot_run?/1`) — means the record's lock could not be read, and the
+  page opens only for whoever holds `*`.
 
   ## Share cards
 
@@ -917,13 +919,18 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   def page_number(_params), do: nil
 
-  # The plugins' answer, or — when they cannot run — the given map, with the lock of the record a
-  # page shows set to `*`: the plugin that reads it is not there to say it is open.
+  # The plugins' answer; on a page that shows a record, an answer no plugin touched — or none at all,
+  # when they cannot run — locks it to `*`: no plugin read the record to say it is open.
   defp answered(answer, given) do
     cond do
-      not PluginEvent.cannot_run?(answer) -> accept(answer, given)
-      is_binary(given.record) -> %{given | permissions: ["*"]}
-      true -> given
+      is_binary(given.record) and (answer == given or PluginEvent.cannot_run?(answer)) ->
+        %{given | permissions: ["*"]}
+
+      PluginEvent.cannot_run?(answer) ->
+        given
+
+      true ->
+        accept(answer, given)
     end
   end
 
