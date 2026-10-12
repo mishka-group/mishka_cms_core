@@ -5,6 +5,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
 
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.States.AssetsState
+  alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
 
   setup_all do
@@ -147,6 +148,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       assert AssetsState.get_value("test_site", "js") == js
       assert AssetsState.get_value("test_site", "brotli_js") != nil
       assert AssetsState.get_value("test_site", "gzip_js") != nil
+    end
+
+    test "stores the bundle while runtime:compile:js cannot run" do
+      EventCannotRun.stub!("runtime:compile:js")
+
+      assert {:ok, js} = JavaScriptCompiler.compile_and_store("test_site")
+      assert is_binary(js) and byte_size(js) > 0
+      assert AssetsState.get_value("test_site", "js") == js
     end
 
     test "stores JavaScript successfully" do

@@ -105,6 +105,22 @@ defmodule MishkaCmsCore.CaptchaTest do
       assert Captcha.check(nil, site.id, :sign_in, %{}) == :ok
     end
 
+    test "a scope that chose one refuses every check while the providers' plugins cannot run",
+         %{site: site} do
+      turnstile!(site)
+      MishkaCmsCore.Test.EventCannotRun.stub!(Provider.event())
+
+      assert Captcha.provider(site.id) == {:error, :cannot_run}
+      refute Captcha.on?(site.id)
+      assert {:error, {:failed, _detail}} = Captcha.check(token("pass"), site.id, :sign_in, %{})
+    end
+
+    test "a scope that chose none asks nothing while they cannot run", %{site: site} do
+      MishkaCmsCore.Test.EventCannotRun.stub!(Provider.event())
+
+      assert Captcha.check(nil, site.id, :sign_in, %{}) == :ok
+    end
+
     test "the secret key is stored sealed", %{site: site} do
       turnstile!(site)
 

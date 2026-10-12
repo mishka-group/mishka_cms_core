@@ -17,6 +17,7 @@ defmodule MishkaCmsCoreWeb.Test.AdminLanguageTest do
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.EventCannotRun
 
   @home "/admin/dashboard"
   @pages "/admin/dashboard/runtime/pages"
@@ -116,6 +117,15 @@ defmodule MishkaCmsCoreWeb.Test.AdminLanguageTest do
       assert has_element?(view, "#topbar-user a[href='/auth/sign-out']", "[fa] Sign out")
       assert has_element?(view, "#admin-language-form", "[fa] Language")
       close(view)
+    end
+
+    test "keeps it while web:request:admin_language_chosen cannot run", %{conn: conn} do
+      EventCannotRun.stub!("web:request:admin_language_chosen")
+
+      conn = choose(conn, %{"language" => "fa", "return_to" => @pages})
+
+      assert redirected_to(conn) == @pages
+      assert get_session(conn, Languages.admin_session()) == "fa"
     end
 
     test "keeps nothing for a language the site does not offer", %{conn: conn} do

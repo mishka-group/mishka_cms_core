@@ -16,6 +16,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Runtime.Redirect
   alias MishkaCmsCore.Runtime.States.{RedirectsState, SiteState}
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.WebRedirected
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -192,6 +193,19 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
       assert conn.status == 200
       assert conn.resp_body == "kept"
       assert location(conn) == nil
+    end
+  end
+
+  describe "web:request:redirected while it cannot run" do
+    test "a rule's redirect is still answered", %{site: site} do
+      EventCannotRun.stub!("web:request:redirected")
+      rule!(site, %{from_path: "/old", to: "/new", status: 302})
+
+      conn = request("/old", site.host)
+
+      assert conn.halted
+      assert conn.status == 302
+      assert location(conn) == "/new"
     end
   end
 

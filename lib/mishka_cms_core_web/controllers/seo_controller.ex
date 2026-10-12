@@ -65,6 +65,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   import Plug.Conn
 
   alias MishkaCmsCore.Helpers
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
@@ -150,7 +151,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   defp refuse(conn, site, reason) do
     "web:request:sitemap_unavailable"
-    |> Hook.call(conn, meta: %{site: site, reason: reason})
+    |> PluginEvent.call(conn, meta: %{site: site, reason: reason})
     |> refused(reason)
   end
 

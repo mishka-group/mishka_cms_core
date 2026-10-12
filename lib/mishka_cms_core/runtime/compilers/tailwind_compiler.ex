@@ -252,6 +252,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   require Logger
   require Ash.Query
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
   alias MishkaCmsCore.Runtime.Compilers.Helpers
@@ -833,7 +834,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     case compile(site_name) do
       {:ok, css} ->
         css =
-          MishkaInstaller.Event.Hook.call("runtime:compile:css", css, meta: %{site: site_name})
+          PluginEvent.call("runtime:compile:css", css, meta: %{site: site_name})
 
         {brotli, gzip} = Helpers.compress_asset(css)
         updated_at = DateTime.utc_now()

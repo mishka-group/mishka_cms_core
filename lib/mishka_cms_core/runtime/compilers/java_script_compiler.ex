@@ -103,6 +103,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   require Logger
   require Ash.Query
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.States.{AssetsState, CompileFailureState, SiteState}
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Compilers.NpmPackages
@@ -396,7 +397,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   end
 
   defp store_compiled(id, {:ok, js}) do
-    js = MishkaInstaller.Event.Hook.call("runtime:compile:js", js, meta: %{site: id})
+    js = PluginEvent.call("runtime:compile:js", js, meta: %{site: id})
 
     {brotli, gzip} = Helpers.compress_asset(js)
     updated_at = DateTime.utc_now()

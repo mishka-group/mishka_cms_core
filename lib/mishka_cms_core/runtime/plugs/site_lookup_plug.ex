@@ -112,6 +112,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   import Plug.Conn
 
   alias MishkaCmsCore.Accounts.AuthGate
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.{Languages, Redirects}
   alias MishkaCmsCore.Runtime.States.SiteState
 
@@ -209,7 +210,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       [:mishka_cms, :runtime, :plugs, :site_lookup],
       %{path: conn.request_path, method: conn.method},
       fn ->
-        conn = MishkaInstaller.Event.Hook.call("web:request:before_site_resolve", conn)
+        conn = PluginEvent.call("web:request:before_site_resolve", conn)
         host = get_host(conn, opts)
 
         result =
@@ -222,11 +223,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
           end
           # request-lifecycle seam: a plugin may transform the conn (redirect / maintenance mode /
           # geo-block / inject assigns) or `Plug.Conn.halt/1` it. No plugin -> conn unchanged.
-          |> then(
-            &MishkaInstaller.Event.Hook.call("web:request:after_site_resolve", &1,
-              meta: %{host: host}
-            )
-          )
+          |> then(&PluginEvent.call("web:request:after_site_resolve", &1, meta: %{host: host}))
 
         site = result.assigns[:current_site]
 
@@ -507,7 +504,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   # otherwise the built-in one is sent.
   defp site_inactive(conn, site) do
     conn =
-      MishkaInstaller.Event.Hook.call("web:request:site_unavailable", conn,
+      PluginEvent.call("web:request:site_unavailable", conn,
         meta: %{state: :inactive, site: site}
       )
 
@@ -582,9 +579,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   end
 
   defp refuse_master_sign_in(%Plug.Conn{params: %{"master_user" => "true"}} = conn, site) do
-    MishkaInstaller.Event.Hook.call("web:request:master_sign_in_refused", conn,
-      meta: %{site: site}
-    )
+    PluginEvent.call("web:request:master_sign_in_refused", conn, meta: %{site: site})
   end
 
   defp refuse_master_sign_in(conn, _site), do: conn
@@ -639,7 +634,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
     |> delete_session(@session_token)
     |> Ash.PlugHelpers.set_tenant(site.id)
     |> then(
-      &MishkaInstaller.Event.Hook.call("web:request:session_refused", &1,
+      &PluginEvent.call("web:request:session_refused", &1,
         meta: %{site: site, user_id: Map.get(user, :id)}
       )
     )

@@ -28,7 +28,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   The record's own `permissions` come back in the answer: `MishkaCmsWeb.RuntimeLive` opens the
   address only for whoever holds one of them, after the page's own, and the head keeps it out of an
-  index.
+  index. When the plugins cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`), the record's lock
+  cannot be read either, and the page that shows one opens only for whoever holds `*`.
 
   ## Share cards
 
@@ -98,7 +99,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.Helpers
+  alias MishkaCmsCore.{Helpers, PluginEvent}
   alias MishkaCmsCore.Runtime.{Languages, ShareCard}
   alias MishkaCmsCore.Runtime.States.TranslationsState
   alias MishkaCmsCore.Settings
@@ -892,7 +893,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
     event()
     |> Hook.call(given)
-    |> accept(given)
+    |> answered(given)
     |> stand_ins(Keyword.get(opts, :stand_ins, false))
     |> head(
       opts
@@ -915,6 +916,16 @@ defmodule MishkaCmsCore.Runtime.Seo do
   end
 
   def page_number(_params), do: nil
+
+  # The plugins' answer, or — when they cannot run — the given map, with the lock of the record a
+  # page shows set to `*`: the plugin that reads it is not there to say it is open.
+  defp answered(answer, given) do
+    cond do
+      not PluginEvent.cannot_run?(answer) -> accept(answer, given)
+      is_binary(given.record) -> %{given | permissions: ["*"]}
+      true -> given
+    end
+  end
 
   defp stand_ins(seo, true) do
     shown = for %{key: key} when is_binary(key) <- seo.var_docs, into: %{}, do: {key, "{#{key}}"}

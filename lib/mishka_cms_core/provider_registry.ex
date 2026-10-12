@@ -11,8 +11,13 @@ defmodule MishkaCmsCore.ProviderRegistry do
   `all/2`, `offered/2` and `fetch/3` ask the event which providers are installed: every registered
   module that implements the kind's behaviour, the first of each id. Stopping a provider's plugin in
   the installer takes it out of the list. Nothing is cached: the event is asked each time.
+
+  An event whose plugins cannot run (`MishkaCmsCore.PluginEvent.cannot_run?/1`) cannot say which
+  providers are installed: `all/2` and `offered/2` list none, and `fetch/3` answers
+  `{:error, :cannot_run}` rather than `{:error, :unknown_provider}`.
   """
 
+  alias MishkaCmsCore.PluginEvent
   alias MishkaInstaller.Event.Hook
 
   @doc false
@@ -36,31 +41,28 @@ defmodule MishkaCmsCore.ProviderRegistry do
   @doc "Every provider registered on `event` that implements `behaviour`, the first of each id."
   @spec all(String.t(), module()) :: [module()]
   def all(event, behaviour) do
-    case Hook.call(event, %{providers: []}) do
-      %{providers: providers} when is_list(providers) ->
-        providers |> Enum.filter(&provider?(&1, behaviour)) |> Enum.uniq_by(& &1.id())
-
-      _unanswered ->
-        []
+    case registered(event, behaviour) do
+      {:ok, providers} -> providers
+      {:error, :cannot_run} -> []
     end
   end
 
   @doc "The providers of `all/2` this installation offers: every one, unless its `offered?/0` says not."
   @spec offered(String.t(), module()) :: [module()]
-  def offered(event, behaviour),
-    do:
-      Enum.filter(
-        all(event, behaviour),
-        &(not function_exported?(&1, :offered?, 0) or &1.offered?())
-      )
+  def offered(event, behaviour), do: offered_of(all(event, behaviour))
 
-  @doc "The offered provider registered on `event` under `id`."
+  @doc """
+  The offered provider registered on `event` under `id`; `{:error, :cannot_run}` when the event's
+  plugins cannot run, so whether it is installed cannot be told.
+  """
   @spec fetch(String.t(), module(), String.t() | nil) ::
-          {:ok, module()} | {:error, :unknown_provider}
+          {:ok, module()} | {:error, :unknown_provider | :cannot_run}
   def fetch(event, behaviour, id) when is_binary(id) do
-    case Enum.find(offered(event, behaviour), &(&1.id() == id)) do
-      nil -> {:error, :unknown_provider}
-      provider -> {:ok, provider}
+    with {:ok, providers} <- registered(event, behaviour) do
+      case Enum.find(offered_of(providers), &(&1.id() == id)) do
+        nil -> {:error, :unknown_provider}
+        provider -> {:ok, provider}
+      end
     end
   end
 
@@ -77,6 +79,19 @@ defmodule MishkaCmsCore.ProviderRegistry do
   end
 
   defp provider?(_other, _behaviour), do: false
+
+  defp registered(event, behaviour) do
+    case Hook.call(event, %{providers: []}) do
+      %{providers: providers} when is_list(providers) ->
+        {:ok, providers |> Enum.filter(&provider?(&1, behaviour)) |> Enum.uniq_by(& &1.id())}
+
+      answer ->
+        if PluginEvent.cannot_run?(answer), do: {:error, :cannot_run}, else: {:ok, []}
+    end
+  end
+
+  defp offered_of(providers),
+    do: Enum.filter(providers, &(not function_exported?(&1, :offered?, 0) or &1.offered?()))
 
   defp behaviours(module),
     do: module.module_info(:attributes) |> Keyword.get_values(:behaviour) |> List.flatten()

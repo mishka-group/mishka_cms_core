@@ -136,11 +136,11 @@ defmodule MishkaCmsCoreWeb.AuthController do
   import MishkaCmsCore.Helpers, only: [path: 2]
 
   alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, CaptchaCheck, LiveSockets, SecondFactor}
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.{AuthRateLimitPlug, SiteLookupPlug}
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCoreWeb.ReturnTo
-  alias MishkaInstaller.Event.Hook
 
   # Whose session the sign-out clears: AshAuthentication enumerates that app's authenticated resources
   # to revoke their tokens, and they are declared under the HOST's `:ash_domains`.
@@ -155,7 +155,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       activity: activity,
       message: gettext("If an account exists for that email, a link is on its way.")
     }
-    |> then(&Hook.call("AuthController.Success.Requested", &1))
+    |> then(&PluginEvent.call("AuthController.Success.Requested", &1))
     |> then(fn
       %{conn: %Plug.Conn{halted: true} = conn} ->
         conn
@@ -225,7 +225,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       user: user,
       message: gettext("This site is offline. Only its administrators can sign in.")
     }
-    |> then(&Hook.call("AuthController.Success.Refused", &1))
+    |> then(&PluginEvent.call("AuthController.Success.Refused", &1))
     |> then(fn
       %{conn: %Plug.Conn{halted: true} = conn} ->
         conn
@@ -244,7 +244,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       fn ->
         conn =
           %{conn: conn, user: user, activity: activity}
-          |> then(&Hook.call("AuthController.Success.BeforeAuth", &1))
+          |> then(&PluginEvent.call("AuthController.Success.BeforeAuth", &1))
           |> Map.get(:conn)
 
         # SOMEWHERE ON THIS SITE, OR NOWHERE. `return_to` is a token `MishkaCmsCoreWeb.ReturnTo`
@@ -260,7 +260,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
                 user: user,
                 message: gettext("Your email address has now been confirmed")
               }
-              |> then(&Hook.call("AuthController.Success.EmailConfirmed", &1))
+              |> then(&PluginEvent.call("AuthController.Success.EmailConfirmed", &1))
               |> then(&{:email_confirmation, &1.message})
 
             {:password, :reset} ->
@@ -269,12 +269,12 @@ defmodule MishkaCmsCoreWeb.AuthController do
                 user: user,
                 message: gettext("Your password has successfully been reset")
               }
-              |> then(&Hook.call("AuthController.Success.PasswordReset", &1))
+              |> then(&PluginEvent.call("AuthController.Success.PasswordReset", &1))
               |> then(&{:password_reset, &1.message})
 
             _ ->
               %{conn: conn, user: user, message: gettext("You are now signed in")}
-              |> then(&Hook.call("AuthController.Success.SignIn", &1))
+              |> then(&PluginEvent.call("AuthController.Success.SignIn", &1))
               |> then(&{:sign_in, &1.message})
           end
 
@@ -286,9 +286,9 @@ defmodule MishkaCmsCoreWeb.AuthController do
 
         result =
           %{conn: conn, user: user, activity: activity_type}
-          |> then(&Hook.call("AuthController.Success.AfterAuthentication", &1))
+          |> then(&PluginEvent.call("AuthController.Success.AfterAuthentication", &1))
           |> then(&%{conn: &1.conn, user: user, return_to: return_to, message: message})
-          |> then(&Hook.call("AuthController.Success.BeforeRedirect", &1))
+          |> then(&PluginEvent.call("AuthController.Success.BeforeRedirect", &1))
           |> then(fn data ->
             data.conn
             |> store_in_session(user)
@@ -315,7 +315,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # `auth:request:rate_limited` hears it first, and a plugin that halts the conn answers instead.
   defp rate_limited(conn, limited) do
     conn =
-      Hook.call("auth:request:rate_limited", conn,
+      PluginEvent.call("auth:request:rate_limited", conn,
         meta: Map.put(limited, :site, conn.assigns[:current_site])
       )
 
@@ -381,7 +381,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       fn ->
         conn =
           %{conn: conn, activity: activity, reason: reason}
-          |> then(&Hook.call("AuthController.Failure.BeforeFailure", &1))
+          |> then(&PluginEvent.call("AuthController.Failure.BeforeFailure", &1))
           |> Map.get(:conn)
 
         {failure_type, message} = failure_message(conn, activity, reason)
@@ -405,7 +405,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
             redirect_to: sign_in_page(conn),
             failure_type: failure_type
           }
-          |> then(&Hook.call("AuthController.Failure.BeforeRedirect", &1))
+          |> then(&PluginEvent.call("AuthController.Failure.BeforeRedirect", &1))
           |> then(fn data ->
             data.conn
             |> put_flash(:error, data.message)
@@ -451,7 +451,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
     %{title: title, text: text} = AuthGate.describe(action)
 
     %{conn: conn, activity: activity, reason: reason, message: "#{title}. #{text}"}
-    |> then(&Hook.call("AuthController.Failure.Closed", &1))
+    |> then(&PluginEvent.call("AuthController.Failure.Closed", &1))
     |> then(&{:auth_closed, &1.message})
   end
 
@@ -469,7 +469,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
           )
 
         %{conn: conn, activity: activity, reason: reason, message: msg}
-        |> then(&Hook.call("AuthController.Failure.UnconfirmedUser", &1))
+        |> then(&PluginEvent.call("AuthController.Failure.UnconfirmedUser", &1))
         |> then(&{:unconfirmed_user, &1.message})
 
       _ ->
@@ -479,7 +479,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
           reason: reason,
           message: gettext("Incorrect email or password")
         }
-        |> then(&Hook.call("AuthController.Failure.InvalidCredentials", &1))
+        |> then(&PluginEvent.call("AuthController.Failure.InvalidCredentials", &1))
         |> then(&{:invalid_credentials, &1.message})
     end
   end
@@ -497,7 +497,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
       fn ->
         conn =
           %{conn: conn, user_id: user_id}
-          |> then(&Hook.call("AuthController.SignOut.BeforeSignOut", &1))
+          |> then(&PluginEvent.call("AuthController.SignOut.BeforeSignOut", &1))
           |> Map.get(:conn)
 
         # HOME, AND ONLY HOME. Signing out is asked for from wherever you are, so there is nothing
@@ -518,7 +518,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
             return_to: return_to,
             message: gettext("You are now signed out")
           }
-          |> then(&Hook.call("AuthController.SignOut.BeforeRedirect", &1))
+          |> then(&PluginEvent.call("AuthController.SignOut.BeforeRedirect", &1))
           |> then(fn data ->
             data.conn
             |> clear_session(@host_app)

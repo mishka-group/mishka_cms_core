@@ -169,7 +169,8 @@ defmodule MishkaCmsCore.Mail do
 
   @doc """
   The provider `site_id` sends with, ready to send: `{:ok, module}`, or `{:error, reason}` —
-  `:not_configured` (none chosen), `:unknown_provider` (chosen, but its plugin is gone) or
+  `:not_configured` (none chosen), `:unknown_provider` (chosen, but its plugin is gone),
+  `:cannot_run` (chosen, while the providers' plugins cannot run) or
   `:not_ready` (chosen, but missing what it needs, such as its key).
   """
   @spec provider(String.t() | nil) :: {:ok, module()} | {:error, atom()}
@@ -321,6 +322,9 @@ defmodule MishkaCmsCore.Mail do
 
   def describe(:not_ready),
     do: gettext("The email provider is missing its key or settings.")
+
+  def describe(:cannot_run),
+    do: gettext("The email providers' plugins are not loaded, so nothing can be sent.")
 
   def describe(:invalid_address), do: gettext("That is not an email address.")
   def describe(:suppressed), do: gettext("A plugin stopped this email.")

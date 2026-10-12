@@ -16,9 +16,10 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
   import MishkaCmsCore.Test.Factory
   import Swoosh.TestAssertions
 
-  alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.Accounts.{AuthRateLimit, User}
   alias MishkaCmsCore.Accounts.User.Senders.{SendMagicLinkEmail, SendPasswordResetEmail}
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCoreWeb.ReturnTo
 
   @password "Password123!"
@@ -462,6 +463,115 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
 
     test "is the site's first language for one the site no longer publishes" do
       assert sent_back(%{MishkaCmsCore.Runtime.Languages.session() => "de"}) == "/auth"
+    end
+  end
+
+  # AN EVENT ONE OF WHOSE PLUGINS IS NOT LOADED answers with the state it was handed, so every way
+  # in and out ends as it does with no plugin listening.
+  describe "while its plugin events cannot run" do
+    test "a password sign-in still writes the session", %{conn: conn, site: site} do
+      EventCannotRun.stub!([
+        "AuthController.Success.BeforeAuth",
+        "AuthController.Success.SignIn",
+        "AuthController.Success.AfterAuthentication",
+        "AuthController.Success.BeforeRedirect"
+      ])
+
+      conn = get(conn, handoff(register_user("unloaded-in@example.com", site.id)))
+
+      assert redirected_to(conn) == "/"
+      assert get_session(conn, "user_token")
+      assert get_session(conn, :live_socket_id)
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "You are now signed in"
+    end
+
+    test "signing out still ends the session", %{conn: conn, site: site} do
+      signed_in = get(conn, handoff(register_user("unloaded-out@example.com", site.id)))
+      assert get_session(signed_in, "user_token")
+
+      EventCannotRun.stub!([
+        "AuthController.SignOut.BeforeSignOut",
+        "AuthController.SignOut.BeforeRedirect"
+      ])
+
+      signed_out =
+        signed_in |> Phoenix.ConnTest.recycle() |> with_host() |> delete("/auth/sign-out")
+
+      assert redirected_to(signed_out) == "/"
+      refute get_session(signed_out, "user_token")
+      assert Phoenix.Flash.get(signed_out.assigns.flash, :info) == "You are now signed out"
+    end
+
+    test "a sign-in token that does not verify still goes back to sign-in", %{conn: conn} do
+      EventCannotRun.stub!([
+        "AuthController.Failure.BeforeFailure",
+        "AuthController.Failure.InvalidCredentials",
+        "AuthController.Failure.BeforeRedirect"
+      ])
+
+      conn = get(conn, "/api/auth/user/password/sign_in_with_token?token=not-a-token")
+
+      assert redirected_to(conn) == "/auth"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) == "Incorrect email or password"
+      refute get_session(conn, "user_token")
+    end
+
+    test "a reset asked for over its route still goes back to sign-in" do
+      EventCannotRun.stub!("AuthController.Success.Requested")
+
+      conn =
+        build_conn()
+        |> with_host()
+        |> post("/api/auth/user/password/reset_request", %{
+          "user" => %{"email" => "unloaded-#{System.unique_integer([:positive])}@example.com"}
+        })
+
+      assert redirected_to(conn) == "/auth"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "If an account exists for that email, a link is on its way."
+    end
+
+    test "an offline site still turns back who may not see it", %{conn: conn, site: site} do
+      {:ok, _} = MishkaCmsCore.Settings.put("cms.offline", true, site_id: site.id)
+
+      on_exit(fn ->
+        MishkaCmsCore.Runtime.States.SettingsState.delete(site.id, "cms.offline")
+      end)
+
+      EventCannotRun.stub!("AuthController.Success.Refused")
+
+      conn = get(conn, handoff(user_with(["probe:role"], site.id)))
+
+      assert redirected_to(conn) == "/auth"
+      assert Phoenix.Flash.get(conn.assigns.flash, :error) =~ "offline"
+      refute get_session(conn, :live_socket_id)
+    end
+
+    test "a request refused for its rate is still answered with a 429" do
+      previous = Application.fetch_env(:mishka_cms_core, AuthRateLimit)
+      Application.put_env(:mishka_cms_core, AuthRateLimit, limit: 1)
+
+      on_exit(fn ->
+        case previous do
+          {:ok, env} -> Application.put_env(:mishka_cms_core, AuthRateLimit, env)
+          :error -> Application.delete_env(:mishka_cms_core, AuthRateLimit)
+        end
+      end)
+
+      EventCannotRun.stub!("auth:request:rate_limited")
+      email = "limited-#{System.unique_integer([:positive])}@example.com"
+
+      [_first, second] =
+        for _try <- 1..2 do
+          build_conn()
+          |> with_host()
+          |> post("/api/auth/user/password/reset_request", %{"user" => %{"email" => email}})
+        end
+
+      assert second.status == 429
+      assert [_seconds] = get_resp_header(second, "retry-after")
+      assert second.resp_body =~ ~s(id="auth-rate-limited")
     end
   end
 

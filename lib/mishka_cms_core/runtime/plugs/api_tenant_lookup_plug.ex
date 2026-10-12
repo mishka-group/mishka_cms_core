@@ -162,6 +162,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
   require Logger
 
   alias MishkaCmsCore.Accounts.AuthGate
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Plugs.ApiCorsPlug
 
   @default_opts [
@@ -360,7 +361,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
       [:mishka_cms, :runtime, :plugs, :api_tenant_lookup],
       %{path: conn.request_path, method: conn.method},
       fn ->
-        conn = MishkaInstaller.Event.Hook.call("api:request:before_tenant_resolve", conn)
+        conn = PluginEvent.call("api:request:before_tenant_resolve", conn)
 
         result =
           with {:ok, host} <- extract_host(conn),
@@ -402,11 +403,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
 
         result =
           result
-          |> then(
-            &MishkaInstaller.Event.Hook.call("api:request:after_tenant_resolve", &1,
-              meta: %{host: host}
-            )
-          )
+          |> then(&PluginEvent.call("api:request:after_tenant_resolve", &1, meta: %{host: host}))
 
         site = result.assigns[:current_site]
 
@@ -453,7 +450,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
         conn
         |> assign(:current_user, nil)
         |> then(
-          &MishkaInstaller.Event.Hook.call("api:request:token_refused", &1,
+          &PluginEvent.call("api:request:token_refused", &1,
             meta: %{site: conn.assigns[:current_site], user_id: Map.get(user, :id)}
           )
         )
@@ -489,10 +486,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
 
   defp refuse_no_tenant(conn, site) do
     if check_explicit_no_tenant(conn),
-      do:
-        MishkaInstaller.Event.Hook.call("api:request:no_tenant_refused", conn,
-          meta: %{site: site}
-        ),
+      do: PluginEvent.call("api:request:no_tenant_refused", conn, meta: %{site: site}),
       else: conn
   end
 
@@ -558,7 +552,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
 
       conn ->
         conn =
-          MishkaInstaller.Event.Hook.call("api:request:site_unavailable", conn,
+          PluginEvent.call("api:request:site_unavailable", conn,
             meta: %{state: :inactive, site: site}
           )
 

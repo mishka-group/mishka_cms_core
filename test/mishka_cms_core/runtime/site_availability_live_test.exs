@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Runtime.SiteAvailabilityLiveTest do
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState, ViewerState}
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.{LiveSiteUnavailable, SiteAvailabilityChanged}
   alias Phoenix.LiveView.Socket
 
@@ -272,6 +273,19 @@ defmodule MishkaCmsCore.Runtime.SiteAvailabilityLiveTest do
 
       assert {:halt, %{redirected: {:redirect, %{to: "/closed-by-plugin"}}}} =
                info(socket, arrived(site))
+    end
+  end
+
+  describe "web:live:site_unavailable while it cannot run" do
+    test "a page left open is still sent back to its address once its site goes offline", %{
+      site: site
+    } do
+      EventCannotRun.stub!("web:live:site_unavailable")
+      {:cont, socket} = site |> open() |> navigate()
+      offline!(site.id)
+
+      assert {:halt, socket} = info(socket, arrived(site))
+      assert socket.redirected == {:redirect, %{to: "/blog?page=2", status: 302}}
     end
   end
 

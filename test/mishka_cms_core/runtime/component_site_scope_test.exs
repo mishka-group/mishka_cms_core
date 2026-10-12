@@ -21,6 +21,7 @@ defmodule MishkaCmsCore.Runtime.ComponentSiteScopeTest do
   alias MishkaCmsCore.Runtime.{LiveViewHelpers, Page, RuntimePreview, Translations}
   alias MishkaCmsCore.Runtime.PageBuilder.CardPreview
   alias MishkaCmsCore.Runtime.States.{CompileFailureState, SiteState}
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.ComponentUnavailable
 
   @moduletag :integration
@@ -386,6 +387,19 @@ defmodule MishkaCmsCore.Runtime.ComponentSiteScopeTest do
       assert LazyHTML.attribute(note, "data-name") == [component.name]
       assert LazyHTML.attribute(note, "data-site") == [other.name]
       assert LazyHTML.attribute(note, "data-rendering") == [home.id]
+    end
+  end
+
+  describe "runtime:render:component_unavailable while it cannot run" do
+    test "another site's component still draws nothing", %{home: home, other: other} do
+      EventCannotRun.stub!("runtime:render:component_unavailable")
+      component = component!(other, "unheard")
+      :ok = Translations.put_site(home.id)
+
+      html = render(component.name, other.name)
+
+      assert html == ""
+      refute html =~ "failed to render"
     end
   end
 

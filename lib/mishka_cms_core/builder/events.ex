@@ -14,7 +14,9 @@ defmodule MishkaCmsCore.Builder.Events do
       `[]`, always the core set first — and `Enum.uniq_by/2` keeps the first declaration, so a plugin
       can add but never silently redefine a core entry. Precedent: `sidebar:menus`.
     * **Transforms** pass the value itself and honour the return, so a plugin can rewrite or veto.
-      Precedent: `runtime:compile:css`.
+      Precedent: `runtime:compile:css`. While a transform's plugins cannot run
+      (`MishkaCmsCore.PluginEvent.cannot_run?/1`), one that can veto — its payload carries `:error`,
+      or `:allowed?` — refuses, and any other goes on with its payload unchanged.
     * **Announcements** pass a summary map with `return: false`. Precedent: `runtime:site:after_purge`.
 
   ## Catalog
@@ -118,9 +120,12 @@ defmodule MishkaCmsCore.Builder.Events do
       end
   """
 
+  use Gettext, backend: MishkaCmsCore.Gettext
+
   require Logger
   require MishkaCmsCore.Runtime.PageBuilder.Strict
 
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.PageBuilder.Strict
 
   alias MishkaCmsCore.Builder.Descriptor
@@ -292,6 +297,9 @@ defmodule MishkaCmsCore.Builder.Events do
   @doc """
   Fires a transform event and returns the (possibly rewritten) payload. The plugin's return is
   honoured; anything that is not a map of the same shape is discarded in favour of the original.
+
+  While the event's plugins cannot run, a payload that can veto comes back refused: its `:error`
+  set, or its `:allowed?` false with a `:reason`. Any other comes back unchanged.
   """
   @spec transform(String.t(), map()) :: map()
   def transform(event, payload) when is_map(payload) do
@@ -299,19 +307,36 @@ defmodule MishkaCmsCore.Builder.Events do
       %{} = returned ->
         returned
 
-      # A PLUGIN THAT RETURNED THE WRONG SHAPE IS INERT, and used to be inert silently — its rewrite
-      # discarded, its author with no way to find out except by noticing nothing happened. Production
-      # still carries on with the original; development says whose plugin, which event, and what came
-      # back instead.
-      other ->
-        Strict.violation!(
-          "Builder.Events.transform/2",
-          "#{event} answered #{inspect(other)}, which is not a payload map"
-        )
-
-        payload
+      answer ->
+        if PluginEvent.cannot_run?(answer),
+          do: refused(payload),
+          else: inert(event, answer, payload)
     end
   end
+
+  # A PLUGIN THAT RETURNED THE WRONG SHAPE IS INERT, and used to be inert silently — its rewrite
+  # discarded, its author with no way to find out except by noticing nothing happened. Production
+  # still carries on with the original; development says whose plugin, which event, and what came
+  # back instead.
+  defp inert(event, answer, payload) do
+    Strict.violation!(
+      "Builder.Events.transform/2",
+      "#{event} answered #{inspect(answer)}, which is not a payload map"
+    )
+
+    payload
+  end
+
+  # A VETO NOBODY CAN CAST IS A REFUSAL: the plugins that would have said no are not loaded.
+  defp refused(%{error: _} = payload), do: %{payload | error: not_loaded()}
+
+  defp refused(%{allowed?: _} = payload),
+    do: Map.merge(payload, %{allowed?: false, reason: not_loaded()})
+
+  defp refused(payload), do: payload
+
+  defp not_loaded,
+    do: gettext("An extension that checks this change is not loaded, so it cannot be made now.")
 
   @doc """
   Fires a veto-capable gate. A plugin refuses by putting a message under `:error` in the payload it

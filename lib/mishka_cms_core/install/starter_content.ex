@@ -2829,7 +2829,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     site = socket.assigns[:current_site]
 
     socket =
-      MishkaInstaller.Event.Hook.call("auth:live:rate_limited", socket,
+      MishkaCmsCore.PluginEvent.call("auth:live:rate_limited", socket,
         meta: Map.put(limited, :site_id, site && site.id)
       )
 

@@ -5,6 +5,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
   @repo Application.compile_env!(:mishka_cms_core, :repo)
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.States.AssetsState
+  alias MishkaCmsCore.Test.EventCannotRun
 
   import ExUnit.CaptureLog
   import ExUnit.CaptureIO
@@ -229,6 +230,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
 
       # Cleanup
       AssetsState.delete(site_name, "css")
+    end
+
+    test "stores the stylesheet while runtime:compile:css cannot run" do
+      EventCannotRun.stub!("runtime:compile:css")
+      site_name = "test_compile_store_#{System.unique_integer([:positive])}"
+      on_exit(fn -> AssetsState.delete(site_name, "css") end)
+
+      assert {:ok, css} = quiet_compile_and_store(site_name)
+      assert is_binary(css) and byte_size(css) > 0
+      assert AssetsState.get_value(site_name, "css") == css
     end
 
     test "stores CSS with proper metadata" do

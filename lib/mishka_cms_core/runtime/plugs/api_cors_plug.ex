@@ -34,6 +34,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiCorsPlug do
   import Plug.Conn
   require Logger
 
+  alias MishkaCmsCore.PluginEvent
+
   @default_methods "GET, POST, PUT, PATCH, DELETE, OPTIONS"
   @default_headers "Accept, Authorization, Content-Type, X-Requested-With, x-no-tenant"
   # 24 hours in seconds
@@ -46,7 +48,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiCorsPlug do
       [:mishka_cms, :runtime, :plugs, :api_cors],
       %{path: conn.request_path, method: conn.method},
       fn ->
-        conn = MishkaInstaller.Event.Hook.call("api:request:before_cors", conn)
+        conn = PluginEvent.call("api:request:before_cors", conn)
         site = Keyword.get(opts, :site, conn.assigns[:current_site])
         origin = get_req_header(conn, "origin") |> List.first()
         Logger.debug("CORS Plug - Origin header: #{inspect(origin)}")
@@ -54,11 +56,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiCorsPlug do
 
         result =
           if(origin, do: handle_cors(conn, origin, site), else: conn)
-          |> then(
-            &MishkaInstaller.Event.Hook.call("api:request:cors_headers", &1,
-              meta: %{origin: origin}
-            )
-          )
+          |> then(&PluginEvent.call("api:request:cors_headers", &1, meta: %{origin: origin}))
 
         site_name =
           case site do

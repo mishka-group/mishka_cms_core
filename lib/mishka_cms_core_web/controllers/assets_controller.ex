@@ -149,9 +149,9 @@ defmodule MishkaCmsCoreWeb.AssetsController do
   use Phoenix.Controller, formats: [:html, :json]
   import Plug.Conn
   alias MishkaCmsCore.Accounts.Helper
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.{ContentEditorStyles, DraftPreviewAssets, SiteAvailability}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
-  alias MishkaInstaller.Event.Hook
 
   @shared_base "__shared_base__"
   @public "public, max-age=31536000, immutable"
@@ -245,7 +245,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
 
   defp refuse(conn, site, type, reason) do
     conn =
-      Hook.call("web:request:asset_unavailable", conn,
+      PluginEvent.call("web:request:asset_unavailable", conn,
         meta: %{site: site, type: type, reason: reason}
       )
 
@@ -261,7 +261,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
       fn ->
         conn =
           %{conn: conn, site: site, type: type}
-          |> then(&Hook.call("AssetsController.Serve.BeforeServe", &1))
+          |> then(&PluginEvent.call("AssetsController.Serve.BeforeServe", &1))
           |> Map.get(:conn)
 
         accepted =
@@ -276,7 +276,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
 
         %{content: content, encoding: encoding} =
           %{site: site, key: key, type: type, encoding: encoding}
-          |> then(&Hook.call("AssetsController.Serve.BeforeAssetLookup", &1))
+          |> then(&PluginEvent.call("AssetsController.Serve.BeforeAssetLookup", &1))
           |> then(fn data ->
             {get_asset, encoding} =
               case AssetsState.get_value(data.site, data.key) do
@@ -292,7 +292,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
 
             %{content: get_asset, encoding: encoding}
           end)
-          |> then(&Hook.call("AssetsController.Serve.AfterAssetLookup", &1))
+          |> then(&PluginEvent.call("AssetsController.Serve.AfterAssetLookup", &1))
 
         result =
           %{
@@ -305,7 +305,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
               "cache-control" => cache_control
             }
           }
-          |> then(&Hook.call("AssetsController.Serve.BeforeResponse", &1))
+          |> then(&PluginEvent.call("AssetsController.Serve.BeforeResponse", &1))
           |> then(fn
             %{content: nil} = data ->
               refuse(data.conn, site, type, :missing)

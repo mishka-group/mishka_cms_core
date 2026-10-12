@@ -2696,22 +2696,22 @@ msgstr ""
 msgid "Confirm this account's email address without the confirmation email?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:37
+#: lib/mishka_cms_core/runtime/redirects.ex:38
 #, elixir-autogen, elixir-format
 msgid "301 Moved permanently"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:38
+#: lib/mishka_cms_core/runtime/redirects.ex:39
 #, elixir-autogen, elixir-format
 msgid "302 Found"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:39
+#: lib/mishka_cms_core/runtime/redirects.ex:40
 #, elixir-autogen, elixir-format
 msgid "307 Temporary"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:40
+#: lib/mishka_cms_core/runtime/redirects.ex:41
 #, elixir-autogen, elixir-format
 msgid "308 Permanent"
 msgstr ""

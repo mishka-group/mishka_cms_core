@@ -50,6 +50,7 @@ defmodule MishkaCmsCore.Runtime.SiteAvailability do
   """
 
   alias MishkaCmsCore.Accounts.{AuthGate, Helper, LiveSockets}
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Runtime.States.{SiteState, ViewerState}
   alias MishkaCmsCore.Settings
@@ -256,7 +257,7 @@ defmodule MishkaCmsCore.Runtime.SiteAvailability do
     path = socket.private[:site_availability_path] || "/"
 
     socket =
-      Hook.call("web:live:site_unavailable", socket, meta: %{site_id: site_id, path: path})
+      PluginEvent.call("web:live:site_unavailable", socket, meta: %{site_id: site_id, path: path})
 
     if socket.redirected, do: socket, else: LiveView.redirect(socket, to: path)
   end

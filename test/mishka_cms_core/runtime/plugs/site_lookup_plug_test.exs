@@ -7,6 +7,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
 
   # Helper to create a conn with proper host header
@@ -371,6 +372,65 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
 
       assert result_conn.halted
       refute Map.has_key?(result_conn.assigns, :current_site)
+    end
+  end
+
+  # AN EVENT ONE OF WHOSE PLUGINS IS NOT LOADED answers with the conn it was handed, so the request
+  # is answered as it is with no plugin listening.
+  describe "call/2 and confirm_tenant/2 while their events cannot run" do
+    setup do
+      MishkaCmsCore.DataCase.setup_sandbox(%{async: false})
+      {:ok, site: cached_site!("plugins-not-loaded.example.com", false)}
+    end
+
+    test "resolve the site and refuse ?master_user=true on it", %{site: site} do
+      EventCannotRun.stub!([
+        "web:request:before_site_resolve",
+        "web:request:after_site_resolve",
+        "web:request:master_sign_in_refused"
+      ])
+
+      result_conn = request("/?master_user=true", site.host)
+
+      refute result_conn.halted
+      assert result_conn.assigns.current_site.id == site.id
+      assert get_session(result_conn, :current_site).id == site.id
+      assert tenant(result_conn) == site.id
+    end
+
+    test "answer an inactive site with its 503" do
+      EventCannotRun.stub!("web:request:site_unavailable")
+
+      :ok =
+        SiteState.save(%{
+          id: "inactive-plugins-not-loaded",
+          name: "inactive-plugins-not-loaded",
+          host: "inactive-plugins-not-loaded.example.com",
+          priority: 100,
+          active: false
+        })
+
+      result_conn = request("/", "inactive-plugins-not-loaded.example.com")
+
+      assert result_conn.halted
+      assert result_conn.status == 503
+      assert result_conn.resp_body =~ "This site is not available"
+    end
+
+    test "sign out a session the site refuses", %{site: site} do
+      EventCannotRun.stub!("web:request:session_refused")
+
+      result_conn =
+        :get
+        |> conn_with_host("/", site.host)
+        |> init_test_session(%{"user_token" => "t"})
+        |> assign(:current_site, site)
+        |> assign(:current_user, %{id: "no-site-id"})
+        |> SiteLookupPlug.confirm_tenant([])
+
+      assert result_conn.assigns.current_user == nil
+      assert get_session(result_conn, "user_token") == nil
+      assert tenant(result_conn) == site.id
     end
   end
 

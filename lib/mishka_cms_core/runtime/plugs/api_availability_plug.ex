@@ -69,6 +69,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug do
 
   import Plug.Conn
 
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCore.Settings
 
@@ -118,9 +119,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug do
 
   defp refuse(conn, state, site, api) do
     conn =
-      MishkaInstaller.Event.Hook.call("api:request:site_unavailable", conn,
-        meta: %{state: state, site: site}
-      )
+      PluginEvent.call("api:request:site_unavailable", conn, meta: %{state: state, site: site})
 
     if conn.halted, do: conn, else: conn |> send_refusal(state, site, api) |> halt()
   end

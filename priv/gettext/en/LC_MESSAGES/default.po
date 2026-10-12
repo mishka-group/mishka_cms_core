@@ -1505,7 +1505,7 @@ msgstr ""
 msgid "API Only"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:393
+#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:394
 #, elixir-autogen, elixir-format
 msgid "API access is not allowed for this site"
 msgstr ""
@@ -1515,7 +1515,7 @@ msgstr ""
 msgid "ARCHIVE"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:381
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:378
 #, elixir-autogen, elixir-format
 msgid "Access Not Allowed"
 msgstr ""
@@ -1940,7 +1940,7 @@ msgid "Are you sure you want to restore this version? Current data will be repla
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:99
-#: lib/mishka_cms_core/runtime/seo.ex:577
+#: lib/mishka_cms_core/runtime/seo.ex:578
 #: lib/mishka_cms_core_web/templates/seo_form.ex:1178
 #, elixir-autogen, elixir-format
 msgid "Article"
@@ -3393,8 +3393,8 @@ msgstr ""
 msgid "Describe a change — e.g. “add a testimonials section under the hero”"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:305
-#: lib/mishka_cms_core/runtime/seo.ex:559
+#: lib/mishka_cms_core/runtime/seo.ex:306
+#: lib/mishka_cms_core/runtime/seo.ex:560
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:92
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:552
 #: lib/mishka_cms_core_web/templates/seo_form.ex:382
@@ -3492,7 +3492,7 @@ msgstr ""
 msgid "Does not send"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:383
+#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:384
 #, elixir-autogen, elixir-format
 msgid "Domain not found"
 msgstr ""
@@ -4070,7 +4070,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/dashboard/widgets/cms_status.ex:206
 #: lib/mishka_cms_core/dashboard/widgets/runtime_health.ex:63
-#: lib/mishka_cms_core/mail.ex:309
+#: lib/mishka_cms_core/mail.ex:310
 #: lib/mishka_cms_core_web/live/admin/components/runtime_status_timeline.ex:294
 #: lib/mishka_cms_core_web/live/admin/components/site_details_modal.ex:240
 #, elixir-autogen, elixir-format
@@ -4216,7 +4216,7 @@ msgid "Footer"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/error_status.ex:32
-#: lib/mishka_cms_core/runtime/plugs/require_permission.ex:90
+#: lib/mishka_cms_core/runtime/plugs/require_permission.ex:89
 #, elixir-autogen, elixir-format
 msgid "Forbidden"
 msgstr ""
@@ -4657,7 +4657,7 @@ msgstr ""
 msgid "Hook removed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:378
+#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:379
 #, elixir-autogen, elixir-format
 msgid "Host header is required"
 msgstr ""
@@ -4739,7 +4739,7 @@ msgid "If the connection drops for a moment, what they typed is put back."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:275
-#: lib/mishka_cms_core/runtime/seo.ex:560
+#: lib/mishka_cms_core/runtime/seo.ex:561
 #, elixir-autogen, elixir-format
 msgid "Image"
 msgstr ""
@@ -5953,8 +5953,8 @@ msgstr ""
 msgid "Moved its fields to %{form}. The empty form was removed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:557
 #: lib/mishka_cms_core/runtime/seo.ex:558
+#: lib/mishka_cms_core/runtime/seo.ex:559
 #: lib/mishka_cms_core_web/live/admin/components/permission_details_modal.ex:83
 #, elixir-autogen, elixir-format
 msgid "Name"
@@ -6241,7 +6241,7 @@ msgstr ""
 msgid "No reusable classes yet. Name one above, and it can go on as many elements as you like."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:497
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:494
 #, elixir-autogen, elixir-format
 msgid "No server available for this domain."
 msgstr ""
@@ -7184,12 +7184,12 @@ msgstr ""
 msgid "Placing %{label} — click the canvas or a layer"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:558
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:555
 #, elixir-autogen, elixir-format
 msgid "Please check back later."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:498
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:495
 #, elixir-autogen, elixir-format
 msgid "Please check the domain name and try again."
 msgstr ""
@@ -7373,8 +7373,8 @@ msgstr ""
 msgid "Publish — this will make the page visible to visitors"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:453
-#: lib/mishka_cms_core/runtime/seo.ex:561
+#: lib/mishka_cms_core/runtime/seo.ex:454
+#: lib/mishka_cms_core/runtime/seo.ex:562
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14733
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14784
 #, elixir-autogen, elixir-format
@@ -8341,8 +8341,8 @@ msgid "Server errors"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/error_status.ex:61
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:460
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:496
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:457
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:493
 #, elixir-autogen, elixir-format
 msgid "Service Unavailable"
 msgstr ""
@@ -8713,7 +8713,7 @@ msgstr ""
 msgid "Site Details"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:528
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:525
 #, elixir-autogen, elixir-format
 msgid "Site Not Available"
 msgstr ""
@@ -8753,7 +8753,7 @@ msgstr ""
 msgid "Site not found."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:156
+#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:155
 #, elixir-autogen, elixir-format
 msgid "Site offline"
 msgstr ""
@@ -10127,12 +10127,12 @@ msgstr ""
 msgid "This site is API-only, so it answers 403 for every one of these pages until its mode changes. They are kept up to date all the same."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:418
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:415
 #, elixir-autogen, elixir-format
 msgid "This site is configured for API access only."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:557
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:554
 #, elixir-autogen, elixir-format
 msgid "This site is not available"
 msgstr ""
@@ -10162,8 +10162,8 @@ msgstr ""
 msgid "This submit button is not inside a form"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:162
-#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:573
+#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:161
+#: lib/mishka_cms_core/runtime/plugs/api_tenant_lookup_plug.ex:567
 #, elixir-autogen, elixir-format
 msgid "This website is currently unavailable"
 msgstr ""
@@ -10221,7 +10221,7 @@ msgid "Times used across this site"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/tree/styles.ex:345
-#: lib/mishka_cms_core/runtime/seo.ex:293
+#: lib/mishka_cms_core/runtime/seo.ex:294
 #: lib/mishka_cms_core_web/templates/seo_form.ex:375
 #: lib/mishka_cms_core_web/templates/seo_form.ex:585
 #, elixir-autogen, elixir-format
@@ -10875,23 +10875,23 @@ msgstr ""
 msgid "Warning"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:152
+#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:151
 #: lib/mishka_cms_core/settings.ex:740
 #, elixir-autogen, elixir-format
 msgid "We are currently undergoing maintenance. Please check back soon."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:417
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:414
 #, elixir-autogen, elixir-format
 msgid "Web Access Not Allowed"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:419
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:416
 #, elixir-autogen, elixir-format
 msgid "Web interface access is not permitted."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:161
+#: lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:160
 #, elixir-autogen, elixir-format
 msgid "Website unavailable"
 msgstr ""
@@ -11282,13 +11282,13 @@ msgid "You do not have permission to open this builder."
 msgstr ""
 
 #: lib/mishka_cms_core/live_user_auth.ex:82
-#: lib/mishka_cms_core/runtime/plugs/require_permission.ex:101
+#: lib/mishka_cms_core/runtime/plugs/require_permission.ex:100
 #: lib/mishka_cms_core/sidebar.ex:851
 #, elixir-autogen, elixir-format
 msgid "You don't have permission to access this page"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/require_permission.ex:91
+#: lib/mishka_cms_core/runtime/plugs/require_permission.ex:90
 #, elixir-autogen, elixir-format
 msgid "You don't have permission to access this resource"
 msgstr ""
@@ -12422,7 +12422,7 @@ msgstr ""
 msgid "✕ whole document"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:482
+#: lib/mishka_cms_core/runtime/seo.ex:483
 #, elixir-autogen, elixir-format
 msgid "A word an article is about, one tag each."
 msgstr ""
@@ -12432,316 +12432,316 @@ msgstr ""
 msgid "Add an og:image tag so link previews show a picture."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:469
+#: lib/mishka_cms_core/runtime/seo.ex:470
 #, elixir-autogen, elixir-format
 msgid "Article author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:477
+#: lib/mishka_cms_core/runtime/seo.ex:478
 #, elixir-autogen, elixir-format
 msgid "Article section"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:481
+#: lib/mishka_cms_core/runtime/seo.ex:482
 #, elixir-autogen, elixir-format
 msgid "Article tag"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:406
-#: lib/mishka_cms_core/runtime/seo.ex:562
+#: lib/mishka_cms_core/runtime/seo.ex:407
+#: lib/mishka_cms_core/runtime/seo.ex:563
 #, elixir-autogen, elixir-format
 msgid "Author"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:418
+#: lib/mishka_cms_core/runtime/seo.ex:419
 #, elixir-autogen, elixir-format
 msgid "Author's X account"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:300
+#: lib/mishka_cms_core/runtime/seo.ex:301
 #: lib/mishka_cms_core_web/templates/seo_form.ex:1097
 #, elixir-autogen, elixir-format
 msgid "Canonical address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:351
+#: lib/mishka_cms_core/runtime/seo.ex:352
 #, elixir-autogen, elixir-format
 msgid "Each other language the page is published in, one tag each."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:364
+#: lib/mishka_cms_core/runtime/seo.ex:365
 #, elixir-autogen, elixir-format
 msgid "How X (Twitter) draws a link preview: with a small or a large picture."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:435
+#: lib/mishka_cms_core/runtime/seo.ex:436
 #, elixir-autogen, elixir-format
 msgid "Image height"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:359
+#: lib/mishka_cms_core/runtime/seo.ex:360
 #, elixir-autogen, elixir-format
 msgid "Image text"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:426
+#: lib/mishka_cms_core/runtime/seo.ex:427
 #, elixir-autogen, elixir-format
 msgid "Image width"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:427
-#: lib/mishka_cms_core/runtime/seo.ex:436
+#: lib/mishka_cms_core/runtime/seo.ex:428
+#: lib/mishka_cms_core/runtime/seo.ex:437
 #, elixir-autogen, elixir-format
 msgid "In pixels, so a preview can be drawn before the picture loads."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:399
+#: lib/mishka_cms_core/runtime/seo.ex:400
 #, elixir-autogen, elixir-format
 msgid "Language version"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:343
+#: lib/mishka_cms_core/runtime/seo.ex:344
 #, elixir-autogen, elixir-format
 msgid "Locale"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:461
+#: lib/mishka_cms_core/runtime/seo.ex:462
 #, elixir-autogen, elixir-format
 msgid "Modified"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:335
+#: lib/mishka_cms_core/runtime/seo.ex:336
 #, elixir-autogen, elixir-format
 msgid "Open Graph address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:331
+#: lib/mishka_cms_core/runtime/seo.ex:332
 #, elixir-autogen, elixir-format
 msgid "Open Graph description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:354
+#: lib/mishka_cms_core/runtime/seo.ex:355
 #, elixir-autogen, elixir-format
 msgid "Open Graph image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:323
+#: lib/mishka_cms_core/runtime/seo.ex:324
 #, elixir-autogen, elixir-format
 msgid "Open Graph title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:318
+#: lib/mishka_cms_core/runtime/seo.ex:319
 #, elixir-autogen, elixir-format
 msgid "Open Graph type"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:350
+#: lib/mishka_cms_core/runtime/seo.ex:351
 #, elixir-autogen, elixir-format
 msgid "Other locales"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:511
+#: lib/mishka_cms_core/runtime/seo.ex:512
 #, elixir-autogen, elixir-format
 msgid "Page address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:506
+#: lib/mishka_cms_core/runtime/seo.ex:507
 #, elixir-autogen, elixir-format
 msgid "Page description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:521
+#: lib/mishka_cms_core/runtime/seo.ex:522
 #, elixir-autogen, elixir-format
 msgid "Page image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:516
+#: lib/mishka_cms_core/runtime/seo.ex:517
 #, elixir-autogen, elixir-format
 msgid "Page language"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:501
+#: lib/mishka_cms_core/runtime/seo.ex:502
 #, elixir-autogen, elixir-format
 msgid "Page title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:309
+#: lib/mishka_cms_core/runtime/seo.ex:310
 #, elixir-autogen, elixir-format
 msgid "Robots"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:532
+#: lib/mishka_cms_core/runtime/seo.ex:533
 #, elixir-autogen, elixir-format
 msgid "Site address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:339
-#: lib/mishka_cms_core/runtime/seo.ex:527
+#: lib/mishka_cms_core/runtime/seo.ex:340
+#: lib/mishka_cms_core/runtime/seo.ex:528
 #, elixir-autogen, elixir-format
 msgid "Site name"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:410
+#: lib/mishka_cms_core/runtime/seo.ex:411
 #, elixir-autogen, elixir-format
 msgid "Site's X account"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:336
+#: lib/mishka_cms_core/runtime/seo.ex:337
 #, elixir-autogen, elixir-format
 msgid "The address a link preview opens. Absolute, https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:470
+#: lib/mishka_cms_core/runtime/seo.ex:471
 #, elixir-autogen, elixir-format
 msgid "The address of the author's profile."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:419
+#: lib/mishka_cms_core/runtime/seo.ex:420
 #, elixir-autogen, elixir-format
 msgid "The author's @username on X (Twitter)."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:512
+#: lib/mishka_cms_core/runtime/seo.ex:513
 #, elixir-autogen, elixir-format
 msgid "The canonical address of this page, with https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:517
+#: lib/mishka_cms_core/runtime/seo.ex:518
 #, elixir-autogen, elixir-format
 msgid "The language code of this address, such as en."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:302
+#: lib/mishka_cms_core/runtime/seo.ex:303
 #, elixir-autogen, elixir-format
 msgid "The one address search engines should index this page under. Absolute, https."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:507
+#: lib/mishka_cms_core/runtime/seo.ex:508
 #, elixir-autogen, elixir-format
 msgid "The page's description. Empty leaves out whatever uses it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:344
+#: lib/mishka_cms_core/runtime/seo.ex:345
 #, elixir-autogen, elixir-format
 msgid "The page's language, as en or pt_BR."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:356
+#: lib/mishka_cms_core/runtime/seo.ex:357
 #, elixir-autogen, elixir-format
 msgid "The picture a link preview shows. An https address or a path on the site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:523
+#: lib/mishka_cms_core/runtime/seo.ex:524
 #, elixir-autogen, elixir-format
 msgid "The picture a plugin set for this address. Empty leaves out whatever uses it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:381
+#: lib/mishka_cms_core/runtime/seo.ex:382
 #, elixir-autogen, elixir-format
 msgid "The picture an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:478
+#: lib/mishka_cms_core/runtime/seo.ex:479
 #, elixir-autogen, elixir-format
 msgid "The section an article belongs to, such as Technology."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:340
+#: lib/mishka_cms_core/runtime/seo.ex:341
 #, elixir-autogen, elixir-format
 msgid "The site a link preview names. The site title setting, unless set here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:411
+#: lib/mishka_cms_core/runtime/seo.ex:412
 #, elixir-autogen, elixir-format
 msgid "The site's @username on X (Twitter)."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:533
+#: lib/mishka_cms_core/runtime/seo.ex:534
 #, elixir-autogen, elixir-format
 msgid "The site's https address, with no path."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:306
+#: lib/mishka_cms_core/runtime/seo.ex:307
 #, elixir-autogen, elixir-format
 msgid "The summary a search result shows under the title."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:332
+#: lib/mishka_cms_core/runtime/seo.ex:333
 #, elixir-autogen, elixir-format
 msgid "The text a link preview shows under its title."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:377
+#: lib/mishka_cms_core/runtime/seo.ex:378
 #, elixir-autogen, elixir-format
 msgid "The text an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:324
+#: lib/mishka_cms_core/runtime/seo.ex:325
 #, elixir-autogen, elixir-format
 msgid "The title a link preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:369
+#: lib/mishka_cms_core/runtime/seo.ex:370
 #, elixir-autogen, elixir-format
 msgid "The title an X (Twitter) preview shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:502
+#: lib/mishka_cms_core/runtime/seo.ex:503
 #, elixir-autogen, elixir-format
 msgid "The title this address shows."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:401
+#: lib/mishka_cms_core/runtime/seo.ex:402
 #, elixir-autogen, elixir-format
 msgid "This page in another language, with its language code in hreflang, or x-default for the one to show when none matches."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:363
+#: lib/mishka_cms_core/runtime/seo.ex:364
 #, elixir-autogen, elixir-format
 msgid "Twitter card"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:376
+#: lib/mishka_cms_core/runtime/seo.ex:377
 #, elixir-autogen, elixir-format
 msgid "Twitter description"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:380
+#: lib/mishka_cms_core/runtime/seo.ex:381
 #, elixir-autogen, elixir-format
 msgid "Twitter image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:368
+#: lib/mishka_cms_core/runtime/seo.ex:369
 #, elixir-autogen, elixir-format
 msgid "Twitter title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:319
+#: lib/mishka_cms_core/runtime/seo.ex:320
 #, elixir-autogen, elixir-format
 msgid "What the page is to a link preview: a website, an article, a profile…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:360
+#: lib/mishka_cms_core/runtime/seo.ex:361
 #, elixir-autogen, elixir-format
 msgid "What the preview picture shows, for people who cannot see it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:462
+#: lib/mishka_cms_core/runtime/seo.ex:463
 #, elixir-autogen, elixir-format
 msgid "When an article last changed, as an ISO 8601 date."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:454
+#: lib/mishka_cms_core/runtime/seo.ex:455
 #, elixir-autogen, elixir-format
 msgid "When an article was first published, as an ISO 8601 date."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:311
+#: lib/mishka_cms_core/runtime/seo.ex:312
 #, elixir-autogen, elixir-format
 msgid "Whether search engines may index this page and follow its links. A page that needs a permission is never indexed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:407
+#: lib/mishka_cms_core/runtime/seo.ex:408
 #, elixir-autogen, elixir-format
 msgid "Who wrote the page."
 msgstr ""
@@ -12761,9 +12761,9 @@ msgstr ""
 msgid "Add a tag…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:663
-#: lib/mishka_cms_core/runtime/seo.ex:672
-#: lib/mishka_cms_core/runtime/seo.ex:683
+#: lib/mishka_cms_core/runtime/seo.ex:664
+#: lib/mishka_cms_core/runtime/seo.ex:673
+#: lib/mishka_cms_core/runtime/seo.ex:684
 #, elixir-autogen, elixir-format
 msgid "Address"
 msgstr ""
@@ -12789,22 +12789,22 @@ msgstr ""
 msgid "Best between %{min} and %{max} characters"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:582
+#: lib/mishka_cms_core/runtime/seo.ex:583
 #, elixir-autogen, elixir-format
 msgid "Blog post"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:590
+#: lib/mishka_cms_core/runtime/seo.ex:591
 #, elixir-autogen, elixir-format
 msgid "Brand"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:676
+#: lib/mishka_cms_core/runtime/seo.ex:677
 #, elixir-autogen, elixir-format
 msgid "City"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:571
+#: lib/mishka_cms_core/runtime/seo.ex:572
 #, elixir-autogen, elixir-format
 msgid "Currency"
 msgstr ""
@@ -12829,12 +12829,12 @@ msgstr ""
 msgid "Empty: search engines pick a passage from the page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:650
+#: lib/mishka_cms_core/runtime/seo.ex:651
 #, elixir-autogen, elixir-format
 msgid "Event"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:556
+#: lib/mishka_cms_core/runtime/seo.ex:557
 #, elixir-autogen, elixir-format
 msgid "Headline"
 msgstr ""
@@ -12849,17 +12849,17 @@ msgstr ""
 msgid "Hide from search engines"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:685
+#: lib/mishka_cms_core/runtime/seo.ex:686
 #, elixir-autogen, elixir-format
 msgid "Job title"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:669
+#: lib/mishka_cms_core/runtime/seo.ex:670
 #, elixir-autogen, elixir-format
 msgid "Local business"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:664
+#: lib/mishka_cms_core/runtime/seo.ex:665
 #, elixir-autogen, elixir-format
 msgid "Logo"
 msgstr ""
@@ -12884,27 +12884,27 @@ msgstr ""
 msgid "Open Graph"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:661
+#: lib/mishka_cms_core/runtime/seo.ex:662
 #, elixir-autogen, elixir-format
 msgid "Organization"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:681
+#: lib/mishka_cms_core/runtime/seo.ex:682
 #, elixir-autogen, elixir-format
 msgid "Person"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:656
+#: lib/mishka_cms_core/runtime/seo.ex:657
 #, elixir-autogen, elixir-format
 msgid "Place"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:570
+#: lib/mishka_cms_core/runtime/seo.ex:571
 #, elixir-autogen, elixir-format
 msgid "Price"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:589
+#: lib/mishka_cms_core/runtime/seo.ex:590
 #, elixir-autogen, elixir-format
 msgid "Product"
 msgstr ""
@@ -12914,7 +12914,7 @@ msgstr ""
 msgid "Question"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:586
+#: lib/mishka_cms_core/runtime/seo.ex:587
 #, elixir-autogen, elixir-format
 msgid "Questions and answers"
 msgstr ""
@@ -12926,12 +12926,12 @@ msgstr ""
 msgid "Share image"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:655
+#: lib/mishka_cms_core/runtime/seo.ex:656
 #, elixir-autogen, elixir-format
 msgid "Starts"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:675
+#: lib/mishka_cms_core/runtime/seo.ex:676
 #, elixir-autogen, elixir-format
 msgid "Street"
 msgstr ""
@@ -12946,7 +12946,7 @@ msgstr ""
 msgid "Tags"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:674
+#: lib/mishka_cms_core/runtime/seo.ex:675
 #, elixir-autogen, elixir-format
 msgid "Telephone"
 msgstr ""
@@ -13048,7 +13048,7 @@ msgstr ""
 msgid "The browser tab and the headline of a search result. Empty uses the one shown."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:295
+#: lib/mishka_cms_core/runtime/seo.ex:296
 #, elixir-autogen, elixir-format
 msgid "The browser tab and the headline of a search result. Empty uses the record's title, else the page's."
 msgstr ""
@@ -13063,7 +13063,7 @@ msgstr ""
 msgid "%{count} reviews"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:1499
+#: lib/mishka_cms_core/runtime/seo.ex:1510
 #, elixir-autogen, elixir-format
 msgid "%{title} – Page %{number}"
 msgstr ""
@@ -13080,17 +13080,17 @@ msgstr[1] ""
 msgid "A list of objects, each with an \"@type\". Values may use the variables above."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:626
+#: lib/mishka_cms_core/runtime/seo.ex:627
 #, elixir-autogen, elixir-format
 msgid "Application"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:619
+#: lib/mishka_cms_core/runtime/seo.ex:620
 #, elixir-autogen, elixir-format
 msgid "Book"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:630
+#: lib/mishka_cms_core/runtime/seo.ex:631
 #, elixir-autogen, elixir-format
 msgid "Category"
 msgstr ""
@@ -13106,7 +13106,7 @@ msgstr ""
 msgid "Click the box to choose a picture from Media."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:611
+#: lib/mishka_cms_core/runtime/seo.ex:612
 #, elixir-autogen, elixir-format
 msgid "Course"
 msgstr ""
@@ -13126,7 +13126,7 @@ msgstr ""
 msgid "Hide the address"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:620
+#: lib/mishka_cms_core/runtime/seo.ex:621
 #, elixir-autogen, elixir-format
 msgid "ISBN"
 msgstr ""
@@ -13136,12 +13136,12 @@ msgstr ""
 msgid "JSON-LD"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:645
+#: lib/mishka_cms_core/runtime/seo.ex:646
 #, elixir-autogen, elixir-format
 msgid "Length (PT2M30S)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:566
+#: lib/mishka_cms_core/runtime/seo.ex:567
 #, elixir-autogen, elixir-format
 msgid "Number of ratings"
 msgstr ""
@@ -13156,7 +13156,7 @@ msgstr ""
 msgid "Preview with"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:565
+#: lib/mishka_cms_core/runtime/seo.ex:566
 #, elixir-autogen, elixir-format
 msgid "Rating (out of 5)"
 msgstr ""
@@ -13166,12 +13166,12 @@ msgstr ""
 msgid "Rating: %{value}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:597
+#: lib/mishka_cms_core/runtime/seo.ex:598
 #, elixir-autogen, elixir-format
 msgid "Recipe"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:631
+#: lib/mishka_cms_core/runtime/seo.ex:632
 #, elixir-autogen, elixir-format
 msgid "Runs on"
 msgstr ""
@@ -13181,12 +13181,12 @@ msgstr ""
 msgid "Search results may show its rating as stars. A rating can name a variable, such as {{post.rating}}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:604
+#: lib/mishka_cms_core/runtime/seo.ex:605
 #, elixir-autogen, elixir-format
 msgid "Serves"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:612
+#: lib/mishka_cms_core/runtime/seo.ex:613
 #, elixir-autogen, elixir-format
 msgid "Taught by"
 msgstr ""
@@ -13201,17 +13201,17 @@ msgstr ""
 msgid "The picture a link share shows. Click it to choose another."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:642
+#: lib/mishka_cms_core/runtime/seo.ex:643
 #, elixir-autogen, elixir-format
 msgid "Thumbnail"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:603
+#: lib/mishka_cms_core/runtime/seo.ex:604
 #, elixir-autogen, elixir-format
 msgid "Total time (PT45M)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:643
+#: lib/mishka_cms_core/runtime/seo.ex:644
 #, elixir-autogen, elixir-format
 msgid "Uploaded"
 msgstr ""
@@ -13221,12 +13221,12 @@ msgstr ""
 msgid "Use an address or a variable"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:638
+#: lib/mishka_cms_core/runtime/seo.ex:639
 #, elixir-autogen, elixir-format
 msgid "Video"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:644
+#: lib/mishka_cms_core/runtime/seo.ex:645
 #, elixir-autogen, elixir-format
 msgid "Video address"
 msgstr ""
@@ -13323,12 +13323,12 @@ msgstr ""
 msgid "Hidden from visitors. Click to show it again."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:326
+#: lib/mishka_cms_core/mail.ex:330
 #, elixir-autogen, elixir-format
 msgid "A plugin stopped this email."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:298
+#: lib/mishka_cms_core/mail.ex:299
 #, elixir-autogen, elixir-format
 msgid "Account confirmation"
 msgstr ""
@@ -13338,7 +13338,7 @@ msgstr ""
 msgid "Create one in Resend with sending access only, limited to this site's domain. It starts with re_. Stored sealed and never shown again."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:212
+#: lib/mishka_cms_core/mail.ex:213
 #, elixir-autogen, elixir-format
 msgid "Delivery"
 msgstr ""
@@ -13348,7 +13348,7 @@ msgstr ""
 msgid "Email history"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:215
+#: lib/mishka_cms_core/mail.ex:216
 #, elixir-autogen, elixir-format
 msgid "Email provider"
 msgstr ""
@@ -13358,22 +13358,22 @@ msgstr ""
 msgid "Keep the email history for (days)"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:327
+#: lib/mishka_cms_core/mail.ex:331
 #, elixir-autogen, elixir-format
 msgid "No \"from\" address is set."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:317
+#: lib/mishka_cms_core/mail.ex:318
 #, elixir-autogen, elixir-format
 msgid "No email provider is set for this site."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:308
+#: lib/mishka_cms_core/mail.ex:309
 #, elixir-autogen, elixir-format
 msgid "No provider"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:221
+#: lib/mishka_cms_core/mail.ex:222
 #, elixir-autogen, elixir-format
 msgid "None — no email is sent"
 msgstr ""
@@ -13388,7 +13388,7 @@ msgstr ""
 msgid "Not set"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:296
+#: lib/mishka_cms_core/mail.ex:297
 #, elixir-autogen, elixir-format
 msgid "Password reset"
 msgstr ""
@@ -13435,7 +13435,7 @@ msgstr ""
 msgid "Sender name"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:307
+#: lib/mishka_cms_core/mail.ex:308
 #, elixir-autogen, elixir-format
 msgid "Sending"
 msgstr ""
@@ -13445,7 +13445,7 @@ msgstr ""
 msgid "Sending…"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:306
+#: lib/mishka_cms_core/mail.ex:307
 #, elixir-autogen, elixir-format
 msgid "Sent"
 msgstr ""
@@ -13455,17 +13455,17 @@ msgstr ""
 msgid "Sent now through this scope's saved provider and sender — save your changes first. The answer appears here and in the history below."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:297
+#: lib/mishka_cms_core/mail.ex:298
 #, elixir-autogen, elixir-format
 msgid "Sign-in link"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:299
+#: lib/mishka_cms_core/mail.ex:300
 #, elixir-autogen, elixir-format
 msgid "Test email"
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:449
+#: lib/mishka_cms_core/mail.ex:453
 #, elixir-autogen, elixir-format
 msgid "Test email from %{site}"
 msgstr ""
@@ -13475,17 +13475,17 @@ msgstr ""
 msgid "Test email sent to %{to}."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:325
+#: lib/mishka_cms_core/mail.ex:329
 #, elixir-autogen, elixir-format
 msgid "That is not an email address."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:320
+#: lib/mishka_cms_core/mail.ex:321
 #, elixir-autogen, elixir-format
 msgid "The chosen email provider is not installed or was stopped."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:323
+#: lib/mishka_cms_core/mail.ex:324
 #, elixir-autogen, elixir-format
 msgid "The email provider is missing its key or settings."
 msgstr ""
@@ -13505,13 +13505,13 @@ msgstr ""
 msgid "The name shown beside the address. Empty means the site's title."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:452
-#: lib/mishka_cms_core/mail.ex:457
+#: lib/mishka_cms_core/mail.ex:456
+#: lib/mishka_cms_core/mail.ex:461
 #, elixir-autogen, elixir-format
 msgid "This is a test email from %{site}. If you can read it, email is set up and working."
 msgstr ""
 
-#: lib/mishka_cms_core/mail.ex:217
+#: lib/mishka_cms_core/mail.ex:218
 #, elixir-autogen, elixir-format
 msgid "What this site sends its email through. A site sends with its own provider and key only, never with another site's."
 msgstr ""
@@ -13521,129 +13521,129 @@ msgstr ""
 msgid "Where a reply goes when it should not go to the from address. Optional."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:348
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:351
 #, elixir-autogen, elixir-format
 msgid "Accounts that still get in"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:316
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:319
 #, elixir-autogen, elixir-format
 msgid "Close password reset"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:317
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:320
 #, elixir-autogen, elixir-format
 msgid "Close password reset on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:310
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:313
 #, elixir-autogen, elixir-format
 msgid "Close registration"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:311
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:314
 #, elixir-autogen, elixir-format
 msgid "Close registration on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:289
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:292
 #, elixir-autogen, elixir-format
 msgid "Close sign-in"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:324
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:327
 #, elixir-autogen, elixir-format
 msgid "Close sign-in links"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:325
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:328
 #, elixir-autogen, elixir-format
 msgid "Close sign-in links on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:290
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:293
 #, elixir-autogen, elixir-format
 msgid "Close sign-in on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:298
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:362
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:301
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:365
 #, elixir-autogen, elixir-format
 msgid "Closed"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:312
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:315
 #, elixir-autogen, elixir-format
 msgid "No new accounts, except for an address on the allowed list below."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:273
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:276
 #, elixir-autogen, elixir-format
 msgid "Password reset is closed"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:336
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:339
 #, elixir-autogen, elixir-format
 msgid "Permissions that still get in"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:267
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:270
 #, elixir-autogen, elixir-format
 msgid "Registration is closed"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:318
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:321
 #, elixir-autogen, elixir-format
 msgid "Reset emails go only to the people allowed below, and a reset link already sent stops working for everyone else."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:274
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:277
 #, elixir-autogen, elixir-format
 msgid "Resetting a password is switched off on this site for now."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:261
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:264
 #, elixir-autogen, elixir-format
 msgid "Sign-in is closed"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:326
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:329
 #, elixir-autogen, elixir-format
 msgid "Sign-in link emails go only to the people allowed below, and a link already sent stops working for everyone else."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:279
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:282
 #, elixir-autogen, elixir-format
 msgid "Sign-in links are closed"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:280
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:283
 #, elixir-autogen, elixir-format
 msgid "Signing in by email link is switched off on this site for now."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:262
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:265
 #, elixir-autogen, elixir-format
 msgid "Signing in is switched off on this site for now."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:334
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:346
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:337
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:349
 #, elixir-autogen, elixir-format
 msgid "Still allowed"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:350
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:353
 #, elixir-autogen, elixir-format
 msgid "These addresses pass whatever is closed above, separated by commas, and may register while registration is closed."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:268
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:271
 #, elixir-autogen, elixir-format
 msgid "This site is not taking new accounts for now."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:338
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:341
 #, elixir-autogen, elixir-format
 msgid "Whoever holds one of these passes whatever is closed above, separated by commas — *, admin:dashboard:*."
 msgstr ""
@@ -13658,22 +13658,22 @@ msgstr ""
 msgid "Sign-in limits, closing sign-in or registration, and who still gets in"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:291
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:294
 #, elixir-autogen, elixir-format
 msgid "Nobody signs in — by password, sign-in link or the API — but the people allowed below. Masters always can. Whoever is already signed in stays, unless the next switch is on."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:301
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:304
 #, elixir-autogen, elixir-format
 msgid "Sign out who is signed in"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:302
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:305
 #, elixir-autogen, elixir-format
 msgid "Sign out who is signed in on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_auth_gate.ex:304
+#: lib/mishka_cms_core/accounts/_auth_gate.ex:307
 #, elixir-autogen, elixir-format
 msgid "While sign-in is closed, whoever could not sign in now is signed out on every device, at their next page, click or API call. Masters and the people allowed below stay."
 msgstr ""
@@ -14161,28 +14161,28 @@ msgstr ""
 msgid "Two-step sign-in is turned off for this site: signing in asks for the password alone."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:194
+#: lib/mishka_cms_core/captcha.ex:201
 #, elixir-autogen, elixir-format
 msgid "%{provider} accepted the check — with its test keys, which pass everything. Use real keys on a live site."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:217
+#: lib/mishka_cms_core/captcha.ex:224
 #, elixir-autogen, elixir-format
 msgid "%{provider} could not check it: %{detail}. Check the secret key."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:209
+#: lib/mishka_cms_core/captcha.ex:216
 #, elixir-autogen, elixir-format
 msgid "%{provider} refused the check: %{detail}"
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:73
+#: lib/mishka_cms_core/captcha.ex:75
 #, elixir-autogen, elixir-format
 msgid "Asked on this site's sign-in, registration, forgot-password and sign-in-link pages, before the password is checked. The JSON API never asks. Each site uses its own keys, set below; while one is missing, nothing is asked."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:62
-#: lib/mishka_cms_core/captcha.ex:71
+#: lib/mishka_cms_core/captcha.ex:64
+#: lib/mishka_cms_core/captcha.ex:73
 #, elixir-autogen, elixir-format
 msgid "Captcha"
 msgstr ""
@@ -14204,7 +14204,7 @@ msgstr ""
 msgid "Draws this scope's saved captcha — save your changes first — and checks it with the saved keys. Try it on the site's own address: its keys work only there."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:227
+#: lib/mishka_cms_core/captcha.ex:234
 #, elixir-autogen, elixir-format
 msgid "Enter both keys and save, then test."
 msgstr ""
@@ -14250,22 +14250,22 @@ msgstr ""
 msgid "New accounts per IP address (per hour)"
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:222
+#: lib/mishka_cms_core/captcha.ex:229
 #, elixir-autogen, elixir-format
 msgid "No captcha is chosen for this scope: choose one and save."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:77
+#: lib/mishka_cms_core/captcha.ex:79
 #, elixir-autogen, elixir-format
 msgid "None — nothing is asked"
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:86
+#: lib/mishka_cms_core/captcha.ex:88
 #, elixir-autogen, elixir-format
 msgid "Refuse a check solved on another address"
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:204
+#: lib/mishka_cms_core/captcha.ex:211
 #, elixir-autogen, elixir-format
 msgid "Solve the check first, then press Test."
 msgstr ""
@@ -14275,12 +14275,12 @@ msgstr ""
 msgid "Test"
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:225
+#: lib/mishka_cms_core/captcha.ex:232
 #, elixir-autogen, elixir-format
 msgid "The captcha chosen for this scope is not installed any more."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:201
+#: lib/mishka_cms_core/captcha.ex:208
 #, elixir-autogen, elixir-format
 msgid "The keys work: %{provider} accepted the check."
 msgstr ""
@@ -14290,7 +14290,7 @@ msgstr ""
 msgid "The kind the key below was made for in Google's admin console: v2 shows the \"I'm not a robot\" box, v3 asks nothing and scores the visitor."
 msgstr ""
 
-#: lib/mishka_cms_core/captcha.ex:88
+#: lib/mishka_cms_core/captcha.ex:90
 #, elixir-autogen, elixir-format
 msgid "The provider says which address the check was solved on, and it must be this site's own. Turn it off only for a key several addresses share."
 msgstr ""
@@ -15100,7 +15100,7 @@ msgstr ""
 msgid "Uploads go to"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:393
+#: lib/mishka_cms_core/runtime/seo.ex:394
 #: lib/mishka_cms_core/settings.ex:673
 #, elixir-autogen, elixir-format
 msgid "Favicon"
@@ -15116,7 +15116,7 @@ msgstr ""
 msgid "Site logo"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:528
+#: lib/mishka_cms_core/runtime/seo.ex:529
 #, elixir-autogen, elixir-format
 msgid "The site title setting, in the page's language when Translations has it."
 msgstr ""
@@ -15126,27 +15126,27 @@ msgstr ""
 msgid "The small picture a browser tab and a search result show for the site's pages: a square PNG or SVG, from Media or an address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:444
+#: lib/mishka_cms_core/runtime/seo.ex:445
 #, elixir-autogen, elixir-format
 msgid "Image type"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:445
+#: lib/mishka_cms_core/runtime/seo.ex:446
 #, elixir-autogen, elixir-format
 msgid "The picture's format, such as image/jpeg. A share card says it itself."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:395
+#: lib/mishka_cms_core/runtime/seo.ex:396
 #, elixir-autogen, elixir-format
 msgid "The small picture a browser tab and a search result show for this page. The site's Favicon setting by default."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:388
+#: lib/mishka_cms_core/runtime/seo.ex:389
 #, elixir-autogen, elixir-format
 msgid "Twitter image text"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/seo.ex:390
+#: lib/mishka_cms_core/runtime/seo.ex:391
 #, elixir-autogen, elixir-format
 msgid "What the X (Twitter) preview picture shows, for people who cannot see it."
 msgstr ""
@@ -15189,4 +15189,19 @@ msgstr ""
 #: lib/mishka_cms_core_web/ui_adapters/admin.ex:356
 #, elixir-autogen, elixir-format
 msgid "Plain text"
+msgstr ""
+
+#: lib/mishka_cms_core/builder/events.ex:339
+#, elixir-autogen, elixir-format
+msgid "An extension that checks this change is not loaded, so it cannot be made now."
+msgstr ""
+
+#: lib/mishka_cms_core/captcha.ex:238
+#, elixir-autogen, elixir-format
+msgid "The captcha providers' plugins are not loaded, so every check is refused until they are."
+msgstr ""
+
+#: lib/mishka_cms_core/mail.ex:327
+#, elixir-autogen, elixir-format
+msgid "The email providers' plugins are not loaded, so nothing can be sent."
 msgstr ""

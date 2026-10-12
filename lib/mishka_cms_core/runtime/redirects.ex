@@ -30,6 +30,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Runtime.Redirect
   alias MishkaCmsCore.Runtime.States.{RedirectsState, SiteState}
 
@@ -319,7 +320,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
       |> put_status(status)
       |> put_resp_header("location", location)
       |> then(
-        &MishkaInstaller.Event.Hook.call("web:request:redirected", &1,
+        &PluginEvent.call("web:request:redirected", &1,
           meta: %{site: site, from: conn.request_path, to: location, status: status}
         )
       )

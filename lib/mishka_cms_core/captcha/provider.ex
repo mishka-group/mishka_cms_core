@@ -181,7 +181,7 @@ defmodule MishkaCmsCore.Captcha.Provider do
   def offered, do: ProviderRegistry.offered(@event, __MODULE__)
 
   @doc "The offered provider registered under `id`."
-  @spec fetch(String.t() | nil) :: {:ok, module()} | {:error, :unknown_provider}
+  @spec fetch(String.t() | nil) :: {:ok, module()} | {:error, :unknown_provider | :cannot_run}
   def fetch(id), do: ProviderRegistry.fetch(@event, __MODULE__, id)
 
   @doc """

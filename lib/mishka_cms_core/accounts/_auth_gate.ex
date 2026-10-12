@@ -47,7 +47,9 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
 
   `"auth:gate:check"` hears every decision before it is final: `%{action:, site_id:, user:, email:,
   allowed?:}`, and the `allowed?` it hands back is the answer — a captcha or an IP list can close a
-  way the settings left open, or open one they closed. `"auth:gate:refused"` hears each refusal
+  way the settings left open, or open one they closed. While its plugins cannot run
+  (`MishkaCmsCore.PluginEvent.cannot_run?/1`), every way in is closed: what they would close cannot
+  be told. `"auth:gate:refused"` hears each refusal
   (`return: false`), and `"auth:gate:signed_out"` each account `sign_out/2` signs out, with
   `%{site_id:, user_id:, email:}` (`return: false`).
   """
@@ -56,6 +58,7 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
 
   alias MishkaCmsCore.Accounts.AuthGate.Closed
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.PluginEvent
   alias MishkaCmsCore.Accounts.{LiveSockets, User}
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
@@ -91,7 +94,7 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
            allowed?: decided
          }) do
       %{allowed?: allowed?} when is_boolean(allowed?) -> allowed?
-      _unanswered -> decided
+      answer -> decided and not PluginEvent.cannot_run?(answer)
     end
   end
 

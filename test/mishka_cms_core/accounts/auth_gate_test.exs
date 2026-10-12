@@ -194,6 +194,15 @@ defmodule MishkaCmsCore.Accounts.AuthGateTest do
 
       assert closed?(sign_in(site.id, email), :sign_in)
     end
+
+    test "while the plugins on auth:gate:check cannot run, every way in is closed", %{site: site} do
+      email = email!()
+      create_user!(site_id: site.id, email: email)
+      MishkaCmsCore.Test.EventCannotRun.stub!("auth:gate:check")
+
+      assert closed?(sign_in(site.id, email), :sign_in)
+      refute AuthGate.allowed?(:register, site.id, %{email: email!()})
+    end
   end
 
   describe "who is already signed in" do

@@ -3,6 +3,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
   import MishkaCmsCore.Test.Factory
   import MishkaCmsCoreWeb.Test.AuthTestHelpers
   require Ash.Query
+  alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
   @moduletag :capture_log
 
@@ -5162,6 +5163,20 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       end
 
       assert is_binary(sign_in_master(master))
+    end
+  end
+
+  describe "a sign-in refused for its rate while auth:request:rate_limited cannot run" do
+    test "is still answered with a 429 that says when to try again", %{site: site} do
+      EventCannotRun.stub!("auth:request:rate_limited")
+      lift_sign_in_limit!(per_account: 1)
+      email = "limited-#{System.unique_integer([:positive])}@example.com"
+
+      [_first, second] =
+        for _try <- 1..2, do: sign_in(site.host, email, "WrongPassword123!", [])
+
+      assert second.status == 429
+      assert [_seconds] = Plug.Conn.get_resp_header(second, "retry-after")
     end
   end
 

@@ -4,7 +4,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
   import Plug.Conn
   import ExUnit.CaptureLog
 
-  alias MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug
+  alias MishkaCmsCore.Runtime.Plugs.{ApiCorsPlug, ApiTenantLookupPlug}
+  alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
 
   # Test module to replace SiteState during tests
@@ -581,6 +582,82 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
              |> ApiTenantLookupPlug.confirm_bearer_tenant([])
              |> Map.fetch!(:assigns)
              |> Map.fetch!(:current_user) == site_user
+    end
+  end
+
+  # AN EVENT ONE OF WHOSE PLUGINS IS NOT LOADED answers with the conn it was handed, so the request
+  # is answered as it is with no plugin listening.
+  describe "the API's events while they cannot run" do
+    setup do
+      MishkaCmsCore.Runtime.States.SiteState.clear()
+      n = System.unique_integer([:positive])
+
+      master_site = cache_site!("api-master-#{n}.test", true)
+      other_site = cache_site!("api-other-#{n}.test", false)
+
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.clear() end)
+      {:ok, master_site: master_site, other_site: other_site}
+    end
+
+    test "a request resolves its site and carries its CORS headers", %{other_site: site} do
+      EventCannotRun.stub!([
+        "api:request:before_tenant_resolve",
+        "api:request:after_tenant_resolve",
+        "api:request:before_cors",
+        "api:request:cors_headers"
+      ])
+
+      origin = "https://#{site.host}"
+      conn = site.host |> api_request([{"origin", origin}]) |> ApiCorsPlug.call([])
+
+      refute conn.halted
+      assert conn.assigns.current_site.id == site.id
+      assert tenant(conn) == site.id
+      assert get_resp_header(conn, "access-control-allow-origin") == [origin]
+    end
+
+    test "another site still scopes a request that asks for no tenant", %{other_site: site} do
+      EventCannotRun.stub!("api:request:no_tenant_refused")
+
+      conn = api_request(site.host, [{"x-no-tenant", "true"}])
+
+      refute conn.halted
+      assert tenant(conn) == site.id
+    end
+
+    test "a site user on an unscoped request is still nobody", %{master_site: site} do
+      EventCannotRun.stub!("api:request:token_refused")
+
+      refused =
+        site.host
+        |> api_request([{"x-no-tenant", "true"}])
+        |> assign(:current_user, %{id: "u1", site_id: "a-site"})
+        |> ApiTenantLookupPlug.confirm_bearer_tenant([])
+
+      assert refused.assigns.current_user == nil
+      assert tenant(refused) == nil
+    end
+
+    test "an inactive site is still refused with its 503" do
+      EventCannotRun.stub!("api:request:site_unavailable")
+
+      host = "api-inactive-#{System.unique_integer([:positive])}.test"
+
+      :ok =
+        MishkaCmsCore.Runtime.States.SiteState.save(%{
+          id: Ecto.UUID.generate(),
+          name: host,
+          host: host,
+          priority: 0,
+          active: false,
+          mode: :hybrid
+        })
+
+      conn = api_request(host)
+
+      assert conn.halted
+      assert conn.status == 503
+      assert Jason.decode!(conn.resp_body)["error"]["code"] == "website_unavailable"
     end
   end
 
