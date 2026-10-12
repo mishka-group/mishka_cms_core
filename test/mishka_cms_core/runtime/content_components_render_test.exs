@@ -674,6 +674,75 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
     end
   end
 
+  # AN ICON CONTENT NAMES IS IN NO TEMPLATE EITHER — a marker's `icon="hero-inbox"` reaches its
+  # component as an expression — so the same event answers them, and the stylesheet carries them.
+  describe "TailwindCompiler.content_icons/1" do
+    setup do
+      original = Application.get_env(:mishka_cms_core, :icon_libraries)
+
+      on_exit(fn ->
+        case original do
+          nil -> Application.delete_env(:mishka_cms_core, :icon_libraries)
+          libraries -> Application.put_env(:mishka_cms_core, :icon_libraries, libraries)
+        end
+      end)
+
+      Application.put_env(:mishka_cms_core, :icon_libraries, [
+        MishkaCmsCore.Runtime.PageBuilder.Icons.Heroicons,
+        MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake
+      ])
+
+      :ok
+    end
+
+    test "is what the stored content of the site says it names, each once", %{site: site} do
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
+        "runtime:compile:content_components"
+      )
+
+      assert TailwindCompiler.content_icons(site.name) == ["hero-inbox-arrow-down", "fake-star"]
+    end
+
+    test "is nothing for a site that is not there, that nothing answers for, or while the event cannot run",
+         %{site: site} do
+      assert TailwindCompiler.content_icons(site.name) == []
+      assert TailwindCompiler.content_icons("no-such-site") == []
+
+      MishkaCmsCore.Test.EventCannotRun.stub!("runtime:compile:content_components")
+
+      assert TailwindCompiler.content_icons(site.name) == []
+      assert TailwindCompiler.content_components(site.name) == []
+    end
+
+    test "each has a rule in the site's stylesheet, whichever registered set ships it", %{
+      site: site
+    } do
+      on_exit(fn -> MishkaCmsCore.Runtime.States.AssetsState.delete("__shared_base__", "css") end)
+
+      assert {:ok, unnamed} = TailwindCompiler.compile(site.name)
+      refute site_part(unnamed, site) =~ ".hero-inbox-arrow-down{"
+      refute site_part(unnamed, site) =~ ".fake-star{"
+
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
+        "runtime:compile:content_components"
+      )
+
+      assert {:ok, named} = TailwindCompiler.compile(site.name)
+      css = site_part(named, site)
+
+      assert css =~ ".hero-inbox-arrow-down{"
+      assert css =~ "mask"
+      assert css =~ ".fake-star{"
+    end
+  end
+
+  defp site_part(css, site) do
+    [_shared, own] = String.split(css, "/* Site: #{site.name} */", parts: 2)
+    own
+  end
+
   describe "embeddable/2 — what the editor offers" do
     test "lists the site's active components and the global ones, with what a marker sets", %{
       site: site,

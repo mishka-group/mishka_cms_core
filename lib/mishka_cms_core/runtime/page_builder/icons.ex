@@ -43,8 +43,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Icons do
   means offering tens of thousands of utilities a chance to match.
 
   Shared by `MishkaCmsCore.Runtime.Compilers.TailwindCompiler`, which asks it of a site's templates
-  to decide what the bundle carries, and by `MishkaCmsCore.Runtime.RuntimePreview`, which asks it of
-  one rendered component so the preview can carry its icons without borrowing a bundle.
+  to decide what the bundle carries, by `MishkaCmsCore.Runtime.RuntimePreview`, which asks it of
+  one rendered component so the preview can carry its icons without borrowing a bundle, and by
+  `MishkaCmsCore.Runtime.ContentComponents.icons/1`, which asks it of stored content.
   """
   @spec classes_in(String.t()) :: [String.t()]
   def classes_in(source) when is_binary(source) do

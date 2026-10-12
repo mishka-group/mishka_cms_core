@@ -91,6 +91,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       assert only == ["fake-star"]
     end
 
+    # STORED CONTENT IS READ BY EVERY REGISTERED PREFIX, so a site's stylesheet carries the icons
+    # its posts name from whichever set they come from.
+    test "content names an icon of each set, and none a set does not ship" do
+      register([Heroicons, MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake])
+
+      html =
+        ~s([[slot item icon="fake-star"]]x[[/slot]]<span class="hero-bell fake-moon"></span>)
+
+      assert MishkaCmsCore.Runtime.ContentComponents.icons(html) == ["fake-star", "hero-bell"]
+
+      register([Heroicons])
+
+      assert MishkaCmsCore.Runtime.ContentComponents.icons(html) == ["hero-bell"]
+    end
+
     # A variant button half the results cannot honour reads as broken, so only shared weights show.
     test "only the weights both sets ship are offered" do
       register([Heroicons, MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake])
@@ -167,6 +182,17 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       assert "zzz-rocket" in Icons.search("rocket", limit: 200)
       assert "zzz-rocket-solid" in Icons.search("rocket", limit: 200, variant: "-solid")
       refute "zzz-rocket-solid" in Icons.search("rocket", limit: 200, variant: "")
+    end
+
+    test "content naming its glyphs stores them beside the heroicons it names" do
+      register([Heroicons])
+
+      html = ~s(<span class="zzz-rocket-solid"></span>[[slot item icon="hero-bell" /]]zzz-gone)
+
+      assert MishkaCmsCore.Runtime.ContentComponents.icons(html) == [
+               "zzz-rocket-solid",
+               "hero-bell"
+             ]
     end
 
     # Heroicons keeps answering for its own classes with a second set present.
