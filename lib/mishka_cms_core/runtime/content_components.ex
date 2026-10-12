@@ -53,6 +53,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   against the slot's own. A slot marker anywhere else is text. Markers are drawn eight levels deep;
   the content of a deeper one is drawn as it is written.
 
+  What a component hands its content — `render_slot(@inner_block, value)`, or a slot entry's
+  `render_slot(entry, value)` — reaches each marker inside that content, at any depth, as
+  `runtime:render:before_content_component`'s `slot_arg` meta. A marker outside the component never
+  sees it, and a component inside that hands nothing (`render_slot(@inner_block)`) passes on the one
+  it was given.
+
   A paragraph holding one marker and nothing else — whitespace and non-breaking spaces aside — is
   drawn as the component alone, without the `<p>` an editor wraps a line in: a block inside a `<p>`
   is HTML a browser takes apart. A marker sharing its paragraph with other text keeps it.
@@ -126,9 +132,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
     * `runtime:render:before_content_component` — before each embedded component is drawn, with
       `%{component_name: name, site: site, attrs: attrs, inner: inner_html | nil}` and
-      `%{site_id: site_id, index: n}` as meta. `attrs` is atom-keyed and already cast. A plugin
-      answers the map with other `attrs` or `inner` to change what is drawn, or with
-      `suppress: true` set to draw nothing.
+      `%{site_id: site_id, index: n, marker_attrs: written, slot_arg: arg, slot_args: args}` as
+      meta. `attrs` is atom-keyed and already cast; `marker_attrs` are the attributes as the marker
+      writes them, string-keyed and uncast. `slot_arg` is the value the nearest component around the
+      marker hands its content (`nil` when none does), and `slot_args` every such value, nearest
+      first. A plugin answers the map with other `attrs` or `inner` to change what is drawn,
+      `unset: [name]` to leave declared attributes out altogether — for a component's own clause to
+      fill, as a form field's `name` from its `field` — or `suppress: true` to draw nothing.
     * `runtime:component:crashed` — a marker's component raised while it was drawn, and a box was
       drawn in its place; see `MishkaCmsCore.Runtime.ComponentBoundary`.
     * `runtime:content:editor_palette` — before the content editor's palette is shown, with
@@ -983,7 +993,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       site: assigns[:site],
       prefix: assigns[:id] || "content",
       current_user: assigns[:current_user],
-      level: 0
+      level: 0,
+      slot_args: []
     }
 
     html |> parse() |> drawn_parts(context, mode)
@@ -1009,7 +1020,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
          :ok <- placeable(module),
          %{component: component} = information <- module.__component_information__(),
          declared = List.wrap(component.attrs),
-         {:ok, attrs, inner} <- before_draw(marker, site, cast(declared, marker.attrs)),
+         {:ok, attrs, inner, left} <-
+           before_draw(marker, site, cast(declared, marker.attrs), context),
          {content, entries} = held(inner, context.level),
          slots = List.wrap(component.slots),
          :ok <- required(declared, attrs, slots, entries) do
@@ -1017,6 +1029,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
       declared
       |> unset(attrs)
+      |> Map.drop(left)
       |> Map.merge(attrs)
       |> Map.merge(%{component_name: marker.name, site: site, __changed__: nil})
       |> inner_block(Enum.any?(slots, &Inspector.inner_block?/1), content, child, mode)
@@ -1093,15 +1106,31 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  defp before_draw(marker, site, attrs) do
+  defp before_draw(marker, site, attrs, %{slot_args: args}) do
     data = %{component_name: marker.name, site: site, attrs: attrs, inner: marker.inner}
 
-    case Hook.call(@event, data, meta: %{site_id: Translations.site(), index: marker.index}) do
-      %{suppress: true} -> :refused
-      %{attrs: %{} = changed} = answer -> {:ok, changed, Map.get(answer, :inner, marker.inner)}
-      _unchanged -> {:ok, attrs, marker.inner}
+    meta = %{
+      site_id: Translations.site(),
+      index: marker.index,
+      marker_attrs: marker.attrs,
+      slot_arg: List.first(args),
+      slot_args: args
+    }
+
+    case Hook.call(@event, data, meta: meta) do
+      %{suppress: true} ->
+        :refused
+
+      %{attrs: %{} = changed} = answer ->
+        {:ok, changed, Map.get(answer, :inner, marker.inner), left_unset(answer)}
+
+      _unchanged ->
+        {:ok, attrs, marker.inner, []}
     end
   end
+
+  defp left_unset(%{unset: names}) when is_list(names), do: Enum.filter(names, &is_atom/1)
+  defp left_unset(_answer), do: []
 
   # The attributes and slots the component requires and the marker left out — a slot entry's
   # required attributes as `slot.attribute`.
@@ -1151,7 +1180,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     Map.put(assigns, :inner_block, [
       %{
         __slot__: :inner_block,
-        inner_block: fn _changed, _arg -> drawn_parts(content, child, mode) end
+        inner_block: fn _changed, arg -> drawn_parts(content, handed(child, arg), mode) end
       }
     ])
   end
@@ -1207,8 +1236,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         false -> parse(inner)
       end
 
-    fn _changed, _arg -> drawn_parts(content, child, mode) end
+    fn _changed, arg -> drawn_parts(content, handed(child, arg), mode) end
   end
+
+  # What a component hands `render_slot/2`, for every marker inside; `nil`, handed when it passes
+  # nothing, keeps what the markers around it were given.
+  defp handed(context, nil), do: context
+  defp handed(context, arg), do: %{context | slot_args: [arg | context.slot_args]}
 
   # AN ID FROM ITS PLACE IN THE CONTENT, never from the marker, for a stateful component and for one
   # declaring `id` — a hook needs one — so it is the same element across renders and unique on the
