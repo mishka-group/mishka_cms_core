@@ -1787,10 +1787,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp without_self(components, _editor), do: components
 
   defp collect_palette(components) do
+    extensions = extension_kits()
+
     components
-    |> Enum.map(&palette_entry/1)
+    |> Enum.map(&palette_entry(&1, extensions))
     |> then(&Events.collect(:components, &1))
   end
+
+  # EACH INSTALLED EXTENSION'S OWN KIT, by the name its components carry — `mishka_blog` — to the
+  # label the extension registers under, `Blog`. An extension's kit is named after its OTP app, the
+  # key `MishkaCmsCore.Install.Extensions` lists it by; a UI kit is no extension and is not in it.
+  defp extension_kits,
+    do: Map.new(MishkaCmsCore.Install.Extensions.installable(), &{&1.key, &1.label})
+
+  # WHERE THE PALETTE FILES A COMPONENT: under its extension's name when an installed extension's own
+  # kit brought it, so a blog's or a documentation's blocks are found together rather than spread
+  # over the categories they share with the UI kit; under its category otherwise.
+  defp palette_group(component, extensions) do
+    case Map.fetch(extensions, kit_name(component.ui_kit_label)) do
+      {:ok, label} -> {label, true}
+      :error -> {component.type || "general", false}
+    end
+  end
+
+  # `ui_kit_label` is the kit's name, then its version: `mishka_blog 3.7.0`.
+  defp kit_name(label) when is_binary(label), do: label |> String.split(" ", parts: 2) |> hd()
+  defp kit_name(_no_kit), do: nil
 
   # `:for_tenant_with_globals` is the one read that serves both callers: it bypasses multitenancy and
   # takes the site as an ARGUMENT, which is how a master narrows to the site being edited while still
@@ -1806,7 +1828,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # `form:` carries which attribute a binding goes on, when the kit says so.
   # `MishkaCmsCore.Builder.FormRole` reads it and `MishkaCmsCore.Runtime.PageBuilder.Fields` infers
   # when it is absent, which is every kit exported before the key existed.
-  defp palette_entry(component) do
+  defp palette_entry(component, extensions) do
+    {group, extension?} = palette_group(component, extensions)
+
     %{
       id: component.id,
       # `key` is what the registry de-duplicates on, so a plugin contributing an entry that names an
@@ -1816,6 +1840,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       template: component.template,
       label: humanize(component.name),
       type: component.type || "general",
+      group: group,
+      extension?: extension?,
       description: component.description,
       slots: component.slots || [],
       attrs: component.attrs || [],

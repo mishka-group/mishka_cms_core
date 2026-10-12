@@ -1828,7 +1828,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         data-role="pb-comps"
         class="min-h-0 flex-1 overflow-y-auto px-3.5 pb-[18px] pt-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <section :for={{group, group_entries} <- grouped_entries(@entries)} class="mb-4">
+        <section
+          :for={{group, group_entries} <- grouped_entries(@entries)}
+          data-role="pb-group"
+          data-group={group}
+          class="mb-4"
+        >
           <div class="mb-2.5 flex items-center gap-2">
             <span
               class="size-[5px] flex-none rounded-full"
@@ -15807,21 +15812,29 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     do: MishkaCmsCore.Runtime.PageBuilder.Presets.template(entry, site_name, presets, components)
 
   # The demo groups the palette under category headings with a count each, which is what makes 100+
-  # components scannable; a flat grid is not.
+  # components scannable; a flat grid is not. An installed extension's own components are one group
+  # under its name, drawn before the categories.
   defp grouped_entries(entries) do
     entries
-    |> Enum.group_by(& &1.type)
-    |> Enum.sort_by(fn {group, _entries} -> group end)
-    |> Enum.map(fn {group, group_entries} ->
-      {String.upcase(group || "general"), Enum.sort_by(group_entries, & &1.label)}
-    end)
+    |> Enum.group_by(&palette_group/1)
+    |> Enum.sort_by(fn {group, [entry | _rest]} -> {not extension_group?(entry), group} end)
+    |> Enum.map(fn {group, group_entries} -> {group, Enum.sort_by(group_entries, & &1.label)} end)
   end
 
   # The row is no longer one list: All is drawn first, the two browser-side chips sit right after it,
-  # and the kit's own categories follow — so this returns the categories WITHOUT "all".
+  # and the groups follow, the extensions' first — so this returns the groups WITHOUT "all".
   defp component_categories(components) do
-    components |> Enum.map(& &1.type) |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.sort()
+    components
+    |> Enum.uniq_by(&palette_group/1)
+    |> Enum.sort_by(&{not extension_group?(&1), palette_group(&1)})
+    |> Enum.map(&palette_group/1)
   end
+
+  # The group a card is filed under: its extension's name, or its category — the builder sets
+  # `group`, and an entry a plugin contributes carries its category alone.
+  defp palette_group(entry), do: PaletteEntry.optional(entry, :group) || entry.type || "general"
+
+  defp extension_group?(entry), do: PaletteEntry.optional(entry, :extension?) == true
 
   attr(:cat, :string, required: true)
   attr(:active, :string, required: true)
@@ -15857,13 +15870,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       "data" -> gettext("data")
       "overlay" -> gettext("overlay")
       "general" -> gettext("general")
-      _kit_category -> to_string(type)
+      # A kit's own category, or an extension's name — `Blog` — translated where it has one.
+      _named -> Gettext.gettext(MishkaCmsCore.Gettext, to_string(type))
     end
   end
 
   defp filter_palette(%{components: components, palette_query: query, palette_cat: cat}) do
     components
-    |> Enum.filter(&(cat == "all" or &1.type == cat))
+    |> Enum.filter(&(cat == "all" or palette_group(&1) == cat))
     |> Enum.filter(&matches?(&1, query))
     |> Enum.sort_by(& &1.label)
   end
