@@ -1717,11 +1717,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # (`:natural` → `"natural"`). Phoenix's attr/3 macro validates the
   # default's type at compile time and rejects strings for `:atom` typed
   # attrs. Coerce the string back to an atom here.
+  #
+  # `:values` and `:examples` arrive the same way, as lists of strings, and Phoenix checks every
+  # entry against the type too ("expected the values for attr :kind to be an :atom"), so each string
+  # in them is coerced as the default is.
   defp coerce_default_for_type(opts, :atom) do
-    case Keyword.fetch(opts, :default) do
-      {:ok, val} when is_binary(val) -> Keyword.put(opts, :default, String.to_atom(val))
-      _ -> opts
-    end
+    opts
+    |> atom_option(:default)
+    |> atom_option(:values)
+    |> atom_option(:examples)
   end
 
   # `:map` defaults like `%{kind: "toast"}` round-trip through the
@@ -1774,6 +1778,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   defp coerce_default_for_type(opts, _type), do: opts
+
+  defp atom_option(opts, key) do
+    case Keyword.fetch(opts, key) do
+      {:ok, value} when is_binary(value) ->
+        Keyword.put(opts, key, String.to_atom(value))
+
+      {:ok, values} when is_list(values) ->
+        Keyword.put(opts, key, Enum.map(values, &atom_entry/1))
+
+      _absent_or_atom ->
+        opts
+    end
+  end
+
+  defp atom_entry(value) when is_binary(value), do: String.to_atom(value)
+  defp atom_entry(value), do: value
 
   defp struct_module?(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :__struct__, 0)
