@@ -764,7 +764,7 @@ msgstr ""
 msgid "%{name} (inactive)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:559
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:574
 #, elixir-autogen, elixir-format
 msgid "%{name} Component failed to render!"
 msgstr ""
@@ -790,7 +790,7 @@ msgstr ""
 msgid "%{name} is bound to %{value} — press to store it as plain text instead"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:386
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:400
 #, elixir-autogen, elixir-format
 msgid "%{name} keeps state, so it needs an id — add one to its tag."
 msgstr ""
@@ -4098,7 +4098,7 @@ msgid "Features ×4"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:37
-#: lib/mishka_cms_core/runtime/content_components.ex:874
+#: lib/mishka_cms_core/runtime/content_components.ex:876
 #, elixir-autogen, elixir-format
 msgid "Feedback"
 msgstr ""
@@ -4269,7 +4269,7 @@ msgid "Format"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:34
-#: lib/mishka_cms_core/runtime/content_components.ex:877
+#: lib/mishka_cms_core/runtime/content_components.ex:879
 #: lib/mishka_cms_core/runtime/page_builder/blocks.ex:262
 #: lib/mishka_cms_core/runtime/page_builder/blocks.ex:294
 #: lib/mishka_cms_core/runtime/page_builder/blocks.ex:326
@@ -5194,7 +5194,7 @@ msgid "Layers"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/sources/editor_history.ex:46
-#: lib/mishka_cms_core/runtime/content_components.ex:870
+#: lib/mishka_cms_core/runtime/content_components.ex:872
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:79
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:86
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:93
@@ -5747,7 +5747,7 @@ msgid "Max width"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:36
-#: lib/mishka_cms_core/runtime/content_components.ex:869
+#: lib/mishka_cms_core/runtime/content_components.ex:871
 #: lib/mishka_cms_core/runtime/page_builder/binding.ex:41
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:276
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:283
@@ -5838,7 +5838,7 @@ msgstr ""
 msgid "Missing bundles"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:593
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:611
 #, elixir-autogen, elixir-format
 msgid "Missing for_slot attribute in %{count} slot(s)"
 msgstr ""
@@ -6006,7 +6006,7 @@ msgid "Nav"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:35
-#: lib/mishka_cms_core/runtime/content_components.ex:875
+#: lib/mishka_cms_core/runtime/content_components.ex:877
 #, elixir-autogen, elixir-format
 msgid "Navigation"
 msgstr ""
@@ -6857,7 +6857,7 @@ msgid "Original"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/query.ex:574
-#: lib/mishka_cms_core/runtime/content_components.ex:878
+#: lib/mishka_cms_core/runtime/content_components.ex:880
 #, elixir-autogen, elixir-format
 msgid "Other"
 msgstr ""
@@ -6888,7 +6888,7 @@ msgid "Over the %{size} budget — every page on this site loads it."
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:38
-#: lib/mishka_cms_core/runtime/content_components.ex:876
+#: lib/mishka_cms_core/runtime/content_components.ex:878
 #, elixir-autogen, elixir-format
 msgid "Overlays"
 msgstr ""
@@ -8822,7 +8822,7 @@ msgstr ""
 msgid "Skipped — this site starts empty"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:574
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:592
 #, elixir-autogen, elixir-format
 msgid "Slot Error in %{name}:"
 msgstr ""
@@ -9246,7 +9246,7 @@ msgstr ""
 msgid "Tenant · %{name} — click to place, or drag onto the canvas"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:868
+#: lib/mishka_cms_core/runtime/content_components.ex:870
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:194
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:201
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:208
@@ -10482,7 +10482,7 @@ msgstr ""
 msgid "Unavailable For Legal Reasons"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/live_view_helpers.ex:608
+#: lib/mishka_cms_core/runtime/live_view_helpers.ex:626
 #, elixir-autogen, elixir-format
 msgid "Undeclared slot(s): %{slots}"
 msgstr ""
@@ -11281,7 +11281,7 @@ msgstr ""
 msgid "You do not have permission to open this builder."
 msgstr ""
 
-#: lib/mishka_cms_core/live_user_auth.ex:82
+#: lib/mishka_cms_core/live_user_auth.ex:83
 #: lib/mishka_cms_core/runtime/plugs/require_permission.ex:98
 #: lib/mishka_cms_core/sidebar.ex:851
 #, elixir-autogen, elixir-format
@@ -11298,7 +11298,7 @@ msgstr ""
 msgid "You have already signed in another way, but have not confirmed your account. You can confirm your account using the link we sent to you, or by resetting your password."
 msgstr ""
 
-#: lib/mishka_cms_core/live_user_auth.ex:65
+#: lib/mishka_cms_core/live_user_auth.ex:66
 #, elixir-autogen, elixir-format
 msgid "You must log in to access this page."
 msgstr ""
@@ -14680,17 +14680,17 @@ msgstr ""
 msgid "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers, _ and - between them only."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:1151
+#: lib/mishka_cms_core/runtime/content_components.ex:1153
 #, elixir-autogen, elixir-format
 msgid "%{name} draws content of its own, so it cannot be placed inside content."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:1164
+#: lib/mishka_cms_core/runtime/content_components.ex:1166
 #, elixir-autogen, elixir-format
 msgid "%{name} is not a component this site can show, so visitors see nothing here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:1157
+#: lib/mishka_cms_core/runtime/content_components.ex:1159
 #, elixir-autogen, elixir-format
 msgid "%{name} needs %{attrs}, so visitors see nothing here."
 msgstr ""
@@ -14842,7 +14842,7 @@ msgstr ""
 msgid "All components"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:871
+#: lib/mishka_cms_core/runtime/content_components.ex:873
 #, elixir-autogen, elixir-format
 msgid "Buttons"
 msgstr ""
@@ -14877,12 +14877,12 @@ msgstr ""
 msgid "Click to place it at the cursor, or drag it into the text. Drop a component on a box to put it inside."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:872
+#: lib/mishka_cms_core/runtime/content_components.ex:874
 #, elixir-autogen, elixir-format
 msgid "Data"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:873
+#: lib/mishka_cms_core/runtime/content_components.ex:875
 #, elixir-autogen, elixir-format
 msgid "Disclosure"
 msgstr ""
@@ -17752,4 +17752,9 @@ msgstr ""
 #: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.html.heex:183
 #, elixir-autogen, elixir-format
 msgid "— Create a workspace version first before adding sections."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/component_boundary.ex:189
+#, elixir-autogen, elixir-format
+msgid "This component could not be drawn"
 msgstr ""

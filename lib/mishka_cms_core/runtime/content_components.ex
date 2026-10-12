@@ -66,7 +66,9 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   and no remembered failure. A name that resolves to nothing, an inactive component, another site's,
   one that draws content itself (it could draw the content that holds it, forever), and one missing
   an attribute it requires are drawn as nothing. The same render in a preview (`MishkaCmsCore.Runtime.StaticHelpers`) draws a
-  notice saying why in their place.
+  notice saying why in their place. One that passes every check and then raises while it draws is
+  drawn as a small box, and the content around it draws — see
+  `MishkaCmsCore.Runtime.ComponentBoundary`.
 
   Every attribute the component declares is passed — one the marker leaves out as its default, or
   `nil` when it has none. Only the attributes the component declares are read from the marker, each

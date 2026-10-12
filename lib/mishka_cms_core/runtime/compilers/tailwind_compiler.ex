@@ -255,6 +255,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.ComponentBoundary
   alias MishkaCmsCore.Runtime.Stylesheet
   alias MishkaInstaller.Event.Hook
 
@@ -702,6 +703,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
        being previewed — that is what makes it a draft — so a walk over the saved site alone would
        leave the previewed component unstyled. */
     #{reachable_sources(closure, site_name, [preview_ns])}
+
+    /* The box a component that could not be drawn is drawn as. */
+    @source inline("#{ComponentBoundary.box_class()}");
 
     #{tailwind_preamble()}
     #{icon_css(closure, site_name, content.icons)}
@@ -1878,6 +1882,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
        The directory globs this replaced charged every visitor for every layout the site had ever
        had and every component of every installed kit, to render the handful it renders. */
     #{reachable_sources(closure, site_name, [])}
+
+    /* The box a component that could not be drawn is drawn as. */
+    @source inline("#{ComponentBoundary.box_class()}");
 
     /* Plugin needed for icon classes in site templates */
     #{tailwind_preamble()}
