@@ -36,6 +36,10 @@ defmodule MishkaCmsCore.UiKit.KitCompileTest do
       |> Ash.Query.load([:component_module, :site])
       |> Ash.read!(authorize?: false, page: false)
 
+    # THE MODULES BUILT HERE ARE NODE-WIDE and outlive the rollback: a later module drawing
+    # `chelekom-alert` from its own rows would otherwise be handed this kit's build.
+    on_exit(fn -> Enum.each(rows, &ModuleCompiler.unload(&1.component_module)) end)
+
     Map.merge(context, %{kits: kits, rows: rows})
   end
 
