@@ -523,6 +523,32 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
                ["content-0", "content-1-0", "content-1-1"]
     end
 
+    test "a marker in a slot entry gets an id of its own, never one in the inner block", %{
+      site: site,
+      n: n
+    } do
+      live!(site, "live-#{n}")
+
+      note!(site, "box-#{n}",
+        attrs: [%{"name" => "rest", "type" => "global", "opts" => %{}}],
+        slots: [
+          %{"name" => "inner_block", "opts" => %{}},
+          %{"name" => "item", "opts" => %{}, "attrs" => []}
+        ],
+        template:
+          ~S'<div>{render_slot(@inner_block)}<p :for={i <- @item}>{render_slot(i)}</p></div>'
+      )
+
+      html =
+        preview(
+          ~s([[component box-#{n}]][[component live-#{n} /]][[slot item]][[component live-#{n} /]][[/slot]][[slot item]][[component live-#{n} /]][[/slot]][[/component]]),
+          site.name
+        )
+
+      assert html |> query(~s([data-role="probe-live"])) |> LazyHTML.attribute("id") ==
+               ["content-0-0", "content-0-item-0-0", "content-0-item-1-0"]
+    end
+
     test "content is drawn eight markers deep, and written as it is past that", %{
       site: site,
       n: n

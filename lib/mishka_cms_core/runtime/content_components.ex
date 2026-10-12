@@ -1188,16 +1188,20 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   # EVERY SLOT THE COMPONENT DECLARES IS PASSED, an empty list when the content fills none of it —
   # a template reads `@source` whether or not anything was written for it. Each entry carries the
   # attributes the slot declares, cast as a component's are, a declared one left out as its default,
-  # and its own content drawn as content. The slot's name becomes an atom only as the declaration
+  # and its own content drawn as content, its markers' ids under `<parent>-<slot>-<n>` so they never
+  # take the id of one in the inner block. The slot's name becomes an atom only as the declaration
   # spells it.
   defp named_slots(assigns, slots, entries, child, mode) do
     Enum.reduce(named(slots), assigns, fn slot, assigns ->
       name = slot_name(slot)
       key = String.to_existing_atom(name)
 
+      own = for {:slot, %{name: ^name} = entry} <- entries, do: entry
+
       given =
-        for {:slot, %{name: ^name} = entry} <- entries,
-            do: slot_entry(key, slot, entry, child, mode)
+        for {entry, n} <- Enum.with_index(own) do
+          slot_entry(key, slot, entry, %{child | prefix: "#{child.prefix}-#{name}-#{n}"}, mode)
+        end
 
       Map.put(assigns, key, given)
     end)
