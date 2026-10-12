@@ -1,12 +1,14 @@
 defmodule MishkaCmsCore.Runtime.ComponentBoundary do
   @moduledoc """
-  Where a runtime function component that raises while it draws is drawn as a small box instead,
-  and the rest of the page draws around it.
+  Where a component a `[[component …]]` marker names, in stored content, is drawn as a small box
+  when it raises while it draws, and the rest of the page draws around it.
 
-  `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` draws every function component through
-  `draw/3` — a page's, a layout's, an error page's, and every `[[component …]]` marker
-  `rich_content/1` draws — so a component that raises takes neither the HTTP response nor the
-  visitor's LiveView with it.
+  `MishkaCmsCore.Runtime.ContentComponents` draws every marker of `rich_content/1` through `draw/3`
+  — a docs note's, a blog post's, any stored content's, a marker inside another marker included —
+  so a component that raises takes neither the HTTP response nor the visitor's LiveView with it.
+
+  A page's, a layout's and an error page's own `<.component>` calls are not drawn through it: their
+  author sees the component in the builder's canvas, and they render at full speed.
 
   ## What it catches
 
@@ -35,8 +37,9 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundary do
       process drawing the page.
     * A stateful component. LiveView runs its `update/2` and `render/1` itself, after the page is
       drawn; one that raises stops the visitor's LiveView, as before.
-    * The canvas and the previews, which draw through `static_component/1` and contain a raise
-      themselves.
+    * A component a page, a layout or an error page names in its own template.
+    * Content drawn in the canvas and the previews, which draw through `static_component/1` and
+      contain a raise themselves.
 
   ## The box
 
@@ -70,14 +73,16 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundary do
   @box_class "inline-block rounded border border-dashed border-gray-300 px-2 py-1 text-sm text-gray-500"
 
   @doc """
-  Draws the function component `render` returns, or the box when drawing it raises.
+  Draws the component `render` returns, or the box when drawing it raises. A stateful component's
+  `%Phoenix.LiveView.Component{}` is returned as it is.
 
   `name` and `site` are the component's name and its site's name, `nil` for a global component;
   they are what the log and `runtime:component:crashed` name.
 
       ComponentBoundary.draw("chelekom-alert", "my-site", fn -> MyComponent.alert(assigns) end)
   """
-  @spec draw(String.t(), String.t() | nil, (-> Rendered.t())) :: Rendered.t()
+  @spec draw(String.t(), String.t() | nil, (-> Rendered.t() | Phoenix.LiveView.Component.t())) ::
+          Rendered.t() | Phoenix.LiveView.Component.t()
   def draw(name, site, render) when is_function(render, 0) do
     render.() |> settled()
   rescue
@@ -89,8 +94,12 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundary do
 
   A dashboard admin named here sees a contained component's error id in its box. The user is kept
   for this response only — tied to its CSP nonce — so a process that draws a later response draws
-  it for nobody until it is named again. `MishkaCmsCore.LiveUserAuth.load_current_user/1` and
-  `reload_current_user/1` call it.
+  it for nobody until it is named again. Nothing calls it on a page's render path; a host that wants
+  its admins to see the id calls it where the user is known, after
+  `MishkaCmsCore.LiveUserAuth.load_current_user/1`:
+
+      socket = LiveUserAuth.load_current_user(socket)
+      :ok = ComponentBoundary.put_viewer(socket.assigns[:current_user])
   """
   @spec put_viewer(map() | nil) :: :ok
   def put_viewer(user) do

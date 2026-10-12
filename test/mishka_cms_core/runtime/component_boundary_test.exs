@@ -1,8 +1,9 @@
 defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
   @moduledoc """
-  A runtime function component that raises while it draws is drawn as a box, and the rest of the
-  page draws — in the HTTP render, in the connected LiveView and in its re-renders, and for a
-  `[[component …]]` marker inside another component's content.
+  A component a `[[component …]]` marker names that raises while it draws is drawn as a box, and
+  the rest of the page draws — in the HTTP render, in the connected LiveView and in its re-renders,
+  and for a marker inside another component's content. A page's own `<.component>` call is not
+  wrapped.
 
   The components are real rows compiled by the runtime on first use, on a site this process renders
   for. `async: false` — `SiteState`, compiled modules and the event registry are process-global.
@@ -118,23 +119,7 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
       ~H"""
       <main>
         <.component component_name={@names.fine} site={@site} title="before" />
-        <.component
-          component_name={@names.boom}
-          site={@site}
-          title={@title}
-          explode={@explode}
-          upload={%{}}
-        />
-        <.component component_name={@names.fine} site={@site} title="after" />
-      </main>
-      """
-    end
-
-    def one(assigns) do
-      ~H"""
-      <main>
-        <.component component_name={@name} site={@site} />
-        <p class="probe-sibling">still here</p>
+        <.component component_name={@names.boom} site={@site} explode={true} upload={%{}} />
       </main>
       """
     end
@@ -151,56 +136,53 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
 
     def mount(_params, session, socket) do
       :ok = MishkaCmsCore.Runtime.Translations.put_site(session["site_id"])
-
-      {:ok,
-       assign(socket,
-         names: session["names"],
-         site: session["site"],
-         title: "calm",
-         explode: session["explode"],
-         html: session["html"]
-       )}
+      {:ok, assign(socket, site: session["site"], html: session["html"])}
     end
 
-    def handle_info({:assign, values}, socket), do: {:noreply, assign(socket, values)}
+    def handle_info({:html, html}, socket), do: {:noreply, assign(socket, :html, html)}
 
-    def render(%{html: html} = assigns) when is_binary(html) do
+    def render(assigns) do
       ~H"""
       <div id="host"><Page.content html={@html} site={@site} /></div>
       """
     end
-
-    def render(assigns) do
-      ~H"""
-      <div id="host">
-        <Page.page names={@names} site={@site} title={@title} explode={@explode} />
-      </div>
-      """
-    end
   end
 
-  defp mount_page(site, session) do
+  defp mount_page(site, html) do
     {:ok, view, html} =
-      live_isolated(
-        Phoenix.ConnTest.build_conn(),
-        Host,
-        session: Map.merge(%{"site" => site.name, "site_id" => site.id, "html" => nil}, session)
+      live_isolated(Phoenix.ConnTest.build_conn(), Host,
+        session: %{"site" => site.name, "site_id" => site.id, "html" => html}
       )
 
     {view, html}
   end
 
-  describe "the HTTP render" do
-    test "draws the box where the component raised, and its siblings around it", %{
+  defp drawn(site, html) do
+    capture_log(fn ->
+      send(self(), {:html, to_html(Page.content(%{html: html, site: site.name}))})
+    end)
+
+    assert_received {:html, drawn}
+    drawn
+  end
+
+  defp marker(name, attrs \\ ""), do: "[[component #{name}#{attrs} /]]"
+
+  defp siblings(names, middle) do
+    ~s(<p class="probe-intro">Intro</p>) <>
+      marker(names.fine, ~s( title="before")) <>
+      middle <> marker(names.fine, ~s( title="after")) <> ~s(<p class="probe-outro">After</p>)
+  end
+
+  describe "a marker, in the HTTP render" do
+    test "draws the box where the component raised, and the content around it", %{
       site: site,
       names: names
     } do
       log =
         capture_log(fn ->
-          html =
-            to_html(Page.page(%{names: names, site: site.name, title: "t", explode: true}))
-
-          send(self(), {:html, html})
+          content = %{html: siblings(names, marker(names.broken)), site: site.name}
+          send(self(), {:html, to_html(Page.content(content))})
         end)
 
       assert_received {:html, html}
@@ -212,21 +194,23 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
                "after"
              ]
 
-      assert count(html, ".probe-boom") == 0
+      assert count(html, ".probe-intro") == 1
+      assert count(html, ".probe-outro") == 1
+      assert count(html, ".probe-broken") == 0
       assert html =~ "This component could not be drawn"
 
-      assert log =~ names.boom
+      assert log =~ names.broken
       assert log =~ site.name
-      assert log =~ "KeyError"
+      assert log =~ "BadMapError"
       assert log =~ ~r/error [0-9a-f]{12}/
       assert log =~ "ComponentBoundary.draw/3"
     end
 
     test "a component that does not raise is drawn as it always was", %{site: site, names: names} do
-      html = to_html(Page.page(%{names: names, site: site.name, title: "t", explode: false}))
+      html = drawn(site, siblings(names, marker(names.boom, ~s( title="calm"))))
 
       assert count(html, @box) == 0
-      assert count(html, ".probe-boom") == 1
+      assert html |> query(".probe-boom") |> LazyHTML.text() == "calm"
       assert count(html, ".probe-fine") == 2
     end
 
@@ -234,148 +218,145 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
       site: site,
       names: names
     } do
-      draw = fn ->
-        capture_log(fn ->
-          send(self(), {:html, to_html(Page.one(%{name: names.broken, site: site.name}))})
-        end)
-
-        assert_received {:html, html}
-        html
+      ids = fn ->
+        site |> drawn(marker(names.broken)) |> query(@box) |> LazyHTML.attribute("data-error-id")
       end
 
       :ok = CspNonce.put("nonce-#{System.unique_integer([:positive])}")
       on_exit(fn -> CspNonce.put(nil) end)
 
       :ok = ComponentBoundary.put_viewer(nil)
-      assert draw.() |> query(@box) |> LazyHTML.attribute("data-error-id") == []
+      assert ids.() == []
 
       :ok = ComponentBoundary.put_viewer(%{dashboard_admin?: false})
-      assert draw.() |> query(@box) |> LazyHTML.attribute("data-error-id") == []
+      assert ids.() == []
 
       :ok = ComponentBoundary.put_viewer(%{dashboard_admin?: true})
-      [error_id] = draw.() |> query(@box) |> LazyHTML.attribute("data-error-id")
+      [error_id] = ids.()
       assert error_id =~ ~r/\A[0-9a-f]{12}\z/
 
       :ok = CspNonce.put("a-later-response")
-      assert draw.() |> query(@box) |> LazyHTML.attribute("data-error-id") == []
+      assert ids.() == []
     end
 
     test "the box is drawn with classes only, so a strict CSP allows it", %{
       site: site,
       names: names
     } do
-      capture_log(fn ->
-        send(self(), {:html, to_html(Page.one(%{name: names.broken, site: site.name}))})
-      end)
-
-      assert_received {:html, html}
+      html = drawn(site, marker(names.broken))
       [box] = html |> query(@box) |> Enum.to_list()
 
       assert LazyHTML.attribute(box, "style") == []
       assert LazyHTML.attribute(box, "class") == [ComponentBoundary.box_class()]
       refute html =~ "<style"
     end
+
+    test "that raises inside another component's content is boxed there", %{
+      site: site,
+      names: names
+    } do
+      html =
+        ~s([[component #{names.example}]]<p class="probe-inner">Inside</p>) <>
+          marker(names.boom, " explode") <> "[[/component]]"
+
+      drawn = drawn(site, siblings(names, html))
+
+      assert count(drawn, ".probe-example #{@box}") == 1
+      assert count(drawn, ".probe-example .probe-inner") == 1
+      assert count(drawn, ".probe-fine") == 2
+      assert count(drawn, ".probe-outro") == 1
+    end
   end
 
-  describe "the connected LiveView" do
-    test "draws the box and its siblings, and stays up", %{site: site, names: names} do
+  describe "a marker, in the connected LiveView" do
+    test "draws the box and the content around it, and stays up", %{site: site, names: names} do
       {view, html} =
-        capture_log_value(fn -> mount_page(site, %{"names" => names, "explode" => true}) end)
+        capture_log_value(fn -> mount_page(site, siblings(names, marker(names.broken))) end)
 
       assert count(html, @box) == 1
       assert has_element?(view, @box)
       assert has_element?(view, ".probe-fine[data-title=before]")
       assert has_element?(view, ".probe-fine[data-title=after]")
-      refute has_element?(view, ".probe-boom")
+      assert has_element?(view, ".probe-outro")
+    end
+
+    test "inside another component's content", %{site: site, names: names} do
+      html =
+        ~s([[component #{names.example}]]<p class="probe-inner">Inside</p>) <>
+          marker(names.boom, " explode") <> "[[/component]]"
+
+      {view, _html} = capture_log_value(fn -> mount_page(site, siblings(names, html)) end)
+
+      assert has_element?(view, ".probe-example #{@box}")
+      assert has_element?(view, ".probe-example .probe-inner")
+      assert has_element?(view, ".probe-outro")
     end
 
     test "a re-render whose change makes the component raise is contained", %{
       site: site,
       names: names
     } do
-      {view, _html} = mount_page(site, %{"names" => names, "explode" => false})
+      calm = siblings(names, marker(names.boom, ~s( title="calm")))
+      {view, _html} = mount_page(site, calm)
       assert has_element?(view, ".probe-boom", "calm")
 
       capture_log(fn ->
-        send(view.pid, {:assign, explode: true})
+        send(view.pid, {:html, siblings(names, marker(names.boom, ~s( title="calm" explode)))})
         render(view)
       end)
 
       assert Process.alive?(view.pid)
       assert has_element?(view, @box)
       assert has_element?(view, ".probe-fine[data-title=before]")
-      assert has_element?(view, ".probe-fine[data-title=after]")
+      assert has_element?(view, ".probe-outro")
 
       capture_log(fn ->
-        send(view.pid, {:assign, title: "changed"})
+        send(view.pid, {:html, siblings(names, marker(names.boom, ~s( title="changed" explode)))})
         render(view)
       end)
 
       assert Process.alive?(view.pid)
       assert has_element?(view, @box)
 
-      send(view.pid, {:assign, explode: false})
+      send(view.pid, {:html, siblings(names, marker(names.boom, ~s( title="changed")))})
       assert has_element?(view, ".probe-boom", "changed")
       refute has_element?(view, @box)
     end
   end
 
-  describe "a [[component]] marker" do
-    test "that raises inside another component's content is boxed there", %{
+  describe "what it does not contain" do
+    test "a page's own <.component> call is not wrapped, and raises as it always did", %{
       site: site,
       names: names
     } do
-      html =
-        ~s(<p class="probe-intro">Intro</p>[[component #{names.example}]]<p class="probe-inner">Inside</p>) <>
-          ~s([[component #{names.boom} explode /]][[/component]]<p class="probe-outro">After</p>)
+      rendered =
+        LiveViewHelpers.component(%{component_name: names.fine, site: site.name, title: "t"})
 
-      capture_log(fn ->
-        send(self(), {:html, to_html(Page.content(%{html: html, site: site.name}))})
-      end)
+      refute :erlang.fun_info(rendered.dynamic, :module) == {:module, ComponentBoundary}
 
-      assert_received {:html, drawn}
+      {error, stacktrace} =
+        try do
+          to_html(Page.page(%{names: names, site: site.name}))
+        rescue
+          error -> {error, __STACKTRACE__}
+        end
 
-      assert count(drawn, ".probe-example #{@box}") == 1
-      assert count(drawn, ".probe-example .probe-inner") == 1
-      assert count(drawn, ".probe-intro") == 1
-      assert count(drawn, ".probe-outro") == 1
-
-      {view, _html} = capture_log_value(fn -> mount_page(site, %{"html" => html}) end)
-
-      assert has_element?(view, ".probe-example #{@box}")
-      assert has_element?(view, ".probe-example .probe-inner")
-      assert has_element?(view, ".probe-outro")
+      assert %KeyError{} = error
+      refute Enum.any?(stacktrace, &(elem(&1, 0) == ComponentBoundary))
     end
-  end
 
-  describe "what it does not contain" do
     test "an exception that names a 4xx status is the page's answer, and is raised on", %{
       site: site,
       names: names
     } do
       assert_raise NotFoundError, fn ->
-        to_html(Page.one(%{name: names.missing, site: site.name}))
+        to_html(Page.content(%{html: marker(names.missing), site: site.name}))
       end
     end
 
     test "a throw passes through", %{site: site, names: names} do
-      assert catch_throw(to_html(Page.one(%{name: names.tossed, site: site.name}))) == :tossed
-    end
-
-    test "a stateful component is not wrapped", %{site: site} do
-      name = "live-#{System.unique_integer([:positive])}"
-
-      create_component!(
-        name: name,
-        site_id: site.id,
-        stateful: true,
-        active: true,
-        precompile: false,
-        template: ~s(<div id={@id} data-role="probe-live">live</div>)
-      )
-
-      assert %Phoenix.LiveView.Component{} =
-               LiveViewHelpers.component(%{component_name: name, site: site.name, id: "x"})
+      assert catch_throw(to_html(Page.content(%{html: marker(names.tossed), site: site.name}))) ==
+               :tossed
     end
   end
 
@@ -386,7 +367,7 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
     } do
       register_plugin(ComponentCrashed, "runtime:component:crashed")
 
-      capture_log(fn -> to_html(Page.one(%{name: names.broken, site: site.name})) end)
+      drawn(site, marker(names.broken))
 
       assert_received {:component_crashed, data}
       assert data.component_name == names.broken
@@ -400,7 +381,7 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
     test "is not fired for a component that draws", %{site: site, names: names} do
       register_plugin(ComponentCrashed, "runtime:component:crashed")
 
-      to_html(Page.one(%{name: names.fine, site: site.name}))
+      drawn(site, marker(names.fine))
 
       refute_received {:component_crashed, _data}
     end

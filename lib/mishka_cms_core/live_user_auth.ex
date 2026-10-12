@@ -12,7 +12,6 @@ defmodule MishkaCmsCore.LiveUserAuth do
   import MishkaCmsCore.Helpers, only: [path: 2]
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
-  alias MishkaCmsCore.Runtime.ComponentBoundary
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
 
@@ -112,7 +111,6 @@ defmodule MishkaCmsCore.LiveUserAuth do
       context: session["context"] || %{}
     )
     |> maybe_load_user_site()
-    |> viewed()
   end
 
   @doc """
@@ -142,7 +140,6 @@ defmodule MishkaCmsCore.LiveUserAuth do
       context: session["context"] || %{}
     )
     |> maybe_load_user_site()
-    |> viewed()
   end
 
   # `:current_tenant` is the tenant `MishkaCmsCore.Runtime.Plugs.SiteLookupPlug` chose for the
@@ -154,13 +151,6 @@ defmodule MishkaCmsCore.LiveUserAuth do
 
   defp site_id(%{"current_site" => %{id: id}}), do: id
   defp site_id(_session), do: nil
-
-  # The user a contained component's box is drawn for — see
-  # `MishkaCmsCore.Runtime.ComponentBoundary.put_viewer/1`.
-  defp viewed(socket) do
-    :ok = ComponentBoundary.put_viewer(socket.assigns[:current_user])
-    socket
-  end
 
   # Load site relation for tenant users (site_id is not nil)
   defp maybe_load_user_site(socket) do

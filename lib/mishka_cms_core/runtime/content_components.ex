@@ -66,8 +66,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   and no remembered failure. A name that resolves to nothing, an inactive component, another site's,
   one that draws content itself (it could draw the content that holds it, forever), and one missing
   an attribute it requires are drawn as nothing. The same render in a preview (`MishkaCmsCore.Runtime.StaticHelpers`) draws a
-  notice saying why in their place. One that passes every check and then raises while it draws is
-  drawn as a small box, and the content around it draws — see
+  notice saying why in their place. On a page, one that passes every check and then raises while it
+  draws is drawn as a small box, and the content around it draws — see
   `MishkaCmsCore.Runtime.ComponentBoundary`.
 
   Every attribute the component declares is passed — one the marker leaves out as its default, or
@@ -123,6 +123,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       `%{site_id: site_id, index: n}` as meta. `attrs` is atom-keyed and already cast. A plugin
       answers the map with other `attrs` or `inner` to change what is drawn, or with
       `suppress: true` set to draw nothing.
+    * `runtime:component:crashed` — a marker's component raised while it was drawn, and a box was
+      drawn in its place; see `MishkaCmsCore.Runtime.ComponentBoundary`.
     * `runtime:content:editor_palette` — before the content editor's palette is shown, with
       `%{site_id: site_id, components: entries}` (`embeddable/2`'s entries) and
       `%{current_user: user}` as meta. A plugin answers the map with other `components` to narrow or
@@ -136,7 +138,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   require Ash.Query
 
   alias MishkaCmsCore.Builder.Furnishing
-  alias MishkaCmsCore.Runtime.{Component, LiveViewHelpers, Translations}
+  alias MishkaCmsCore.Runtime.{Component, ComponentBoundary, LiveViewHelpers, Translations}
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Icons, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
@@ -1133,7 +1135,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp visitor(assigns, true, user), do: Map.put(assigns, :current_user, user)
   defp visitor(assigns, false, _user), do: assigns
 
-  defp drawn(assigns, :live), do: LiveViewHelpers.component(assigns)
+  # A MARKER IS DRAWN INSIDE `ComponentBoundary.draw/3`: a component that raises while it draws is a
+  # box in the content, and the page around it draws. Only here — a page's, a layout's and an error
+  # page's own `<.component>` calls go straight to `LiveViewHelpers.component/1`.
+  defp drawn(%{component_name: name, site: site} = assigns, :live),
+    do: ComponentBoundary.draw(name, site, fn -> LiveViewHelpers.component(assigns) end)
+
   defp drawn(assigns, :static), do: LiveViewHelpers.static_component(assigns)
 
   defp unavailable(_name, _reason, :live), do: nil
