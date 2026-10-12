@@ -738,6 +738,134 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
     end
   end
 
+  # A CLASS CONTENT WRITES IS IN NO TEMPLATE — a marker's `track_class="bg-[#282828]"` reaches its
+  # component as an expression — so the same event answers them, and the stylesheet carries them.
+  describe "TailwindCompiler.content_classes/1" do
+    test "is what the stored content of the site says it writes, each once, and nothing a CSS string could not hold",
+         %{site: site} do
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
+        "runtime:compile:content_components"
+      )
+
+      assert TailwindCompiler.content_classes(site.name) == [
+               "bg-[#282828]",
+               "data-[orientation=vertical]:h-32"
+             ]
+    end
+
+    test "is nothing for a site that is not there, that nothing answers for, or while the event cannot run",
+         %{site: site} do
+      assert TailwindCompiler.content_classes(site.name) == []
+      assert TailwindCompiler.content_classes("no-such-site") == []
+
+      MishkaCmsCore.Test.EventCannotRun.stub!("runtime:compile:content_components")
+
+      assert TailwindCompiler.content_classes(site.name) == []
+    end
+
+    test "each has a rule in the site's stylesheet", %{site: site} do
+      on_exit(fn -> MishkaCmsCore.Runtime.States.AssetsState.delete("__shared_base__", "css") end)
+
+      assert {:ok, unnamed} = TailwindCompiler.compile(site.name)
+      refute site_part(unnamed, site) =~ "#282828"
+
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
+        "runtime:compile:content_components"
+      )
+
+      assert {:ok, named} = TailwindCompiler.compile(site.name)
+      css = site_part(named, site)
+
+      assert css =~ ~S(.bg-\[\#282828\]{background-color:#282828})
+      assert css =~ ~S(.data-\[orientation\=vertical\]\:h-32[data-orientation=vertical]{height:)
+      refute css =~ "color:red"
+    end
+
+    test "each has a rule in a draft's preview stylesheet", %{site: site} do
+      on_exit(fn -> MishkaCmsCore.Runtime.States.AssetsState.delete("__shared_base__", "css") end)
+
+      register_plugin(
+        MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
+        "runtime:compile:content_components"
+      )
+
+      assert {:ok, css} =
+               TailwindCompiler.compile_preview(
+                 site.name,
+                 "preview-classes-#{System.unique_integer([:positive])}",
+                 "draft",
+                 ~s(<div class="p-1"></div>)
+               )
+
+      [_shared, own] = String.split(css, "/* Preview: ", parts: 2)
+
+      assert own =~ ~S(.bg-\[\#282828\])
+    end
+  end
+
+  # THE ATTRIBUTES A COMPONENT TAKES A CLASS STRING IN are the ones it declares `examples` for and
+  # no `values` — read off the components the site reaches, its own hiding a global one.
+  describe "open_attrs/2 and site_classes/2" do
+    @open_attrs [
+      %{
+        "name" => "size",
+        "type" => "string",
+        "opts" => %{"default" => "small", "examples" => ["small", "large"]}
+      },
+      %{
+        "name" => "color",
+        "type" => "string",
+        "opts" => %{"default" => "base", "values" => ["base", "dark"]}
+      },
+      %{"name" => "title", "type" => "string", "opts" => %{"default" => nil}},
+      %{"name" => "class", "type" => "any", "opts" => %{"default" => nil}}
+    ]
+
+    test "name the attributes declaring examples and no values, of the site's own and global components",
+         %{site: site, n: n} do
+      note!(site, "open-#{n}", attrs: @open_attrs)
+      note!(nil, "global-open-#{n}", attrs: @open_attrs)
+      note!(site, "closed-#{n}")
+
+      assert ContentComponents.open_attrs(
+               ["open-#{n}", "global-open-#{n}", "closed-#{n}", "nothing-#{n}"],
+               site.id
+             ) == %{"open-#{n}" => ["size"], "global-open-#{n}" => ["size"]}
+
+      assert ContentComponents.open_attrs([], site.id) == %{}
+    end
+
+    test "a site's own component hides the global one of its name", %{site: site, n: n} do
+      note!(nil, "shared-#{n}", attrs: @open_attrs)
+      note!(site, "shared-#{n}")
+
+      assert ContentComponents.open_attrs(["shared-#{n}"], site.id) == %{}
+      assert ContentComponents.open_attrs(["shared-#{n}"], nil) == %{"shared-#{n}" => ["size"]}
+    end
+
+    test "read a marker's open attribute as classes, and leave the rest of it out", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "open-#{n}", attrs: @open_attrs)
+
+      html =
+        ~s(<p class="text-sm">x</p>) <>
+          ~s([[component open-#{n} size="leading-5 py-2" color="bg-red-500" title="Hidden block" class="ml-1" /]])
+
+      assert ContentComponents.site_classes(html, site.id) == [
+               "text-sm",
+               "ml-1",
+               "leading-5",
+               "py-2"
+             ]
+
+      assert ContentComponents.site_classes(nil, site.id) == []
+    end
+  end
+
   defp site_part(css, site) do
     [_shared, own] = String.split(css, "/* Site: #{site.name} */", parts: 2)
     own

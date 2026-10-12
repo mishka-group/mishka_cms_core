@@ -198,6 +198,81 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     end
   end
 
+  describe "classes/2 — the class tokens a resource stores beside its content" do
+    test "the HTML's own class lists, quoted either way or bare, entities decoded" do
+      html =
+        ~s(<div class="bg-[#282828] text-white"><span class='p-2   m-1'>x</span>) <>
+          ~s(<i class=hidden></i><b data-class="no-me" CLASS="font-bold">y</b>) <>
+          ~s(<p class="[&amp;&gt;svg]:size-4 text-white">z</p></div>)
+
+      assert ContentComponents.classes(html) == [
+               "bg-[#282828]",
+               "text-white",
+               "p-2",
+               "m-1",
+               "hidden",
+               "font-bold",
+               "[&>svg]:size-4"
+             ]
+    end
+
+    test "a component's and a slot's class and *_class attributes, at every depth" do
+      html =
+        ~s([[component doc-example title="Big title"]]) <>
+          ~s([[component chelekom-headless-slider track_class="h-1 bg-neutral-200" thumb_class="size-4" label="Volume"]]) <>
+          ~s([[slot item class="ml-2" icon="hero-home"]]x[[/slot]][[/component]][[/component]])
+
+      assert ContentComponents.classes(html) == ["size-4", "h-1", "bg-neutral-200", "ml-2"]
+    end
+
+    test "an attribute its component takes a class string in, and only for that component" do
+      html =
+        ~s([[component chelekom-badge size="leading-5 py-2" variant="base" color="bg-red-500" /]]) <>
+          ~s([[component chelekom-alert size="px-9" /]])
+
+      assert ContentComponents.classes(html, %{"chelekom-badge" => ["size", "variant"]}) == [
+               "leading-5",
+               "py-2",
+               "base"
+             ]
+
+      assert ContentComponents.classes(html) == []
+    end
+
+    test "a marker shown as code, a bare key and text that only looks like a class are left out" do
+      html =
+        ~s(<pre><code>[[component x class="in-code" /]]</code></pre>) <>
+          ~s([[component x class /]]<p>class="not-a-tag"</p>)
+
+      assert ContentComponents.classes(html) == []
+    end
+
+    test "a token no class is made of is left out" do
+      html =
+        ~s|<p class="ok-1 a&quot;b {brace} back\\slash semi;colon &lt;tag no-[close w-(1 -- 42 | <>
+          ~s|café tick`y #{String.duplicate("a", 161)} #{String.duplicate("b", 160)}">x</p>|
+
+      assert ContentComponents.classes(html) == ["ok-1", String.duplicate("b", 160)]
+    end
+
+    test "each once, and at most a thousand" do
+      many = Enum.map_join(1..1200, " ", &"p-#{&1}")
+      html = ~s(<p class="flex flex #{many}">x</p>[[component x class="flex" /]])
+
+      classes = ContentComponents.classes(html)
+
+      assert length(classes) == 1000
+      assert hd(classes) == "flex"
+      assert classes == Enum.uniq(classes)
+    end
+
+    test "nothing for content that writes none, or none at all" do
+      assert ContentComponents.classes("<p>plain</p>") == []
+      assert ContentComponents.classes(nil) == []
+      assert ContentComponents.site_classes(nil, nil) == []
+    end
+  end
+
   # Several registered sets are `MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest`'s, which swaps
   # the process-global registry.
   describe "icons/1 — the icon classes a resource stores beside its content" do

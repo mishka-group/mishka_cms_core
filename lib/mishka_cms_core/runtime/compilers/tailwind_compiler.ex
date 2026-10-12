@@ -703,6 +703,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
        being previewed — that is what makes it a draft — so a walk over the saved site alone would
        leave the previewed component unstyled. */
     #{reachable_sources(closure, site_name, [preview_ns])}
+    #{class_sources(content.classes)}
 
     /* The box a component that could not be drawn is drawn as. */
     @source inline("#{ComponentBoundary.box_class()}");
@@ -1417,17 +1418,18 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   that content reaches (`MishkaCmsCore.Runtime.Compilers.CssClosure`).
 
   Asked of whoever stores content through `runtime:compile:content_components`, with
-  `%{site: name, site_id: id, components: [], icons: []}`: a plugin adds the names its content uses
-  to `components`, and the icon classes it names to `icons` (`content_icons/1`). Read while a
-  stylesheet is built, never in a request. `[]` for a site `SiteState` does not know, and while the
-  event cannot run.
+  `%{site: name, site_id: id, components: [], icons: [], classes: []}`: a plugin adds the names its
+  content uses to `components`, the icon classes it names to `icons` (`content_icons/1`), and the
+  classes it writes to `classes` (`content_classes/1`). Read while a stylesheet is built, never in a
+  request. `[]` for a site `SiteState` does not know, and while the event cannot run.
 
-      def call(%{site_id: site_id, components: names, icons: icons} = data) do
+      def call(%{site_id: site_id, components: names, icons: icons, classes: classes} = data) do
         {:reply,
          %{
            data
            | components: names ++ names_my_posts_use(site_id),
-             icons: icons ++ icons_my_posts_use(site_id)
+             icons: icons ++ icons_my_posts_use(site_id),
+             classes: classes ++ classes_my_posts_use(site_id)
          }}
       end
   """
@@ -1447,19 +1449,52 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   @spec content_icons(String.t()) :: [String.t()]
   def content_icons(site_name), do: content_named(site_name).icons
 
-  # ONE EVENT PER COMPILE for both answers, so each plugin reads its content's rows once.
+  @doc """
+  The classes the stored content of the site `site_name` writes — a `class="bg-[#282828]"` in its
+  HTML, a marker's `class` and `*_class` attributes, and the attributes its component takes a class
+  string in (`MishkaCmsCore.Runtime.ContentComponents.site_classes/2`). No template holds them, so
+  no scan finds them: the site's stylesheet is built with each as an `@source inline(…)` candidate.
+
+  Answered in `classes` by the same `runtime:compile:content_components` event as
+  `content_components/1`; a token that could not be a class is left out, and at most 20000 are
+  kept. `[]` for a site `SiteState` does not know, and while the event cannot run.
+  """
+  @spec content_classes(String.t()) :: [String.t()]
+  def content_classes(site_name), do: content_named(site_name).classes
+
+  # What one `@source inline(…)` may carry as a candidate: what `ContentComponents.classes/2` keeps.
+  # A quote or a backslash would end the CSS string, and a brace is Tailwind's brace expansion.
+  @classes 20_000
+  @inline_class ~r/\A[A-Za-z0-9!#$%&'()*+,.\/:=>?@\[\]^_|~-]{1,160}\z/
+
+  # ONE EVENT PER COMPILE for every answer, so each plugin reads its content's rows once.
   defp content_named(site_name) do
     with {:ok, %{id: site_id}} <- MishkaCmsCore.Runtime.States.SiteState.get_by_name(site_name),
          %{} = answer <-
            MishkaInstaller.Event.Hook.call(
              "runtime:compile:content_components",
-             %{site: site_name, site_id: site_id, components: [], icons: []},
+             %{site: site_name, site_id: site_id, components: [], icons: [], classes: []},
              meta: %{site: site_name}
            ) do
-      %{components: named(answer, :components), icons: named(answer, :icons)}
+      %{
+        components: named(answer, :components),
+        icons: named(answer, :icons),
+        classes: answer |> named(:classes) |> Enum.filter(&inline_class?/1) |> Enum.take(@classes)
+      }
     else
-      _nothing_named -> %{components: [], icons: []}
+      _nothing_named -> %{components: [], icons: [], classes: []}
     end
+  end
+
+  defp inline_class?(class), do: Regex.match?(@inline_class, class)
+
+  # The content's classes as candidates, a few hundred to a line.
+  defp class_sources([]), do: ""
+
+  defp class_sources(classes) do
+    classes
+    |> Enum.chunk_every(200)
+    |> Enum.map_join("\n", &~s|@source inline("#{Enum.join(&1, " ")}");|)
   end
 
   defp named(answer, key) do
@@ -1472,8 +1507,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   @doc """
   Enqueues the stylesheet build of the site `site_id` names — its `"css"` job, on the per-site path
   that coalesces a burst of writes into one build. For a write that changed what the stylesheet is
-  built from without a component, page or layout being written: content that names a component or
-  an icon it did not name before.
+  built from without a component, page or layout being written: content that names a component, an
+  icon or a class it did not name before.
 
   A switched-off or unknown site has nothing to build, and is `:ok`. So is every call under the
   `:env_test?` flag, as for every other runtime job.
@@ -1885,6 +1920,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
     /* The box a component that could not be drawn is drawn as. */
     @source inline("#{ComponentBoundary.box_class()}");
+
+    /* THE CLASSES THE SITE'S STORED CONTENT WRITES, which no template holds. */
+    #{class_sources(content.classes)}
 
     /* Plugin needed for icon classes in site templates */
     #{tailwind_preamble()}
