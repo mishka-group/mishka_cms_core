@@ -39,7 +39,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       assert Icons.variants() == Heroicons.variants()
       assert Icons.available?()
       assert Icons.known?("hero-bell")
-      assert Icons.css(["hero-bell"]) == Heroicons.css(["hero-bell"])
+      assert Icons.css(["hero-bell"]) =~ Heroicons.css(["hero-bell"])
     end
 
     test "a class no set claims is unknown, and draws nothing" do
@@ -69,7 +69,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       assert {:safe, _svg} = Icons.svg("fake-star", 15)
 
       # And heroicons is untouched by its presence.
-      assert Icons.css(["hero-bell"]) == Heroicons.css(["hero-bell"])
+      assert Icons.css(["hero-bell"]) =~ Heroicons.css(["hero-bell"])
     end
 
     test "a search spans both, and the cap applies to the merged list" do
@@ -89,6 +89,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
         )
 
       assert only == ["fake-star"]
+    end
+
+    # STORED CONTENT IS READ BY EVERY REGISTERED PREFIX, so a site's stylesheet carries the icons
+    # its posts name from whichever set they come from.
+    test "content names an icon of each set, and none a set does not ship" do
+      register([Heroicons, MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake])
+
+      html =
+        ~s([[slot item icon="fake-star"]]x[[/slot]]<span class="hero-bell fake-moon"></span>)
+
+      assert MishkaCmsCore.Runtime.ContentComponents.icons(html) == ["fake-star", "hero-bell"]
+
+      register([Heroicons])
+
+      assert MishkaCmsCore.Runtime.ContentComponents.icons(html) == ["hero-bell"]
     end
 
     # A variant button half the results cannot honour reads as broken, so only shared weights show.
@@ -169,13 +184,63 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest do
       refute "zzz-rocket-solid" in Icons.search("rocket", limit: 200, variant: "")
     end
 
+    test "content naming its glyphs stores them beside the heroicons it names" do
+      register([Heroicons])
+
+      html = ~s(<span class="zzz-rocket-solid"></span>[[slot item icon="hero-bell" /]]zzz-gone)
+
+      assert MishkaCmsCore.Runtime.ContentComponents.icons(html) == [
+               "zzz-rocket-solid",
+               "hero-bell"
+             ]
+    end
+
     # Heroicons keeps answering for its own classes with a second set present.
     test "the sets do not tread on each other" do
       register([Heroicons])
 
-      assert Icons.css(["hero-bell"]) == Heroicons.css(["hero-bell"])
+      assert Icons.css(["hero-bell"]) =~ Heroicons.css(["hero-bell"])
       refute Icons.known?("zzz-nothing")
     end
+
+    # AN UNLAYERED RULE BEATS EVERY LAYERED ONE, so `size-3` on an icon never applied.
+    test "every set's rules sit inside the components layer, after Tailwind's layer order" do
+      register([Heroicons, MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake])
+
+      assert Enum.sort(Icons.libraries()) ==
+               Enum.sort([
+                 Heroicons,
+                 MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake,
+                 Bundled
+               ])
+
+      for names <- [
+            ["hero-bell"],
+            ["fake-star"],
+            ["zzz-rocket"],
+            ["hero-bell", "fake-star", "zzz-rocket"]
+          ] do
+        css = Icons.css(names)
+
+        assert [order, "@layer components{" <> body] = String.split(css, "\n", parts: 2)
+        assert order == Icons.layer_order()
+        assert closes_at(body) == byte_size(body) - 1, "a rule escaped the block: #{css}"
+        for name <- names, do: assert(body =~ ".#{name}{")
+      end
+    end
+  end
+
+  # Where the `{` already open at the start of `body` closes.
+  defp closes_at(body) do
+    body
+    |> :binary.bin_to_list()
+    |> Enum.with_index()
+    |> Enum.reduce_while(1, fn
+      {?{, _at}, depth -> {:cont, depth + 1}
+      {?}, at}, 1 -> {:halt, at}
+      {?}, _at}, depth -> {:cont, depth - 1}
+      _char, depth -> {:cont, depth}
+    end)
   end
 
   # Chelekom's bundle ships the `hero-` set so that a host WITHOUT `deps/heroicons` can still draw a

@@ -101,6 +101,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   and a template that draws content reaches exactly those. `names/1` reads them out of content, to
   store beside it when it is written.
 
+  The icons content names are in no template either: a marker's `icon="hero-inbox"` reaches the
+  component as an expression, and a `<span class="hero-inbox">` in the HTML is never scanned. The
+  same event answers them as `icons` — see
+  `MishkaCmsCore.Runtime.Compilers.TailwindCompiler.content_icons/1` — and `icons/1` reads them out
+  of content.
+
   ## The editor
 
   The admin's content editor holds content as `segments/1` splits it: the HTML it edits, and each
@@ -130,7 +136,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   alias MishkaCmsCore.Builder.Furnishing
   alias MishkaCmsCore.Runtime.{Component, LiveViewHelpers, Translations}
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
-  alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Inspector, Markup}
+  alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Icons, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.Hook
 
@@ -304,6 +310,24 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   end
 
   def names(_html), do: []
+
+  @doc """
+  The icon classes `html` names, each once, in the order they first appear — a marker's attribute
+  (`[[slot item icon="hero-inbox"]]`) and the HTML's own classes (`<span class="hero-inbox">`) alike
+  — what a resource stores beside its content when it is written, for the site's stylesheet.
+
+  A class is found by the prefixes `MishkaCmsCore.Runtime.PageBuilder.Icons` registers
+  (`Icons.classes_in/1`), and kept only when a registered set ships it (`Icons.known?/1`): a
+  `hero-section` in the text, or a prefix nothing registers, is left out.
+
+      icons(~s([[slot item icon="hero-cloud" /]]<span class="hero-inbox size-4"></span>hero-nope))
+      #=> ["hero-cloud", "hero-inbox"]
+  """
+  @spec icons(String.t() | nil) :: [String.t()]
+  def icons(html) when is_binary(html),
+    do: html |> Icons.classes_in() |> Enum.filter(&Icons.known?/1)
+
+  def icons(_html), do: []
 
   @doc """
   One component marker read apart into a `t:tree/0` — what the content editor's settings edit.

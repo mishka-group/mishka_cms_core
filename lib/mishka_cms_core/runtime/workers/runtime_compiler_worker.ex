@@ -467,6 +467,43 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
     end
   end
 
+  @doc """
+  What a bulk write owes each component row it wrote — a kit installed or upgraded, every row written
+  with `defer_runtime` so no job ran for it — once the batch has committed and
+  `BootHandler.compile_components/1` has written every template and built every precompiled module
+  that was not built yet: the rest of what a single save of the row does
+  (`apply_component_lifecycle/3` on `"update"`).
+
+  A row switched off is purged. For one that is on, the memory of its name as unresolvable goes, and
+  a module a render had already built — lazy or precompiled — is built again from the new row;
+  `compile_components/1` passes over a loaded module, so without this it kept the old row's code
+  until the node restarted.
+
+  `data` is the row as a job carries it: `"name"`, `"site_id"` and `"active"`.
+  """
+  @spec refresh_after_bulk(map()) :: :ok | {:error, term()}
+  def refresh_after_bulk(%{"name" => name} = data) do
+    case resolve_site(data) do
+      :skip ->
+        :ok
+
+      {:ok, site_name, _site_id} ->
+        module = Helpers.module_name(name, site_name, "Component")
+
+        if data["active"],
+          do: rebuild_loaded(module, data),
+          else: apply_component_lifecycle("update", data, module)
+    end
+  end
+
+  defp rebuild_loaded(module, data) do
+    CompileFailureState.clear(module)
+
+    if Helpers.loaded?(module),
+      do: compile_module(module, "update", data, "component"),
+      else: :ok
+  end
+
   # True when a record should be unloaded and de-routed — destroyed, or updated
   # into an inactive state.
   @doc false

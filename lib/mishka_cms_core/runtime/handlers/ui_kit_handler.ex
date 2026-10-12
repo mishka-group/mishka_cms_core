@@ -913,7 +913,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
       with {:ok, bundle_result} <- result do
         RuntimeOrchestrator.sync_after_bulk(
           scope: sync_scope(site_id),
-          kinds: touched_kinds(bundle_result)
+          kinds: touched_kinds(bundle_result),
+          components: bundle_result.components
         )
 
         MishkaInstaller.Event.Hook.call(

@@ -10,7 +10,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
 
   `sync_after_bulk/1` rebuilds from the DB using the same steps boot uses:
 
-    1. component templates + modules (`BootHandler.compile_components/0`)
+    1. component templates + modules (`BootHandler.compile_components/0`), and for each
+       component row the batch wrote, a module a render had already built is built again from it
+       (`RuntimeCompilerWorker.refresh_after_bulk/1`)
     2. JS-hook templates (`BootHandler.create_js_hooks_template/0`)
     3. stylesheet load (`BootHandler.load_stylesheets/0`)
     4. for a global change: drop + rebuild the shared base once
@@ -31,6 +33,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
 
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.Compilers.{TailwindCompiler, JavaScriptCompiler}
+  alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
 
   @default_kinds [:component, :js_hook, :stylesheet]
 
@@ -43,6 +46,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
       every active site; `{:site, site_id}` scopes the rebuild to one site.
     * `:kinds` — which resource kinds were touched (default
       `#{inspect(@default_kinds)}`); limits which build steps run.
+    * `:components` — the component rows the batch wrote (default `[]`). Each one's module is
+      brought up to date as a single save of it would bring it — see
+      `RuntimeCompilerWorker.refresh_after_bulk/1`.
   """
   @spec sync_after_bulk(keyword()) :: :ok
   def sync_after_bulk(opts \\ []) do
@@ -61,7 +67,11 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
       return: false
     )
 
-    if :component in kinds, do: BootHandler.compile_components()
+    if :component in kinds do
+      BootHandler.compile_components()
+      Enum.each(Keyword.get(opts, :components, []), &refresh_component/1)
+    end
+
     if :js_hook in kinds, do: BootHandler.create_js_hooks_template()
     if :stylesheet in kinds, do: BootHandler.load_stylesheets()
 
@@ -73,6 +83,14 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
 
     Logger.info("[RuntimeOrchestrator] bulk sync complete (scope: #{inspect(scope)})")
     :ok
+  end
+
+  defp refresh_component(component) do
+    RuntimeCompilerWorker.refresh_after_bulk(%{
+      "name" => component.name,
+      "site_id" => component.site_id,
+      "active" => component.active
+    })
   end
 
   defp rebuild_assets(:global) do

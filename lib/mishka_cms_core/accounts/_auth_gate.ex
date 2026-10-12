@@ -47,7 +47,9 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
 
   `"auth:gate:check"` hears every decision before it is final: `%{action:, site_id:, user:, email:,
   allowed?:}`, and the `allowed?` it hands back is the answer — a captcha or an IP list can close a
-  way the settings left open, or open one they closed. `"auth:gate:refused"` hears each refusal
+  way the settings left open, or open one they closed. While its plugins cannot run, its
+  `cannot_run:` answer closes every way in: what they would close cannot be told.
+  `"auth:gate:refused"` hears each refusal
   (`return: false`), and `"auth:gate:signed_out"` each account `sign_out/2` signs out, with
   `%{site_id:, user_id:, email:}` (`return: false`).
   """
@@ -82,16 +84,11 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
     user = Map.get(who, :user)
     email = who |> Map.get(:email) |> Kernel.||(user && Map.get(user, :email)) |> address()
     decided = decide(action, site_id, user, email, pending)
+    state = %{action: action, site_id: site_id, user: user, email: email, allowed?: decided}
 
-    case Hook.call("auth:gate:check", %{
-           action: action,
-           site_id: site_id,
-           user: user,
-           email: email,
-           allowed?: decided
-         }) do
+    case Hook.call("auth:gate:check", state, cannot_run: %{state | allowed?: false}) do
       %{allowed?: allowed?} when is_boolean(allowed?) -> allowed?
-      _unanswered -> decided
+      _not_an_answer -> decided
     end
   end
 

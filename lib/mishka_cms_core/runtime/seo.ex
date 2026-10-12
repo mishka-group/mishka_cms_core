@@ -28,7 +28,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   The record's own `permissions` come back in the answer: `MishkaCmsWeb.RuntimeLive` opens the
   address only for whoever holds one of them, after the page's own, and the head keeps it out of an
-  index.
+  index. A plugin answers for each kind it owns even when it finds no record, so an answer the
+  plugins left untouched on a page that shows one — none of them answered: one raised, or the event
+  cannot run and hands back what it was given — means the record's lock could not be read, and the
+  page opens only for whoever holds `*`.
 
   ## Share cards
 
@@ -892,7 +895,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
     event()
     |> Hook.call(given)
-    |> accept(given)
+    |> answered(given)
     |> stand_ins(Keyword.get(opts, :stand_ins, false))
     |> head(
       opts
@@ -915,6 +918,14 @@ defmodule MishkaCmsCore.Runtime.Seo do
   end
 
   def page_number(_params), do: nil
+
+  # The plugins' answer; on a page that shows a record, an answer no plugin touched — the event
+  # cannot run, or none of its plugins answered — locks it to `*`: no plugin read the record to say
+  # it is open.
+  defp answered(given, %{record: record} = given) when is_binary(record),
+    do: %{given | permissions: ["*"]}
+
+  defp answered(answer, given), do: accept(answer, given)
 
   defp stand_ins(seo, true) do
     shown = for %{key: key} when is_binary(key) <- seo.var_docs, into: %{}, do: {key, "{#{key}}"}

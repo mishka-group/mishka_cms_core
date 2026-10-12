@@ -4,6 +4,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.RequirePermissionTest do
   import Phoenix.ConnTest
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsWeb.Runtime.Plugs.RequirePermission
   @moduletag :unit
 
@@ -75,6 +76,38 @@ defmodule MishkaCmsCore.Runtime.Plugs.RequirePermissionTest do
       result = RequirePermission.call(conn, ["test.permission"])
 
       assert result.halted == true
+    end
+  end
+
+  describe "call/2 while its events cannot run" do
+    setup do
+      EventCannotRun.stub!(["web:request:before_permission_gate", "web:request:permission_gate"])
+    end
+
+    test "still refuses a visitor without the permission", %{conn: conn} do
+      result = RequirePermission.call(conn, ["test.permission"])
+
+      assert result.halted
+      assert redirected_to(result) == "/"
+    end
+
+    test "still lets in a user who holds it", %{conn: conn} do
+      perm = create_permission!(name: "admin:dashboard:runtime:page")
+
+      user =
+        create_user!()
+        |> Ash.Changeset.for_update(:assign_permissions, %{permission_ids: [perm.id]},
+          authorize?: false
+        )
+        |> Ash.update!()
+        |> Ash.load!(permissions: [:name])
+
+      result =
+        conn
+        |> assign(:current_user, user)
+        |> RequirePermission.call(["admin:dashboard:runtime:page"])
+
+      refute result.halted
     end
   end
 

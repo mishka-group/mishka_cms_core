@@ -71,6 +71,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug do
 
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCore.Settings
+  alias MishkaInstaller.Event.Hook
 
   @open_actions [
     :sign_in_with_password,
@@ -118,9 +119,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug do
 
   defp refuse(conn, state, site, api) do
     conn =
-      MishkaInstaller.Event.Hook.call("api:request:site_unavailable", conn,
-        meta: %{state: state, site: site}
-      )
+      Hook.call("api:request:site_unavailable", conn, meta: %{state: state, site: site})
 
     if conn.halted, do: conn, else: conn |> send_refusal(state, site, api) |> halt()
   end

@@ -36,6 +36,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.RequirePermission do
   import Plug.Conn
   import Phoenix.Controller
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaInstaller.Event.Hook
 
   @doc "The required list and how a refusal is answered, from `:permissions` and `:on_denied`."
   def init(opts) do
@@ -54,18 +55,14 @@ defmodule MishkaCmsWeb.Runtime.Plugs.RequirePermission do
       [:mishka_cms, :runtime, :plugs, :require_permission],
       %{path: conn.request_path, method: conn.method, permissions: permissions},
       fn ->
-        conn = MishkaInstaller.Event.Hook.call("web:request:before_permission_gate", conn)
+        conn = Hook.call("web:request:before_permission_gate", conn)
         current_user = conn.assigns[:current_user]
         context = Ash.PlugHelpers.get_context(conn) || %{}
         authorized = AccessPermissions.match?(current_user, context, permissions: permissions)
 
         result =
           if(authorized, do: conn, else: refuse(conn, mode))
-          |> then(
-            &MishkaInstaller.Event.Hook.call("web:request:permission_gate", &1,
-              meta: %{authorized: authorized}
-            )
-          )
+          |> then(&Hook.call("web:request:permission_gate", &1, meta: %{authorized: authorized}))
 
         {result, %{user_id: current_user && current_user.id, authorized: authorized}}
       end

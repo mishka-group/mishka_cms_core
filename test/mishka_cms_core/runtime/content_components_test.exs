@@ -198,6 +198,46 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     end
   end
 
+  # Several registered sets are `MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest`'s, which swaps
+  # the process-global registry.
+  describe "icons/1 — the icon classes a resource stores beside its content" do
+    test "a marker's attributes name them, on a component and in its slots alike" do
+      html =
+        ~s([[component chelekom-breadcrumb separator_icon="hero-star"]]) <>
+          ~s([[slot item icon="hero-home" link="/docs"]]Home[[/slot]]) <>
+          ~s([[slot item icon='hero-inbox']]Inbox[[/slot]]) <>
+          ~s([[slot item icon=&quot;hero-cloud&quot;]]Cloud[[/slot]][[/component]])
+
+      assert ContentComponents.icons(html) == [
+               "hero-star",
+               "hero-home",
+               "hero-inbox",
+               "hero-cloud"
+             ]
+    end
+
+    test "the HTML's own class lists name them, each once, in the order they first appear" do
+      html =
+        ~s(<p><span class="size-4 hero-envelope text-red-500"></span> Mail</p>) <>
+          ~s(<span class="hero-circle-stack-solid"></span><i class="hero-envelope"></i>)
+
+      assert ContentComponents.icons(html) == ["hero-envelope", "hero-circle-stack-solid"]
+    end
+
+    test "a token no set ships, a prefix nothing registers and a word running into one are left out" do
+      html =
+        ~s(<p class="hero-section superhero-cloud">A hero-banner, lucide-heart and ) <>
+          ~s([[slot item icon="hero-"]]x[[/slot]]</p>)
+
+      assert ContentComponents.icons(html) == []
+    end
+
+    test "nothing for content that names none, or none at all" do
+      assert ContentComponents.icons("<p>plain</p>") == []
+      assert ContentComponents.icons(nil) == []
+    end
+  end
+
   describe "cast/2 — the attributes a component takes" do
     @declared [
       %{name: "title", type: "string", opts: %{default: nil}},

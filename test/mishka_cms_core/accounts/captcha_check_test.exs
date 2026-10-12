@@ -74,6 +74,13 @@ defmodule MishkaCmsCore.Accounts.CaptchaCheckTest do
       assert CaptchaCheck.refusal(error) == %{reason: :missing}
     end
 
+    test "refuses a form while the captcha providers' plugins cannot run, asking nobody", ctx do
+      MishkaCmsCore.Test.EventCannotRun.stub!(MishkaCmsCore.Captcha.Provider.event())
+
+      assert {:error, error} = sign_in(ctx, token())
+      assert CaptchaCheck.refusal(error) == %{reason: :failed}
+    end
+
     test "signs in with a token Cloudflare accepts", ctx do
       pass!()
       assert {:ok, %User{}} = sign_in(ctx, token())

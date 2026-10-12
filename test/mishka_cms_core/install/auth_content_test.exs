@@ -22,6 +22,7 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCoreWeb.ReturnTo
 
   require Ash.Query
@@ -305,6 +306,30 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       assert path == "/api/auth/user/password/sign_in_with_token"
       assert %{"return_to" => ^token, "token" => signed} = URI.decode_query(query)
       assert is_binary(signed)
+    end
+
+    test "a sign-in refused for its rate says how long to wait while auth:live:rate_limited cannot run",
+         %{site: site} do
+      previous = Application.fetch_env(:mishka_cms_core, AuthRateLimit)
+      Application.put_env(:mishka_cms_core, AuthRateLimit, limit: 1)
+
+      on_exit(fn ->
+        case previous do
+          {:ok, env} -> Application.put_env(:mishka_cms_core, AuthRateLimit, env)
+          :error -> Application.delete_env(:mishka_cms_core, AuthRateLimit)
+        end
+      end)
+
+      EventCannotRun.stub!("auth:live:rate_limited")
+      user = create_user!(site_id: site.id)
+      module = compiled!(page_at(site, "/:lang/auth"), site, "Page")
+      params = %{"user" => %{"email" => to_string(user.email), "password" => "not-the-password"}}
+
+      {:noreply, _first} = module.handle_event("sign_in", params, socket(site))
+      {:noreply, socket} = module.handle_event("sign_in", params, socket(site))
+
+      assert socket.assigns.message.id == "auth-rate-limited"
+      refute socket.redirected
     end
 
     test "a rate refusal says how long to wait in AuthRateLimit's own words", %{site: site} do

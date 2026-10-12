@@ -644,7 +644,52 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
         do: assert(Seo.locale(language) =~ ~r/\A#{language}(_[A-Z]{2})?\z/, language)
   end
 
+  defmodule RaisingSeo do
+    @moduledoc false
+    def call(_seo), do: raise("broken extension")
+  end
+
   describe "resolve/2" do
+    test "a page that shows a record no plugin answered for — one raised — opens only for *",
+         %{site: site} do
+      {:ok, _} =
+        MishkaInstaller.Event.Event.write(%{
+          name: RaisingSeo,
+          event: Seo.event(),
+          extension: :mishka_cms_core,
+          status: :started
+        })
+
+      :ok = MishkaInstaller.Event.EventHandler.do_compile(Seo.event(), :start, false)
+
+      on_exit(fn ->
+        MishkaInstaller.Event.Event.unregister(:name, RaisingSeo, false)
+        MishkaInstaller.Event.EventHandler.do_compile(Seo.event(), :start, false)
+      end)
+
+      page = %{title: "Post", language: "en", seo: %{description: nil, schema: []}}
+      opts = [site_id: site.id, base: @base]
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        assert Seo.resolve(page, opts ++ [url: "/en/blog/x", record: "blog:post"]).permissions ==
+                 ["*"]
+
+        assert Seo.resolve(page, opts ++ [url: "/en/about"]).permissions == []
+      end)
+    end
+
+    test "while its plugins cannot run, a page that shows a record opens only for whoever holds *",
+         %{site: site} do
+      MishkaCmsCore.Test.EventCannotRun.stub!(Seo.event())
+      page = %{title: "Post", language: "en", seo: %{description: nil, schema: []}}
+      opts = [site_id: site.id, base: @base]
+
+      assert Seo.resolve(page, opts ++ [url: "/en/blog/x", record: "blog:post"]).permissions ==
+               ["*"]
+
+      assert Seo.resolve(page, opts ++ [url: "/en/about"]).permissions == []
+    end
+
     test "is the head a plugin's answer builds, with its variables listed", %{site: site} do
       page = %{title: "About", language: "en", seo: %{description: "D", schema: []}}
 

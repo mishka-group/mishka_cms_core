@@ -197,6 +197,22 @@ defmodule MishkaCmsCore.MailTest do
       assert error =~ "No email provider"
     end
 
+    test "while the providers' plugins cannot run, a site sends nothing, and says why", %{
+      site: site
+    } do
+      MishkaCmsCore.Test.EventCannotRun.stub!(Provider.event())
+
+      assert {:error, :not_configured} =
+               Mail.deliver(email(site.id), site_id: site.id, purpose: "welcome")
+
+      refute_email_sent()
+
+      assert [%{status: :not_configured, error: error}] =
+               Ash.read!(Delivery, authorize?: false, tenant: site.id)
+
+      assert error =~ "plugins are not loaded"
+    end
+
     test "a site on Resend without its own key sends nothing, though the installation has one", %{
       site: site
     } do

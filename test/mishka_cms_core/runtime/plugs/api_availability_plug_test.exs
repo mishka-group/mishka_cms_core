@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlugTest do
   alias MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.EventCannotRun
 
   setup do
     SettingsState.refresh()
@@ -68,6 +69,19 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlugTest do
 
       refute through_plug(site, user(nil, ["admin:api:*"])).halted
       assert through_plug(site, user(nil, ["admin:dashboard:*"])).status == 503
+    end
+  end
+
+  describe "an offline site's API while api:request:site_unavailable cannot run" do
+    test "still refuses its dashboard-only admin with a 503" do
+      EventCannotRun.stub!("api:request:site_unavailable")
+      site = cached_site!(active: true)
+      {:ok, _} = Settings.put("cms.offline", true, site_id: site.id)
+
+      conn = through_plug(site, user(site.id, ["admin:dashboard:*"]))
+
+      assert conn.halted
+      assert conn.status == 503
     end
   end
 end

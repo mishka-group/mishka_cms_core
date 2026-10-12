@@ -32,6 +32,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Redirect
   alias MishkaCmsCore.Runtime.States.{RedirectsState, SiteState}
+  alias MishkaInstaller.Event.Hook
 
   @statuses [
     {301, dgettext_noop("mishka_gervaz", "301 Moved permanently")},
@@ -319,7 +320,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
       |> put_status(status)
       |> put_resp_header("location", location)
       |> then(
-        &MishkaInstaller.Event.Hook.call("web:request:redirected", &1,
+        &Hook.call("web:request:redirected", &1,
           meta: %{site: site, from: conn.request_path, to: location, status: status}
         )
       )

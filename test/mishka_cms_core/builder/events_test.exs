@@ -232,4 +232,22 @@ defmodule MishkaCmsCore.Builder.EventsTest do
                       %{action: "probe-toolbar", node_id: "nabcdefgh", token: "a-session-token"}}
     end
   end
+
+  describe "an event whose plugins cannot run" do
+    test "refuses what it could veto, and hands anything else back unchanged" do
+      MishkaCmsCore.Test.EventCannotRun.stub!([
+        "builder:save:before",
+        "builder:containment",
+        "builder:ai:before_ask",
+        "builder:examples"
+      ])
+
+      assert {:error, saved} = Events.before_save(%{})
+      assert saved =~ "not loaded"
+      assert {:ok, false, placed} = Events.containment(true, %{})
+      assert placed =~ "not loaded"
+      assert {:error, _asked} = Events.before_ask(%{prompt: "Write a heading"})
+      assert Events.examples([%{"label" => "One"}], %{}) == [%{"label" => "One"}]
+    end
+  end
 end

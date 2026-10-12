@@ -12,7 +12,9 @@ defmodule MishkaCmsCore.MixProject do
       aliases: aliases(),
       elixirc_paths: elixirc_paths(Mix.env()),
       package: package(),
-      gettext: [excluded_refs_from_purging: ~r{^\.\./mishka_gervaz/}]
+      # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
+      # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
+      gettext: [excluded_refs_from_purging: ~r{^\.\./}]
     ]
   end
 
@@ -92,7 +94,7 @@ defmodule MishkaCmsCore.MixProject do
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
-      {:mishka_installer, "~> 0.1"},
+      {:mishka_installer, "~> 0.1.13"},
       {:guarded_struct, "~> 0.1"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},

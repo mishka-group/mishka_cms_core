@@ -2794,6 +2794,52 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
       %{component: create_component!(site_id: site.id, name: "hero-card")}
     end
 
+    # An installed extension's own components are found together under its name, ahead of the
+    # categories, and its chip shows them alone; a UI kit's stay under their categories.
+    test "an installed extension's own components are one group under its name", %{
+      conn: conn,
+      page: page
+    } do
+      installer = MishkaCmsCore.Test.AcmeShopInstaller
+
+      {:ok, _} =
+        MishkaInstaller.Event.Event.write(%{
+          name: installer,
+          event: MishkaCmsCore.Install.Extensions.event(),
+          extension: :acme_shop,
+          extra: [%{label: "Acme Shop", summary: "", fields: []}],
+          status: :started
+        })
+
+      on_exit(fn -> MishkaInstaller.Event.Event.unregister(:name, installer, false) end)
+
+      create_component!(
+        name: "shop-cart",
+        type: "media",
+        extra: %{"ui_kit" => "acme_shop", "ui_kit_version" => "1.0.0"}
+      )
+
+      create_component!(name: "kit-photo", type: "media", extra: %{"ui_kit" => "chelekom"})
+
+      {:ok, view, _html} = open_builder(conn, page)
+
+      assert has_element?(view, ~s([data-group="Acme Shop"] #pb-comp-shop-cart))
+      assert has_element?(view, ~s([data-group="media"] #pb-comp-kit-photo))
+      refute has_element?(view, ~s([data-group="media"] #pb-comp-shop-cart))
+
+      assert view
+             |> render()
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query(~s([data-role="pb-group"]))
+             |> Enum.map(&LazyHTML.attribute(&1, "data-group"))
+             |> List.first() == ["Acme Shop"]
+
+      view |> element(~s(button[phx-value-cat="Acme Shop"])) |> render_click()
+
+      assert has_element?(view, "#pb-comp-shop-cart")
+      refute has_element?(view, "#pb-comp-kit-photo")
+    end
+
     test "lists the site's components and filters by search", %{conn: conn, page: page} do
       {:ok, view, _html} = open_builder(conn, page)
 
@@ -2885,8 +2931,12 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
       assert Panels.entry_icon(entry(view, "kit-zzz")) == :image
     end
 
-    # Every card is the same box whatever its name is; one wrapping label must not make its row grow.
-    test "every palette card is the same fixed height", %{conn: conn, page: page} do
+    # Every card is the same box whatever its name is; one wrapping label must not make its row grow,
+    # and the box holds two lines of it: the label never shrinks to one and cuts the second off.
+    test "every palette card is the same fixed height, tall enough for a two-line name", %{
+      conn: conn,
+      page: page
+    } do
       create_component!(name: "kit-x")
       create_component!(name: "kit-with-a-very-long-name-that-wraps-twice")
 
@@ -2897,12 +2947,12 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
         for name <- ~w(kit-x kit-with-a-very-long-name-that-wraps-twice) do
           [_before, after_id] = String.split(html, ~s(id="pb-comp-#{name}"), parts: 2)
           [tag, _rest] = String.split(after_id, ">", parts: 2)
-          tag =~ "h-[86px]"
+          tag =~ "h-[92px]"
         end
 
       assert short
       assert long
-      assert html =~ "line-clamp-2"
+      assert html =~ "line-clamp-2 w-full flex-none"
     end
 
     # The kit's own name is on every one of its components, so printing it on every card spends the

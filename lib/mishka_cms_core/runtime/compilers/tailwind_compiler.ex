@@ -256,6 +256,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Stylesheet
+  alias MishkaInstaller.Event.Hook
 
   # Track if Tailwind binary is verified (avoid repeated install checks)
   @tailwind_verified_key :tailwind_binary_verified
@@ -680,12 +681,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   end
 
   defp build_css_content_preview(site_name, preview_ns) do
-    closure = closure_for(site_name, [preview_ns])
+    content = content_named(site_name)
+    closure = closure_for(site_name, content.components, [preview_ns])
 
     {global_pre, _global_post} = read_global_stylesheets()
     {site_pre, post_tailwind} = read_site_stylesheets(site_name)
 
     """
+    #{layer_order()}
     #{global_pre}
     #{site_pre}
 
@@ -701,7 +704,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     #{reachable_sources(closure, site_name, [preview_ns])}
 
     #{tailwind_preamble()}
-    #{icon_css(closure, site_name)}
+    #{icon_css(closure, site_name, content.icons)}
 
     #{post_tailwind}
     """
@@ -833,7 +836,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     case compile(site_name) do
       {:ok, css} ->
         css =
-          MishkaInstaller.Event.Hook.call("runtime:compile:css", css, meta: %{site: site_name})
+          Hook.call("runtime:compile:css", css, meta: %{site: site_name})
 
         {brotli, gzip} = Helpers.compress_asset(css)
         updated_at = DateTime.utc_now()
@@ -1394,14 +1397,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   # ONE WALK PER COMPILE, shared by the `@source` list and the icon sweep below — they are the same
   # question asked twice, and answering it reads every reachable template off disk.
-  defp closure_for(site_name, extra_scopes \\ []) do
+  defp closure_for(site_name, components, extra_scopes \\ []) do
     runtime = Path.join(get_temp_dir(), "runtime")
 
     CssClosure.for_site(site_name,
       runtime_dir: runtime,
       extra_scopes: extra_scopes,
       roots: closure_roots(site_name, runtime_dir: runtime, extra_scopes: extra_scopes),
-      content_components: content_components(site_name)
+      content_components: components
     )
   end
 
@@ -1410,33 +1413,63 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   that content reaches (`MishkaCmsCore.Runtime.Compilers.CssClosure`).
 
   Asked of whoever stores content through `runtime:compile:content_components`, with
-  `%{site: name, site_id: id, components: []}`: a plugin adds the names its content uses to
-  `components`. Read while a stylesheet is built, never in a request. `[]` for a site `SiteState`
-  does not know.
+  `%{site: name, site_id: id, components: [], icons: []}`: a plugin adds the names its content uses
+  to `components`, and the icon classes it names to `icons` (`content_icons/1`). Read while a
+  stylesheet is built, never in a request. `[]` for a site `SiteState` does not know, and while the
+  event cannot run.
 
-      def call(%{site_id: site_id, components: names} = data),
-        do: {:reply, %{data | components: names ++ names_my_posts_use(site_id)}}
+      def call(%{site_id: site_id, components: names, icons: icons} = data) do
+        {:reply,
+         %{
+           data
+           | components: names ++ names_my_posts_use(site_id),
+             icons: icons ++ icons_my_posts_use(site_id)
+         }}
+      end
   """
   @spec content_components(String.t()) :: [String.t()]
-  def content_components(site_name) do
+  def content_components(site_name), do: content_named(site_name).components
+
+  @doc """
+  The icon classes the stored content of the site `site_name` names — a marker's
+  `icon="hero-inbox"`, a `<span class="hero-inbox">` in its HTML
+  (`MishkaCmsCore.Runtime.ContentComponents.icons/1`). No template holds them, so no scan finds
+  them: the site's stylesheet carries a rule for each a registered set ships, beside the icons its
+  templates name.
+
+  Answered in `icons` by the same `runtime:compile:content_components` event as
+  `content_components/1`. `[]` for a site `SiteState` does not know, and while the event cannot run.
+  """
+  @spec content_icons(String.t()) :: [String.t()]
+  def content_icons(site_name), do: content_named(site_name).icons
+
+  # ONE EVENT PER COMPILE for both answers, so each plugin reads its content's rows once.
+  defp content_named(site_name) do
     with {:ok, %{id: site_id}} <- MishkaCmsCore.Runtime.States.SiteState.get_by_name(site_name),
-         %{components: names} when is_list(names) <-
+         %{} = answer <-
            MishkaInstaller.Event.Hook.call(
              "runtime:compile:content_components",
-             %{site: site_name, site_id: site_id, components: []},
+             %{site: site_name, site_id: site_id, components: [], icons: []},
              meta: %{site: site_name}
            ) do
-      names |> Enum.filter(&is_binary/1) |> Enum.uniq()
+      %{components: named(answer, :components), icons: named(answer, :icons)}
     else
-      _nothing_named -> []
+      _nothing_named -> %{components: [], icons: []}
+    end
+  end
+
+  defp named(answer, key) do
+    case Map.get(answer, key) do
+      names when is_list(names) -> names |> Enum.filter(&is_binary/1) |> Enum.uniq()
+      _not_a_list -> []
     end
   end
 
   @doc """
   Enqueues the stylesheet build of the site `site_id` names — its `"css"` job, on the per-site path
   that coalesces a burst of writes into one build. For a write that changed what the stylesheet is
-  built from without a component, page or layout being written: content that names a component it
-  did not name before.
+  built from without a component, page or layout being written: content that names a component or
+  an icon it did not name before.
 
   A switched-off or unknown site has nothing to build, and is `:ok`. So is every call under the
   `:env_test?` flag, as for every other runtime job.
@@ -1633,7 +1666,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # The names come from the components this site actually reaches, which is the same closure the
   # stylesheet is already built from: an icon belonging to a component no page renders has no more
   # claim on the bundle than the component itself.
-  defp icon_css(closure, site_name) do
+  #
+  # AND THE ICONS THE SITE'S STORED CONTENT NAMES (`content_icons/1`), which no template holds: a
+  # marker's `icon="hero-inbox"` reaches its component as `name={item[:icon]}`, and a
+  # `<span class="hero-inbox">` in a post is never scanned — so neither had a rule, and both drew as
+  # an empty box.
+  defp icon_css(closure, site_name, content_icons) do
     closure
     |> icon_scan_paths(site_name)
     |> Enum.flat_map(fn path ->
@@ -1642,9 +1680,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         {:error, _reason} -> []
       end
     end)
+    |> Enum.concat(content_icons)
     |> Enum.uniq()
     |> MishkaCmsCore.Runtime.PageBuilder.Icons.css()
   end
+
+  # FIRST in a site or preview input. Those import Tailwind piecemeal, declaring `theme` and
+  # `utilities` only, so without it the chunk ranks the icons' `components` layer above utilities.
+  defp layer_order, do: MishkaCmsCore.Runtime.PageBuilder.Icons.layer_order()
 
   # SCOPED TO THIS SITE even when the walk gave up: `runtime/*/component/*` matched every OTHER
   # site's component directory too, so one site's icons rode into another's stylesheet.
@@ -1813,12 +1856,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # utilities aren't generated, so site components render uncolored.
   # Global theme first so a site :theme row can still override it.
   defp build_css_content_site_only(site_name) do
-    closure = closure_for(site_name)
+    content = content_named(site_name)
+    closure = closure_for(site_name, content.components)
 
     {global_pre, _global_post} = read_global_stylesheets()
     {site_pre, post_tailwind} = read_site_stylesheets(site_name)
 
     """
+    #{layer_order()}
     #{global_pre}
     #{site_pre}
 
@@ -1836,7 +1881,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
     /* Plugin needed for icon classes in site templates */
     #{tailwind_preamble()}
-    #{icon_css(closure, site_name)}
+    #{icon_css(closure, site_name, content.icons)}
 
     /* === post-Tailwind: site :base + :custom rows === */
     #{post_tailwind}

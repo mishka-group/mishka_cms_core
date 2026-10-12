@@ -8,6 +8,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
   import Plug.Test
   import Plug.Conn
 
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
 
   setup do
@@ -51,6 +52,21 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
 
       assert get_resp_header(conn, "content-security-policy") == []
       assert get_resp_header(conn, "content-security-policy-report-only") == []
+    end
+  end
+
+  describe "while its events cannot run" do
+    test "every header is put on, as with no plugin listening" do
+      EventCannotRun.stub!([
+        "web:request:before_response",
+        "web:response:before_security_headers"
+      ])
+
+      conn = run("/about", csp: :enforce)
+
+      assert [_policy] = get_resp_header(conn, "content-security-policy")
+      assert get_resp_header(conn, "x-frame-options") == ["SAMEORIGIN"]
+      assert is_binary(conn.assigns.csp_nonce)
     end
   end
 

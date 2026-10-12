@@ -27,6 +27,7 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Test.Plugins.{SeoManyUrls, SeoRobotsLines, SeoSitemapUrls}
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.{SitemapUnavailable, SitemapUnavailablePage}
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -652,6 +653,19 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
           assert {id, scheduled_at} == {job.id, job.scheduled_at}, "#{path} moved a #{state} job"
         end
       end
+    end
+  end
+
+  describe "a sitemap not built yet while web:request:sitemap_unavailable cannot run" do
+    test "is still a 503 a crawler comes back for", %{site: site} do
+      EventCannotRun.stub!("web:request:sitemap_unavailable")
+      create_page!(site_id: site.id, path: "/about")
+
+      conn = fetch(site, "/sitemap.xml")
+
+      assert conn.status == 503
+      assert get_resp_header(conn, "retry-after") == ["60"]
+      assert get_resp_header(conn, "cache-control") == ["no-store"]
     end
   end
 
