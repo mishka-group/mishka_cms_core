@@ -302,6 +302,18 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
       assert %Needed{reason: :invalid} = recover_error(user, "NOTACODE1234")
       assert SecondFactor.recovery_codes_left(user) == 10
     end
+
+    test "the strategy's own verify action answers nil for a wrong or used code", %{user: user} do
+      [code | _rest] = recovery_codes!(user)
+
+      assert %Ash.Resource.Actions.Action{allow_nil?: true} =
+               Ash.Resource.Info.action(User, :verify_with_recovery_code)
+
+      assert {:ok, nil} = verify_recovery_code(user, "NOTACODE1234")
+      assert {:ok, %User{}} = verify_recovery_code(user, code)
+      assert {:ok, nil} = verify_recovery_code(user, code)
+      assert SecondFactor.recovery_codes_left(user) == 9
+    end
   end
 
   describe "the account's emails" do
@@ -519,6 +531,16 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
       tenant: user.site_id
     )
     |> Ash.read_one()
+  end
+
+  # As `SecondFactor` runs it at sign-in: the action's policy forbids it to every actor.
+  defp verify_recovery_code(user, code) do
+    User
+    |> Ash.ActionInput.for_action(:verify_with_recovery_code, %{user: reload(user), code: code},
+      tenant: user.site_id,
+      authorize?: false
+    )
+    |> Ash.run_action()
   end
 
   defp recover_error(user, recovery_code) do
