@@ -18,6 +18,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  import MishkaCmsCore.CoreComponents, only: [select_chevron: 1]
+
   alias MishkaCmsCore.Builder.Collection
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Builder.Descriptor
@@ -4422,23 +4424,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       phx-value-name={@name}
       phx-value-value_kind={option_kind(@atom?)}
     >
-      <select
-        id={"pb-attr-#{@name}"}
-        name="value"
-        class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[12px] font-semibold text-[#3a382f]"
-      >
-        <option value="">
-          {(default_text(@default) && gettext("%{value} (default)", value: default_text(@default))) ||
-            gettext("— default —")}
-        </option>
-        <option
-          :for={value <- @values}
-          value={option_value(value, @atom?)}
-          selected={chosen?(@value, value)}
+      <div class="relative">
+        <select
+          id={"pb-attr-#{@name}"}
+          name="value"
+          class="h-8 w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[12px] font-semibold text-[#3a382f]"
         >
-          {value}
-        </option>
-      </select>
+          <option value="">
+            {(default_text(@default) && gettext("%{value} (default)", value: default_text(@default))) ||
+              gettext("— default —")}
+          </option>
+          <option
+            :for={value <- @values}
+            value={option_value(value, @atom?)}
+            selected={chosen?(@value, value)}
+          >
+            {value}
+          </option>
+        </select>
+        <.select_chevron />
+      </div>
     </.form>
     """
   end
@@ -5019,16 +5024,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       phx-value-key={@key}
       class="min-w-0 flex-1"
     >
-      <select
-        :if={@options != []}
-        name="value"
-        class="h-[26px] w-full rounded-[7px] border border-[#ecebe6] bg-white px-1.5 text-[11px] font-semibold text-[#3a382f]"
-      >
-        <option value="">{gettext("— none —")}</option>
-        <option :for={option <- @options} value={option} selected={printable(@value) == option}>
-          {option}
-        </option>
-      </select>
+      <div :if={@options != []} class="relative">
+        <select
+          name="value"
+          class="h-[26px] w-full cursor-pointer appearance-none rounded-[7px] border border-[#ecebe6] bg-white ps-1.5 pe-8 text-[11px] font-semibold text-[#3a382f]"
+        >
+          <option value="">{gettext("— none —")}</option>
+          <option :for={option <- @options} value={option} selected={printable(@value) == option}>
+            {option}
+          </option>
+        </select>
+        <.select_chevron />
+      </div>
 
       <input
         :if={@options == []}
@@ -5400,7 +5407,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 id={"pb-style-#{@bucket}-#{prop}"}
                 name="value"
                 class={[
-                  "h-9 w-full appearance-none rounded-[9px] border py-0 pl-2.5 pr-7 text-[11.5px] font-semibold text-[#3a382f] outline-none",
+                  "h-9 w-full cursor-pointer appearance-none rounded-[9px] border py-0 ps-2.5 pe-8 text-[11.5px] font-semibold text-[#3a382f] outline-none",
                   (own_style(@node, @bucket, prop) && "border-[#c3c1f0] bg-white") ||
                     "border-[#ecebe6] bg-[#faf9f6]"
                 ]}
@@ -5414,11 +5421,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                   {option}
                 </option>
               </select>
-              <.icon
-                name={:chevron}
-                size={11}
-                class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90 text-[#a8a5a0]"
-              />
+              <.select_chevron />
             </div>
           </.form>
           <.field_form
@@ -7541,15 +7544,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       <select
         id={@id}
         name="form"
-        class="h-9 w-full appearance-none rounded-[9px] border border-[#ecebe6] bg-white py-0 pl-2.5 pr-7 text-[11.5px] font-semibold text-[#3a382f] outline-none"
+        class="h-9 w-full cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white py-0 ps-2.5 pe-8 text-[11.5px] font-semibold text-[#3a382f] outline-none"
       >
         {render_slot(@inner_block)}
       </select>
-      <.icon
-        name={:chevron}
-        size={11}
-        class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 rotate-90 text-[#a8a5a0]"
-      />
+      <.select_chevron />
     </div>
     """
   end
@@ -11285,46 +11284,50 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 twelve more render their own content closed, so "Show" pointed at one is the whole
                 of "open that dialog" — and the list is the document's own concealing nodes rather
                 than a free-text selector, so a click still cannot reach outside the page. --%>
-          <select
-            :if={@openable != []}
-            id="pb-act-target"
-            name="target"
-            phx-change="aim_interaction"
-            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
-          >
-            <%!-- THE AUTHOR'S CHOICE OUTRANKS THE SAVED ONE, because picking a target re-renders this
-                  list — the verbs a click can honour depend on what it points at — and a `selected`
-                  computed only from what is in the document put the select straight back to "This
-                  element" underneath them. Applying then wrote a command aimed at the button. --%>
-            <option value="" selected={@aiming == ""}>{gettext("This element")}</option>
-            <option
-              :for={{id, label, scope} <- @openable}
-              :if={id != @node.id}
-              value={id}
-              selected={
-                (@aiming && id == @aiming) ||
-                  (is_nil(@aiming) and scope != nil and scope == @aimed)
-              }
+          <div :if={@openable != []} class="relative">
+            <select
+              id="pb-act-target"
+              name="target"
+              phx-change="aim_interaction"
+              class="h-[30px] w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
             >
-              {label}
-            </option>
-          </select>
+              <%!-- THE AUTHOR'S CHOICE OUTRANKS THE SAVED ONE, because picking a target re-renders this
+                    list — the verbs a click can honour depend on what it points at — and a `selected`
+                    computed only from what is in the document put the select straight back to "This
+                    element" underneath them. Applying then wrote a command aimed at the button. --%>
+              <option value="" selected={@aiming == ""}>{gettext("This element")}</option>
+              <option
+                :for={{id, label, scope} <- @openable}
+                value={id}
+                selected={
+                  (@aiming && id == @aiming) ||
+                    (is_nil(@aiming) and scope != nil and scope == @aimed)
+                }
+              >
+                {label}
+              </option>
+            </select>
+            <.select_chevron />
+          </div>
 
-          <select
-            id="pb-act-action"
-            name="action"
-            phx-change="pick_interaction"
-            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
-          >
-            <option value="">{gettext("Nothing")}</option>
-            <option
-              :for={{value, label} <- interaction_actions(@opener)}
-              value={value}
-              selected={value == @verb}
+          <div class="relative">
+            <select
+              id="pb-act-action"
+              name="action"
+              phx-change="pick_interaction"
+              class="h-[30px] w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
             >
-              {translate(label)}
-            </option>
-          </select>
+              <option value="">{gettext("Nothing")}</option>
+              <option
+                :for={{value, label} <- interaction_actions(@opener)}
+                value={value}
+                selected={value == @verb}
+              >
+                {translate(label)}
+              </option>
+            </select>
+            <.select_chevron />
+          </div>
 
           <%!-- WHATEVER THE CHOSEN VERB ASKS FOR, AND NOTHING ELSE. The class box used to be drawn
                 for all six verbs and does nothing for three of them, which left an author to work
@@ -11352,20 +11355,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
             />
 
-            <select
-              :if={field.type == :select}
-              id={"pb-act-#{field.name}"}
-              name={field.name}
-              class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
-            >
-              <option
-                :for={{value, label} <- field.options}
-                value={value}
-                selected={value == typed(@state, @verb, field)}
+            <div :if={field.type == :select} class="relative">
+              <select
+                id={"pb-act-#{field.name}"}
+                name={field.name}
+                class="h-[30px] w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
               >
-                {translate(label)}
-              </option>
-            </select>
+                <option
+                  :for={{value, label} <- field.options}
+                  value={value}
+                  selected={value == typed(@state, @verb, field)}
+                >
+                  {translate(label)}
+                </option>
+              </select>
+              <.select_chevron />
+            </div>
           </div>
 
           <%!-- The action's own words, so core does not hold a note about somebody else's verb. --%>
@@ -11443,20 +11448,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         >
           <input type="hidden" name="node_id" value={@node.id} />
 
-          <select
-            id="pb-when-rule"
-            name="rule"
-            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
-          >
-            <option value="" selected={@state == :none}>{gettext("Always")}</option>
-            <option
-              :for={{value, label} <- Conditions.rules()}
-              value={value}
-              selected={condition?(@state, value)}
+          <div class="relative">
+            <select
+              id="pb-when-rule"
+              name="rule"
+              class="h-[30px] w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
             >
-              {translate(label)}
-            </option>
-          </select>
+              <option value="" selected={@state == :none}>{gettext("Always")}</option>
+              <option
+                :for={{value, label} <- Conditions.rules()}
+                value={value}
+                selected={condition?(@state, value)}
+              >
+                {translate(label)}
+              </option>
+            </select>
+            <.select_chevron />
+          </div>
 
           <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
             {gettext(
@@ -11530,16 +11538,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         >
           <input type="hidden" name="node_id" value={@node.id} />
 
-          <select
-            id="pb-hook-select"
-            name="hook"
-            class="h-[30px] w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
-          >
-            <option value="">{gettext("None")}</option>
-            <option :for={hook <- @hooks} value={hook.name} selected={hook.name == @attached}>
-              {(hook.global? && gettext("%{hook} (global)", hook: hook.hook)) || hook.hook}
-            </option>
-          </select>
+          <div class="relative">
+            <select
+              id="pb-hook-select"
+              name="hook"
+              class="h-[30px] w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[11.5px] font-semibold text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
+            >
+              <option value="">{gettext("None")}</option>
+              <option :for={hook <- @hooks} value={hook.name} selected={hook.name == @attached}>
+                {(hook.global? && gettext("%{hook} (global)", hook: hook.hook)) || hook.hook}
+              </option>
+            </select>
+            <.select_chevron />
+          </div>
 
           <p class="text-[10px] font-medium leading-[1.5] text-[#6d6a63]">
             {gettext("A hook needs a unique id, so one is given to this element if it has none.")}
@@ -12124,23 +12135,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 phx-submit="wizard_pick"
               >
                 <input type="hidden" name="name" value={axis.name} />
-                <select
-                  id={"pb-wizard-select-#{axis.name}"}
-                  name="value"
-                  class="h-8 w-full rounded-[8px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-medium text-[#3a382f]"
-                >
-                  <option value="">
-                    {(axis.default && gettext("%{value} (default)", value: axis.default)) ||
-                      gettext("— default —")}
-                  </option>
-                  <option
-                    :for={value <- axis.values}
-                    value={value}
-                    selected={@wizard[axis.name] == value}
+                <div class="relative">
+                  <select
+                    id={"pb-wizard-select-#{axis.name}"}
+                    name="value"
+                    class="h-8 w-full cursor-pointer appearance-none rounded-[8px] border border-[#ecebe6] bg-white ps-2 pe-8 text-[11.5px] font-medium text-[#3a382f]"
                   >
-                    {value}
-                  </option>
-                </select>
+                    <option value="">
+                      {(axis.default && gettext("%{value} (default)", value: axis.default)) ||
+                        gettext("— default —")}
+                    </option>
+                    <option
+                      :for={value <- axis.values}
+                      value={value}
+                      selected={@wizard[axis.name] == value}
+                    >
+                      {value}
+                    </option>
+                  </select>
+                  <.select_chevron />
+                </div>
               </form>
             </div>
 
@@ -13299,7 +13313,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <div class="relative">
             <select
               name="registry[source]"
-              class="h-10 w-full appearance-none rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] pl-3 pr-[30px] font-['Space_Grotesk'] text-[12px] font-semibold text-[#3a382f] outline-none"
+              class="h-10 w-full cursor-pointer appearance-none rounded-[10px] border border-[#ecebe6] bg-[#faf9f6] ps-3 pe-8 font-['Space_Grotesk'] text-[12px] font-semibold text-[#3a382f] outline-none"
             >
               <option
                 :for={source <- registry_sources()}
@@ -13309,11 +13323,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 {(source == "self-hosted" && gettext("self-hosted")) || source}
               </option>
             </select>
-            <.icon
-              name={:chevron_down}
-              size={13}
-              class="pointer-events-none absolute right-[11px] top-1/2 -translate-y-1/2 text-[#a8a5a0]"
-            />
+            <.select_chevron />
           </div>
         </.form>
       </div>
