@@ -1111,7 +1111,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
          {content, entries} = held(inner, context.level),
          slots = List.wrap(component.slots),
          :ok <- required(declared, attrs, slots, entries) do
-      child = %{context | prefix: "#{context.prefix}-#{marker.index}", level: context.level + 1}
+      child = %{
+        context
+        | prefix: Enum.join([context.prefix, marker.index], "-"),
+          level: context.level + 1
+      }
 
       declared
       |> unset(attrs)
@@ -1286,7 +1290,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
       given =
         for {entry, n} <- Enum.with_index(own) do
-          slot_entry(key, slot, entry, %{child | prefix: "#{child.prefix}-#{name}-#{n}"}, mode)
+          slot_entry(
+            key,
+            slot,
+            entry,
+            %{child | prefix: Enum.join([child.prefix, name, n], "-")},
+            mode
+          )
         end
 
       Map.put(assigns, key, given)
