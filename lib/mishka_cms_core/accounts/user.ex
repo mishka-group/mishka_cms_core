@@ -1609,29 +1609,6 @@ defmodule MishkaCmsCore.Accounts.User do
       accept []
     end
 
-    # The `recovery_code` strategy's check, written here because the one it builds returns `nil` for a
-    # code that does not match while declaring it never returns `nil`, so a wrong code raised instead
-    # of being refused (5.0.0-rc.14).
-    action :verify_with_recovery_code, :term do
-      description "Verify a recovery code and return the user if valid, nil otherwise."
-      allow_nil? true
-      transaction? true
-      touches_resources [MishkaCmsCore.Accounts.User, MishkaCmsCore.Accounts.RecoveryCode]
-
-      argument :user, :struct do
-        allow_nil? false
-        sensitive? true
-        constraints instance_of: MishkaCmsCore.Accounts.User
-      end
-
-      argument :code, :string do
-        allow_nil? false
-        sensitive? true
-      end
-
-      run AshAuthentication.Strategy.RecoveryCode.VerifyAction
-    end
-
     # The `recovery_code` strategy's own action, written here to ask a current code from the app
     # first: ten new codes replace any made before, hashed as they are stored, and handed back once
     # in the `:recovery_codes` metadata.
