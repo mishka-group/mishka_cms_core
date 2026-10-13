@@ -457,19 +457,23 @@ defmodule MishkaCmsCore.CoreComponents do
     <div class="mb-2">
       <label>
         <span :if={@label} class="mb-1 block text-sm font-medium text-gray-700">{@label}</span>
-        <select
-          id={@id}
-          name={@name}
-          class={[
-            @class || "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm",
-            @errors != [] && (@error_class || "border-red-500")
-          ]}
-          multiple={@multiple}
-          {@rest}
-        >
-          <option :if={@prompt} value="">{@prompt}</option>
-          {Phoenix.HTML.Form.options_for_select(@options, @value)}
-        </select>
+        <span class="relative block">
+          <select
+            id={@id}
+            name={@name}
+            class={[
+              @class || "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm",
+              !@multiple && "appearance-none pe-8",
+              @errors != [] && (@error_class || "border-red-500")
+            ]}
+            multiple={@multiple}
+            {@rest}
+          >
+            <option :if={@prompt} value="">{@prompt}</option>
+            {Phoenix.HTML.Form.options_for_select(@options, @value)}
+          </select>
+          <.select_chevron :if={!@multiple} />
+        </span>
       </label>
       <.error :for={msg <- @errors}>{msg}</.error>
     </div>
@@ -685,6 +689,37 @@ defmodule MishkaCmsCore.CoreComponents do
   def icon(%{name: "hero-" <> _} = assigns) do
     ~H"""
     <span class={[@name, @class]} />
+    """
+  end
+
+  @doc """
+  The chevron of a native `<select>`, 11px in from its end edge: the right in a left-to-right
+  page, the left in a right-to-left one.
+
+  Put it after the select inside a `relative` box. Give the select `appearance-none`, so the
+  browser draws no arrow of its own, and an end padding of at least `pe-8`, so the selected text
+  stops before the chevron.
+
+  ## Examples
+
+      <div class="relative">
+        <select name="size" class="h-9 appearance-none rounded-[9px] border ps-3 pe-8">
+          <option>20</option>
+        </select>
+        <.select_chevron />
+      </div>
+  """
+  attr :class, :any, default: nil, doc: "classes added to the chevron's own"
+
+  def select_chevron(assigns) do
+    ~H"""
+    <span
+      aria-hidden="true"
+      class={[
+        "hero-chevron-down pointer-events-none absolute end-[11px] top-1/2 size-[13px] -translate-y-1/2 text-[#a8a5a0]",
+        @class
+      ]}
+    />
     """
   end
 

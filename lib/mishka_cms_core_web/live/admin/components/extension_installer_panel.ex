@@ -49,7 +49,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  import MishkaCmsCore.CoreComponents, only: [icon: 1, modal: 1, show_modal: 1]
+  import MishkaCmsCore.CoreComponents, only: [icon: 1, modal: 1, select_chevron: 1, show_modal: 1]
   import Phoenix.LiveView, only: [put_flash: 3]
 
   alias MishkaCmsCore.Install.Extensions
@@ -360,21 +360,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
               carries no site and a master is told to choose one they have already chosen. --%>
         <input :if={@sites == []} type="hidden" name="site_id" value={@setup.site_id} />
 
-        <select
-          :if={@sites != []}
-          id={"#{@id}-site"}
-          name="site_id"
-          aria-label={gettext("Site")}
-          class="h-[34px] min-w-[220px] rounded-[9px] border border-[#ecebe6] bg-white px-2.5 text-[12.5px] font-semibold text-[#3a382f]"
-        >
-          <option
-            :for={{label, value} <- @sites}
-            value={value}
-            selected={@setup.site_id == value}
+        <div :if={@sites != []} class="relative">
+          <select
+            id={"#{@id}-site"}
+            name="site_id"
+            aria-label={gettext("Site")}
+            class="h-[34px] min-w-[220px] cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-2.5 pe-8 text-[12.5px] font-semibold text-[#3a382f]"
           >
-            {label}
-          </option>
-        </select>
+            <option
+              :for={{label, value} <- @sites}
+              value={value}
+              selected={@setup.site_id == value}
+            >
+              {label}
+            </option>
+          </select>
+          <.select_chevron />
+        </div>
 
         <button
           id={"#{@id}-submit"}
@@ -640,21 +642,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
             {@site_name}
           </div>
 
-          <select
-            :if={@sites != []}
-            id={"#{@id}-site"}
-            name="site_id"
-            aria-label={gettext("Site")}
-            class="h-[42px] min-w-[220px] flex-1 cursor-pointer appearance-none rounded-xl border border-[#ecebe6] bg-white px-[15px] text-[12.5px] font-semibold text-[#3a382f] outline-none"
-          >
-            <option
-              :for={{label, value} <- @sites}
-              value={value}
-              selected={(@kit.site_id || @setup.site_id) == value}
+          <div :if={@sites != []} class="relative min-w-[220px] flex-1">
+            <select
+              id={"#{@id}-site"}
+              name="site_id"
+              aria-label={gettext("Site")}
+              class="h-[42px] w-full cursor-pointer appearance-none rounded-xl border border-[#ecebe6] bg-white ps-[15px] pe-9 text-[12.5px] font-semibold text-[#3a382f] outline-none"
             >
-              {label}
-            </option>
-          </select>
+              <option
+                :for={{label, value} <- @sites}
+                value={value}
+                selected={(@kit.site_id || @setup.site_id) == value}
+              >
+                {label}
+              </option>
+            </select>
+            <.select_chevron />
+          </div>
 
           <button
             id={"#{@id}-check"}

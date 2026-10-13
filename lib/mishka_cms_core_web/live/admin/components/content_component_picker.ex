@@ -78,7 +78,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   use Phoenix.LiveComponent
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  import MishkaCmsCore.CoreComponents, only: [icon: 1]
+  import MishkaCmsCore.CoreComponents, only: [icon: 1, select_chevron: 1]
 
   alias MishkaCmsCore.Runtime.{
     ContentBlocks,
@@ -2214,22 +2214,36 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   defp value_input(%{attr: %{values: [_ | _]}} = assigns) do
     ~H"""
-    <select id={@id} name={@name} class={["h-10", field_class()]}>
-      <option value="">{default_label(@attr)}</option>
-      <option :for={value <- @attr.values} value={value} selected={to_string(value) == @value}>
-        {value}
-      </option>
-    </select>
+    <div class="relative">
+      <select
+        id={@id}
+        name={@name}
+        class={["h-10 cursor-pointer appearance-none pe-9", field_class()]}
+      >
+        <option value="">{default_label(@attr)}</option>
+        <option :for={value <- @attr.values} value={value} selected={to_string(value) == @value}>
+          {value}
+        </option>
+      </select>
+      <.select_chevron />
+    </div>
     """
   end
 
   defp value_input(%{attr: %{type: "boolean"}} = assigns) do
     ~H"""
-    <select id={@id} name={@name} class={["h-10", field_class()]}>
-      <option value="">{default_label(@attr)}</option>
-      <option value="true" selected={@value == "true"}>{gettext("Yes")}</option>
-      <option value="false" selected={@value == "false"}>{gettext("No")}</option>
-    </select>
+    <div class="relative">
+      <select
+        id={@id}
+        name={@name}
+        class={["h-10 cursor-pointer appearance-none pe-9", field_class()]}
+      >
+        <option value="">{default_label(@attr)}</option>
+        <option value="true" selected={@value == "true"}>{gettext("Yes")}</option>
+        <option value="false" selected={@value == "false"}>{gettext("No")}</option>
+      </select>
+      <.select_chevron />
+    </div>
     """
   end
 

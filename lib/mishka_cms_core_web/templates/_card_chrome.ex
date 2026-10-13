@@ -28,7 +28,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   use Phoenix.Component
   use MishkaGervaz.Messages
 
-  import MishkaCmsCore.CoreComponents, only: [icon: 1]
+  import MishkaCmsCore.CoreComponents, only: [icon: 1, select_chevron: 1]
   import MishkaGervaz.Helpers, only: [dynamic_component: 1, accessible?: 2]
 
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
@@ -606,15 +606,18 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
         {dgettext("mishka_gervaz", "Show")}
       </span>
-      <select
-        name="size"
-        aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
-        class="h-9 cursor-pointer rounded-[9px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-semibold text-[#3a382f] outline-none"
-      >
-        <option :for={option <- @page_size_options} value={option} selected={option == @page_size}>
-          {option}
-        </option>
-      </select>
+      <div class="relative">
+        <select
+          name="size"
+          aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
+          class="h-9 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
+        >
+          <option :for={option <- @page_size_options} value={option} selected={option == @page_size}>
+            {option}
+          </option>
+        </select>
+        <.select_chevron />
+      </div>
       <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
         {dgettext("mishka_gervaz", "per page")}
       </span>
@@ -645,15 +648,22 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
         <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
           {dgettext("mishka_gervaz", "Show")}
         </span>
-        <select
-          name="size"
-          aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
-          class="h-9 cursor-pointer rounded-[9px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-semibold text-[#3a382f] outline-none"
-        >
-          <option :for={option <- @page_size_options} value={option} selected={option == @page_size}>
-            {option}
-          </option>
-        </select>
+        <div class="relative">
+          <select
+            name="size"
+            aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
+            class="h-9 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
+          >
+            <option
+              :for={option <- @page_size_options}
+              value={option}
+              selected={option == @page_size}
+            >
+              {option}
+            </option>
+          </select>
+          <.select_chevron />
+        </div>
         <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
           {dgettext("mishka_gervaz", "per page")}
         </span>
@@ -965,18 +975,21 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       <label for={@form_id <> "-column"} class="text-[12px] font-semibold text-[#8a877f]">
         {dgettext("mishka_gervaz", "Sort by")}
       </label>
-      <select
-        id={@form_id <> "-column"}
-        name="column"
-        class="h-8 rounded-[9px] border border-[#ecebe6] bg-white ps-2.5 pe-7 text-[12px] font-semibold text-[#3a382f] outline-none focus:border-[#c3c1f0]"
-      >
-        <option :if={is_nil(@column)} value="" selected>
-          {dgettext("mishka_gervaz", "Default")}
-        </option>
-        <option :for={{name, label} <- @columns} value={name} selected={name == @column}>
-          {label}
-        </option>
-      </select>
+      <div class="relative">
+        <select
+          id={@form_id <> "-column"}
+          name="column"
+          class="h-8 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-2.5 pe-8 text-[12px] font-semibold text-[#3a382f] outline-none focus:border-[#c3c1f0]"
+        >
+          <option :if={is_nil(@column)} value="" selected>
+            {dgettext("mishka_gervaz", "Default")}
+          </option>
+          <option :for={{name, label} <- @columns} value={name} selected={name == @column}>
+            {label}
+          </option>
+        </select>
+        <.select_chevron />
+      </div>
       <input type="hidden" name="order" value={@order} />
       <button
         :if={@column}

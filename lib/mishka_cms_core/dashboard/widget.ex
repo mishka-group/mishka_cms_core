@@ -62,6 +62,8 @@ defmodule MishkaCmsCore.Dashboard.Widget do
   use Gettext, backend: MishkaCmsCore.Gettext
   require Logger
 
+  import MishkaCmsCore.CoreComponents, only: [select_chevron: 1]
+
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Settings
   alias Phoenix.LiveView.JS
@@ -617,18 +619,21 @@ defmodule MishkaCmsCore.Dashboard.Widget do
       <span class="mb-1.5 block text-[10px] font-bold uppercase tracking-[0.07em] text-[#8a877f]">
         {Settings.text(setting_label(@setting))}
       </span>
-      <select
-        name={@setting.key}
-        class="h-9 w-full rounded-[9px] border border-[#ecebe6] bg-white px-2 text-[12.5px] font-semibold text-[#3a382f]"
-      >
-        <option
-          :for={{label, value} <- @options}
-          value={value}
-          selected={to_string(value) == to_string(@value)}
+      <span class="relative block">
+        <select
+          name={@setting.key}
+          class="h-9 w-full cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-2.5 pe-8 text-[12.5px] font-semibold text-[#3a382f]"
         >
-          {option_label(label)}
-        </option>
-      </select>
+          <option
+            :for={{label, value} <- @options}
+            value={value}
+            selected={to_string(value) == to_string(@value)}
+          >
+            {option_label(label)}
+          </option>
+        </select>
+        <.select_chevron />
+      </span>
     </label>
     """
   end
