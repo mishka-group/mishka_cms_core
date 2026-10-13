@@ -1644,7 +1644,14 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   # Every marker in the text of `html` that is outside `<pre>` and `<code>`, as
   # `{start, stop, token}` byte offsets in order.
-  defp tokens(html), do: html |> text_runs() |> Enum.flat_map(&run_tokens(html, &1))
+  #
+  # THE FOUR MARKERS ARE COMPILED ONCE A PARSE. `:binary.matches/2` handed a list compiles it on
+  # every call, and there is a text run between every two tags: a page of 23 000 tags spent two
+  # thirds of its parse compiling the same pattern.
+  defp tokens(html) do
+    markers = :binary.compile_pattern([@open, @close, @slot_open, @slot_close])
+    html |> text_runs() |> Enum.flat_map(&run_tokens(html, &1, markers))
+  end
 
   defp text_runs(html) do
     {runs, position, depth} =
@@ -1675,11 +1682,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp code_depth(name, _closing, _tag, depth) when name in ["pre", "code"], do: max(depth - 1, 0)
   defp code_depth(_name, _slash, _tag, depth), do: depth
 
-  defp run_tokens(html, {offset, length}) do
+  defp run_tokens(html, {offset, length}, markers) do
     text = binary_part(html, offset, length)
 
     text
-    |> :binary.matches([@open, @close, @slot_open, @slot_close])
+    |> :binary.matches(markers)
     |> Enum.reduce({[], 0}, fn {at, size}, {found, consumed} ->
       case at < consumed do
         true -> {found, consumed}
