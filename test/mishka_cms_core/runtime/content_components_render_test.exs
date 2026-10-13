@@ -928,7 +928,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
 
       assert TailwindCompiler.content_classes(site.name) == [
                "bg-[#282828]",
-               "data-[orientation=vertical]:h-32"
+               "data-[orientation=vertical]:h-32",
+               "mask-linear-[to_bottom,transparent_0,black_min(40px,var(--scroll-area-overflow-y-start)),black_calc(100%_-_min(40px,var(--scroll-area-overflow-y-end,40px))),transparent_100%]"
              ]
     end
 
@@ -958,6 +959,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
 
       assert css =~ ~S(.bg-\[\#282828\]{background-color:#282828})
       assert css =~ ~S(.data-\[orientation\=vertical\]\:h-32[data-orientation=vertical]{height:)
+      assert css =~ "--tw-mask-linear-position:to bottom,transparent 0,black min(40px"
       refute css =~ "color:red"
     end
 
