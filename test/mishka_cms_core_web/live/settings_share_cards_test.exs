@@ -100,21 +100,6 @@ defmodule MishkaCmsCoreWeb.Test.SettingsShareCardsTest do
     user
   end
 
-  # An admin an offline site lets through: the host's pipeline writes the viewer and the socket id on
-  # every page load, and the page's own hook reads the one by the other.
-  defp let_through(conn, email, site_id) do
-    user = email |> create_admin(site_id) |> Ash.load!([:permissions], authorize?: false)
-    MishkaCmsCore.Runtime.States.ViewerState.remember(user)
-    on_exit(fn -> MishkaCmsCore.Runtime.States.ViewerState.forget(user.id) end)
-
-    conn
-    |> log_in(user, is_nil(site_id))
-    |> Plug.Conn.put_session(
-      :live_socket_id,
-      MishkaCmsCore.Accounts.LiveSockets.live_socket_id(user)
-    )
-  end
-
   # Who is a master is read from the signed-in user's own token — issued with no site, on the master
   # site's address — so `master_mode` only stands for the choice the sign-in page would have kept, and
   # changes nothing once someone is signed in. A tenant admin's token names their own site.
