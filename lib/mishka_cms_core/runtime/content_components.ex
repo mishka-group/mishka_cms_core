@@ -350,7 +350,9 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     * a component's or a slot's `class` attribute, and every attribute named `*_class`;
     * a component's attribute `open` names for it — `%{"chelekom-badge" => ["size", "variant"]}`,
       what `open_attrs/2` reads off the components a site reaches: an attribute that takes one of
-      its examples or a class string of the author's own.
+      its examples or a class string of the author's own;
+    * any other attribute of a component or a slot whose value is nothing but utilities — every
+      token holding a `-`, `:` or `[`, and none an icon: `height="h-16"`, `relative="md:relative"`.
 
   A token is kept when it could be a class: at most 160 bytes, printable ASCII holding a letter,
   its brackets and parentheses balanced, and none of `"`, `\\`, `{`, `}`, `<`, `;` or a backtick in
@@ -1354,7 +1356,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
       own =
         for {key, value} when is_binary(value) <- Enum.sort(attrs),
-            class_key?(key) or key in takes,
+            class_key?(key) or key in takes or utilities?(value),
             do: value
 
       own ++ marker_values(children, open)
@@ -1362,6 +1364,23 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   end
 
   defp class_key?(key), do: key == "class" or String.ends_with?(key, "_class")
+
+  # A VALUE THAT IS NOTHING BUT UTILITIES IS READ, WHATEVER ATTRIBUTE HOLDS IT, as Tailwind reads
+  # every word of a template. A kit takes classes in attributes that declare no list at all — a
+  # skeleton's `height="h-16"`, a content item's `font_weight="font-thin"`, a tab slot's
+  # `badge_size="size-[19px]"`, a dropdown's `relative="md:relative"` — and they drew nothing. A
+  # token counts when it has a `-`, `:` or `[` and is no icon (`icons/1` carries those), so a title,
+  # a label or `extra_large` stays out.
+  defp utilities?(value) do
+    case String.split(value) do
+      [] -> false
+      tokens -> Enum.all?(tokens, &utility?/1)
+    end
+  end
+
+  defp utility?(token) do
+    class_token?(token) and String.contains?(token, ["-", ":", "["]) and not Icons.known?(token)
+  end
 
   defp class_token?(token) do
     byte_size(token) <= @class_length and Regex.match?(@class_token, token) and

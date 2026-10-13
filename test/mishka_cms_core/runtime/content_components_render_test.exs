@@ -853,7 +853,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
 
       html =
         ~s(<p class="text-sm">x</p>) <>
-          ~s([[component open-#{n} size="leading-5 py-2" color="bg-red-500" title="Hidden block" class="ml-1" /]])
+          ~s([[component open-#{n} size="leading-5 py-2" color="dark" title="Hidden block" class="ml-1" /]])
 
       assert ContentComponents.site_classes(html, site.id) == [
                "text-sm",

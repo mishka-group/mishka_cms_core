@@ -225,18 +225,34 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
       assert ContentComponents.classes(html) == ["size-4", "h-1", "bg-neutral-200", "ml-2"]
     end
 
-    test "an attribute its component takes a class string in, and only for that component" do
+    test "an attribute its component takes a class string in, every word of it, and only for that component" do
       html =
-        ~s([[component chelekom-badge size="leading-5 py-2" variant="base" color="bg-red-500" /]]) <>
-          ~s([[component chelekom-alert size="px-9" /]])
+        ~s([[component my-badge size="leading-5 py-2" variant="base" color="natural" /]]) <>
+          ~s([[component my-alert variant="base" /]])
 
-      assert ContentComponents.classes(html, %{"chelekom-badge" => ["size", "variant"]}) == [
+      assert ContentComponents.classes(html, %{"my-badge" => ["size", "variant"]}) == [
                "leading-5",
                "py-2",
                "base"
              ]
 
-      assert ContentComponents.classes(html) == []
+      assert ContentComponents.classes(html) == ["leading-5", "py-2"]
+    end
+
+    test "any attribute of a component or a slot whose value is nothing but utilities" do
+      html =
+        ~s([[component my-skeleton height="h-16" width="extra_large" /]]) <>
+          ~s([[component my-item font_weight="font-thin" title="Color and Variants"]]x[[/component]]) <>
+          ~s([[component my-dropdown relative="md:relative" label="Open menu"]]) <>
+          ~s([[slot tab badge="8" badge_size="size-[19px]" icon="hero-home"]]y[[/slot]][[/component]]) <>
+          ~s([[component my-card title="A well-known name" padding="py-2 large" /]])
+
+      assert ContentComponents.classes(html) == [
+               "h-16",
+               "font-thin",
+               "md:relative",
+               "size-[19px]"
+             ]
     end
 
     test "a marker shown as code, a bare key and text that only looks like a class are left out" do
