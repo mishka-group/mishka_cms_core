@@ -49,12 +49,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  import MishkaCmsCore.CoreComponents, only: [icon: 1, modal: 1, show_modal: 1]
+  import MishkaCmsCore.CoreComponents, only: [icon: 1, modal: 1, select_chevron: 1, show_modal: 1]
   import Phoenix.LiveView, only: [put_flash: 3]
 
   alias MishkaCmsCore.Install.Extensions
-  alias MishkaCmsCore.Runtime.PageProvision
-  alias MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel
+  alias MishkaCmsCore.Runtime.{PageProvision, ShareCard}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{KitUpgradePanel, ShareCardRedraw}
 
   require Logger
 
@@ -360,21 +360,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
               carries no site and a master is told to choose one they have already chosen. --%>
         <input :if={@sites == []} type="hidden" name="site_id" value={@setup.site_id} />
 
-        <select
-          :if={@sites != []}
-          id={"#{@id}-site"}
-          name="site_id"
-          aria-label={gettext("Site")}
-          class="h-[34px] min-w-[220px] rounded-[9px] border border-[#ecebe6] bg-white px-2.5 text-[12.5px] font-semibold text-[#3a382f]"
-        >
-          <option
-            :for={{label, value} <- @sites}
-            value={value}
-            selected={@setup.site_id == value}
+        <div :if={@sites != []} class="relative">
+          <select
+            id={"#{@id}-site"}
+            name="site_id"
+            aria-label={gettext("Site")}
+            class="h-[34px] min-w-[220px] cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-2.5 pe-8 text-[12.5px] font-semibold text-[#3a382f]"
           >
-            {label}
-          </option>
-        </select>
+            <option
+              :for={{label, value} <- @sites}
+              value={value}
+              selected={@setup.site_id == value}
+            >
+              {label}
+            </option>
+          </select>
+          <.select_chevron />
+        </div>
 
         <button
           id={"#{@id}-submit"}
@@ -595,6 +597,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   `MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel` — and the dashboard's `kit_check` clause
   hands the same site to `choose/2`, so the Repair below writes to the site whose standings are on
   screen rather than to whichever one the page opened on.
+
+  When the extension answers `MishkaCmsCore.Runtime.ShareCard.targets_event/0` under its app's
+  name, the modal ends with a button that draws its own share cards on that site again
+  (`MishkaCmsCoreWeb.Live.Admin.Components.ShareCardRedraw`).
   """
   attr :id, :string, required: true
   attr :install_id, :string, required: true
@@ -636,21 +642,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
             {@site_name}
           </div>
 
-          <select
-            :if={@sites != []}
-            id={"#{@id}-site"}
-            name="site_id"
-            aria-label={gettext("Site")}
-            class="h-[42px] min-w-[220px] flex-1 cursor-pointer appearance-none rounded-xl border border-[#ecebe6] bg-white px-[15px] text-[12.5px] font-semibold text-[#3a382f] outline-none"
-          >
-            <option
-              :for={{label, value} <- @sites}
-              value={value}
-              selected={(@kit.site_id || @setup.site_id) == value}
+          <div :if={@sites != []} class="relative min-w-[220px] flex-1">
+            <select
+              id={"#{@id}-site"}
+              name="site_id"
+              aria-label={gettext("Site")}
+              class="h-[42px] w-full cursor-pointer appearance-none rounded-xl border border-[#ecebe6] bg-white ps-[15px] pe-9 text-[12.5px] font-semibold text-[#3a382f] outline-none"
             >
-              {label}
-            </option>
-          </select>
+              <option
+                :for={{label, value} <- @sites}
+                value={value}
+                selected={(@kit.site_id || @setup.site_id) == value}
+              >
+                {label}
+              </option>
+            </select>
+            <.select_chevron />
+          </div>
 
           <button
             id={"#{@id}-check"}
@@ -686,9 +694,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
             }
           />
         </div>
+
+        <div
+          :if={share_cards?(@setup, @kit)}
+          id={"#{@id}-share-cards"}
+          class="mt-[18px] border-t border-[#ecebe6] pt-[16px]"
+        >
+          <.live_component
+            module={ShareCardRedraw}
+            id={"#{@id}-share-cards-redraw"}
+            site_id={@kit.site_id || @setup.site_id}
+            producer={Atom.to_string(@setup.app)}
+            allowed?={@allowed?}
+            title={gettext("Redraw the %{noun}'s share cards", noun: @setup.noun)}
+            blurb={
+              gettext(
+                "Draws every share card the %{noun} shows on this site again, one at a time, in the background.",
+                noun: @setup.noun
+              )
+            }
+            action={gettext("Redraw")}
+          />
+        </div>
       </div>
     </.modal>
     """
+  end
+
+  # Whether the extension draws share cards of its own on the site the modal is about.
+  defp share_cards?(setup, kit) do
+    case kit.site_id || setup.site_id do
+      site_id when is_binary(site_id) -> Atom.to_string(setup.app) in ShareCard.producers(site_id)
+      _no_site -> false
+    end
   end
 
   attr :id, :string, required: true

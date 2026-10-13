@@ -984,7 +984,8 @@ defmodule MishkaCmsCore.Settings do
       )
     ] ++
       email_definitions() ++
-      MishkaCmsCore.Accounts.AuthGate.definitions() ++ MishkaCmsCore.Captcha.settings()
+      MishkaCmsCore.Accounts.AuthGate.definitions() ++
+      MishkaCmsCore.Captcha.settings() ++ MishkaCmsCore.Runtime.ShareCardQueue.settings()
   end
 
   # THE EMAIL TAB. Which provider a scope sends through and that provider's own fields come from

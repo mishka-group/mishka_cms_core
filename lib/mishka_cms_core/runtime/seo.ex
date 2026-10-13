@@ -248,6 +248,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
   canonical address), `:params` (`@query_params`, `%{}` by default) and `:record`, the kind of
   record the page shows (`record_of/1`). An editor reads a dynamic page's `var_docs` by calling
   `event/0` with this map and no `:params`.
+
+  `:redraw` is `true` when a forced look at the page's share card asks for the map
+  (`MishkaCmsCore.Runtime.ShareCard.specs/3`): a plugin that draws a card of its own draws it again
+  over its old file. `false` by default.
   """
   @spec given(map(), keyword()) :: map()
   def given(page, opts) do
@@ -269,7 +273,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
       page: page,
       site_id: Keyword.get(opts, :site_id),
       params: Keyword.get(opts, :params, %{}),
-      record: Keyword.get(opts, :record)
+      record: Keyword.get(opts, :record),
+      redraw: Keyword.get(opts, :redraw, false) == true
     }
   end
 
@@ -884,14 +889,14 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `head/2`. `MishkaCmsWeb.RuntimeLive` calls it for every address it serves; an editor's preview
   calls it with no `:params`, and reads the plugin's variables from `var_docs`.
 
-  Options: `:site_id`, `:url` and `:params` as `given/2` takes them; `:base`, `:languages`,
+  Options: `:site_id`, `:url`, `:params` and `:redraw` as `given/2` takes them; `:base`, `:languages`,
   `:restricted?` and `:layers` as `head/2` takes them; and `:stand_ins` — `true` for an editor's
   preview, where a page that serves records has none to read: each variable a plugin describes in
   `var_docs` but did not fill reads as `{key}`, `{post.title}`, so the preview shows where it goes.
   """
   @spec resolve(map(), keyword()) :: head()
   def resolve(page, opts) do
-    given = given(page, Keyword.take(opts, [:site_id, :url, :params, :record]))
+    given = given(page, Keyword.take(opts, [:site_id, :url, :params, :record, :redraw]))
 
     event()
     |> Hook.call(given)
@@ -937,7 +942,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
   @doc """
   The map a plugin on `event/0` returned, read against the one it was given. Each key keeps the
   plugin's value when it has the right type and the given one otherwise; `page`, `site_id`,
-  `params` and `record` are always the given ones. Anything but a map is the given map.
+  `params`, `record` and `redraw` are always the given ones. Anything but a map is the given map.
 
   The page's own `description` and `schema` win: the plugin's fill them only when the page's are
   empty.

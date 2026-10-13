@@ -34,8 +34,9 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   ## When it is drawn
 
   Never in a request. `image/2` answers from ETS (`MishkaCmsCore.Runtime.States.AssetsState`), and
-  the first time a card is asked for it is queued: this module is the Oban worker, on `:assets`,
-  one job per card. Until it is drawn, the page shows its own image, or none.
+  the first time a card is asked for it is queued: this module is the Oban worker, on
+  `:share_cards` (`MishkaCmsCore.Runtime.ShareCardQueue`, as many at once as the Share-card workers
+  setting says), one job per card. Until it is drawn, the page shows its own image, or none.
 
   A card is named by what it shows (`key/1`): a page whose title changes asks for a new card, and the
   old one stays where it is. It is stored at `/uploads/<site_id>/share/<key>.jpg`, served as the
@@ -48,11 +49,22 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   the first visitor. A save that leaves what the card shows alone finds it drawn and draws nothing.
   `refresh(site_id, target, force: true)` draws it again over the old file: the Regenerate button.
 
+  ## Every card of a site
+
+  `redraw_all/2` looks at every card of a site in the background, so none waits for its first
+  visitor: after what every card of the site shows changes — its address, its name or that name's
+  translation, its logo — and from the Redraw buttons of the settings page and of an extension. It
+  queues one planner job (`MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker`), which asks the
+  producers for the cards they own on the site through the `targets_event/0` mishka_installer
+  event (`targets/2`) and queues a look at each, in batches. The core answers with its pages
+  (`MishkaCmsCore.Runtime.PageShareCardTargets`); an extension or a site answers with its own.
+
   Drawn by libvips in a separate process (`MishkaCmsCore.Isolated`), so a file that crashes it ends
-  that process, never the server.
+  that process, never the server. That process runs at a lower priority (`nice` 10) and libvips in
+  it on one thread, so a long redraw leaves the processor to the pages being served.
   """
   use Oban.Worker,
-    queue: :assets,
+    queue: :share_cards,
     max_attempts: 3,
     unique: [
       period: :infinity,
@@ -66,7 +78,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   alias MishkaCmsCore.Isolated
   alias MishkaCmsCore.Runtime.{Languages, Layout, Media, Page, PageEditions, Seo}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
-  alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
+  alias MishkaCmsCore.Runtime.Workers.{ShareCardPlanWorker, ShareCardRefreshWorker}
+  alias MishkaInstaller.Event.Hook
   alias Vix.Vips.Image, as: VImage
   alias Vix.Vips.Operation, as: Op
 
@@ -81,6 +94,11 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @logo 52
 
   @texts ~w(title description eyebrow site host logo byline picture)
+
+  @targets_event "runtime:share_card:targets"
+
+  # The settings a core card shows on every page of a site (`MishkaCmsCore.Runtime.Seo`).
+  @site_settings ~w(site.title site.logo)
 
   @typedoc "What a card shows; see the module doc."
   @type card :: %{optional(atom() | String.t()) => term()}
@@ -129,6 +147,143 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   end
 
   @doc """
+  The event every share card of a site is collected through: `"#{@targets_event}"`.
+
+  It is called with `%{site_id: id, force: boolean, producer: name | nil, targets: %{}}`, and each
+  plugin answers with its own put in `targets` under its name (`put_targets/3`) — the name of its
+  OTP application, `%{"mishka_blog" => [target, …]}`. A target is either
+
+    * a `t:target/0`, `{:page, id}` or `{:record, kind, captures}`, which `refresh/3` looks at, or
+    * an `Oban.Job` changeset of the producer's own worker on `:share_cards`, for a card the core
+      does not draw: built with `force` it draws the card again over the old file, else only when
+      it is not drawn yet.
+
+  An answer names targets only — ids and captures, read in pages or streamed — and draws nothing.
+  With `producer` set, only that producer answers; with `names_only: true` each puts its name and
+  no targets (`producers/1`).
+  """
+  @spec targets_event() :: String.t()
+  def targets_event, do: @targets_event
+
+  @doc "The settings a core card shows on every page of a site: its name and its logo."
+  @spec site_settings() :: [String.t()]
+  def site_settings, do: @site_settings
+
+  @doc """
+  Puts `producer`'s targets in an answer to `targets_event/0`; `fun` is called for them only when
+  the answer asks every producer or this one.
+  """
+  @spec put_targets(map(), String.t(), (-> Enumerable.t())) :: map()
+  def put_targets(%{names_only: true, targets: %{} = targets} = data, producer, _fun)
+      when is_binary(producer),
+      do: %{data | targets: Map.put(targets, producer, [])}
+
+  def put_targets(%{producer: only, targets: %{} = targets} = data, producer, fun)
+      when is_binary(producer) and (is_nil(only) or only == producer) do
+    %{data | targets: Map.put(targets, producer, Enum.to_list(fun.()))}
+  end
+
+  def put_targets(data, _producer, _fun), do: data
+
+  @doc """
+  Every share card of the site `site_id`, by producer, as the plugins on `targets_event/0` answer:
+  `{:ok, %{"mishka_cms_core" => [{:page, id}, …], …}}`.
+
+  Options: `:force`, handed to the producers, and `:producer`, to ask that one alone.
+  `{:error, :cannot_run}` while the event cannot run: one of its plugins is started but not loaded.
+  """
+  @spec targets(String.t(), keyword()) :: {:ok, %{String.t() => list()}} | {:error, :cannot_run}
+  def targets(site_id, opts \\ []) when is_binary(site_id) do
+    asked = %{
+      site_id: site_id,
+      force: Keyword.get(opts, :force, false),
+      producer: Keyword.get(opts, :producer),
+      names_only: false,
+      targets: %{}
+    }
+
+    case Hook.call(@targets_event, asked, cannot_run: :cannot_run) do
+      %{targets: %{} = targets} ->
+        {:ok, Map.filter(targets, fn {name, list} -> is_binary(name) and is_list(list) end)}
+
+      :cannot_run ->
+        {:error, :cannot_run}
+
+      _not_answered ->
+        {:ok, %{}}
+    end
+  end
+
+  @doc """
+  The producers that answer `targets_event/0` on the site `site_id` — or on any site, for `nil` —
+  sorted: `["mishka_blog", "mishka_cms_core"]`. Asks for their names alone; nothing is read.
+  """
+  @spec producers(String.t() | nil) :: [String.t()]
+  def producers(site_id) do
+    asked = %{site_id: site_id, force: false, producer: nil, names_only: true, targets: %{}}
+
+    case Hook.call(@targets_event, asked) do
+      %{targets: %{} = targets} ->
+        targets |> Map.keys() |> Enum.filter(&is_binary/1) |> Enum.sort()
+
+      _not_answered ->
+        []
+    end
+  end
+
+  @doc """
+  Looks at every share card of the site `site_id` in the background — of every active site for
+  `nil` — so a card whose data changed is drawn before anybody asks for it: one planner job a site
+  on `:share_cards`, which collects the cards through `targets_event/0` and queues a look at each.
+  A site that already has a planner waiting with the same options keeps that one.
+
+  Options:
+
+    * `:force` — `true` draws every card again over its old file; by default only a card whose data
+      changed is drawn
+    * `:producer` — the one producer to ask, `"mishka_blog"`; every one by default
+    * `:schedule_in` — seconds to wait first, so the saves of a burst are one look; none by default
+
+  `{:ok, site_ids}`: the sites a planner is queued for.
+  """
+  @spec redraw_all(String.t() | nil, keyword()) :: {:ok, [String.t()]} | {:error, term()}
+  def redraw_all(site_id, opts \\ [])
+
+  def redraw_all(nil, opts) do
+    SiteState.get_active_sites()
+    |> Enum.reduce_while({:ok, []}, fn %{id: id}, {:ok, queued} ->
+      case redraw_all(id, opts) do
+        {:ok, [^id]} -> {:cont, {:ok, [id | queued]}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, queued} -> {:ok, Enum.reverse(queued)}
+      error -> error
+    end
+  end
+
+  def redraw_all(site_id, opts) when is_binary(site_id) do
+    later =
+      case Keyword.get(opts, :schedule_in) do
+        seconds when is_integer(seconds) and seconds > 0 -> [schedule_in: seconds]
+        _now -> []
+      end
+
+    %{
+      site_id: site_id,
+      force: Keyword.get(opts, :force, false) == true,
+      producer: Keyword.get(opts, :producer)
+    }
+    |> ShareCardPlanWorker.new(later)
+    |> Oban.insert()
+    |> case do
+      {:ok, _job} -> {:ok, [site_id]}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc """
   Each card `target`'s pages show now: `%{title:, url:, drawn_at:}`, `drawn_at` the Unix time its
   file was written, `nil` until it is drawn. A page kept out of an index, or storing an `og:image`
   of its own, shows none.
@@ -154,15 +309,20 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   What each page that shows `target` puts on its share card, as `Seo.head/2` builds it for a visit
   to it: the same card, with the same name. The pages are read as the system, as the sitemap reads
   them — a job has no visitor.
+
+  `redraw: true` tells the plugins on `MishkaCmsCore.Runtime.Seo.event/0` the card is to be drawn
+  again (`redraw` in `MishkaCmsCore.Runtime.Seo.given/2`): one that draws a card of its own draws it
+  over its old file.
   """
-  @spec specs(String.t(), target()) :: [map()]
-  def specs(site_id, target) when is_binary(site_id) do
+  @spec specs(String.t(), target(), keyword()) :: [map()]
+  def specs(site_id, target, opts \\ []) when is_binary(site_id) do
     case SiteState.get(site_id) do
       {:ok, %{host: host}} when is_binary(host) ->
         base = Seo.base(host)
+        redraw = Keyword.get(opts, :redraw, false)
 
         for {page, params} <- pages(site_id, target),
-            %{card: %{} = spec} <- [head(page, params, site_id, base)],
+            %{card: %{} = spec} <- [head(page, params, site_id, base, redraw)],
             do: spec
 
       _unknown ->
@@ -238,7 +398,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   end
 
   # The head a visit to `page` with `params` gets, with the card's spec and nothing asked for.
-  defp head(page, params, site_id, base) do
+  defp head(page, params, site_id, base, redraw) do
     language = Map.get(params, Languages.capture()) || page.language
 
     Seo.resolve(
@@ -258,7 +418,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       base: base,
       restricted?: Seo.noindex?(page.permissions, page.extra),
       layers: [layout_tags(page.tenant_layout), List.wrap(page.seo_tags)],
-      card: :spec
+      card: :spec,
+      redraw: redraw
     )
   end
 
@@ -389,7 +550,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     card = with_files(card, site_id)
 
     with {:ok, {:ok, jpeg}} <-
-           Isolated.run(__MODULE__, :draw, [card], env: env(), timeout: 60_000),
+           Isolated.run(__MODULE__, :draw, [card], env: env(), nice: 10, timeout: 60_000),
          :ok <- File.mkdir_p(Path.dirname(target)),
          :ok <- File.write(target <> ".part", jpeg),
          :ok <- File.rename(target <> ".part", target) do
@@ -443,6 +604,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       {~c"FONTCONFIG_FILE",
        String.to_charlist(Application.app_dir(:mishka_cms_core, "priv/share_card/fonts.conf"))},
       {~c"PANGOCAIRO_BACKEND", ~c"fc"},
+      {~c"VIPS_CONCURRENCY", ~c"1"},
       {~c"XDG_CACHE_HOME", String.to_charlist(System.tmp_dir!())},
       {~c"VIPS_BLOCK_UNTRUSTED", false}
     ]
