@@ -35,6 +35,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   Email tab adds a test email to any address, through the scope's provider, and the email history
   (`MishkaCmsCore.Mail.Delivery`).
 
+  The SEO tab adds the Redraw share cards buttons (`MishkaCmsCoreWeb.Live.Admin.Components.ShareCardRedraw`)
+  for whoever may change the site's logo: every share card of the scope — every active site in
+  Global — and each producer's own, one row for each producer that answers
+  `MishkaCmsCore.Runtime.ShareCard.targets_event/0`.
+
   See `MishkaCmsCore.Settings` and `MishkaCmsCore.Runtime.Setting`.
   """
   use MishkaCmsCore.ExtensionLiveView
@@ -43,9 +48,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   alias MishkaCmsCore.Captcha
   alias MishkaCmsCore.Captcha.Widget
   alias MishkaCmsCore.Mail
+  alias MishkaCmsCore.Runtime.ShareCard
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
-  alias MishkaCmsCoreWeb.Live.Admin.Components.{MediaField, SecurityCards}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{MediaField, SecurityCards, ShareCardRedraw}
   alias Phoenix.LiveView.JS
 
   @badge_class "rounded-md border px-[7px] py-0.5 text-[9px] font-bold uppercase tracking-[0.08em]"
@@ -98,6 +104,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
      |> assign(security_cards: SecurityCards.collect())
      |> assign(scopes: scope_options(master?))
      |> assign(active_scope: if(master?, do: nil, else: user.site_id))
+     |> assign(can_redraw_cards?: can_redraw_cards?(user))
      |> subscribe_settings()}
   end
 
@@ -265,7 +272,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
       secret_hints: %{},
       dirty?: false,
       attention: %{},
-      captcha_test_id: nil
+      captcha_test_id: nil,
+      share_card_producers: []
     )
   end
 
@@ -285,9 +293,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
       secret_hints: secret_hints(socket, fields),
       dirty?: false,
       attention: attention_map(socket),
-      captcha_test_id: captcha_test_id(socket, tab)
+      captcha_test_id: captcha_test_id(socket, tab),
+      share_card_producers: share_card_producers(socket, tab)
     )
   end
+
+  # The producers whose cards the SEO tab may redraw one by one: whoever answers the targets event.
+  defp share_card_producers(socket, "seo") do
+    if socket.assigns.can_redraw_cards?,
+      do: ShareCard.producers(socket.assigns.active_scope),
+      else: []
+  end
+
+  defp share_card_producers(_socket, _tab), do: []
 
   # THE TEST BOX IS DRAWN AFRESH for each scope and each change of its provider or keys: the hook
   # owns the box (`phx-update="ignore"`), so another configuration needs another element.
@@ -314,6 +332,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     for {%{type: :secret} = definition, _editable} <- fields,
         into: %{},
         do: {definition.key, Settings.secret_hint(definition.key, socket.assigns.active_scope)}
+  end
+
+  # Redrawing the share cards is the card settings' own: whoever may change the site's logo may.
+  defp can_redraw_cards?(user) do
+    case Settings.definition("site.logo") do
+      nil -> false
+      definition -> Settings.writable?(definition, user)
+    end
+  end
+
+  # What a producer is called: its application's description, else its name.
+  defp producer_label(producer) do
+    Enum.find_value(Application.loaded_applications(), producer, fn {app, description, _vsn} ->
+      Atom.to_string(app) == producer and description != [] and List.to_string(description)
+    end)
   end
 
   # The test email and the history are the email settings' own: whoever may change those may use them.

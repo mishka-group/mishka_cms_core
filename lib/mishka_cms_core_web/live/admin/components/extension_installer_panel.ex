@@ -53,8 +53,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   import Phoenix.LiveView, only: [put_flash: 3]
 
   alias MishkaCmsCore.Install.Extensions
-  alias MishkaCmsCore.Runtime.PageProvision
-  alias MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel
+  alias MishkaCmsCore.Runtime.{PageProvision, ShareCard}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{KitUpgradePanel, ShareCardRedraw}
 
   require Logger
 
@@ -595,6 +595,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   `MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel` — and the dashboard's `kit_check` clause
   hands the same site to `choose/2`, so the Repair below writes to the site whose standings are on
   screen rather than to whichever one the page opened on.
+
+  When the extension answers `MishkaCmsCore.Runtime.ShareCard.targets_event/0` under its app's
+  name, the modal ends with a button that draws its own share cards on that site again
+  (`MishkaCmsCoreWeb.Live.Admin.Components.ShareCardRedraw`).
   """
   attr :id, :string, required: true
   attr :install_id, :string, required: true
@@ -686,9 +690,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
             }
           />
         </div>
+
+        <div
+          :if={share_cards?(@setup, @kit)}
+          id={"#{@id}-share-cards"}
+          class="mt-[18px] border-t border-[#ecebe6] pt-[16px]"
+        >
+          <.live_component
+            module={ShareCardRedraw}
+            id={"#{@id}-share-cards-redraw"}
+            site_id={@kit.site_id || @setup.site_id}
+            producer={Atom.to_string(@setup.app)}
+            allowed?={@allowed?}
+            title={gettext("Redraw the %{noun}'s share cards", noun: @setup.noun)}
+            blurb={
+              gettext(
+                "Draws every share card the %{noun} shows on this site again, one at a time, in the background.",
+                noun: @setup.noun
+              )
+            }
+            action={gettext("Redraw")}
+          />
+        </div>
       </div>
     </.modal>
     """
+  end
+
+  # Whether the extension draws share cards of its own on the site the modal is about.
+  defp share_cards?(setup, kit) do
+    case kit.site_id || setup.site_id do
+      site_id when is_binary(site_id) -> Atom.to_string(setup.app) in ShareCard.producers(site_id)
+      _no_site -> false
+    end
   end
 
   attr :id, :string, required: true

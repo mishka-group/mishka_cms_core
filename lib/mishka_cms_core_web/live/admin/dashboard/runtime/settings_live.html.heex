@@ -453,6 +453,55 @@
           </form>
         </div>
 
+        <%!-- THE SEO TAB'S OWN: every share card of the scope drawn again, and each producer's
+              own, outside the settings form for the same reason as the email tab's panel. --%>
+        <div
+          :if={@active_tab == "seo" and @can_redraw_cards?}
+          id="share-cards-panel"
+          class="rounded-[18px] border border-[#ecebe6] bg-white px-[26px] py-[22px] shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+        >
+          <h2 class="m-0 font-['Space_Grotesk'] text-[16px] font-bold text-[#17161a]">
+            {gettext("Share cards")}
+          </h2>
+          <p class="mt-1 text-[12.5px] font-medium text-[#8a877f]">
+            {gettext(
+              "A card is drawn again by itself when what it shows changes — a page, the site's address, name or logo. Redraw them all here after anything else changed how they look."
+            )}
+          </p>
+          <div class="mt-4 flex flex-col gap-4">
+            <.live_component
+              module={ShareCardRedraw}
+              id="share-cards-redraw"
+              site_id={@active_scope}
+              producer={nil}
+              allowed?={@can_redraw_cards?}
+              title={
+                if(@active_scope,
+                  do: gettext("Every share card of this site"),
+                  else: gettext("Every share card of every site")
+                )
+              }
+              blurb={gettext("Every page's card, whatever draws it.")}
+              action={gettext("Redraw all share cards")}
+            />
+            <div
+              :for={producer <- @share_card_producers}
+              class="border-t border-[#f0efea] pt-4"
+            >
+              <.live_component
+                module={ShareCardRedraw}
+                id={"share-cards-redraw-#{producer}"}
+                site_id={@active_scope}
+                producer={producer}
+                allowed?={@can_redraw_cards?}
+                title={producer_label(producer)}
+                blurb={gettext("Only the cards %{name} draws.", name: producer)}
+                action={gettext("Redraw these")}
+              />
+            </div>
+          </div>
+        </div>
+
         <%!-- THE PREFERENCES TAB'S OWN: the account's sign-in security — its authenticator app, its
               recovery codes and any card an extension adds (`SecurityCards`) — outside the settings
               form for the same reason as the email tab's panel. --%>
