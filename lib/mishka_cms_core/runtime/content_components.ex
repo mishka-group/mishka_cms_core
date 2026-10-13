@@ -78,6 +78,20 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   the content's markers from 0 — `"<id>-<n>-<m>"` for the `m`th inside it — so it stays the same
   component across renders.
 
+  A component declaring a `global` attribute (`attr :rest, :global, include: ~w(disabled circle)`)
+  takes, through it, the HTML attributes that attribute names and a few every element has: each
+  name in its `include` list, `aria-*`, `data-*`, and `accesskey`, `autocapitalize`,
+  `autocorrect`, `autofocus`, `dir`, `draggable`, `enterkeyhint`, `hidden`, `inert`, `inputmode`,
+  `lang`, `role`, `spellcheck`, `tabindex`, `title` and `translate`. A bare key or `"true"` is
+  `true`, `"false"` leaves it out, and anything else is the text written. Never an event handler
+  (`on…`), `style`, a `phx-` or `data-phx-` name, `data-method`, `data-to`, `data-csrf`, `method`,
+  `csrf_token` or a name the component declares, and a link or source (`href`, `src`, `action`,
+  `formaction`, `poster`, `cite`, `ping`) only when it is a path or an `http`, `https`, `mailto` or
+  `tel` address:
+
+      [[component my-video controls muted]][[slot source src="/intro.mp4" /]][[/component]]
+      [[component my-button circle disabled aria-label="Scan"]][[/component]]
+
   A slot the component declares and the content does not fill is passed empty, and one it requires
   draws the component as nothing — as a required attribute does. A slot's attribute the marker
   leaves out is passed as its declared default, and an entry with nothing inside it draws nothing
@@ -393,11 +407,16 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   `declared` is the component's attribute declarations, as `__component_information__/1` or the
   row holds them; `given` is a marker's `attrs`. What is not declared, cannot be cast, or is one of
-  the names an author never sets is left out.
+  the names an author never sets is left out. The HTML attributes a `global` attribute takes are
+  gathered under its name, as the module documentation says.
 
       cast([%{name: "count", type: "integer"}, %{name: "open", type: "boolean"}],
            %{"count" => "3", "open" => true, "phx-click" => "boom"})
       #=> %{count: 3, open: true}
+
+      cast([%{name: "rest", type: "global", opts: %{"include" => ["circle"]}}],
+           %{"circle" => true, "aria-label" => "Scan", "onclick" => "boom"})
+      #=> %{rest: %{:circle => true, "aria-label" => "Scan"}}
   """
   @spec cast([map()], %{String.t() => String.t() | true}) :: %{atom() => term()}
   def cast(declared, given) when is_list(declared) and is_map(given) do
@@ -406,8 +425,75 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         name = Inspector.name(attr),
         Map.has_key?(given, name),
         {:ok, value} <- [cast_value(type(attr), Map.fetch!(given, name), values(attr))],
-        into: %{},
+        into: global(declared, given),
         do: {String.to_existing_atom(name), value}
+  end
+
+  # THE HTML ATTRIBUTES A `global` ATTRIBUTE TAKES, under its name. An `include` name becomes the
+  # atom the declaration spells, which a template reads as `@rest[:circle]`; any other stays a
+  # string, which `{@rest}` writes the same and which mints no atom.
+  defp global(declared, given) do
+    with %{} = attr <- Enum.find(declared, &(type(&1) == "global")),
+         name when is_binary(name) <- Inspector.name(attr),
+         taken = taken_globals(declared, attr, given),
+         true <- taken != %{} do
+      %{String.to_existing_atom(name) => taken}
+    else
+      _none -> %{}
+    end
+  end
+
+  defp taken_globals(declared, attr, given) do
+    own = MapSet.new(declared, &Inspector.name/1)
+    include = for name <- List.wrap(Inspector.opts(attr)["include"]), is_binary(name), do: name
+
+    for {key, value} <- given,
+        not MapSet.member?(own, key),
+        key in include or global_html?(key),
+        safe_global?(key),
+        {:ok, value} <- [global_value(key, value)],
+        into: %{},
+        do: {(key in include && String.to_atom(key)) || key, value}
+  end
+
+  @globals ~w(accesskey autocapitalize autocorrect autofocus dir draggable enterkeyhint hidden inert
+              inputmode lang role spellcheck tabindex title translate)
+
+  defp global_html?(key),
+    do: key in @globals or String.starts_with?(key, ["aria-", "data-"])
+
+  @unsafe_globals ~w(style method csrf_token data-method data-to data-csrf)
+
+  defp safe_global?(key) do
+    lower = String.downcase(key)
+
+    lower not in @reserved and lower not in @unsafe_globals and
+      not String.starts_with?(lower, ["on", "phx", "data-phx"])
+  end
+
+  @addresses ~w(href src action formaction poster cite ping)
+
+  defp global_value(_key, true), do: {:ok, true}
+  defp global_value(_key, "true"), do: {:ok, true}
+  defp global_value(_key, "false"), do: :error
+
+  defp global_value(key, value) when key in @addresses and is_binary(value) do
+    case safe_address?(value) do
+      true -> {:ok, value}
+      false -> :error
+    end
+  end
+
+  defp global_value(_key, value) when is_binary(value), do: {:ok, value}
+  defp global_value(_key, _value), do: :error
+
+  # A browser drops control characters and spaces from an address before it reads its scheme, so
+  # `java\tscript:` is read without them.
+  defp safe_address?(value) do
+    case value |> String.replace(~r/[\x00-\x20\x7F]/, "") |> URI.parse() do
+      %URI{scheme: nil} -> true
+      %URI{scheme: scheme} -> String.downcase(scheme) in ~w(http https mailto tel)
+    end
   end
 
   @doc """

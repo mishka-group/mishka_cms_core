@@ -157,6 +157,39 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       refute html =~ "onclick"
     end
 
+    test "the HTML attributes its global attribute takes reach the element, and nothing unsafe",
+         %{site: site, n: n} do
+      note!(site, "video-#{n}",
+        template:
+          ~S|<video class={["probe-video", @rest[:circle] && "rounded-full"]} {@rest}></video>|,
+        attrs: [
+          %{
+            "name" => "rest",
+            "type" => "global",
+            "opts" => %{"include" => ["controls", "circle", "muted", "poster"]}
+          }
+        ],
+        slots: []
+      )
+
+      html =
+        draw(
+          ~s([[component video-#{n} controls circle muted="false" aria-label="Intro" ) <>
+            ~s|data-state="idle" poster="javascript:alert(1)" onplay="x" style="color:red" phx-click="boom" /]]|,
+          site.name
+        )
+
+      assert html |> query(".probe-video[controls]") |> Enum.count() == 1
+      assert attribute(html, ".probe-video", "class") == "probe-video rounded-full"
+      assert attribute(html, ".probe-video", "aria-label") == "Intro"
+      assert attribute(html, ".probe-video", "data-state") == "idle"
+      assert attribute(html, ".probe-video", "muted") == nil
+      assert attribute(html, ".probe-video", "poster") == nil
+      refute html =~ "onplay"
+      refute html =~ "style="
+      refute html =~ "phx-click"
+    end
+
     test "a value that does not cast leaves the component's default", %{site: site, n: n} do
       note!(site, "note-#{n}")
 

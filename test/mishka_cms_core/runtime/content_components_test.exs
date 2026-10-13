@@ -306,6 +306,89 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
 
       assert ContentComponents.cast(@declared, given) == %{}
     end
+
+    @global [
+      %{name: "label", type: "string"},
+      %{
+        name: "rest",
+        type: "global",
+        opts: %{"include" => ["circle", "disabled", "min", "href", "method", "onload"]}
+      }
+    ]
+
+    test "a global attribute takes its include list and the HTML attributes every element has" do
+      given = %{
+        "label" => "Scan",
+        "circle" => true,
+        "disabled" => "true",
+        "min" => "100",
+        "aria-label" => "Scan the code",
+        "data-state" => "idle",
+        "role" => "switch",
+        "title" => "Scan"
+      }
+
+      assert ContentComponents.cast(@global, given) == %{
+               label: "Scan",
+               rest: %{
+                 :circle => true,
+                 :disabled => true,
+                 :min => "100",
+                 "aria-label" => "Scan the code",
+                 "data-state" => "idle",
+                 "role" => "switch",
+                 "title" => "Scan"
+               }
+             }
+    end
+
+    test "a global attribute never takes a handler, a style, LiveView's or a link's request" do
+      given = %{
+        "onclick" => "alert(1)",
+        "onload" => "alert(1)",
+        "OnMouseOver" => "alert(1)",
+        "style" => "position:fixed",
+        "phx-click" => "delete",
+        "data-phx-link" => "redirect",
+        "data-method" => "delete",
+        "data-to" => "/admin",
+        "data-csrf" => "x",
+        "method" => "delete",
+        "class" => "not-declared",
+        "id" => "mine",
+        "rest" => "x",
+        "srcdoc" => "<script>",
+        "disabled" => "false"
+      }
+
+      assert ContentComponents.cast(@global, given) == %{}
+    end
+
+    test "a link or a source only when it is a path or a web, mail or phone address" do
+      safe = ["/docs", "#top", "docs/a", "https://example.com", "mailto:a@b.c", "tel:+1"]
+
+      unsafe =
+        [
+          "javascript:alert(1)",
+          " JavaScript:alert(1)",
+          "java\tscript:alert(1)",
+          "data:text/html,x",
+          "vbscript:x"
+        ]
+
+      for href <- safe do
+        assert ContentComponents.cast(@global, %{"href" => href}) == %{rest: %{href: href}}
+      end
+
+      for href <- unsafe do
+        assert ContentComponents.cast(@global, %{"href" => href}) == %{}
+      end
+    end
+
+    test "a component with no global attribute takes none" do
+      assert ContentComponents.cast([%{name: "label", type: "string"}], %{"aria-label" => "x"}) ==
+               %{}
+    end
   end
 
   describe "marker/3 — what Insert writes" do
