@@ -59,6 +59,13 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   event (`targets/2`) and queues a look at each, in batches. The core answers with its pages
   (`MishkaCmsCore.Runtime.PageShareCardTargets`); an extension or a site answers with its own.
 
+  ## Old cards
+
+  A card drawn for data that has changed since stays on disk until the next look at every card of
+  the site: each look marks the files its pages show (`keep/2`), and once all have run the planner's
+  `MishkaCmsCore.Runtime.Workers.ShareCardSweepWorker` deletes the files none of them marked. A page
+  that asks again for a card swept away has it drawn again.
+
   Drawn by libvips in a separate process (`MishkaCmsCore.Isolated`), so a file that crashes it ends
   that process, never the server. That process runs at a lower priority (`nice` 10) and libvips in
   it on one thread, so a long redraw leaves the processor to the pages being served.
@@ -96,6 +103,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @texts ~w(title description eyebrow site host logo byline picture)
 
   @targets_event "runtime:share_card:targets"
+  @swept_event "runtime:share_card:swept"
 
   # The settings a core card shows on every page of a site (`MishkaCmsCore.Runtime.Seo`).
   @site_settings ~w(site.title site.logo)
@@ -316,14 +324,79 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   """
   @spec specs(String.t(), target(), keyword()) :: [map()]
   def specs(site_id, target, opts \\ []) when is_binary(site_id) do
+    for %{card: %{} = spec} <- heads(site_id, target, Keyword.get(opts, :redraw, false)),
+        do: spec
+  end
+
+  @doc """
+  Looks at the cards `target`'s pages show now, as `ShareCardRefreshWorker` does in the background:
+  a card not drawn yet is queued (`image/2`), and with `force: true` every card is drawn again over
+  its old file (`redraw/2`). Each card file the pages show — the core's, and one a plugin on
+  `MishkaCmsCore.Runtime.Seo.event/0` drew and put in the head's image — is kept (`keep/2`).
+  """
+  @spec look(String.t(), target(), keyword()) :: :ok
+  def look(site_id, target, opts \\ []) when is_binary(site_id) do
+    force = Keyword.get(opts, :force, false) == true
+
+    for head <- heads(site_id, target, force) do
+      case head do
+        %{card: %{} = spec} when force -> redraw(site_id, spec)
+        %{card: %{} = spec} -> keep(site_id, image(site_id, spec))
+        _no_card -> :ok
+      end
+
+      keep(site_id, head.image)
+    end
+
+    :ok
+  end
+
+  @doc """
+  Marks the card file `url` names as shown now — `/uploads/<site_id>/share/<name>.jpg`, or an
+  address whose path is that — so the sweep that follows a look at every card of the site
+  (`MishkaCmsCore.Runtime.Workers.ShareCardSweepWorker`) leaves it. A producer whose own job finds
+  its card drawn calls it; `look/3` calls it for the core's cards and a plugin's. A map with a
+  `url`, as `image/2` answers, is read for it. A file that is not there, a path elsewhere and
+  anything else are left alone.
+  """
+  @spec keep(String.t(), String.t() | map() | nil) :: :ok
+  def keep(site_id, %{url: url}), do: keep(site_id, url)
+
+  def keep(site_id, url) when is_binary(site_id) and is_binary(url) do
+    with %URI{path: path} when is_binary(path) <- URI.parse(url),
+         ["/", "uploads", ^site_id, "share", name] <- Path.split(path),
+         ".jpg" <- Path.extname(name),
+         file = Path.join(dir(site_id), name),
+         true <- File.regular?(file) do
+      File.touch(file)
+    end
+
+    :ok
+  end
+
+  def keep(_site_id, _no_card), do: :ok
+
+  @doc """
+  The event the names of the card files a sweep deleted are announced on:
+  `"#{@swept_event}"`, with `%{site_id:, removed: ["<name>.jpg", …]}`. A producer that remembers
+  its cards as drawn forgets those names here; the core forgets its own.
+  """
+  @spec swept_event() :: String.t()
+  def swept_event, do: @swept_event
+
+  @doc "The folder the share cards of the site `site_id` are written to."
+  @spec dir(String.t()) :: String.t()
+  def dir(site_id), do: Path.join([Media.static_dir(), "uploads", site_id, "share"])
+
+  # The head each page that shows `target` renders, as built for a visit to it, with the card's
+  # spec in `card`.
+  defp heads(site_id, target, redraw) do
     case SiteState.get(site_id) do
       {:ok, %{host: host}} when is_binary(host) ->
         base = Seo.base(host)
-        redraw = Keyword.get(opts, :redraw, false)
 
         for {page, params} <- pages(site_id, target),
-            %{card: %{} = spec} <- [head(page, params, site_id, base, redraw)],
-            do: spec
+            do: head(page, params, site_id, base, redraw)
 
       _unknown ->
         []
@@ -496,8 +569,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @spec url(String.t(), String.t()) :: String.t()
   def url(site_id, key), do: "/uploads/#{site_id}/share/#{key}.jpg"
 
-  defp disk_path(site_id, key),
-    do: Path.join([Media.static_dir(), "uploads", site_id, "share", key <> ".jpg"])
+  defp disk_path(site_id, key), do: Path.join(dir(site_id), key <> ".jpg")
 
   # String keys, as the job stores it; empty and unknown values left out.
   defp normalize(card) do

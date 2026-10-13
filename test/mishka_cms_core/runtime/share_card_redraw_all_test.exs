@@ -34,7 +34,13 @@ defmodule MishkaCmsCore.Runtime.ShareCardRedrawAllTest do
   alias MishkaCmsCore.Runtime.ShareCardRedrawAllTest.RedrawSeo
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Runtime.Translation
-  alias MishkaCmsCore.Runtime.Workers.{ShareCardPlanWorker, ShareCardRefreshWorker}
+
+  alias MishkaCmsCore.Runtime.Workers.{
+    ShareCardPlanWorker,
+    ShareCardRefreshWorker,
+    ShareCardSweepWorker
+  }
+
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Test.{EventCannotRun, ShareCardLookWorker}
   alias MishkaCmsCore.Test.Plugins.ShareCardProducer
@@ -207,6 +213,28 @@ defmodule MishkaCmsCore.Runtime.ShareCardRedrawAllTest do
                        }}
 
       assert site_id == site.id
+    end
+
+    test "asked for every producer, queues the sweep after the looks; for one, none", %{
+      site: site
+    } do
+      before = System.os_time(:second)
+      :ok = perform_job(ShareCardPlanWorker, %{site_id: site.id, force: false, producer: nil})
+
+      assert [sweep] = all_enqueued(worker: ShareCardSweepWorker)
+      assert sweep.args["site_id"] == site.id
+      assert sweep.args["since"] >= before and sweep.priority == 9
+
+      MishkaCmsCore.Repo.delete_all(Oban.Job)
+
+      :ok =
+        perform_job(ShareCardPlanWorker, %{
+          site_id: site.id,
+          force: true,
+          producer: "test_producer"
+        })
+
+      assert all_enqueued(worker: ShareCardSweepWorker) == []
     end
 
     test "asks only the producer it names", %{site: site} do
