@@ -90,6 +90,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAudit
   alias MishkaCmsCore.Runtime.PageLanguageBackfill
+  alias MishkaCmsCore.Runtime.ShareCardQueue
   import Ecto.Query
   ####################################################################################
   ########################### (▰˘◡˘▰) Client API (▰˘◡˘▰) #############################
@@ -240,6 +241,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
     MishkaCmsCore.Install.refresh!()
     MishkaCmsCore.Settings.load_definitions()
+
+    # The `:share_cards` queue starts paused, and draws once the stored number of workers is read.
+    _ = ShareCardQueue.boot()
 
     # BEFORE THE COMPILES, because a compiled page carries its language group. A failure is reported
     # and the boot goes on: a page with no group still serves, and is given one when it is next saved

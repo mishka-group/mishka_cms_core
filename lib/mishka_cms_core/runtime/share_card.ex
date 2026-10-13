@@ -34,8 +34,9 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   ## When it is drawn
 
   Never in a request. `image/2` answers from ETS (`MishkaCmsCore.Runtime.States.AssetsState`), and
-  the first time a card is asked for it is queued: this module is the Oban worker, on `:assets`,
-  one job per card. Until it is drawn, the page shows its own image, or none.
+  the first time a card is asked for it is queued: this module is the Oban worker, on
+  `:share_cards` (`MishkaCmsCore.Runtime.ShareCardQueue`, as many at once as the Share-card workers
+  setting says), one job per card. Until it is drawn, the page shows its own image, or none.
 
   A card is named by what it shows (`key/1`): a page whose title changes asks for a new card, and the
   old one stays where it is. It is stored at `/uploads/<site_id>/share/<key>.jpg`, served as the
@@ -49,10 +50,11 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   `refresh(site_id, target, force: true)` draws it again over the old file: the Regenerate button.
 
   Drawn by libvips in a separate process (`MishkaCmsCore.Isolated`), so a file that crashes it ends
-  that process, never the server.
+  that process, never the server. That process runs at a lower priority (`nice` 10) and libvips in
+  it on one thread, so a long redraw leaves the processor to the pages being served.
   """
   use Oban.Worker,
-    queue: :assets,
+    queue: :share_cards,
     max_attempts: 3,
     unique: [
       period: :infinity,
@@ -389,7 +391,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     card = with_files(card, site_id)
 
     with {:ok, {:ok, jpeg}} <-
-           Isolated.run(__MODULE__, :draw, [card], env: env(), timeout: 60_000),
+           Isolated.run(__MODULE__, :draw, [card], env: env(), nice: 10, timeout: 60_000),
          :ok <- File.mkdir_p(Path.dirname(target)),
          :ok <- File.write(target <> ".part", jpeg),
          :ok <- File.rename(target <> ".part", target) do
@@ -443,6 +445,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       {~c"FONTCONFIG_FILE",
        String.to_charlist(Application.app_dir(:mishka_cms_core, "priv/share_card/fonts.conf"))},
       {~c"PANGOCAIRO_BACKEND", ~c"fc"},
+      {~c"VIPS_CONCURRENCY", ~c"1"},
       {~c"XDG_CACHE_HOME", String.to_charlist(System.tmp_dir!())},
       {~c"VIPS_BLOCK_UNTRUSTED", false}
     ]

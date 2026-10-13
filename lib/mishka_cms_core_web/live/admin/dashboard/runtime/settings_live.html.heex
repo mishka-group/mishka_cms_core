@@ -325,6 +325,8 @@
                               id={"set-#{dom_id(definition.key)}"}
                               name={field_name(definition)}
                               value={input_value(@form[definition.key].value)}
+                              min={Map.get(definition, :min)}
+                              max={Map.get(definition, :max)}
                               disabled={!editable}
                               class={[input_class(), "h-[46px] px-[15px]"]}
                             />

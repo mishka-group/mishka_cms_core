@@ -4098,7 +4098,7 @@ msgid "Features ×4"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:37
-#: lib/mishka_cms_core/runtime/content_components.ex:878
+#: lib/mishka_cms_core/runtime/content_components.ex:1061
 #, elixir-autogen, elixir-format
 msgid "Feedback"
 msgstr ""
@@ -4269,7 +4269,7 @@ msgid "Format"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:34
-#: lib/mishka_cms_core/runtime/content_components.ex:881
+#: lib/mishka_cms_core/runtime/content_components.ex:1064
 #: lib/mishka_cms_core/runtime/page_builder/blocks.ex:262
 #: lib/mishka_cms_core/runtime/page_builder/blocks.ex:294
 #: lib/mishka_cms_core/runtime/page_builder/blocks.ex:326
@@ -4636,7 +4636,7 @@ msgstr ""
 msgid "Highest number accepted."
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1039
+#: lib/mishka_cms_core/settings.ex:1040
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:14830
 #, elixir-autogen, elixir-format
 msgid "History"
@@ -5194,7 +5194,7 @@ msgid "Layers"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/sources/editor_history.ex:46
-#: lib/mishka_cms_core/runtime/content_components.ex:874
+#: lib/mishka_cms_core/runtime/content_components.ex:1057
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:79
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:86
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:93
@@ -5747,7 +5747,7 @@ msgid "Max width"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:36
-#: lib/mishka_cms_core/runtime/content_components.ex:873
+#: lib/mishka_cms_core/runtime/content_components.ex:1056
 #: lib/mishka_cms_core/runtime/page_builder/binding.ex:41
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:276
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:283
@@ -6006,7 +6006,7 @@ msgid "Nav"
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:35
-#: lib/mishka_cms_core/runtime/content_components.ex:879
+#: lib/mishka_cms_core/runtime/content_components.ex:1062
 #, elixir-autogen, elixir-format
 msgid "Navigation"
 msgstr ""
@@ -6246,7 +6246,7 @@ msgstr ""
 msgid "No server available for this domain."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:346
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:348
 #, elixir-autogen, elixir-format
 msgid "No settings in this category yet."
 msgstr ""
@@ -6857,7 +6857,7 @@ msgid "Original"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/query.ex:574
-#: lib/mishka_cms_core/runtime/content_components.ex:882
+#: lib/mishka_cms_core/runtime/content_components.ex:1065
 #, elixir-autogen, elixir-format
 msgid "Other"
 msgstr ""
@@ -6867,7 +6867,7 @@ msgstr ""
 msgid "Other ways to create this"
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1004
+#: lib/mishka_cms_core/settings.ex:1005
 #, elixir-autogen, elixir-format
 msgid "Outgoing email \"from\" address"
 msgstr ""
@@ -6888,7 +6888,7 @@ msgid "Over the %{size} budget — every page on this site loads it."
 msgstr ""
 
 #: lib/mishka_cms_core/install/ui_kit_catalog.ex:38
-#: lib/mishka_cms_core/runtime/content_components.ex:880
+#: lib/mishka_cms_core/runtime/content_components.ex:1063
 #, elixir-autogen, elixir-format
 msgid "Overlays"
 msgstr ""
@@ -9246,7 +9246,7 @@ msgstr ""
 msgid "Tenant · %{name} — click to place, or drag onto the canvas"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:872
+#: lib/mishka_cms_core/runtime/content_components.ex:1055
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:194
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:201
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:208
@@ -13343,7 +13343,7 @@ msgstr ""
 msgid "Delivery"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:394
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:396
 #, elixir-autogen, elixir-format
 msgid "Email history"
 msgstr ""
@@ -13353,7 +13353,7 @@ msgstr ""
 msgid "Email provider"
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1041
+#: lib/mishka_cms_core/settings.ex:1042
 #, elixir-autogen, elixir-format
 msgid "Keep the email history for (days)"
 msgstr ""
@@ -13398,7 +13398,7 @@ msgstr ""
 msgid "Provider, sender, test email and history"
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1027
+#: lib/mishka_cms_core/settings.ex:1028
 #, elixir-autogen, elixir-format
 msgid "Reply-to address"
 msgstr ""
@@ -13413,24 +13413,24 @@ msgstr ""
 msgid "Saved, ends in %{last} — type a new one to replace it"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:365
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:367
 #, elixir-autogen, elixir-format
 msgid "Send a test email"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:387
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:389
 #, elixir-autogen, elixir-format
 msgid "Send test"
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1001
-#: lib/mishka_cms_core/settings.ex:1014
-#: lib/mishka_cms_core/settings.ex:1024
+#: lib/mishka_cms_core/settings.ex:1002
+#: lib/mishka_cms_core/settings.ex:1015
+#: lib/mishka_cms_core/settings.ex:1025
 #, elixir-autogen, elixir-format
 msgid "Sender"
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1017
+#: lib/mishka_cms_core/settings.ex:1018
 #, elixir-autogen, elixir-format
 msgid "Sender name"
 msgstr ""
@@ -13440,7 +13440,7 @@ msgstr ""
 msgid "Sending"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:384
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:386
 #, elixir-autogen, elixir-format
 msgid "Sending…"
 msgstr ""
@@ -13450,7 +13450,7 @@ msgstr ""
 msgid "Sent"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:368
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:370
 #, elixir-autogen, elixir-format
 msgid "Sent now through this scope's saved provider and sender — save your changes first. The answer appears here and in the history below."
 msgstr ""
@@ -13500,7 +13500,7 @@ msgstr ""
 msgid "The key was removed."
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1019
+#: lib/mishka_cms_core/settings.ex:1020
 #, elixir-autogen, elixir-format
 msgid "The name shown beside the address. Empty means the site's title."
 msgstr ""
@@ -13516,7 +13516,7 @@ msgstr ""
 msgid "What this site sends its email through. A site sends with its own provider and key only, never with another site's."
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1029
+#: lib/mishka_cms_core/settings.ex:1030
 #, elixir-autogen, elixir-format
 msgid "Where a reply goes when it should not go to the from address. Optional."
 msgstr ""
@@ -13648,7 +13648,7 @@ msgstr ""
 msgid "Whoever holds one of these passes whatever is closed above, separated by commas — *, admin:dashboard:*."
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1043
+#: lib/mishka_cms_core/settings.ex:1044
 #, elixir-autogen, elixir-format
 msgid "A site's older entries are deleted when it next sends an email."
 msgstr ""
@@ -13683,7 +13683,7 @@ msgstr ""
 msgid "This would shut you out too. Add your permission or email to Still allowed first."
 msgstr ""
 
-#: lib/mishka_cms_core/settings.ex:1006
+#: lib/mishka_cms_core/settings.ex:1007
 #, elixir-autogen, elixir-format
 msgid "Every email this site sends comes from this address, on a domain its provider has verified. Empty sends from noreply@ the site's own domain."
 msgstr ""
@@ -13802,7 +13802,7 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/two_factor.ex:276
 #: lib/mishka_cms_core_web/live/admin/components/two_factor.ex:317
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:258
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:445
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:447
 #, elixir-autogen, elixir-format
 msgid "Checking…"
 msgstr ""
@@ -14199,7 +14199,7 @@ msgstr ""
 msgid "Complete the security check"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:421
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:423
 #, elixir-autogen, elixir-format
 msgid "Draws this scope's saved captcha — save your changes first — and checks it with the saved keys. Try it on the site's own address: its keys work only there."
 msgstr ""
@@ -14270,7 +14270,7 @@ msgstr ""
 msgid "Solve the check first, then press Test."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:448
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:450
 #, elixir-autogen, elixir-format
 msgid "Test"
 msgstr ""
@@ -14300,7 +14300,7 @@ msgstr ""
 msgid "Then send the form again."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:438
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:440
 #, elixir-autogen, elixir-format
 msgid "This scope asks no captcha: choose one above, enter its keys and save."
 msgstr ""
@@ -14310,7 +14310,7 @@ msgstr ""
 msgid "Too many new accounts"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:418
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:420
 #, elixir-autogen, elixir-format
 msgid "Try the captcha"
 msgstr ""
@@ -14680,17 +14680,17 @@ msgstr ""
 msgid "“%{name}” cannot be a name — start with a lowercase letter and use letters, numbers, _ and - between them only."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:1160
+#: lib/mishka_cms_core/runtime/content_components.ex:1371
 #, elixir-autogen, elixir-format
 msgid "%{name} draws content of its own, so it cannot be placed inside content."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:1173
+#: lib/mishka_cms_core/runtime/content_components.ex:1384
 #, elixir-autogen, elixir-format
 msgid "%{name} is not a component this site can show, so visitors see nothing here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:1166
+#: lib/mishka_cms_core/runtime/content_components.ex:1377
 #, elixir-autogen, elixir-format
 msgid "%{name} needs %{attrs}, so visitors see nothing here."
 msgstr ""
@@ -14842,7 +14842,7 @@ msgstr ""
 msgid "All components"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:875
+#: lib/mishka_cms_core/runtime/content_components.ex:1058
 #, elixir-autogen, elixir-format
 msgid "Buttons"
 msgstr ""
@@ -14877,12 +14877,12 @@ msgstr ""
 msgid "Click to place it at the cursor, or drag it into the text. Drop a component on a box to put it inside."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:876
+#: lib/mishka_cms_core/runtime/content_components.ex:1059
 #, elixir-autogen, elixir-format
 msgid "Data"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/content_components.ex:877
+#: lib/mishka_cms_core/runtime/content_components.ex:1060
 #, elixir-autogen, elixir-format
 msgid "Disclosure"
 msgstr ""
@@ -17757,4 +17757,19 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/component_boundary.ex:198
 #, elixir-autogen, elixir-format
 msgid "This component could not be drawn"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/share_card_queue.ex:67
+#, elixir-autogen, elixir-format
+msgid "How many share cards are drawn at the same time, from 0 to 4. Each one keeps a processor core busy while it draws. 0 pauses the drawing: new cards wait, and pages show their own image until it is set above 0 again."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/share_card_queue.ex:63
+#, elixir-autogen, elixir-format
+msgid "Share cards"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/share_card_queue.ex:65
+#, elixir-autogen, elixir-format
+msgid "Share-card workers"
 msgstr ""

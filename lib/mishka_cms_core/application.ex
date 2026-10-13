@@ -38,9 +38,12 @@ defmodule MishkaCmsCore.Application do
   ]
 
   # A page's share card refreshed after the page is saved, on `cms_core:page:after_save` — the same
-  # event an extension's plugin would listen on (`MishkaCmsCore.Runtime.ShareCard`).
+  # event an extension's plugin would listen on (`MishkaCmsCore.Runtime.ShareCard`) — and the
+  # share-card queue scaled when its Share-card workers setting is saved, on
+  # `cms_core:setting:after_save` (`MishkaCmsCore.Runtime.ShareCardQueue`).
   @share_card_plugins [
-    MishkaCmsCore.Runtime.PageShareCard
+    MishkaCmsCore.Runtime.PageShareCard,
+    MishkaCmsCore.Runtime.ShareCardQueue
   ]
 
   # `settings:register` plugins — the core widgets' settings under the General tab, and every

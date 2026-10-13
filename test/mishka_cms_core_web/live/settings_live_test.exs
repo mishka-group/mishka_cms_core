@@ -991,6 +991,45 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
         assert Settings.get("seo.sitemap.paths", nil, site.id) == ["/pricing"]
       end
     end
+
+    test "holds the share-card workers in Global alone, as a number from 0 to 4", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      {:ok, view, _html} = live(conn, @path <> "?tab=seo")
+
+      assert has_element?(
+               view,
+               ~s(input#set-share_cards-workers[type="number"][min="0"][max="4"][value="1"])
+             )
+
+      view |> form("#scope-form") |> render_change(%{"scope" => site.id})
+      refute has_element?(view, "#set-share_cards-workers")
+    end
+
+    test "saves the share-card workers held to 0..4, and refuses what is not a number", %{
+      conn: conn
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      {:ok, view, _html} = live(conn, @path <> "?tab=seo")
+
+      for {typed, saved} <- [{"3", 3}, {"9", 4}, {"-2", 0}, {"0", 0}, {"2", 2}] do
+        view
+        |> form("#settings-form", settings: %{"share_cards.workers" => typed})
+        |> render_submit()
+
+        assert Settings.get("share_cards.workers") == saved, "#{typed} saved as #{saved}"
+      end
+
+      html =
+        view
+        |> element("#settings-form")
+        |> render_submit(%{"settings" => %{"share_cards.workers" => "two"}})
+
+      assert html =~ "could not be saved"
+      assert Settings.get("share_cards.workers") == 2
+    end
   end
 
   describe "the Email tab" do

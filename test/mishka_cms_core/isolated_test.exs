@@ -52,6 +52,23 @@ defmodule MishkaCmsCore.IsolatedTest do
     System.delete_env("MISHKA_ISOLATED_DROPPED")
   end
 
+  test "with nice, the peer runs that much below the caller's priority" do
+    caller = niceness(:os.cmd(~c"ps -o nice= -p $$"))
+
+    assert {:ok, peer} = Isolated.run(:os, :cmd, [~c"ps -o nice= -p $$"], nice: 10)
+    assert niceness(peer) == min(caller + 10, 19)
+
+    assert {:ok, same} = Isolated.run(:os, :cmd, [~c"ps -o nice= -p $$"])
+    assert niceness(same) == caller
+  end
+
+  test "without nice, or with 0, the peer is started as erl itself" do
+    assert Isolated.exec(0) == Isolated.erl()
+    assert {nice, [~c"-n", ~c"5", erl]} = Isolated.exec(5)
+    assert List.to_string(nice) in ["/usr/bin/nice", "/bin/nice"]
+    assert erl == Isolated.erl()
+  end
+
   test "starts the Erlang of the caller's own ERTS, whatever is on PATH" do
     erl = List.to_string(Isolated.erl())
 
@@ -59,4 +76,6 @@ defmodule MishkaCmsCore.IsolatedTest do
     assert String.starts_with?(erl, List.to_string(:code.root_dir()))
     assert erl =~ "erts-#{:erlang.system_info(:version)}"
   end
+
+  defp niceness(output), do: output |> List.to_string() |> String.trim() |> String.to_integer()
 end
