@@ -26,7 +26,14 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState}
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
   alias MishkaCmsCore.Settings
-  alias MishkaCmsCore.Test.Plugins.{SeoManyUrls, SeoRobotsLines, SeoSitemapUrls}
+
+  alias MishkaCmsCore.Test.Plugins.{
+    SeoManyUrls,
+    SeoRobotsLines,
+    SeoSitemapSlashes,
+    SeoSitemapUrls
+  }
+
   alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.{SitemapUnavailable, SitemapUnavailablePage}
   alias MishkaInstaller.Event.{Event, EventHandler}
@@ -395,6 +402,18 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
                {origin(site) <> "/about", iso(about.updated_at)},
                {origin(site) <> "/from-plugin", "2026-01-02T03:04:05Z"},
                {origin(site) <> "/%C3%BCber%20uns", nil}
+             ]
+    end
+
+    test "lists each address once, with no slash at its end, whoever lists it", %{site: site} do
+      register!(SeoSitemapSlashes, "seo:sitemap:urls")
+      create_page!(site_id: site.id, path: "/")
+      create_page!(site_id: site.id, path: "/about")
+
+      assert built_locs(site) == [
+               origin(site),
+               origin(site) <> "/about",
+               origin(site) <> "/guides"
              ]
     end
 

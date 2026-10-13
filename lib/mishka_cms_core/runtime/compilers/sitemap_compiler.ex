@@ -6,7 +6,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
 
   ## What goes in it
 
-  Its addresses, each once, the first to name a path keeping it:
+  Its addresses, each once whoever lists it, the first to name a path keeping it, and none ending in
+  a slash — `/blog/` and `/blog` are the one `/blog`, and the home page is the site's address alone,
+  `https://example.com`:
 
     1. the site's pages a search engine may be sent to
        (`MishkaCmsCore.Runtime.PageEditions.indexable/1`), each at its public addresses
@@ -77,9 +79,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
         |> Stream.map(&%{path: "/posts/" <> &1.slug, lastmod: &1.updated_at, images: [&1.cover]})
       end
 
-  A plugin lists each of its paths once, and none another plugin lists: only a path core lists
-  itself is looked for again, so what a build remembers while it reads the stream is core's own
-  list, however many rows the plugins add.
+  A path listed twice — by core and a plugin, by two plugins, or by one plugin twice, with or without
+  a slash at its end — is listed once, the first time it comes: a build remembers every path it
+  wrote while it reads the stream.
 
   Nothing is read while the chain runs: the build reads the stream once, after it, so a stream that
   raises then fails the build — the job is retried as Oban retries any, and the sitemap stored
@@ -358,7 +360,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
         _refused -> own
       end
 
-    rules = %{own: MapSet.new(own, & &1.path), hidden: hidden, routes: routed()}
+    rules = %{hidden: MapSet.new(hidden, &bare/1), routes: routed()}
 
     urls
     |> Stream.filter(&match?(%{path: "/" <> _}, &1))
@@ -378,7 +380,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
           entry <- public(%{path: path, lastmod: nil}, site.id),
           do: entry
 
-    {Enum.uniq_by(page_urls ++ listed, & &1.path), pages, hidden}
+    {page_urls ++ listed, pages, hidden}
   end
 
   # AN ADDRESS AS A VISITOR IS SERVED IT, whoever listed it: one under the primary language a site
@@ -386,8 +388,20 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   defp public(%{path: path} = entry, site_id) do
     case Languages.url(path, %{}, site_id) do
       nil -> []
-      public -> [%{entry | path: public}]
+      public -> [%{entry | path: bare(public)}]
     end
+  end
+
+  # One address however its slashes are written: none at its end and never two in a row, so
+  # `/blog/`, `//blog` and `/blog` are the one `/blog`. The query, if any, is kept as it is.
+  defp bare(path) do
+    {path, query} =
+      case String.split(path, "?", parts: 2) do
+        [path, query] -> {path, "?" <> query}
+        [path] -> {path, ""}
+      end
+
+    "/" <> Enum.join(String.split(path, "/", trim: true), "/") <> query
   end
 
   # A literal page at its address; a page whose only capture is the language at one address per
@@ -406,13 +420,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
     {urls, pages, hidden}
   end
 
-  # Each address where a visitor is sent to it, and once. ONLY CORE'S OWN PATHS ARE REMEMBERED, the
-  # first to name one keeping it: a plugin lists each of its own once, so what this holds while the
-  # stream is read is core's own list, and never grows with the rows.
+  # Each address where a visitor is sent to it, and once: the first to name a path keeps it,
+  # whoever lists it. What this holds grows with the addresses, one path each, read in a job.
   defp once(%{path: path} = entry, seen, rules) do
     cond do
       MapSet.member?(rules.hidden, path) or routed?(path, rules.routes) -> {[], seen}
-      not MapSet.member?(rules.own, path) -> {[entry], seen}
       MapSet.member?(seen, path) -> {[], seen}
       true -> {[entry], MapSet.put(seen, path)}
     end
@@ -456,11 +468,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
 
   defp url(entry, host) do
     %Sitemapper.URL{
-      loc: host |> Helpers.site_url(entry.path) |> encoded(),
+      loc: host |> Helpers.site_url(loc_path(entry.path)) |> encoded(),
       lastmod: lastmod(Map.get(entry, :lastmod)),
       images: for(image <- List.wrap(Map.get(entry, :images)), loc <- image(image, host), do: loc)
     }
   end
+
+  # The home page is the site's address alone, so no address ends in a slash.
+  defp loc_path("/"), do: ""
+  defp loc_path(path), do: path
 
   defp lastmod(%DateTime{} = at), do: DateTime.truncate(at, :second)
   defp lastmod(_unknown), do: nil
