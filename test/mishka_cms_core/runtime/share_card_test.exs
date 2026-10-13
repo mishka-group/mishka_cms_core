@@ -6,6 +6,27 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest.ThingSeo do
   def call(seo), do: {:reply, seo}
 end
 
+defmodule MishkaCmsCore.Runtime.ShareCardTest.OwnCardSeo do
+  @moduledoc false
+  def call(%{title: "Own card"} = seo),
+    do: {:reply, %{seo | image: "/uploads/#{seo.site_id}/share/landing-own.jpg", card: false}}
+
+  def call(seo), do: {:reply, seo}
+end
+
+defmodule MishkaCmsCore.Runtime.ShareCardTest.SweptListener do
+  @moduledoc false
+  use MishkaInstaller.Event.Hook,
+    event: MishkaCmsCore.Runtime.ShareCard.swept_event(),
+    initial: %{priority: 50}
+
+  @impl true
+  def call(data) do
+    send(self(), {:swept, data})
+    {:reply, data}
+  end
+end
+
 defmodule MishkaCmsCore.Runtime.ShareCardTest do
   @moduledoc """
   `MishkaCmsCore.Runtime.ShareCard`: the picture a shared link to a page shows. Asked for, it is
@@ -21,9 +42,9 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
   use Oban.Testing, repo: @repo
 
   alias MishkaCmsCore.Runtime.{PageShareCard, Seo, ShareCard}
-  alias MishkaCmsCore.Runtime.ShareCardTest.ThingSeo
-  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState, TranslationsState}
-  alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
+  alias MishkaCmsCore.Runtime.ShareCardTest.{OwnCardSeo, SweptListener, ThingSeo}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState, TranslationsState}
+  alias MishkaCmsCore.Runtime.Workers.{ShareCardRefreshWorker, ShareCardSweepWorker}
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -395,6 +416,128 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
     end
   end
 
+  describe "keeping the cards a page shows" do
+    setup %{site: site} do
+      site = cached!(site)
+      page = create_page!(site_id: site.id, path: "/team", title: "The team", language: "en")
+      %{site: site, page: page}
+    end
+
+    test "a look marks the page's drawn card as shown now", %{site: site, page: page} do
+      [spec] = ShareCard.specs(site.id, {:page, page.id})
+      file = card_file(site, ShareCard.key(spec) <> ".jpg")
+      File.touch!(file, 0)
+
+      :ok = perform_job(ShareCardRefreshWorker, %{site_id: site.id, target: %{"page" => page.id}})
+
+      assert mtime(file) >= System.os_time(:second) - 5
+      assert all_enqueued(worker: ShareCard) == []
+    end
+
+    test "and the card a plugin drew itself, which the head names", %{site: site} do
+      answers!(OwnCardSeo)
+      page = create_page!(site_id: site.id, path: "/own", title: "Own card", language: "en")
+      file = card_file(site, "landing-own.jpg")
+      File.touch!(file, 0)
+
+      :ok = ShareCard.look(site.id, {:page, page.id})
+
+      assert mtime(file) >= System.os_time(:second) - 5
+    end
+
+    test "keep/2 touches only a card file of the site that is there", %{site: site} do
+      file = card_file(site, "kept.jpg")
+      File.touch!(file, 0)
+      elsewhere = card_file(create_site!(), "kept.jpg")
+      File.touch!(elsewhere, 0)
+
+      assert :ok = ShareCard.keep(site.id, "https://cards.test/uploads/#{site.id}/share/kept.jpg")
+      assert mtime(file) > 0
+
+      for url <- [
+            "/uploads/#{site.id}/share/missing.jpg",
+            "/uploads/#{site.id}/share/../share/kept.jpg",
+            "/uploads/#{site.id}/media/kept.jpg",
+            "/uploads/#{site.id}/share/kept.png",
+            "/uploads/other/share/kept.jpg",
+            nil
+          ],
+          do: assert(:ok = ShareCard.keep(site.id, url))
+
+      assert mtime(elsewhere) == 0
+      refute File.exists?(Path.join(ShareCard.dir(site.id), "missing.jpg"))
+    end
+  end
+
+  describe "the sweep" do
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: SweptListener,
+          event: ShareCard.swept_event(),
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile(ShareCard.swept_event(), :start, false)
+
+      on_exit(fn ->
+        Event.unregister(:name, SweptListener, false)
+        EventHandler.do_compile(ShareCard.swept_event(), :start, false)
+      end)
+    end
+
+    test "deletes the card files none of the looks since its start kept, and forgets them", %{
+      site: site
+    } do
+      since = System.os_time(:second)
+      kept = card_file(site, "kept.jpg")
+      old = card_file(site, "old.jpg")
+      theirs = card_file(site, "landing-old.jpg")
+      unfinished = card_file(site, "half.jpg.part")
+      other = card_file(site, "notes.txt")
+      for file <- [old, theirs, unfinished, other], do: File.touch!(file, since - 60)
+      File.touch!(kept, since)
+
+      for key <- ~w(old kept) do
+        AssetsState.save(%{
+          id: site.id,
+          type: "share_card:" <> key,
+          value: :ready,
+          hash: nil,
+          updated_at: DateTime.utc_now()
+        })
+      end
+
+      assert :ok = perform_job(ShareCardSweepWorker, %{site_id: site.id, since: since})
+
+      assert File.exists?(kept) and File.exists?(other)
+      refute File.exists?(old) or File.exists?(theirs) or File.exists?(unfinished)
+      assert AssetsState.get_value(site.id, "share_card:old") == nil
+      assert AssetsState.get_value(site.id, "share_card:kept") == :ready
+
+      assert_received {:swept, %{site_id: site_id, removed: removed}}
+      assert site_id == site.id
+      assert Enum.sort(removed) == ["landing-old.jpg", "old.jpg"]
+    end
+
+    test "a site with no cards yet has nothing to delete", %{site: site} do
+      assert :ok = perform_job(ShareCardSweepWorker, %{site_id: site.id, since: 0})
+      assert_received {:swept, %{removed: []}}
+    end
+
+    test "runs after every other job of the queue: one a site, at the lowest priority", %{
+      site: site
+    } do
+      {:ok, _} = Oban.insert(ShareCardSweepWorker.after_plan(site.id, 1))
+      {:ok, _} = Oban.insert(ShareCardSweepWorker.after_plan(site.id, 2))
+
+      assert [job] = all_enqueued(worker: ShareCardSweepWorker)
+      assert job.priority == 9 and job.queue == "share_cards"
+      assert job.args == %{"site_id" => site.id, "since" => 1}
+    end
+  end
+
   describe "the page plugin" do
     setup do
       {:ok, _} =
@@ -435,6 +578,15 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
       EventHandler.do_compile(Seo.event(), :start, false)
     end)
   end
+
+  defp card_file(site, name) do
+    file = Path.join(ShareCard.dir(site.id), name)
+    File.mkdir_p!(Path.dirname(file))
+    File.write!(file, "jpeg")
+    file
+  end
+
+  defp mtime(file), do: File.stat!(file, time: :posix).mtime
 
   # What `perform/1` draws for `card`, read back.
   defp drawn(site, card) do

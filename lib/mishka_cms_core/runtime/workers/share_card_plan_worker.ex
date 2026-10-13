@@ -11,7 +11,9 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker do
     * each `Oban.Job` changeset a producer answered with, as it is — one on another queue than
       `:share_cards` is left out.
 
-  A target two producers name is looked at once. While the targets event cannot run — one of its
+  Asked for every producer's cards, it then queues a
+  `MishkaCmsCore.Runtime.Workers.ShareCardSweepWorker`, which deletes the card files none of those
+  looks showed once they have run. A target two producers name is looked at once. While the targets event cannot run — one of its
   plugins is started but not loaded — the planner waits 30 seconds and asks again.
 
   One planner a site, `force` and `producer` waits at a time: a second request while one waits is
@@ -31,7 +33,7 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker do
   require Logger
 
   alias MishkaCmsCore.Runtime.{ShareCard, ShareCardQueue}
-  alias MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker
+  alias MishkaCmsCore.Runtime.Workers.{ShareCardRefreshWorker, ShareCardSweepWorker}
 
   @batch 500
   @topic "share_cards:planned"
@@ -44,10 +46,12 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker do
   def perform(%Oban.Job{args: %{"site_id" => site_id} = args}) do
     force = args["force"] == true
     producer = args["producer"]
+    since = System.os_time(:second)
 
     case ShareCard.targets(site_id, force: force, producer: producer) do
       {:ok, by_producer} ->
         counts = plan(site_id, by_producer, force)
+        :ok = sweep(site_id, producer, since)
 
         Phoenix.PubSub.broadcast(
           MishkaCmsCore.PubSub,
@@ -62,6 +66,16 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker do
         {:snooze, 30}
     end
   end
+
+  # After a look at every producer's cards, the files none of them shows go.
+  defp sweep(site_id, nil, since) do
+    case Oban.insert(ShareCardSweepWorker.after_plan(site_id, since)) do
+      {:ok, _job} -> :ok
+      {:error, reason} -> Logger.warning("[ShareCardPlanWorker] no sweep: #{inspect(reason)}")
+    end
+  end
+
+  defp sweep(_site_id, _one_producer, _since), do: :ok
 
   # Each producer's looks, a target named twice looked at once; how many each producer queued.
   defp plan(site_id, by_producer, force) do
