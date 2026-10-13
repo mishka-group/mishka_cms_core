@@ -40,10 +40,16 @@ defmodule MishkaCmsCore.Application do
   # A page's share card refreshed after the page is saved, on `cms_core:page:after_save` — the same
   # event an extension's plugin would listen on (`MishkaCmsCore.Runtime.ShareCard`) — and the
   # share-card queue scaled when its Share-card workers setting is saved, on
-  # `cms_core:setting:after_save` (`MishkaCmsCore.Runtime.ShareCardQueue`).
+  # `cms_core:setting:after_save` (`MishkaCmsCore.Runtime.ShareCardQueue`). Every card of a site is
+  # looked at again when its address, name, logo or name's translation changes, and the core answers
+  # `runtime:share_card:targets` with its pages (`MishkaCmsCore.Runtime.ShareCard.redraw_all/2`).
   @share_card_plugins [
     MishkaCmsCore.Runtime.PageShareCard,
-    MishkaCmsCore.Runtime.ShareCardQueue
+    MishkaCmsCore.Runtime.ShareCardQueue,
+    MishkaCmsCore.Runtime.PageShareCardTargets,
+    MishkaCmsCore.Runtime.SiteShareCards,
+    MishkaCmsCore.Runtime.SettingShareCards,
+    MishkaCmsCore.Runtime.TranslationShareCards
   ]
 
   # `settings:register` plugins — the core widgets' settings under the General tab, and every

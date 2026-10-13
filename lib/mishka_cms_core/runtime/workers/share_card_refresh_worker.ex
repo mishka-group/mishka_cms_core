@@ -18,8 +18,10 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"site_id" => site_id, "target" => target} = args}) do
-    for spec <- ShareCard.specs(site_id, ShareCard.decode(target)) do
-      if args["force"],
+    force = args["force"] == true
+
+    for spec <- ShareCard.specs(site_id, ShareCard.decode(target), redraw: force) do
+      if force,
         do: ShareCard.redraw(site_id, spec),
         else: ShareCard.image(site_id, spec)
     end

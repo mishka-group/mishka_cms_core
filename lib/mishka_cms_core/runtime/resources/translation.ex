@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Runtime.Translation do
     domain: MishkaCmsCore.Runtime,
     data_layer: AshPostgres.DataLayer,
     authorizers: [Ash.Policy.Authorizer],
-    notifiers: [Ash.Notifier.PubSub],
+    notifiers: [Ash.Notifier.PubSub, MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook],
     extensions: [MishkaGervaz.Resource, GuardedStruct.AshResource]
 
   import Phoenix.Component, only: [sigil_H: 2]
