@@ -60,7 +60,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ShareCardRedraw do
     {:noreply,
      socket
      |> assign(state: :queuing, counts: nil)
-     |> start_async(:redraw, fn -> redraw(site_id, producer, wait) end)}
+     |> MishkaGervaz.Messages.start_async(:redraw, fn -> redraw(site_id, producer, wait) end)}
   end
 
   def handle_event("redraw", _params, socket), do: {:noreply, socket}
