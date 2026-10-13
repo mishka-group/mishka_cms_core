@@ -256,6 +256,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.ComponentBoundary
+  alias MishkaCmsCore.Runtime.ContentComponents
   alias MishkaCmsCore.Runtime.Stylesheet
   alias MishkaInstaller.Event.Hook
 
@@ -1462,10 +1463,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   @spec content_classes(String.t()) :: [String.t()]
   def content_classes(site_name), do: content_named(site_name).classes
 
-  # What one `@source inline(…)` may carry as a candidate: what `ContentComponents.classes/2` keeps.
-  # A quote or a backslash would end the CSS string, and a brace is Tailwind's brace expansion.
+  # What one `@source inline(…)` may carry as a candidate: what `ContentComponents.classes/2` keeps
+  # (`ContentComponents.class?/1`), so no quote or backslash ends the CSS string and no brace is
+  # read as Tailwind's brace expansion.
   @classes 20_000
-  @inline_class ~r/\A[A-Za-z0-9!#$%&'()*+,.\/:=>?@\[\]^_|~-]{1,160}\z/
 
   # ONE EVENT PER COMPILE for every answer, so each plugin reads its content's rows once.
   defp content_named(site_name) do
@@ -1479,14 +1480,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
       %{
         components: named(answer, :components),
         icons: named(answer, :icons),
-        classes: answer |> named(:classes) |> Enum.filter(&inline_class?/1) |> Enum.take(@classes)
+        classes:
+          answer
+          |> named(:classes)
+          |> Enum.filter(&ContentComponents.class?/1)
+          |> Enum.take(@classes)
       }
     else
       _nothing_named -> %{components: [], icons: [], classes: []}
     end
   end
-
-  defp inline_class?(class), do: Regex.match?(@inline_class, class)
 
   # The content's classes as candidates, a few hundred to a line.
   defp class_sources([]), do: ""

@@ -216,7 +216,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   # What `classes/2` keeps: how many tokens, how long each, and the bytes a class is made of.
   @class_cap 1000
-  @class_length 160
+  @class_length 512
   @class_token ~r/\A[A-Za-z0-9!#$%&'()*+,.\/:=>?@\[\]^_|~-]+\z/
   @tag_with_attrs ~r{<[A-Za-z][A-Za-z0-9-]*\s[^<>]*>}
   @class_attr ~r/\sclass\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i
@@ -382,9 +382,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     * any other attribute of a component or a slot whose value is nothing but utilities — every
       token holding a `-`, `:` or `[`, and none an icon: `height="h-16"`, `relative="md:relative"`.
 
-  A token is kept when it could be a class: at most 160 bytes, printable ASCII holding a letter,
-  its brackets and parentheses balanced, and none of `"`, `\\`, `{`, `}`, `<`, `;` or a backtick in
-  it. At most 1000 are kept.
+  A token is kept when it could be a class (`class?/1`). At most 1000 are kept.
 
       classes(~s(<p class="text-sm bg-[#282828]">x</p>[[component chelekom-badge size="py-2 px-4" class="ml-1" /]]),
         %{"chelekom-badge" => ["size"]})
@@ -398,7 +396,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     |> html_class_values()
     |> Stream.concat(marker_class_values(html, open))
     |> Stream.flat_map(&String.split/1)
-    |> Stream.filter(&class_token?/1)
+    |> Stream.filter(&class?/1)
     |> Stream.uniq()
     |> Enum.take(@class_cap)
   end
@@ -1512,14 +1510,28 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   end
 
   defp utility?(token) do
-    class_token?(token) and String.contains?(token, ["-", ":", "["]) and not Icons.known?(token)
+    class?(token) and String.contains?(token, ["-", ":", "["]) and not Icons.known?(token)
   end
 
-  defp class_token?(token) do
+  @doc """
+  Whether `token` could be a class: at most 512 bytes — an arbitrary value such as
+  `mask-linear-[to_bottom,transparent_0,black_min(40px,var(--edge)),…]` runs past a hundred —
+  printable ASCII holding a letter, its brackets and parentheses balanced, and none of `"`, `\\`,
+  `{`, `}`, `<`, `;` or a backtick in it.
+
+      class?("bg-[#282828]")
+      #=> true
+      class?("{brace}")
+      #=> false
+  """
+  @spec class?(term()) :: boolean()
+  def class?(token) when is_binary(token) do
     byte_size(token) <= @class_length and Regex.match?(@class_token, token) and
       Regex.match?(~r/[A-Za-z]/, token) and balanced?(token, ?[, ?]) and
       balanced?(token, ?(, ?))
   end
+
+  def class?(_token), do: false
 
   defp balanced?(token, open, close), do: count(token, open) == count(token, close)
 

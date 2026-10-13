@@ -266,9 +266,21 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     test "a token no class is made of is left out" do
       html =
         ~s|<p class="ok-1 a&quot;b {brace} back\\slash semi;colon &lt;tag no-[close w-(1 -- 42 | <>
-          ~s|café tick`y #{String.duplicate("a", 161)} #{String.duplicate("b", 160)}">x</p>|
+          ~s|café tick`y #{String.duplicate("a", 513)} #{String.duplicate("b", 512)}">x</p>|
 
-      assert ContentComponents.classes(html) == ["ok-1", String.duplicate("b", 160)]
+      assert ContentComponents.classes(html) == ["ok-1", String.duplicate("b", 512)]
+    end
+
+    test "a long arbitrary value is a class" do
+      mask =
+        "mask-linear-[to_bottom,transparent_0,black_min(40px,var(--scroll-area-overflow-y-start)),black_calc(100%_-_min(40px,var(--scroll-area-overflow-y-end,40px))),transparent_100%]"
+
+      assert byte_size(mask) > 160
+
+      assert ContentComponents.classes(~s(<div class="h-full #{mask} mask-no-repeat">x</div>)) ==
+               ["h-full", mask, "mask-no-repeat"]
+
+      assert ContentComponents.classes(~s([[component x viewport_class="#{mask}" /]])) == [mask]
     end
 
     test "each once, and at most a thousand" do
