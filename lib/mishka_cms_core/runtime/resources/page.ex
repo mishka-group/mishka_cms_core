@@ -1192,6 +1192,15 @@ defmodule MishkaCmsCore.Runtime.Page do
           end
         end
 
+        group :site do
+          fields [:site_id]
+
+          ui do
+            columns 1
+            class ""
+          end
+        end
+
         group :shows do
           fields [:record]
 
@@ -1217,7 +1226,6 @@ defmodule MishkaCmsCore.Runtime.Page do
             :priority,
             :language,
             :language_group_id,
-            :site_id,
             :active,
             :precompile
           ]
