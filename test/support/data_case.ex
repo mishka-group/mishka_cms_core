@@ -17,6 +17,9 @@ defmodule MishkaCmsCore.DataCase do
   # (the CMS's MishkaCms.Repo) without the tests knowing which.
   @repo Application.compile_env!(:mishka_cms_core, :repo)
 
+  alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
+  alias MishkaCmsCore.Runtime.States.CompileFailureState
+
   using do
     quote do
       import Ecto
@@ -36,21 +39,23 @@ defmodule MishkaCmsCore.DataCase do
   @doc """
   Checks out a sandboxed connection for the test, shared with its spawned processes unless async,
   and — for a test that is not async — puts `MishkaCmsCore.Runtime.States.SiteState` back as it
-  found it when the test ends.
+  found it when the test ends, and unloads the runtime modules the test built.
 
   A site a test creates is saved to `SiteState`, which is the node's, not the test's: the rollback
   takes the row back and leaves the entry, and a later test that saves a site of the same name or
   host is refused — its pages and its email then read as a site the node does not know. ExUnit runs
   the async modules first and the others one at a time after them, so a test that is not async is
   the only one touching the tables while it runs.
+
+  A runtime module is the node's too — see `unload_built_on_exit/0`.
   """
   def setup_sandbox(%{module_sandbox: pid} = tags) when is_pid(pid),
-    do: restore_sites_on_exit(tags)
+    do: forget_runtime_on_exit(tags)
 
   def setup_sandbox(tags) do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: not tags[:async])
     on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
-    restore_sites_on_exit(tags)
+    forget_runtime_on_exit(tags)
   end
 
   @doc """
@@ -73,14 +78,62 @@ defmodule MishkaCmsCore.DataCase do
   def module_sandbox do
     pid = Ecto.Adapters.SQL.Sandbox.start_owner!(@repo, shared: true)
     ExUnit.Callbacks.on_exit(fn -> Ecto.Adapters.SQL.Sandbox.stop_owner(pid) end)
+    unload_built_on_exit()
     %{module_sandbox: pid}
   end
 
-  defp restore_sites_on_exit(%{async: true}), do: :ok
+  @doc """
+  Unloads, when the test (or the `setup_all`) that calls it ends, every runtime module —
+  `MishkaCmsCore.Runtime.<hash>.Component`, `.Page`, `.Layout`, … — that was built while it ran,
+  and forgets the compile failures recorded while it ran.
 
-  defp restore_sites_on_exit(_tags) do
+  `setup_sandbox/1` calls it for every test that is not async, and `module_sandbox/0` for the
+  module. A module built from a row is node-wide and outlives the rollback that takes the row away,
+  and the runtime reaches a loaded module by its name without reading the row again; so a later
+  test that writes its own row of the same name, from another bundle or with other attributes,
+  would be drawn with the earlier test's build. What was loaded before the call is left as it was,
+  unless it was rebuilt while the test ran.
+  """
+  @spec unload_built_on_exit() :: :ok
+  def unload_built_on_exit do
+    modules = runtime_modules()
+    failures = MapSet.new(CompileFailureState.matching(:_))
+
+    ExUnit.Callbacks.on_exit(fn ->
+      for {module, md5} <- runtime_modules(),
+          Map.get(modules, module) != md5,
+          do: ModuleCompiler.unload(module)
+
+      for {key, _reason} = failure <- CompileFailureState.matching(:_),
+          not MapSet.member?(failures, failure),
+          do: CompileFailureState.clear(key)
+    end)
+
+    :ok
+  end
+
+  # Each loaded module whose name has the shape `Helpers.module_name/3` gives a runtime module,
+  # with the checksum of the code it was built with.
+  defp runtime_modules do
+    for {module, _file} <- :code.all_loaded(),
+        runtime_module?(Atom.to_string(module)),
+        into: %{},
+        do: {module, module.module_info(:md5)}
+  end
+
+  defp runtime_module?(
+         "Elixir.MishkaCmsCore.Runtime." <> <<hash::binary-size(32), ".", _::binary>>
+       ),
+       do: String.match?(hash, ~r/\A[0-9a-f]+\z/)
+
+  defp runtime_module?(_name), do: false
+
+  defp forget_runtime_on_exit(%{async: true}), do: :ok
+
+  defp forget_runtime_on_exit(_tags) do
     snapshot = MishkaCmsCore.Runtime.States.SiteState.snapshot()
     on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.restore(snapshot) end)
+    unload_built_on_exit()
   end
 
   @doc """
