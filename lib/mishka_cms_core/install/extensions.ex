@@ -333,6 +333,12 @@ defmodule MishkaCmsCore.Install.Extensions do
   @spec active?(String.t(), atom() | String.t()) :: boolean()
   def active?(site_id, app), do: Settings.get("#{app}.active", true, site_id) != false
 
+  @doc """
+  Whether the settings key `key` is an extension's `active?/2` switch, as `settings/2` declares it.
+  """
+  @spec active_key?(String.t()) :: boolean()
+  def active_key?(key), do: String.ends_with?(key, ".active")
+
   # WHAT CAME BACK, OR WHAT WENT OUT. A plugin answering with something that is not the payload —
   # a bare atom, a list, nothing at all — must leave the caller where it started rather than take
   # the screen down with a `BadMapError`, which is the convention every other event caller in this

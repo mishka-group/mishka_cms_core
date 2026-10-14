@@ -88,6 +88,17 @@ defmodule MishkaCmsCore.Sidebar do
   `MishkaCmsCore.Settings.get/3` (RAM cache), and a non-integer order or non-boolean visibility is
   ignored in favour of the declaration rather than crashing the chrome.
 
+  ## Open pages
+
+  `changed/1` tells this node's open admin LiveViews that the entries' settings changed, and
+  `MishkaCmsCore.Layouts.Nav` redraws their sidebar. `MishkaCmsCore.Runtime.States.SettingsState`
+  calls it after it holds a `sidebar.*` value or an extension's `<app>.active` switch
+  (`MishkaCmsCore.Install.Extensions.active?/2`), so a view that reads the menu again reads the new
+  value. A site's change reaches the viewers whose menu reads that site, and the global one reaches
+  every viewer.
+
+  Event: `runtime:state:sidebar:changed` — `%{key: site_id}`, `nil` for the global value.
+
   Like the widget board, nothing here is cached: the hook is called at each mount so enabling or
   disabling a plugin shows up immediately. Everything else is compile-time data and ETS reads, and
   the viewer's permissions are loaded once per mount rather than once per item.
@@ -232,6 +243,7 @@ defmodule MishkaCmsCore.Sidebar do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   @event "sidebar:menus"
+  @pubsub MishkaCmsCore.PubSub
 
   @core_groups Enum.map(
                  [
@@ -689,6 +701,40 @@ defmodule MishkaCmsCore.Sidebar do
   @doc "The permissions declared for one of the CORE's pages. See `permissions/2`."
   @spec permissions(String.t()) :: [AccessPermissions.requirement()]
   def permissions(key), do: permissions(@core_items, key)
+
+  @doc """
+  Tells this node's open admin LiveViews that the sidebar settings of `site_id` changed; `nil` for
+  the global ones, which every viewer reads.
+
+      Sidebar.changed(site.id)
+  """
+  @spec changed(String.t() | nil) :: :ok
+  def changed(site_id) do
+    Phoenix.PubSub.local_broadcast(@pubsub, topic(site_id), {:sidebar_changed, site_id})
+
+    MishkaInstaller.Event.Hook.call("runtime:state:sidebar:changed", %{key: site_id},
+      return: false
+    )
+
+    :ok
+  end
+
+  @doc """
+  Subscribes the calling process to the changes `changed/1` announces for the menu `user` is shown:
+  the global ones and those of the site the menu reads. It receives `{:sidebar_changed, site_id}`.
+  """
+  @spec subscribe(map() | nil) :: :ok
+  def subscribe(nil), do: :ok
+
+  def subscribe(user) do
+    for topic <- Enum.uniq([topic(nil), topic(site_id(user))]),
+        do: Phoenix.PubSub.subscribe(@pubsub, topic)
+
+    :ok
+  end
+
+  defp topic(nil), do: "sidebar:all"
+  defp topic(site_id), do: "sidebar:" <> site_id
 
   @doc "The settings key holding `key`'s position override."
   @spec order_key(String.t()) :: String.t()

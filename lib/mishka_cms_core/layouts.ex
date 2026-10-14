@@ -103,10 +103,12 @@ defmodule MishkaCmsCore.Layouts do
   The nav itself is data, not markup: `MishkaCmsCore.Sidebar.menu/1` collects it from every
   extension's `"sidebar:menus"` plugin, drops what `@current_user` may not see, and orders it from
   Settings. This component only paints what it is handed, so an empty section is one that was
-  filtered away rather than one that has to be spelled out here.
+  filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
+  sidebar is drawn again each time it changes.
   """
   attr :current_path, :string, default: nil
   attr :current_user, :any, default: nil
+  attr :version, :integer, default: 0
 
   def sidebar(assigns) do
     %{main: main, footer: footer} = Sidebar.menu(assigns.current_user)
