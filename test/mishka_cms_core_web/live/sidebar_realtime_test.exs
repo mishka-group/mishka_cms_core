@@ -16,6 +16,8 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.Plugins.ExtensionMenu
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   require Ash.Query
 
@@ -188,6 +190,55 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       back(here, @media_link)
       back(there, @media_link)
+    end
+  end
+
+  describe "an extension's switch" do
+    @probe_link "#admin-sidebar a[href='#{ExtensionMenu.path()}']"
+
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: ExtensionMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, ExtensionMenu, false) end)
+    end
+
+    test "draws and drops its entry on the open pages of its site only", %{
+      site: site,
+      other: other
+    } do
+      here = open("localhost", "here@example.com", site.id, @other_page)
+      second = open("localhost", "second@example.com", site.id, @settings)
+      there = open("other.test", "there@example.com", other.id, @other_page)
+
+      assert shows?(here, @probe_link)
+
+      {:ok, _} = Settings.put("mishka_probe.active", false, site_id: site.id)
+
+      gone(here, @probe_link)
+      gone(second, @probe_link)
+      assert shows?(there, @probe_link)
+
+      {:ok, _} = Settings.put("mishka_probe.active", true, site_id: site.id)
+
+      back(here, @probe_link)
+      back(second, @probe_link)
+    end
+
+    test "switched off for every site, drops it on all of them", %{site: site, other: other} do
+      here = open("localhost", "here@example.com", site.id, @other_page)
+      there = open("other.test", "there@example.com", other.id, @other_page)
+
+      {:ok, _} = Settings.put("mishka_probe.active", false)
+
+      gone(here, @probe_link)
+      gone(there, @probe_link)
     end
   end
 

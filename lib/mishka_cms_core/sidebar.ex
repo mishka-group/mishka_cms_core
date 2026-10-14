@@ -92,7 +92,8 @@ defmodule MishkaCmsCore.Sidebar do
 
   `changed/1` tells this node's open admin LiveViews that the entries' settings changed, and
   `MishkaCmsCore.Layouts.Nav` redraws their sidebar. `MishkaCmsCore.Runtime.States.SettingsState`
-  calls it after it holds a `sidebar.*` value, so a view that reads the menu again reads the new
+  calls it after it holds a `sidebar.*` value or an extension's `<app>.active` switch
+  (`MishkaCmsCore.Install.Extensions.active?/2`), so a view that reads the menu again reads the new
   value. A site's change reaches the viewers whose menu reads that site, and the global one reaches
   every viewer.
 

@@ -206,7 +206,12 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   defp written(site_id, "sidebar." <> _entry),
     do: MishkaCmsCore.Sidebar.changed(site_id)
 
-  defp written(_site_id, _key), do: :ok
+  # AN EXTENSION'S SWITCH DRAWS OR DROPS ITS ENTRIES, so the sidebars open on that site are told too.
+  defp written(site_id, key) do
+    if MishkaCmsCore.Install.Extensions.active_key?(key),
+      do: MishkaCmsCore.Sidebar.changed(site_id),
+      else: :ok
+  end
 
   defp load_all do
     load_rows()
