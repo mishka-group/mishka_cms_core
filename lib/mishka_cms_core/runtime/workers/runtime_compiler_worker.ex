@@ -24,7 +24,45 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   # what the purge took away. A removal still runs, so nothing it cleans up is left behind.
   @impl Oban.Worker
   def perform(%Oban.Job{args: args} = job) do
-    if builds_for_inactive_site?(args) or stale?(args), do: :ok, else: run(job)
+    cond do
+      for_another_instance?(job) -> {:snooze, snooze_seconds(job)}
+      builds_for_inactive_site?(args) or stale?(args) -> :ok
+      true -> run(job)
+    end
+  end
+
+  # A JOB THAT NAMES AN INSTANCE IS BUILT ON IT. A bundle job carries the `"boot_id"` of the
+  # instance that inserted it (`BootHandler.asset_job/4`), because what it builds goes into that
+  # instance's own `AssetsState`, from the template files on that instance's disk. A deploy that
+  # starts the next instance beside the old one shares one database, so one Oban queue, and either
+  # instance may take the job. One that is not this instance's is snoozed, for 1 second and twice as
+  # long each time up to a minute, so the instance it names takes it.
+  #
+  # Snoozed only while it is younger than `@claim_window`, the same half hour the app's
+  # `Oban.Lifeline` waits (`rescue_after`) before it takes an instance that holds a job for gone. An
+  # older one belongs to an instance that is gone — a deploy whose new instance stopped — and is
+  # built wherever it is taken, as a job with no `"boot_id"` is, and one taken by an instance that
+  # has none.
+  @claim_window :timer.minutes(30)
+  @snooze_seconds [1, 2, 4, 8, 16, 32]
+  @longest_snooze 60
+
+  defp for_another_instance?(%Oban.Job{
+         args: %{"boot_id" => boot_id},
+         inserted_at: %DateTime{} = inserted_at
+       })
+       when is_binary(boot_id) do
+    own = BootHandler.boot_id()
+
+    is_binary(own) and boot_id != own and
+      DateTime.diff(DateTime.utc_now(), inserted_at, :millisecond) < @claim_window
+  end
+
+  defp for_another_instance?(_job), do: false
+
+  defp snooze_seconds(%Oban.Job{meta: meta}) do
+    snoozed = if is_map(meta), do: Map.get(meta, "snoozed", 0), else: 0
+    Enum.at(@snooze_seconds, snoozed, @longest_snooze)
   end
 
   # A SITEMAP BUILD HAS TEN MINUTES, so one that never ends cannot hold the `:sitemaps` queue for
