@@ -1544,14 +1544,15 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   end
 
   # Whether a marker declaring `attrs` hands `value` on in `key`, as `cast/2` does when it draws
-  # it; every value when it declares nothing.
+  # it; every value when it declares nothing. Read by name, so a declaration no compiled module
+  # has made an atom of yet — a kit just installed — is read the same.
   defp taken?([], _key, _value), do: true
 
   defp taken?(attrs, key, value) do
-    attrs
-    |> cast(%{key => value})
-    |> Map.keys()
-    |> Enum.any?(&(Atom.to_string(&1) == key))
+    Enum.any?(attrs, fn attr ->
+      castable?(attr) and Inspector.name(attr) == key and
+        match?({:ok, _}, cast_value(type(attr), value, values(attr)))
+    end)
   end
 
   defp class_key?(key), do: key == "class" or String.ends_with?(key, "_class")

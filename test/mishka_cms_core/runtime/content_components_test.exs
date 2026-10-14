@@ -294,6 +294,14 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
       assert classes == Enum.uniq(classes)
     end
 
+    test "a declaration naming an attribute no module has made an atom of is read by its name" do
+      name = "never_an_atom_#{System.unique_integer([:positive])}"
+      declared = %{"fresh-kit" => %{attrs: [%{name: name, type: "string"}], slots: []}}
+      html = ~s([[component fresh-kit #{name}="mt-2 px-4" other="p-1" /]])
+
+      assert ContentComponents.classes(html, %{}, declared) == ["mt-2", "px-4"]
+    end
+
     test "nothing for content that writes none, or none at all" do
       assert ContentComponents.classes("<p>plain</p>") == []
       assert ContentComponents.classes(nil) == []
