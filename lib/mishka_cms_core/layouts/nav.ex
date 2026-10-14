@@ -14,17 +14,23 @@ defmodule MishkaCmsCore.Layouts.Nav do
   `@footer_credit`: the name and address of the extension that owns the page, or `nil` on the core's
   own (`MishkaCmsCore.Sidebar.credit/1`).
 
+  The sidebar follows its settings live: the hook subscribes to `MishkaCmsCore.Sidebar.changed/1` for
+  the menu its viewer is shown and raises `@sidebar_version`, which `MishkaCmsCore.Layouts.sidebar/1`
+  redraws on. Changes that arrive together are drawn once.
+
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
   which loads an unloaded actor — so without this the chrome would issue a query on every render.
   """
-  import Phoenix.LiveView, only: [attach_hook: 4]
+  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
   import Phoenix.Component, only: [assign: 2, assign: 3]
   import Ecto.Query
 
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
+
+  @sidebar_refresh_ms 50
 
   def on_mount(:default, _params, session, socket) do
     language = Languages.admin(session)
@@ -68,10 +74,41 @@ defmodule MishkaCmsCore.Layouts.Nav do
       )
 
     {:cont,
-     attach_hook(socket, :current_path, :handle_params, fn _params, uri, socket ->
+     socket
+     |> attach_hook(:current_path, :handle_params, fn _params, uri, socket ->
        {:cont, assign(socket, :current_path, URI.parse(uri).path)}
-     end)}
+     end)
+     |> follow_sidebar()}
   end
+
+  defp follow_sidebar(socket) do
+    socket = assign(socket, :sidebar_version, 0)
+
+    if connected?(socket) do
+      Sidebar.subscribe(socket.assigns[:current_user])
+      attach_hook(socket, :sidebar_changed, :handle_info, &sidebar_message/2)
+    else
+      socket
+    end
+  end
+
+  defp sidebar_message({:sidebar_changed, _site_id}, socket) do
+    if socket.private[:sidebar_refresh_pending] do
+      {:halt, socket}
+    else
+      Process.send_after(self(), :sidebar_refresh, @sidebar_refresh_ms)
+      {:halt, put_private(socket, :sidebar_refresh_pending, true)}
+    end
+  end
+
+  defp sidebar_message(:sidebar_refresh, socket) do
+    {:halt,
+     socket
+     |> put_private(:sidebar_refresh_pending, false)
+     |> assign(:sidebar_version, socket.assigns.sidebar_version + 1)}
+  end
+
+  defp sidebar_message(_message, socket), do: {:cont, socket}
 
   defp site_id(%{"current_site" => %{id: id}}), do: id
   defp site_id(_session), do: nil

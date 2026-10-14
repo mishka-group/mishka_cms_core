@@ -201,6 +201,11 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   defp written(site_id, "auth." <> _gate),
     do: MishkaCmsCore.Runtime.SiteAvailability.changed(site_id)
 
+  # A SIDEBAR PLACE'S POSITION OR SWITCH is drawn by every open admin page, so they are told once the
+  # cache holds the value.
+  defp written(site_id, "sidebar." <> _entry),
+    do: MishkaCmsCore.Sidebar.changed(site_id)
+
   defp written(_site_id, _key), do: :ok
 
   defp load_all do

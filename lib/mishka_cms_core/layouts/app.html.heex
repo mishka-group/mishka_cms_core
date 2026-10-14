@@ -8,7 +8,11 @@
 </.flash_group>
 
 <div class="flex h-screen overflow-hidden bg-[#f6f5f2] font-[Manrope,ui-sans-serif,system-ui,sans-serif] text-[#1b1a18] antialiased [[data-theme=dark]_&]:[filter:invert(0.92)_hue-rotate(180deg)] [[data-theme=dark]_&]:[transition:filter_.3s_ease]">
-  <.sidebar current_path={assigns[:current_path]} current_user={assigns[:current_user]} />
+  <.sidebar
+    current_path={assigns[:current_path]}
+    current_user={assigns[:current_user]}
+    version={assigns[:sidebar_version] || 0}
+  />
 
   <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
     <.topbar
