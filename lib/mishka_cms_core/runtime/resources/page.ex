@@ -1184,10 +1184,28 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       groups do
         group :basic_info do
-          fields [:title, :path, :layout_id]
+          fields [:title, :path]
 
           ui do
             columns 3
+            class ""
+          end
+        end
+
+        group :site do
+          fields [:site_id]
+
+          ui do
+            columns 1
+            class ""
+          end
+        end
+
+        group :layout do
+          fields [:layout_id]
+
+          ui do
+            columns 1
             class ""
           end
         end
@@ -1217,7 +1235,6 @@ defmodule MishkaCmsCore.Runtime.Page do
             :priority,
             :language,
             :language_group_id,
-            :site_id,
             :active,
             :precompile
           ]

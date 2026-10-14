@@ -370,10 +370,28 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
       # The page's own rows: name, address and layout; what each address shows; who may open it.
       groups do
         group :basic_info do
-          fields [:title, :path, :layout_id, :site_id]
+          fields [:title, :path]
 
           ui do
             columns 3
+            class ""
+          end
+        end
+
+        group :site do
+          fields [:site_id]
+
+          ui do
+            columns 1
+            class ""
+          end
+        end
+
+        group :layout do
+          fields [:layout_id]
+
+          ui do
+            columns 1
             class ""
           end
         end
