@@ -381,6 +381,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       its examples or a class string of the author's own;
     * any other attribute of a component or a slot whose value is nothing but utilities — every
       token holding a `-`, `:` or `[`, and none an icon: `height="h-16"`, `relative="md:relative"`.
+      Of a component `declared` holds the declaration of — `%{"my-badge" => %{attrs: [...],
+      slots: [...]}}`, what `site_classes/2` reads off the components a site reaches — and of its
+      slots, only an attribute that declaration takes the value in (`cast/2`): a value outside an
+      attribute's `values` never reaches the component.
 
   A token is kept when it could be a class (`class?/1`). At most 1000 are kept.
 
@@ -388,20 +392,21 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         %{"chelekom-badge" => ["size"]})
       #=> ["text-sm", "bg-[#282828]", "py-2", "px-4", "ml-1"]
   """
-  @spec classes(String.t() | nil, %{String.t() => [String.t()]}) :: [String.t()]
-  def classes(html, open \\ %{})
+  @spec classes(String.t() | nil, %{String.t() => [String.t()]}, %{String.t() => map()}) ::
+          [String.t()]
+  def classes(html, open \\ %{}, declared \\ %{})
 
-  def classes(html, open) when is_binary(html) and is_map(open) do
+  def classes(html, open, declared) when is_binary(html) and is_map(open) and is_map(declared) do
     html
     |> html_class_values()
-    |> Stream.concat(marker_class_values(html, open))
+    |> Stream.concat(marker_class_values(html, open, declared))
     |> Stream.flat_map(&String.split/1)
     |> Stream.filter(&class?/1)
     |> Stream.uniq()
     |> Enum.take(@class_cap)
   end
 
-  def classes(_html, _open), do: []
+  def classes(_html, _open, _declared), do: []
 
   @doc """
   The attributes each component `names` names takes a class string in — one declaring `examples`
@@ -415,19 +420,33 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   @spec open_attrs([String.t()], String.t() | nil) :: %{String.t() => [String.t()]}
   def open_attrs([], _site_id), do: %{}
 
-  def open_attrs(names, site_id) when is_list(names) do
+  def open_attrs(names, site_id) when is_list(names),
+    do: names |> declarations(site_id) |> open_of()
+
+  defp open_of(declared) do
+    declared
+    |> Map.new(fn {name, %{attrs: attrs}} -> {name, open_names(attrs)} end)
+    |> Map.reject(fn {_name, attrs} -> attrs == [] end)
+  end
+
+  # The attributes and the slots each of `names` declares, of the active components the site
+  # `site_id` reaches, a site's own hiding the global one of the same name.
+  defp declarations([], _site_id), do: %{}
+
+  defp declarations(names, site_id) do
     Component
     |> Ash.Query.for_read(:for_tenant_with_globals, %{}, tenant: site_id, authorize?: false)
     |> Ash.Query.filter(active == true and name in ^names)
     |> within(site_id)
-    |> Ash.Query.select([:name, :attrs, :site_id])
+    |> Ash.Query.select([:name, :attrs, :slots, :site_id])
     |> every([], 0, authorize?: false)
     |> case do
       {:ok, rows} ->
         rows
         |> own_first()
-        |> Map.new(fn row -> {row.name, open_names(row.attrs)} end)
-        |> Map.reject(fn {_name, attrs} -> attrs == [] end)
+        |> Map.new(fn row ->
+          {row.name, %{attrs: List.wrap(row.attrs), slots: List.wrap(row.slots)}}
+        end)
 
       {:error, _reason} ->
         %{}
@@ -439,8 +458,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   components it names take a class string in (`open_attrs/2`).
   """
   @spec site_classes(String.t() | nil, String.t() | nil) :: [String.t()]
-  def site_classes(html, site_id) when is_binary(html),
-    do: classes(html, open_attrs(names(html), site_id))
+  def site_classes(html, site_id) when is_binary(html) do
+    declared = html |> names() |> declarations(site_id)
+    classes(html, open_of(declared), declared)
+  end
 
   def site_classes(_html, _site_id), do: []
 
@@ -1484,24 +1505,53 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  defp marker_class_values(html, open) do
+  defp marker_class_values(html, open, declared) do
     case :binary.match(html, [@open, @slot_open]) do
       :nomatch -> []
-      _found -> html |> tree() |> marker_values(open)
+      _found -> html |> tree() |> marker_values(open, declared, [])
     end
   end
 
-  defp marker_values(nodes, open) do
+  defp marker_values(nodes, open, declared, slots) do
     Enum.flat_map(nodes, fn %{kind: kind, name: name, attrs: attrs, children: children} ->
       takes = (kind == :component && Map.get(open, name)) || []
+      {own_attrs, inner_slots} = declaration(kind, name, declared, slots)
 
       own =
         for {key, value} when is_binary(value) <- Enum.sort(attrs),
-            class_key?(key) or key in takes or utilities?(value),
+            class_key?(key) or key in takes or
+              (utilities?(value) and taken?(own_attrs, key, value)),
             do: value
 
-      own ++ marker_values(children, open)
+      own ++ marker_values(children, open, declared, inner_slots)
     end)
+  end
+
+  # The attributes a marker declares, and the slots the markers inside it are read against: a
+  # component's own, a slot's from the component it sits in, `[]` when `declared` holds none.
+  defp declaration(:component, name, declared, _slots) do
+    case Map.fetch(declared, name) do
+      {:ok, %{attrs: attrs, slots: slots}} -> {attrs, slots}
+      :error -> {[], []}
+    end
+  end
+
+  defp declaration(:slot, name, _declared, slots) do
+    case Enum.find(slots, &(to_string(Inspector.name(&1)) == name)) do
+      nil -> {[], slots}
+      slot -> {Inspector.attrs(slot), slots}
+    end
+  end
+
+  # Whether a marker declaring `attrs` hands `value` on in `key`, as `cast/2` does when it draws
+  # it; every value when it declares nothing.
+  defp taken?([], _key, _value), do: true
+
+  defp taken?(attrs, key, value) do
+    attrs
+    |> cast(%{key => value})
+    |> Map.keys()
+    |> Enum.any?(&(Atom.to_string(&1) == key))
   end
 
   defp class_key?(key), do: key == "class" or String.ends_with?(key, "_class")
