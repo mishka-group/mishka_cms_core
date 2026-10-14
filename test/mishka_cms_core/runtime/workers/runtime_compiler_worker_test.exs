@@ -5,6 +5,9 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorkerTest do
   """
   use ExUnit.Case, async: false
 
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
+  use Oban.Testing, repo: @repo
+
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker, as: Worker
   alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
@@ -441,6 +444,83 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorkerTest do
                )
 
       assert WebRunTimeMetaDataState.exists?(page_id)
+    end
+  end
+
+  describe "perform/1 — a bundle job is built on the instance that inserted it" do
+    # A SWITCHED-OFF SITE'S JOB ENDS IN `:ok` WITHOUT BUILDING ANYTHING, so `:ok` here says the job
+    # went past the instance rule, and `{:snooze, _}` that it stopped there.
+    setup do
+      n = System.unique_integer([:positive])
+      site = %{id: "rcw-boot-#{n}", name: "rcw-boot-#{n}"}
+
+      :ok =
+        SiteState.save(%{
+          id: site.id,
+          name: site.name,
+          host: "#{site.id}.test",
+          priority: 0,
+          active: false
+        })
+
+      on_exit(fn -> SiteState.delete(site.id) end)
+      %{site: site}
+    end
+
+    defp bundle_args(site, boot_id) do
+      %{
+        "resource" => "MishkaCmsCore.Runtime.Handlers.BootHandler",
+        "action" => "boot_handler",
+        "boot_id" => boot_id,
+        "data" => %{"site_name" => site.name, "site_id" => site.id, "type" => "css"}
+      }
+    end
+
+    test "a job another instance inserted is snoozed for it", %{site: site} do
+      assert {:snooze, 1} = perform_job(Worker, bundle_args(site, Ecto.UUID.generate()))
+    end
+
+    test "each snooze waits twice as long, up to a minute", %{site: site} do
+      args = bundle_args(site, Ecto.UUID.generate())
+
+      waits =
+        for snoozed <- [0, 1, 2, 5, 6, 40] do
+          {:snooze, seconds} = perform_job(Worker, args, meta: %{"snoozed" => snoozed})
+          seconds
+        end
+
+      assert waits == [1, 2, 4, 32, 60, 60]
+    end
+
+    test "a job this instance inserted runs here", %{site: site} do
+      assert BootHandler.boot_id() |> is_binary()
+      assert :ok = perform_job(Worker, bundle_args(site, BootHandler.boot_id()))
+    end
+
+    test "every bundle job type follows the same rule", %{site: site} do
+      for type <- ["asset", "css", "js", "sitemap"] do
+        foreign = put_in(bundle_args(site, Ecto.UUID.generate()), ["data", "type"], type)
+        own = put_in(bundle_args(site, BootHandler.boot_id()), ["data", "type"], type)
+
+        assert {:snooze, _seconds} = perform_job(Worker, foreign), type
+        assert :ok = perform_job(Worker, own), type
+      end
+    end
+
+    test "a job with no boot id runs wherever it is taken", %{site: site} do
+      args = Map.delete(bundle_args(site, nil), "boot_id")
+
+      assert :ok = perform_job(Worker, args)
+      assert :ok = perform_job(Worker, bundle_args(site, nil))
+    end
+
+    test "a job no instance took for half an hour runs wherever it is taken", %{site: site} do
+      args = bundle_args(site, Ecto.UUID.generate())
+      just_inside = DateTime.add(DateTime.utc_now(), -29, :minute)
+      past = DateTime.add(DateTime.utc_now(), -31, :minute)
+
+      assert {:snooze, _seconds} = perform_job(Worker, args, inserted_at: just_inside)
+      assert :ok = perform_job(Worker, args, inserted_at: past)
     end
   end
 

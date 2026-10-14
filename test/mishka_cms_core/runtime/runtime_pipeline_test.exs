@@ -43,6 +43,40 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
     end
   end
 
+  describe "a bundle job names the instance that queued it" do
+    test "the boot's per-site jobs carry this instance's boot id" do
+      n = System.unique_integer([:positive])
+      site = %{id: Ecto.UUID.generate(), name: "boot-id-#{n}", host: "boot-id-#{n}.test"}
+
+      :ok =
+        MishkaCmsCore.Runtime.States.SiteState.save(Map.merge(site, %{priority: 0, active: true}))
+
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.delete(site.id) end)
+
+      for type <- ["asset", "css", "js", "sitemap"] do
+        :ok = BootHandler.create_assets_compilation_jobs(type)
+
+        assert [job] = enqueued_asset_jobs(site.name, type)
+        assert job.args["boot_id"] == BootHandler.boot_id()
+      end
+    end
+
+    test "another instance's job for the same site and type is kept beside this one's" do
+      {:ok, _} = Oban.insert(BootHandler.asset_job("site_y", "y-id", "css"))
+
+      {:ok, _} =
+        "site_y"
+        |> BootHandler.asset_job("y-id", "css")
+        |> Ecto.Changeset.update_change(:args, &Map.put(&1, :boot_id, Ecto.UUID.generate()))
+        |> Oban.insert()
+
+      boot_ids = Enum.map(enqueued_asset_jobs("site_y", "css"), & &1.args["boot_id"])
+
+      assert length(boot_ids) == 2
+      assert BootHandler.boot_id() in boot_ids
+    end
+  end
+
   describe "the boot's cleanup" do
     # The page and component compile jobs run in the `modules` queue, which the cleanup's own list
     # of queues left out — every one a restart interrupted stayed `executing` for good.

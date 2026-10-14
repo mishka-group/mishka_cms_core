@@ -174,6 +174,27 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     DateTime.add(DateTime.utc_now(), -since_boot, :millisecond)
   end
 
+  @boot_id_key {__MODULE__, :boot_id}
+
+  @doc """
+  This running instance's own id, made when `:mishka_cms_core` starts (`new_boot_id/0`) and `nil`
+  before then.
+
+  Every bundle job carries it (`asset_job/4`), and `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker`
+  builds the job on the instance it names: the CSS, JS and sitemap a bundle job builds go into that
+  instance's own `MishkaCmsCore.Runtime.States.AssetsState`. A deploy that starts the next instance
+  beside the old one gives both the same `node()` and the same Oban queue; this id is what tells them
+  apart.
+  """
+  @spec boot_id() :: String.t() | nil
+  def boot_id, do: :persistent_term.get(@boot_id_key, nil)
+
+  @doc """
+  Gives this instance a new `boot_id/0`. Called once, by `MishkaCmsCore.Application.start/2`.
+  """
+  @spec new_boot_id() :: :ok
+  def new_boot_id, do: :persistent_term.put(@boot_id_key, Ecto.UUID.generate())
+
   @doc """
   Cancels every runtime compile job a previous run left pending or executing, in whichever queue it
   was put — the boot rebuilds what they would have. Other workers' jobs (mail, notifications) are
@@ -1102,6 +1123,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       %{
         resource: "MishkaCmsCore.Runtime.Handlers.BootHandler",
         action: "boot_handler",
+        boot_id: BootHandler.boot_id(),
         data: %{site_name: "example_site", site_id: "<uuid>", type: "asset"}
       }
 
@@ -1189,6 +1211,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   # burst, each insert moving a pending one later; `replace: []` leaves it where it is instead, and
   # `states:` widens which jobs already there count). `site_id` lives in `data` so the Oban→PubSub
   # bridge broadcasts on the per-site topic, letting that site's admins see the rebuild live.
+  # `boot_id` names the instance that inserted it, which is the one `RuntimeCompilerWorker` builds it
+  # on, and is part of the unique args, so a job one instance inserts never merges into another's.
   # `Oban.insert/1` (not insert_all) is required for uniqueness on the Basic engine.
   @doc false
   def asset_job(site_name, site_id, type, opts \\ []) do
@@ -1198,6 +1222,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       %{
         resource: "MishkaCmsCore.Runtime.Handlers.BootHandler",
         action: "boot_handler",
+        boot_id: boot_id(),
         data: %{site_name: site_name, site_id: site_id, type: type}
       },
       queue: rules.queue,

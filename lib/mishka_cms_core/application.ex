@@ -127,6 +127,8 @@ defmodule MishkaCmsCore.Application do
 
   @impl true
   def start(_type, _args) do
+    :ok = MishkaCmsCore.Runtime.Handlers.BootHandler.new_boot_id()
+
     children =
       installer_children() ++
         [{AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]}] ++ plugins()

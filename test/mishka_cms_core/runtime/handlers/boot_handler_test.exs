@@ -23,6 +23,14 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandlerTest do
       assert args.data == %{site_name: "site_a", site_id: "site-a-id", type: "css"}
     end
 
+    test "carries the boot id of the instance that inserts it" do
+      args =
+        "site_a" |> BootHandler.asset_job("site-a-id", "css") |> Ecto.Changeset.get_change(:args)
+
+      assert is_binary(BootHandler.boot_id())
+      assert args.boot_id == BootHandler.boot_id()
+    end
+
     test "is configured unique over {worker, args} for available + scheduled" do
       unique =
         "site_a"
