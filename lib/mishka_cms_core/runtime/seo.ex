@@ -14,7 +14,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
     * the title is a stored `title` tag, the page's over the layout's, else the plugin's `title`,
       else the page's own;
-    * the description is the page's own, else the plugin's, else a stored `description` meta;
+    * the description is a stored `description` meta, the page's over the layout's, else the page's
+      own, else a plugin's stored one, else the plugin's `description`;
     * the image is a stored `og:image`, else the page's share card, else the plugin's;
     * the JSON-LD is the page's stored `schema` when it holds an object, else the plugin's, else one
       `WebPage`. The plugin's and the `WebPage` are followed by the site's `WebSite` (`@id`
@@ -22,6 +23,9 @@ defmodule MishkaCmsCore.Runtime.Seo do
       with the `site.logo` setting as its `logo`), both named by the `site.title` setting, so an
       object that names either by its `@id` finds it on the page. `{{page.image}}` in it is the
       image the head resolved: a stored `og:image`, else the drawn share card, else the plugin's.
+
+  `og:title` and `twitter:title` say the title, `og:description` and `twitter:description` the
+  description, and `og:image` and `twitter:image` the image, unless a layer stores one of them.
 
   ## What a page shows
 
@@ -1012,9 +1016,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
       `false` by default: a preview asks for none; `:spec` returns what the card would show in
       `card` without asking for it
 
-  A stored `title` replaces `title`, and a stored `og:image` replaces `image`, else the share card
-  does once it is drawn. The `description` has its variables filled; empty, or naming one that does
-  not resolve, a stored `description` meta stands in.
+  A stored `title` replaces `title`, a stored `description` meta `description`, and a stored
+  `og:image` `image`, else the share card does once it is drawn; with `:page_description?`, a
+  plugin's `description` meta does not replace the page's own. The `description` has its variables
+  filled; empty, or naming one that does not resolve, a stored `description` meta stands in.
 
   Returns the resolved `title`, `description`, `image` and `url`, the share `card`'s spec (with
   `:card`), the `tags` to render as
@@ -1059,7 +1064,9 @@ defmodule MishkaCmsCore.Runtime.Seo do
     owned = owned(stack(own), Keyword.get(opts, :page_description?, false))
     stored = stack([Enum.reject(plugin, &MapSet.member?(owned, identity(&1))) | own])
 
-    description = description || meta_value(stored, "name", "description")
+    # The description is what the `description` meta renders: `og:description`,
+    # `twitter:description`, the share card and the `WebPage` say it, unless a layer stores its own.
+    description = meta_value(stored, "name", "description") || description
     stored_image = absolute(meta_value(stored, "property", "og:image"), base)
 
     {spec, card} =

@@ -286,7 +286,7 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert values(head, "meta", "property", "og:title") == ["page"]
       assert values(head, "meta", "name", "twitter:title") == ["page"]
       assert values(head, "meta", "name", "author") == ["Ada"]
-      assert value(head, "meta", "property", "og:description") == "default"
+      assert value(head, "meta", "property", "og:description") == "layout"
     end
 
     test "a stored title is the title, the page's over the layout's, its variables filled", %{
@@ -394,6 +394,103 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert value(head, "meta", "name", "twitter:card") == "summary_large_image"
       assert head.description == "Stored."
       assert head.image == "#{@base}/a.png"
+    end
+
+    test "og:description and twitter:description say a stored description, in any layer", %{
+      site: site
+    } do
+      stored = [meta("name", "description", "Stored.")]
+
+      for {where, seo, layers} <- [
+            {"plugin", seo(site, description: "Plugin's.", tags: stored), []},
+            {"layout", seo(site, description: "Plugin's."), [stored, []]},
+            {"page", seo(site, description: "Plugin's."), [[], stored]}
+          ] do
+        head = Seo.head(seo, base: @base, layers: layers)
+
+        for {key, name} <- [
+              {"name", "description"},
+              {"property", "og:description"},
+              {"name", "twitter:description"}
+            ] do
+          assert values(head, "meta", key, name) == ["Stored."], "#{name} under the #{where}'s"
+        end
+
+        assert head.description == "Stored."
+        assert [json] = head.schema
+        assert %{"description" => "Stored."} = Jason.decode!(json)
+      end
+    end
+
+    test "a stored og:description or twitter:description wins over the description meta", %{
+      site: site
+    } do
+      plugin = [
+        meta("name", "description", "Stored."),
+        meta("property", "og:description", "Shared.")
+      ]
+
+      page = [meta("name", "twitter:description", "Posted.")]
+      head = Seo.head(seo(site, description: "Plugin's.", tags: plugin), base: @base)
+
+      assert value(head, "meta", "name", "description") == "Stored."
+      assert value(head, "meta", "property", "og:description") == "Shared."
+      assert value(head, "meta", "name", "twitter:description") == "Stored."
+
+      head =
+        Seo.head(seo(site, description: "Plugin's.", tags: plugin),
+          base: @base,
+          layers: [[], page]
+        )
+
+      assert value(head, "meta", "property", "og:description") == "Shared."
+      assert value(head, "meta", "name", "twitter:description") == "Posted."
+    end
+
+    test "the page's own description wins over a plugin's, its tags and its description meta", %{
+      site: site
+    } do
+      plugin = [
+        meta("name", "description", "Plugin's tag."),
+        meta("property", "og:description", "Plugin's tag."),
+        meta("name", "twitter:description", "Plugin's tag.")
+      ]
+
+      seo = seo(site, description: "Page's own.", tags: plugin)
+      head = Seo.head(seo, base: @base, page_description?: true)
+
+      for {key, name} <- [
+            {"name", "description"},
+            {"property", "og:description"},
+            {"name", "twitter:description"}
+          ] do
+        assert values(head, "meta", key, name) == ["Page's own."], name
+      end
+
+      assert head.description == "Page's own."
+    end
+
+    test "og:title and twitter:title say the title, whichever layer stores it", %{site: site} do
+      stored = [%{tag: "title", attrs: %{}, content: "Stored title"}]
+
+      for {where, seo, layers} <- [
+            {"plugin", seo(site, title: "Plugin's", tags: stored), []},
+            {"layout", seo(site, title: "Plugin's"), [stored, []]},
+            {"page", seo(site, title: "Plugin's"), [[], stored]}
+          ] do
+        head = Seo.head(seo, base: @base, layers: layers)
+
+        assert head.title == "Stored title"
+        assert values(head, "meta", "property", "og:title") == ["Stored title"], where
+        assert values(head, "meta", "name", "twitter:title") == ["Stored title"], where
+      end
+
+      plugin = stored ++ [meta("property", "og:title", "Shared")]
+      head = Seo.head(seo(site, title: "Plugin's", tags: plugin), base: @base)
+
+      assert head.title == "Stored title"
+      assert value(head, "meta", "property", "og:title") == "Shared"
+      assert value(head, "meta", "name", "twitter:title") == "Stored title"
     end
 
     test "a stored address that is a path is written on the base", %{site: site} do
