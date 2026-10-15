@@ -333,11 +333,15 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
     end
   end
 
-  # A TEMPLATE READS EVERY ATTRIBUTE IT DECLARES. Found drawing each of the kit's 269 components from
-  # a bare marker: 26 read one that had no default and was not given — `@label`, `@name`, `@for` —
-  # and raised, which on a page takes the page down.
+  # A MARKER HANDS A COMPONENT WHAT `<.component>` IN A TEMPLATE WOULD, and Phoenix sets no assign
+  # for an attribute declared without a default and not given. Every one of them was handed as nil,
+  # so a kit's `%{navigate: _} = assigns` clause matched every marker: a headless button written
+  # with nothing but a label was drawn as `<a href="#" role="button">`.
   describe "rich_content/1 — attributes the marker leaves out" do
-    test "one declared with no default is handed as nil", %{site: site, n: n} do
+    test "one declared with no default is absent, and one with a default is its default", %{
+      site: site,
+      n: n
+    } do
       note!(site, "loose-#{n}",
         attrs: [
           %{"name" => "label", "type" => "string", "opts" => %{}},
@@ -345,21 +349,66 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
           %{"name" => "size", "type" => "string", "opts" => %{"default" => "small"}}
         ],
         template:
-          ~S'<p class="probe-loose" data-label={@label || "none"} data-items={inspect(@items)} data-size={@size}></p>'
+          ~S'<p class="probe-loose" data-label={assigns[:label] || "none"} data-keys={assigns |> Map.take([:label, :items]) |> Map.keys() |> Enum.join(",")} data-size={@size}></p>'
       )
 
       html = draw("[[component loose-#{n} /]]", site.name)
 
       assert attribute(html, ".probe-loose", "data-label") == "none"
-      assert attribute(html, ".probe-loose", "data-items") == "nil"
+      assert attribute(html, ".probe-loose", "data-keys") == ""
       assert attribute(html, ".probe-loose", "data-size") == "small"
 
+      given = draw(~s([[component loose-#{n} label="Hi" size="large" /]]), site.name)
+
+      assert attribute(given, ".probe-loose", "data-label") == "Hi"
+      assert attribute(given, ".probe-loose", "data-keys") == "label"
+      assert attribute(given, ".probe-loose", "data-size") == "large"
+    end
+
+    test "a clause that matches on an attribute is taken only when the marker writes it", %{
+      site: site,
+      n: n
+    } do
+      note!(site, "pick-#{n}",
+        attrs: [
+          %{"name" => "navigate", "type" => "string", "opts" => %{}},
+          %{"name" => "href", "type" => "string", "opts" => %{"default" => nil}},
+          %{"name" => "label", "type" => "string", "opts" => %{"default" => nil}}
+        ],
+        slots: [],
+        template: ~S|<i class="probe-base"></i>|,
+        extra: %{
+          "clauses" => [
+            %{
+              "match" => "%{navigate: _navigate} = assigns",
+              "template" => ~S|<a class="probe-navigate" data-to={@navigate}>{@label}</a>|
+            },
+            %{
+              "match" => "%{href: href} = assigns",
+              "guard" => "is_binary(href)",
+              "template" => ~S|<a class="probe-href" href={@href}>{@label}</a>|
+            },
+            %{"match" => nil, "template" => ~S|<button class="probe-button">{@label}</button>|}
+          ]
+        }
+      )
+
+      plain = draw(~s([[component pick-#{n} label="Save" /]]), site.name)
+
+      assert plain |> query("button.probe-button") |> LazyHTML.text() == "Save"
+      assert plain |> query("a") |> Enum.count() == 0
+
       assert attribute(
-               draw(~s([[component loose-#{n} label="Hi" /]]), site.name),
-               ".probe-loose",
-               "data-label"
-             ) ==
-               "Hi"
+               draw(~s([[component pick-#{n} navigate="/docs" /]]), site.name),
+               ".probe-navigate",
+               "data-to"
+             ) == "/docs"
+
+      assert attribute(
+               draw(~s([[component pick-#{n} href="/blog" /]]), site.name),
+               ".probe-href",
+               "href"
+             ) == "/blog"
     end
 
     test "one whose default is its type's empty struct keeps it", %{site: site, n: n} do
@@ -753,21 +802,24 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       assert has_element?(view, "#host .probe-note[data-title='none||']")
     end
 
-    test "a plugin leaves an attribute out altogether with unset", %{site: site, n: n} do
+    test "a plugin that takes an attribute out of attrs leaves it out altogether", %{
+      site: site,
+      n: n
+    } do
       note!(site, "probe-#{n}",
         attrs: [%{"name" => "label", "type" => "string", "opts" => %{}}],
         slots: [],
         template:
-          ~S|<i class="probe-unset" data-has={to_string(Map.has_key?(assigns, :label))}></i>|
+          ~S|<i class="probe-drop" data-has={to_string(Map.has_key?(assigns, :label))}></i>|
       )
 
       html =
         draw(
-          ~s([[component probe-#{n} label="x" probe="unset" /]][[component probe-#{n} /]]),
+          ~s([[component probe-#{n} label="x" probe="drop" /]][[component probe-#{n} label="x" /]]),
           site.name
         )
 
-      assert html |> query(".probe-unset") |> LazyHTML.attribute("data-has") == ["false", "true"]
+      assert html |> query(".probe-drop") |> LazyHTML.attribute("data-has") == ["false", "true"]
     end
   end
 

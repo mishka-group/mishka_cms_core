@@ -76,12 +76,16 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   draws is drawn as a small box, and the content around it draws — see
   `MishkaCmsCore.Runtime.ComponentBoundary`.
 
-  Every attribute the component declares is passed — one the marker leaves out as its default, or
-  `nil` when it has none. Only the attributes the component declares are read from the marker, each
-  cast to its declared type: `string`
-  and `any` as written, `boolean` from `true`/`false` or a bare key, `integer` and `float` from a
-  number, and anything that declares `values` only as one of them — which is the only way an `atom`
-  is taken. `id`, `site`, `component_name`, `current_user`, `rest` and any `phx-` name are never an
+  A component is handed what `<.component>` in a template would hand it: the attributes the marker
+  writes, and for one it leaves out the default the component declares, or nothing at all when it
+  declares none, as Phoenix leaves it. A clause matching `%{navigate: _}` is taken only when the
+  marker writes `navigate`, and a template reads an attribute with no default as `assigns[:label]`,
+  never `@label`.
+
+  Only the attributes the component declares are read from the marker, each cast to its declared
+  type: `string` and `any` as written, `boolean` from `true`/`false` or a bare key, `integer` and
+  `float` from a number, and anything that declares `values` only as one of them — which is the only
+  way an `atom` is taken. `id`, `site`, `component_name`, `current_user`, `rest` and any `phx-` name are never an
   author's. A stateful component, and one declaring `id`, gets the id `"<id>-<n>"`, `n` counting
   the content's markers from 0 — `"<id>-<n>-<m>"` for the `m`th inside it — so it stays the same
   component across renders.
@@ -150,9 +154,9 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       meta. `attrs` is atom-keyed and already cast; `marker_attrs` are the attributes as the marker
       writes them, string-keyed and uncast. `slot_arg` is the value the nearest component around the
       marker hands its content (`nil` when none does), and `slot_args` every such value, nearest
-      first. A plugin answers the map with other `attrs` or `inner` to change what is drawn,
-      `unset: [name]` to leave declared attributes out altogether — for a component's own clause to
-      fill, as a form field's `name` from its `field` — or `suppress: true` to draw nothing.
+      first. A plugin answers the map with other `attrs` or `inner` to change what is drawn — an
+      attribute taken out of `attrs` is not handed at all, for a component's own clause to fill, as
+      a form field's `name` from its `field` — or `suppress: true` to draw nothing.
     * `runtime:component:crashed` — a marker's component raised while it was drawn, and a box was
       drawn in its place; see `MishkaCmsCore.Runtime.ComponentBoundary`.
     * `runtime:content:editor_palette` — before the content editor's palette is shown, with
@@ -1127,8 +1131,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
          :ok <- placeable(module),
          %{component: component} = information <- module.__component_information__(),
          declared = List.wrap(component.attrs),
-         {:ok, attrs, inner, left} <-
-           before_draw(marker, site, cast(declared, marker.attrs), context),
+         {:ok, attrs, inner} <- before_draw(marker, site, cast(declared, marker.attrs), context),
          {content, entries} = held(inner, context.level),
          slots = List.wrap(component.slots),
          :ok <- required(declared, attrs, slots, entries) do
@@ -1138,10 +1141,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
           level: context.level + 1
       }
 
-      declared
-      |> unset(attrs)
-      |> Map.drop(left)
-      |> Map.merge(attrs)
+      # WHAT THE MARKER WRITES, AND NOTHING FOR WHAT IT LEAVES OUT — what `<.component>` in a template
+      # hands. The component's declaration merges its own defaults in, and an attribute declared
+      # without one stays absent, as Phoenix leaves it: a kit's `%{navigate: _} = assigns` clause is
+      # taken only when the marker writes `navigate`.
+      attrs
       |> Map.merge(%{component_name: marker.name, site: site, __changed__: nil})
       |> inner_block(Enum.any?(slots, &Inspector.inner_block?/1), content, child, mode)
       |> named_slots(slots, entries, child, mode)
@@ -1155,29 +1159,6 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       :refused -> nil
       reason -> unavailable(marker.name, reason, mode)
     end
-  end
-
-  # EVERY ATTRIBUTE IS THERE, `nil` when the marker leaves out one that has no default — what a
-  # template is handed for `attr={nil}`. Phoenix sets no assign for an attribute declared without a
-  # default and not given, so a template reading `@label` raised, and a component placed with only
-  # some of its attributes took the page down with it.
-  defp unset(declared, attrs) do
-    for attr <- declared,
-        name = to_string(Inspector.name(attr)),
-        name not in @reserved,
-        not String.starts_with?(name, "phx"),
-        not defaulted?(attr),
-        key = String.to_existing_atom(name),
-        not Map.has_key?(attrs, key),
-        into: %{},
-        do: {key, nil}
-  end
-
-  # A default written as a value, or as the empty struct of the attribute's type — a `JS`
-  # attribute's `%JS{}`.
-  defp defaulted?(attr) do
-    opts = Inspector.opts(attr)
-    Map.has_key?(opts, "default") or opts["default_struct"] == true
   end
 
   # What one component holds: the content its `inner_block` draws, and its slot entries. Past
@@ -1233,15 +1214,12 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         :refused
 
       %{attrs: %{} = changed} = answer ->
-        {:ok, changed, Map.get(answer, :inner, marker.inner), left_unset(answer)}
+        {:ok, changed, Map.get(answer, :inner, marker.inner)}
 
       _unchanged ->
-        {:ok, attrs, marker.inner, []}
+        {:ok, attrs, marker.inner}
     end
   end
-
-  defp left_unset(%{unset: names}) when is_list(names), do: Enum.filter(names, &is_atom/1)
-  defp left_unset(_answer), do: []
 
   # The attributes and slots the component requires and the marker left out — a slot entry's
   # required attributes as `slot.attribute`.

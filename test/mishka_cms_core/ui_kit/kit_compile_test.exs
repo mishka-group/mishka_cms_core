@@ -136,6 +136,40 @@ defmodule MishkaCmsCore.UiKit.KitCompileTest do
     end
   end
 
+  # The headless button dispatches on the attributes it is given — `%{navigate: _}`, `%{patch: _}`
+  # and `%{href: href} when is_binary(href)` draw a link, anything else a `<button>` — so a marker
+  # that writes none of them draws the button.
+  describe "a headless button in content" do
+    setup do
+      for name <- ~w(chelekom-headless-button chelekom-headless-button-content) do
+        :ok = SiteState.put_component(nil, name)
+        on_exit(fn -> SiteState.delete_component(nil, name) end)
+      end
+
+      :ok
+    end
+
+    test "written with a label alone is a button" do
+      html = draw(~s([[component chelekom-headless-button label="Save" /]]))
+
+      assert html |> query("button.chelekom-button") |> Enum.count() == 1
+      assert html |> query("a") |> Enum.count() == 0
+    end
+
+    test "written with navigate, patch or href is a link to it" do
+      for attr <- ~w(navigate patch href) do
+        html = draw(~s([[component chelekom-headless-button label="Docs" #{attr}="/docs" /]]))
+
+        assert html |> query("a.chelekom-button") |> LazyHTML.attribute("href") == ["/docs"],
+               "#{attr}: #{html}"
+
+        assert html |> query("button") |> Enum.count() == 0
+      end
+    end
+  end
+
+  defp query(html, selector), do: html |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
+
   defp draw(html) do
     %{html: html, site: nil}
     |> LiveViewHelpers.rich_content()
