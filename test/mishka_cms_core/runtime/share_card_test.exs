@@ -120,6 +120,26 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
     end
   end
 
+  describe "static_headers/1" do
+    test "keeps a card a year in any cache, and adds nothing to another upload" do
+      site_id = Ecto.UUID.generate()
+      card = ShareCard.url(site_id, ShareCard.key(%{title: "Launch week"}))
+
+      assert Plug.Test.conn(:get, card) |> ShareCard.static_headers() == %{
+               "cache-control" => "public, max-age=31536000, immutable"
+             }
+
+      for path <- [
+            "/uploads/#{site_id}/media/uncategorized/cover.png",
+            "/uploads/#{site_id}/share",
+            "/uploads/#{site_id}/share/nested/card.jpg",
+            "/fonts/fonts.css"
+          ] do
+        assert Plug.Test.conn(:get, path) |> ShareCard.static_headers() == %{}, path
+      end
+    end
+  end
+
   describe "the drawing" do
     test "is a 1200×630 JPEG", %{site: site} do
       card = %{
