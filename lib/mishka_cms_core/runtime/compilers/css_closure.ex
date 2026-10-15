@@ -71,6 +71,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   Each degrades to correct-and-large rather than small-and-broken.
 
+  ## A component's calls from code
+
+  Whether a component calls `component(…)`, `send_update(…)` or `send_update_after(…)` is read off
+  its parsed code when its template file is written: `call_mark/1` writes a line into the file when
+  none of its code or markup makes such a call, and the walk takes that line over the file's text,
+  where a regex, a string or the content an author places with the component may spell
+  `component(` without calling it. A file without the line — a page, a layout, an error page, or a
+  component whose code does not parse — is read by its text.
+
   ## Components named in stored content
 
   A template that draws stored content — `<.rich_content …/>` — reaches the components the
@@ -106,6 +115,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   @read_attribute ~r/\A\s*@([a-z_][A-Za-z0-9_]*[?!]?)\s*\z/
   @named_through ~r/component_name\s*=\s*\{\s*@([a-z_][A-Za-z0-9_]*[?!]?)\s*\}/
   @code_call ~r/\b(?:component|send_update(?:_after)?)\(/
+  @calling [:component, :send_update, :send_update_after]
+  @no_calls "<%!-- css-closure calls=none --%>"
   @mark ~r/<%!-- css-closure attr=([a-z_][A-Za-z0-9_]*[?!]?)(?: default="([^"\r\n]*)")? --%>/
 
   @typedoc """
@@ -250,20 +261,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   """
   @spec attribute_marks(map()) :: String.t()
   def attribute_marks(component) do
-    extra = field(component, :extra)
-    clauses = extra |> field(:clauses) |> List.wrap()
-    markup = [field(component, :template) | Enum.map(clauses, &field(&1, :template))]
-
-    helpers = component |> field(:helpers) |> List.wrap() |> Enum.map(&field(&1, :code))
-    bodies = [field(component, :body) | helpers] ++ Enum.map(clauses, &field(&1, :body))
-    code = [field(extra, :prelude) | bodies]
+    %{markup: markup, prelude: prelude, bodies: bodies} = parts(component)
 
     # A `{@name}` INSIDE A HELPER READS THAT FUNCTION'S ASSIGNS, which are whatever its caller built
     # — not necessarily the component's attributes at all.
-    named = attribute_reads(markup) -- attribute_reads(code)
+    named = attribute_reads(markup) -- attribute_reads([prelude | bodies])
 
     with [_ | _] <- named,
-         {:ok, assigned} <- assigned(field(extra, :prelude), bodies) do
+         {:ok, assigned} <- assigned(prelude, bodies) do
       declared = declared(field(component, :attrs))
 
       named
@@ -272,6 +277,49 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     else
       _nothing_to_mark -> ""
     end
+  end
+
+  @doc """
+  The line a component's template file carries when none of its code calls `component(…)`,
+  `send_update(…)` or `send_update_after(…)`, so `for_site/2` reads that off the parsed code rather
+  than off the file's text. `""` when any of it makes such a call, or does not parse — see
+  `MishkaCmsCore.Runtime.PageBuilder.CodeReads.called/2`.
+
+      <%!-- css-closure calls=none --%>
+
+  The code is the component's prelude, the bodies of its render, its helpers and its clauses, and
+  every expression in its markup and its clauses' markup — a `~H` inside any of them included.
+
+  `component` is the component's row, or the same record decoded from a job, with string keys.
+  `MishkaCmsCore.Runtime.Handlers.BootHandler.build_component_class_content/1` writes the line into
+  the file.
+  """
+  @spec call_mark(map()) :: String.t()
+  def call_mark(component) do
+    %{markup: markup, prelude: prelude, bodies: bodies} = parts(component)
+
+    answers =
+      Enum.map(code_sources(prelude, bodies), &CodeReads.called(&1, @calling)) ++
+        Enum.map(markup, &CodeReads.called_in_markup(&1, @calling))
+
+    case Enum.all?(answers, &(&1 == {:ok, []})) do
+      true -> @no_calls
+      false -> ""
+    end
+  end
+
+  # A component's markup — its template and its clauses' — and its code: the module-level prelude,
+  # and the bodies of its render, its helpers and its clauses.
+  defp parts(component) do
+    extra = field(component, :extra)
+    clauses = extra |> field(:clauses) |> List.wrap()
+    helpers = component |> field(:helpers) |> List.wrap() |> Enum.map(&field(&1, :code))
+
+    %{
+      markup: [field(component, :template) | Enum.map(clauses, &field(&1, :template))],
+      prelude: field(extra, :prelude),
+      bodies: [field(component, :body) | helpers] ++ Enum.map(clauses, &field(&1, :body))
+    }
   end
 
   # THE WALK REPEATS UNTIL NOTHING NEW IS REACHED. One pass follows every edge out of what is reached
@@ -334,9 +382,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
       dynamic?:
         Enum.any?(calls, &(&1.target == :dynamic)) or
           length(Regex.scan(@expression_name, source)) > length(attribute_calls(calls)),
-      opaque?: :error in tags or Regex.match?(@code_call, source),
+      opaque?: :error in tags or calls_from_code?(source, component?),
       draws_content?: Regex.match?(@draws_content, source)
     }
+  end
+
+  # A component file holding `call_mark/1`'s line calls nothing from code, whatever its text spells.
+  defp calls_from_code?(source, component?) do
+    Regex.match?(@code_call, source) and not (component? and String.contains?(source, @no_calls))
   end
 
   defp attribute_calls(calls), do: Enum.filter(calls, &match?(%{target: {:attribute, _}}, &1))
@@ -641,12 +694,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   # A HELPER IS A FUNCTION BODY, compiled inside `def … do … end`, so a body-level `rescue` is legal
   # in one and is read the same way here. The prelude is module-level code and is read as it is.
-  defp assigned(prelude, bodies) do
-    sources =
-      for(source <- [prelude], is_binary(source), do: source) ++
-        for(body <- bodies, is_binary(body), do: "def a do\n#{body}\nend")
+  defp code_sources(prelude, bodies) do
+    for(source <- [prelude], is_binary(source), do: source) ++
+      for(body <- bodies, is_binary(body), do: "def a do\n#{body}\nend")
+  end
 
-    Enum.reduce_while(sources, {:ok, MapSet.new()}, fn source, {:ok, found} ->
+  defp assigned(prelude, bodies) do
+    prelude
+    |> code_sources(bodies)
+    |> Enum.reduce_while({:ok, MapSet.new()}, fn source, {:ok, found} ->
       case CodeReads.assigned(source) do
         {:ok, written} -> {:cont, {:ok, MapSet.union(found, written)}}
         :unknown -> {:halt, :unknown}

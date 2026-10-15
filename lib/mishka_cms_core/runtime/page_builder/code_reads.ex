@@ -20,9 +20,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeReads do
   Nothing found. An author is mid-sentence in a box they are typing into, and `CodeCheck` is what
   tells them the code will not compile — a half-typed line is not this module's news to break.
 
-  `assigned/1` is the exception: its caller decides from the answer that an assign is NOT written,
-  so code it cannot read is `:unknown`.
+  `assigned/1`, `called/2` and `called_in_markup/2` are the exceptions: their callers decide from
+  the answer that an assign is NOT written or a function NOT called, so code they cannot read is
+  `:unknown`.
   """
+
+  alias MishkaCmsCore.Runtime.PageBuilder.Markup
 
   @doc """
   Every assign a snippet reads, by name and without the `@`.
@@ -41,6 +44,86 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeReads do
   """
   @spec calls(String.t() | nil) :: [{atom(), [Macro.t()]}]
   def calls(code), do: walked(code, &call/1)
+
+  @doc """
+  Which of `names` a snippet calls — bare, piped, on a module or captured — here and in the markup
+  of every `~H` it holds (`called_in_markup/2`), or `:unknown` when it or that markup does not
+  parse. A name inside a string, a regex or a comment is not a call.
+
+      iex> MishkaCmsCore.Runtime.PageBuilder.CodeReads.called(
+      ...>   ~S|marker = ~r/\\[\\[component(\\s)/; send_update(Card, id: "a")|,
+      ...>   [:component, :send_update]
+      ...> )
+      {:ok, [:send_update]}
+  """
+  @spec called(String.t() | nil, [atom()]) :: {:ok, [atom()]} | :unknown
+  def called(code, names) when is_binary(code) do
+    case Code.string_to_quoted(code) do
+      {:ok, ast} -> ast |> callings(names) |> merged()
+      {:error, _unparseable} -> :unknown
+    end
+  end
+
+  def called(nil, _names), do: {:ok, []}
+
+  @doc """
+  `called/2` for every expression of a HEEx template
+  (`MishkaCmsCore.Runtime.PageBuilder.Markup.read_expressions/1`), or `:unknown` when the template
+  cannot be tokenised or one of its expressions does not parse.
+
+      iex> MishkaCmsCore.Runtime.PageBuilder.CodeReads.called_in_markup(
+      ...>   ~S|<p>component(x)</p>{component(%{component_name: "card"})}|,
+      ...>   [:component]
+      ...> )
+      {:ok, [:component]}
+  """
+  @spec called_in_markup(String.t() | nil, [atom()]) :: {:ok, [atom()]} | :unknown
+  def called_in_markup(template, names) do
+    case Markup.read_expressions(template) do
+      {:ok, expressions} -> expressions |> Enum.map(&called(&1, names)) |> merged()
+      :unreadable -> :unknown
+    end
+  end
+
+  # Every answer the tree gives: `{:ok, [name]}` for each call of one of `names`, and what the markup
+  # of each `~H` it holds calls.
+  defp callings(ast, names) do
+    {_ast, found} =
+      Macro.prewalk(ast, [], fn node, found -> {node, calling(node, names) ++ found} end)
+
+    found
+  end
+
+  defp calling({:sigil_H, _meta, [{:<<>>, _bits, [markup]}, _modifiers]}, names)
+       when is_binary(markup),
+       do: [called_in_markup(markup, names)]
+
+  defp calling({:&, _meta, [{:/, _slash, [{name, _name_meta, context}, _arity]}]}, names)
+       when is_atom(name) and is_atom(context),
+       do: named_call(name, names)
+
+  defp calling({{:., _dot, [_module, name]}, _meta, args}, names)
+       when is_atom(name) and is_list(args),
+       do: named_call(name, names)
+
+  defp calling({name, _meta, args}, names) when is_atom(name) and is_list(args),
+    do: named_call(name, names)
+
+  defp calling(_node, _names), do: []
+
+  defp named_call(name, names) do
+    case name in names do
+      true -> [{:ok, [name]}]
+      false -> []
+    end
+  end
+
+  defp merged(answers) do
+    case Enum.member?(answers, :unknown) do
+      true -> :unknown
+      false -> {:ok, answers |> Enum.flat_map(&elem(&1, 1)) |> Enum.uniq() |> Enum.sort()}
+    end
+  end
 
   @doc """
   Every assign a snippet may write, by name — or `:unknown` when it writes one whose name it works

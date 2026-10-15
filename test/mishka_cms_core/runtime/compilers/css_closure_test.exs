@@ -387,6 +387,73 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
       assert unbounded_naming(fn -> closure(root) end) =~ "coded.template"
     end
 
+    # The Mishka Document kit's `doc-section` rewrites the content markers it draws, so its helpers
+    # hold `~r/\[\[component(…)/` — text that spells `component(` without calling it.
+    test "a component whose code only spells component( keeps the site bounded", %{root: root} do
+      card_list(root)
+
+      component_row(root, "kit-doc", %{
+        template: ~s|<div>#{reference("kit-list")}<.rich_content html={@body} /></div>|,
+        helpers: [
+          %{name: "cards", code: ~S|Regex.replace(~r/\[\[component(\s+)kit-cards/u, html, "")|},
+          %{name: "note", code: ~s|"component(" <> name|}
+        ],
+        examples: ["[[component kit-list]]component(x)[[/component]]"]
+      })
+
+      write(root, "acme", "page", "home", reference("kit-doc"))
+
+      assert %{components: ["kit-doc", "kit-list"]} = closure(root)
+    end
+
+    test "the same text in a component file boot did not mark is read as a call", %{root: root} do
+      card_list(root)
+
+      global_component(
+        root,
+        "kit-doc",
+        reference("kit-list") <> ~S|Regex.replace(~r/\[\[component(\s+)x/u, html, "")|
+      )
+
+      write(root, "acme", "page", "home", reference("kit-doc"))
+
+      assert unbounded_naming(fn -> closure(root) end) =~ "kit-doc.template"
+    end
+
+    test "a component whose code calls one from code can hand anything over", %{root: root} do
+      card_list(root)
+
+      for code <- [
+            ~s|component(%{component_name: "kit-list", card: "kit-x"})|,
+            ~s|send_update(Card, id: "list", card: "kit-x")|
+          ] do
+        component_row(root, "kit-coded", %{
+          template: reference("kit-list"),
+          helpers: [%{name: "draw", code: code}]
+        })
+
+        write(root, "acme", "page", "home", reference("kit-coded"))
+
+        assert unbounded_naming(fn -> closure(root) end) =~ "kit-coded.template", code
+      end
+    end
+
+    test "a page is read by its text, whatever line it holds", %{root: root} do
+      card_list(root)
+
+      write(
+        root,
+        "acme",
+        "page",
+        "coded",
+        reference("kit-list") <>
+          ~s|{component(%{component_name: "kit-list", card: "kit-x"})}| <>
+          "\n<%!-- css-closure calls=none --%>"
+      )
+
+      assert unbounded_naming(fn -> closure(root) end) =~ "coded.template"
+    end
+
     test "an attribute the component does not declare stays unbounded", %{root: root} do
       component_row(root, "kit-loose", %{template: named_through("card"), attrs: []})
       write(root, "acme", "page", "home", call("kit-loose", ~s|card="kit-a"|))
@@ -596,6 +663,81 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
       assert content =~ "py-16"
       assert content =~ "tracking-tight"
       assert content =~ "opacity-70"
+    end
+  end
+
+  describe "call_mark/1" do
+    @no_calls "<%!-- css-closure calls=none --%>"
+
+    test "marks a component whose code and markup call no component" do
+      assert CssClosure.call_mark(%{
+               template: ~s|<div class={tone(@kind)}><p>component(x)</p>{@body}</div>|,
+               body: ~s|assign(assigns, :seen, "send_update(")|,
+               helpers: [
+                 %{
+                   name: "tone",
+                   code: ~s|# component(x)\nif kind == "a", do: "p-1", else: "p-2"|
+                 },
+                 %{name: "cards", code: ~S|Regex.replace(~r/\[\[component(\s+)x/u, html, "")|}
+               ]
+             }) == @no_calls
+    end
+
+    test "every spelling of a call leaves it unmarked" do
+      for code <- [
+            "component(assigns)",
+            "assigns |> component()",
+            "MishkaCmsCore.Runtime.LiveViewHelpers.component(assigns)",
+            "Enum.map(rows, &component/1)",
+            ~s|send_update(Card, id: "a", card: "kit-x")|,
+            ~s|Phoenix.LiveView.send_update_after(Card, [id: "a"], 100)|
+          ] do
+        assert CssClosure.call_mark(%{template: "<div></div>", helpers: [%{code: code}]}) == "",
+               code
+      end
+    end
+
+    test "a call in the markup, a clause or a helper's ~H leaves it unmarked" do
+      call = ~s|{component(%{component_name: "kit-a"})}|
+
+      for component <- [
+            %{template: "<div>#{call}</div>"},
+            %{template: "<div></div>", extra: %{clauses: [%{template: call}]}},
+            %{template: "<div></div>", extra: %{clauses: [%{body: "component(assigns)"}]}},
+            %{template: "<div></div>", extra: %{prelude: "def draw(a), do: component(a)"}},
+            %{template: "<div></div>", helpers: [%{code: ~s|~H"<p>#{call}</p>"|}]}
+          ] do
+        assert CssClosure.call_mark(component) == "", inspect(component)
+      end
+    end
+
+    test "code that does not parse and markup that cannot be read mark nothing" do
+      assert CssClosure.call_mark(%{template: "<div></div>", body: "assign(socket, "}) == ""
+      assert CssClosure.call_mark(%{template: "<div>{@a</div>"}) == ""
+    end
+
+    test "a block's closing end is no call" do
+      assert CssClosure.call_mark(%{template: "<%= if @open do %><p>{@body}</p><% end %>"}) ==
+               @no_calls
+    end
+
+    test "a record decoded from a job, with string keys, is read the same" do
+      assert CssClosure.call_mark(%{
+               "template" => "<div></div>",
+               "helpers" => [%{"name" => "draw", "code" => "component(assigns)"}]
+             }) == ""
+
+      assert CssClosure.call_mark(%{"template" => "<div></div>", "body" => "assigns"}) ==
+               @no_calls
+    end
+
+    test "boot writes the line into the component's template file" do
+      assert BootHandler.build_component_class_content(%{template: "<div></div>"}) =~ @no_calls
+
+      refute BootHandler.build_component_class_content(%{
+               template: "<div></div>",
+               helpers: [%{code: "component(assigns)"}]
+             }) =~ @no_calls
     end
   end
 

@@ -27,7 +27,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Markup do
 
   Answers `[]`, which every caller has to read as "nothing found" rather than "nothing there".
   `component_arguments/1` is the exception: its caller decides what a component can reach from the
-  answer, so an unreadable template there is `:dynamic` rather than an empty list.
+  answer, so an unreadable template there is `:dynamic` rather than an empty list. So is
+  `read_expressions/1`, which answers `:unreadable`.
   """
 
   alias Phoenix.LiveView.TagEngine.Tokenizer
@@ -36,14 +37,30 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Markup do
 
   @doc "Every Elixir expression in a template: attribute values, interpolations and EEx tags."
   @spec expressions(String.t() | nil) :: [String.t()]
-  def expressions(template) when is_binary(template) do
-    case tokens(template) do
-      {:ok, tokens} -> tokens |> Enum.flat_map(&found/1) |> Enum.uniq()
+  def expressions(template) do
+    case read_expressions(template) do
+      {:ok, found} -> found
       :unreadable -> []
     end
   end
 
-  def expressions(_template), do: []
+  @doc """
+  `expressions/1` for a caller that decides from the answer that something is NOT in the template:
+  `:unreadable` when it cannot be tokenised, rather than `[]`.
+
+      iex> MishkaCmsCore.Runtime.PageBuilder.Markup.read_expressions(~S|<p>{@title}</p>|)
+      {:ok, ["@title"]}
+  """
+  @spec read_expressions(String.t() | nil) :: {:ok, [String.t()]} | :unreadable
+  def read_expressions(template) when is_binary(template) do
+    case tokens(template) do
+      {:ok, tokens} -> {:ok, tokens |> Enum.flat_map(&found/1) |> Enum.uniq()}
+      :unreadable -> :unreadable
+    end
+  end
+
+  def read_expressions(nil), do: {:ok, []}
+  def read_expressions(_template), do: :unreadable
 
   @doc """
   Every expression a template HANDS TO a `<.component …/>` tag — the values a runtime component can
@@ -144,6 +161,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Markup do
   # `else`, and a `case` arm's pattern. Neither is a form on its own, and an assign named ONLY in an
   # arm's pattern is therefore not reported — a miss rather than a wrong answer.
   defp found({:eex, :middle_expr, _source}), do: []
+
+  # A block's closing `<% end %>` holds no code of its own.
+  defp found({:eex, :end_expr, "end"}), do: []
 
   defp found({:eex, _type, source}) when is_binary(source), do: [source]
 

@@ -1476,7 +1476,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   arrives with, which the content editor offers as ready blocks.
 
   It ends with the attribute lines the CSS closure reads to follow a component named through an
-  attribute — `MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks/1`.
+  attribute — `MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks/1` — and the line saying
+  none of the component's code calls a component —
+  `MishkaCmsCore.Runtime.Compilers.CssClosure.call_mark/1`.
   """
   def build_component_class_content(component) do
     extra = field(component, :extra) || %{}
@@ -1501,7 +1503,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       placed_to_text(field(component, :examples), field(extra, :furnishing)),
       defaults_to_text(field(component, :attrs)),
       defaults_to_text(field(component, :slots)),
-      MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks(component)
+      MishkaCmsCore.Runtime.Compilers.CssClosure.attribute_marks(component),
+      MishkaCmsCore.Runtime.Compilers.CssClosure.call_mark(component)
     ]
     |> Enum.filter(fn s -> is_binary(s) and s != "" end)
     |> Enum.join("\n\n")
