@@ -55,6 +55,24 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
     end
   end
 
+  describe "the headers every response carries" do
+    test "switch off the old XSS filter, refuse the unused features and keep openers out" do
+      for path <- ["/about", "/admin/dashboard"] do
+        conn = run(path)
+
+        assert get_resp_header(conn, "x-xss-protection") == ["0"]
+        assert get_resp_header(conn, "cross-origin-opener-policy") == ["same-origin"]
+
+        assert get_resp_header(conn, "permissions-policy") == [
+                 "browsing-topics=(), camera=(), geolocation=(), microphone=(), payment=(), usb=()"
+               ]
+
+        assert get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+        assert get_resp_header(conn, "referrer-policy") == ["strict-origin-when-cross-origin"]
+      end
+    end
+  end
+
   describe "while its events cannot run" do
     test "every header is put on, as with no plugin listening" do
       EventCannotRun.stub!([

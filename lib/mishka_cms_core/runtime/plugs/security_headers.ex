@@ -36,6 +36,16 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
 
   So: `SAMEORIGIN`, and `frame-ancestors 'self'` for browsers that read CSP instead — which is all
   of them, and which is why the header is kept only for the ones that do not.
+
+  ## The other headers
+
+    * `x-xss-protection: 0` — switches off the XSS filter of the browsers that still have one; the
+      CSP is what refuses an injected script.
+    * `permissions-policy` — refuses the camera, the microphone, geolocation, payment, USB and the
+      Topics API to the page and to every frame in it.
+    * `cross-origin-opener-policy: same-origin` — a window of another origin the page opens, or
+      that opened it, cannot reach it. Frames are not affected: the builder's canvas and the
+      captcha widgets keep working, and a page opened from the preview is opened with `noopener`.
   """
   import Plug.Conn
 
@@ -45,6 +55,21 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   alias MishkaInstaller.Event.Hook
 
   @nonce_bytes 18
+
+  # The browser features no admin or site page uses, refused to the page and to every frame in it.
+  # Take a feature off this list when a page starts to use it. Leave `interest-cohort` off: Chrome no
+  # longer knows it, and logs an error for a header that names it.
+  @permissions_policy Enum.join(
+                        [
+                          "browsing-topics=()",
+                          "camera=()",
+                          "geolocation=()",
+                          "microphone=()",
+                          "payment=()",
+                          "usb=()"
+                        ],
+                        ", "
+                      )
 
   # Anchor links to github, x.com and the rest are not fetches and CSP does not govern them. What a
   # page actually LOADS from elsewhere was measured: Google Fonts on the marketing pages, and
@@ -73,9 +98,10 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
           |> assign(:csp_nonce, nonce)
           |> put_resp_header("x-frame-options", "SAMEORIGIN")
           |> put_resp_header("x-content-type-options", "nosniff")
-          |> put_resp_header("x-xss-protection", "1; mode=block")
+          |> put_resp_header("x-xss-protection", "0")
           |> put_resp_header("referrer-policy", "strict-origin-when-cross-origin")
-          |> put_resp_header("permissions-policy", "geolocation=(), microphone=(), camera=()")
+          |> put_resp_header("permissions-policy", @permissions_policy)
+          |> put_resp_header("cross-origin-opener-policy", "same-origin")
           |> put_csp(nonce)
           |> then(&Hook.call("web:response:before_security_headers", &1))
 
