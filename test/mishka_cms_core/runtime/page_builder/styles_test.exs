@@ -1109,6 +1109,105 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StylesTest do
     end
   end
 
+  # The class list of the one `<.link>` in a serialized tree, in its written order.
+  defp link_classes(tree) do
+    [_match, class] = Regex.run(~r/<\.link[^>]*class="([^"]*)"/, Serializer.serialize(tree))
+    String.split(class)
+  end
+
+  defp link_node(tree), do: tree |> Tree.walk() |> Enum.find(&(&1.kind == :component))
+
+  defp link(class),
+    do: Tree.parse!(~s(<nav><.link navigate="/" class="#{class}">Go</.link></nav>))
+
+  # A component's override is written with a bang so it beats the kit's own classes. A class the
+  # author wrote without one is the author's: read and written back, it gained the bang, and an
+  # important base utility beats the variant beside it.
+  describe "a class passed to a component" do
+    test "comes back as written, so its variants still win" do
+      for class <- [
+            "ml-auto min-[1026px]:hidden inline-flex items-center gap-2 text-[#ece6ff] " <>
+              "hover:text-[#ffb86b] border-[rgba(180,150,240,0.32)]! hover:border-[#ff8a3a]!",
+            "text-[#e9e7ff] transition-colors hover:text-white",
+            "text-[#9994c8] hover:text-white focus-visible:text-white " <>
+              "focus-visible:border-[var(--acc)]",
+            "flex items-center gap-3 h-[14px] w-[14px] [font-size:14px]"
+          ] do
+        tree = link(class)
+
+        assert Enum.sort(link_classes(tree)) == Enum.sort(String.split(class)),
+               "#{class} came back as #{Enum.join(link_classes(tree), " ")}"
+
+        if not String.contains?(class, "!") do
+          assert link_node(tree).meta[:styles] in [nil, %{}],
+                 "#{class} was read as the editor's own"
+        end
+      end
+    end
+
+    test "while the editor's own important override is still read back" do
+      assert Styles.from_classes("p-[8px]! text-[#fff] flex!", important?: true) ==
+               {["text-[#fff]"], %{base: %{"padding" => "8px", "display" => "flex"}}}
+
+      tree = link("px-[14px]! py-[10px]! text-[13px]!")
+      assert link_node(tree).meta[:styles] == %{base: %{"px" => "14px", "py" => "10px"}}
+      assert Enum.sort(link_classes(tree)) == ~w(px-[14px]! py-[10px]! text-[13px]!)
+    end
+
+    test "setting a colour makes the author's colour variants important too" do
+      tree = link("text-[#e9e7ff] hover:text-white focus-visible:text-white rounded-md")
+      {:ok, coloured} = Tree.set_style(tree, link_node(tree).id, :base, "color", "#abcdef")
+
+      assert Enum.sort(link_classes(coloured)) ==
+               Enum.sort(
+                 ~w(text-[#abcdef]! hover:text-white! focus-visible:text-white! rounded-md)
+               )
+    end
+
+    # Made important, `hover:text-[#ffb86b]!` is spelt the way the editor writes its own hover
+    # colour, and must survive being read back as one rather than vanish between the two.
+    test "and a variant spelt like the editor's own survives the next save and the one after" do
+      tree = link("text-[#e9e7ff] hover:text-[#ffb86b] focus-visible:border-[var(--acc)]")
+      {:ok, coloured} = Tree.set_style(tree, link_node(tree).id, :base, "color", "#abcdef")
+
+      expected =
+        Enum.sort(~w|text-[#abcdef]! hover:text-[#ffb86b]! focus-visible:border-[var(--acc)]|)
+
+      assert Enum.sort(link_classes(coloured)) == expected
+
+      saved = coloured |> Serializer.serialize() |> Tree.parse!()
+      assert Enum.sort(link_classes(saved)) == expected
+      assert link_node(saved).meta[:styles][:hover] == %{"color" => "#ffb86b"}
+    end
+
+    test "a class written as a list gets the same, with the author's logic left in place" do
+      tree =
+        Tree.parse!(
+          ~S(<nav><.link navigate="/" class={["text-[#e9e7ff] hover:text-white", @on && "underline"]}>Go</.link></nav>)
+        )
+
+      {:ok, coloured} = Tree.set_style(tree, link_node(tree).id, :base, "color", "#abcdef")
+      html = Serializer.serialize(coloured)
+
+      assert html =~ ~S(class={["hover:text-white!", @on && "underline", "text-[#abcdef]!"]})
+    end
+
+    test "setting the display does the same for a display variant, and replaces the base one" do
+      tree = link("ml-auto min-[1026px]:hidden inline-flex items-center")
+      {:ok, shown} = Tree.set_style(tree, link_node(tree).id, :base, "display", "flex")
+
+      assert Enum.sort(link_classes(shown)) ==
+               Enum.sort(~w(ml-auto min-[1026px]:hidden! flex! items-center))
+    end
+
+    test "on a plain element nothing is made important" do
+      tree = Tree.parse!(~s(<div><p class="text-[#e9e7ff] hover:text-white">hi</p></div>))
+      {:ok, coloured} = Tree.set_style(tree, p_node(tree).id, :base, "color", "#abcdef")
+
+      assert p_classes(coloured) == Enum.sort(~w(text-[#abcdef] hover:text-white))
+    end
+  end
+
   describe "every option explains itself" do
     # The compile-time guard in `Styles` already refuses a value with neither, so this is about the
     # panel being able to FIND the description: it asks both and draws whichever answers.

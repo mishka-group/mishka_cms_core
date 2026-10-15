@@ -909,13 +909,16 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   # AND ONLY WHAT IS WRITTEN BACK THE SAME. `bg-[url(/hero.jpg)]` read as a background came back as
   # `[background:url(/hero.jpg)]` — the shorthand, which Tailwind sorts after `bg-cover` and so
   # resets the size — and `p-[8]`, which paints nothing, came back as eight pixels of padding.
+  #
+  # Bang included. On a component a class WITHOUT one is the author's, not this writer's: read, it
+  # came back as `text-[#e9e7ff]!`, which beats the `hover:text-white` beside it.
   defp parse_class(token, important?) do
-    candidate = candidate(token, important?)
-    {variant, rest} = split_variant(candidate)
+    {variant, rest} = split_variant(candidate(token, important?))
 
     with bucket when not is_nil(bucket) <- bucket_for(variant),
          {^bucket, prop, value} = style <- parse_value(bucket, rest),
-         ^candidate <- class_for(bucket, prop, value) do
+         class when is_binary(class) <- class_for(bucket, prop, value),
+         ^token <- emphasise(class, important?) do
       style
     else
       _not_ours -> :authored
@@ -1155,10 +1158,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   The class attribute a node should serialize with: the author's classes followed by the compiled
   overrides. Returns `nil` when there is nothing to write, so an override-free node with no class
   keeps having no class attribute.
+
+  Every authored class is kept unless an override in `styles` replaces it — one that would read as
+  an override but has none is the author's, and stays.
   """
   @spec merge_class(String.t() | nil, map(), keyword()) :: String.t() | nil
   def merge_class(authored, styles, opts \\ []) do
-    {kept, _absorbed} = from_classes(authored)
+    kept = String.split(authored || "", ~r/\s+/, trim: true)
     emitted = to_classes(styles, opts)
 
     case Enum.reject(kept, &overridden?(&1, styles)) ++ emitted do
@@ -1166,6 +1172,45 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
       classes -> Enum.join(classes, " ")
     end
   end
+
+  @doc """
+  `classes` with each one that sets `prop` under a variant made important: `hover:text-white`
+  becomes `hover:text-white!` when `prop` is `"color"`.
+
+  A component's override is written important, so it beats the kit's own classes, and it beats the
+  author's variants beside it just the same: a link given a colour stopped changing on hover. With
+  both important, Tailwind's order decides again, and it puts the variant last.
+  """
+  @spec with_important_variants([String.t()], String.t()) :: [String.t()]
+  def with_important_variants(classes, prop) when is_list(classes),
+    do: Enum.map(classes, &important_variant(&1, prop))
+
+  defp important_variant(class, prop) do
+    with false <- String.ends_with?(class, "!"),
+         at when at > 0 <- last_variant_colon(class, 0, 0, 0),
+         utility = binary_part(class, at + 1, byte_size(class) - at - 1),
+         true <- prop in controls_replacing(utility, :base) do
+      class <> "!"
+    else
+      _not_a_variant_of_it -> class
+    end
+  end
+
+  # Where the variants end: the last colon outside brackets, so `max-[560px]:hover:text-white` is
+  # `text-white` and `[font-size:2rem]` has no variant at all. `0` when there is none.
+  defp last_variant_colon(<<>>, _at, _depth, found), do: found
+
+  defp last_variant_colon(<<char, rest::binary>>, at, depth, found) when char in ~c"[(",
+    do: last_variant_colon(rest, at + 1, depth + 1, found)
+
+  defp last_variant_colon(<<char, rest::binary>>, at, depth, found) when char in ~c"])",
+    do: last_variant_colon(rest, at + 1, depth - 1, found)
+
+  defp last_variant_colon(<<?:, rest::binary>>, at, 0, _found),
+    do: last_variant_colon(rest, at + 1, 0, at)
+
+  defp last_variant_colon(<<_char, rest::binary>>, at, depth, found),
+    do: last_variant_colon(rest, at + 1, depth, found)
 
   # AN OVERRIDE MUST REPLACE, NOT JOIN. `from_classes/1` only recognises the shapes this module
   # emits — `bg-[#fff]` and the `@enums` words — so an ordinary hand-written utility like
@@ -1187,9 +1232,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
 
   defp overridden?(_token, _styles), do: false
 
-  # The `{bucket, control}` pairs whose override replaces `token`.
+  # The `{bucket, control}` pairs whose override replaces `token`, with or without its bang.
   defp replaced_by(token) do
-    {variant, rest} = split_variant(token)
+    {variant, rest} = token |> String.replace_suffix("!", "") |> split_variant()
 
     case bucket_for(variant) do
       nil -> []
@@ -1202,7 +1247,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   # utility's own control is among the ones the utility gives way to, so only a word and a raw
   # property are read as one.
   defp controls_replacing(rest, bucket) do
-    word = List.wrap(Map.get(@by_enum_value, rest))
+    word = word_control(rest)
 
     case utility_of(rest) do
       nil -> Enum.uniq(word ++ raw_control(bucket, rest))
@@ -1216,6 +1261,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
       :authored -> []
     end
   end
+
+  # The display utilities the Display control replaces without offering them.
+  @display_utilities ~w(inline inline-block flow-root inline-flex inline-grid contents table
+                        inline-table list-item hidden)
+
+  defp word_control(rest) when rest in @display_utilities, do: ["display"]
+  defp word_control(rest), do: List.wrap(Map.get(@by_enum_value, rest))
 
   # TAILWIND SPELLS SEVERAL PROPERTIES THE SAME WAY. `text-` is colour, size AND alignment;
   # `border-` is colour and width. Dropping every `text-*` because a colour was set would take

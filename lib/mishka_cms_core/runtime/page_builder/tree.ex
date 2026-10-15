@@ -899,10 +899,46 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree do
       {:ok,
        put_node(tree, %{
          node
-         | meta: Map.put(node.meta, :styles, prune(styles, bucket, bucket_styles))
+         | attrs: important_variants(node, prop, value),
+           meta: Map.put(node.meta, :styles, prune(styles, bucket, bucket_styles))
        })}
     end
   end
+
+  # A COMPONENT'S OVERRIDE IS WRITTEN IMPORTANT, so the author's variants of the same property are
+  # made important in the same write — see `Styles.with_important_variants/2`. Only when the editor
+  # sets a value: a class nobody touched is never given a bang.
+  defp important_variants(%Node{kind: kind, attrs: attrs}, prop, value)
+       when kind in [:component, :slot] and not is_nil(value) do
+    case List.keyfind(attrs, "class", 0) do
+      {"class", {:string, class}} -> important_string_class(attrs, split_classes(class), prop)
+      {"class", {:expr, source}} -> important_expr_class(attrs, Styles.list_parts(source), prop)
+      _none -> attrs
+    end
+  end
+
+  defp important_variants(%Node{attrs: attrs}, _prop, _value), do: attrs
+
+  defp important_string_class(attrs, classes, prop) do
+    case Styles.with_important_variants(classes, prop) do
+      ^classes -> attrs
+      important -> put_class(attrs, important)
+    end
+  end
+
+  defp important_expr_class(attrs, :not_a_list, _prop), do: attrs
+
+  defp important_expr_class(attrs, parts, prop) do
+    case Enum.map(parts, &important_part(&1, prop)) do
+      ^parts -> attrs
+      important -> put_expr_class(attrs, Styles.list_expr(important))
+    end
+  end
+
+  defp important_part({:classes, classes}, prop),
+    do: {:classes, Styles.with_important_variants(classes, prop)}
+
+  defp important_part(logic, _prop), do: logic
 
   defp put_or_drop(map, prop, nil), do: Map.delete(map, prop)
   defp put_or_drop(map, prop, value), do: Map.put(map, prop, value)
