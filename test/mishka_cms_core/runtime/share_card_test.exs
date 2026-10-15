@@ -226,6 +226,29 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
       assert value(head, "name", "twitter:image:alt") == "About the studio"
     end
 
+    test "fills {{page.image}} in a plugin's schema with the card, once drawn", %{site: site} do
+      seo =
+        seo(site, schema: [%{"@type" => "TechArticle", "image" => "{{page.image}}"}])
+
+      assert [first | _site] = Seo.head(seo, base: @base, card: true).schema
+      refute Map.has_key?(Jason.decode!(first), "image")
+
+      assert [job] = all_enqueued(worker: ShareCard)
+      :ok = perform_job(ShareCard, job.args)
+      url = "#{@base}/uploads/#{site.id}/share/#{job.args["key"]}.jpg"
+
+      assert [first | _site] = Seo.head(seo, base: @base, card: true).schema
+      assert Jason.decode!(first) == %{"@type" => "TechArticle", "image" => url}
+
+      plugin = Map.merge(seo, %{image: "/uploads/#{site.id}/media/cover.jpg", card: false})
+      assert [first | _site] = Seo.head(plugin, base: @base, card: true).schema
+
+      assert Jason.decode!(first) == %{
+               "@type" => "TechArticle",
+               "image" => "#{@base}/uploads/#{site.id}/media/cover.jpg"
+             }
+    end
+
     test "draws what the plugin adds, over the plugin's image, with the site's logo", %{
       site: site
     } do

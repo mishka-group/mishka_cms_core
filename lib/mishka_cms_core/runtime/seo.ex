@@ -17,7 +17,11 @@ defmodule MishkaCmsCore.Runtime.Seo do
     * the description is the page's own, else the plugin's, else a stored `description` meta;
     * the image is a stored `og:image`, else the page's share card, else the plugin's;
     * the JSON-LD is the page's stored `schema` when it holds an object, else the plugin's, else one
-      `WebPage`.
+      `WebPage`. The plugin's and the `WebPage` are followed by the site's `WebSite` (`@id`
+      `<base>/#website`) and the `Organization` that publishes it (`@id` `<base>/#organization`,
+      with the `site.logo` setting as its `logo`), both named by the `site.title` setting, so an
+      object that names either by its `@id` finds it on the page. `{{page.image}}` in it is the
+      image the head resolved: a stored `og:image`, else the drawn share card, else the plugin's.
 
   ## What a page shows
 
@@ -906,6 +910,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       opts
       |> Keyword.take([:base, :languages, :restricted?, :layers, :card])
       |> Keyword.put(:page_description?, set?(given.description))
+      |> Keyword.put(:page_schema?, set?(given.schema))
       |> Keyword.put(:page_number, page_number(given.params))
     )
   end
@@ -999,6 +1004,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
       `permissions` is kept out too
     * `:layers` — the layout's and the page's stored `seo_tags`, in that order
     * `:page_description?` — whether `description` is the page's own rather than a plugin's
+    * `:page_schema?` — whether `schema` is the page's own rather than a plugin's; `false` by
+      default, which adds the site's `WebSite` and `Organization` after it
     * `:page_number` — the page of a list this address shows (`page_number/1`); past the first,
       the title says so, `Blog – Page 2`, so no two pages of a list share one
     * `:card` — whether a page with no stored `og:image` shows its share card (`ShareCard.image/2`),
@@ -1083,11 +1090,24 @@ defmodule MishkaCmsCore.Runtime.Seo do
         |> stack()
         |> Enum.reject(&match?({"title", _attrs}, &1))
         |> Enum.map(&absolute_tag(&1, base)),
-      schema: resolved |> schema(vars, site_title, base) |> Enum.flat_map(&json_ld/1),
+      schema:
+        resolved
+        |> schema(
+          image_var(vars, resolved.image),
+          site_title,
+          base,
+          Keyword.get(opts, :page_schema?, false)
+        )
+        |> Enum.flat_map(&json_ld/1),
       var_docs: List.wrap(seo.var_docs),
       permissions: seo.permissions
     }
   end
+
+  # `{{page.image}}` in the JSON-LD is the picture the head resolved: a stored og:image, else the
+  # share card once drawn, else the plugin's.
+  defp image_var(vars, image) when is_binary(image), do: Map.put(vars, "page.image", image)
+  defp image_var(vars, _no_image), do: vars
 
   defp schema_field(key, label, default), do: %{key: key, label: label, default: default}
 
@@ -1358,13 +1378,13 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
   def alternate_links(_one_edition, _base, _site_id), do: []
 
-  defp schema(seo, vars, site_title, base) do
-    seo.schema
-    |> List.wrap()
-    |> Enum.flat_map(&stored_object(&1, vars))
-    |> case do
-      [] -> [web_page(seo, site_title, base)]
-      stored -> stored
+  # The page's own objects as they are; otherwise the plugin's, else a `WebPage`, then the site's
+  # `WebSite` and `Organization`, which they name by `@id`.
+  defp schema(seo, vars, site_title, base, page_schema?) do
+    case {seo.schema |> List.wrap() |> Enum.flat_map(&stored_object(&1, vars)), page_schema?} do
+      {[_ | _] = own, true} -> own
+      {[_ | _] = plugin, false} -> plugin ++ site_nodes(seo.site_id, site_title, base)
+      {[], _} -> [web_page(seo, site_title, base) | site_nodes(seo.site_id, site_title, base)]
     end
   end
 
@@ -1377,8 +1397,6 @@ defmodule MishkaCmsCore.Runtime.Seo do
   defp stored_object(_not_an_object, _vars), do: []
 
   defp web_page(seo, site_title, base) do
-    site = if site_title && base, do: %{"@type" => "WebSite", "name" => site_title, "url" => base}
-
     [
       {"@context", "https://schema.org"},
       {"@type", "WebPage"},
@@ -1387,11 +1405,41 @@ defmodule MishkaCmsCore.Runtime.Seo do
       {"url", seo.url},
       {"inLanguage", seo.language},
       {"image", seo.image},
-      {"isPartOf", site}
+      {"isPartOf", if(site_title && base, do: %{"@id" => website_id(base)})}
     ]
-    |> Enum.reject(fn {_key, value} -> value in [nil, ""] end)
-    |> Map.new()
+    |> present()
   end
+
+  # The `@id`s every JSON-LD object of the site names them by: `<base>/#website` and
+  # `<base>/#organization`.
+  defp site_nodes(site_id, site_title, base) when is_binary(site_title) and is_binary(base) do
+    [
+      %{
+        "@context" => "https://schema.org",
+        "@type" => "WebSite",
+        "@id" => website_id(base),
+        "name" => site_title,
+        "url" => base,
+        "publisher" => %{"@id" => organization_id(base)}
+      },
+      present([
+        {"@context", "https://schema.org"},
+        {"@type", "Organization"},
+        {"@id", organization_id(base)},
+        {"name", site_title},
+        {"url", base},
+        {"logo", absolute(Settings.get("site.logo", nil, site_id), base)}
+      ])
+    ]
+  end
+
+  defp site_nodes(_site_id, _no_title, _no_base), do: []
+
+  defp website_id(base), do: base <> "/#website"
+  defp organization_id(base), do: base <> "/#organization"
+
+  defp present(pairs),
+    do: pairs |> Enum.reject(fn {_key, value} -> value in [nil, ""] end) |> Map.new()
 
   defp fill_vars(seo, %{url: url, image: image}, site_title, base) do
     core = %{

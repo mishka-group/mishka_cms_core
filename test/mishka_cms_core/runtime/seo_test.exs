@@ -159,24 +159,61 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert head.permissions == []
     end
 
-    test "is one WebPage of JSON-LD, part of the site", %{site: site} do
+    test "is one WebPage of JSON-LD, part of the site its organization publishes", %{site: site} do
       head =
         Seo.head(seo(site, description: "What the studio does.", image: "/uploads/cover.png"),
           base: @base
         )
 
-      assert [json] = head.schema
+      assert Enum.map(head.schema, &Jason.decode!/1) == [
+               %{
+                 "@context" => "https://schema.org",
+                 "@type" => "WebPage",
+                 "name" => "About the studio",
+                 "description" => "What the studio does.",
+                 "url" => "#{@base}/en/about",
+                 "inLanguage" => "en",
+                 "image" => "#{@base}/uploads/cover.png",
+                 "isPartOf" => %{"@id" => "#{@base}/#website"}
+               },
+               %{
+                 "@context" => "https://schema.org",
+                 "@type" => "WebSite",
+                 "@id" => "#{@base}/#website",
+                 "name" => "Acme Studio",
+                 "url" => @base,
+                 "publisher" => %{"@id" => "#{@base}/#organization"}
+               },
+               %{
+                 "@context" => "https://schema.org",
+                 "@type" => "Organization",
+                 "@id" => "#{@base}/#organization",
+                 "name" => "Acme Studio",
+                 "url" => @base
+               }
+             ]
+    end
 
-      assert Jason.decode!(json) == %{
-               "@context" => "https://schema.org",
-               "@type" => "WebPage",
-               "name" => "About the studio",
-               "description" => "What the studio does.",
-               "url" => "#{@base}/en/about",
-               "inLanguage" => "en",
-               "image" => "#{@base}/uploads/cover.png",
-               "isPartOf" => %{"@type" => "WebSite", "name" => "Acme Studio", "url" => @base}
-             }
+    test "names the site's logo as its organization's", %{site: site} do
+      {:ok, _} = Settings.put("site.logo", "/uploads/#{site.id}/media/logo.png", site_id: site.id)
+
+      assert %{"@type" => "Organization", "logo" => logo} =
+               site
+               |> seo()
+               |> Seo.head(base: @base)
+               |> Map.fetch!(:schema)
+               |> List.last()
+               |> Jason.decode!()
+
+      assert logo == "#{@base}/uploads/#{site.id}/media/logo.png"
+    end
+
+    test "has no site objects for a site with no title", %{site: site} do
+      {:ok, _} = Settings.put("site.title", "", site_id: site.id)
+
+      assert [json] = site |> seo() |> Seo.head(base: @base) |> Map.fetch!(:schema)
+      assert %{"@type" => "WebPage"} = decoded = Jason.decode!(json)
+      refute Map.has_key?(decoded, "isPartOf")
     end
 
     # A plain-text field holds `&` as typed (`MishkaCmsCore.PlainText`); the head is where it is
@@ -200,16 +237,34 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert %{"name" => "MCP & AI-Ready"} =
                document
                |> LazyHTML.query(~s(script[type="application/ld+json"]))
-               |> LazyHTML.text()
+               |> Enum.map(&LazyHTML.text/1)
+               |> hd()
                |> Jason.decode!()
     end
 
-    test "is replaced whole by a stored schema", %{site: site} do
-      head = Seo.head(seo(site, schema: [%{"@type" => "AboutPage", "name" => "Studio"}]), [])
+    test "is replaced whole by the page's own schema", %{site: site} do
+      head =
+        Seo.head(seo(site, schema: [%{"@type" => "AboutPage", "name" => "Studio"}]),
+          base: @base,
+          page_schema?: true
+        )
 
       assert Enum.map(head.schema, &Jason.decode!/1) == [
                %{"@type" => "AboutPage", "name" => "Studio"}
              ]
+    end
+
+    test "is a plugin's schema, followed by the site objects it names by @id", %{site: site} do
+      posting = %{"@type" => "BlogPosting", "publisher" => %{"@id" => "#{@base}/#organization"}}
+
+      assert [^posting, %{"@id" => website}, %{"@id" => organization}] =
+               site
+               |> seo(schema: [posting])
+               |> Seo.head(base: @base)
+               |> Map.fetch!(:schema)
+               |> Enum.map(&Jason.decode!/1)
+
+      assert {website, organization} == {"#{@base}/#website", "#{@base}/#organization"}
     end
   end
 
@@ -419,7 +474,8 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
 
       head =
         Seo.head(seo(site, schema: schema, vars: %{"post.title" => "Hello", post: "unused"}),
-          base: @base
+          base: @base,
+          page_schema?: true
         )
 
       assert [json] = head.schema
@@ -445,7 +501,8 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
         }
       ]
 
-      head = Seo.head(seo(site, schema: schema), base: @base, layers: [[], page])
+      head =
+        Seo.head(seo(site, schema: schema), base: @base, layers: [[], page], page_schema?: true)
 
       assert [json] = head.schema
 
@@ -459,7 +516,7 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     test "a schema left empty by them falls back to the WebPage", %{site: site} do
       head = Seo.head(seo(site, schema: [%{"name" => "{{post.title}}"}]), base: @base)
 
-      assert [json] = head.schema
+      assert [json, _website, _organization] = head.schema
       assert %{"@type" => "WebPage"} = Jason.decode!(json)
     end
 
