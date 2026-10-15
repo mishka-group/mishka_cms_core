@@ -9,11 +9,16 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StylesTest do
   """
   use ExUnit.Case, async: true
 
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
 
   # A value the property will actually accept: enumerated properties (display) only compile one of
-  # their own options, everything else takes a free-form length or colour.
+  # their own options, a colour control a colour — `text-[7px]` is a font size to Tailwind — and
+  # everything else a free-form length.
+  defp sample(prop) when prop in ~w(color background border-color), do: "#123456"
+
   defp sample(prop) do
     case Styles.options(prop) do
       [] -> "7px"
@@ -885,6 +890,222 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StylesTest do
     test "and a breakpoint carries the picture too" do
       assert Styles.to_classes(%{mobile: %{"background" => "url(/a.png) center/cover no-repeat"}}) ==
                ["max-[560px]:[background:url(/a.png)_center/cover_no-repeat]"]
+    end
+  end
+
+  # The class attribute of the one `<p>` in a serialized tree, as a sorted list.
+  defp p_classes(tree) do
+    [_match, class] = Regex.run(~r/<p class="([^"]*)"/, Serializer.serialize(tree))
+    class |> String.split() |> Enum.sort()
+  end
+
+  defp p_node(tree), do: tree |> Tree.walk() |> Enum.find(&(&1.tag == "p"))
+
+  # `text-[14px]` is a font size and `text-[#9a96c4]` a colour. Tailwind tells them apart by the type
+  # of the value in the brackets, and so does this module, or one of the two is lost on every parse.
+  describe "a prefix Tailwind shares between properties" do
+    test "a size beside a colour stays the author's, and the colour is read" do
+      assert Styles.from_classes("text-[14px] text-[#9a96c4] leading-6") ==
+               {["text-[14px]", "leading-6"], %{base: %{"color" => "#9a96c4"}}}
+    end
+
+    test "a length, a percentage, a size keyword, a maths function or a bare number is a size" do
+      for value <- ~w|14px 1.5rem 2em 120% 10vw 5vh 40ch 1lh .5rem 1e1px -2px 14 1.5 larger medium
+                      xx-large clamp(1rem,2vw,2rem) calc(1rem_+_2px) min(2rem,5vw) max(1rem,2vw)| do
+        class = "text-[#{value}]"
+
+        assert Styles.from_classes(class) == {[class], %{}}, "#{class} was read as a colour"
+
+        assert Styles.merge_class(class, %{base: %{"color" => "#000"}}) == "#{class} text-[#000]",
+               "a colour took #{class}"
+
+        assert Styles.merge_class(class, %{base: %{"font-size" => "2rem"}}) == "[font-size:2rem]",
+               "a size left #{class}"
+      end
+    end
+
+    test "a hex, a colour function, a colour word or a bare variable is a colour" do
+      for value <- ~w|#9a96c4 #fff rgb(0_0_0) rgba(0,0,0,.5) hsl(210_40%_50%) hsla(0,0%,0%,.2)
+                      oklch(.7_.1_200) oklab(.5_.1_.1) lab(50%_40_59) lch(50%_40_59)
+                      color(display-p3_1_0_0) color-mix(in_oklab,red,blue) light-dark(#000,#fff)
+                      hwb(0_0%_0%) transparent currentColor red rebeccapurple var(--brand)| do
+        class = "text-[#{value}]"
+
+        assert {[], %{base: %{"color" => _colour}}} = Styles.from_classes(class),
+               "#{class} was not read as a colour"
+
+        tree = Tree.parse!(~s(<div><p class="text-[14px] #{class}">hi</p></div>))
+        {:ok, sized} = Tree.set_style(tree, p_node(tree).id, :base, "font-size", "2rem")
+
+        assert p_classes(sized) == Enum.sort([class, "[font-size:2rem]"]),
+               "a size took #{class}"
+      end
+    end
+
+    test "a type hint wins over the guess, and a hinted class stays as the author wrote it" do
+      for class <- ~w|text-[length:var(--x)] text-[size:var(--x)]| do
+        assert Styles.from_classes(class) == {[class], %{}}
+        assert Styles.merge_class(class, %{base: %{"color" => "#000"}}) == "#{class} text-[#000]"
+        assert Styles.merge_class(class, %{base: %{"font-size" => "2rem"}}) == "[font-size:2rem]"
+      end
+
+      assert Styles.from_classes("text-[color:var(--x)]") == {["text-[color:var(--x)]"], %{}}
+
+      assert Styles.merge_class("text-[color:var(--x)] text-[14px]", %{
+               base: %{"color" => "#000"}
+             }) == "text-[14px] text-[#000]"
+    end
+
+    # The editor's two controls on one element, through the door the editor uses.
+    test "setting a colour keeps the size, and setting a size keeps the colour" do
+      tree = Tree.parse!(~s(<div><p class="text-[14px] text-[#9a96c4]">hi</p></div>))
+      id = p_node(tree).id
+
+      {:ok, coloured} = Tree.set_style(tree, id, :base, "color", "#ff0000")
+      assert p_classes(coloured) == ["text-[#ff0000]", "text-[14px]"]
+
+      {:ok, sized} = Tree.set_style(tree, id, :base, "font-size", "2rem")
+      assert p_classes(sized) == ["[font-size:2rem]", "text-[#9a96c4]"]
+
+      {:ok, both} = Tree.set_style(sized, id, :base, "color", "#ff0000")
+      assert p_classes(both) == ["[font-size:2rem]", "text-[#ff0000]"]
+      assert p_classes(Tree.parse!(Serializer.serialize(both))) == p_classes(both)
+    end
+
+    test "a border width is not a border colour" do
+      assert Styles.from_classes("border-[2px] border-[#ccc]") ==
+               {["border-[2px]"], %{base: %{"border-color" => "#ccc"}}}
+
+      for value <- ~w|2px thin medium thick 2 calc(1px+1px) length:var(--x) line-width:var(--x)| do
+        class = "border-[#{value}]"
+
+        assert Styles.from_classes(class) == {[class], %{}}, "#{class} was read as a colour"
+
+        assert Styles.merge_class(class, %{base: %{"border-color" => "#00f"}}) ==
+                 "#{class} border-[#00f]"
+
+        assert Styles.merge_class(class, %{base: %{"border-width" => "4px"}}) ==
+                 "[border-width:4px]"
+      end
+
+      for value <- ~w|#ccc red var(--line)| do
+        assert {[], %{base: %{"border-color" => _colour}}} =
+                 Styles.from_classes("border-[#{value}]")
+      end
+    end
+
+    test "setting a border width keeps the colour, and setting a colour keeps the width" do
+      tree = Tree.parse!(~s(<div><p class="border-[2px] border-[#ccc]">hi</p></div>))
+      id = p_node(tree).id
+
+      {:ok, wider} = Tree.set_style(tree, id, :base, "border-width", "4px")
+      assert p_classes(wider) == ["[border-width:4px]", "border-[#ccc]"]
+
+      {:ok, recoloured} = Tree.set_style(tree, id, :base, "border-color", "#00f")
+      assert p_classes(recoloured) == ["border-[#00f]", "border-[2px]"]
+    end
+
+    test "a background position or size is not a colour, and a colour leaves it" do
+      class = "bg-[length:200px_100px] bg-[center_top] bg-[50%] bg-[cover] bg-[#fff]"
+
+      assert Styles.from_classes(class) ==
+               {~w(bg-[length:200px_100px] bg-[center_top] bg-[50%] bg-[cover]),
+                %{base: %{"background" => "#fff"}}}
+
+      assert Styles.merge_class(class, %{base: %{"background" => "#000"}}) ==
+               "bg-[length:200px_100px] bg-[center_top] bg-[50%] bg-[cover] bg-[#000]"
+    end
+
+    # The Background control holds a picture as well as a colour, so it replaces an authored one.
+    test "a gradient is read as the background, and a picture is replaced by one" do
+      assert Styles.from_classes("bg-[linear-gradient(90deg,_red,_blue)]") ==
+               {[], %{base: %{"background" => "linear-gradient(90deg, red, blue)"}}}
+
+      assert Styles.merge_class("bg-[url(/a.png)] bg-cover", %{base: %{"background" => "#000"}}) ==
+               "bg-cover bg-[#000]"
+    end
+
+    # Tailwind paints an arbitrary shadow in `--tw-shadow-color`, so a shadow colour left behind
+    # would recolour the shadow the panel just set.
+    test "a shadow colour is not a shadow, and setting a shadow replaces it" do
+      assert Styles.from_classes("shadow-[#f00]") == {["shadow-[#f00]"], %{}}
+      assert Styles.from_classes("shadow-[red]") == {["shadow-[red]"], %{}}
+
+      assert Styles.from_classes("shadow-[0_0_4px_#000]") ==
+               {[], %{base: %{"shadow" => "0 0 4px #000"}}}
+
+      assert Styles.merge_class("rounded shadow-lg shadow-[#f00] shadow-indigo-500/50", %{
+               base: %{"shadow" => "0 1px 2px #000"}
+             }) == "rounded shadow-[0_1px_2px_#000]"
+    end
+
+    test "a palette colour with an opacity is still a colour" do
+      assert Styles.merge_class("text-white/80 bg-black/50 text-lg", %{
+               base: %{"color" => "#111", "background" => "#222"}
+             }) == "text-lg bg-[#222] text-[#111]"
+    end
+  end
+
+  # One value in the panel cannot give back two classes, so neither is read, and a class an
+  # override would drop is not read past either.
+  describe "two classes for one control" do
+    test "both stay the author's, and come back as they were" do
+      for class <- [
+            "text-[#fff] text-[#000]",
+            "bg-white bg-[#000]",
+            "bg-[url(/hero.jpg)] bg-cover bg-[#111]",
+            "p-[20px] px-8",
+            "text-[14px] [font-size:2rem]",
+            "shadow-lg shadow-[0_0_4px_#000]",
+            "flex grid"
+          ] do
+        assert Styles.from_classes(class) == {String.split(class), %{}}, class
+        assert Styles.merge_class(class, %{}) == class
+      end
+    end
+
+    test "and the control replaces them all once it is set" do
+      assert Styles.merge_class("bg-white bg-[#000]", %{base: %{"background" => "#123"}}) ==
+               "bg-[#123]"
+
+      assert Styles.merge_class("text-[14px] [font-size:2rem]", %{base: %{"font-size" => "3rem"}}) ==
+               "[font-size:3rem]"
+    end
+
+    test "a class in another bucket is no rival" do
+      assert Styles.from_classes("bg-white hover:bg-[#000]") ==
+               {["bg-white"], %{hover: %{"background" => "#000"}}}
+    end
+
+    test "the editor's own shorthand beside its own edge is still one class each" do
+      assert Styles.from_classes("p-[20px] px-[8px]") ==
+               {[], %{base: %{"padding" => "20px", "px" => "8px"}}}
+    end
+
+    test "a list's literal elements are read together" do
+      source = ~s(["text-[#fff]", @x && "a", "text-[#000]"])
+
+      assert {parts, %{}} = Styles.split_list_expr(source)
+      assert Styles.list_expr(parts) == source
+
+      assert {parts, %{base: %{"gap" => "4px"}}} =
+               Styles.split_list_expr(~s(["p-2", @x && "a", "gap-[4px]"]))
+
+      assert Styles.list_expr(parts) == ~s(["p-2", @x && "a"])
+    end
+  end
+
+  # Reading a class and writing it back must not change the page, so a class this module would
+  # spell differently is left as the author wrote it.
+  describe "only a class written back the same is read" do
+    test "a picture in the bg utility is not rewritten as the shorthand" do
+      assert Styles.from_classes("bg-[url(/a.png)]") == {["bg-[url(/a.png)]"], %{}}
+    end
+
+    test "nor is a bare number in a length, a bracketed count, or a colour in the shorthand" do
+      for class <- ~w(p-[8] w-[1000] [font-size:18] grid-cols-[3] [background:#fff]) do
+        assert Styles.from_classes(class) == {[class], %{}}, class
+      end
     end
   end
 
