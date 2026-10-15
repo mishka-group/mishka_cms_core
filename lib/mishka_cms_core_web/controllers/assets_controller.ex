@@ -47,7 +47,8 @@ defmodule MishkaCmsCoreWeb.AssetsController do
 
   ## Caching Strategy
 
-  The URL carries the bundle's hash, so a bundle never changes at a given URL:
+  The URL carries the bundle's hash, so a bundle never changes at a given URL, and no answer sends
+  the session cookie:
   - **Site up**: `public, max-age=31536000, immutable`
   - **Site down, to its admins or a master, or its stylesheet while it is offline**:
     `private, max-age=31536000, immutable`
@@ -157,10 +158,15 @@ defmodule MishkaCmsCoreWeb.AssetsController do
   @public "public, max-age=31536000, immutable"
   @private "private, max-age=31536000, immutable"
 
+  plug :keep_session_unwritten
+
   def css(conn, params), do: serve(conn, params, "css")
 
   def js(conn, params),
     do: put_private(conn, :plug_skip_csrf_protection, true) |> serve(params, "js")
+
+  # The viewer is read off the session, which a bundle never changes, so no answer sends the cookie.
+  defp keep_session_unwritten(conn, _opts), do: configure_session(conn, ignore: true)
 
   defp serve(conn, %{"site" => site, "hash" => hash}, type) do
     case access(conn, site, type, Path.rootname(hash)) do

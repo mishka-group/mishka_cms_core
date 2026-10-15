@@ -183,7 +183,8 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
                """
 
       assert get_resp_header(conn, "content-type") == ["text/plain; charset=utf-8"]
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=60"]
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=60"]
+      assert get_resp_header(conn, "set-cookie") == []
     end
 
     test "keeps out the sign-in pages in every language the site publishes in, and nothing that only starts like one",
@@ -253,7 +254,8 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
       assert conn.status == 302
       assert get_resp_header(conn, "location") == ["/uploads/#{site.id}/media/icon.png"]
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=60"]
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=60"]
+      assert get_resp_header(conn, "set-cookie") == []
     end
 
     test "takes the global favicon, and an address as it is, for a site with none of its own", %{
@@ -321,8 +323,9 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       assert DateTime.compare(built_at, DateTime.utc_now()) != :gt
 
       assert get_resp_header(conn, "content-type") == ["application/xml; charset=utf-8"]
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=60"]
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=60"]
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+      assert get_resp_header(conn, "set-cookie") == []
     end
 
     test "is an index of no file for a site with nothing to list", %{site: site} do
@@ -353,8 +356,9 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
       assert conn.status == 200
       assert get_resp_header(conn, "content-type") == ["application/gzip"]
-      assert get_resp_header(conn, "cache-control") == ["private, max-age=60, no-transform"]
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=60, no-transform"]
       assert get_resp_header(conn, "x-robots-tag") == ["noindex"]
+      assert get_resp_header(conn, "set-cookie") == []
 
       file = :zlib.gunzip(conn.resp_body)
 

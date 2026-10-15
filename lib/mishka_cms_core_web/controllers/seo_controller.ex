@@ -46,10 +46,11 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   ## Caching
 
-  `private, max-age=60`: the browser pipeline gives every response a session cookie, so no shared
-  cache may keep one. An admin let through to an offline site gets `private, no-store`, as the gate
-  gives every page it lets them through to. A gzipped file adds `no-transform`, which keeps the
-  server's response compression from gzipping it again on every request.
+  `public, max-age=60`, and no session cookie: the session is read, as the gates in front of these
+  need it, and never written back, so a shared cache may keep the answer. An admin let through to an
+  offline site gets `private, no-store`, as the gate gives every page it lets them through to. A
+  gzipped file adds `no-transform`, which keeps the server's response compression from gzipping it
+  again on every request.
 
   ## Refusals
 
@@ -63,6 +64,8 @@ defmodule MishkaCmsCoreWeb.SeoController do
   """
   use Phoenix.Controller, formats: []
   import Plug.Conn
+
+  plug :keep_session_unwritten
 
   alias MishkaCmsCore.Helpers
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
@@ -134,7 +137,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   defp cache_control(conn, site, extra \\ "") do
     cache_control =
-      if Settings.offline?(site), do: "private, no-store", else: "private, max-age=60"
+      if Settings.offline?(site), do: "private, no-store", else: "public, max-age=60"
 
     put_resp_header(conn, "cache-control", cache_control <> extra)
   end
@@ -147,6 +150,9 @@ defmodule MishkaCmsCoreWeb.SeoController do
   # told not to transform it, and would gzip the gzipped file again on every request.
   defp transform("application/gzip"), do: ", no-transform"
   defp transform(_text), do: ""
+
+  # Nothing here changes the session, so no answer sends the cookie.
+  defp keep_session_unwritten(conn, _opts), do: configure_session(conn, ignore: true)
 
   defp refuse(conn, site, reason) do
     "web:request:sitemap_unavailable"

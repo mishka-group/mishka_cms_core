@@ -69,6 +69,19 @@ defmodule MishkaCmsCoreWeb.AssetsControllerTest do
     assert content_type =~ "text/css"
   end
 
+  test "a site's bundle is kept a year by any cache, and sends no session cookie", %{site: site} do
+    conn = fetch(site, "/assets/css/#{site.name}/current.css")
+
+    assert conn.status == 200
+    assert get_resp_header(conn, "cache-control") == ["public, max-age=31536000, immutable"]
+    assert get_resp_header(conn, "set-cookie") == []
+
+    refused = fetch(site, "/assets/css/#{site.name}/stale.css")
+
+    assert refused.status == 404
+    assert get_resp_header(refused, "set-cookie") == []
+  end
+
   test "a hash that is not the bundle's is refused while web:request:asset_unavailable cannot run",
        %{site: site} do
     EventCannotRun.stub!("web:request:asset_unavailable")
