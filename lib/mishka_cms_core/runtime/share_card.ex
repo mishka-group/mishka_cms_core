@@ -569,6 +569,18 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @spec url(String.t(), String.t()) :: String.t()
   def url(site_id, key), do: "/uploads/#{site_id}/share/#{key}.jpg"
 
+  @doc """
+  The headers `Plug.Static` adds to a file it serves from the uploads folder: a card is named by
+  what it shows (`key/1`), so any cache may keep it a year; any other file gets none.
+
+      plug Plug.Static, at: "/", only: ~w(uploads), headers: {ShareCard, :static_headers, []}
+  """
+  @spec static_headers(Plug.Conn.t()) :: %{optional(String.t()) => String.t()}
+  def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, "share", _name]}),
+    do: %{"cache-control" => "public, max-age=31536000, immutable"}
+
+  def static_headers(_conn), do: %{}
+
   defp disk_path(site_id, key), do: Path.join(dir(site_id), key <> ".jpg")
 
   # String keys, as the job stores it; empty and unknown values left out.

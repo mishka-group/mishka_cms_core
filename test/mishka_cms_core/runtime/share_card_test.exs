@@ -120,6 +120,26 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
     end
   end
 
+  describe "static_headers/1" do
+    test "keeps a card a year in any cache, and adds nothing to another upload" do
+      site_id = Ecto.UUID.generate()
+      card = ShareCard.url(site_id, ShareCard.key(%{title: "Launch week"}))
+
+      assert Plug.Test.conn(:get, card) |> ShareCard.static_headers() == %{
+               "cache-control" => "public, max-age=31536000, immutable"
+             }
+
+      for path <- [
+            "/uploads/#{site_id}/media/uncategorized/cover.png",
+            "/uploads/#{site_id}/share",
+            "/uploads/#{site_id}/share/nested/card.jpg",
+            "/fonts/fonts.css"
+          ] do
+        assert Plug.Test.conn(:get, path) |> ShareCard.static_headers() == %{}, path
+      end
+    end
+  end
+
   describe "the drawing" do
     test "is a 1200×630 JPEG", %{site: site} do
       card = %{
@@ -204,6 +224,29 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
       assert value(head, "name", "twitter:card") == "summary_large_image"
       assert value(head, "name", "twitter:image") == url
       assert value(head, "name", "twitter:image:alt") == "About the studio"
+    end
+
+    test "fills {{page.image}} in a plugin's schema with the card, once drawn", %{site: site} do
+      seo =
+        seo(site, schema: [%{"@type" => "TechArticle", "image" => "{{page.image}}"}])
+
+      assert [first | _site] = Seo.head(seo, base: @base, card: true).schema
+      refute Map.has_key?(Jason.decode!(first), "image")
+
+      assert [job] = all_enqueued(worker: ShareCard)
+      :ok = perform_job(ShareCard, job.args)
+      url = "#{@base}/uploads/#{site.id}/share/#{job.args["key"]}.jpg"
+
+      assert [first | _site] = Seo.head(seo, base: @base, card: true).schema
+      assert Jason.decode!(first) == %{"@type" => "TechArticle", "image" => url}
+
+      plugin = Map.merge(seo, %{image: "/uploads/#{site.id}/media/cover.jpg", card: false})
+      assert [first | _site] = Seo.head(plugin, base: @base, card: true).schema
+
+      assert Jason.decode!(first) == %{
+               "@type" => "TechArticle",
+               "image" => "#{@base}/uploads/#{site.id}/media/cover.jpg"
+             }
     end
 
     test "draws what the plugin adds, over the plugin's image, with the site's logo", %{
