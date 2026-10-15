@@ -417,7 +417,7 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
         end
 
         assert head.description == "Stored."
-        assert [json] = head.schema
+        assert [json, _website, _organization] = head.schema
         assert %{"description" => "Stored."} = Jason.decode!(json)
       end
     end
