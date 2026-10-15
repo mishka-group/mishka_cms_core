@@ -498,7 +498,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorkerTest do
     end
 
     test "every bundle job type follows the same rule", %{site: site} do
-      for type <- ["asset", "css", "js", "sitemap"] do
+      for type <- ["asset", "css", "js", "sitemap", "warm"] do
         foreign = put_in(bundle_args(site, Ecto.UUID.generate()), ["data", "type"], type)
         own = put_in(bundle_args(site, BootHandler.boot_id()), ["data", "type"], type)
 

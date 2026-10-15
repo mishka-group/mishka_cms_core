@@ -71,6 +71,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   Each degrades to correct-and-large rather than small-and-broken.
 
+  `reached_components/2` answers what the walk did reach either way, for a caller that needs only
+  what is certainly reached — the components a site's warm job builds ahead of its visitors
+  (`MishkaCmsCore.Runtime.Handlers.BootHandler.warm_components/2`).
+
   ## Components named in stored content
 
   A template that draws stored content — `<.rich_content …/>` — reaches the components the
@@ -158,21 +162,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   """
   @spec for_site(String.t(), keyword()) :: result()
   def for_site(site_name, opts \\ []) do
-    root = Keyword.get_lazy(opts, :runtime_dir, &default_runtime_dir/0)
-    scopes = [site_name | Keyword.get(opts, :extra_scopes, [])]
-
-    # WHERE A NAME IS LOOKED UP, IN ORDER. A site-scoped component shadows a global one of the same
-    # name — that is how an install overrides a kit — so the site's directories are searched first.
-    dirs = Enum.map(scopes ++ [@global], &component_dir(Path.join(root, &1)))
-
-    roots = Keyword.get_lazy(opts, :roots, fn -> entry_templates(root, scopes) end)
-
-    content =
-      opts
-      |> Keyword.get(:content_components, [])
-      |> Enum.map(&resolve(&1, dirs))
-      |> Enum.reject(&is_nil/1)
-      |> Enum.uniq()
+    %{dirs: dirs, roots: roots, content: content} = sources(site_name, opts)
 
     case walk(roots, dirs, content) do
       {:ok, %{components: components, scanned: scanned, resolved: resolved}} ->
@@ -188,13 +178,86 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
           resolved: resolved
         }
 
-      {:dynamic, offenders} ->
+      {:dynamic, offenders, _known} ->
         Logger.warning(
           "[CssClosure] #{site_name}: #{length(offenders)} template(s) name a component the walk " <>
             "cannot resolve, so every component will be scanned: #{Enum.join(offenders, ", ")}"
         )
 
         :unbounded
+    end
+  end
+
+  @typedoc """
+  A component the walk reached: its name, and the `site` a `<.component>` tag names to draw it — the
+  site's own name for a component of its own, `"Global"` for a global one.
+  """
+  @type reached :: %{name: String.t(), site: String.t()}
+
+  @doc """
+  Every component the walk is sure a site reaches, in whichever scope each was found, and whether
+  that is all of them.
+
+  The same walk as `for_site/2`, with the same options. Where `for_site/2` answers `:unbounded`,
+  this still answers what the walk did reach, with `complete?: false`: a reference it cannot
+  resolve may name more. A stylesheet cannot be built from that, since a component it leaves out
+  renders unstyled; a caller that only needs what is certainly reached can.
+
+      iex> CssClosure.reached_components("localhost")
+      %{complete?: true, components: [%{name: "chelekom-alert", site: "Global"}]}
+  """
+  @spec reached_components(String.t(), keyword()) :: %{
+          complete?: boolean(),
+          components: [reached()]
+        }
+  def reached_components(site_name, opts \\ []) do
+    %{root: root, dirs: dirs, roots: roots, content: content} = sources(site_name, opts)
+
+    {complete?, components} =
+      case walk(roots, dirs, content) do
+        {:ok, %{components: components}} -> {true, components}
+        {:dynamic, _offenders, components} -> {false, components}
+      end
+
+    %{
+      complete?: complete?,
+      components:
+        components
+        |> Enum.filter(&(Path.dirname(&1) in dirs))
+        |> Enum.map(&%{name: name_of(&1), site: scope_of(&1, root)})
+        |> Enum.uniq()
+        |> Enum.sort_by(&{&1.site, &1.name})
+    }
+  end
+
+  # WHERE A NAME IS LOOKED UP, IN ORDER. A site-scoped component shadows a global one of the same
+  # name — that is how an install overrides a kit — so the site's directories are searched first.
+  defp sources(site_name, opts) do
+    root = Keyword.get_lazy(opts, :runtime_dir, &default_runtime_dir/0)
+    scopes = [site_name | Keyword.get(opts, :extra_scopes, [])]
+    dirs = Enum.map(scopes ++ [@global], &component_dir(Path.join(root, &1)))
+
+    content =
+      opts
+      |> Keyword.get(:content_components, [])
+      |> Enum.map(&resolve(&1, dirs))
+      |> Enum.reject(&is_nil/1)
+      |> Enum.uniq()
+
+    %{
+      root: root,
+      dirs: dirs,
+      roots: Keyword.get_lazy(opts, :roots, fn -> entry_templates(root, scopes) end),
+      content: content
+    }
+  end
+
+  # `<root>/<scope>/component/<name>.template`: the scope directory is the site's name, or
+  # `__global__` for a global component, whose tag names the site `"Global"`.
+  defp scope_of(path, root) do
+    case path |> Path.relative_to(root) |> Path.split() do
+      [@global | _rest] -> "Global"
+      [scope | _rest] -> scope
     end
   end
 
@@ -411,7 +474,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
          }}
 
       offenders ->
-        {:dynamic, offenders}
+        {:dynamic, offenders, state.components}
     end
   end
 

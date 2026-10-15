@@ -200,8 +200,11 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   A `:site` that is neither global nor the site this process renders for draws nothing and builds
   nothing — see "Which site's components a render reaches" above.
 
-  A component whose `precompile` flag is unset is not built at boot, so **this is where it is
-  built** — the first render that names it. `MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler`
+  A component whose `precompile` flag is unset is not built by the boot's compile passes. The site's
+  warm job builds it once a site reaches it
+  (`MishkaCmsCore.Runtime.Handlers.BootHandler.warm_components/2`), and one it has not built —
+  named in a way the walk cannot follow, or asked for before the job ran — **is built here**, by the
+  first render that names it. `MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler`
   coordinates through its registry, so concurrent first renders of the same component wait on one
   compile rather than racing, and a component whose template does not compile is remembered in
   `MishkaCmsCore.Runtime.States.CompileFailureState` so the next render short-circuits to the

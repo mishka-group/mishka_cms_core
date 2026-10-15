@@ -677,6 +677,59 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
     end
   end
 
+  describe "reached_components/2" do
+    defp reached(root, site \\ "acme"),
+      do: CssClosure.reached_components(site, runtime_dir: root)
+
+    test "names each reached component with the site a tag draws it for", %{root: root} do
+      global_component(root, "kit-icon", "<i></i>")
+      write(root, "acme", "component", "card", reference("kit-icon"))
+      global_component(root, "kit-unused", "<div></div>")
+      write(root, "acme", "page", "home", reference("card"))
+
+      assert reached(root) == %{
+               complete?: true,
+               components: [%{name: "kit-icon", site: "Global"}, %{name: "card", site: "acme"}]
+             }
+    end
+
+    test "a site component shadowing a global one is the site's", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "component", "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", reference("kit-alert"))
+
+      assert %{components: [%{name: "kit-alert", site: "acme"}]} = reached(root)
+    end
+
+    # `for_site/2` gives up on the whole answer here, because a stylesheet built from part of it
+    # leaves a component unstyled. Part of it is still what is certainly reached.
+    test "a reference the walk cannot resolve still answers what it did reach", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+
+      write(
+        root,
+        "acme",
+        "page",
+        "home",
+        reference("kit-alert") <> ~s|<.component component_name={@pick} />|
+      )
+
+      assert unbounded_naming(fn -> closure(root) end) =~ "cannot resolve"
+
+      assert reached(root) == %{
+               complete?: false,
+               components: [%{name: "kit-alert", site: "Global"}]
+             }
+    end
+
+    test "nothing is reached from a site with no references", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", "<p>plain</p>")
+
+      assert reached(root) == %{complete?: true, components: []}
+    end
+  end
+
   describe "all_components/1" do
     test "lists every installed global component, reachable or not", %{root: root} do
       global_component(root, "kit-a", "")

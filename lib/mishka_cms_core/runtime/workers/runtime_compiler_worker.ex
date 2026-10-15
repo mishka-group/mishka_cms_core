@@ -287,20 +287,38 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   defp run(%Oban.Job{
          args: %{
            "resource" => "MishkaCmsCore.Runtime.Handlers.BootHandler",
-           "data" => %{"site_name" => site_name, "type" => "asset"}
+           "data" => %{"site_name" => site_name, "type" => "asset"} = data
          }
        }) do
     JavaScriptCompiler.compile_and_store(site_name)
-    TailwindCompiler.compile_and_store(site_name)
+
+    site_name
+    |> TailwindCompiler.compile_and_store()
+    |> warm_after(site_name, data["site_id"])
   end
 
   defp run(%Oban.Job{
          args: %{
            "resource" => "MishkaCmsCore.Runtime.Handlers.BootHandler",
-           "data" => %{"site_name" => site_name, "type" => "css"}
+           "data" => %{"site_name" => site_name, "type" => "css"} = data
          }
        }) do
-    TailwindCompiler.compile_and_store(site_name)
+    site_name
+    |> TailwindCompiler.compile_and_store()
+    |> warm_after(site_name, data["site_id"])
+  end
+
+  # A site gone since the job was queued has nothing to warm.
+  defp run(%Oban.Job{
+         args: %{
+           "resource" => "MishkaCmsCore.Runtime.Handlers.BootHandler",
+           "data" => %{"site_name" => site_name, "type" => "warm"}
+         }
+       }) do
+    case BootHandler.warm_components(site_name) do
+      {:ok, _warmed} -> :ok
+      {:error, :no_site} -> :ok
+    end
   end
 
   defp run(%Oban.Job{
@@ -329,6 +347,15 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   defp run(%Oban.Job{args: _args}) do
     # TODO: We should log this why it happends
     :ok
+  end
+
+  # WHAT A SITE REACHES IS WHAT ITS STYLESHEET IS BUILT FROM, and every change that can alter it — a
+  # page, layout, error page, component or stored content saved, a kit installed, the site switched
+  # on — rebuilds the stylesheet. So once it is built, the site's warm job is queued, on this
+  # instance and debounced like the build itself, whether or not the build succeeded.
+  defp warm_after(built, site_name, site_id) do
+    _ = run_asset_compiler(site_name, site_id, "warm")
+    built
   end
 
   defp create_js_hooks_template_run_js_compiler(site_id, site_name) do
