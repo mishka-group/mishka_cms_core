@@ -4056,26 +4056,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   # A Forms finding names an edit rather than a decision — wrap this field, rename that form, move
   # this button — so Fix makes it, in one history entry, and where there is no edit to make it says
-  # why in a sentence rather than swinging the rail over to the assistant. The patterns are narrower
-  # than the catch-all below on purpose: a clause with the same pattern would make the existing one
-  # unreachable rather than front it.
-  def handle_event("audit_fix", %{"rule" => "form-" <> _rest = rule} = params, socket),
-    do: form_fix(rule, params, socket)
-
-  def handle_event("audit_fix", %{"rule" => "field-" <> _rest = rule} = params, socket),
-    do: form_fix(rule, params, socket)
-
-  def handle_event("audit_fix", %{"rule" => "submit-no-form" = rule} = params, socket),
-    do: form_fix(rule, params, socket)
-
-  # Fix hands the finding to the assistant as scoped prompt text — the one rail that can actually
-  # change the document. Selecting the node first is what makes the request scoped.
+  # why in a sentence rather than swinging the rail over to the assistant. Any other finding is handed
+  # to the assistant as scoped prompt text — the one rail that can actually change the document.
+  # Selecting the node first is what makes the request scoped.
   # NOT `%{"rule" => rule, "id" => id}`. A finding about the DOCUMENT — no meta description, no
   # title, no heading, a bundle over budget — has no node, and HEEx omits an attribute whose value is
   # `nil`, so those clicks arrive without an `id` at all and used to fall through to the catch-all.
   # Which meant the Fix button did nothing on exactly the findings that fire on every page.
-  def handle_event("audit_fix", %{"rule" => rule} = params, socket),
-    do: audit_ask(rule, params, socket)
+  def handle_event("audit_fix", %{"rule" => rule} = params, socket) do
+    case FormChecks.rule?(rule) do
+      true -> form_fix(rule, params, socket)
+      false -> audit_ask(rule, params, socket)
+    end
+  end
 
   # A Behavior switch edits the element's `class`, so it goes through the same `set_attr` op every
   # other property edit uses — one funnel, one history entry, one containment check.

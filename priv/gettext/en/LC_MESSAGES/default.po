@@ -4161,7 +4161,7 @@ msgstr ""
 msgid "Find in the page's text…"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10107
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10073
 #, elixir-autogen, elixir-format
 msgid "Findings marked Sample show how they will look; they are on our roadmap."
 msgstr ""
@@ -4179,6 +4179,11 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10159
 #, elixir-autogen, elixir-format
 msgid "Fix"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10071
+#, elixir-autogen, elixir-format
+msgid "Fix hands a finding to the AI Assistant, which is on our roadmap."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5436
@@ -6025,6 +6030,11 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/site_health_panel.ex:116
 #, elixir-autogen, elixir-format
 msgid "Needs attention"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10087
+#, elixir-autogen, elixir-format
+msgid "Needs the AI Assistant, which is on our roadmap"
 msgstr ""
 
 #: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:70
@@ -8030,7 +8040,7 @@ msgstr ""
 msgid "Same tab"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10195
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10225
 #, elixir-autogen, elixir-format
 msgid "Sample"
 msgstr ""
@@ -8863,7 +8873,12 @@ msgstr ""
 msgid "Solid"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10104
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10066
+#, elixir-autogen, elixir-format
+msgid "Some checks and automatic fixes are not available yet"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10063
 #, elixir-autogen, elixir-format
 msgid "Some checks are not available yet"
 msgstr ""

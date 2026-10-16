@@ -14,6 +14,14 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.RoadmapNoticeTest do
   @assistant_title "The AI Assistant is not available yet"
   @assistant_sample "The conversation below is a sample of how it will work."
   @audit_title "Some checks are not available yet"
+  @audit_title_no_assistant "Some checks and automatic fixes are not available yet"
+  @audit_fix_sentence "Fix hands a finding to the AI Assistant, which is on our roadmap."
+  @audit_sample_sentence "Findings marked Sample show how they will look; they are on our roadmap."
+  @fix_hint "Needs the AI Assistant, which is on our roadmap"
+
+  @unlabelled_link ~s(<div id="root"><h1>T</h1><a href="/x"></a></div>)
+
+  @bare_form ~s(<div id="root"><.form :let={f} id="contact-form" as={:contact} for={assigns[:contact_form]} phx-change="contact_validate" phx-submit="contact_submit"><input name={f[:email].name} /></.form></div>)
 
   defp demo_data(enabled?) do
     Application.put_env(:mishka_cms_core, :builder_demo_data, enabled?)
@@ -143,16 +151,57 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.RoadmapNoticeTest do
   end
 
   describe "the Audit tab" do
-    test "a sample finding brings the notice", %{conn: conn, page: page} do
+    test "sample findings and no backend bring the notice with both sentences", %{
+      conn: conn,
+      page: page
+    } do
       demo_data(true)
       {:ok, view, _html} = open_builder(conn, page)
       open_audit(view)
 
       assert has_element?(view, "#pb-audit-roadmap[role=note]")
-      assert has_element?(view, "#pb-audit-roadmap", @audit_title)
+      assert has_element?(view, "#pb-audit-roadmap", @audit_title_no_assistant)
+      assert notice_text(view, "pb-audit-roadmap") =~ @audit_fix_sentence
+      assert notice_text(view, "pb-audit-roadmap") =~ @audit_sample_sentence
+    end
 
-      assert notice_text(view, "pb-audit-roadmap") =~
-               "Findings marked Sample show how they will look; they are on our roadmap."
+    test "no backend and no sample bring the notice with the Fix sentence only", %{
+      conn: conn,
+      page: page
+    } do
+      demo_data(false)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      assert has_element?(view, "#pb-audit-roadmap", @audit_title_no_assistant)
+      assert notice_text(view, "pb-audit-roadmap") =~ @audit_fix_sentence
+      refute notice_text(view, "pb-audit-roadmap") =~ "Sample"
+      refute has_element?(view, "[data-role=pb-sample-badge]")
+    end
+
+    test "a real backend with sample findings brings the notice about the samples only", %{
+      conn: conn,
+      page: page
+    } do
+      demo_data(true)
+      real_backend()
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      assert has_element?(view, "#pb-audit-roadmap", @audit_title)
+      refute has_element?(view, "#pb-audit-roadmap", "automatic fixes")
+      assert notice_text(view, "pb-audit-roadmap") =~ @audit_sample_sentence
+      refute notice_text(view, "pb-audit-roadmap") =~ @audit_fix_sentence
+    end
+
+    test "a real backend and no sample leave no notice", %{conn: conn, page: page} do
+      demo_data(false)
+      real_backend()
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      refute has_element?(view, "#pb-audit-roadmap")
+      refute render(view) =~ @audit_title
     end
 
     test "the sample finding wears a Sample badge and its Fix is disabled", %{
@@ -160,6 +209,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.RoadmapNoticeTest do
       page: page
     } do
       demo_data(true)
+      real_backend()
       {:ok, view, _html} = open_builder(conn, page)
       open_audit(view)
 
@@ -174,20 +224,77 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.RoadmapNoticeTest do
       assert render(view) =~ "Low contrast on muted text"
     end
 
-    test "a real finding keeps its Fix and has no badge", %{conn: conn, site: site} do
+    test "with no backend a Fix that would reach the assistant is disabled and says why", %{
+      conn: conn,
+      site: site
+    } do
+      demo_data(false)
+      page = create_page!(site_id: site.id, template: @unlabelled_link)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      fix = ~s|button[data-rule="link-text"]|
+
+      assert render(view) =~ "Link has no visible text"
+      assert has_element?(view, "#{fix}[disabled][title=\"#{@fix_hint}\"]")
+      refute has_element?(view, "#{fix}[phx-click]")
+
+      assert_raise ArgumentError, ~r/because it is disabled/, fn ->
+        view |> element(fix) |> render_click()
+      end
+    end
+
+    test "with a backend the same Fix is enabled and hands the finding to the assistant", %{
+      conn: conn,
+      site: site
+    } do
+      demo_data(false)
+      real_backend()
+      page = create_page!(site_id: site.id, template: @unlabelled_link)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      fix = ~s|button[data-rule="link-text"]|
+
+      assert has_element?(view, "#{fix}[phx-click=audit_fix]:not([disabled])")
+      refute has_element?(view, "#{fix}[title]")
+
+      view |> element(fix) |> render_click()
+
+      assert has_element?(view, "#pb-ai-form")
+      assert_receive {:asked, _prompt, _opts}
+    end
+
+    test "a Forms finding is mended by the editor itself, so its Fix needs no backend", %{
+      conn: conn,
+      site: site
+    } do
+      demo_data(false)
+      page = create_page!(site_id: site.id, template: @bare_form)
+      {:ok, view, _html} = open_builder(conn, page)
+      open_audit(view)
+
+      fix = ~s|button[data-rule="form-no-submit"]|
+
+      assert has_element?(view, "#{fix}[phx-click=audit_fix]:not([disabled])")
+      refute has_element?(view, "#{fix}[title]")
+      refute node_with_tag(view, "button")
+
+      view |> element(fix) |> render_click()
+
+      assert node_with_tag(view, "button")
+      refute has_element?(view, "#pb-ai-form")
+    end
+
+    test "a real finding has no badge, and the one sample finding has", %{conn: conn, site: site} do
       demo_data(true)
-
-      page =
-        create_page!(
-          site_id: site.id,
-          template: ~s(<div id="root"><h1>T</h1><a href="/x"></a></div>)
-        )
-
+      real_backend()
+      page = create_page!(site_id: site.id, template: @unlabelled_link)
       {:ok, view, _html} = open_builder(conn, page)
       open_audit(view)
 
       assert render(view) =~ "Link has no visible text"
-      assert has_element?(view, ~s|button[phx-click="audit_fix"][data-rule]:not([disabled])|)
+      assert has_element?(view, ~s|button[data-rule="link-text"]:not([disabled])|)
 
       badges =
         view
@@ -197,24 +304,6 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.RoadmapNoticeTest do
 
       assert Enum.count(badges) == 1
       assert has_element?(view, "#pb-audit-sample-contrast")
-    end
-
-    test "no sample findings, no notice and no badge", %{conn: conn, site: site} do
-      demo_data(false)
-
-      page =
-        create_page!(
-          site_id: site.id,
-          template: ~s(<div id="root"><h1>T</h1><a href="/x"></a></div>)
-        )
-
-      {:ok, view, _html} = open_builder(conn, page)
-      open_audit(view)
-
-      refute has_element?(view, "#pb-audit-roadmap")
-      refute has_element?(view, "[data-role=pb-sample-badge]")
-      refute render(view) =~ "Low contrast on muted text"
-      assert has_element?(view, ~s|button[phx-click="audit_fix"]:not([disabled])|)
     end
   end
 end

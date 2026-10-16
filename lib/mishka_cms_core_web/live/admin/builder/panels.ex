@@ -10060,6 +10060,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp ai_roadmap_text(false), do: gettext("This part of the editor is on our roadmap.")
 
+  defp audit_roadmap_title(true), do: gettext("Some checks are not available yet")
+
+  defp audit_roadmap_title(false),
+    do: gettext("Some checks and automatic fixes are not available yet")
+
+  defp audit_roadmap_text(connected?, sample?) do
+    [
+      {not connected?,
+       gettext("Fix hands a finding to the AI Assistant, which is on our roadmap.")},
+      {sample?,
+       gettext("Findings marked Sample show how they will look; they are on our roadmap.")}
+    ]
+    |> Enum.filter(&elem(&1, 0))
+    |> Enum.map_join(" ", &elem(&1, 1))
+  end
+
+  # A Forms finding is mended by `FormChecks`; Fix on any other is handed to the assistant.
+  defp assistant_fix?(%{rule: rule}), do: not FormChecks.rule?(rule)
+
+  defp fix_off?(finding, connected?),
+    do: sample?(finding) or (assistant_fix?(finding) and not connected?)
+
+  defp fix_title(finding, connected?) do
+    case fix_off?(finding, connected?) and not sample?(finding) do
+      true -> gettext("Needs the AI Assistant, which is on our roadmap")
+      false -> nil
+    end
+  end
+
   defp sample_badge_id(%{rule: rule, node_id: nil}), do: "pb-audit-sample-#{rule}"
   defp sample_badge_id(%{rule: rule, node_id: node_id}), do: "pb-audit-sample-#{rule}-#{node_id}"
 
@@ -10095,16 +10124,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       |> assign(:findings, audit_findings(assigns.tree, assigns.record, assigns.editor))
       |> then(&assign(&1, :groups, audit_groups(&1.findings)))
       |> then(&assign(&1, :audit_sample?, sample?(&1.findings)))
+      |> assign(:ai_connected?, AiBackend.connected?())
 
     ~H"""
     <div class="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <.roadmap_notice
-        :if={@audit_sample?}
+        :if={@audit_sample? or not @ai_connected?}
         id="pb-audit-roadmap"
-        title={gettext("Some checks are not available yet")}
+        title={audit_roadmap_title(@ai_connected?)}
         class="flex-none"
       >
-        {gettext("Findings marked Sample show how they will look; they are on our roadmap.")}
+        {audit_roadmap_text(@ai_connected?, @audit_sample?)}
       </.roadmap_notice>
 
       <%!-- The score is a ring, not a number in a box: the sweep is the reading, and the line under
@@ -10204,10 +10234,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               type="button"
               id={fix_id(finding)}
               data-rule={finding.rule}
-              phx-click={!sample?(finding) && "audit_fix"}
+              phx-click={!fix_off?(finding, @ai_connected?) && "audit_fix"}
               phx-value-rule={finding.rule}
               phx-value-id={finding.node_id}
-              disabled={sample?(finding)}
+              disabled={fix_off?(finding, @ai_connected?)}
+              title={fix_title(finding, @ai_connected?)}
               class="h-[22px] flex-none rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white"
             >
               {gettext("Fix")}
@@ -10221,11 +10252,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 id={(at == 0 && fix_id(finding)) || "#{fix_id(finding)}-#{fix.fix}"}
                 data-rule={(at == 0 && finding.rule) || nil}
                 data-fix={fix.fix}
-                phx-click={!sample?(finding) && "audit_fix"}
+                phx-click={!fix_off?(finding, @ai_connected?) && "audit_fix"}
                 phx-value-rule={finding.rule}
                 phx-value-id={finding.node_id}
                 phx-value-fix={fix.fix}
-                disabled={sample?(finding)}
+                disabled={fix_off?(finding, @ai_connected?)}
+                title={fix_title(finding, @ai_connected?)}
                 class="h-[22px] rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white"
               >
                 {fix.label}

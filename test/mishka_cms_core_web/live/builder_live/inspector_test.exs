@@ -2188,6 +2188,14 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
     end
 
     test "Fix scopes the assistant to the finding's own element", %{conn: conn, page: page} do
+      Application.put_env(:mishka_cms_core, :builder_ai_backend, MishkaCmsCore.Test.AiBackendStub)
+      MishkaCmsCore.Test.AiBackendStub.answer([])
+
+      on_exit(fn ->
+        Application.delete_env(:mishka_cms_core, :builder_ai_backend)
+        Application.delete_env(:mishka_cms_core, :test_ai_answer)
+      end)
+
       {:ok, view, _html} = open_builder(conn, page)
       section = node_with_tag(view, "section")
 
