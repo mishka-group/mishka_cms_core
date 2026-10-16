@@ -22,6 +22,11 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   typed by hand becomes editable in the panel instead of being invisible to it, and it re-serializes
   byte-identically.
 
+  A class is read only when writing its override back gives that same class, and only when it is the
+  one class in its bucket that override would replace. Two of them — `text-[#fff] text-[#000]`, or
+  `p-[20px]` beside an authored `px-8` — stay as the author wrote them: one value in the panel could
+  only give one of them back.
+
   ## Buckets
 
   `:base` has no prefix. `:tablet` and `:mobile` are max-width queries at the prototype's
@@ -112,9 +117,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   # Anything not listed here is skipped rather than guessed at — a wrong utility is worse than none.
   #
   # The mapping MUST stay injective, because `from_classes/1` inverts it. Tailwind spells both text
-  # colour and text size `text-…`, distinguishing them only by the value's type, which an inverse
-  # cannot recover — so `color` owns `text-` and font size is left out rather than making the round
-  # trip ambiguous. `styles_test.exs` fails the build if a second property ever claims a utility.
+  # colour and text size `text-…`, distinguishing them only by the value's type (`@prefix_kinds`) —
+  # so `color` owns `text-` and font size is written as its own property rather than as a second
+  # claim on the prefix. `styles_test.exs` fails the build if a second property ever claims a utility.
   @utilities %{
     "gap" => "gap",
     "padding" => "p",
@@ -552,6 +557,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
                  [Map.get(@utilities, prop) | covered] |> Enum.reject(&is_nil/1) |> Enum.uniq()}
               end)
 
+  # The same, read from the class: the controls an authored `px-8` gives way to.
+  @superseded_by Enum.group_by(
+                   for({prop, utils} <- @supersedes, util <- utils, do: {util, prop}),
+                   &elem(&1, 0),
+                   &elem(&1, 1)
+                 )
+
   @doc """
   The style controls a hand-written CSS property overrides — `[]` when the panel has no say in it.
 
@@ -768,6 +780,60 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
 
   defp unescape(value), do: String.replace(value, "_", " ")
 
+  # ONE PREFIX, TWO PROPERTIES. Tailwind spells a font size and a colour both `text-[…]` and tells
+  # them apart by the value in the brackets: `text-[14px]` is a size, `text-[#9a96c4]` a colour. It
+  # tries a fixed list of types in order, takes a `type:` hint over the guess
+  # (`text-[length:var(--x)]`), and falls back to one property when nothing matches, so `var(--x)`
+  # alone is a colour. Read as "every `text-[…]` is a colour", an element wearing both lost its size
+  # on every parse — every save, and every compile of a page holding a hidden element.
+  #
+  # `{fallback, [{kind, types}]}`, the kinds in the order Tailwind tries their types. `number` under
+  # `text` is ours: Tailwind reads `text-[14]` as a colour that paints nothing, and it is a size.
+  @prefix_kinds %{
+    "text" =>
+      {:colour,
+       [colour: ~w(color), size: ~w(length percentage absolute-size relative-size number size)]},
+    "border" => {:colour, [colour: ~w(color), width: ~w(line-width length)]},
+    "bg" =>
+      {:colour,
+       [
+         image: ~w(image url),
+         colour: ~w(color),
+         position: ~w(percentage position),
+         size: ~w(bg-size length size)
+       ]},
+    "shadow" => {:shadow, [colour: ~w(color)]}
+  }
+
+  # The control whose override replaces a class of each kind. A shadow's colour belongs to the Shadow
+  # control: Tailwind paints an arbitrary shadow in it, so one left beside a new shadow recolours it.
+  @kind_controls %{
+    {"text", :colour} => "color",
+    {"text", :size} => "font-size",
+    {"border", :colour} => "border-color",
+    {"border", :width} => "border-width",
+    {"bg", :colour} => "background",
+    {"bg", :image} => "background",
+    {"shadow", :shadow} => "shadow",
+    {"shadow", :colour} => "shadow"
+  }
+
+  # The kinds this module writes in each prefix, which are the only ones it reads back. A size is
+  # written `[font-size:…]` and a width `[border-width:…]`, so `text-[14px]` stays the author's.
+  @read_kinds %{
+    "text" => [:colour],
+    "border" => [:colour],
+    "bg" => [:colour, :image],
+    "shadow" => [:shadow]
+  }
+
+  for {prefix, kinds} <- @read_kinds, kind <- kinds do
+    if @kind_controls[{prefix, kind}] != @by_utility[prefix] do
+      raise "Styles: #{prefix}-[…] of kind #{kind} is read as #{@by_utility[prefix]} " <>
+              "but replaced by #{inspect(@kind_controls[{prefix, kind}])}"
+    end
+  end
+
   @doc """
   Splits a class attribute into the author's own classes and the override map the editor recorded.
 
@@ -784,14 +850,52 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
 
     class
     |> String.split(~r/\s+/, trim: true)
-    |> Enum.reduce({[], %{}}, fn token, {authored, styles} ->
-      case parse_class(token, important?) do
-        {bucket, prop, value} -> {authored, put_style(styles, bucket, prop, value)}
-        :authored -> {[token | authored], styles}
-      end
+    |> Enum.map(&{&1, parse_class(&1, important?)})
+    |> settle()
+    |> Enum.reduce({[], %{}}, fn
+      {token, :authored}, {authored, styles} ->
+        {[token | authored], styles}
+
+      {_token, {bucket, prop, value}}, {authored, styles} ->
+        {authored, put_style(styles, bucket, prop, value)}
     end)
     |> then(fn {authored, styles} -> {Enum.reverse(authored), styles} end)
   end
+
+  # A CLASS IS READ ONLY WHEN NOTHING BESIDE IT WOULD BE LOST FOR IT. The override a class becomes is
+  # written back on the next serialize, and `merge_class/3` drops every authored class that override
+  # replaces — so `bg-white bg-[#000]` read as one background came back as `bg-[#000]`, and two
+  # classes for one control kept only the second. Either way the class stays the author's.
+  #
+  # Repeated until nothing moves: a class given back to the author can be what the next one replaces.
+  defp settle(entries),
+    do: settle(entries, replaced_slots(for {token, :authored} <- entries, do: token))
+
+  defp settle(entries, replaced) do
+    read = Enum.frequencies(for {_token, {bucket, prop, _value}} <- entries, do: {bucket, prop})
+
+    {settled, given_back} =
+      Enum.map_reduce(entries, [], fn
+        {token, {bucket, prop, _value}} = entry, given_back ->
+          slot = {bucket, prop}
+
+          case MapSet.member?(replaced, slot) or Map.fetch!(read, slot) > 1 do
+            true -> {{token, :authored}, [token | given_back]}
+            false -> {entry, given_back}
+          end
+
+        authored, given_back ->
+          {authored, given_back}
+      end)
+
+    case given_back do
+      [] -> entries
+      tokens -> settle(settled, MapSet.union(replaced, replaced_slots(tokens)))
+    end
+  end
+
+  defp replaced_slots(tokens),
+    do: for(token <- tokens, slot <- replaced_by(token), into: MapSet.new(), do: slot)
 
   # AN IMPORTANT UTILITY IS STILL ONE OF OURS. `to_classes/2` writes `p-[8px]!` for a component and
   # a slot — the bang is what lets an override beat the kit's own `[&_table_.table-header]:px-4` —
@@ -801,12 +905,23 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   #
   # Only where the writer uses the bang. On a plain tag `p-[8px]!` is the author's own text and
   # lifting it would re-emit it without the bang, which changes what it means.
+  #
+  # AND ONLY WHAT IS WRITTEN BACK THE SAME. `bg-[url(/hero.jpg)]` read as a background came back as
+  # `[background:url(/hero.jpg)]` — the shorthand, which Tailwind sorts after `bg-cover` and so
+  # resets the size — and `p-[8]`, which paints nothing, came back as eight pixels of padding.
+  #
+  # Bang included. On a component a class WITHOUT one is the author's, not this writer's: read, it
+  # came back as `text-[#e9e7ff]!`, which beats the `hover:text-white` beside it.
   defp parse_class(token, important?) do
     {variant, rest} = split_variant(candidate(token, important?))
 
-    case bucket_for(variant) do
-      nil -> :authored
-      bucket -> parse_value(bucket, rest)
+    with bucket when not is_nil(bucket) <- bucket_for(variant),
+         {^bucket, prop, value} = style <- parse_value(bucket, rest),
+         class when is_binary(class) <- class_for(bucket, prop, value),
+         ^token <- emphasise(class, important?) do
+      style
+    else
+      _not_ours -> :authored
     end
   end
 
@@ -842,10 +957,20 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   defp parse_arbitrary(bucket, rest) do
     with [util, "[" <> bracketed] <- split_utility(rest),
          prop when not is_nil(prop) <- Map.get(@by_utility, util),
-         true <- String.ends_with?(bracketed, "]") do
-      {bucket, prop, bracketed |> String.trim_trailing("]") |> unescape()}
+         true <- String.ends_with?(bracketed, "]"),
+         value = bracketed |> String.trim_trailing("]") |> unescape(),
+         true <- read_kind?(util, value) do
+      {bucket, prop, value}
     else
       _other -> :authored
+    end
+  end
+
+  # A hinted value is never one this module wrote, and read back it would put `color:` in the box.
+  defp read_kind?(util, value) do
+    case Map.fetch(@read_kinds, util) do
+      {:ok, kinds} -> is_nil(type_hint(value)) and value_kind(value, util) in kinds
+      :error -> true
     end
   end
 
@@ -859,6 +984,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
             |> Enum.sort_by(&(-String.length(&1)))
 
   defp split_variant(token) do
+    case String.contains?(token, ":") do
+      true -> variant_prefix(token)
+      false -> {nil, token}
+    end
+  end
+
+  defp variant_prefix(token) do
     Enum.find_value(@prefixes, {nil, token}, fn prefix ->
       case String.starts_with?(token, prefix <> ":") do
         true ->
@@ -919,16 +1051,19 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
 
   def split_list_expr(_source, _opts), do: :not_a_list
 
+  # The literal elements are read as one class attribute, so `["text-[#fff]", "text-[#000]"]` is two
+  # classes for one control exactly as the same two in a string are. A class read is in no other
+  # element: the same class twice is two classes for one control.
   defp split_parts(parts, opts) do
-    Enum.map_reduce(parts, %{}, fn
-      {:classes, classes}, styles ->
-        {authored, lifted} = from_classes(Enum.join(classes, " "), opts)
-        {{:classes, authored}, merge_buckets(styles, lifted)}
+    literal = for {:classes, classes} <- parts, class <- classes, do: class
+    {authored, styles} = from_classes(Enum.join(literal, " "), opts)
+    read = literal -- authored
 
-      logic, styles ->
-        {logic, styles}
-    end)
+    {Enum.map(parts, &without_read(&1, read)), styles}
   end
+
+  defp without_read({:classes, classes}, read), do: {:classes, classes -- read}
+  defp without_read(logic, _read), do: logic
 
   @doc """
   A `class={[…]}` expression taken apart in order: `{:classes, [class]}` for each literal string
@@ -1019,18 +1154,17 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
     end)
   end
 
-  defp merge_buckets(held, fresh) do
-    Map.merge(held, fresh, fn _bucket, a, b -> Map.merge(a, b) end)
-  end
-
   @doc """
   The class attribute a node should serialize with: the author's classes followed by the compiled
   overrides. Returns `nil` when there is nothing to write, so an override-free node with no class
   keeps having no class attribute.
+
+  Every authored class is kept unless an override in `styles` replaces it — one that would read as
+  an override but has none is the author's, and stays.
   """
   @spec merge_class(String.t() | nil, map(), keyword()) :: String.t() | nil
   def merge_class(authored, styles, opts \\ []) do
-    {kept, _absorbed} = from_classes(authored)
+    kept = String.split(authored || "", ~r/\s+/, trim: true)
     emitted = to_classes(styles, opts)
 
     case Enum.reject(kept, &overridden?(&1, styles)) ++ emitted do
@@ -1038,6 +1172,45 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
       classes -> Enum.join(classes, " ")
     end
   end
+
+  @doc """
+  `classes` with each one that sets `prop` under a variant made important: `hover:text-white`
+  becomes `hover:text-white!` when `prop` is `"color"`.
+
+  A component's override is written important, so it beats the kit's own classes, and it beats the
+  author's variants beside it just the same: a link given a colour stopped changing on hover. With
+  both important, Tailwind's order decides again, and it puts the variant last.
+  """
+  @spec with_important_variants([String.t()], String.t()) :: [String.t()]
+  def with_important_variants(classes, prop) when is_list(classes),
+    do: Enum.map(classes, &important_variant(&1, prop))
+
+  defp important_variant(class, prop) do
+    with false <- String.ends_with?(class, "!"),
+         at when at > 0 <- last_variant_colon(class, 0, 0, 0),
+         utility = binary_part(class, at + 1, byte_size(class) - at - 1),
+         true <- prop in controls_replacing(utility, :base) do
+      class <> "!"
+    else
+      _not_a_variant_of_it -> class
+    end
+  end
+
+  # Where the variants end: the last colon outside brackets, so `max-[560px]:hover:text-white` is
+  # `text-white` and `[font-size:2rem]` has no variant at all. `0` when there is none.
+  defp last_variant_colon(<<>>, _at, _depth, found), do: found
+
+  defp last_variant_colon(<<char, rest::binary>>, at, depth, found) when char in ~c"[(",
+    do: last_variant_colon(rest, at + 1, depth + 1, found)
+
+  defp last_variant_colon(<<char, rest::binary>>, at, depth, found) when char in ~c"])",
+    do: last_variant_colon(rest, at + 1, depth - 1, found)
+
+  defp last_variant_colon(<<?:, rest::binary>>, at, 0, _found),
+    do: last_variant_colon(rest, at + 1, 0, at)
+
+  defp last_variant_colon(<<_char, rest::binary>>, at, depth, found),
+    do: last_variant_colon(rest, at + 1, depth, found)
 
   # AN OVERRIDE MUST REPLACE, NOT JOIN. `from_classes/1` only recognises the shapes this module
   # emits — `bg-[#fff]` and the `@enums` words — so an ordinary hand-written utility like
@@ -1049,56 +1222,272 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   # hover override compiles to `.hover\:bg-\[…\]:hover`, a two-part selector that outranks the tie
   # instead of joining it. The state was never the difference; the collision was.
   defp overridden?(token, styles) when is_map(styles) do
-    {variant, rest} = split_variant(token)
-
-    case bucket_for(variant) do
-      nil -> false
-      bucket -> claimed?(rest, Map.get(styles, bucket))
-    end
+    Enum.any?(replaced_by(token), fn {bucket, prop} ->
+      case Map.get(styles, bucket) do
+        props when is_map(props) -> Map.has_key?(props, prop)
+        _none -> false
+      end
+    end)
   end
 
   defp overridden?(_token, _styles), do: false
 
-  defp claimed?(_rest, nil), do: false
+  # The `{bucket, control}` pairs whose override replaces `token`, with or without its bang.
+  defp replaced_by(token) do
+    {variant, rest} = token |> String.replace_suffix("!", "") |> split_variant()
 
-  defp claimed?(rest, props) when is_map(props) do
-    case utility_of(rest) do
-      nil -> false
-      {util, value} -> Enum.any?(props, &claims?(&1, util, value))
+    case bucket_for(variant) do
+      nil -> []
+      bucket -> rest |> controls_replacing(bucket) |> Enum.map(&{bucket, &1})
     end
   end
 
-  defp claims?({prop, _value}, util, authored_value) do
-    util in Map.get(@supersedes, prop, []) and same_kind?(prop, authored_value)
+  # A class left to the author in a control's own spelling — `flex` beside `grid`, or a
+  # `[font-size:2rem]` beside a `text-[14px]` — is still that control's, and goes when it is set. A
+  # utility's own control is among the ones the utility gives way to, so only a word and a raw
+  # property are read as one.
+  defp controls_replacing(rest, bucket) do
+    word = word_control(rest)
+
+    case utility_of(rest) do
+      nil -> Enum.uniq(word ++ raw_control(bucket, rest))
+      {util, value} -> Enum.uniq(word ++ utility_controls(util, value))
+    end
   end
+
+  defp raw_control(bucket, rest) do
+    case parse_value(bucket, rest) do
+      {_bucket, prop, _value} -> [prop]
+      :authored -> []
+    end
+  end
+
+  # The display utilities the Display control replaces without offering them.
+  @display_utilities ~w(inline inline-block flow-root inline-flex inline-grid contents table
+                        inline-table list-item hidden)
+
+  defp word_control(rest) when rest in @display_utilities, do: ["display"]
+  defp word_control(rest), do: List.wrap(Map.get(@by_enum_value, rest))
 
   # TAILWIND SPELLS SEVERAL PROPERTIES THE SAME WAY. `text-` is colour, size AND alignment;
   # `border-` is colour and width. Dropping every `text-*` because a colour was set would take
-  # `text-lg` and `text-center` with it, so for those the value has to look like the same kind of
-  # thing. Everything else owns its utility outright and any value of it collides.
-  defp same_kind?(prop, value) when prop in ~w(color border-color background),
-    do: colour_like?(value)
-
-  defp same_kind?(_prop, _value), do: true
-
-  # A colour is a hex, an arbitrary value, or one of Tailwind's palette words — `white`, `black`,
-  # `transparent`, `current`, `inherit`, or a `family-shade` pair like `indigo-600`.
-  defp colour_like?("[" <> _rest), do: true
-  defp colour_like?("#" <> _rest), do: true
-
-  defp colour_like?(value) when is_binary(value) do
-    value in ~w(white black transparent current inherit) or
-      Regex.match?(~r/^[a-z]+-\d{2,3}$/, value)
+  # `text-lg` and `text-center` with it, so for those the class has to be the kind of value the
+  # override is (`@kind_controls`). Everything else owns its utility outright and any value collides.
+  defp utility_controls(util, value) when is_map_key(@prefix_kinds, util) do
+    case Map.get(@kind_controls, {util, class_kind(util, value)}) do
+      nil -> []
+      control -> [control]
+    end
   end
 
-  defp colour_like?(_value), do: false
+  defp utility_controls(util, _value), do: Map.get(@superseded_by, util, [])
+
+  # What follows the prefix: `[14px]`, `[#fff]/50`, `indigo-600/50`, `5xl`, or nothing at all.
+  defp class_kind(util, "[" <> rest) do
+    case :binary.matches(rest, "]") do
+      [] ->
+        :other
+
+      closes ->
+        rest |> binary_part(0, closes |> List.last() |> elem(0)) |> unescape() |> value_kind(util)
+    end
+  end
+
+  defp class_kind(util, word) do
+    case word |> String.split("/", parts: 2) |> hd() |> palette_colour?() do
+      true -> :colour
+      false -> word_kind(util)
+    end
+  end
+
+  # A word that is not a colour is the prefix's own scale — `text-5xl`, `border-2`, `bg-cover` — and
+  # no control here replaces it: Tailwind already orders `[font-size:…]` after `text-5xl`, and taking
+  # the class would take its line height with it. Every `shadow-*` word but a colour is a shadow.
+  defp word_kind("shadow"), do: :shadow
+  defp word_kind(_util), do: :other
+
+  # Tailwind's palette words — `white`, `black`, `transparent`, `current`, `inherit`, or a
+  # `family-shade` pair like `indigo-600`.
+  defp palette_colour?(word) do
+    word in ~w(white black transparent current inherit) or
+      Regex.match?(~r/^[a-z]+-\d{2,3}$/, word)
+  end
+
+  # The kind of an arbitrary value under `util`, decided the way Tailwind decides it.
+  defp value_kind(value, util) do
+    {fallback, kinds} = Map.fetch!(@prefix_kinds, util)
+
+    case type_hint(value) do
+      nil -> inferred_kind(value, kinds, fallback)
+      hint -> Enum.find_value(kinds, fallback, fn {kind, types} -> hint in types and kind end)
+    end
+  end
+
+  # `length` in `length:var(--x)`: lower-case letters and dashes, then a colon.
+  defp type_hint(value), do: type_hint(value, 0)
+
+  defp type_hint(value, at) when at > 0 and binary_part(value, at, 1) == ":",
+    do: binary_part(value, 0, at)
+
+  defp type_hint(value, at) when byte_size(value) > at do
+    case :binary.at(value, at) do
+      char when char in ?a..?z or char == ?- -> type_hint(value, at + 1)
+      _other -> nil
+    end
+  end
+
+  defp type_hint(_value, _at), do: nil
+
+  defp inferred_kind("var(" <> _rest, _kinds, fallback), do: fallback
+
+  defp inferred_kind(value, kinds, fallback) do
+    Enum.find_value(kinds, fallback, fn {kind, types} ->
+      Enum.any?(types, &type?(&1, value)) and kind
+    end)
+  end
+
+  defp type?("color", value), do: colour?(value)
+  defp type?("length", value), do: length?(value)
+  defp type?("percentage", value), do: percentage?(value)
+  defp type?("number", value), do: number?(value)
+  defp type?("url", value), do: url?(value)
+  defp type?("image", value), do: image?(value)
+  defp type?("position", value), do: position?(value)
+  defp type?("bg-size", value), do: bg_size?(value)
+
+  defp type?("absolute-size", value),
+    do: value in ~w(xx-small x-small small medium large x-large xx-large xxx-large)
+
+  defp type?("relative-size", value), do: value in ~w(larger smaller)
+
+  defp type?("line-width", value) do
+    value
+    |> segments(" ")
+    |> Enum.all?(&(length?(&1) or number?(&1) or &1 in ~w(thin medium thick)))
+  end
+
+  defp type?(_hint_only, _value), do: false
+
+  @named_colours ~w(
+    black silver gray white maroon red purple fuchsia green lime olive yellow navy blue teal
+    aqua aliceblue antiquewhite aquamarine azure beige bisque blanchedalmond blueviolet brown
+    burlywood cadetblue chartreuse chocolate coral cornflowerblue cornsilk crimson cyan darkblue
+    darkcyan darkgoldenrod darkgray darkgreen darkgrey darkkhaki darkmagenta darkolivegreen
+    darkorange darkorchid darkred darksalmon darkseagreen darkslateblue darkslategray
+    darkslategrey darkturquoise darkviolet deeppink deepskyblue dimgray dimgrey dodgerblue
+    firebrick floralwhite forestgreen gainsboro ghostwhite gold goldenrod greenyellow grey
+    honeydew hotpink indianred indigo ivory khaki lavender lavenderblush lawngreen lemonchiffon
+    lightblue lightcoral lightcyan lightgoldenrodyellow lightgray lightgreen lightgrey lightpink
+    lightsalmon lightseagreen lightskyblue lightslategray lightslategrey lightsteelblue
+    lightyellow limegreen linen magenta mediumaquamarine mediumblue mediumorchid mediumpurple
+    mediumseagreen mediumslateblue mediumspringgreen mediumturquoise mediumvioletred
+    midnightblue mintcream mistyrose moccasin navajowhite oldlace olivedrab orange orangered
+    orchid palegoldenrod palegreen paleturquoise palevioletred papayawhip peachpuff peru pink
+    plum powderblue rebeccapurple rosybrown royalblue saddlebrown salmon sandybrown seagreen
+    seashell sienna skyblue slateblue slategray slategrey snow springgreen steelblue tan thistle
+    tomato turquoise violet wheat whitesmoke yellowgreen transparent currentcolor canvas
+    canvastext linktext visitedtext activetext buttonface buttontext buttonborder field
+    fieldtext highlight highlighttext selecteditem selecteditemtext mark marktext graytext
+    accentcolor accentcolortext
+  )
+
+  @colour_functions ~w(rgb( rgba( hsl( hsla( hwb( color( lab( lch( oklab( oklch( light-dark(
+                       color-mix( --alpha()
+
+  defp colour?("#" <> _hex), do: true
+
+  defp colour?(value) do
+    value = String.downcase(value)
+    String.starts_with?(value, @colour_functions) or value in @named_colours
+  end
+
+  @length_units ~w(cm mm q in pc pt px em ex ch rem lh rlh vw vh vmin vmax vb vi svw svh lvw lvh
+                   dvw dvh cqw cqh cqi cqb cqmin cqmax)
+
+  defp length?(value) do
+    case Regex.run(~r/^[+-]?\d*\.?\d+(?:e[+-]?\d+)?([a-z]+)$/i, value) do
+      [_length, unit] -> String.downcase(unit) in @length_units
+      nil -> String.starts_with?(value, "--spacing(") or math?(value)
+    end
+  end
+
+  defp number?(value),
+    do: Regex.match?(~r/^[+-]?\d*\.?\d+(?:e[+-]?\d+)?$/i, value) or math?(value)
+
+  defp percentage?(value),
+    do: Regex.match?(~r/^[+-]?\d*\.?\d+(?:e[+-]?\d+)?%$/i, value) or math?(value)
+
+  @math_functions ~w(calc min max clamp mod rem sin cos tan asin acos atan atan2 pow sqrt hypot log
+                     exp round)
+
+  defp math?(value), do: Enum.any?(@math_functions, &String.contains?(value, &1 <> "("))
+
+  defp url?(value), do: String.starts_with?(value, "url(") and String.ends_with?(value, ")")
+
+  @image_functions ~w(linear-gradient( radial-gradient( conic-gradient( repeating-linear-gradient(
+                      repeating-radial-gradient( repeating-conic-gradient( element( image(
+                      cross-fade( image-set()
+
+  defp image?(value) do
+    case value |> segments(",") |> Enum.reject(&String.starts_with?(&1, "var(")) do
+      [] -> false
+      images -> Enum.all?(images, &(url?(&1) or String.starts_with?(&1, @image_functions)))
+    end
+  end
+
+  defp position?(value) do
+    case value |> segments(" ") |> Enum.reject(&String.starts_with?(&1, "var(")) do
+      [] -> false
+      parts -> Enum.all?(parts, &(&1 in ~w(center top right bottom left) or length_ish?(&1)))
+    end
+  end
+
+  defp bg_size?(value) do
+    sizes = Enum.map(segments(value, ","), &segments(&1, " "))
+
+    Enum.all?(sizes, &(length(&1) in 1..2)) and
+      Enum.any?(sizes, fn
+        [keyword] when keyword in ~w(cover contain) -> true
+        parts -> Enum.all?(parts, &(&1 == "auto" or length_ish?(&1)))
+      end)
+  end
+
+  defp length_ish?(value), do: length?(value) or percentage?(value)
+
+  # `value` split on `separator` where no bracket is open, the way Tailwind splits a value into its
+  # parts: `rgb(0 0 0) url(a)` is two parts, not four.
+  defp segments(value, separator) do
+    case String.contains?(value, separator) do
+      true -> split_outside_groups(value, separator)
+      false -> [value]
+    end
+  end
+
+  defp split_outside_groups(value, separator) do
+    {parts, current, _depth} =
+      value
+      |> String.graphemes()
+      |> Enum.reduce({[], "", 0}, fn
+        "(", {parts, current, depth} -> {parts, current <> "(", depth + 1}
+        ")", {parts, current, depth} -> {parts, current <> ")", depth - 1}
+        ^separator, {parts, current, 0} -> {[current | parts], "", 0}
+        char, {parts, current, depth} -> {parts, current <> char, depth}
+      end)
+
+    Enum.reverse([current | parts])
+  end
 
   # The utility a token starts with and the value it carries — `bg-indigo-600` is `{"bg",
-  # "indigo-600"}`. Longest match first, so `min-h-screen` is `min-h` rather than `min`.
+  # "indigo-600"}`. Longest match first, so `min-h-screen` is `min-h` rather than `min`. Only the
+  # utilities that start with the token's first word can match it.
+  @utilities_by_word @utilities
+                     |> Map.values()
+                     |> Enum.sort_by(&(-String.length(&1)))
+                     |> Enum.group_by(&(&1 |> String.split("-", parts: 2) |> hd()))
+
   defp utility_of(rest) do
-    @utilities
-    |> Map.values()
-    |> Enum.sort_by(&(-String.length(&1)))
+    @utilities_by_word
+    |> Map.get(first_word(rest), [])
     |> Enum.find_value(fn util ->
       case rest do
         ^util -> {util, ""}
@@ -1109,4 +1498,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
 
   defp drop_prefix(rest, util),
     do: binary_part(rest, byte_size(util) + 1, byte_size(rest) - byte_size(util) - 1)
+
+  defp first_word(rest), do: rest |> String.split("-", parts: 2) |> hd()
 end

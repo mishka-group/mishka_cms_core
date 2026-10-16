@@ -81,6 +81,34 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.VisibilityTest do
       assert stripped =~ "Always"
     end
 
+    # Stripping parses the template and writes it out again, so every class on an element it keeps
+    # has to come back as it was written — a font size beside a colour, both spelt `text-[…]`, used
+    # to come back as the colour alone.
+    test "keeps every class on the elements it leaves, whatever prefix two of them share" do
+      for class <- [
+            "text-[14px] text-[#9a96c4] leading-6",
+            "text-[clamp(1rem,2vw,2rem)] text-[var(--ink)]",
+            "border-[2px] border-[#ccc]",
+            "bg-[url(/hero.jpg)] bg-cover bg-center bg-[#111]",
+            "bg-[length:200px_100px] bg-[center_top] bg-[#fff]",
+            "shadow-[0_0_4px_#000] shadow-[#f00]",
+            "bg-white bg-[#000]",
+            "text-[#fff] text-[#000]",
+            "p-[20px] px-8",
+            "text-[14px] [font-size:2rem]",
+            "p-[8] grid-cols-[3]"
+          ] do
+        stripped =
+          Visibility.strip(~s(<div><p class="#{class}">Hi</p><p data-pb-hidden>Gone</p></div>))
+
+        refute stripped =~ "Gone"
+        assert [_match, kept] = Regex.run(~r/<p class="([^"]*)">Hi/, stripped)
+
+        assert Enum.sort(String.split(kept)) == Enum.sort(String.split(class)),
+               "#{class} came back as #{kept}"
+      end
+    end
+
     test "is the stored template itself when nothing is hidden, unparsed" do
       template = "<p>{@unclosed"
       assert Visibility.strip(template) == template
