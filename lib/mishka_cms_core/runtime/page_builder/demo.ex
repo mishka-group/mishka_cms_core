@@ -20,6 +20,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Demo do
   entry is marked `demo?: true` so nothing downstream can mistake it for a record. Delete this module
   and its remaining call sites in `Panels` when the real things arrive.
 
+  While any of it is shown, the Assistant and Audit tabs say so in a roadmap notice, and each sample
+  finding carries a Sample badge and a disabled Fix.
+
       config :mishka_cms_core, builder_demo_data: false
 
   See `MishkaCmsCoreWeb.Live.Admin.Builder.Panels` (`assistant/1`).
@@ -45,7 +48,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Demo do
       scope: "<header>",
       plain: nil,
       ops: [],
-      author: "Sara Hadid"
+      author: "Shahryar Tavakkoli"
     },
     %{
       role: :assistant,
@@ -62,7 +65,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Demo do
       scope: nil,
       plain: nil,
       ops: [],
-      author: "Sara Hadid"
+      author: "Shahryar Tavakkoli"
     },
     %{
       role: :assistant,

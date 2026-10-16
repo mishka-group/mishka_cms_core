@@ -22,7 +22,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  import MishkaCmsCore.CoreComponents, only: [select_chevron: 1]
+  import MishkaCmsCore.CoreComponents, only: [roadmap_notice: 1, select_chevron: 1]
 
   alias MishkaCmsCore.Builder.Collection
   alias MishkaCmsCore.Builder.Events
@@ -9704,8 +9704,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   end
 
   defp assistant(assigns) do
+    assigns = assign(assigns, :ai_sample?, sample?(ai_thread(assigns.ai_messages)))
+
     ~H"""
     <div class="flex min-h-0 flex-1 flex-col">
+      <div
+        :if={@ai_sample? or not AiBackend.connected?()}
+        class="flex-none px-3.5 pt-3.5"
+      >
+        <.roadmap_notice id="pb-ai-roadmap" title={gettext("The AI Assistant is not available yet")}>
+          {ai_roadmap_text(@ai_sample?)}
+        </.roadmap_notice>
+      </div>
+
       <%!-- Who you are talking to, what it has already done, and how it is connected — the three
             things worth knowing before typing. --%>
       <div data-role="pb-aichrome" class="flex-none border-b border-[#f0efea] px-3.5 pb-2.5 pt-3.5">
@@ -9840,7 +9851,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               </span>
             </div>
 
-            <div class="text-[12px] font-medium leading-[1.55] text-[#3a382f]">{message.text}</div>
+            <div dir="auto" class="text-[12px] font-medium leading-[1.55] text-[#3a382f]">
+              {message.text}
+            </div>
 
             <div
               :if={message[:revision]}
@@ -10033,6 +10046,52 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp ai_thread([]), do: Demo.messages()
   defp ai_thread(messages) when is_list(messages), do: messages
 
+  # `Demo` marks every sample entry `demo?: true`; a message or a finding with a key of its own, or
+  # none, is a real one.
+  defp sample?(%{} = entry), do: Map.get(entry, :demo?) == true
+  defp sample?(entries) when is_list(entries), do: Enum.any?(entries, &sample?/1)
+  defp sample?(_other), do: false
+
+  defp ai_roadmap_text(true),
+    do:
+      gettext(
+        "This part of the editor is on our roadmap. The conversation below is a sample of how it will work."
+      )
+
+  defp ai_roadmap_text(false), do: gettext("This part of the editor is on our roadmap.")
+
+  defp audit_roadmap_title(true), do: gettext("Some checks are not available yet")
+
+  defp audit_roadmap_title(false),
+    do: gettext("Some checks and automatic fixes are not available yet")
+
+  defp audit_roadmap_text(connected?, sample?) do
+    [
+      {not connected?,
+       gettext("Fix hands a finding to the AI Assistant, which is on our roadmap.")},
+      {sample?,
+       gettext("Findings marked Sample show how they will look; they are on our roadmap.")}
+    ]
+    |> Enum.filter(&elem(&1, 0))
+    |> Enum.map_join(" ", &elem(&1, 1))
+  end
+
+  # A Forms finding is mended by `FormChecks`; Fix on any other is handed to the assistant.
+  defp assistant_fix?(%{rule: rule}), do: not FormChecks.rule?(rule)
+
+  defp fix_off?(finding, connected?),
+    do: sample?(finding) or (assistant_fix?(finding) and not connected?)
+
+  defp fix_title(finding, connected?) do
+    case fix_off?(finding, connected?) and not sample?(finding) do
+      true -> gettext("Needs the AI Assistant, which is on our roadmap")
+      false -> nil
+    end
+  end
+
+  defp sample_badge_id(%{rule: rule, node_id: nil}), do: "pb-audit-sample-#{rule}"
+  defp sample_badge_id(%{rule: rule, node_id: node_id}), do: "pb-audit-sample-#{rule}-#{node_id}"
+
   # The prototype's starter phrasings, as things this editor can actually be asked for.
   defp ai_chips do
     [
@@ -10064,9 +10123,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
       assigns
       |> assign(:findings, audit_findings(assigns.tree, assigns.record, assigns.editor))
       |> then(&assign(&1, :groups, audit_groups(&1.findings)))
+      |> then(&assign(&1, :audit_sample?, sample?(&1.findings)))
+      |> assign(:ai_connected?, AiBackend.connected?())
 
     ~H"""
     <div class="flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto p-3.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <.roadmap_notice
+        :if={@audit_sample? or not @ai_connected?}
+        id="pb-audit-roadmap"
+        title={audit_roadmap_title(@ai_connected?)}
+        class="flex-none"
+      >
+        {audit_roadmap_text(@ai_connected?, @audit_sample?)}
+      </.roadmap_notice>
+
       <%!-- The score is a ring, not a number in a box: the sweep is the reading, and the line under
             it says what kind of problem it is. --%>
       <div class="flex items-center gap-3 rounded-[13px] border border-[#f0efea] bg-[#faf9f6] p-[13px]">
@@ -10130,21 +10200,31 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               <.icon name={severity_icon(finding.severity)} size={11} />
             </span>
             <div class="min-w-0 flex-1">
-              <button
-                :if={finding.node_id}
-                type="button"
-                phx-click="select"
-                phx-value-id={finding.node_id}
-                class="block text-left text-[11.5px] font-semibold text-[#1b1a18] hover:text-[#4f4bcc]"
-              >
-                {finding.message}
-              </button>
-              <span
-                :if={!finding.node_id}
-                class="block text-[11.5px] font-semibold text-[#1b1a18]"
-              >
-                {finding.message}
-              </span>
+              <div class="flex min-w-0 flex-wrap items-center gap-1.5">
+                <button
+                  :if={finding.node_id}
+                  type="button"
+                  phx-click="select"
+                  phx-value-id={finding.node_id}
+                  class="block text-left text-[11.5px] font-semibold text-[#1b1a18] hover:text-[#4f4bcc]"
+                >
+                  {finding.message}
+                </button>
+                <span
+                  :if={!finding.node_id}
+                  class="block text-[11.5px] font-semibold text-[#1b1a18]"
+                >
+                  {finding.message}
+                </span>
+                <span
+                  :if={sample?(finding)}
+                  id={sample_badge_id(finding)}
+                  data-role="pb-sample-badge"
+                  class="flex-none rounded-[5px] bg-[#f4f3ef] px-1.5 py-0.5 font-['Space_Grotesk'] text-[9px] font-bold text-[#6d6a63]"
+                >
+                  {gettext("Sample")}
+                </span>
+              </div>
               <div class="mt-0.5 text-[10.5px] font-medium leading-[1.45] text-[#6d6a63]">
                 {finding.detail}
               </div>
@@ -10154,10 +10234,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               type="button"
               id={fix_id(finding)}
               data-rule={finding.rule}
-              phx-click="audit_fix"
+              phx-click={!fix_off?(finding, @ai_connected?) && "audit_fix"}
               phx-value-rule={finding.rule}
               phx-value-id={finding.node_id}
-              class="h-[22px] flex-none rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+              disabled={fix_off?(finding, @ai_connected?)}
+              title={fix_title(finding, @ai_connected?)}
+              class="h-[22px] flex-none rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white"
             >
               {gettext("Fix")}
             </button>
@@ -10170,11 +10252,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
                 id={(at == 0 && fix_id(finding)) || "#{fix_id(finding)}-#{fix.fix}"}
                 data-rule={(at == 0 && finding.rule) || nil}
                 data-fix={fix.fix}
-                phx-click="audit_fix"
+                phx-click={!fix_off?(finding, @ai_connected?) && "audit_fix"}
                 phx-value-rule={finding.rule}
                 phx-value-id={finding.node_id}
                 phx-value-fix={fix.fix}
-                class="h-[22px] rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc]"
+                disabled={fix_off?(finding, @ai_connected?)}
+                title={fix_title(finding, @ai_connected?)}
+                class="h-[22px] rounded-[6px] border border-[#ecebe6] bg-white px-2 text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#f2f1fc] disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:bg-white"
               >
                 {fix.label}
               </button>

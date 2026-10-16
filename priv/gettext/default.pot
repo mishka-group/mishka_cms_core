@@ -4161,6 +4161,11 @@ msgstr ""
 msgid "Find in the page's text…"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10073
+#, elixir-autogen, elixir-format
+msgid "Findings marked Sample show how they will look; they are on our roadmap."
+msgstr ""
+
 #: lib/mishka_cms_core/install/bootstrap.ex:135
 #, elixir-autogen, elixir-format
 msgid "Finishing up"
@@ -4174,6 +4179,11 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10159
 #, elixir-autogen, elixir-format
 msgid "Fix"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10071
+#, elixir-autogen, elixir-format
+msgid "Fix hands a finding to the AI Assistant, which is on our roadmap."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:5436
@@ -6020,6 +6030,11 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/site_health_panel.ex:116
 #, elixir-autogen, elixir-format
 msgid "Needs attention"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10087
+#, elixir-autogen, elixir-format
+msgid "Needs the AI Assistant, which is on our roadmap"
 msgstr ""
 
 #: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:70
@@ -8025,6 +8040,11 @@ msgstr ""
 msgid "Same tab"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10225
+#, elixir-autogen, elixir-format
+msgid "Sample"
+msgstr ""
+
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:13368
 #, elixir-autogen, elixir-format
 msgid "Sample catalogue."
@@ -8853,6 +8873,16 @@ msgstr ""
 msgid "Solid"
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10066
+#, elixir-autogen, elixir-format
+msgid "Some checks and automatic fixes are not available yet"
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10063
+#, elixir-autogen, elixir-format
+msgid "Some checks are not available yet"
+msgstr ""
+
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:502
 #, elixir-autogen, elixir-format
 msgid "Some settings could not be saved."
@@ -9565,6 +9595,11 @@ msgstr ""
 msgid "The %{noun} could not be updated. The logs say why."
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:9715
+#, elixir-autogen, elixir-format
+msgid "The AI Assistant is not available yet"
+msgstr ""
+
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:11462
 #, elixir-autogen, elixir-format
 msgid "The canvas always draws it, so it stays editable. The published page is where the condition decides."
@@ -10056,6 +10091,16 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:117
 #, elixir-autogen, elixir-format
 msgid "This page's address takes its language from the site's list, so it will not answer %{language} until you add it under Settings, General, Languages."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10061
+#, elixir-autogen, elixir-format
+msgid "This part of the editor is on our roadmap."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/builder/panels.ex:10057
+#, elixir-autogen, elixir-format
+msgid "This part of the editor is on our roadmap. The conversation below is a sample of how it will work."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1452

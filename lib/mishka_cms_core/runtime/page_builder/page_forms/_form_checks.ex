@@ -173,6 +173,17 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks do
 
   def repair(session, rule, node_id, _fix), do: repair(session, rule, node_id)
 
+  @doc """
+  Whether `rule` names one of this module's findings.
+
+  Fix on such a finding is answered by `repair/3`; Fix on any other is handed to the assistant.
+  """
+  @spec rule?(term()) :: boolean()
+  def rule?("form-" <> _rest), do: true
+  def rule?("field-" <> _rest), do: true
+  def rule?("submit-no-form"), do: true
+  def rule?(_other), do: false
+
   defp mend(_rule, _session, nil), do: :none
 
   defp mend("field-no-form", session, node), do: rewrap(session, node)

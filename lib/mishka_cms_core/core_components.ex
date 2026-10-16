@@ -737,6 +737,7 @@ defmodule MishkaCmsCore.CoreComponents do
   """
   attr :id, :string, default: nil
   attr :class, :any, default: nil
+  attr :rest, :global, doc: "the arbitrary HTML attributes to add to the tip's box"
   slot :inner_block, required: true
 
   def tip(assigns) do
@@ -747,6 +748,7 @@ defmodule MishkaCmsCore.CoreComponents do
         "flex items-start gap-2.5 rounded-[11px] border border-[#f0e3c9] bg-[#fdf8ef] px-3 py-2.5",
         @class
       ]}
+      {@rest}
     >
       <svg
         width="14"
@@ -766,6 +768,33 @@ defmodule MishkaCmsCore.CoreComponents do
         {render_slot(@inner_block)}
       </span>
     </div>
+    """
+  end
+
+  @doc """
+  A roadmap notice: the `tip/1` box with a bold title over a line of text, for a part of the admin
+  that is not built yet or that shows sample content in its place.
+
+  `title` names what is not available. The inner block says that it is on the roadmap, and what the
+  sample content is, in the caller's own gettext.
+
+  ## Examples
+
+      <.roadmap_notice id="pb-ai-roadmap" title={gettext("The AI Assistant is not available yet")}>
+        {gettext("This part of the editor is on our roadmap.")}
+      </.roadmap_notice>
+  """
+  attr :id, :string, default: nil
+  attr :class, :any, default: nil
+  attr :title, :string, required: true
+  slot :inner_block, required: true
+
+  def roadmap_notice(assigns) do
+    ~H"""
+    <.tip id={@id} class={@class} role="note" data-role="roadmap-notice">
+      <span dir="auto" class="block text-[11px] font-bold">{@title}</span>
+      <span dir="auto" class="mt-0.5 block">{render_slot(@inner_block)}</span>
+    </.tip>
     """
   end
 
