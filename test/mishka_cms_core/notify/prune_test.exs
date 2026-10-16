@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Notify.PruneTest do
   @moduledoc """
   Phase 3 — retention. The nightly sweep keeps the table small no matter how many notifications are

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Api.Json.AccountAreasTest do
   @moduledoc """
   The Users and Permissions areas over the admin JSON:API: a bearer token opens them with

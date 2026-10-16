@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug do
   @moduledoc """
   Closes a site's API while the site is offline, to everyone but its own API admins and the masters

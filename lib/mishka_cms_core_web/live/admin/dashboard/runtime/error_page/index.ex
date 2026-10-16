@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
   @moduledoc """
   The admin's error-page list. Creating, viewing and editing all happen in the one inspector modal

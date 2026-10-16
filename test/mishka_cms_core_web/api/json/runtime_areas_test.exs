@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Api.Json.RuntimeAreasTest do
   @moduledoc """
   The site and media areas over the admin JSON:API: a bearer token reads sites with

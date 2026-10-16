@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals do
   @moduledoc """
   Scopes a read to one site plus the shared rows, deciding whose site from WHO IS ASKING.

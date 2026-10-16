@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
   @moduledoc """
   The admin sidebar follows its settings without a reload. Pages already open, on one site or two,

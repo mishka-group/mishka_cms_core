@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.RedirectStateChanged do
   @moduledoc """
   Test plugin for `runtime:state:redirect:changed`: reports each rule the redirects cache keeps or

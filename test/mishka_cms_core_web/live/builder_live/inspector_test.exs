@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
   @moduledoc """
   The inspector panels, attributes that hold expressions, and layouts, components and error pages.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Activity.Sources.EventLogTest do
   @moduledoc """
   The EventLog source maps AshEvents central-log rows to the unified entry shape

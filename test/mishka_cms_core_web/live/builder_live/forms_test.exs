@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Test.BuilderLive.FormsTest do
   @moduledoc """
   A page's forms: the Form and Validation sections, their handlers, joining fields and the Form panel.

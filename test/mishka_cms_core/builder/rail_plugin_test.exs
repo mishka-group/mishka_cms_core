@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Builder.RailPluginTest do
   @moduledoc """
   An extension adding a rail to the editor, end to end — the thing the `builder:rails` registry

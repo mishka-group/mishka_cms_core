@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.CaptchaTest do
   @moduledoc """
   `MishkaCmsCore.Captcha` and its two providers, Cloudflare Turnstile and Google reCAPTCHA: which

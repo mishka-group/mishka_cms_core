@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.UiKit.Contract do
   @moduledoc """
   What a component in a `mishka.ui_kit.bundle.v3` file has to look like before this CMS will install

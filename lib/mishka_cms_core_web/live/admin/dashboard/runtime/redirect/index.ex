@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Redirect.Index do
   @moduledoc """
   The admin's list of a site's redirect rules — a Gervaz table and a Gervaz form, nothing drawn by

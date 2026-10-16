@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.User.Notices.SecondFactorTurnedOff do
   @moduledoc """
   A mishka_installer plugin on `"auth:second_factor:disabled"`: emails the account that its two-step

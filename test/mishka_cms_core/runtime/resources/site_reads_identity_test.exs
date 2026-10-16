@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Resources.SiteReadsIdentityTest do
   @moduledoc """
   Whose rows a read of a runtime resource shows — decided by the actor when the read runs, whichever

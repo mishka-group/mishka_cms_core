@@ -1,0 +1,31 @@
+version = 1
+
+# Files that cannot carry a comment header (data, docs, lock files, images, fonts, the
+# CI workflow and the repository's own dotfiles) are covered here instead. Source files
+# carry their own SPDX header.
+[[annotations]]
+path = [
+  "**/*.md",
+  "**/*.json",
+  "**/*.po",
+  "**/*.pot",
+  "**/*.lock",
+  "**/*.png",
+  "**/*.jpg",
+  "**/*.jpeg",
+  "**/*.gif",
+  "**/*.svg",
+  "**/*.ico",
+  "**/*.webp",
+  "priv/**",
+  "assets/vendor/**",
+  "test/fixtures/**",
+  ".github/**",
+  ".gitignore",
+  ".tool-versions",
+  "LICENSE",
+  "LICENSES/**",
+  "REUSE.toml",
+]
+SPDX-FileCopyrightText = "2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>"
+SPDX-License-Identifier = "Apache-2.0"

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.AccessPermissionsTest do
   @moduledoc """
   The matcher every gate asks: which held names cover a required one, the `{:under, prefix}` entry

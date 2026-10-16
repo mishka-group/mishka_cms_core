@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.Marketplace.Mock do
   @moduledoc """
   The default `MishkaCmsCore.Runtime.PageBuilder.Marketplace` adapter: the design prototype's exact

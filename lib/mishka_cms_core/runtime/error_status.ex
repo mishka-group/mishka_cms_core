@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.ErrorStatus do
   @moduledoc """
   What one entry of a site's Error Page answers for: an HTTP status code (`404`, `500`, …) or

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.States.TranslationsState do
   @moduledoc """
   ETS copy of `MishkaCmsCore.Runtime.Translation`, so `t/1` is answered without a query.

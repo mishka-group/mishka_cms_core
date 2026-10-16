@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule Mix.MishkaCmsCore.GettextTemplates do
   @moduledoc """
   Writes messages marked outside the core into the core's `.pot` files, for
