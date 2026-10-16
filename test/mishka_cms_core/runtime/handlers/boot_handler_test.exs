@@ -18,17 +18,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandlerTest do
                "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker"
     end
 
-    test "a warm job waits on the :maintenance queue, with the same unique, debounced rules" do
-      job = BootHandler.asset_job("site_a", "site-a-id", "warm")
-      args = Ecto.Changeset.get_change(job, :args)
-
-      assert Ecto.Changeset.get_change(job, :queue) == "maintenance"
-      assert args.data.type == "warm"
-      assert args.boot_id == BootHandler.boot_id()
-      assert Ecto.Changeset.get_change(job, :unique).states == [:available, :scheduled]
-      assert Ecto.Changeset.get_change(job, :replace) == [scheduled: [:scheduled_at]]
-    end
-
     test "carries the site name and asset type in args" do
       args =
         "site_a" |> BootHandler.asset_job("site-a-id", "css") |> Ecto.Changeset.get_change(:args)

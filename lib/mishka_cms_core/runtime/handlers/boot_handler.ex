@@ -33,10 +33,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   6. **Page Compilation**: Compiles individual content pages
   7. **Asset Jobs**: Schedules CSS and JavaScript compilation jobs
 
-  Once they are done, every open site's sitemap is built on this node (`build_sitemaps/0`), and
-  every open site's warm job is queued for this node: it builds the modules of the components the
-  site reaches that are not precompiled, so no visitor's first request compiles them
-  (`warm_components/2`).
+  Once they are done, every open site's sitemap is built on this node (`build_sitemaps/0`).
 
   ## Architecture Integration
 
@@ -89,12 +86,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   require Logger
 
   alias MishkaCmsCore.Runtime.States.SiteState
-  alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.Helpers
   alias MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState
-  alias MishkaCmsCore.Runtime.Compilers.CssClosure
-  alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
@@ -312,10 +306,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
     _ = TailwindCompiler.compile_and_store_shared_base()
     _ = create_assets_compilation_jobs()
-
-    # AFTER the passes that write every template file and fill `SiteState`, which is what the warm
-    # walk reads. On its own queue, so it starts beside the bundle build rather than behind it.
-    _ = create_assets_compilation_jobs("warm")
 
     # AFTER `load_sites`, the only pass that fills `SiteState`, and here rather than in a job so
     # every node fills its own cache.
@@ -675,10 +665,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   # `CssClosure` walks and what Tailwind scans, so it is written for every active
   # component whether or not a module is ever built — otherwise a component
   # reached only at render time would come up unstyled. The module is what a
-  # render calls, and a non-precompiled one is built by the site's warm job when
-  # the site reaches it (`warm_components/2`), or else by
-  # `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` on the first render that
-  # needs it.
+  # render calls, and a non-precompiled one is built by the first render that
+  # needs it — the page or layout drawing it builds what it reaches before it draws
+  # (`MishkaCmsCore.Runtime.ComponentPrefetch`), and
+  # `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` builds anything else.
   def compile_components(site_id \\ nil) do
     try do
       query =
@@ -768,8 +758,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     end
   end
 
-  # Lazy, and an unset flag reads as lazy: the component contributes its template and nothing more
-  # here, and the site's warm job builds the module once a site reaches it.
+  # Lazy, and an unset flag reads as lazy: the component contributes its template and nothing more,
+  # and the first render that names it builds the module.
   defp boot_compile_component(_component, _lazy), do: nil
 
   defp compile_layouts(site_id \\ nil) do
@@ -1102,7 +1092,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     * `"css"` - CSS-only compilation
     * `"js"` - JavaScript-only compilation
     * `"sitemap"` - the site's sitemap (`MishkaCmsCore.Runtime.Compilers.SitemapCompiler`)
-    * `"warm"` - the modules of the components the site reaches (`warm_components/2`)
 
   ## Return Values
 
@@ -1171,7 +1160,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
         end)
         |> Stream.run()
 
-        Logger.info("[BootHandler] Compilation jobs created for active sites (#{type})")
+        Logger.info("[BootHandler] Compilation jobs created for active sites")
         :ok
       end
     rescue
@@ -1223,197 +1212,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     end
   end
 
-  @warm_event "runtime:compile:warm_components"
-  @warmed_event "runtime:compile:after_warm_components"
-
-  @doc """
-  Builds, on THIS node, the module of every component the site `site_name` reaches that nothing has
-  built yet — so the first visitor after a boot or a change does not wait for it.
-
-  What a site reaches is what its stylesheet is built from: its pages and error pages, the layouts
-  those pages use, the components they name transitively, and the components its stored content
-  names (`MishkaCmsCore.Runtime.Compilers.CssClosure.reached_components/2`). A component nothing
-  reaches is not built. One named in a way the walk cannot resolve is built by the first render that
-  names it, as every component was before (`MishkaCmsCore.Runtime.LiveViewHelpers.component/1`).
-
-  A module already loaded and one whose last compile failed are passed over. The rest are read in
-  one query and compiled `:max_concurrency` at a time, through the registry and the
-  `MishkaCmsCore.Runtime.Handlers.CompileGate` every compile goes through: a visitor asking for one
-  of them meanwhile waits for that compile rather than starting another.
-
-  Run by the site's `"warm"` job (`asset_job/4`), which the boot queues for every open site and the
-  site's stylesheet build queues after it is built.
-
-  ## Options
-
-    * `:runtime_dir` — the template tree to walk. Defaults to
-      `MishkaCmsCore.Runtime.Compilers.CssClosure.default_runtime_dir/0`.
-    * `:max_concurrency` — how many compile at once. Defaults to
-      `config :mishka_cms_core, :component_warm_concurrency`, or half the node's schedulers and at
-      least one.
-
-  ## Events
-
-    * `runtime:compile:warm_components` — before anything is built, with
-      `%{site: site_name, site_id: site_id, components: [%{name: name, site: site}]}`, `site` the
-      site's name for a component of its own and `"Global"` for a global one — what a
-      `<.component site="…">` tag names. A plugin answers the map with other `components` to build
-      more or fewer; only the site's own and global ones are built.
-    * `runtime:compile:after_warm_components` — once they are built, with
-      `%{site: site_name, site_id: site_id, warmed: [component], failed: [failure],
-      complete?: complete?}`, each failure `%{name: name, site: site, reason: reason}`.
-      `complete?` is `false` when a reference the walk could not resolve may name more.
-
-  ## Return Values
-
-    * `{:ok, %{warmed: [component], failed: [failure], complete?: boolean()}}`
-    * `{:error, :no_site}` — `SiteState` knows no site of that name
-  """
-  @spec warm_components(String.t(), keyword()) :: {:ok, map()} | {:error, :no_site}
-  def warm_components(site_name, opts \\ []) do
-    case SiteState.get_by_name(site_name) do
-      {:ok, site} -> {:ok, warm_site(site, opts)}
-      {:error, :not_found} -> {:error, :no_site}
-    end
-  end
-
-  defp warm_site(site, opts) do
-    started = System.monotonic_time(:millisecond)
-    runtime = Keyword.get_lazy(opts, :runtime_dir, &CssClosure.default_runtime_dir/0)
-
-    reached =
-      CssClosure.reached_components(site.name,
-        runtime_dir: runtime,
-        roots: TailwindCompiler.closure_roots(site.name, runtime_dir: runtime),
-        content_components: TailwindCompiler.content_components(site.name)
-      )
-
-    asked = %{site: site.name, site_id: site.id, components: reached.components}
-
-    answered =
-      case MishkaInstaller.Event.Hook.call(@warm_event, asked, meta: %{site: site.name}) do
-        %{components: components} when is_list(components) -> components
-        _unchanged -> asked.components
-      end
-
-    cold =
-      answered
-      |> Enum.filter(&warmable?(&1, site.name))
-      |> Enum.uniq()
-      |> Enum.reject(&built_or_failed?/1)
-
-    {warmed, failed} = cold |> cold_rows(site.id) |> compile_cold(warm_concurrency(opts))
-
-    result = %{warmed: warmed, failed: failed, complete?: reached.complete?}
-    log_warmed(site.name, result, System.monotonic_time(:millisecond) - started)
-
-    MishkaInstaller.Event.Hook.call(
-      @warmed_event,
-      Map.merge(result, %{site: site.name, site_id: site.id}),
-      return: false
-    )
-
-    result
-  end
-
-  defp warmable?(%{name: name, site: site}, site_name) when is_binary(name),
-    do: site in [site_name, "Global"]
-
-  defp warmable?(_component, _site_name), do: false
-
-  defp built_or_failed?(%{name: name, site: site}) do
-    module = CompilerHelpers.module_name(name, site, "Component")
-    CompilerHelpers.loaded?(module) or CompileFailureState.failed?(module)
-  end
-
-  # ONE QUERY for every cold component of both scopes, streamed, so a site reaching a whole kit holds
-  # a batch of rows at a time rather than all of them.
-  defp cold_rows([], _site_id), do: []
-
-  defp cold_rows(cold, site_id) do
-    {own, global} = Enum.split_with(cold, &(&1.site != "Global"))
-    own = Enum.map(own, & &1.name)
-    global = Enum.map(global, & &1.name)
-
-    MishkaCmsCore.Runtime.Component
-    |> Ash.Query.for_read(:read_any)
-    |> Ash.Query.filter(
-      active == true and
-        ((site_id == ^site_id and name in ^own) or (is_nil(site_id) and name in ^global))
-    )
-    |> Ash.Query.load([:component_module, :site])
-    |> Ash.Query.sort(priority: :desc, name: :asc)
-    |> Ash.stream!(batch_size: 100, authorize?: false)
-  end
-
-  defp compile_cold(rows, max_concurrency) do
-    MishkaCmsCore.Runtime.TaskSupervisor
-    |> Task.Supervisor.async_stream_nolink(rows, &warm_one/1,
-      max_concurrency: max_concurrency,
-      ordered: false,
-      timeout: :timer.minutes(5),
-      on_timeout: :kill_task,
-      zip_input_on_exit: true
-    )
-    |> Enum.reduce({[], []}, fn
-      {:ok, {component, {:ok, _module}}}, {warmed, failed} ->
-        {[warmed_entry(component) | warmed], failed}
-
-      {:ok, {component, {:error, reason}}}, {warmed, failed} ->
-        {warmed, [failed_entry(component, reason) | failed]}
-
-      {:exit, {component, reason}}, {warmed, failed} ->
-        {warmed, [failed_entry(component, {:exit, reason}) | failed]}
-    end)
-    |> then(fn {warmed, failed} -> {Enum.reverse(warmed), Enum.reverse(failed)} end)
-  end
-
-  defp warm_one(component) do
-    {component,
-     ModuleCompilerHandler.boot_compile_or_return_module(
-       {component.component_module, component},
-       component.name,
-       nil,
-       component.site_id
-     )}
-  end
-
-  defp warmed_entry(component), do: %{name: component.name, site: scope_name(component)}
-
-  defp failed_entry(component, reason),
-    do: %{name: component.name, site: scope_name(component), reason: reason}
-
-  defp scope_name(%{site: %{name: name}}), do: name
-  defp scope_name(_global), do: "Global"
-
-  defp warm_concurrency(opts) do
-    Keyword.get_lazy(opts, :max_concurrency, fn ->
-      Application.get_env(
-        :mishka_cms_core,
-        :component_warm_concurrency,
-        max(1, div(System.schedulers_online(), 2))
-      )
-    end)
-  end
-
-  defp log_warmed(_site_name, %{warmed: [], failed: []}, _ms), do: :ok
-
-  defp log_warmed(site_name, %{warmed: warmed, failed: failed}, ms) do
-    Logger.info(
-      "[BootHandler] #{length(warmed)} components warmed for site #{site_name} in #{ms}ms"
-    )
-
-    if failed != [] do
-      Logger.warning(
-        "[BootHandler] #{length(failed)} component(s) of site #{site_name} did not compile: " <>
-          Enum.map_join(failed, ", ", & &1.name)
-      )
-    end
-
-    :ok
-  end
-
-  # Per-site asset (css/js/sitemap/warm) build job: unique + debounced (3s `schedule_in` coalesces a
+  # Per-site asset (css/js/sitemap) build job: unique + debounced (3s `schedule_in` coalesces a
   # burst, each insert moving a pending one later; `replace: []` leaves it where it is instead, and
   # `states:` widens which jobs already there count). `site_id` lives in `data` so the Oban→PubSub
   # bridge broadcasts on the per-site topic, letting that site's admins see the rebuild live.
@@ -1456,19 +1255,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       period: :infinity,
       states: [:available, :scheduled, :retryable],
       replace: [scheduled: [:scheduled_at], retryable: [:scheduled_at]]
-    }
-  end
-
-  # A WARM JOB BUILDS MODULES, NOT A BUNDLE, so it waits on `:maintenance`, the small queue a host
-  # keeps for whole-site work: it holds up no stylesheet and no editor's save, and a node runs only
-  # as many at once as that queue allows.
-  defp job_rules("warm") do
-    %{
-      queue: :maintenance,
-      max_attempts: 3,
-      period: 120,
-      states: [:available, :scheduled],
-      replace: [scheduled: [:scheduled_at]]
     }
   end
 
