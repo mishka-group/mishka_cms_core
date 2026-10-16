@@ -17863,3 +17863,33 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "The share cards could not be queued."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:1484
+#, elixir-autogen, elixir-format
+msgid "%{attr} (deeper than %{depth} levels)"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:1481
+#, elixir-autogen, elixir-format
+msgid "%{attr} (larger than %{size} KB)"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:1475
+#, elixir-autogen, elixir-format
+msgid "%{attr} (not a JSON array)"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:1478
+#, elixir-autogen, elixir-format
+msgid "%{attr} (not a JSON object)"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:1472
+#, elixir-autogen, elixir-format
+msgid "%{attr} (not valid JSON)"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/content_components.ex:1461
+#, elixir-autogen, elixir-format
+msgid "%{name} cannot read %{attrs}, so visitors see nothing here."
+msgstr ""

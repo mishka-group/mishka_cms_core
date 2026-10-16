@@ -88,6 +88,25 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
 
       assert ContentComponents.parse(html) == [{:html, html}]
     end
+
+    test "takes JSON in single quotes whole, its brackets and the markers it spells included" do
+      json = ~s([{"label":"a]] /]] [[/component]] [[slot x /]]","children":[[1],[2]]}])
+
+      assert [%{attrs: %{"nodes" => ^json, "id" => "t1"}, inner: nil}] =
+               markers(~s(<p>[[component tree id="t1" nodes='#{json}' /]]</p>))
+    end
+
+    test "takes JSON whose quotes and ampersands arrive as entities" do
+      assert [%{attrs: %{"labels" => labels}}] =
+               markers(
+                 ~s([[component a labels=&#39;{&quot;days&quot;:&quot;d &amp; n&quot;,"it":"it\\u0027s"}&#39; /]])
+               )
+
+      assert labels == ~s({"days":"d & n","it":"it\\u0027s"})
+
+      assert ContentComponents.cast([%{name: "labels", type: "map"}], %{"labels" => labels}) ==
+               %{labels: %{"days" => "d & n", "it" => "it's"}}
+    end
   end
 
   describe "parse/1 — what stays text" do
@@ -408,7 +427,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
         "phx-click" => "boom",
         "onclick" => "x",
         "items" => "a,b",
-        "params" => "{}",
+        "params" => "a=1",
         "id" => "mine",
         "current_user" => "admin",
         "rest" => "x",
@@ -499,6 +518,132 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     test "a component with no global attribute takes none" do
       assert ContentComponents.cast([%{name: "label", type: "string"}], %{"aria-label" => "x"}) ==
                %{}
+    end
+  end
+
+  describe "cast/2 — a list or a map written as JSON" do
+    @json [
+      %{name: "nodes", type: "list"},
+      %{name: "labels", type: "map"},
+      %{name: "params", type: "map", opts: %{"default" => %{"__atom_map__" => [[":kind", "x"]]}}},
+      %{name: "flags", type: "map", opts: %{"default" => %{"__atom_map__" => []}}},
+      %{name: "option", type: "any"},
+      %{name: "size", type: "any", opts: %{"values" => ["small", "large"]}},
+      %{name: "title", type: "string"},
+      %{name: "count", type: "integer"},
+      %{name: "open", type: "boolean"}
+    ]
+
+    test "an array is a list, its objects records with atom keys, nested ones too" do
+      given = %{
+        "nodes" =>
+          ~s([{"value":"src","label":"src","children":[{"value":"app","label":"app.ex"}]},3,"x",true,null])
+      }
+
+      assert ContentComponents.cast(@json, given) == %{
+               nodes: [
+                 %{
+                   value: "src",
+                   label: "src",
+                   children: [%{value: "app", label: "app.ex"}]
+                 },
+                 3,
+                 "x",
+                 true,
+                 nil
+               ]
+             }
+    end
+
+    test "an object a map attribute is keeps its keys as written" do
+      assert ContentComponents.cast(@json, %{"labels" => ~s({"days":"d","hours":"h"})}) ==
+               %{labels: %{"days" => "d", "hours" => "h"}}
+
+      assert ContentComponents.cast(@json, %{"flags" => ~s({"open":true})}) ==
+               %{flags: %{"open" => true}}
+    end
+
+    test "the object of a map attribute whose default has atom keys has atom keys" do
+      assert ContentComponents.cast(@json, %{"params" => ~s({"kind":"badge"})}) ==
+               %{params: %{kind: "badge"}}
+    end
+
+    test "makes no atom: a key no atom has the name of stays a string, and so does a value" do
+      key = "probe_key_#{System.unique_integer([:positive])}"
+      value = "probe_value_#{System.unique_integer([:positive])}"
+
+      assert %{nodes: [record]} =
+               ContentComponents.cast(@json, %{
+                 "nodes" => ~s([{"#{key}":"#{value}","label":"#{value}"}])
+               })
+
+      assert record == %{key => value, :label => value}
+      assert_raise ArgumentError, fn -> String.to_existing_atom(key) end
+      assert_raise ArgumentError, fn -> String.to_existing_atom(value) end
+    end
+
+    test "a key starting with __ is always a string, so no record is a struct" do
+      assert %{nodes: [record]} =
+               ContentComponents.cast(@json, %{
+                 "nodes" => ~s([{"__struct__":"Elixir.Phoenix.LiveView.JS","__meta__":null}])
+               })
+
+      assert record == %{"__struct__" => "Elixir.Phoenix.LiveView.JS", "__meta__" => nil}
+      refute is_struct(record)
+    end
+
+    test "an any attribute takes an array or an object, and every other value as written" do
+      assert ContentComponents.cast(@json, %{"option" => ~s({"series":[{"type":"line"}]})}) ==
+               %{option: %{"series" => [%{type: "line"}]}}
+
+      assert ContentComponents.cast(@json, %{"option" => ~s( ["a","b"])}) ==
+               %{option: ["a", "b"]}
+
+      for written <- ["{draft", "[&_p]:mt-2", "12", ~s("quoted"), "plain text", ""] do
+        assert ContentComponents.cast(@json, %{"option" => written}) == %{option: written}
+      end
+    end
+
+    test "an any attribute that lists its values is never read as JSON" do
+      assert ContentComponents.cast(@json, %{"size" => ~s(["small"])}) == %{}
+      assert ContentComponents.cast(@json, %{"size" => "small"}) == %{size: "small"}
+    end
+
+    test "drops a list or a map that is not JSON of its kind, or a bare key" do
+      for written <- ["[1,2", ~s([{"a":}]), "a,b", "1", "", ~s({"a":1}), true] do
+        assert ContentComponents.cast(@json, %{"nodes" => written}) == %{},
+               "list from #{inspect(written)}"
+      end
+
+      for written <- ["{", ~s(["a"]), "days=d", true] do
+        assert ContentComponents.cast(@json, %{"labels" => written}) == %{},
+               "map from #{inspect(written)}"
+      end
+    end
+
+    test "takes a value up to 32 KB as written, and none larger" do
+      fits = "[" <> String.duplicate(~s("x",), 8190) <> ~s("x"]) <> String.duplicate(" ", 3)
+      assert byte_size(fits) == 32_768
+      assert %{nodes: nodes} = ContentComponents.cast(@json, %{"nodes" => fits})
+      assert length(nodes) == 8191
+
+      assert ContentComponents.cast(@json, %{"nodes" => fits <> " "}) == %{}
+      assert ContentComponents.cast(@json, %{"option" => fits <> " "}) == %{option: fits <> " "}
+    end
+
+    test "takes a value up to 8 arrays and objects deep, and none deeper" do
+      eight = String.duplicate("[", 7) <> ~s({"a":1}) <> String.duplicate("]", 7)
+      nine = String.duplicate("[", 8) <> ~s({"a":1}) <> String.duplicate("]", 8)
+
+      assert %{nodes: [[[[[[[%{a: 1}]]]]]]]} = ContentComponents.cast(@json, %{"nodes" => eight})
+      assert ContentComponents.cast(@json, %{"nodes" => nine}) == %{}
+      assert ContentComponents.cast(@json, %{"option" => nine}) == %{option: nine}
+    end
+
+    test "a string, a number and a boolean are cast as before, JSON or not" do
+      given = %{"title" => ~s([{"a":1}]), "count" => "[1]", "open" => "true"}
+
+      assert ContentComponents.cast(@json, given) == %{title: ~s([{"a":1}]), open: true}
     end
   end
 
@@ -716,6 +861,16 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
 
       assert ContentComponents.write(tree) == @card
       assert ContentComponents.read("<p>" <> @card <> "</p>") == {:ok, tree}
+    end
+
+    test "writes back a marker holding JSON as it was written" do
+      marker =
+        ~s([[component tree labels='{"days":"d &amp; n"}' nodes='[{"label":"it\\u0027s","value":"a"}]' /]])
+
+      {:ok, tree} = ContentComponents.read(marker)
+
+      assert tree.attrs["nodes"] == ~s([{"label":"it\\u0027s","value":"a"}])
+      assert ContentComponents.write(tree) == marker
     end
 
     test "a changed tree writes the change" do

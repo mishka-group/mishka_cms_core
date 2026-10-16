@@ -670,6 +670,142 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
     end
   end
 
+  describe "rich_content/1 — a list or a map written as JSON" do
+    @tree_attrs [
+      %{"name" => "nodes", "type" => "list", "opts" => %{"required" => true}},
+      %{"name" => "labels", "type" => "map", "opts" => %{"default" => %{}}},
+      %{"name" => "option", "type" => "any", "opts" => %{"default" => nil}}
+    ]
+
+    @tree_template ~S"""
+    <ul class="probe-tree">
+      <li :for={node <- @nodes} class="probe-node" data-value={node.value}>
+        {node.label}
+        <span :for={child <- Map.get(node, :children, [])} class="probe-child" data-value={child.value}>{child.label}</span>
+      </li>
+    </ul>
+    <p class="probe-labels" data-days={Map.get(@labels, "days")} data-option={if(is_map(@option), do: "map:" <> Enum.join(Map.keys(@option), ","), else: @option)}></p>
+    """
+
+    setup %{site: site, n: n} do
+      note!(site, "tree-#{n}", attrs: @tree_attrs, template: @tree_template, slots: [])
+
+      note!(site, "cols-#{n}",
+        attrs: [],
+        slots: [
+          %{
+            "name" => "col",
+            "opts" => %{},
+            "attrs" => [%{"name" => "values", "type" => "list", "opts" => %{}}]
+          }
+        ],
+        template:
+          ~S'<div class="probe-cols"><i :for={col <- @col} class="probe-col" data-values={Enum.join(col[:values] || [], ",")}></i></div>'
+      )
+
+      :ok
+    end
+
+    test "an array of objects reaches the component as records it reads by field", %{
+      site: site,
+      n: n
+    } do
+      nodes =
+        ~s([{"value":"src","label":"src","children":[{"value":"app","label":"app.ex"},{"value":"web","label":"web &amp; co"}]},{"value":"mix","label":"mix.exs"}])
+
+      html = draw(~s(<p>[[component tree-#{n} nodes='#{nodes}' /]]</p>), site.name)
+
+      assert html |> query(".probe-node") |> LazyHTML.attribute("data-value") == ["src", "mix"]
+      assert html |> query(".probe-child") |> LazyHTML.attribute("data-value") == ["app", "web"]
+      assert html |> query(".probe-child") |> Enum.map(&LazyHTML.text/1) == ["app.ex", "web & co"]
+      refute html =~ "<p>"
+    end
+
+    test "a map keeps its keys as written, and an any attribute takes JSON or text", %{
+      site: site,
+      n: n
+    } do
+      html =
+        draw(
+          ~s([[component tree-#{n} nodes='[]' labels='{"days":"d"}' option='{"series":[]}' /]]),
+          site.name
+        )
+
+      assert attribute(html, ".probe-labels", "data-days") == "d"
+      assert attribute(html, ".probe-labels", "data-option") == "map:series"
+
+      text = draw(~s([[component tree-#{n} nodes='[]' option="{draft" /]]), site.name)
+
+      assert attribute(text, ".probe-labels", "data-option") == "{draft"
+    end
+
+    test "a record the component cannot read draws the box, and the content around it draws", %{
+      site: site,
+      n: n
+    } do
+      {html, log} =
+        ExUnit.CaptureLog.with_log(fn ->
+          draw(
+            ~s(<p>Before</p>[[component tree-#{n} nodes='[{"value":"src"}]' /]]<p>After</p>),
+            site.name
+          )
+        end)
+
+      assert log =~ "component tree-#{n}"
+      assert html |> query(~s([data-role="component-crashed"])) |> Enum.count() == 1
+      assert html |> query("p") |> Enum.map(&LazyHTML.text/1) == ["Before", "After"]
+    end
+
+    test "a value that cannot be read draws nothing, and a preview says which and why", %{
+      site: site,
+      n: n
+    } do
+      large = "[" <> String.duplicate("1,", 17_000) <> "1]"
+      deep = String.duplicate("[", 9) <> String.duplicate("]", 9)
+
+      for {written, reason} <- [
+            {"'[{\"value\":'", "nodes (not valid JSON)"},
+            {~s("src, app"), "nodes (not a JSON array)"},
+            {"'#{large}'", "nodes (larger than 32 KB)"},
+            {"'#{deep}'", "nodes (deeper than 8 levels)"}
+          ] do
+        marker = "[[component tree-#{n} nodes=#{written} /]]"
+
+        assert draw(marker, site.name) == "", reason
+
+        notice =
+          marker
+          |> preview(site.name)
+          |> query(~s([data-role="content-component-unavailable"]))
+          |> LazyHTML.text()
+
+        assert notice =~ "tree-#{n} cannot read #{reason}"
+      end
+
+      both = preview(~s([[component tree-#{n} nodes="x" labels='["d"]' /]]), site.name)
+
+      assert both =~ "nodes (not a JSON array), labels (not a JSON object)"
+    end
+
+    test "a slot entry's list is read the same, and named after its slot when it cannot be", %{
+      site: site,
+      n: n
+    } do
+      html =
+        draw(
+          ~s([[component cols-#{n}]][[slot col values='["a","b"]' /]][[slot col /]][[/component]]),
+          site.name
+        )
+
+      assert html |> query(".probe-col") |> LazyHTML.attribute("data-values") == ["a,b", ""]
+
+      bad = ~s([[component cols-#{n}]][[slot col values='["a",' /]][[/component]])
+
+      assert draw(bad, site.name) == ""
+      assert preview(bad, site.name) =~ "cols-#{n} cannot read col.values (not valid JSON)"
+    end
+  end
+
   describe "runtime:render:before_content_component" do
     setup do
       register_plugin(ContentComponentBeforeDraw, "runtime:render:before_content_component")
