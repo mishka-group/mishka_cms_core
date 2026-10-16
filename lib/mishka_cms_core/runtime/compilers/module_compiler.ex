@@ -64,6 +64,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   """
   require Logger
 
+  alias MishkaCmsCore.Runtime.Compilers.CompiledModuleCache
+
   @typedoc """
   A list of compilation diagnostics containing warnings and errors generated during the compilation process.
   """
@@ -87,6 +89,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
 
   * `quoted` - A quoted expression containing a valid module definition (typically from `quote do`)
   * `file` - Optional source file name for error reporting and debugging (defaults to "nofile")
+  * `opts` - Keyword list:
+    * `:cache` - `true` to load the module from `MishkaCmsCore.Runtime.Compilers.CompiledModuleCache`
+      when it holds this exact code, and to save it there when it is compiled. Only when the cache is
+      configured; otherwise, and by default (`false`), the module is compiled. A module loaded from
+      the cache is answered `{:ok, module, []}`, and the span's stop metadata says
+      `%{cache: :hit, module: module}` — `%{cache: :miss, module: module}` when it was compiled
+      through the cache, `%{}` when the cache was not used.
 
   ## Return Values
 
@@ -143,11 +152,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
 
       {:error, module, {error, diagnostics}} = ModuleCompiler.compile_module(broken)
   """
-  @spec compile_module(Macro.t(), String.t()) ::
+  @spec compile_module(Macro.t(), String.t(), keyword()) ::
           {:ok, module(), diagnostics()}
           | {:error, module(), {Exception.t(), diagnostics()}}
           | {:error, Exception.t() | :invalid_module}
-  def compile_module(quoted, file \\ "nofile") do
+  def compile_module(quoted, file \\ "nofile", opts \\ []) do
     MishkaInstaller.Event.Hook.call("runtime:compile:before_module", %{file: file},
       meta: %{file: file},
       return: false
@@ -157,15 +166,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
       [:mishka_cms, :runtime, :compilers, :module],
       %{file: file},
       fn ->
-        result =
+        {result, metadata} =
           case module_name(quoted) do
-            {:ok, module} ->
-              Logger.debug("compiling #{inspect(module)}")
-              Code.put_compiler_option(:ignore_module_conflict, true)
-              compile_quoted(quoted, file, module)
-
-            {:error, error} ->
-              {:error, error}
+            {:ok, module} -> build(quoted, file, module, cache_dir(opts))
+            {:error, error} -> {{:error, error}, %{}}
           end
 
         case result do
@@ -179,9 +183,58 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
             :ok
         end
 
-        {result, %{}}
+        {result, metadata}
       end
     )
+  end
+
+  # The cache is asked only by a caller that passed `cache: true`, and only when it is configured.
+  defp cache_dir(opts) do
+    case Keyword.get(opts, :cache, false) do
+      true -> CompiledModuleCache.dir()
+      _no -> nil
+    end
+  end
+
+  # NO CACHE, THE PLAIN COMPILE — and the only path when the cache is not configured: nothing below
+  # reads a file or hashes the code.
+  defp build(quoted, file, module, nil), do: {compile(quoted, file, module), %{}}
+
+  defp build(quoted, file, module, dir) do
+    case CompiledModuleCache.entry(dir, module, file, quoted) do
+      {:ok, entry} -> load_or_compile(quoted, file, module, entry)
+      :off -> {compile(quoted, file, module), %{}}
+    end
+  end
+
+  # A MODULE FROM THE CACHE IS ANSWERED AS A COMPILED ONE, so whatever the caller does after a compile
+  # — the handler's root check, recording the outcome, its hooks and telemetry — runs the same, and
+  # the compiler option a compile sets is set too. Only a compile that produced this one module is
+  # saved: a file holds one module, and a hit loads that.
+  defp load_or_compile(quoted, file, module, entry) do
+    case CompiledModuleCache.load(entry, file) do
+      :ok ->
+        Code.put_compiler_option(:ignore_module_conflict, true)
+        {{:ok, module, []}, %{cache: :hit, module: module}}
+
+      {:miss, _reason} ->
+        {result, binaries} = compile_quoted(quoted, file, module)
+
+        case {result, binaries} do
+          {{:ok, ^module, _diagnostics}, [{^module, binary}]} ->
+            CompiledModuleCache.store(entry, binary)
+
+          _not_one_module ->
+            :ok
+        end
+
+        {result, %{cache: :miss, module: module}}
+    end
+  end
+
+  defp compile(quoted, file, module) do
+    {result, _binaries} = compile_quoted(quoted, file, module)
+    result
   end
 
   @doc """
@@ -277,6 +330,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   The unloading process:
   1. **Purge**: Removes all references to the old module code
   2. **Delete**: Removes the module definition from the code server
+  3. **Forget**: Deletes the module's saved files when `CompiledModuleCache` is on — an unloaded
+     module is one that was removed or replaced, and is compiled afresh the next time it is asked for
 
   This is essential for long-running applications that frequently compile and
   discard modules to prevent memory leaks and module conflicts.
@@ -332,20 +387,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   def unload(module) do
     :code.purge(module)
     :code.delete(module)
-    :ok
+    CompiledModuleCache.forget(module)
   end
 
   ####################################################################################
   ############################ (▰˘◡˘▰) Helpers (▰˘◡˘▰) ###############################
   ####################################################################################
-  # Compiles quoted code and collects diagnostics
+  # Compiles quoted code and collects diagnostics, with the `{module, binary}` pairs it produced.
   defp compile_quoted(quoted, file, module) do
+    Logger.debug("compiling #{inspect(module)}")
+    Code.put_compiler_option(:ignore_module_conflict, true)
     {result, diagnostics} = Code.with_diagnostics(fn -> do_compile_and_load(quoted, file) end)
     diagnostics = Enum.uniq(diagnostics)
 
     case result do
-      {:ok, module} -> {:ok, module, diagnostics}
-      {:error, error} -> {:error, module, {error, diagnostics}}
+      {:ok, module, binaries} -> {{:ok, module, diagnostics}, binaries}
+      {:error, error} -> {{:error, module, {error, diagnostics}}, []}
     end
   end
 
@@ -374,7 +431,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
         # Return the LAST module (the user-facing component module — its
         # related Version/PaperTrail modules come earlier in the list).
         {final_module, _} = List.last(mods)
-        {:ok, final_module}
+        {:ok, final_module, mods}
 
       [] ->
         {:error, :no_modules_compiled}

@@ -530,9 +530,14 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
     # AST-build — there's no non-raising template-compile API — so this is the one
     # compile-time boundary that catches it and answers `{:error, _}` instead of
     # crashing the worker (which would take down boot / every lazy request).
+    #
+    # `cache: true`: a module this exact code was built into before is loaded from
+    # `CompiledModuleCache` when one is configured, and is answered as a compiled one, so everything
+    # after this — the root check, the recorded outcome, the hooks — runs the same.
     try do
       with {:ok, ast} <- get_data_from_database_to_ast({module_name_and_item, state}),
-           {:ok, module, _diagnostics} <- ModuleCompiler.compile_module(ast) do
+           {:ok, module, _diagnostics} <-
+             ModuleCompiler.compile_module(ast, "nofile", cache: true) do
         rooted(module)
       else
         {:error, _ash_error} -> {:error, :not_found}
