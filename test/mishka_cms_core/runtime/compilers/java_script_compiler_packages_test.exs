@@ -11,6 +11,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
 
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.{JsHook, RuntimeStatus}
+  alias MishkaCmsCore.Runtime.States.AssetsState
+
+  @reuse_site "lazy_reuse_site"
 
   setup do
     assets = js_assets_dir()
@@ -121,7 +124,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
       }
     )
 
-    assert {:ok, js} = JavaScriptCompiler.compile("packages_site", global_only: true)
+    assert {:ok, %{js: js}} = JavaScriptCompiler.compile("packages_site", global_only: true)
     assert js =~ "DRAWN_BY_THE_PACKAGE"
     assert js =~ "SITE_PALETTE"
   end
@@ -141,13 +144,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
 
     hook!("toast", ~s|export default { mounted() { window.__toast = "TOAST_HOOK"; } };|, %{})
 
-    assert {:ok, js} = JavaScriptCompiler.compile("packages_site", global_only: true)
+    assert {:ok, %{js: js}} = JavaScriptCompiler.compile("packages_site", global_only: true)
     assert js =~ "TOAST_HOOK"
     refute js =~ "CHART_HOOK"
   end
 
   defp left_out!(site \\ "packages_site") do
-    assert {:ok, js} = JavaScriptCompiler.compile(site, global_only: true)
+    assert {:ok, %{js: js}} = JavaScriptCompiler.compile(site, global_only: true)
     assert js =~ "TOAST_HOOK", "every other hook is still built"
     refute js =~ "CHART_HOOK"
     js
@@ -253,7 +256,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
       )
       |> Ash.update!(authorize?: false)
 
-      assert {:ok, js} = JavaScriptCompiler.compile("packages_site", global_only: true)
+      assert {:ok, %{js: js}} = JavaScriptCompiler.compile("packages_site", global_only: true)
       assert js =~ "CHART_HOOK"
       assert js =~ "TOAST_HOOK"
       assert left_out_of_site(chart) == nil
@@ -288,6 +291,131 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerPackagesTest do
       assert left_out_of_site(chart) == reported, "the bundle still served is the one reported"
     end
   end
+
+  describe "a lazy hook" do
+    setup %{package: package} do
+      tgz = tarball(package, "DRAWN_BY_THE_HEAVY_PACKAGE")
+      registry!(%{"/#{package}/-/#{package}-1.0.0.tgz" => tgz})
+
+      hook!("toast", ~s|export default { mounted() { window.__toast = "TOAST_HOOK"; } };|, %{})
+
+      chart =
+        hook!(
+          "chart",
+          """
+          import draw from "#{package}";
+          import settings from "./chart_extensions.js";
+          export default { mounted() { window.__chart = [draw(), settings.palette]; } };
+          """,
+          %{
+            lazy: true,
+            npm: [entry(package, tgz)],
+            modules: [
+              %{
+                "file" => "chart_extensions.js",
+                "content" => ~s(export default { palette: "SITE_PALETTE" };)
+              }
+            ]
+          }
+        )
+
+      Application.put_env(:mishka_cms_core, :env_test?, false)
+
+      on_exit(fn ->
+        Application.put_env(:mishka_cms_core, :env_test?, true)
+        JavaScriptCompiler.delete_shared_base_js()
+        Enum.each(AssetsState.types(@reuse_site), &AssetsState.delete(@reuse_site, &1))
+      end)
+
+      %{chart: chart}
+    end
+
+    test "is built as its own module, and the bundle carries the stub that loads it instead" do
+      assert {:ok, %{js: js, lazy: [module]}} =
+               JavaScriptCompiler.compile("packages_site", global_only: true)
+
+      assert module.hook == "chart"
+      assert module.hash == Base.encode16(:crypto.hash(:md5, module.js), case: :lower)
+      assert module.js =~ "DRAWN_BY_THE_HEAVY_PACKAGE"
+      assert module.js =~ "SITE_PALETTE"
+      assert module.js =~ ~r/export\s*\{[^}]*as default\s*\}/
+
+      refute js =~ "DRAWN_BY_THE_HEAVY_PACKAGE"
+      refute js =~ "SITE_PALETTE"
+      assert js =~ "#{module.hash}.js"
+      assert js =~ "GlobalChart"
+      assert js =~ "TOAST_HOOK"
+    end
+
+    test "that does not build is left out, and the rest still build", %{chart: chart} do
+      chart
+      |> Ash.Changeset.for_update(
+        :master_update,
+        %{content: ~s|export default { mounted() { let = ; window.__chart = "CHART_HOOK"; } };|},
+        authorize?: false
+      )
+      |> Ash.update!(authorize?: false)
+
+      assert {:ok, %{js: js, lazy: []}} =
+               JavaScriptCompiler.compile("packages_site", global_only: true)
+
+      assert js =~ "TOAST_HOOK"
+      refute js =~ "GlobalChart"
+      assert left_out_of_site(chart) =~ "Unexpected"
+    end
+
+    test "is stored with the bundle that loads it, copied with the shared base, and dropped with it",
+         %{chart: chart} do
+      assert {:ok, base} = JavaScriptCompiler.compile_and_store_shared_base()
+      assert [hash] = lazy_hashes("__shared_base__")
+      assert base =~ "#{hash}.js"
+
+      for type <- [lazy(hash), "brotli_" <> lazy(hash), "gzip_" <> lazy(hash)] do
+        assert %{hash: ^hash, value: value} = AssetsState.get!("__shared_base__", type)
+        assert byte_size(value) > 0
+      end
+
+      assert AssetsState.get_value("__shared_base__", lazy(hash)) =~ "DRAWN_BY_THE_HEAVY_PACKAGE"
+
+      # A site whose hooks are all global serves a copy of the base, and its stubs read their
+      # module beside that copy.
+      assert {:ok, ^base} = JavaScriptCompiler.compile_and_store(@reuse_site)
+      assert lazy_hashes(@reuse_site) == [hash]
+
+      chart =
+        chart
+        |> Ash.Changeset.for_update(:master_update, %{lazy: false}, authorize?: false)
+        |> Ash.update!(authorize?: false)
+
+      assert {:ok, eager} = JavaScriptCompiler.compile_and_store_shared_base()
+      assert eager =~ "DRAWN_BY_THE_HEAVY_PACKAGE"
+      assert lazy_hashes("__shared_base__") == []
+
+      assert {:ok, ^eager} = JavaScriptCompiler.compile_and_store(@reuse_site)
+      assert lazy_hashes(@reuse_site) == []
+
+      chart
+      |> Ash.Changeset.for_update(:master_update, %{lazy: true}, authorize?: false)
+      |> Ash.update!(authorize?: false)
+
+      assert {:ok, base} = JavaScriptCompiler.compile_and_store_shared_base()
+      assert [hash] = lazy_hashes("__shared_base__")
+      assert {:ok, ^base} = JavaScriptCompiler.compile_and_store(@reuse_site)
+      assert lazy_hashes(@reuse_site) == [hash]
+
+      JavaScriptCompiler.delete_shared_base_js()
+      assert lazy_types("__shared_base__") == []
+      assert lazy_hashes(@reuse_site) == [hash], "a site's copy goes with its own bundle"
+    end
+  end
+
+  defp lazy(hash), do: JavaScriptCompiler.lazy_type(hash)
+
+  defp lazy_hashes(id) do
+    for "lazy_js:" <> hash <- AssetsState.types(id), do: hash
+  end
+
+  defp lazy_types(id), do: Enum.filter(AssetsState.types(id), &(&1 =~ "lazy_js:"))
 
   test "a package or a module that cannot be fetched or written is refused when the hook is saved" do
     refused =

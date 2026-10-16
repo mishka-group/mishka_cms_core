@@ -81,6 +81,26 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   - Logging of compilation status and errors
   - Fallback behavior for missing JavaScript
 
+  ## Lazy hooks
+
+  A hook marked `lazy` is not built into the bundle. It is built on its own, in the same compile, as
+  an ES module whose name is the hash of its content, and stored beside the bundle under
+  `lazy_type/1`. The bundle registers a stub under the hook's browser name instead; the first element
+  that mounts it imports the module once, and from then on the hook's own `mounted`, `beforeUpdate`,
+  `updated`, `destroyed`, `disconnected` and `reconnected` run on that element. A page that never
+  mounts the hook never downloads it. Each module passes through `runtime:compile:lazy_js`, with
+  `%{site: site_name, hook: hook_name}` as its meta, before it is hashed — as the bundle passes
+  through `runtime:compile:js`.
+
+  The module is read beside the bundle that asked for it — `/assets/js/<site>/<hash>.js`, with the
+  bundle's query string — so the bundle has to be loaded from its URL, not inlined. It is served
+  by `MishkaCmsCoreWeb.AssetsController` to whoever may read the bundle, with the same headers, and
+  replaced with it: the modules a bundle names are the ones stored under its site. A same-origin
+  script, it needs nothing from the Content-Security-Policy that `'self'` does not already give.
+
+  A lazy hook's default export is a hook object, or a hook class whose state is set in `mounted`:
+  its constructor does not run.
+
   ## Integration with Phoenix
 
       # In your layout template
@@ -111,6 +131,87 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   @esbuild_verified_key :mishka_cms_esbuild_verified
   @shared_base_id "__shared_base__"
+  @lazy_type "lazy_js:"
+
+  # Written beside a site's hooks; a hook's own `modules` cannot take the name, since theirs begin
+  # with a letter or a digit — see `Validations.HookPackages`.
+  @lazy_loader_file "__lazy_hook.js"
+
+  # THE STUB A LAZY HOOK IS REGISTERED AS. The bundle runs as a classic script, so
+  # `document.currentScript` is the bundle while this module is evaluated, and the hook's file is
+  # read beside it with its query string. LiveView copies the stub's callbacks onto the element's
+  # hook; once the file has loaded, the hook's own callbacks replace them there, the way LiveView
+  # copies an object hook's, and its `mounted` runs.
+  @lazy_loader ~S"""
+  const script = document.currentScript;
+  const bundle = script && script.src ? new URL(script.src) : null;
+  const loading = new Map();
+  const LIFECYCLE = ["mounted", "beforeUpdate", "updated", "destroyed", "disconnected", "reconnected"];
+  const noop = function () {};
+
+  function load(file) {
+    if (!loading.has(file)) {
+      const url = new URL(file, bundle);
+      url.search = bundle.search;
+      loading.set(file, import(url.href).then((module) => module.default));
+    }
+
+    return loading.get(file);
+  }
+
+  function adopt(instance, hook) {
+    for (const name of LIFECYCLE) instance[name] = noop;
+
+    if (typeof hook !== "function") return Object.assign(instance, hook);
+
+    const chain = [];
+    for (
+      let proto = hook.prototype;
+      proto && proto !== Object.prototype && !Object.prototype.hasOwnProperty.call(proto, "__mounted");
+      proto = Object.getPrototypeOf(proto)
+    ) chain.unshift(proto);
+
+    for (const proto of chain) {
+      for (const key of Object.getOwnPropertyNames(proto)) {
+        if (key !== "constructor") {
+          Object.defineProperty(instance, key, Object.getOwnPropertyDescriptor(proto, key));
+        }
+      }
+    }
+
+    return instance;
+  }
+
+  export default function lazyHook(file) {
+    return {
+      mounted() {
+        if (!bundle) {
+          console.error(`Lazy hook ${file}: the site's script was not loaded from a URL, so the hook's file cannot be found.`);
+          return;
+        }
+
+        load(file).then(
+          (hook) => {
+            if (this.__lazyHookDestroyed) return;
+
+            if (!hook) {
+              console.error(`Lazy hook ${file} has no default export.`);
+              return;
+            }
+
+            adopt(this, hook);
+            this.mounted();
+          },
+          (error) => console.error(`Lazy hook ${file} could not be loaded.`, error)
+        );
+      },
+
+      destroyed() {
+        this.__lazyHookDestroyed = true;
+      },
+    };
+  }
+  """
 
   @doc """
   Ensures the configured ESBuild is installed and runnable, caching the answer in `:persistent_term`
@@ -225,7 +326,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   ## Returns
 
-  - `{:ok, compiled_js}` - On successful compilation, returns the bundled JavaScript string
+  - `{:ok, %{js: compiled_js, lazy: modules}}` - On successful compilation: the bundle, and the
+    module of each lazy hook it loads on first use, as `%{hook: name, hash: hash, js: module}`
   - `{:error, reason}` - On failure, returns an error with descriptive message
 
   ## Compilation Steps
@@ -249,7 +351,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
       # Compile JavaScript for main site
       case JavaScriptCompiler.compile("main") do
-        {:ok, js} ->
+        {:ok, %{js: js}} ->
           IO.puts("Compiled JS size: \#{byte_size(js)} bytes")
         {:error, reason} ->
           IO.puts("Compilation failed: \#{reason}")
@@ -389,26 +491,30 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     end
   end
 
-  @doc "Drops the cached shared base JS (all formats)."
+  @doc "Drops the cached shared base JS (all formats), and the lazy hooks' modules it loads."
   def delete_shared_base_js do
     AssetsState.delete(@shared_base_id, "js")
     AssetsState.delete(@shared_base_id, "brotli_js")
     AssetsState.delete(@shared_base_id, "gzip_js")
+    keep_lazy(@shared_base_id, [])
   end
 
-  defp store_compiled(id, {:ok, js}) do
+  @doc """
+  The `AssetsState` type a lazy hook's module is stored under, beside its site's bundle, from the
+  hash its file is named by: `lazy_js:<hash>`, with `brotli_lazy_js:<hash>` and
+  `gzip_lazy_js:<hash>` for its compressed copies.
+  """
+  @spec lazy_type(String.t()) :: String.t()
+  def lazy_type(hash), do: @lazy_type <> hash
+
+  defp store_compiled(id, {:ok, %{js: js, lazy: modules}}) do
     js = Hook.call("runtime:compile:js", js, meta: %{site: id})
-
-    {brotli, gzip} = Helpers.compress_asset(js)
     updated_at = DateTime.utc_now()
-    hash = Base.encode16(:crypto.hash(:md5, js), case: :lower)
 
-    [
-      %{id: id, type: "js", value: js, hash: hash, updated_at: updated_at},
-      %{id: id, type: "brotli_js", value: brotli, hash: hash, updated_at: updated_at},
-      %{id: id, type: "gzip_js", value: gzip, hash: hash, updated_at: updated_at}
-    ]
-    |> AssetsState.save_batch()
+    lazy = Enum.flat_map(modules, &asset_records(id, lazy_type(&1.hash), &1.js, updated_at))
+
+    AssetsState.save_batch(asset_records(id, "js", js, updated_at) ++ lazy)
+    keep_lazy(id, Enum.map(lazy, & &1.type))
 
     Logger.debug("JavaScript compiled and stored in AssetsState for site: #{id}")
     {:ok, js}
@@ -434,16 +540,56 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         hash = Base.encode16(:crypto.hash(:md5, js), case: :lower)
         updated_at = DateTime.utc_now()
 
+        # THE BASE'S LAZY MODULES ARE COPIED WITH IT, because its stubs read them beside the bundle
+        # that loaded them — this site's.
+        lazy =
+          for type <- AssetsState.types(@shared_base_id),
+              lazy_type?(type),
+              %{value: value, hash: lazy_hash} <- [AssetsState.get!(@shared_base_id, type)],
+              do: %{
+                id: site_name,
+                type: type,
+                value: value,
+                hash: lazy_hash,
+                updated_at: updated_at
+              }
+
         [
           %{id: site_name, type: "js", value: js, hash: hash, updated_at: updated_at},
           %{id: site_name, type: "brotli_js", value: brotli, hash: hash, updated_at: updated_at},
           %{id: site_name, type: "gzip_js", value: gzip, hash: hash, updated_at: updated_at}
+          | lazy
         ]
         |> AssetsState.save_batch()
+
+        keep_lazy(site_name, Enum.map(lazy, & &1.type))
 
         {:ok, js}
     end
   end
+
+  defp asset_records(id, type, value, updated_at) do
+    {brotli, gzip} = Helpers.compress_asset(value)
+    hash = Base.encode16(:crypto.hash(:md5, value), case: :lower)
+
+    [
+      %{id: id, type: type, value: value, hash: hash, updated_at: updated_at},
+      %{id: id, type: "brotli_" <> type, value: brotli, hash: hash, updated_at: updated_at},
+      %{id: id, type: "gzip_" <> type, value: gzip, hash: hash, updated_at: updated_at}
+    ]
+  end
+
+  # A SITE KEEPS THE LAZY MODULES ITS CURRENT BUNDLE NAMES, and no others: a module is answered only
+  # while a bundle that loads it is the one served.
+  defp keep_lazy(id, types) do
+    for type <- AssetsState.types(id), lazy_type?(type), type not in types do
+      AssetsState.delete(id, type)
+    end
+
+    :ok
+  end
+
+  defp lazy_type?(type), do: String.contains?(type, @lazy_type)
 
   defp site_has_own_hooks?(site_name) do
     case SiteState.get_by_name(site_name) do
@@ -713,20 +859,87 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # hook's own file, in one of its `modules` or inside one of its `npm` packages leaves that hook out
   # and the bundle is built again without it. An error no hook owns — `boot.js`, a shared hook —
   # fails the compile, and the hooks the bundle served before stay as they were reported.
+  #
+  # A lazy hook is built first, on its own, and its file is then replaced by the stub the bundle
+  # carries — so a lazy hook that does not build is left out the same way.
   defp bundle({hooks, left_out}, site_name, tmp_dir) do
     _ = write_runtime_hooks!(hooks, site_name)
 
-    case execute_esbuild(tmp_dir, site_name) do
-      {:ok, js} ->
-        report_left_out(left_out, site_name)
-        {:ok, js}
-
+    with {:ok, modules} <- build_lazy(hooks, site_name, tmp_dir),
+         {:ok, js} <- execute_esbuild(tmp_dir, site_name) do
+      report_left_out(left_out, site_name)
+      {:ok, %{js: js, lazy: modules}}
+    else
       {:error, reason} ->
         hooks
         |> failing_hooks(reason, site_name)
         |> rebuild_without(reason, {hooks, left_out}, site_name, tmp_dir)
     end
   end
+
+  defp build_lazy(hooks, site_name, tmp_dir) do
+    hooks
+    |> Enum.filter(& &1.lazy)
+    |> Enum.reduce_while({:ok, []}, fn hook, {:ok, modules} ->
+      case build_lazy_module(hook, site_name, tmp_dir) do
+        {:ok, module} -> {:cont, {:ok, [module | modules]}}
+        {:error, _reason} = error -> {:halt, error}
+      end
+    end)
+  end
+
+  # The hook's own file, with its `modules` and `npm` packages, built as one ES module whose default
+  # export is the hook — then that file is rewritten as the stub that imports it.
+  defp build_lazy_module(hook, site_name, tmp_dir) do
+    js_dir = Path.join(get_js_assets_dir(), "js")
+    site_js_dir = Path.join(js_dir, site_name)
+    entry = Path.join(site_js_dir, hook_file(hook, site_name))
+    output = Path.join(tmp_dir, "lazy_#{site_name}_#{:os.system_time(:nanosecond)}.js")
+
+    args =
+      [entry, "--format=esm", "--outfile=#{output}"] ++ esbuild_common_args(js_dir)
+
+    try do
+      case run_esbuild(args) do
+        {_output, 0} ->
+          js =
+            Hook.call("runtime:compile:lazy_js", File.read!(output),
+              meta: %{site: site_name, hook: hook.name}
+            )
+
+          hash = Base.encode16(:crypto.hash(:md5, js), case: :lower)
+
+          File.write!(Path.join(site_js_dir, @lazy_loader_file), @lazy_loader)
+          File.write!(entry, lazy_stub(hash))
+
+          {:ok, %{hook: hook.name, hash: hash, js: js}}
+
+        {output, exit_code} ->
+          {:error,
+           """
+           Esbuild could not build the lazy hook #{hook.name} (exit code #{exit_code})
+           Entry file: #{entry}
+           Args: #{inspect(args)}
+
+           #{output}
+           """}
+      end
+    after
+      File.rm(output)
+    end
+  end
+
+  defp lazy_stub(hash) do
+    """
+    import lazyHook from "./#{@lazy_loader_file}";
+
+    export default lazyHook(#{Jason.encode!(hash <> ".js")});
+    """
+  end
+
+  @doc false
+  # The loader every lazy hook's stub imports, for the tests that run it.
+  def lazy_loader, do: @lazy_loader
 
   defp rebuild_without([], reason, _hooks, _site_name, _tmp_dir), do: {:error, reason}
 
@@ -939,22 +1152,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
     # TODO: we need check we are in dev or not and based on convert the JS
     try do
-      args = [
-        entry_file,
-        "--bundle",
-        "--target=es2022",
-        "--format=iife",
-        "--platform=browser",
-        "--minify",
-        "--outfile=#{output_file}",
-        "--log-level=error",
-        "--log-limit=0",
-        "--color=false",
-        "--external:/fonts/*",
-        "--external:/images/*",
-        "--resolve-extensions=.js",
-        "--alias:@=#{Path.join(js_assets_dir, "js")}"
-      ]
+      args =
+        [entry_file, "--format=iife", "--outfile=#{output_file}"] ++
+          esbuild_common_args(Path.join(js_assets_dir, "js"))
 
       case run_esbuild(args) do
         {_output, 0} ->
@@ -975,6 +1175,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     after
       Enum.each([entry_file, output_file, "#{output_file}.map"], &File.rm/1)
     end
+  end
+
+  defp esbuild_common_args(js_dir) do
+    [
+      "--bundle",
+      "--target=es2022",
+      "--platform=browser",
+      "--minify",
+      "--log-level=error",
+      "--log-limit=0",
+      "--color=false",
+      "--external:/fonts/*",
+      "--external:/images/*",
+      "--resolve-extensions=.js",
+      "--alias:@=#{js_dir}"
+    ]
   end
 
   # The profile run the way `Esbuild.run/2` runs it, with esbuild's messages kept rather than

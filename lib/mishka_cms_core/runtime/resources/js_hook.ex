@@ -117,6 +117,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
     :format,
     :priority,
     :active,
+    :lazy,
     :permissions,
     :npm,
     :modules,
@@ -544,6 +545,19 @@ defmodule MishkaCmsCore.Runtime.JsHook do
           end
         end
 
+        field :lazy do
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Load on first use") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Keeps this hook out of the site's script: a page downloads it only when it shows an element that uses it. For a large hook few pages use."
+              )
+            end
+          end
+        end
+
         field :description do
           ui do
             label fn -> dgettext("mishka_gervaz", "Description") end
@@ -583,7 +597,8 @@ defmodule MishkaCmsCore.Runtime.JsHook do
             :format,
             :priority,
             :site_id,
-            :active
+            :active,
+            :lazy
           ]
 
           ui do
@@ -641,6 +656,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
 
     field :priority, :integer, derives: "validate(integer, min_len=0, max_len=100)"
     field :active, :boolean, derives: "validate(boolean)"
+    field :lazy, :boolean, derives: "validate(boolean)"
 
     field :permissions, {:array, :string},
       derives: "sanitize(each=[trim, downcase], reject_empty, uniq) validate(list)"
@@ -1702,6 +1718,16 @@ defmodule MishkaCmsCore.Runtime.JsHook do
       default true
       public? true
       description "Whether the hook is active and should be loaded"
+    end
+
+    # A LAZY HOOK IS NOT IN THE SITE'S BUNDLE. The bundle carries a stub under the same browser name,
+    # and the stub downloads the hook from its own content-addressed file the first time an element
+    # mounts it — see `MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler`.
+    attribute :lazy, :boolean do
+      allow_nil? false
+      default false
+      public? true
+      description "Whether the hook is left out of the site's bundle and downloaded on first use"
     end
 
     # ACL

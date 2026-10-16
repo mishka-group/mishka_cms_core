@@ -194,6 +194,7 @@ defmodule MishkaCmsCore.Dev.Generator do
         format: :js,
         priority: 0,
         active: true,
+        lazy: false,
         permissions: [],
         npm: [],
         modules: [],

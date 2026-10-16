@@ -221,6 +221,17 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
     end
   end
 
+  describe "scripts" do
+    # A lazy JS hook's module is imported from `/assets/js/<site>/<hash>.js`, beside the bundle that
+    # loads it: the same origin, which `'self'` already allows. Nothing is widened for it.
+    test "are the page's own origin and its nonce, and nothing else" do
+      conn = run("/about")
+
+      assert [script] = Regex.run(~r/script-src [^;]+/, csp(conn))
+      assert script == "script-src 'self' 'nonce-#{conn.assigns.csp_nonce}'"
+    end
+  end
+
   describe "framing" do
     # DENY forbids framing by ANY page, same-origin included — and the editor's canvas is a
     # same-origin iframe. It only ever worked because a dev-only dependency deleted the header.

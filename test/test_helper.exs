@@ -94,6 +94,13 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
   # `MishkaCmsCore.Test.PluginReadiness`.
   MishkaCmsCore.Test.PluginReadiness.await(MishkaCmsCore.Application.plugins())
 
+  # The `:node` tests run browser JavaScript in Node.js. Without it they are left out, and the run
+  # says so.
+  if is_nil(System.find_executable("node")) do
+    IO.puts("Node.js is not installed: the :node tests are excluded.")
+    ExUnit.configure(exclude: [:node | ExUnit.configuration()[:exclude] || []])
+  end
+
   ExUnit.start()
   Ecto.Adapters.SQL.Sandbox.mode(MishkaCmsCore.Repo, :manual)
 end

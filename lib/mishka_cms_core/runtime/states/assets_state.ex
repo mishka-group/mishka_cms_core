@@ -221,6 +221,13 @@ defmodule MishkaCmsCore.Runtime.States.AssetsState do
   end
 
   @doc """
+  The types stored for a site, without reading their values.
+  """
+  @spec types(String.t()) :: [String.t()]
+  def types(site_name),
+    do: @main_table |> :ets.match({{site_name, :"$1"}, :_, :_, :_}) |> List.flatten()
+
+  @doc """
   Gets multiple assets by their composite keys {site_name, type}.
   Returns a list of found assets.
   """
