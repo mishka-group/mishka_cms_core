@@ -828,9 +828,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   }
 
   for {prefix, kinds} <- @read_kinds, kind <- kinds do
-    if @kind_controls[{prefix, kind}] != @by_utility[prefix] do
+    replaced_by = @kind_controls[{prefix, kind}]
+    read_as = @by_utility[prefix]
+
+    if replaced_by != read_as do
       raise "Styles: the #{kind} kind of the #{inspect(prefix)} prefix is read as " <>
-              "#{@by_utility[prefix]} but replaced by #{inspect(@kind_controls[{prefix, kind}])}"
+              "#{read_as} but replaced by #{inspect(replaced_by)}"
     end
   end
 
