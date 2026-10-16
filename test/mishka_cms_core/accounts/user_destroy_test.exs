@@ -183,6 +183,17 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
       end
     end
 
+    test "the generic master action run by the system, with no actor, still deletes", context do
+      %{worker: worker} = worker!(context)
+
+      assert {:ok, %User{}} =
+               User
+               |> Ash.ActionInput.for_action(:master_destroy, %{id: worker.id}, authorize?: false)
+               |> Ash.run_action(authorize?: false)
+
+      assert gone?(context, worker)
+    end
+
     test "does not take the master's own history, or anyone else's, with it", context do
       %{worker: worker} = worker!(context)
       other = worker!(context)

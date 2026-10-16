@@ -1186,8 +1186,9 @@ defmodule MishkaCmsCore.Accounts.User do
       validate {MishkaCmsCore.Accounts.Validations.GrantWithinActorScope, []},
         before_action?: true
 
-      run fn input, _context ->
+      run fn input, context ->
         user_id = input.arguments.id
+        actor = context.actor
         email = input.arguments[:email]
         password = input.arguments[:password]
         password_confirmation = input.arguments[:password_confirmation]
@@ -1204,14 +1205,21 @@ defmodule MishkaCmsCore.Accounts.User do
 
           true ->
             # Fetch user with multitenancy bypass
-            case Ash.get(__MODULE__, user_id, action: :master_get, authorize?: false) do
+            case Ash.get(__MODULE__, user_id,
+                   action: :master_get,
+                   actor: actor,
+                   authorize?: context.authorize?
+                 ) do
               {:ok, user} ->
                 attrs =
                   %{}
                   |> then(fn a -> if email, do: Map.put(a, :email, email), else: a end)
 
                 user
-                |> Ash.Changeset.for_update(:update, attrs, authorize?: false)
+                |> Ash.Changeset.for_update(:update, attrs,
+                  actor: actor,
+                  authorize?: context.authorize?
+                )
                 |> then(fn cs ->
                   # Allow changing site_id (moving user between sites)
                   case Map.fetch(input.arguments, :site_id) do
