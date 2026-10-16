@@ -55,14 +55,19 @@ defmodule MishkaCmsCore.Accounts.Helper do
     * `user` is the account as the reader's own read returned it: a user, `nil`,
       `%Ash.NotLoaded{}` or `%Ash.ForbiddenField{}`.
     * `master?` says whether the account's id is a master's (see `master_ids/1`).
-    * `no_account` is what to call a record with no readable account: `:guest`, `:system` or
-      `:unknown` (see `label/1`), or the words themselves.
+    * `no_account` is what to call a record with no readable account: `:guest`, `:system`,
+      `:unknown` or `:deleted` (see `label/1`), or the words themselves.
     * `master_name` replaces `label(:master)`, such as a master's blogger name on a comment.
 
   Returns the email when `user` carries a readable one, else `master_name` or `label(:master)` for
   a master, else `no_account`. Never returns any part of an unreadable email.
   """
-  @spec who(term(), boolean(), :guest | :system | :unknown | String.t(), String.t() | nil) ::
+  @spec who(
+          term(),
+          boolean(),
+          :guest | :system | :unknown | :deleted | String.t(),
+          String.t() | nil
+        ) ::
           String.t()
   def who(user, master?, no_account, master_name \\ nil)
   def who(%{email: %Ash.CiString{} = email}, _master?, _no_account, _name), do: to_string(email)
@@ -77,14 +82,16 @@ defmodule MishkaCmsCore.Accounts.Helper do
 
   @doc """
   The word a screen shows for an account it does not name, in the `mishka_gervaz` Gettext domain:
-  `:master` "Master", `:guest` "Guest" (written signed out), `:system` "System" (no user did it) and
-  `:unknown` "Unknown" (an account the reader's read did not return).
+  `:master` "Master", `:guest` "Guest" (written signed out), `:system` "System" (no user did it),
+  `:unknown` "Unknown" (an account the reader's read did not return) and `:deleted` "Deleted user"
+  (a person's work whose account has been deleted, so its author was released).
   """
-  @spec label(:master | :guest | :system | :unknown) :: String.t()
+  @spec label(:master | :guest | :system | :unknown | :deleted) :: String.t()
   def label(:master), do: dpgettext("mishka_gervaz", "account", "Master")
   def label(:guest), do: dgettext("mishka_gervaz", "Guest")
   def label(:system), do: dgettext("mishka_gervaz", "System")
   def label(:unknown), do: dgettext("mishka_gervaz", "Unknown")
+  def label(:deleted), do: dgettext("mishka_gervaz", "Deleted user")
 
   @doc """
   `user` when `reader` may see its email, else `nil`.

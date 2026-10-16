@@ -5516,3 +5516,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Load on first use"
 msgstr ""
+
+#: lib/mishka_cms_core/accounts/_helper.ex:94
+#, elixir-autogen, elixir-format
+msgid "Deleted user"
+msgstr ""

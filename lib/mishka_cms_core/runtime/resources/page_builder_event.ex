@@ -38,6 +38,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilderEvent do
   and it must branch on `author_type` BEFORE the email-masking ladder, or an assistant's row prints
   the operator's address.
 
+  Both `author_id` and `note_author_id` are released when their account is deleted
+  (`on_delete: :nilify`): the row stays, and a `:human` row with no author reads as a deleted user.
+
   See `MishkaCmsCore.Runtime.PageBuilderSnapshot` (the document a row restores) and
   `MishkaCmsCore.Runtime.PageBuilder.History` (how rows are written).
   """
@@ -90,6 +93,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilderEvent do
       # A dropped payload must leave a READABLE row — that is what makes "keep the label, lose the
       # snapshot" a usable answer to the cap instead of a hole in the timeline.
       reference :snapshot, on_delete: :nilify
+
+      # THE HISTORY OUTLIVES ITS AUTHOR. A row says who changed what, and deleting that account must
+      # not be refused for it nor take the record of the change along: the row stays and the author
+      # reads as a deleted user (`author_type` still says it was a person's).
+      reference :author, on_delete: :nilify
+      reference :note_author, on_delete: :nilify
 
       # A DRAFT IS NOT ONE TABLE. `source_type` names all four editable kinds, and three of them keep
       # their drafts in tables of their own — `layout_drafts`, `error_page_drafts` — so a foreign key

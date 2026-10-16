@@ -366,6 +366,10 @@ defmodule MishkaCmsCoreWeb.Templates.HistoryTimeline do
   defp author(%{author_type: :ai} = record, reader), do: assistant_label(record, reader)
   defp author(%{author_type: :system}, _reader), do: dgettext("mishka_gervaz", "System")
 
+  # A person's row whose account was deleted: `on_delete: :nilify` released the author, and
+  # `author_type` is what says it was not the system's.
+  defp author(%{author_id: nil}, _reader), do: Helper.label(:deleted)
+
   defp author(record, reader),
     do: person(record.author, record.author_id, Map.get(record, :author_master?), reader)
 
@@ -385,8 +389,6 @@ defmodule MishkaCmsCoreWeb.Templates.HistoryTimeline do
   end
 
   # The email when the reader may see it, "Master" for a master, "Unknown" for anyone else.
-  defp person(_user, nil, _master?, _reader), do: dgettext("mishka_gervaz", "System")
-
   defp person(user, _id, master?, reader),
     do:
       Helper.who(

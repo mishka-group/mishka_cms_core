@@ -501,7 +501,7 @@ defmodule MishkaCmsCoreWeb.Templates.ReviewComments do
       )
 
   # The email when the reader may see it, "Master" for a master, "Unknown" for anyone else; a note
-  # with no author is the assistant's or the system's.
+  # with no author is the assistant's, the system's or — written by a person — a deleted user's.
   defp person(user, id, master?, _type, reader) when is_binary(id),
     do:
       Helper.who(
@@ -511,10 +511,14 @@ defmodule MishkaCmsCoreWeb.Templates.ReviewComments do
       )
 
   defp person(_none, _id, _master?, :ai, _reader), do: dgettext("mishka_gervaz", "Assistant")
+  defp person(_none, _id, _master?, :human, _reader), do: Helper.label(:deleted)
   defp person(_none, _id, _master?, _type, _reader), do: Helper.label(:system)
 
   defp resolver(comment, reader) do
     case comment.resolved_by_id do
+      nil when not is_nil(comment.resolved_at) ->
+        Helper.label(:deleted)
+
       nil ->
         nil
 

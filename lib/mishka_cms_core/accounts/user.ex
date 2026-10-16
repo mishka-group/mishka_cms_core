@@ -1303,13 +1303,8 @@ defmodule MishkaCmsCore.Accounts.User do
           # Fetch user with multitenancy bypass
           case Ash.get(__MODULE__, user_id, action: :master_get, authorize?: false) do
             {:ok, user} ->
-              # Clear permissions first (to avoid FK constraint)
-              user
-              |> Ash.Changeset.for_update(:update, %{}, authorize?: false)
-              |> Ash.Changeset.manage_relationship(:permissions, [], type: :append_and_remove)
-              |> Ash.update!()
-
-              # Then delete
+              # One transaction: the grants go with the account through their `on_delete: :delete`,
+              # so a delete that is refused leaves the account as it was, permissions included.
               case Ash.destroy(user, authorize?: false) do
                 :ok -> {:ok, user}
                 {:error, _} = error -> error

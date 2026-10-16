@@ -74,6 +74,11 @@ defmodule MishkaCmsCore.Runtime.PageComment do
       # that has been replied to — the answers still point at it — and the reader is told a note
       # cannot be deleted with no way to find out why. A thread is one thing; it goes as one.
       reference :parent_comment, on_delete: :delete
+
+      # A NOTE OUTLIVES ITS WRITER. Deleting an account would otherwise be refused for every note it
+      # wrote or closed; the thread stays and the writer reads as a deleted user.
+      reference :author, on_delete: :nilify
+      reference :resolved_by, on_delete: :nilify
     end
 
     custom_indexes do
