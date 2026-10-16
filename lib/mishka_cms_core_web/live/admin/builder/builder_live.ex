@@ -1450,6 +1450,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp blank_to_nil("__all__"), do: nil
   defp blank_to_nil(id), do: id
 
+  # EVERY ROUTE INTO A SHEET GOES THROUGH HERE. A sheet's contents are read when it opens
+  # (`load_sheet/2`), so a route that set `:sheet` by hand opened the panel and never asked for them:
+  # the folder rail of the Assets sheet drew its placeholders for as long as the sheet stayed open
+  # when it was reached from an Inspector's image button, a background, the SEO share image or a
+  # file attached to the assistant — and the Studio did the same from a node's right-click menu.
+  defp show_sheet(socket, sheet), do: socket |> assign(:sheet, sheet) |> load_sheet(sheet)
+
   # THE SHEET OPENS, AND THEN ITS CONTENTS ARRIVE. Everything the Studio shows was read on the way
   # in: `assign_token_categories/1` parses every stylesheet the site has, and the render itself
   # called `Marketplace.packages/1`, which parses the kit bundles — 10.8 MB of JSON for Chelekom
@@ -3144,10 +3151,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     # The Record-history button always lands on Record history. Only the routes that mean "drafts"
     # — the header chip, the stage menu, the More menu — open the other tab.
-    {:noreply,
-     socket
-     |> assign(sheet: opened, history_tab: :history)
-     |> load_sheet(opened)}
+    {:noreply, socket |> assign(:history_tab, :history) |> show_sheet(opened)}
   end
 
   # Switching tab resets the category: "media" means something different to a package than it does to
@@ -3264,7 +3268,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
        seo: :image,
        accepts: :images
      })
-     |> assign(:sheet, :assets)}
+     |> show_sheet(:assets)}
   end
 
   # RESOLVING RECORDS WHO DID IT. The action sets the resolver from the actor, together with the
@@ -3375,7 +3379,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # width, and leave the canvas showing underneath.
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
       when panel in ~w(assets studio review history),
-      do: {:noreply, assign(socket, sheet: String.to_existing_atom(panel), mob_panel: :canvas)}
+      do:
+        {:noreply,
+         socket
+         |> assign(:mob_panel, :canvas)
+         |> show_sheet(String.to_existing_atom(panel))}
 
   def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
     do: {:noreply, assign(socket, command_open: true, command_query: "", mob_panel: :canvas)}
@@ -3762,7 +3770,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # A file means a file the site already has, so this opens the library rather than inventing an
   # upload the assistant could not read anyway.
   def handle_event("attach", %{"kind" => "file"}, socket) do
-    {:noreply, assign(socket, :sheet, :assets)}
+    {:noreply, show_sheet(socket, :assets)}
   end
 
   # LEAVING IN PUBLISH MODE IS THE ONE WAY TO LOSE WORK HERE. Every other mode writes as you go, so
@@ -3935,7 +3943,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
        item: item_target(params),
        accepts: accepts(socket, node_id, name)
      })
-     |> assign(:sheet, :assets)}
+     |> show_sheet(:assets)}
   end
 
   # THE WHOLE COLLECTION, REWRITTEN. One `set_attr` per change, so one add, one removal and one edit
@@ -3988,7 +3996,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
        prop: "background",
        accepts: :images
      })
-     |> assign(:sheet, :assets)}
+     |> show_sheet(:assets)}
   end
 
   # THE SHEET'S SIDEBAR IS A FILTER. It rides `path_params` rather than the table's filter event
@@ -5557,7 +5565,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       :media ->
         socket
         |> assign(:media_target, %{node_id: id, name: prop})
-        |> assign(:sheet, :assets)
+        |> show_sheet(:assets)
 
       _no_chooser ->
         socket
@@ -7152,7 +7160,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     EditorSession.select(socket.assigns.token, node_id)
 
     case EditorSession.context_action(socket.assigns.token, action, node_id) do
-      {:open, :snippet} -> assign(socket, sheet: :studio, studio_tab: :snippets)
+      {:open, :snippet} -> socket |> assign(:studio_tab, :snippets) |> show_sheet(:studio)
       {:ok, _editor} -> socket
       {:relocated, _editor, note} -> put_flash(socket, :info, note)
       {:error, reason} -> put_flash(socket, :error, human(reason))

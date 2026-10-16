@@ -131,9 +131,11 @@ defmodule MishkaCmsCoreWeb.Templates.HistoryTimelineTest do
       assert author_of(html) == "Unknown"
     end
 
-    test "a person's row with no account reads System", _context do
+    # The author is released when the account is deleted (`on_delete: :nilify`), and `author_type`
+    # is what says it was a person's: the system's rows are the ones below.
+    test "a person's row with no account reads Deleted user", _context do
       assert row(%{author: nil, author_id: nil}) |> render_row(tenant()) |> author_of() ==
-               "System"
+               "Deleted user"
     end
 
     test "the platform's own rows say so, and not by looking like a hidden person", _context do

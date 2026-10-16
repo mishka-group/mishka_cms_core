@@ -35,6 +35,18 @@ defmodule MishkaCmsCoreWeb.Templates.AssetsGrid do
   Both were hand-rolled here first, and both drifted: a 34px search box beside a 42px one, and a
   switcher whose active tab was a filled violet square where the library's is a white pill.
 
+  ## The card's footer while a pick is in flight
+
+  A card is about 185px wide in the sheet, and its footer is one row: the labelled button, then every
+  other action as a 30px square. With a pick in flight that is `Use` and three squares, which leaves
+  the button about 50px — its glyph, the gap and its padding take most of that, and the label came
+  out as "U…". The footer wraps while a `Use` button is in it, and the button takes the whole of its
+  first row, so the label has the card's width however long a language writes it and the squares sit
+  under it. A card with no `Use` in it matches neither rule and is the Media page's card. Both rules
+  are written out in `render/1` rather than assembled, because Tailwind reads class names off the
+  source text, and their `\\_` is Tailwind's way of keeping the underscore of `use_media` from
+  becoming a space.
+
   ## Which clicks go where
 
   `filter`, `load_more` and `switch_template` are Gervaz's own events and carry
@@ -97,7 +109,11 @@ defmodule MishkaCmsCoreWeb.Templates.AssetsGrid do
       <div
         id={@static.stream_name}
         phx-update="stream"
-        class="grid grid-cols-2 gap-2.5 max-[420px]:grid-cols-1"
+        class={[
+          "grid grid-cols-2 gap-2.5 max-[420px]:grid-cols-1",
+          ~S"[&_div:has(>div>div>button[phx-value-event=use\_media])]:flex-wrap",
+          ~S"[&_button[phx-value-event=use\_media]]:basis-full"
+        ]}
       >
         <.render_item
           :for={{id, record} <- @stream}

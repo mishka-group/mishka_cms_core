@@ -176,7 +176,10 @@ defmodule MishkaCmsCore.Runtime.Media do
     only_when_changed? true
     relationship_opts public?: true
 
-    belongs_to_actor :user, MishkaCmsCore.Accounts.User, domain: MishkaCmsCore.Accounts
+    # The version stays, with no author, when the account that made it is deleted.
+    belongs_to_actor :user, MishkaCmsCore.Accounts.User,
+      domain: MishkaCmsCore.Accounts,
+      on_delete: :nilify
 
     version_extensions authorizers: [Ash.Policy.Authorizer]
     mixin {MishkaCmsCore.Runtime.Resources.Mixins.MediaPaperTrailMixin, :postgres, []}

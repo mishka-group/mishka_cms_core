@@ -363,6 +363,41 @@ defmodule MishkaCmsCore.Accounts.AccountAreasTest do
       assert names_of(ctx.member) == ["admin:dashboard:runtime:media"]
     end
 
+    test "the master update action reads and writes the account as the master that asked", ctx do
+      media = permission!("admin:dashboard:runtime:media")
+      users_master = holder(["admin:dashboard:user", "admin:dashboard:runtime:media"])
+      target = holder(["admin:dashboard:runtime:media"], ctx.site.id)
+
+      assert {:ok, renamed} =
+               master_update(users_master, target, %{
+                 email: "kept-permissions@example.com",
+                 permission_ids: [media.id]
+               })
+
+      assert to_string(renamed.email) == "kept-permissions@example.com"
+      assert names_of(target) == ["admin:dashboard:runtime:media"]
+
+      assert {:error, _} =
+               master_update(holder(["admin:dashboard:runtime:media"]), target, %{
+                 email: "not-by-a-master-of-users@example.com"
+               })
+
+      assert to_string(reload(target).email) == "kept-permissions@example.com"
+    end
+
+    test "the master update action run by the system, with no actor, still updates", ctx do
+      assert {:ok, renamed} =
+               User
+               |> Ash.ActionInput.for_action(
+                 :master_update,
+                 %{id: ctx.member.id, email: "by-the-system@example.com"},
+                 authorize?: false
+               )
+               |> Ash.run_action(authorize?: false)
+
+      assert to_string(renamed.email) == "by-the-system@example.com"
+    end
+
     # Asked with `Ash.can?/2`, which runs the policies alone: acting refuses these a second time,
     # when `manage_relationship` looks the permissions up in a catalogue the user area cannot read.
     defp grant_asked(action, ctx, site_id) do
