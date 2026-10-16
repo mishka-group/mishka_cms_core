@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   @moduledoc """
   The response headers that are the same whatever was asked for, and the Content-Security-Policy,

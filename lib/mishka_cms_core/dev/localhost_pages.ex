@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Dev.LocalhostPages do
   @moduledoc """
   The dev showcase: what `localhost` answers on top of the starter site every seeded site gets.

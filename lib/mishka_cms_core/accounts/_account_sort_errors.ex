@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # How AshJsonApi shows a sort it refuses because a field or a relationship is `sortable? false` —
 # every relationship into an account is (see `MishkaCmsCore.Accounts.User`'s `:related`), and
 # `sort_included[comments]=author.email` reaches Ash with no check of AshJsonApi's own first. A

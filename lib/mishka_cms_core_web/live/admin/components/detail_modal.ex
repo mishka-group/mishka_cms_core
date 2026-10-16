@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Live.Admin.Components.DetailModal do
   @moduledoc """
   Shared chrome + display helpers for the admin record modals (the runtime preview modal and the

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.SitemapTriggersTest do
   @moduledoc """
   What enqueues a site's `"sitemap"` job in core: the compiler worker after a page or a layout, the

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Activity.Calculations.Tone do
   @moduledoc """
   Ash calculation that exposes `:tone` (atom or `nil`) on a resource carrying an action name — the

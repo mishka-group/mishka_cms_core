@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Templates.SnippetForm do
   @moduledoc """
   A MishkaGervaz custom form template: the "Save as snippet" box at the top of the Studio's Snippets

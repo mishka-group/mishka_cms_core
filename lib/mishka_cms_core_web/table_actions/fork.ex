@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.TableActions.Fork do
   @moduledoc """
   A row action that copies a record and leaves the original alone — Gervaz's `ActionType` behaviour

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.BuilderHijackPlugin do
   @moduledoc """
   Test plugin: returns its entries AHEAD of the seed, which is what made a core key takeable.

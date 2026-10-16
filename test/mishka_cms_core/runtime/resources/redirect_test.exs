@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
   @moduledoc """
   `MishkaCmsCore.Runtime.Redirect`: the form both addresses are stored in, the rules a save is held

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # This library's tests run in two places, and the difference matters.
 #
 # Standalone (`cd __extensions/mishka_cms_core && mix test`) there is no application around it, so

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   @moduledoc """
   The server half of the content editor `MishkaCmsCoreWeb.UIAdapters.Admin.textarea/1` draws for a

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # How AshJsonApi and AshPhoenix forms show a refused sign-in action: an `ash_rate_limiter` refusal
 # (`MishkaCmsCore.Accounts.AuthRateLimit`), a way in a site has closed
 # (`MishkaCmsCore.Accounts.AuthGate`), a second factor still owed

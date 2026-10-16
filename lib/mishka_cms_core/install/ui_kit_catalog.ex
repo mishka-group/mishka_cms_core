@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Install.UiKitCatalog do
   @moduledoc """
   Pure view of a `mishka.ui_kit.bundle.v3` for the installer's component picker: groups the

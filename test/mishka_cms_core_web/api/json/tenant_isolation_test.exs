@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Api.Json.TenantIsolationTest do
   @moduledoc """
   Regression test for API tenant isolation (the "B1 cross-tenant IDOR" the audit flagged). It is

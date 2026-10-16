@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.CoreComponentsPresentTest do
   @moduledoc """
   `present?/1` is the guard every admin template reaches for before reading through a relationship,

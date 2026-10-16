@@ -5507,12 +5507,12 @@ msgstr ""
 msgid "versions"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:553
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:557
 #, elixir-autogen, elixir-format
 msgid "Keeps this hook out of the site's script: a page downloads it only when it shows an element that uses it. For a large hook few pages use."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/js_hook.ex:550
+#: lib/mishka_cms_core/runtime/resources/js_hook.ex:554
 #, elixir-autogen, elixir-format
 msgid "Load on first use"
 msgstr ""

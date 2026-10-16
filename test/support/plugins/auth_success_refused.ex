@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.AuthSuccessRefused do
   @moduledoc """
   Test plugin for `AuthController.Success.Refused`: rewords the message a refused sign-in is shown,

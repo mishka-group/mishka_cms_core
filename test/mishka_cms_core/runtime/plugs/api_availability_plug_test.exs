@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlugTest do
   @moduledoc """
   Who the API of an offline or switched-off site answers: its API admins and the masters who are

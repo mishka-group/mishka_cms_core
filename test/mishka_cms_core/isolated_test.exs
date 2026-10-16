@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.IsolatedTest do
   @moduledoc """
   `MishkaCmsCore.Isolated.run/4`: a function run in a peer BEAM of its own, whose crash, exception

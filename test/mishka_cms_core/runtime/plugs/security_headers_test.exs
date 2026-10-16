@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
   @moduledoc """
   The policy is only worth having if it says what it is meant to say, and a header nobody looks at

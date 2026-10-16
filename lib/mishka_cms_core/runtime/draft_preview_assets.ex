@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   @moduledoc """
   Temporary, isolated CSS and compiled module for a runtime preview — a draft (Page/Layout/ErrorPage)

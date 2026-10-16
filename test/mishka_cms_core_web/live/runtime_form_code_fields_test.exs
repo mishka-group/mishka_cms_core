@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Test.RuntimeFormCodeFieldsTest do
   @moduledoc """
   The code of a page, layout, component, error page, JS hook and stylesheet is written on its list's

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Workers.ShareCardRefreshWorker do
   @moduledoc """
   Looks at the share card a page or a record shows now (`MishkaCmsCore.Runtime.ShareCard.look/3`)

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index do
   use MishkaCmsCore.ExtensionLiveView
   alias MishkaGervaz.Table.Web.UrlSync

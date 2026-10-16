@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.CaptchaCheck.Refused do
   @moduledoc """
   A form sent without the captcha its site asks (`reason: :missing`) or with one that did not pass

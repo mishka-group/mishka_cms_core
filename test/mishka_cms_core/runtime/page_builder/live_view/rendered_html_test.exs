@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.RenderedHtmlTest do
   @moduledoc """
   The builder's encoder attaches a `rendered_html` preview by actually rendering the node, so this is
