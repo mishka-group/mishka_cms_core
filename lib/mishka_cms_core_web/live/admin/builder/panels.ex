@@ -621,7 +621,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:history_position, :integer, default: 0)
   attr(:history_total, :integer, default: 0)
 
-  @doc "The 56px top bar: identity and save status on the left, every global control on the right."
+  @doc """
+  The 56px top bar: identity and save status on the left, every global control on the right.
+
+  THE IDENTITY BLOCK IS THE ONLY CHILD THAT GIVES WAY. Everything on its right is `flex-none`, so it
+  is the controls that must stay whole; the block takes what is left and truncates — the document's
+  name, the status, the scope badge and the draft chip each carry `min-w-0` for it. A block that was
+  itself `flex-none` grew with whatever the record was called and pushed Publish off the screen, and
+  the status line is longest exactly when the stage is Published. Below 1180px the status wording
+  goes and its dot, with the words as a tooltip, stays — the same ladder the avatars and the labels
+  follow.
+  """
   def top_bar(assigns) do
     assigns = assign(assigns, :shareable_draft?, shareable_draft?(assigns[:draft]))
 
@@ -633,7 +643,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         data-armed={to_string(@stage == :published and @dirty?)}
         class="hidden"
       />
-      <div class="flex flex-none items-center gap-2.5">
+      <div data-role="pb-identity" class="flex min-w-0 flex-1 items-center gap-2.5">
         <.link
           id="pb-back"
           navigate={@back_path}
@@ -657,7 +667,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               data-role="pb-scope"
               title={scope_title(assigns)}
               class={[
-                "flex-none rounded-full px-1.5 py-[1px] font-['Space_Grotesk'] text-[9.5px] font-bold",
+                "min-w-0 max-w-[120px] truncate rounded-full px-1.5 py-[1px] font-['Space_Grotesk'] text-[9.5px] font-bold",
                 (global_document?(assigns) && "bg-[#f6f4fd] text-[#6d4fc0]") ||
                   "bg-[#f2f1ec] text-[#5c5a54]"
               ]}
@@ -666,10 +676,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             </span>
           </div>
           <div class="mt-0.5 flex items-center gap-1.5">
-            <span class={[
-              "size-[5px] rounded-full",
-              (@dirty? && "bg-[#cf8a24]") || "bg-[#1f9d6b]"
-            ]} />
+            <span
+              title={status_label(assigns)}
+              class={[
+                "size-[5px] flex-none rounded-full",
+                (@dirty? && "bg-[#cf8a24]") || "bg-[#1f9d6b]"
+              ]}
+            />
             <%!-- THE NAME IS THE WAY IN, which is where a reader already looks for it — and it is a
                   button only when there is a record to change and an address to change about it.
                   Before that, the essentials step is asking for exactly these fields one layer up. --%>
@@ -690,7 +703,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             >
               {document_label(assigns)}
             </span>
-            <span class="flex-none text-[10px] font-medium text-[#6d6a63]">
+            <span
+              data-role="pb-status"
+              title={status_label(assigns)}
+              class="min-w-0 truncate text-[10px] font-medium text-[#6d6a63] max-[1180px]:hidden"
+            >
               · {status_label(assigns)}
             </span>
             <%!-- Which of this document's versions the editor is writing to. Absent means the live
@@ -704,7 +721,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               id="pb-draft-target"
               phx-click="draft_sheet"
               title={gettext("Choose a draft")}
-              class="inline-flex max-w-[190px] flex-none items-center gap-1 rounded-full border border-[#dcdbf5] bg-[#f2f1fc] px-2 py-[1px] font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
+              class="inline-flex min-w-0 max-w-[190px] items-center gap-1 rounded-full border border-[#dcdbf5] bg-[#f2f1fc] px-2 py-[1px] font-['Space_Grotesk'] text-[9.5px] font-bold text-[#4f4bcc] hover:bg-[#e9e7fa]"
             >
               <span class="truncate">
                 {(@editor.draft_label &&
@@ -719,8 +736,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           </div>
         </div>
       </div>
-
-      <div class="flex-1"></div>
 
       <div
         data-role="pb-more"
