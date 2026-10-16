@@ -76,8 +76,21 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   Each degrades to correct-and-large rather than small-and-broken.
 
   `reached_components/2` answers what the walk did reach either way, for a caller that needs only
-  what is certainly reached — the components a site's warm job builds ahead of its visitors
-  (`MishkaCmsCore.Runtime.Handlers.BootHandler.warm_components/2`).
+  what is certainly reached — the components a page builds before it draws them
+  (`MishkaCmsCore.Runtime.ComponentPrefetch`).
+
+  ## Which copy of a component
+
+  A stylesheet looks a name up in the site's own components first and in the global ones after, and
+  either copy found is scanned. `reached_components/2` answers which MODULE a render draws, so it
+  reads the tag's `site` as `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` does:
+
+    * no `site`, or `site="Global"` — the global component;
+    * `site="<this site>"` — the site's own, and nothing when it has none;
+    * `site="<another site>"` — nothing, as the render refuses it;
+    * `site={assigns[:site]}` or `site={@site}` in a component — the scope that component was found
+      in;
+    * any other expression, and a name written outside a tag — the site's own, else the global one.
 
   ## Components named in stored content
 
@@ -115,6 +128,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   @named_through ~r/component_name\s*=\s*\{\s*@([a-z_][A-Za-z0-9_]*[?!]?)\s*\}/
   @code_call ~r/\b(?:component|send_update(?:_after)?)\(/
   @mark ~r/<%!-- css-closure attr=([a-z_][A-Za-z0-9_]*[?!]?)(?: default="([^"\r\n]*)")? --%>/
+  @handed_site ~r/\A\s*(?:assigns\[:site\]|@site)\s*\z/
 
   @typedoc """
   Everything a site's stylesheet has to be built from, or `:unbounded` when a reference the walk
@@ -166,9 +180,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   """
   @spec for_site(String.t(), keyword()) :: result()
   def for_site(site_name, opts \\ []) do
-    %{dirs: dirs, roots: roots, content: content} = sources(site_name, opts)
+    %{dirs: dirs, roots: roots} = sources = sources(site_name, opts)
 
-    case walk(roots, dirs, content) do
+    case walk(roots, sources, :stylesheet) do
       {:ok, %{components: components, scanned: scanned, resolved: resolved}} ->
         # The roots are part of the ANSWER, not only a source of edges: a page's own markup carries
         # classes, and so does a layout's.
@@ -198,27 +212,53 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   """
   @type reached :: %{name: String.t(), site: String.t()}
 
-  @doc """
-  Every component the walk is sure a site reaches, in whichever scope each was found, and whether
-  that is all of them.
+  @typedoc """
+  What one template names, read by `references/1` where the template is in hand, for
+  `reached_components/2` to walk from without a file.
+  """
+  @opaque references :: map()
 
-  The same walk as `for_site/2`, with the same options. Where `for_site/2` answers `:unbounded`,
-  this still answers what the walk did reach, with `complete?: false`: a reference it cannot
-  resolve may name more. A stylesheet cannot be built from that, since a component it leaves out
-  renders unstyled; a caller that only needs what is certainly reached can.
+  @doc """
+  Every component the walk is sure a site reaches, each with the site its tag draws it for, and
+  whether that is all of them.
+
+  The walk of `for_site/2`, with its options, and two differences. Where `for_site/2` answers
+  `:unbounded`, this still answers what the walk did reach, with `complete?: false`: a reference it
+  cannot resolve may name more. And a name is resolved to the copy a render draws, by the tag's
+  `site` — see "Which copy of a component" above.
+
+  `site_name` may be `nil` for a render that is for no site, which reaches the global components
+  alone.
+
+  ## Options
+
+  Those of `for_site/2`, and:
+
+    * `:references` — templates to walk from as well as `:roots`, each read by `references/1`.
+
+  ## Examples
 
       iex> CssClosure.reached_components("localhost")
       %{complete?: true, components: [%{name: "chelekom-alert", site: "Global"}]}
+
+      references = CssClosure.references(~s|<.component component_name="card" site="localhost" />|)
+      CssClosure.reached_components("localhost", roots: [], references: [references])
+      #=> %{complete?: true, components: [%{name: "card", site: "localhost"}]}
   """
-  @spec reached_components(String.t(), keyword()) :: %{
+  @spec reached_components(String.t() | nil, keyword()) :: %{
           complete?: boolean(),
           components: [reached()]
         }
   def reached_components(site_name, opts \\ []) do
-    %{root: root, dirs: dirs, roots: roots, content: content} = sources(site_name, opts)
+    %{root: root, dirs: dirs, roots: roots} = sources = sources(site_name, opts)
+
+    seeds =
+      opts
+      |> Keyword.get(:references, [])
+      |> Enum.with_index(fn references, index -> {"references:#{index}", references} end)
 
     {complete?, components} =
-      case walk(roots, dirs, content) do
+      case walk(roots ++ Enum.map(seeds, &elem(&1, 0)), sources, :render, Map.new(seeds)) do
         {:ok, %{components: components}} -> {true, components}
         {:dynamic, _offenders, components} -> {false, components}
       end
@@ -234,12 +274,56 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     }
   end
 
+  @doc """
+  What the template `source` names, for `reached_components/2` to walk from as `:references` — the
+  page or layout module built from it keeps the answer, so a render can walk what it names without
+  reading a file. Read as a page's markup is: no attribute of it names a component.
+  """
+  @spec references(String.t() | nil) :: references()
+  def references(source) when is_binary(source), do: source |> summarize(false) |> kept()
+  def references(nil), do: references("")
+
+  @doc """
+  The components `references` names in a tag that says which copy it draws — `site="Global"`, no
+  `site`, or `site` the name `site_name` — each as `%{name: name, site: site}`. A tag naming another
+  site, naming its component through an expression, or saying its `site` through one is left out.
+
+  `site_name` is the site of the page or layout the template belongs to, `nil` for a global one.
+
+      references = CssClosure.references(~s|<.component component_name="card" />|)
+      CssClosure.certain_components(references, "acme")
+      #=> [%{name: "card", site: "Global"}]
+  """
+  @spec certain_components(references(), String.t() | nil) :: [reached()]
+  def certain_components(%{calls: calls}, site_name) do
+    for %{target: {:name, name}, site: site} <- calls,
+        site == "Global" or (is_binary(site) and site == site_name),
+        uniq: true,
+        do: %{name: name, site: site}
+  end
+
+  # A KEPT SUMMARY CARRIES WHAT THE WALK READS. The source of an expression is read once, here, into
+  # `target` and `site`; after that only whether a value was an expression is asked.
+  defp kept(summary) do
+    Map.update!(summary, :calls, fn calls ->
+      Enum.map(calls, fn call -> Map.update!(call, :given, &without_sources/1) end)
+    end)
+  end
+
+  defp without_sources(given) do
+    Map.new(given, fn
+      {name, {:expression, _source}} -> {name, {:expression, nil}}
+      other -> other
+    end)
+  end
+
   # WHERE A NAME IS LOOKED UP, IN ORDER. A site-scoped component shadows a global one of the same
   # name — that is how an install overrides a kit — so the site's directories are searched first.
   defp sources(site_name, opts) do
     root = Keyword.get_lazy(opts, :runtime_dir, &default_runtime_dir/0)
-    scopes = [site_name | Keyword.get(opts, :extra_scopes, [])]
-    dirs = Enum.map(scopes ++ [@global], &component_dir(Path.join(root, &1)))
+    scopes = List.wrap(site_name) ++ Keyword.get(opts, :extra_scopes, [])
+    global = component_dir(Path.join(root, @global))
+    dirs = Enum.map(scopes, &component_dir(Path.join(root, &1))) ++ [global]
 
     content =
       opts
@@ -251,6 +335,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     %{
       root: root,
       dirs: dirs,
+      global: global,
       roots: Keyword.get_lazy(opts, :roots, fn -> entry_templates(root, scopes) end),
       content: content
     }
@@ -345,8 +430,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   # so far. A name an attribute takes is an edge only once a caller handing it over has been reached,
   # and the component it names may hand a name on in turn. Every set only grows, so it settles — and
   # a cycle, two components that render each other inside opposite branches, settles with it.
-  defp walk(roots, dirs, content) do
-    settle(%{roots: roots, dirs: dirs, content: content, read: %{}, components: [], names: %{}})
+  #
+  # `mode` is how a name becomes a file: `:stylesheet` takes the first copy found, `:render` the copy
+  # the tag's `site` draws (`locate/4`). `read` holds what is already summarized, the references a
+  # caller walks from among them.
+  defp walk(roots, sources, mode, read \\ %{}) do
+    sources
+    |> Map.take([:root, :dirs, :global, :content])
+    |> Map.merge(%{roots: roots, mode: mode, read: read, components: [], names: %{}})
+    |> settle()
   end
 
   defp settle(state) do
@@ -376,7 +468,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   defp summary(path, dirs) do
     case File.read(path) do
       {:ok, source} ->
-        summarize(source, Path.dirname(path) in dirs, dirs)
+        summarize(source, Path.dirname(path) in dirs)
 
       # A reference to a component that was uninstalled leaves a dangling name. It is not this
       # module's job to report that — the page will raise on render — and dropping it here is the
@@ -386,14 +478,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     end
   end
 
-  defp summarize(source, component?, dirs) do
+  # NOTHING HERE DEPENDS ON THE TREE: a name is resolved to a file when an edge is followed, so the
+  # summary of a template can be kept by the module built from it (`references/1`).
+  defp summarize(source, component?) do
     tags = component_tags(source)
-    calls = for {:ok, attributes} <- tags, found = call(attributes, dirs), found.target, do: found
+    calls = for {:ok, attributes} <- tags, found = call(attributes), found.target, do: found
     refs = for(%{target: {:attribute, name}} <- calls, do: name) |> Enum.uniq()
 
     %{
-      named:
-        @reference |> Regex.scan(source) |> Enum.map(fn [_all, name] -> name end) |> paths(dirs),
+      named: @reference |> Regex.scan(source) |> Enum.map(fn [_all, name] -> name end),
+      tagged: for(%{target: {:name, name}} <- calls, do: name),
       calls: calls,
       refs: refs,
       # A page, a layout and an error page declare no attributes, so nothing they hold is a mark.
@@ -418,10 +512,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   end
 
   defp edges_of(path, summary, state) do
-    named = for to <- summary.named, do: {path, :named, to}
+    named = for to <- named(summary, state), do: {path, :named, to}
 
     called =
-      for call <- summary.calls, to <- targets(call.target, path, state), do: {path, call, to}
+      for call <- summary.calls, to <- targets(call, path, state), do: {path, call, to}
 
     drawn =
       case summary.draws_content? do
@@ -432,12 +526,49 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     named ++ called ++ drawn
   end
 
-  defp targets({:path, to}, _from, _state), do: [to]
+  # A STYLESHEET SCANS WHATEVER A NAME FINDS, and every `component_name="…"` in the file is one,
+  # inside a tag or not. A render draws a tag's copy by its `site`, so there the names written in
+  # tags are left to the calls, and only those written elsewhere — a comment naming what stored
+  # content draws — are looked up as a stylesheet looks them up.
+  defp named(summary, %{mode: :stylesheet} = state), do: paths(summary.named, state.dirs)
+  defp named(summary, state), do: paths(summary.named -- summary.tagged, state.dirs)
 
-  defp targets({:attribute, name}, from, state),
-    do: state.names |> Map.get({from, name}, []) |> paths(state.dirs)
+  defp targets(%{target: {:name, name}, site: site}, from, state),
+    do: [name] |> locate(site, from, state) |> Enum.uniq()
 
-  defp targets(:dynamic, _from, _state), do: []
+  defp targets(%{target: {:attribute, name}, site: site}, from, state),
+    do: state.names |> Map.get({from, name}, []) |> locate(site, from, state) |> Enum.uniq()
+
+  defp targets(%{target: :dynamic}, _from, _state), do: []
+
+  defp locate(names, site, from, state) do
+    for name <- names, path = locate_one(name, site, from, state), do: path
+  end
+
+  defp locate_one(name, _site, _from, %{mode: :stylesheet} = state), do: resolve(name, state.dirs)
+  defp locate_one(name, "Global", _from, state), do: resolve(name, [state.global])
+
+  # `site={assigns[:site]}` is the site the component itself was drawn for, which is the scope it was
+  # found in. A page or a layout is drawn for no `site` attribute of its own, so it cannot tell.
+  defp locate_one(name, :inherit, from, state) do
+    case Path.dirname(from) in state.dirs do
+      true -> resolve(name, [Path.dirname(from)])
+      false -> resolve(name, state.dirs)
+    end
+  end
+
+  defp locate_one(name, :unknown, _from, state), do: resolve(name, state.dirs)
+
+  # A site's own component of the site walked for. Another site's is refused by the render, and is
+  # no component of this walk.
+  defp locate_one(name, site, _from, state) do
+    dir = component_dir(Path.join(state.root, site))
+
+    case dir != state.global and dir in state.dirs do
+      true -> resolve(name, [dir])
+      false -> nil
+    end
+  end
 
   # WHAT EACH ATTRIBUTE CAN BE: its default, and every literal a reached call hands over for it. An
   # empty string names nothing.
@@ -551,26 +682,23 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   end
 
   # A call reaches a component by its literal name, by an attribute it was handed, or by an
-  # expression the walk cannot read — or names nothing, when the tag has no `component_name`.
-  defp call(attributes, dirs) do
+  # expression the walk cannot read — or names nothing, when the tag has no `component_name`. Its
+  # `site` is which copy it draws: see "Which copy of a component" above.
+  defp call(attributes) do
     given = for {name, value} <- attributes, into: %{}, do: {name, value}
     spread? = :spread in attributes
 
     %{
-      target: target(Map.get(given, "component_name"), spread?, dirs),
+      target: target(Map.get(given, "component_name"), spread?),
+      site: site(Map.get(given, "site")),
       given: given,
       spread?: spread?
     }
   end
 
-  defp target({:literal, name}, _spread?, dirs) do
-    case resolve(name, dirs) do
-      nil -> nil
-      path -> {:path, path}
-    end
-  end
+  defp target({:literal, name}, _spread?), do: {:name, name}
 
-  defp target({:expression, source}, _spread?, _dirs) do
+  defp target({:expression, source}, _spread?) do
     case Regex.run(@read_attribute, source) do
       [_all, name] -> {:attribute, name}
       nil -> :dynamic
@@ -578,8 +706,21 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
   end
 
   # A TAG THAT SPREADS A MAP AND NAMES NOTHING names whatever that map holds.
-  defp target(nil, true, _dirs), do: :dynamic
-  defp target(_nothing, _spread?, _dirs), do: nil
+  defp target(nil, true), do: :dynamic
+  defp target(_nothing, _spread?), do: nil
+
+  # `nil` and `"Global"` draw the global component (`Helpers.module_name/3`).
+  defp site(nil), do: "Global"
+  defp site({:literal, site}), do: site
+
+  defp site({:expression, source}) do
+    case Regex.match?(@handed_site, source) do
+      true -> :inherit
+      false -> :unknown
+    end
+  end
+
+  defp site(_bare), do: :unknown
 
   # Every `<.component …>` opening tag, as its attributes or `:error` when it cannot be read.
   defp component_tags(source) do

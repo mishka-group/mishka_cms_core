@@ -398,8 +398,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       # Check the function AST structure
       [{:__block__, _, defs}] = functions_ast
-      # render/1 + templates/1
-      assert length(defs) == 2
+      # __component_references__/0 + render/1 + templates/1
+      assert length(defs) == 3
     end
 
     test "handles empty template" do

@@ -681,13 +681,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
     end
   end
 
+  # WHICH MODULE A RENDER DRAWS, not which file a stylesheet scans: `LiveViewHelpers.component/1`
+  # builds the copy the tag's `site` names, and only that one.
   describe "reached_components/2" do
-    defp reached(root, site \\ "acme"),
-      do: CssClosure.reached_components(site, runtime_dir: root)
+    defp reached(root, site \\ "acme", opts \\ []),
+      do: CssClosure.reached_components(site, Keyword.put(opts, :runtime_dir, root))
+
+    defp drawn(name, site), do: ~s|<.component component_name="#{name}" site="#{site}" />|
 
     test "names each reached component with the site a tag draws it for", %{root: root} do
       global_component(root, "kit-icon", "<i></i>")
-      write(root, "acme", "component", "card", reference("kit-icon"))
+      write(root, "acme", "component", "card", drawn("kit-icon", "Global"))
       global_component(root, "kit-unused", "<div></div>")
       write(root, "acme", "page", "home", reference("card"))
 
@@ -697,10 +701,94 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
              }
     end
 
-    test "a site component shadowing a global one is the site's", %{root: root} do
+    test "a tag naming the site draws the site's copy", %{root: root} do
       global_component(root, "kit-alert", "<div></div>")
       write(root, "acme", "component", "kit-alert", "<div></div>")
       write(root, "acme", "page", "home", reference("kit-alert"))
+
+      assert %{components: [%{name: "kit-alert", site: "acme"}]} = reached(root)
+    end
+
+    # The site's copy is the first a stylesheet finds, and the one a render of this tag never draws.
+    test "site=\"Global\" draws the global copy, though the site has its own", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "component", "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", drawn("kit-alert", "Global"))
+
+      assert %{components: [%{name: "kit-alert", site: "Global"}]} = reached(root)
+    end
+
+    test "a tag naming no site draws the global copy", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "component", "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", ~s|<.component component_name="kit-alert" />|)
+
+      assert %{components: [%{name: "kit-alert", site: "Global"}]} = reached(root)
+    end
+
+    test "a tag naming the site draws nothing when only a global copy exists", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", reference("kit-alert"))
+
+      assert %{components: []} = reached(root)
+    end
+
+    test "a tag naming another site draws nothing", %{root: root} do
+      write(root, "other", "component", "theirs", "<div></div>")
+      global_component(root, "theirs", "<div></div>")
+      write(root, "acme", "page", "home", drawn("theirs", "other"))
+
+      assert %{components: []} = reached(root)
+    end
+
+    # `site={assigns[:site]}` is the site the component was drawn for.
+    test "a site handed on by a component is the scope that component was found in", %{
+      root: root
+    } do
+      handing = ~s|<.component component_name="kit-icon" site={assigns[:site]} />|
+      global_component(root, "kit-button", handing)
+      write(root, "acme", "component", "kit-button", handing)
+      global_component(root, "kit-icon", "<i></i>")
+      write(root, "acme", "component", "kit-icon", "<i></i>")
+      write(root, "acme", "page", "home", drawn("kit-button", "Global"))
+      write(root, "acme", "page", "about", drawn("kit-button", "acme"))
+
+      assert reached(root).components == [
+               %{name: "kit-button", site: "Global"},
+               %{name: "kit-icon", site: "Global"},
+               %{name: "kit-button", site: "acme"},
+               %{name: "kit-icon", site: "acme"}
+             ]
+    end
+
+    test "a site said through any other expression is the site's copy, else the global one", %{
+      root: root
+    } do
+      global_component(root, "kit-alert", "<div></div>")
+      global_component(root, "kit-badge", "<div></div>")
+      write(root, "acme", "component", "kit-badge", "<div></div>")
+
+      write(
+        root,
+        "acme",
+        "page",
+        "home",
+        ~s|<.component component_name="kit-alert" site={site_name()} />| <>
+          ~s|<.component component_name="kit-badge" site={site_name()} />|
+      )
+
+      assert reached(root).components == [
+               %{name: "kit-alert", site: "Global"},
+               %{name: "kit-badge", site: "acme"}
+             ]
+    end
+
+    # A comment naming what stored content draws is no tag, and stored content draws the site's
+    # copy, else the global one.
+    test "a name written outside a tag is looked up as a stylesheet looks it up", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "component", "kit-alert", "<div></div>")
+      write(root, "acme", "page", "home", ~s|<%!-- component_name="kit-alert" --%>|)
 
       assert %{components: [%{name: "kit-alert", site: "acme"}]} = reached(root)
     end
@@ -715,7 +803,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
         "acme",
         "page",
         "home",
-        reference("kit-alert") <> ~s|<.component component_name={@pick} />|
+        drawn("kit-alert", "Global") <> ~s|<.component component_name={@pick} />|
       )
 
       assert unbounded_naming(fn -> closure(root) end) =~ "cannot resolve"
@@ -731,6 +819,79 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
       write(root, "acme", "page", "home", "<p>plain</p>")
 
       assert reached(root) == %{complete?: true, components: []}
+    end
+
+    test "a render for no site reaches the global components alone", %{root: root} do
+      global_component(root, "kit-alert", "<div></div>")
+      write(root, "acme", "component", "card", "<div></div>")
+
+      references =
+        CssClosure.references(drawn("kit-alert", "Global") <> drawn("card", "acme"))
+
+      assert %{components: [%{name: "kit-alert", site: "Global"}]} =
+               reached(root, nil, roots: [], references: [references])
+    end
+  end
+
+  # WHAT A PAGE OR LAYOUT MODULE KEEPS of its own template, so a render walks from it without a file.
+  describe "references/1" do
+    test "is walked as the template it was read from would be", %{root: root} do
+      global_component(root, "kit-icon", "<i></i>")
+      write(root, "acme", "component", "card", ~s|<.component component_name="kit-icon" />|)
+      template = ~s|<div>#{reference("card")}</div>|
+      write(root, "acme", "page", "home", template)
+
+      assert reached(root, "acme", roots: [], references: [CssClosure.references(template)]) ==
+               reached(root)
+    end
+
+    test "a literal a page hands a component is followed", %{root: root} do
+      card_list(root)
+      global_component(root, "kit-a", "<div></div>")
+      write(root, "acme", "component", "kit-a", "<div></div>")
+
+      references =
+        CssClosure.references(
+          ~s|<.component component_name="kit-list" site="Global" card="kit-a" />|
+        )
+
+      assert reached(root, "acme", roots: [], references: [references]).components == [
+               %{name: "kit-list", site: "Global"},
+               %{name: "kit-a", site: "acme"}
+             ]
+    end
+
+    test "keeps no expression's source" do
+      references =
+        CssClosure.references(~s|<.component component_name="card" label={secret()} />|)
+
+      refute inspect(references) =~ "secret"
+    end
+  end
+
+  describe "certain_components/2" do
+    test "the tags that say which copy they draw, of this site or global" do
+      references =
+        CssClosure.references(
+          ~s|<.component component_name="a" />| <>
+            ~s|<.component component_name="b" site="Global" />| <>
+            ~s|<.component component_name="c" site="acme" />| <>
+            ~s|<.component component_name="d" site="other" />| <>
+            ~s|<.component component_name="e" site={site_name()} />| <>
+            ~s|<.component component_name={@pick} site="Global" />| <>
+            ~s|<%!-- component_name="f" --%>|
+        )
+
+      assert CssClosure.certain_components(references, "acme") == [
+               %{name: "a", site: "Global"},
+               %{name: "b", site: "Global"},
+               %{name: "c", site: "acme"}
+             ]
+
+      assert CssClosure.certain_components(references, nil) == [
+               %{name: "a", site: "Global"},
+               %{name: "b", site: "Global"}
+             ]
     end
   end
 
