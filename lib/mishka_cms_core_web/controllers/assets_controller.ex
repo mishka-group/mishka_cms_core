@@ -44,6 +44,10 @@ defmodule MishkaCmsCoreWeb.AssetsController do
       master, and an admin of that site;
     * `__shared_base__`, the base every site's bundle starts with: anyone.
 
+  A lazy JS hook's module (`MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.lazy_type/1`) is
+  answered at `/assets/js/<site>/<hash>.js` too, by its own hash, to whom may see that site's script,
+  with the same headers — and only while the site's current bundle loads it.
+
   Anything else — a stale or unknown hash, another site's bundle, a site that is down — is a 404
   that no cache keeps. A plugin on `web:request:asset_unavailable` hears it first, with
   `%{site: site_name, type: "css" | "js", reason: reason}` as its meta, and may answer instead by
@@ -155,6 +159,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
   import Plug.Conn
   alias MishkaCmsCore.Accounts.Helper
   alias MishkaCmsCore.Runtime.{ContentEditorStyles, DraftPreviewAssets, SiteAvailability}
+  alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaInstaller.Event.Hook
 
@@ -173,21 +178,26 @@ defmodule MishkaCmsCoreWeb.AssetsController do
   defp keep_session_unwritten(conn, _opts), do: configure_session(conn, ignore: true)
 
   defp serve(conn, %{"site" => site, "hash" => hash}, type) do
-    case access(conn, site, type, Path.rootname(hash)) do
-      {:ok, cache_control} -> send_bundle(conn, site, type, cache_control)
+    with {:ok, asset} <- stored(site, type, Path.rootname(hash)),
+         {:ok, cache_control} <- audience(conn, site, type) do
+      send_bundle(conn, site, type, asset, cache_control)
+    else
       {:error, reason} -> refuse(conn, site, type, reason)
     end
   end
 
-  defp access(conn, site, type, hash) do
-    case AssetsState.get!(site, type) do
-      %{hash: ^hash, value: value} when is_binary(value) and value != "" ->
-        audience(conn, site, type)
-
-      _missing_or_stale ->
-        {:error, :missing}
-    end
+  # The bundle at its current hash — or, for a script, a lazy hook's module that bundle loads.
+  defp stored(site, type, hash) do
+    Enum.find_value(assets(type, hash), {:error, :missing}, fn asset ->
+      case AssetsState.get!(site, asset) do
+        %{hash: ^hash, value: value} when is_binary(value) and value != "" -> {:ok, asset}
+        _missing_or_stale -> nil
+      end
+    end)
   end
+
+  defp assets("js", hash), do: ["js", JavaScriptCompiler.lazy_type(hash)]
+  defp assets(type, _hash), do: [type]
 
   defp audience(_conn, @shared_base, _type), do: {:ok, @public}
 
@@ -264,7 +274,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
       else: conn |> put_resp_header("cache-control", "no-store") |> send_resp(404, "") |> halt()
   end
 
-  defp send_bundle(conn, site, type, cache_control) do
+  defp send_bundle(conn, site, type, asset, cache_control) do
     :telemetry.span(
       [:mishka_cms, :assets, :serve],
       %{site: site, asset_type: type},
@@ -279,18 +289,18 @@ defmodule MishkaCmsCoreWeb.AssetsController do
 
         {encoding, key} =
           cond do
-            accepted =~ "br" -> {"br", "brotli_#{type}"}
-            accepted =~ "gzip" -> {"gzip", "gzip_#{type}"}
-            true -> {nil, type}
+            accepted =~ "br" -> {"br", "brotli_#{asset}"}
+            accepted =~ "gzip" -> {"gzip", "gzip_#{asset}"}
+            true -> {nil, asset}
           end
 
         %{content: content, encoding: encoding} =
-          %{site: site, key: key, type: type, encoding: encoding}
+          %{site: site, key: key, type: type, asset: asset, encoding: encoding}
           |> then(&Hook.call("AssetsController.Serve.BeforeAssetLookup", &1))
           |> then(fn data ->
             {get_asset, encoding} =
               case AssetsState.get_value(data.site, data.key) do
-                nil -> {AssetsState.get_value(data.site, data.type), nil}
+                nil -> {AssetsState.get_value(data.site, data.asset), nil}
                 found -> {found, data.encoding}
               end
 

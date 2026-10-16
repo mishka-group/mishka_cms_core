@@ -26,6 +26,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookGuardedStructTest do
                :format,
                :priority,
                :active,
+               :lazy,
                :permissions
              ]) == JsHook.__guarded_field_name_set__()
     end

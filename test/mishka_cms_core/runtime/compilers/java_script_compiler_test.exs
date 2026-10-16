@@ -82,7 +82,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
 
   describe "compile/1" do
     test "successfully compiles JavaScript for a site with no hooks" do
-      assert {:ok, js} = JavaScriptCompiler.compile("test_site")
+      assert {:ok, %{js: js}} = JavaScriptCompiler.compile("test_site")
       assert is_binary(js)
       assert byte_size(js) > 0
       # Should contain some basic JavaScript structure
@@ -93,7 +93,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
 
     test "successfully compiles JavaScript for a site that doesn't exist" do
       # When site doesn't exist, it should still compile with empty hooks
-      assert {:ok, js} = JavaScriptCompiler.compile("nonexistent_site")
+      assert {:ok, %{js: js}} = JavaScriptCompiler.compile("nonexistent_site")
       assert is_binary(js)
       assert byte_size(js) > 0
     end
@@ -126,7 +126,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       end
 
       # Compile and check cleanup happens
-      assert {:ok, _js} = JavaScriptCompiler.compile("test_site")
+      assert {:ok, %{js: _js}} = JavaScriptCompiler.compile("test_site")
 
       # The implementation should clean up temporary files
       # We can verify by checking the temp directory pattern
