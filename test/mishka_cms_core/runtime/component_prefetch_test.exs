@@ -374,7 +374,7 @@ defmodule MishkaCmsCore.Runtime.ComponentPrefetchTest do
   end
 
   # The next `count` compiles to start, each let go as it starts.
-  defp release(count), do: for(_ <- 1..count, do: send(compile_started!(), :go))
+  defp release(count), do: for(_ <- 1..count//1, do: send(compile_started!(), :go))
 
   # The row, and the template file the boot writes for it — what a cold render walks.
   defp component!(site, name, template \\ ~s|<div class="p-1">x</div>|) do
