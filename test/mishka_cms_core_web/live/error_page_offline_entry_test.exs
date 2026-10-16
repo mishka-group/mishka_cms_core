@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
   @moduledoc """
   The offline page in the Error Pages admin, as a site's own admin uses it: the form offers it next to

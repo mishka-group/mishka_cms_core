@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
   # ONE COMPILE PER PAGE, HOWEVER MANY ASK FOR IT. After a restart every page is cold, and the
   # visitors who arrive before a page is built must all be answered by its one compile — while the

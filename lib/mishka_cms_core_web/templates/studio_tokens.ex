@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Templates.StudioTokens do
   @moduledoc """
   A MishkaGervaz custom table template: the Design tokens list inside the page builder's Studio.

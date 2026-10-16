@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.SitemapUnavailablePage do
   @moduledoc """
   Test plugin for `web:request:sitemap_unavailable`: answers with a response of its own, proving a

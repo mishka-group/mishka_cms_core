@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Compilers.UserClosureTest do
   @moduledoc """
   Whether a page or a layout has any use for the signed-in user, answered once when it is compiled.

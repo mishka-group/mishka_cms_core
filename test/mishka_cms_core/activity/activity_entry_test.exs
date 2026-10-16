@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Activity.ActivityEntryTest do
   @moduledoc """
   The gervaz-backed activity resource: a manual read over `Ash.DataLayer.Simple`

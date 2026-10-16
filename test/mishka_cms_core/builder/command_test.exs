@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Builder.CommandTest do
   @moduledoc """
   A `Phoenix.LiveView.JS` command goes out as terms and comes back as terms, and nobody spells Elixir.

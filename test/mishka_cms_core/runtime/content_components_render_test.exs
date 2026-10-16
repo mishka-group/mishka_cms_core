@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
   @moduledoc """
   Markers in content drawn as the components they name — `rich_content/1` on a page, in a preview

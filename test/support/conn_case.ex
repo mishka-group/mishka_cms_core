@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.ConnCase do
   @moduledoc """
   Test case for the extension's JSON API, standing in for the CMS's `MishkaCmsWeb.ConnCase`.

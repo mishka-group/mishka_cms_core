@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
   @moduledoc """
   Multi-tenant API plug for domain-based tenant resolution and context management.

@@ -160,3 +160,15 @@ jobs:
       # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files,
       # each in the partition that compiles it.
       - run: mix test --warnings-as-errors --partitions 4
+
+  # Every tracked file carries an SPDX header or is matched by REUSE.toml. Only this repository
+  # is checked out, so the job runs at the workspace root and needs no build.
+  reuse:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: fsfe/reuse-action@v5
+        with:
+          args: lint

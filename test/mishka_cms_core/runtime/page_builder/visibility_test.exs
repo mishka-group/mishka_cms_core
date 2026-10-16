@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.VisibilityTest do
   @moduledoc """
   `MishkaCmsCore.Runtime.PageBuilder.Visibility`: an element kept in the page and shown to nobody —

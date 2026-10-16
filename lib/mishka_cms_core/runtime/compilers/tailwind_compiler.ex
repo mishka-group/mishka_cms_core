@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   @moduledoc """
   Production-ready Tailwind CSS v4 compiler for runtime CSS generation with multi-site support.

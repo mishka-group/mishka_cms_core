@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.SitemapBuilt do
   @moduledoc """
   Test plugin for `runtime:compile:after_sitemap`: reports what each stored sitemap was built from

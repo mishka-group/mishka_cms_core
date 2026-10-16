@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Resources.Validations.HookPackages do
   @moduledoc """
   A JS hook's `npm` packages and `modules` are what the JavaScript compiler fetches and writes to

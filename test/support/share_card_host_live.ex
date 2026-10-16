@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.ShareCardHostLive do
   @moduledoc """
   A stand-in for an edit modal holding `MishkaCmsCoreWeb.Live.Admin.Components.ShareCardField`, so

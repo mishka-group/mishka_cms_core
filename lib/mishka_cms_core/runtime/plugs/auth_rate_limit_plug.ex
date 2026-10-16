@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Plugs.AuthRateLimitPlug do
   @moduledoc """
   The JSON:API side of `MishkaCmsCore.Accounts.AuthRateLimit`: hands every action the address

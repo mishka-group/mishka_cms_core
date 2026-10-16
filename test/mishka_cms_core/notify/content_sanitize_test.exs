@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Notify.ContentSanitizeTest do
   @moduledoc """
   GuardedStruct is the pre-DB layer over Ash: it sanitizes notification content (strips HTML tags a

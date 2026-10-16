@@ -1,3 +1,6 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
 defmodule MishkaCmsCore.Runtime.PageBuilder.Highlight do
   @moduledoc """
   Colour for the code the editor shows, driven by tokenizers rather than by regular expressions.

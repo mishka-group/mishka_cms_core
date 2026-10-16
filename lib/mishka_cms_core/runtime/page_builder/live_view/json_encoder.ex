@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Copied and changed from https://github.com/BeaconCMS/beacon_live_admin/blob/main/lib/beacon/live_admin/visual_editor/heex/json_encoder.ex
 defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.JsonEncoder do
   require Logger

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.EventCannotRunTest do
   @moduledoc """
   An event whose plugins cannot all run (`MishkaCmsCore.Test.EventCannotRun.stub!/1`) answers

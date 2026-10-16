@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.AdminPredicatesTest do
   @moduledoc """
   Who is an admin, per surface, in `MishkaCmsCore.Accounts.Helper`: a dashboard admin holds anything

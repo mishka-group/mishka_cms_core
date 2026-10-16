@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
   @moduledoc """
   Each core widget is its own `dashboard:widgets` plugin. These tests call each plugin's `call/1`

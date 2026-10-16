@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Notify.Workers.PruneWorker do
   @moduledoc """
   Nightly retention sweep (Oban Cron). One bulk `:prune` across all sites keeps the table small no
