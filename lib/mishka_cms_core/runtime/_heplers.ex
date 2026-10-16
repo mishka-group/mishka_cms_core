@@ -40,13 +40,23 @@ defmodule MishkaCmsCore.Runtime.Helpers do
 
   def atomize_keys(value), do: value
 
-  defp known_key(key) when is_binary(key) do
+  @doc """
+  `key` as the atom of its name when that atom already exists, and as it is otherwise — what
+  `atomize_keys/1` does to each key. Makes no atom.
+
+      known_key("label")
+      #=> :label
+      known_key("no-atom-has-this-name")
+      #=> "no-atom-has-this-name"
+  """
+  @spec known_key(term()) :: term()
+  def known_key(key) when is_binary(key) do
     String.to_existing_atom(key)
   rescue
     ArgumentError -> key
   end
 
-  defp known_key(key), do: key
+  def known_key(key), do: key
 
   @doc """
   Recursively converts all atom keys in a map to strings.

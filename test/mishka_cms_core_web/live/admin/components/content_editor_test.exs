@@ -346,7 +346,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert Enum.count(entries, &String.starts_with?(&1.name, "many-#{ctx.n}-")) == 251
     end
 
-    test "leaves out a component that requires what no marker can hold", ctx do
+    test "leaves out a component that requires what the editor has no field for", ctx do
       needy =
         callout!(ctx.site, "needs-list-#{ctx.n}",
           attrs: [%{"name" => "rows", "type" => "list", "opts" => %{"required" => true}}]

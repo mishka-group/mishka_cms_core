@@ -172,6 +172,114 @@ defmodule MishkaCmsCore.UiKit.KitCompileTest do
     end
   end
 
+  describe "a list or a map attribute in content, written as JSON" do
+    setup do
+      for name <-
+            ~w(chelekom-headless-tree chelekom-headless-table chelekom-headless-sparkline chelekom-headless-segmented-control chelekom-headless-countdown) do
+        :ok = SiteState.put_component(nil, name)
+        on_exit(fn -> SiteState.delete_component(nil, name) end)
+      end
+
+      :ok
+    end
+
+    test "a tree draws its nodes, their children and the ones it opens" do
+      nodes =
+        ~s([{"value":"src","label":"src","children":[{"value":"app","label":"app.ex"},{"value":"web","label":"web"}]},{"value":"mix","label":"mix.exs"}])
+
+      html =
+        draw(
+          ~s(<p>[[component chelekom-headless-tree id="t1" nodes='#{nodes}' expanded='["src"]' /]]</p>)
+        )
+
+      drawn(html)
+      items = query(html, ~s(li[role="treeitem"]))
+
+      assert html |> query(~s(ul[role="tree"])) |> LazyHTML.attribute("id") == ["content-0"]
+      assert LazyHTML.attribute(items, "data-value") == ["src", "app", "web", "mix"]
+
+      assert html |> query(~s([data-part="label-text"])) |> Enum.map(&text/1) ==
+               ["src", "app.ex", "web", "mix.exs"]
+
+      assert html |> query(~s(li[data-value="src"])) |> LazyHTML.attribute("aria-expanded") ==
+               ["true"]
+
+      assert html |> query(~s(ul[role="tree"])) |> LazyHTML.attribute("data-expanded-values") ==
+               [~s(["src"])]
+    end
+
+    test "a table draws a row for each of its rows, under its columns" do
+      rows = ~s([{"id":1,"name":"mix.exs"},{"id":2,"name":"README.md"},{"id":3,"name":"lib"}])
+
+      html =
+        draw(
+          ~s([[component chelekom-headless-table caption="Files" rows='#{rows}']]) <>
+            ~s([[slot col label="Name" key="name"]]a file[[/slot]][[slot col label="Size"]]1 KB[[/slot]]) <>
+            ~s([[/component]])
+        )
+
+      drawn(html)
+
+      assert html |> query("thead th") |> Enum.map(&text/1) == ["Name", "Size"]
+      assert html |> query("tbody tr") |> Enum.count() == 3
+
+      assert html |> query("tbody td") |> Enum.map(&text/1) ==
+               List.flatten(List.duplicate(["a file", "1 KB"], 3))
+
+      assert html |> query("caption") |> Enum.map(&text/1) == ["Files"]
+    end
+
+    test "a sparkline plots its values, as a line and as bars" do
+      line = draw(~s([[component chelekom-headless-sparkline values='[3,5,2,8,6]' /]]))
+
+      drawn(line)
+      [d] = line |> query(~s(path[fill="none"])) |> LazyHTML.attribute("d")
+
+      assert d =~ ~r/\AM [\d.]+ [\d.]+( L [\d.]+ [\d.]+){4}\z/
+
+      bars =
+        draw(~s([[component chelekom-headless-sparkline values='[3,5,2,8,6]' type="bar" /]]))
+
+      assert bars |> query("rect") |> Enum.count() == 5
+    end
+
+    test "a segmented control draws a segment for each option, the chosen one checked" do
+      html =
+        draw(
+          ~s([[component chelekom-headless-segmented-control name="range" options='["Day","Week","Month"]' value="Week" /]])
+        )
+
+      drawn(html)
+      inputs = query(html, ~s(input[type="radio"]))
+
+      assert LazyHTML.attribute(inputs, "value") == ["Day", "Week", "Month"]
+      assert html |> query("input[checked]") |> LazyHTML.attribute("value") == ["Week"]
+
+      assert html |> query(~s([data-part="label"])) |> Enum.map(&text/1) ==
+               ["Day", "Week", "Month"]
+    end
+
+    test "a countdown shows the units it is given, under the labels it is given" do
+      html =
+        draw(
+          ~s([[component chelekom-headless-countdown seconds="93784" show_labels units='["days","hours"]' labels='{"days":"d","hours":"h"}' /]])
+        )
+
+      drawn(html)
+
+      assert html |> query(~s([data-part="digit"])) |> Enum.map(&text/1) == ["1", "2"]
+      assert html |> query(~s([data-part="label"])) |> Enum.map(&text/1) == ["d", "h"]
+    end
+  end
+
+  # Drawn by the component itself, not as the box a raise is drawn as.
+  defp drawn(html) do
+    assert html |> query(~s([data-role="component-crashed"])) |> Enum.count() == 0, html
+    html
+  end
+
+  defp text(node), do: node |> LazyHTML.text() |> String.trim()
+
   defp query(html, selector), do: html |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
 
   defp draw(html) do

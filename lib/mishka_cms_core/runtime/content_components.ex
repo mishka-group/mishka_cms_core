@@ -74,8 +74,9 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   first checked, as a string, against the active components `SiteState` knows the site and the
   global scope have: a name an author typed that names none of them makes no module name, no atom
   and no remembered failure. A name that resolves to nothing, an inactive component, another site's,
-  one that draws content itself (it could draw the content that holds it, forever), and one missing
-  an attribute it requires are drawn as nothing. The same render in a preview (`MishkaCmsCore.Runtime.StaticHelpers`) draws a
+  one that draws content itself (it could draw the content that holds it, forever), one missing an
+  attribute it requires, and one whose list or map value cannot be read (see Lists and maps) are
+  drawn as nothing. The same render in a preview (`MishkaCmsCore.Runtime.StaticHelpers`) draws a
   notice saying why in their place. On a page, one that passes every check and then raises while it
   draws is drawn as a small box, and the content around it draws — see
   `MishkaCmsCore.Runtime.ComponentBoundary`.
@@ -88,8 +89,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   Only the attributes the component declares are read from the marker, each cast to its declared
   type: `string` and `any` as written, `boolean` from `true`/`false` or a bare key, `integer` and
-  `float` from a number, and anything that declares `values` only as one of them — which is the only
-  way an `atom` is taken. `id`, `site`, `component_name`, `current_user`, `rest` and any `phx-` name are never an
+  `float` from a number, `list` and `map` from JSON (see Lists and maps), and anything that declares
+  `values` only as one of them — which is the only way an `atom` is taken. `id`, `site`, `component_name`, `current_user`, `rest` and any `phx-` name are never an
   author's. A stateful component, and one declaring `id`, gets the id `"<id>-<n>"`, `n` counting
   the content's markers from 0 — `"<id>-<n>-<m>"` for the `m`th inside it — so it stays the same
   component across renders.
@@ -114,6 +115,34 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   where the component renders its content.
 
   The HTML around the markers is drawn as it is given: pass only HTML that was sanitized.
+
+  ## Lists and maps
+
+  An attribute declared `list` takes a JSON array, and one declared `map` a JSON object, written in
+  single quotes around JSON's own double ones:
+
+      [[component chelekom-headless-tree nodes='[{"value":"src","label":"src","children":[{"value":"app","label":"app.ex"}]}]' /]]
+      [[component chelekom-headless-sparkline values='[3,5,2,8,6]' /]]
+      [[component chelekom-headless-segmented-control options='["Day","Week","Month"]' value="Week" /]]
+      [[component chelekom-headless-countdown seconds="93784" show_labels labels='{"days":"d","hours":"h"}' /]]
+
+  An `any` attribute that declares no `values` takes an array or an object the same way, and every
+  other value as it is written: `option='{"series":[]}'` is a map, `option="{draft"` the text.
+
+  The value reaches the component as data: strings, numbers, `true`, `false` and `null` as Elixir's
+  own, an array as a list, an object as a map. Nothing in it is run, and no string in it becomes a
+  module or an atom. An object's keys are atoms when it is a record — an object inside an array,
+  such as a tree's node read as `node.label`, and the object of an attribute whose declared default
+  is a map with atom keys. Any other object keeps its keys as written: a lookup such as a
+  countdown's `labels`, read by the strings its `units` hold. A key becomes an atom only when the VM
+  already has that atom — as it has every key the component's code reads — and a key starting with
+  `__` is always a string.
+
+  A value is at most 32 KB as written, and 8 levels deep, each array and object a level: a tree's
+  node is two. A `'` inside the JSON is written `\\u0027`, and `&`, `<` and `>`, as in any value, as
+  entities. A `list` or `map` value that is not JSON of its kind, that is larger or deeper, or that
+  is a bare key draws the component as nothing, and a preview says which attribute and why. An
+  `any` value is then handed as it is written.
 
   ## Cost
 
@@ -176,7 +205,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   require Ash.Query
 
   alias MishkaCmsCore.Builder.Furnishing
-  alias MishkaCmsCore.Runtime.{Component, ComponentBoundary, LiveViewHelpers, Translations}
+  alias MishkaCmsCore.Runtime.{Component, ComponentBoundary, Helpers, LiveViewHelpers}
+  alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Icons, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
@@ -194,6 +224,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   @depth 8
 
   @reserved ~w(id site component_name runtime_slot current_user inner_block rest)
+
+  # The types a marker writes as JSON, and how large and how deep one such value may be.
+  @json_types ~w(list map)
+  @json_bytes 32_768
+  @json_depth 8
 
   @quotes [
     {"\"", "\""},
@@ -547,6 +582,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       cast([%{name: "rest", type: "global", opts: %{"include" => ["circle"]}}],
            %{"circle" => true, "aria-label" => "Scan", "onclick" => "boom"})
       #=> %{rest: %{:circle => true, "aria-label" => "Scan"}}
+
+      cast([%{name: "nodes", type: "list"}, %{name: "labels", type: "map"}],
+           %{"nodes" => ~s([{"label":"src"}]), "labels" => ~s({"days":"d"})})
+      #=> %{nodes: [%{label: "src"}], labels: %{"days" => "d"}}
   """
   @spec cast([map()], %{String.t() => String.t() | true}) :: %{atom() => term()}
   def cast(declared, given) when is_list(declared) and is_map(given) do
@@ -554,7 +593,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         castable?(attr),
         name = Inspector.name(attr),
         Map.has_key?(given, name),
-        {:ok, value} <- [cast_value(type(attr), Map.fetch!(given, name), values(attr))],
+        {:ok, value} <- [cast_attr(attr, Map.fetch!(given, name))],
         into: global(declared, given),
         do: {String.to_existing_atom(name), value}
   end
@@ -684,7 +723,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   Active components of the site and global ones, every one of them, read as `actor` through
   `:for_tenant_with_globals`; a site's own component hides the global one of the same name, as it
   does when drawn. Components that draw content themselves are left out, and so are those requiring
-  an attribute no marker can hold — a list, a map, a struct — and every attribute `cast/2` would
+  an attribute the editor has no field for — a list or a map, which a marker is written with by
+  hand (see Lists and maps), or a struct — and every such attribute, and every one `cast/2` would
   drop.
   """
   @spec embeddable(map() | nil, String.t() | nil) :: {:ok, [entry()]} | {:error, term()}
@@ -717,12 +757,13 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
-  # A COMPONENT THAT REQUIRES WHAT NO MARKER CAN HOLD — a list, a map, a struct — could never be
-  # drawn in content, so it is never offered. The ones a marker fills itself are not counted.
+  # A COMPONENT THAT REQUIRES WHAT THE EDITOR HAS NO FIELD FOR — a list or a map, written by hand as
+  # JSON, or a struct, which no marker holds — would arrive from the palette drawing nothing, so it is
+  # never offered. The ones a marker fills itself are not counted.
   defp settable?(row) do
     Enum.all?(row.attrs || [], fn attr ->
       name = to_string(Inspector.name(attr))
-      not Inspector.required?(attr) or name in @reserved or castable?(attr)
+      not Inspector.required?(attr) or name in @reserved or offered?(attr)
     end)
   end
 
@@ -972,7 +1013,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
           into: %{},
           do: {Inspector.name(attr), group}
 
-    for attr <- attrs || [], castable?(attr) do
+    for attr <- attrs || [], offered?(attr) do
       name = to_string(Inspector.name(attr))
 
       %{
@@ -1135,9 +1176,11 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
          :ok <- placeable(module),
          %{component: component} = information <- module.__component_information__(),
          declared = List.wrap(component.attrs),
+         :ok <- readable(unreadable(declared, marker.attrs, "")),
          {:ok, attrs, inner} <- before_draw(marker, site, cast(declared, marker.attrs), context),
          {content, entries} = held(inner, context.level),
          slots = List.wrap(component.slots),
+         :ok <- readable(unreadable_entries(slots, entries)),
          :ok <- required(declared, attrs, slots, entries) do
       child = %{
         context
@@ -1242,6 +1285,31 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       [] -> :ok
       names -> {:missing, names}
     end
+  end
+
+  defp readable([]), do: :ok
+  defp readable(problems), do: {:unreadable, problems}
+
+  # The `list` and `map` attributes `given` writes that cannot be read, each named as
+  # `prefix <> name` with the reason.
+  defp unreadable(declared, given, prefix) do
+    for attr <- declared,
+        castable?(attr),
+        type(attr) in @json_types,
+        name = Inspector.name(attr),
+        Map.has_key?(given, name),
+        {:error, reason} <- [cast_attr(attr, Map.fetch!(given, name))],
+        do: {prefix <> name, reason}
+  end
+
+  # The same, of each slot entry against its slot's attributes, named as `slot.attribute`.
+  defp unreadable_entries(slots, entries) do
+    for slot <- named(slots),
+        name = slot_name(slot),
+        {:slot, %{name: ^name} = entry} <- entries,
+        problem <- unreadable(Inspector.attrs(slot), entry.attrs, name <> "."),
+        uniq: true,
+        do: problem
   end
 
   defp missing_slot(slot, entries) do
@@ -1392,11 +1460,32 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
         attrs: Enum.join(names, ", ")
       )
 
+  defp unavailable_message(name, {:unreadable, problems}),
+    do:
+      gettext("%{name} cannot read %{attrs}, so visitors see nothing here.",
+        name: name,
+        attrs: Enum.map_join(problems, ", ", &unreadable_message/1)
+      )
+
   defp unavailable_message(name, _unavailable),
     do:
       gettext("%{name} is not a component this site can show, so visitors see nothing here.",
         name: name
       )
+
+  defp unreadable_message({attr, :json}), do: gettext("%{attr} (not valid JSON)", attr: attr)
+
+  defp unreadable_message({attr, {:kind, "list"}}),
+    do: gettext("%{attr} (not a JSON array)", attr: attr)
+
+  defp unreadable_message({attr, {:kind, "map"}}),
+    do: gettext("%{attr} (not a JSON object)", attr: attr)
+
+  defp unreadable_message({attr, :size}),
+    do: gettext("%{attr} (larger than %{size} KB)", attr: attr, size: div(@json_bytes, 1024))
+
+  defp unreadable_message({attr, :depth}),
+    do: gettext("%{attr} (deeper than %{depth} levels)", attr: attr, depth: @json_depth)
 
   ####################################################################################
   ############################ (▰˘◡˘▰) Casting (▰˘◡˘▰) ###############################
@@ -1409,11 +1498,123 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
       castable_type?(type(attr), values(attr))
   end
 
+  # An attribute the content editor shows a field for: a castable one that is not written as JSON.
+  defp offered?(attr), do: castable?(attr) and type(attr) not in @json_types
+
   defp type(attr), do: attr |> Inspector.type() |> to_string()
 
-  defp castable_type?(type, _values) when type in ~w(string any boolean integer float), do: true
+  defp castable_type?(type, _values) when type in ~w(string any boolean integer float list map),
+    do: true
+
   defp castable_type?("atom", [_ | _]), do: true
   defp castable_type?(_type, _values), do: false
+
+  # One written value of `attr`, cast as `cast/2` casts it. A `list` or `map` one that cannot be
+  # read is `{:error, reason}`, every other that cannot `:error`.
+  defp cast_attr(attr, given) do
+    case {type(attr), values(attr)} do
+      {type, _values} when type in @json_types ->
+        json(given, type, atom_keyed?(Inspector.default(attr)))
+
+      {"any", []} when is_binary(given) ->
+        case json(given, "any", atom_keyed?(Inspector.default(attr))) do
+          {:ok, value} -> {:ok, value}
+          {:error, _not_json} -> {:ok, given}
+        end
+
+      {type, values} ->
+        cast_value(type, given, values)
+    end
+  end
+
+  # A JSON VALUE IS DATA. Jason decodes it into lists, maps, strings, numbers, booleans and nil; an
+  # object's key is made an atom only when that atom already exists, and a value never is — so the
+  # content a visitor's page carries can mint no atom and name no module.
+  defp json(given, kind, atom_keyed?) when is_binary(given) do
+    with :ok <- json_size(given),
+         {:ok, value} <- json_decode(given, kind),
+         :ok <- json_kind(value, kind) do
+      json_walk(value, 1, atom_keyed?)
+    end
+  end
+
+  defp json(_bare_key, kind, _atom_keyed?), do: {:error, {:kind, kind}}
+
+  defp json_size(given) when byte_size(given) > @json_bytes, do: {:error, :size}
+  defp json_size(_given), do: :ok
+
+  # Only text opening an array or an object is handed to the decoder.
+  defp json_decode(given, kind) do
+    case String.trim_leading(given) do
+      <<first, _rest::binary>> when first in [?[, ?{] ->
+        case Jason.decode(given) do
+          {:ok, value} -> {:ok, value}
+          {:error, _invalid} -> {:error, :json}
+        end
+
+      _not_an_array_or_an_object ->
+        {:error, {:kind, kind}}
+    end
+  end
+
+  defp json_kind(value, "list") when is_list(value), do: :ok
+  defp json_kind(value, "map") when is_map(value), do: :ok
+  defp json_kind(value, "any") when is_list(value) or is_map(value), do: :ok
+  defp json_kind(_value, kind), do: {:error, {:kind, kind}}
+
+  # The decoded value with each object's keys as `json_key/2` reads them, or `{:error, :depth}` past
+  # `@json_depth`. An object inside an array is a record; the top one is one when `atom_keyed?`.
+  defp json_walk(value, depth, _atom_keyed?)
+       when (is_list(value) or is_map(value)) and depth > @json_depth,
+       do: {:error, :depth}
+
+  defp json_walk(list, depth, _atom_keyed?) when is_list(list) do
+    json_each(list, &json_walk(&1, depth + 1, true))
+  end
+
+  defp json_walk(map, depth, atom_keyed?) when is_map(map) do
+    map
+    |> Map.to_list()
+    |> json_each(fn {key, value} ->
+      with {:ok, value} <- json_walk(value, depth + 1, false),
+           do: {:ok, {json_key(key, atom_keyed?), value}}
+    end)
+    |> case do
+      {:ok, pairs} -> {:ok, Map.new(pairs)}
+      error -> error
+    end
+  end
+
+  defp json_walk(scalar, _depth, _atom_keyed?), do: {:ok, scalar}
+
+  defp json_each(items, fun) do
+    items
+    |> Enum.reduce_while({:ok, []}, fn item, {:ok, done} ->
+      case fun.(item) do
+        {:ok, item} -> {:cont, {:ok, [item | done]}}
+        error -> {:halt, error}
+      end
+    end)
+    |> case do
+      {:ok, done} -> {:ok, Enum.reverse(done)}
+      error -> error
+    end
+  end
+
+  defp json_key("__" <> _rest = key, _atom_keyed?), do: key
+  defp json_key(key, true), do: Helpers.known_key(key)
+  defp json_key(key, false), do: key
+
+  # Whether a declared default is a map with atom keys — a bundle's `__atom_map__` envelope with
+  # pairs in it, or a map — which says the component reads that attribute's keys as atoms. An empty
+  # one says nothing.
+  defp atom_keyed?(%{__atom_map__: pairs}), do: pairs != []
+  defp atom_keyed?(%{"__atom_map__" => pairs}), do: pairs != []
+
+  defp atom_keyed?(%{} = map) when not is_struct(map),
+    do: map_size(map) > 0 and map |> Map.keys() |> Enum.all?(&is_atom/1)
+
+  defp atom_keyed?(_default), do: false
 
   defp values(attr) do
     case Inspector.opts(attr)["values"] do
@@ -1532,8 +1733,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
 
   defp taken?(attrs, key, value) do
     Enum.any?(attrs, fn attr ->
-      castable?(attr) and Inspector.name(attr) == key and
-        match?({:ok, _}, cast_value(type(attr), value, values(attr)))
+      castable?(attr) and Inspector.name(attr) == key and match?({:ok, _}, cast_attr(attr, value))
     end)
   end
 
