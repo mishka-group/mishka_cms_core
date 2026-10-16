@@ -478,17 +478,29 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
   This function is called as the second stage in the compilation pipeline.
   """
   def build_render_functions({params, functions_ast}) do
-    compiled_template = compile_template(params)
+    # A HIDDEN ELEMENT IS LEFT OUT FIRST, of what is drawn and of what it names alike. See
+    # `PageBuilder.Visibility`.
+    template = MishkaCmsCore.Runtime.PageBuilder.Visibility.strip(params[:template])
+    compiled_template = compile_template(params, template)
+
+    {references_ast, prefetch_ast} =
+      MishkaCmsCore.Runtime.Compilers.Shared.component_prefetch(template, params[:site])
 
     render_functions_ast =
       quote do
+        unquote(references_ast)
+
+        # The components the layout draws are built before it draws them — see
+        # `MishkaCmsCore.Runtime.ComponentPrefetch`.
         def render(var!(assigns)) when is_map(var!(assigns)) do
+          unquote(prefetch_ast)
           layout_data = get_in(__layout_information__(), [:layout])
           var!(assigns) = Map.merge(layout_data, var!(assigns))
           unquote(compiled_template)
         end
 
         def render(var!(assigns), var!(inner_content)) when is_map(var!(assigns)) do
+          unquote(prefetch_ast)
           layout_data = get_in(__layout_information__(), [:layout])
 
           var!(assigns) =
@@ -814,7 +826,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
   # - Malformed component calls
   #
   # Errors are propagated up with full context for debugging.
-  defp compile_template(params) do
+  defp compile_template(params, template) do
     opts = [
       line: 1,
       indentation: 0,
@@ -824,9 +836,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
       tag_handler: Phoenix.LiveView.HTMLEngine
     ]
 
-    params[:template]
-    |> MishkaCmsCore.Runtime.PageBuilder.Visibility.strip()
-    |> Phoenix.LiveView.TagEngine.compile(opts)
+    Phoenix.LiveView.TagEngine.compile(template, opts)
   end
 
   @doc """

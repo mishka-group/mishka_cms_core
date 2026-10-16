@@ -9,7 +9,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.Shared do
   ## What is here, and what deliberately is not
 
   `web_module/0` and `define_import/2` were byte-identical in all four and depend on nothing about
-  the module they live in, so they live here once.
+  the module they live in, so they live here once. `component_prefetch/2` is what the page and the
+  layout compiler both write into their modules.
 
   `make_env/0,1` looks like a fifth copy and is not one. Two things stop it moving:
 
@@ -51,6 +52,43 @@ defmodule MishkaCmsCore.Runtime.Compilers.Shared do
   """
   @spec define_import(Macro.Env.t(), module()) :: {:ok, Macro.Env.t()} | {:error, term()}
   def define_import(env, module), do: Macro.Env.define_import(env, [], module)
+
+  @doc """
+  What a page or layout module needs to build its components before it draws them
+  (`MishkaCmsCore.Runtime.ComponentPrefetch`), from the template it is compiled from and the name of
+  the site it belongs to, `nil` for a global one.
+
+  The first element defines `__component_references__/0`, what the template names, kept for the
+  walk a cold render takes. The second is the call its `render/1` makes first, carrying the
+  components the template names in a tag that says which copy it draws, as module names.
+  """
+  @spec component_prefetch(String.t() | nil, String.t() | nil) :: {Macro.t(), Macro.t()}
+  def component_prefetch(template, site) do
+    references = MishkaCmsCore.Runtime.Compilers.CssClosure.references(template)
+
+    named =
+      for %{name: name, site: scope} <-
+            MishkaCmsCore.Runtime.Compilers.CssClosure.certain_components(references, site),
+          do:
+            {MishkaCmsCore.Runtime.Compilers.Helpers.module_name(name, scope, "Component"), scope}
+
+    definition =
+      quote do
+        @doc false
+        def __component_references__, do: unquote(Macro.escape(references))
+      end
+
+    call =
+      quote do
+        :ok =
+          MishkaCmsCore.Runtime.ComponentPrefetch.prefetch(
+            __MODULE__,
+            unquote(Macro.escape(named))
+          )
+      end
+
+    {definition, call}
+  end
 
   @doc """
   The content-addressed URL of a site's compiled stylesheet, or `nil` before its first compile.

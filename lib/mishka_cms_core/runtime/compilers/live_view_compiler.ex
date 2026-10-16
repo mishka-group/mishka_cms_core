@@ -1385,9 +1385,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       |> confirmable(params[:page_forms], params[:layout_says?])
       |> Phoenix.LiveView.TagEngine.compile(opts)
 
+    {references_ast, prefetch_ast} =
+      MishkaCmsCore.Runtime.Compilers.Shared.component_prefetch(params[:template], params[:site])
+
     render_handlers_ast =
       quote do
+        unquote(references_ast)
+
+        # The components the page draws are built before it draws them — see
+        # `MishkaCmsCore.Runtime.ComponentPrefetch`.
         def render(var!(assigns)) when is_map(var!(assigns)) do
+          unquote(prefetch_ast)
           [primary] = templates(var!(assigns))
           primary
         end

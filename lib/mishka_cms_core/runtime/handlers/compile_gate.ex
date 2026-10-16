@@ -47,6 +47,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileGate do
     end
   end
 
+  @doc """
+  How many compiles this node runs at once.
+  """
+  @spec limit() :: pos_integer()
+  def limit, do: GenServer.call(__MODULE__, :limit)
+
   @impl true
   def init(opts) do
     limit =
@@ -58,6 +64,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileGate do
   end
 
   @impl true
+  def handle_call(:limit, _from, state), do: {:reply, state.limit, state}
+
   def handle_call(:acquire, {pid, _}, %{used: used, limit: limit} = state) when used < limit do
     {:reply, :ok, hold(state, pid)}
   end
