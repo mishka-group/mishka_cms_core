@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Resources.Changes.PluginBeforeHook do
   @moduledoc """
   A reusable `before_action` change that lets a plugin **transform or reject** an action before it runs

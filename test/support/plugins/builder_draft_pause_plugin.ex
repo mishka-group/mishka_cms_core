@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.BuilderDraftPausePlugin do
   @moduledoc """
   Test plugin: holds a draft write open at `builder:draft:before_save` until the test releases it.

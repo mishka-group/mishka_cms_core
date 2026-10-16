@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Api.Json.StylesheetTest do
   @moduledoc """
   JSON:API tests for the Stylesheet resource, `/v1/{tenant,master}/admin/runtime/stylesheet`.

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Resources.PageBuilderSnapshotTest do
   @moduledoc """
   The document a Revert puts back: what is kept, what is refused for size, and why the assistant's

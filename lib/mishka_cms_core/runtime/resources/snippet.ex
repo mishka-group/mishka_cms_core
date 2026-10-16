@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Snippet do
   @moduledoc """
   A named piece of markup an author saved out of the visual editor to reuse somewhere else.

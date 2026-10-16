@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed do
   @moduledoc """
   Real-time activity feed driven by a pluggable list of sources, rendered as a

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.AiBackend do
   @moduledoc """
   The seam the Assistant rail talks to, and an honest default that does not pretend to be an AI.

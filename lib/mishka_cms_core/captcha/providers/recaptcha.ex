@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Captcha.Providers.Recaptcha do
   @moduledoc """
   [Google reCAPTCHA](https://developers.google.com/recaptcha) as a captcha provider, in either of

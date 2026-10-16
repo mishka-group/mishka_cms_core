@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement do
   @moduledoc """
   Wraps a field dropped with no form around it, and binds a field dropped inside one.

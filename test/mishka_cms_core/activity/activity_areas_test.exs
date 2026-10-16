@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Activity.ActivityAreasTest do
   @moduledoc """
   The Activity log is the activity area's, and it shows a holder the entries of the areas it holds:

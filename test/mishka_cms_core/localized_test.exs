@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.LocalizedTest do
   @moduledoc """
   `MishkaCmsCore.Localized`: each kind of value in the reader's language, English when the

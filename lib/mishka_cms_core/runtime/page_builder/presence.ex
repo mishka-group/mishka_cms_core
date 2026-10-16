@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.Presence do
   @moduledoc """
   Who else is in this editing session — real `Phoenix.Presence` on the session's own PubSub topic.

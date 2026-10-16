@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.PluginReadiness do
   @moduledoc """
   Holds a test run until the plugins it names are live: each `:started` in `mishka_installer`, and

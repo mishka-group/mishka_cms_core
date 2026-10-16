@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.TwoStepGuard do
   @moduledoc """
   The dashboard of a site that requires two-step sign-in (`MishkaCmsCore.Accounts.SecondFactor.policy/1`),

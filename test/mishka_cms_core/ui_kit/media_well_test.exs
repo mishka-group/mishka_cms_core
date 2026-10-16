@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.UiKit.MediaWellTest do
   @moduledoc """
   A component waiting for a picture has to be visible, and clicking it has to lead somewhere.

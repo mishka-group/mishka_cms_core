@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets do
   @moduledoc """
   Cuts a user's live sockets after any write that can shrink what they may reach or end their being

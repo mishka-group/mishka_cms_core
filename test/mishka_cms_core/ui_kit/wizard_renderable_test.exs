@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.UiKit.WizardRenderableTest do
   @moduledoc """
   Tier 3 — every component of every installed kit must be PREVIEWABLE by the palette's wizard.

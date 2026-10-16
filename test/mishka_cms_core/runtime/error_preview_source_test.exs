@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCoreWeb.Runtime.ErrorPreviewSourceTest do
   @moduledoc """
   ErrorPage/Layout previews run as a full LiveView at `/_preview/:resource/:token` for BOTH the live

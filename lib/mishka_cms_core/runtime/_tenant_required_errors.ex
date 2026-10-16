@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # How AshJsonApi shows a request that reaches one site's data with no site chosen — what an unscoped
 # request (`x-no-tenant`, see `MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug`) gets on a route
 # that works on one site, such as the public `/v1/user/…` routes and the tenant admin ones. It says

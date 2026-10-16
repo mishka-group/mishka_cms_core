@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.Checks.RegistrationOpen do
   @moduledoc """
   Policy check: passes unless the action would create a new account on a site that is offline.

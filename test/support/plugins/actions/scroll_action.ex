@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.Actions.ScrollAction do
   @moduledoc """
   Test action: a package's CLIENT verb, written the way the docs say to write one.

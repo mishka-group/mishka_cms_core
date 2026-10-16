@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.SettingsMultitenancyTest do
   @moduledoc """
   Real tests for tenant-aware settings: a `site_id = nil` row is GLOBAL (shared), a `site_id` row is a

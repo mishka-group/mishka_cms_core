@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.ShareCardProducer do
   @moduledoc """
   A producer on `MishkaCmsCore.Runtime.ShareCard.targets_event/0`, as an extension writes one: it

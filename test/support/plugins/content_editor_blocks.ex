@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Plugins.ContentEditorBlocks do
   @moduledoc """
   Test plugin for `runtime:content:editor_blocks`: adds the blocks a test put under

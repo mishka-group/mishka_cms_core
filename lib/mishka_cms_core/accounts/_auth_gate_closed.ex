@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.AuthGate.Closed do
   @moduledoc """
   A way into an account that `MishkaCmsCore.Accounts.AuthGate` keeps closed: `:action` is the

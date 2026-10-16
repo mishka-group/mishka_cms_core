@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.RoundTripTest do
   @moduledoc """
   The builder round-trip: a page's HEEx is turned into AST-JSON by `JsonEncoder`

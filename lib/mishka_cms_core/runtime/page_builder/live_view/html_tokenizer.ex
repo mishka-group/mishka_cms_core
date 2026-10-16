@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 # Copied from https://github.com/phoenixframework/phoenix_live_view/blob/main/lib/phoenix_live_view/html_formatter.ex
 defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.HtmlTokenizer do
   @moduledoc """

@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Test.Notify.BellTest do
   @moduledoc """
   The topbar bell's data source (`LiveHooks`): the unseen count and the dropdown's recent list, which

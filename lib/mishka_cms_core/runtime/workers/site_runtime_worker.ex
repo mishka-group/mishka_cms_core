@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
   @moduledoc """
   Gives a site created in the admin its sign-in content, and recompiles or purges a site's

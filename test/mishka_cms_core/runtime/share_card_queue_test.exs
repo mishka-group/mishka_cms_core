@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Runtime.ShareCardQueueTest do
   @moduledoc """
   `MishkaCmsCore.Runtime.ShareCardQueue`: every share-card job runs on `:share_cards`, and the

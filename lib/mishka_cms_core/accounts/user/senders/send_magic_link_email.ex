@@ -1,3 +1,7 @@
+# SPDX-FileCopyrightText: 2026 Mishka Group contributors <https://github.com/mishka-group/mishka_cms_core/graphs/contributors>
+#
+# SPDX-License-Identifier: Apache-2.0
+
 defmodule MishkaCmsCore.Accounts.User.Senders.SendMagicLinkEmail do
   @moduledoc """
   Sends a sign-in link, through `MishkaCmsCore.Mail` from the site the request came to (see
