@@ -41,7 +41,7 @@ defmodule MishkaCmsCoreWeb.Test.UserDeleteLiveTest do
     on_exit(fn -> :persistent_term.erase(:mishka_installed) end)
 
     page = create_page!(site_id: site.id)
-    worker = create_user!(site_id: site.id)
+    worker = create_user_with_permissions!(["admin:dashboard:runtime:page"], site_id: site.id)
 
     event =
       PageBuilderEvent
@@ -57,10 +57,9 @@ defmodule MishkaCmsCoreWeb.Test.UserDeleteLiveTest do
           op: :set_style
         },
         tenant: site.id,
-        actor: worker,
-        authorize?: false
+        actor: worker
       )
-      |> Ash.create!(actor: worker, authorize?: false)
+      |> Ash.create!(actor: worker)
 
     {:ok, conn: conn, site: site, worker: worker, event: event}
   end
@@ -93,12 +92,12 @@ defmodule MishkaCmsCoreWeb.Test.UserDeleteLiveTest do
 
       refute has_element?(view, "#flash-error"), "the delete was answered with an error"
 
-      assert {:ok, nil} = Ash.get(User, ctx.worker.id, authorize?: false, error?: false)
+      assert {:ok, nil} = Ash.get(User, ctx.worker.id, actor: admin, error?: false)
 
       assert %{author_id: nil} =
                PageBuilderEvent
                |> Ash.Query.filter(id == ^ctx.event.id)
-               |> Ash.read_one!(tenant: ctx.site.id, authorize?: false)
+               |> Ash.read_one!(tenant: ctx.site.id, actor: admin)
     end
   end
 end

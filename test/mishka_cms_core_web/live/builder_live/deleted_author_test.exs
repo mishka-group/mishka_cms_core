@@ -15,7 +15,8 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DeletedAuthorTest do
   alias MishkaCmsCore.Runtime.{PageBuilderEvent, PageComment}
 
   setup %{site: site, page: page} do
-    worker = create_user!(site_id: site.id)
+    worker = create_user_with_permissions!(["admin:dashboard:runtime:page"], site_id: site.id)
+    master = create_user_with_permissions!(["*"])
 
     event =
       PageBuilderEvent
@@ -31,10 +32,9 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DeletedAuthorTest do
           op: :set_style
         },
         tenant: site.id,
-        actor: worker,
-        authorize?: false
+        actor: worker
       )
-      |> Ash.create!(actor: worker, authorize?: false)
+      |> Ash.create!(actor: worker)
 
     note =
       PageComment
@@ -42,27 +42,22 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DeletedAuthorTest do
         :create,
         %{body: "a note from somebody", type: :information, section: :page, document_id: page.id},
         tenant: site.id,
-        actor: worker,
-        authorize?: false
+        actor: worker
       )
       |> Ash.create!()
-      |> Ash.Changeset.for_update(:resolve, %{},
-        tenant: site.id,
-        actor: worker,
-        authorize?: false
-      )
+      |> Ash.Changeset.for_update(:resolve, %{}, tenant: site.id, actor: worker)
       |> Ash.update!()
 
-    %{worker: worker, event: event, note: note}
+    %{worker: worker, master: master, event: event, note: note}
   end
 
-  defp delete!(user),
-    do: Ash.destroy!(user, action: :destroy, tenant: user.site_id, authorize?: false)
+  defp delete!(user, master), do: Ash.destroy!(user, action: :table_destroy, actor: master)
 
   test "the history sheet names a deleted account's change as a deleted user", %{
     conn: conn,
     page: page,
     worker: worker,
+    master: master,
     event: event
   } do
     {:ok, view, _html} = open_builder(conn, page)
@@ -70,7 +65,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DeletedAuthorTest do
     render_async(view)
     assert has_element?(view, "#pb-history-author-#{event.id}", worker.email |> to_string())
 
-    delete!(worker)
+    delete!(worker, master)
 
     {:ok, view, _html} = open_builder(conn, page)
     render_click(view, "open_sheet", %{"sheet" => "history"})
@@ -84,9 +79,10 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DeletedAuthorTest do
     conn: conn,
     page: page,
     worker: worker,
+    master: master,
     note: note
   } do
-    delete!(worker)
+    delete!(worker, master)
 
     {:ok, view, _html} = open_builder(conn, page)
     render_click(view, "open_sheet", %{"sheet" => "review"})

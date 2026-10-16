@@ -57,26 +57,23 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
           op: :set_style
         },
         tenant: site.id,
-        actor: worker,
-        authorize?: false
+        actor: worker
       )
-      |> Ash.create!(actor: worker, authorize?: false)
+      |> Ash.create!(actor: worker)
 
     # The note on the event is its own attribution, and the worker wrote it too.
     event =
       event
       |> Ash.Changeset.for_update(:annotate, %{note: "kept on purpose"},
         tenant: site.id,
-        actor: worker,
-        authorize?: false
+        actor: worker
       )
       |> Ash.update!()
 
     page
     |> Ash.Changeset.for_update(:update, %{name: "renamed-by-worker"},
       actor: worker,
-      tenant: site.id,
-      authorize?: false
+      tenant: site.id
     )
     |> Ash.update!()
 
@@ -86,15 +83,10 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
         :create,
         %{body: "a note", type: :information, section: :page, document_id: page.id},
         tenant: site.id,
-        actor: worker,
-        authorize?: false
+        actor: worker
       )
       |> Ash.create!()
-      |> Ash.Changeset.for_update(:resolve, %{},
-        tenant: site.id,
-        actor: worker,
-        authorize?: false
-      )
+      |> Ash.Changeset.for_update(:resolve, %{}, tenant: site.id, actor: worker)
       |> Ash.update!()
 
     %{worker: worker, event: event, note: note}
@@ -103,13 +95,13 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
   defp event(context, id) do
     PageBuilderEvent
     |> Ash.Query.filter(id == ^id)
-    |> Ash.read_one!(tenant: context.site.id, authorize?: false)
+    |> Ash.read_one!(tenant: context.site.id, actor: context.master)
   end
 
   defp note(context, id) do
     PageComment
     |> Ash.Query.filter(id == ^id)
-    |> Ash.read_one!(tenant: context.site.id, authorize?: false)
+    |> Ash.read_one!(tenant: context.site.id, actor: context.master)
   end
 
   defp page_versions(context) do
@@ -117,17 +109,17 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
 
     version
     |> Ash.Query.filter(version_source_id == ^context.page.id)
-    |> Ash.read!(tenant: context.site.id, authorize?: false)
+    |> Ash.read!(tenant: context.site.id, actor: context.master)
   end
 
-  defp grants(user) do
+  defp grants(context, user) do
     MishkaCmsCore.Accounts.UserPermission
     |> Ash.Query.filter(user_id == ^user.id)
-    |> Ash.read!(authorize?: false)
+    |> Ash.read!(actor: context.master)
   end
 
-  defp gone?(user),
-    do: match?({:ok, nil}, Ash.get(User, user.id, authorize?: false, error?: false))
+  defp gone?(context, user),
+    do: match?({:ok, nil}, Ash.get(User, user.id, actor: context.master, error?: false))
 
   # What each of the actions that delete an account is run as, and who runs it.
   @paths [
@@ -170,8 +162,8 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
                "the setup has to leave a version made by the account"
 
         assert :ok = destroy(unquote(path), worker, context)
-        assert gone?(worker)
-        assert grants(worker) == [], "the account's own permission grants went with it"
+        assert gone?(context, worker)
+        assert grants(context, worker) == [], "the account's own permission grants went with it"
 
         kept = event(context, event.id)
         assert kept.author_id == nil
@@ -205,7 +197,7 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
       assert {:error, %Ash.Error.Invalid{}} =
                Ash.destroy(context.master, action: :table_destroy, actor: context.master)
 
-      refute gone?(context.master)
+      refute gone?(context, context.master)
     end
   end
 
