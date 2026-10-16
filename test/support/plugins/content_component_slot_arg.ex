@@ -3,8 +3,8 @@ defmodule MishkaCmsCore.Test.Plugins.ContentComponentSlotArg do
   Test plugin for `runtime:render:before_content_component`'s slot meta. A marker written with
   `probe="seen"` gets as its `title` what reached it: the nearest component's `render_slot` value's
   `tag` (`none` when nothing did), then every value's `tag`, nearest first, then the marker's own
-  uncast `label` — `outer|outer|x`. A marker written with `probe="unset"` has its `label` left out
-  altogether. Every other marker is answered as it came.
+  uncast `label` — `outer|outer|x`. A marker written with `probe="drop"` has its `label` taken out
+  of `attrs`. Every other marker is answered as it came.
   """
   use MishkaInstaller.Event.Hook, event: "runtime:render:before_content_component"
 
@@ -16,8 +16,8 @@ defmodule MishkaCmsCore.Test.Plugins.ContentComponentSlotArg do
     {:reply, %{data | attrs: Map.put(attrs, :title, "#{nearest}|#{every}|#{written["label"]}")}}
   end
 
-  def call(%{attrs: attrs} = data, %{marker_attrs: %{"probe" => "unset"}}),
-    do: {:reply, Map.put(%{data | attrs: Map.delete(attrs, :label)}, :unset, [:label])}
+  def call(%{attrs: attrs} = data, %{marker_attrs: %{"probe" => "drop"}}),
+    do: {:reply, %{data | attrs: Map.delete(attrs, :label)}}
 
   def call(data, _meta), do: {:reply, data}
 end
