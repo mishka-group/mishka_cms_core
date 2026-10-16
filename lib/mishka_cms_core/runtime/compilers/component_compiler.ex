@@ -500,7 +500,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   #
   #   * the BRIDGE, `def :"chelekom-live-search"(assigns)`, keeping every `attr` and `slot`
   #     declaration. A parent still gets defaults, validation and change tracking, and the name a
-  #     stored template calls stays the name it calls.
+  #     stored template calls stays the name it calls. ITS BODY IS A CALL TO `render/1`, so the
+  #     template is compiled once and not once per function: the declarations' wrapper runs first,
+  #     and `render/1` then merges the defaults, runs the body and renders, which is all a copy of
+  #     the template in the bridge would do. A copy there makes the compiler do the template's work
+  #     twice — and the template is most of a kit component's code — for a function no page calls:
+  #     `LiveViewHelpers` mounts a live component and the cold surfaces call `render/1`.
+  #     `MishkaCmsCore.Runtime.Compilers.StatefulTemplateOnceTest` draws both shapes on every surface.
   #   * `render/1`, carrying the template and NO declarations. `Phoenix.Component.Declarative`
   #     generates a wrapper that computes the `:global` attr by subtraction, and a LiveComponent's
   #     `render/1` is handed the SOCKET's assigns — so declarations there sweep the lifecycle's own
@@ -527,11 +533,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     global = global_name(params)
 
     quote do
-      def unquote(String.to_atom(params[:title]))(var!(assigns)) do
-        var!(assigns) = Map.merge(unquote(Macro.escape(defaults_map)), var!(assigns))
-        unquote(body_block(params, body_ast))
-        unquote(template_ast)
-      end
+      def unquote(String.to_atom(params[:title]))(var!(assigns)), do: render(var!(assigns))
 
       # `update_many/1` AND NOT `update/2`, so the name `update/2` stays the kit's to use.
       #
