@@ -24,6 +24,15 @@ defmodule MishkaCmsCore.Accounts.CaptchaCheck do
   checked after both — a bot that fails the captcha never learns whether it was right — and a
   registration is checked only once its fields are valid, so a typo does not spend the token.
 
+  ## An extension's form
+
+  An extension's action checks its own form the same way, named by an atom of its own, and its
+  template draws the check with `<.captcha for={:that_atom}>` (`MishkaCmsCore.Captcha.Widget`).
+  The address is read from the same `ash_authentication_request` context, so the form hands it
+  the visitor's `%{remote_ip: address}`:
+
+      prepare &MishkaCmsCore.Accounts.CaptchaCheck.prepare(&1, &2, :newsletter)
+
   ## Who is not asked
 
     * a scope that asks none — no provider, or one missing a key;
@@ -49,7 +58,7 @@ defmodule MishkaCmsCore.Accounts.CaptchaCheck do
   alias MishkaCmsCore.Captcha
   alias MishkaInstaller.Event.Hook
 
-  @type form :: :sign_in | :register | :reset_request | :magic_link
+  @type form :: :sign_in | :register | :reset_request | :magic_link | atom()
 
   @doc "A preparation: checks the captcha of a read or generic action's `form` before it runs."
   @spec prepare(Ash.Query.t() | Ash.ActionInput.t(), map(), form()) ::

@@ -15,6 +15,29 @@ defmodule MishkaCmsCore.Captcha.Widget do
   re-render takes the provider's frame away — holding the hidden input the token goes in, named for
   the form's `captcha_token` field. A refused submit is answered with the `"mishka:captcha:reset"`
   event, and the hook asks for a fresh check: each token is good once.
+
+  ## An extension's own form
+
+  `for` names the form the way the action checking the token names it. The sign-in pages and the
+  settings page's test use the strings below; an extension's form passes its own atom, the one its
+  action hands `MishkaCmsCore.Accounts.CaptchaCheck`:
+
+      prepare &MishkaCmsCore.Accounts.CaptchaCheck.prepare(&1, &2, :newsletter)
+
+      <.captcha form={@form} for={:newsletter} tenant={site_id()} />
+
+  ## Asked only once the form is sent
+
+  A form that wants no check in the visitor's way until they press its button draws none at first.
+  Its action refuses the first send with `reason: :missing`
+  (`MishkaCmsCore.Accounts.CaptchaCheck.refusal/1`), and from then on the form draws the check with
+  `deferred`:
+
+      <.captcha :if={@asked?} form={@form} for={:newsletter} tenant={site_id()} deferred />
+
+  `deferred` tells the hook the visitor has already sent the form once: it sends it again by itself
+  as soon as the check gives a token — when a widget is solved, or at once for a score — so the
+  visitor presses the button once.
   """
 
   use Phoenix.Component
@@ -29,21 +52,27 @@ defmodule MishkaCmsCore.Captcha.Widget do
 
   attr :form, :any, required: true, doc: "The form the token is sent with."
 
-  attr :for, :string,
+  attr :for, :any,
     required: true,
-    values: Map.keys(@forms),
-    doc: "Which form it is, as the action checking it names it."
+    doc:
+      "Which form it is, as the action checking it names it: one of #{@forms |> Map.keys() |> Enum.map_join(", ", &inspect/1)}, or an extension's own form as an atom."
 
   attr :tenant, :string, default: nil, doc: "The site the form signs into; `nil` for a master's."
   attr :id, :string, default: nil, doc: "Defaults to `captcha-<for>`."
+
+  attr :deferred, :boolean,
+    default: false,
+    doc:
+      "The form has been sent once already: the check sends it again by itself once it gives a token."
+
   attr :class, :any, default: nil
 
   def captcha(assigns) do
-    form = Map.fetch!(@forms, assigns.for)
+    form = form_name(assigns.for)
 
     assigns =
       assign(assigns,
-        id: assigns.id || "captcha-" <> assigns.for,
+        id: assigns.id || "captcha-#{form}",
         field: assigns.form[:captcha_token],
         browser: MishkaCmsCore.Captcha.browser(assigns.tenant, form, Gettext.get_locale())
       )
@@ -59,6 +88,7 @@ defmodule MishkaCmsCore.Captcha.Widget do
       data-global={@browser.global}
       data-mode={@browser.mode}
       data-options={Jason.encode!(@browser.options)}
+      data-deferred={@deferred && "true"}
       class={[
         if(@browser.mode == :score, do: "hidden", else: "flex min-h-[65px]"),
         @class
@@ -69,4 +99,9 @@ defmodule MishkaCmsCore.Captcha.Widget do
     </div>
     """
   end
+
+  @doc "The form `for` names: one of the strings above, or an extension's atom as it is."
+  @spec form_name(String.t() | atom()) :: atom()
+  def form_name(name) when is_binary(name), do: Map.fetch!(@forms, name)
+  def form_name(name) when is_atom(name) and not is_nil(name), do: name
 end

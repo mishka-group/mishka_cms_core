@@ -98,7 +98,11 @@ defmodule MishkaCmsCore.Captcha.Provider do
   @event "captcha:providers"
 
   @type site_id :: String.t() | nil
-  @type form :: :sign_in | :register | :reset_request | :magic_link | :test
+  @typedoc """
+  The form a check is for: the sign-in pages' four, the settings page's `:test`, or an extension's
+  own, named by the atom its action passes `MishkaCmsCore.Accounts.CaptchaCheck`.
+  """
+  @type form :: :sign_in | :register | :reset_request | :magic_link | :test | atom()
 
   @type browser :: %{
           script: String.t(),

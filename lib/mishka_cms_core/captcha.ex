@@ -19,8 +19,10 @@ defmodule MishkaCmsCore.Captcha do
 
   A form draws the check with `<.captcha>` (`MishkaCmsCore.Captcha.Widget`), which `browser/3`
   describes, and its action checks the token (`MishkaCmsCore.Accounts.CaptchaCheck`), so the sign-in
-  pages and the `/api/auth` routes ask alike. The security headers let the browser load the provider
-  on the sites that use it (`csp_sources/1`).
+  pages and the `/api/auth` routes ask alike. An extension's form asks the same captcha under a form
+  of its own, an atom its action and its `<.captcha for={…}>` both name, and may ask it only once the
+  form has been sent (`deferred`, see `MishkaCmsCore.Captcha.Widget`). The security headers let the
+  browser load the provider on the sites that use it (`csp_sources/1`).
 
   ## One check
 

@@ -5,8 +5,8 @@
 defmodule MishkaCmsCore.Accounts.CaptchaCheck.Refused do
   @moduledoc """
   A form sent without the captcha its site asks (`reason: :missing`) or with one that did not pass
-  (`reason: :failed`): `:form` is the form — `:sign_in`, `:register`, `:reset_request` or
-  `:magic_link` — and `:site_id` its site (`nil` for a master's). Shown by the sign-in pages and the
+  (`reason: :failed`): `:form` is the form — `:sign_in`, `:register`, `:reset_request`,
+  `:magic_link`, or an extension's own — and `:site_id` its site (`nil` for a master's). Shown by the sign-in pages and the
   `/api/auth` routes as their own notice; see `MishkaCmsCore.Accounts.CaptchaCheck.describe/1`.
   """
 
