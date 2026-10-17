@@ -99,4 +99,12 @@ defmodule MishkaCmsCore.Runtime.ContentPreviewScrubberTest do
            |> LazyHTML.query("img[srcset]")
            |> Enum.empty?()
   end
+
+  test "draws a style holding an escape past U+10FFFF or a surrogate instead of raising" do
+    for escape <- [~S(\2019CA), ~S(\D800), ~S(\110000)] do
+      html = ~s(<p style="color: red; font-family: #{escape}">x</p>)
+
+      assert ContentPreviewScrubber.sanitize(html) =~ ">x</p>", html
+    end
+  end
 end
