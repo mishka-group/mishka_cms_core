@@ -53,17 +53,15 @@ defmodule MishkaCmsCore.Builder.Events do
 
   | Event | Payload |
   |---|---|
-  | `builder:node:before_<op>` | the validated `Op` + `meta` |
-  | `builder:save:before` / `builder:publish:before` | `%{tree, serialized, resource_id, section}` |
-  | `builder:serialize` | the serialized HEEx string |
-  | `builder:tree:render` | `%{tree, record}` |
+  | `builder:node:before_<op>` | `%{op, meta, error}`, `op` the validated `Op` and `meta` `%{token, section, resource_id, site_id, actor_id}` |
+  | `builder:serialize` | `%{heex, meta}`, `heex` the serialized HEEx string and `meta` `%{section, stage}` |
   | `builder:history:query` | `%{query, source_type, source_id, branch_id}` |
   | `builder:containment` | `%{allowed?, reason, parent, child, tree, components}` |
   | `builder:preview:document` | `%{html, resource, record_id, site_id, note}` |
   | `builder:examples` | `%{examples, entry, site_id}` |
   | `builder:preset:choices` | `%{choices, site_id}` |
-  | `builder:token:before_set` | `%{value, token, scope, error}` |
-  | `builder:ai:before_ask` | `%{prompt, section, node_id, error}` |
+  | `builder:token:before_set` | `%{key, value, site_id, site_name, actor_id, error}` |
+  | `builder:ai:before_ask` | `%{prompt, scope, backend, section, resource_id, site_id, actor_id, error}` |
   | `builder:form:role` | `%{role, entry}` |
   | `page:form:submitted` | `%{form, values, page, site_id, handled}` |
 
@@ -82,20 +80,21 @@ defmodule MishkaCmsCore.Builder.Events do
 
   | Event | Payload |
   |---|---|
-  | `builder:draft:before_save` | `%{section, resource_id, site_id, actor_id, error}` |
+  | `builder:save:before` / `builder:publish:before` | `%{tree, serialized, resource_id, section, error}` |
+  | `builder:draft:before_save` | `%{section, resource_id, draft_id, label, serialized, site_id, actor_id, error}` |
   | `builder:review:before_comment` | `%{body, type, section, node_id, parent_comment_id, error}` |
-  | `builder:code:before_apply` | `%{source, section, resource_id, site_id, actor_id, error}` |
-  | `builder:class:before_save` | `%{name, css, site_id, error}` |
-  | `builder:element_css:before_save` | `%{node_id, css, owner, site_id, error}` |
+  | `builder:code:before_apply` | `%{source, tab, node_id, section, resource_id, site_id, actor_id, error}` |
+  | `builder:class:before_save` | `%{name, utilities, site_id, actor_id, error}` |
+  | `builder:element_css:before_save` | `%{node_id, css, owner, site_id, actor_id, error}` |
 
   ### Announcements — `return: false`, nothing waits on them
 
   | Event | Payload |
   |---|---|
   | `builder:session:after_open` / `after_close` | `%{token, section, resource_id, site_id, actor_id}` |
-  | `builder:node:after_<op>` | `%{op, node_id, parent_id}` |
+  | `builder:node:after_<op>` | `%{token, section, resource_id, site_id, actor_id, kind, node_id}` |
   | `builder:save:after` / `builder:publish:after` | `%{record_id, section, stage}` |
-  | `builder:draft:after_save` | `%{section, resource_id, site_id, actor_id}` |
+  | `builder:draft:after_save` | `%{section, resource_id, draft_id, label, serialized, site_id, actor_id}` |
   | `builder:review:after_comment` | `%{id, body, type, node_id, reply?, section, source_id, site_id, actor_id}` |
   | `builder:element_css:after_save` | `%{node_id, css, owner, site_id, actor_id, stage}` |
   | `builder:canvas:toolbar:invoked` | `%{action, node_id, token}` |
