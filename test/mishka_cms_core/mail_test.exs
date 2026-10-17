@@ -405,5 +405,36 @@ defmodule MishkaCmsCore.MailTest do
       assert [%{id: id}] = Ash.read!(Delivery, authorize?: false, tenant: site.id)
       assert id == new.id
     end
+
+    test "a failed email's error keeps its status cell wide enough to read" do
+      status =
+        MishkaGervaz.Table.Web.State.init("mail-history", Delivery, %{
+          id: "mail-history",
+          site_id: nil,
+          role: :admin
+        })
+        |> Map.fetch!(:static)
+        |> Map.fetch!(:columns)
+        |> Enum.find(&(Map.get(&1, :source) == :status))
+
+      failed =
+        %{status: :failed, provider: "resend", error: "403: The domain is not verified."}
+        |> status.render.()
+        |> Phoenix.LiveViewTest.rendered_to_string()
+        |> LazyHTML.from_fragment()
+
+      assert [_error] =
+               failed |> LazyHTML.query(~s(div[class~="min-w-[240px]"] p)) |> Enum.to_list()
+
+      assert [_label] =
+               failed |> LazyHTML.query(~s(div[class~="whitespace-nowrap"])) |> Enum.to_list()
+
+      sent =
+        %{status: :sent, provider: "resend", error: nil}
+        |> status.render.()
+        |> Phoenix.LiveViewTest.rendered_to_string()
+
+      refute sent =~ "min-w-[240px]"
+    end
   end
 end

@@ -103,13 +103,17 @@ defmodule MishkaCmsCore.Mail.Delivery do
             }
 
             ~H"""
-            <span class={["rounded-md px-1.5 py-0.5 text-[11px] font-bold", @class]}>
-              {@label}
-            </span>
-            <span :if={@provider} class="ms-1.5 text-[11.5px] text-[#8a877f]">{@provider}</span>
-            <p :if={@error} class="mt-1 max-w-[340px] text-[11.5px] leading-snug text-[#c0473d]">
-              {@error}
-            </p>
+            <div class={[@error && "min-w-[240px] max-w-[340px]"]}>
+              <div class="whitespace-nowrap">
+                <span class={["rounded-md px-1.5 py-0.5 text-[11px] font-bold", @class]}>
+                  {@label}
+                </span>
+                <span :if={@provider} class="ms-1.5 text-[11.5px] text-[#8a877f]">{@provider}</span>
+              </div>
+              <p :if={@error} class="mt-1 text-[11.5px] leading-snug text-[#c0473d] break-words">
+                {@error}
+              </p>
+            </div>
             """
           end
         end
