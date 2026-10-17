@@ -38,11 +38,15 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  import MishkaCmsCore.Test.Factory
   import Phoenix.LiveViewTest
 
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
+  alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageUpload
+  alias MishkaCmsCore.Runtime.ShareCard
+  alias MishkaCmsCore.Test.Files
   alias MishkaCmsCore.Test.Plugins.PageFormDestination
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -79,6 +83,8 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     site_id = Ecto.UUID.generate()
     %{dir: dir, site_id: site_id, forms: Path.join([dir, site_id, "forms"])}
   end
+
+  defp attachment(accept), do: %{"name" => "attachment", "accept" => accept}
 
   defp compile!(uploads, template \\ @template) do
     module = :"Elixir.PageUploadPage#{System.unique_integer([:positive])}"
@@ -152,9 +158,9 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     test "a declaration with no usable name is dropped rather than compiled" do
       module =
         compile!([
-          %{"name" => "  "},
+          %{"name" => "  ", "accept" => ".txt"},
           %{"accept" => "image/*"},
-          %{"name" => "kept"}
+          %{"name" => "kept", "accept" => ".txt"}
         ])
 
       assert [%{name: :kept}] = module.__page_uploads__()
@@ -163,7 +169,11 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     # `allow_upload/3` RAISES on a name already registered, which would take the whole page down on
     # mount rather than the one row that was written twice.
     test "two declarations of the same name keep the first" do
-      module = compile!([%{"name" => "doc", "max_entries" => 3}, %{"name" => "doc"}])
+      module =
+        compile!([
+          %{"name" => "doc", "accept" => ".txt", "max_entries" => 3},
+          %{"name" => "doc", "accept" => ".pdf"}
+        ])
 
       assert [%{name: :doc, max_entries: 3}] = module.__page_uploads__()
     end
@@ -201,19 +211,26 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
 
       assert opts[:max_entries] == 1
       assert opts[:max_file_size] > 0
-      assert opts[:accept] == :any
+      assert opts[:accept] == []
       assert opts[:auto_upload] == false
     end
 
-    test "accept is split the way allow_upload/3 wants it" do
-      assert PageUpload.options(%{accept: "image/*, .pdf"})[:accept] == ["image/*", ".pdf"]
-      assert PageUpload.options(%{accept: ""})[:accept] == :any
+    test "accept is read against what a visitor may upload, as dotted extensions" do
+      assert PageUpload.options(%{accept: "image/*, .pdf"})[:accept] ==
+               [".png", ".jpg", ".jpeg", ".gif", ".webp", ".pdf"]
+
+      assert PageUpload.options(%{accept: ["application/pdf", ".CSV"]})[:accept] == [
+               ".pdf",
+               ".csv"
+             ]
+
+      assert PageUpload.options(%{accept: ""})[:accept] == []
     end
   end
 
   describe "a page that accepts a file" do
     test "registers the upload and renders a live file input", %{site_id: site_id} do
-      {:ok, _view, html} = mount!(compile!([%{"name" => "attachment"}]), site_id)
+      {:ok, _view, html} = mount!(compile!([attachment(".txt")]), site_id)
 
       assert html =~ "phx-hook=\"Phoenix.LiveFileUpload\"",
              "the page did not render a live file input — @uploads was not registered"
@@ -225,8 +242,7 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
       site_id: site_id,
       forms: forms
     } do
-      {:ok, view, _html} =
-        mount!(compile!([%{"name" => "attachment", "accept" => ".txt"}]), site_id)
+      {:ok, view, _html} = mount!(compile!([attachment(".txt")]), site_id)
 
       file =
         file_input(view, "#attach-form", :attachment, [
@@ -252,7 +268,7 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     # THE CLIENT'S NAME IS NEVER PART OF THE PATH. It is visitor input that would become a filename,
     # which is where `../../etc/passwd` gets in.
     test "a visitor's filename does not reach the filesystem", %{site_id: site_id, forms: forms} do
-      {:ok, view, _html} = mount!(compile!([%{"name" => "attachment"}]), site_id)
+      {:ok, view, _html} = mount!(compile!([attachment(".txt")]), site_id)
 
       file =
         file_input(view, "#attach-form", :attachment, [
@@ -278,7 +294,7 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     test "the file travels with what was typed, as one submission", %{site_id: site_id} do
       register(PageFormDestination)
       Process.register(self(), PageFormDestination.probe())
-      module = compile!([%{"name" => "attachment"}])
+      module = compile!([attachment(".txt")])
       {:ok, view, _html} = mount!(module, site_id)
 
       file =
@@ -305,7 +321,7 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
          %{
            site_id: site_id
          } do
-      module = compile!([%{"name" => "attachment"}])
+      module = compile!([attachment(".txt")])
       {:ok, view, _html} = mount!(module, site_id)
 
       file =
@@ -328,7 +344,7 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     end
 
     test "a page with no site stores nothing", %{dir: dir} do
-      {:ok, view, _html} = mount!(compile!([%{"name" => "attachment"}]), nil)
+      {:ok, view, _html} = mount!(compile!([attachment(".txt")]), nil)
 
       file =
         file_input(view, "#attach-form", :attachment, [
@@ -344,6 +360,305 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
 
       assert File.ls!(dir) == []
       assert log =~ "was not stored: the page has no site"
+    end
+  end
+
+  # A VISITOR'S FILE IS SERVED BACK FROM THE SITE'S OWN ORIGIN, so what is stored has to be what the
+  # declaration says it is: an HTML or SVG file given a picture's name and type is a script that runs
+  # with the session of whoever opens its link.
+  describe "what a declaration may take" do
+    test "accept is required: a declaration without a usable one is not compiled" do
+      module =
+        compile!([
+          %{"name" => "none"},
+          %{"name" => "blank", "accept" => " , "},
+          %{"name" => "markup", "accept" => "image/svg+xml, .html, .svg, .xml, .js"},
+          %{"name" => "anything", "accept" => "*/*"},
+          %{"name" => "kept", "accept" => ".svg, .png"}
+        ])
+
+      assert [%{name: :kept}] = module.__page_uploads__()
+    end
+
+    test "HTML, SVG, XML and script files are never among the types a visitor may upload" do
+      for extension <- ~w(html htm xhtml svg svgz xml js mjs php exe sh) do
+        refute extension in PageUpload.allowed_types(), "#{extension} must not be uploadable"
+
+        assert PageUpload.allowed_extensions(".#{extension}") == [],
+               ".#{extension} was taken as an upload type"
+      end
+
+      for type <-
+            ~w(text/html image/svg+xml application/xml text/javascript application/javascript) do
+        assert PageUpload.allowed_extensions(type) == [], "#{type} was taken as an upload type"
+        assert PageUpload.unsupported(type) == [type]
+      end
+    end
+
+    test "a group of types is the allowed ones of the group" do
+      assert PageUpload.allowed_extensions("image/*") == ~w(png jpg jpeg gif webp)
+      assert PageUpload.allowed_extensions("text/*") == ~w(txt csv)
+      assert PageUpload.allowed_extensions("application/pdf, .DOCX") == ~w(pdf docx)
+      assert PageUpload.allowed_extensions(["image/png", " .gif "]) == ~w(png gif)
+    end
+
+    test "the words that name nothing are told apart from the ones that do" do
+      assert PageUpload.unsupported("image/*, .svg, .pdf, text/html") == [".svg", "text/html"]
+      assert PageUpload.unsupported("image/*") == []
+      assert PageUpload.unsupported(nil) == []
+    end
+
+    # `accept_option!/1` of LiveView raises for a type it does not know, which took the whole page
+    # down on mount. Nothing outside the allow-list reaches it now.
+    test "options never hands LiveView a type it would raise on" do
+      for accept <- [".nosuchtype", "made/up", "image/*, .svg", nil, ""] do
+        assert is_list(PageUpload.options(%{accept: accept})[:accept])
+      end
+    end
+  end
+
+  describe "what is stored is what the first bytes say" do
+    setup %{site_id: site_id} do
+      %{site_id: site_id, log: nil}
+    end
+
+    # THE ATTACK. An SVG with a script, named and typed as a PNG: LiveView takes it because it only
+    # reads the name and the type the browser sent.
+    test "a script given a picture's name and type is not stored", %{
+      site_id: site_id,
+      forms: forms
+    } do
+      {:ok, view, _html} = mount!(compile!([attachment("image/*")]), site_id)
+
+      for {name, type, content} <- [
+            {"logo.png", "image/png", Files.svg()},
+            {"photo.jpg", "image/jpeg", Files.html()},
+            {"cover.gif", "image/gif", Files.script()}
+          ] do
+        file =
+          file_input(view, "#attach-form", :attachment, [
+            %{name: name, content: content, type: type}
+          ])
+
+        render_upload(file, name)
+      end
+
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+        end)
+
+      refute File.exists?(forms), "nothing should have been written for the three files"
+      assert log =~ "was not stored"
+      assert log =~ "none of the types this upload takes"
+    end
+
+    test "a real picture is stored as the kind it is, not as the name or type it came with", %{
+      site_id: site_id,
+      forms: forms
+    } do
+      {:ok, view, _html} = mount!(compile!([attachment("image/*")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "logo.png", content: Files.png(), type: "image/png"}
+        ])
+
+      render_upload(file, "logo.png")
+      view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+
+      assert [stored] = File.ls!(forms)
+      assert String.ends_with?(stored, ".png")
+      assert File.read!(Path.join(forms, stored)) == Files.png()
+    end
+
+    test "a PNG that says it is an SVG is stored as a PNG", %{site_id: site_id, forms: forms} do
+      register(PageFormDestination)
+      Process.register(self(), PageFormDestination.probe())
+      {:ok, view, _html} = mount!(compile!([attachment(".png,.svg")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "logo.png", content: Files.png(), type: "image/svg+xml"}
+        ])
+
+      render_upload(file, "logo.png")
+      view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+
+      assert [stored] = File.ls!(forms)
+      assert String.ends_with?(stored, ".png")
+      refute stored =~ "svg"
+
+      assert_receive {:page_form_submitted, %{values: %{attachment: [%{"type" => "image/png"}]}}}
+    end
+
+    test "the extension is one the declaration takes: a JPEG named .jpeg is .jpg when only .jpg is taken",
+         %{site_id: site_id, forms: forms} do
+      {:ok, view, _html} = mount!(compile!([attachment(".jpg")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "Photo.JPEG", content: Files.jpeg(), type: "image/jpeg"}
+        ])
+
+      render_upload(file, "Photo.JPEG")
+      view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+
+      assert [stored] = File.ls!(forms)
+      assert String.ends_with?(stored, ".jpg")
+    end
+
+    test "a real picture is refused by an upload that takes only PDFs", %{
+      site_id: site_id,
+      forms: forms
+    } do
+      {:ok, view, _html} = mount!(compile!([attachment(".pdf")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "scan.pdf", content: Files.png(), type: "application/pdf"}
+        ])
+
+      render_upload(file, "scan.pdf")
+
+      ExUnit.CaptureLog.capture_log(fn ->
+        view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+      end)
+
+      refute File.exists?(forms)
+    end
+
+    test "a page typed as .txt is stored as text and nothing else", %{
+      site_id: site_id,
+      forms: forms
+    } do
+      {:ok, view, _html} = mount!(compile!([attachment(".txt")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "page.txt", content: Files.html(), type: "text/plain"}
+        ])
+
+      render_upload(file, "page.txt")
+      view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+
+      assert [stored] = File.ls!(forms)
+      assert String.ends_with?(stored, ".txt")
+    end
+
+    # LiveView itself turns an HTML file away when the declaration takes only text.
+    test "a file the declaration does not take never reaches the page", %{
+      site_id: site_id,
+      forms: forms
+    } do
+      {:ok, view, _html} = mount!(compile!([attachment(".txt")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "evil.html", content: Files.html(), type: "text/html"}
+        ])
+
+      assert {:error, [[_ref, :not_accepted]]} = render_upload(file, "evil.html")
+
+      view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+      refute File.exists?(forms)
+    end
+  end
+
+  # THE ROUND TRIP A BROWSER MAKES: a visitor uploads through the page, and the address that comes
+  # back is requested from the endpoint, which serves `/uploads` with `Plug.Static` and the headers
+  # `ShareCard.static_headers/1` adds.
+  describe "what the endpoint answers for a stored file" do
+    test "is a download that no browser will run", %{site_id: site_id, dir: dir} do
+      {:ok, view, _html} = mount!(compile!([attachment(".txt")]), site_id)
+
+      file =
+        file_input(view, "#attach-form", :attachment, [
+          %{name: "notes.txt", content: "plain notes", type: "text/plain"}
+        ])
+
+      register(PageFormDestination)
+      Process.register(self(), PageFormDestination.probe())
+
+      render_upload(file, "notes.txt")
+      view |> element("#attach-form") |> render_submit(%{"attach" => %{"note" => "x"}})
+
+      assert_receive {:page_form_submitted, %{values: %{attachment: [%{"url" => url}]}}}
+
+      opts =
+        Plug.Static.init(at: "/uploads", from: dir, headers: {ShareCard, :static_headers, []})
+
+      conn = Plug.Test.conn(:get, url) |> Plug.Static.call(opts)
+
+      assert conn.status == 200
+      assert conn.resp_body == "plain notes"
+      assert Plug.Conn.get_resp_header(conn, "content-disposition") == ["attachment"]
+      assert Plug.Conn.get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+      assert Plug.Conn.get_resp_header(conn, "content-security-policy") == ["sandbox"]
+      assert Plug.Conn.get_resp_header(conn, "content-type") == ["text/plain"]
+    end
+  end
+
+  # THE SAME RULE AT THE ACTION BOUNDARY every writer passes: an author is told when the page is
+  # saved, and not by a page that fails to show its upload field.
+  describe "saving a page that declares uploads" do
+    setup do
+      %{site: create_site!()}
+    end
+
+    defp save(site, uploads) do
+      Page
+      |> Ash.Changeset.for_create(
+        :master_create,
+        %{
+          site_id: site.id,
+          title: "Uploads",
+          path: "/uploads-#{System.unique_integer([:positive])}",
+          template: "<p>x</p>",
+          uploads: uploads
+        },
+        authorize?: false,
+        context: %{page_code: :package}
+      )
+      |> Ash.create()
+    end
+
+    test "stores a declaration that names the types it takes", %{site: site} do
+      assert {:ok, page} = save(site, [%{name: "cv", accept: "image/*, .pdf"}])
+      assert [%{name: "cv", accept: "image/*, .pdf"}] = Enum.map(page.uploads, &Map.new(&1))
+    end
+
+    test "refuses a declaration with no accept", %{site: site} do
+      for accept <- [nil, "", "  ,  "] do
+        assert {:error, error} = save(site, [%{name: "cv", accept: accept}])
+        assert Exception.message(error) =~ "needs Accepted Types", inspect(accept)
+      end
+    end
+
+    test "refuses a declaration whose types a visitor may never send", %{site: site} do
+      for accept <- [".svg", "image/svg+xml", ".html, .pdf", "text/html", "*/*", ".js"] do
+        assert {:error, error} = save(site, [%{name: "cv", accept: accept}])
+        message = Exception.message(error)
+
+        assert message =~ "can never be uploaded" or message =~ "needs Accepted Types",
+               "#{accept} was saved"
+      end
+    end
+
+    test "refuses the same declaration on an update", %{site: site} do
+      {:ok, page} = save(site, [%{name: "cv", accept: ".pdf"}])
+
+      assert {:error, error} =
+               page
+               |> Ash.Changeset.for_update(
+                 :master_update,
+                 %{uploads: [%{name: "cv", accept: ".svg"}]},
+                 authorize?: false,
+                 context: %{page_code: :package}
+               )
+               |> Ash.update()
+
+      assert Exception.message(error) =~ "can never be uploaded"
     end
   end
 end

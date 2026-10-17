@@ -182,6 +182,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   alias MishkaCmsCore.Runtime.PageBuilder.Markup
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Runtime.PageUpload
 
   # Compiled modules are built on the host's web entrypoint when it names one, so runtime templates
   # can reach its components and routes. See `MishkaCmsCore.Runtime.CompiledPageBase`.
@@ -500,18 +501,21 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
     {params, functions_ast ++ [uploads_ast]}
   end
 
-  # A DECLARATION WITH NO NAME IS NOT ONE. Everything else is optional and
-  # `MishkaCmsCore.Runtime.PageUpload.options/1` supplies both the defaults and the ceilings, so the
-  # only work here is reading a row somebody stored — string keys from the form, atom keys from a
-  # seed — refusing what cannot be registered at all, and keeping the first of two that share a
-  # name, because `allow_upload/3` raises on a duplicate and would take the whole page with it.
+  # A DECLARATION WITH NO NAME IS NOT ONE, and neither is one that takes no type a visitor may send:
+  # `accept` is required and `MishkaCmsCore.Runtime.PageUpload.allowed_extensions/1` reads it.
+  # Everything else is optional and `MishkaCmsCore.Runtime.PageUpload.options/1` supplies both the
+  # defaults and the ceilings, so the only work here is reading a row somebody stored — string keys
+  # from the form, atom keys from a seed — refusing what cannot be registered at all, and keeping the
+  # first of two that share a name, because `allow_upload/3` raises on a duplicate and would take the
+  # whole page with it.
   defp declared_uploads(uploads) when is_list(uploads) do
     for declaration <- uploads,
         is_map(declaration),
         name = upload_name(declaration),
         is_binary(name),
         trimmed = String.trim(name),
-        trimmed != "" do
+        trimmed != "",
+        PageUpload.allowed_extensions(upload_field(declaration, "accept")) != [] do
       %{
         name: String.to_atom(trimmed),
         accept: upload_field(declaration, "accept"),

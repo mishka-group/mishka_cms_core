@@ -87,7 +87,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   require Logger
 
   alias MishkaCmsCore.Isolated
-  alias MishkaCmsCore.Runtime.{Languages, Layout, Media, Page, PageEditions, Seo}
+  alias MishkaCmsCore.Runtime.{Languages, Layout, Media, Page, PageEditions, PageUpload, Seo}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Runtime.Workers.{ShareCardPlanWorker, ShareCardRefreshWorker}
   alias MishkaInstaller.Event.Hook
@@ -574,14 +574,31 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   def url(site_id, key), do: "/uploads/#{site_id}/share/#{key}.jpg"
 
   @doc """
-  The headers `Plug.Static` adds to a file it serves from the uploads folder: a card is named by
-  what it shows (`key/1`), so any cache may keep it a year; any other file gets none.
+  The headers `Plug.Static` adds to a file it serves from the uploads folder:
+
+    * a card is named by what it shows (`key/1`), so any cache may keep it a year;
+    * a file a visitor uploaded to a page (`/uploads/<site_id>/forms/<file>`) is saved rather than
+      shown, never sniffed into another type, and sandboxed — see
+      `MishkaCmsCore.Runtime.PageUpload.static_headers/0`;
+    * a media library file (`/uploads/<site_id>/media/…`) is never sniffed into another type, and an
+      `.svg` among them is sandboxed, so a script in it does not run when its address is opened;
+    * any other file gets none.
 
       plug Plug.Static, at: "/", only: ~w(uploads), headers: {ShareCard, :static_headers, []}
   """
   @spec static_headers(Plug.Conn.t()) :: %{optional(String.t()) => String.t()}
   def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, "share", _name]}),
     do: %{"cache-control" => "public, max-age=31536000, immutable"}
+
+  def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, "forms", _name]}),
+    do: PageUpload.static_headers()
+
+  def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, "media" | [_ | _] = inner]}) do
+    case inner |> List.last() |> Path.extname() |> String.downcase() do
+      ".svg" -> %{"x-content-type-options" => "nosniff", "content-security-policy" => "sandbox"}
+      _other -> %{"x-content-type-options" => "nosniff"}
+    end
+  end
 
   def static_headers(_conn), do: %{}
 

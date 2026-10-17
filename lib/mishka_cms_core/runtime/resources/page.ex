@@ -1422,6 +1422,7 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageUploads, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -1491,6 +1492,7 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageUploads, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -1570,6 +1572,7 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageUploads, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}
@@ -1627,6 +1630,7 @@ defmodule MishkaCmsCore.Runtime.Page do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.PageStateNames, []}
+      validate {MishkaCmsCore.Runtime.Resources.Validations.PageUploads, []}
       validate {MishkaCmsCore.Runtime.Resources.Validations.StatefulIds, []}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.CodeChange, []}

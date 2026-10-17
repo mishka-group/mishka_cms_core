@@ -134,12 +134,53 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
              }
 
       for path <- [
-            "/uploads/#{site_id}/media/uncategorized/cover.png",
             "/uploads/#{site_id}/share",
             "/uploads/#{site_id}/share/nested/card.jpg",
+            "/uploads/#{site_id}/forms",
+            "/uploads/#{site_id}/forms/nested/file.txt",
+            "/uploads/#{site_id}/media",
             "/fonts/fonts.css"
           ] do
         assert Plug.Test.conn(:get, path) |> ShareCard.static_headers() == %{}, path
+      end
+    end
+
+    # A VISITOR'S FILE IS SERVED FROM THE SITE'S OWN ORIGIN, so it is saved rather than shown.
+    test "makes a file a visitor uploaded a download, never sniffed and sandboxed" do
+      site_id = Ecto.UUID.generate()
+
+      for name <- ["a1b2.png", "a1b2.html", "a1b2.svg", "a1b2", "A1B2.TXT"] do
+        headers =
+          "/uploads/#{site_id}/forms/#{name}"
+          |> then(&Plug.Test.conn(:get, &1))
+          |> ShareCard.static_headers()
+
+        assert headers == %{
+                 "content-disposition" => "attachment",
+                 "x-content-type-options" => "nosniff",
+                 "content-security-policy" => "sandbox"
+               },
+               name
+      end
+    end
+
+    test "never lets a media file be sniffed into another type, and sandboxes an SVG among them" do
+      site_id = Ecto.UUID.generate()
+
+      for name <- ["cover.png", "clip.mp4", "guide.pdf"] do
+        conn = Plug.Test.conn(:get, "/uploads/#{site_id}/media/uncategorized/#{name}")
+
+        assert ShareCard.static_headers(conn) == %{"x-content-type-options" => "nosniff"}, name
+      end
+
+      for name <- ["logo.svg", "LOGO.SVG"] do
+        conn = Plug.Test.conn(:get, "/uploads/#{site_id}/media/brand/#{name}")
+
+        assert ShareCard.static_headers(conn) == %{
+                 "x-content-type-options" => "nosniff",
+                 "content-security-policy" => "sandbox"
+               },
+               name
       end
     end
   end
