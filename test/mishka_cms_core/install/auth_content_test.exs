@@ -76,7 +76,8 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
 
         assert page.extra["auth_role"] == role, page.path
 
-        assert Map.get(page.extra, "visitors_only") == if(role == "sign_out", do: nil, else: true),
+        assert Map.get(page.extra, "visitors_only") ==
+                 if(role == "sign_out", do: nil, else: true),
                page.path
 
         assert Map.get(page.extra, "signed_in_only") == if(role == "sign_out", do: true),

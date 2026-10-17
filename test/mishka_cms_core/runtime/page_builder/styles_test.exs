@@ -1219,7 +1219,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StylesTest do
       for prop <- Styles.properties(), Styles.options(prop) != [] do
         described = Styles.pictures(prop) ++ Styles.labels(prop)
 
-        assert Enum.map(described, &elem(&1, 0)) |> Enum.sort() == Enum.sort(Styles.options(prop)),
+        assert Enum.map(described, &elem(&1, 0)) |> Enum.sort() ==
+                 Enum.sort(Styles.options(prop)),
                "#{prop} is not fully described"
 
         assert Styles.pictures(prop) == [] or Styles.labels(prop) == [],

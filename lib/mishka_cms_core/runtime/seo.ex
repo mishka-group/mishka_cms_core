@@ -1554,7 +1554,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   defp absolute_tag({tag, attrs} = whole, base) do
     key = Map.fetch!(@value_attrs, tag)
 
-    with true <- Enum.any?(@addresses, fn {name, by, id} -> name == tag and {by, id} in attrs end),
+    with true <-
+           Enum.any?(@addresses, fn {name, by, id} -> name == tag and {by, id} in attrs end),
          {^key, "/" <> _ = path} <- List.keyfind(attrs, key, 0),
          url when is_binary(url) <- absolute(path, base) do
       {tag, List.keyreplace(attrs, key, 0, {key, url})}

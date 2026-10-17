@@ -170,7 +170,8 @@ defmodule MishkaCmsCore.Accounts.AccessPermissionsMatrixTest do
             {context, surface} <- [{@dashboard, :dashboard}, {@api, :api}],
             counts? = surface_of(required) in [surface, :both],
             expected = counts? and oracle(held, required),
-            AccessPermissions.match?(holder([held]), context, permissions: [required]) != expected,
+            AccessPermissions.match?(holder([held]), context, permissions: [required]) !=
+              expected,
             do: {held, required, surface}
 
       assert wrong == []
