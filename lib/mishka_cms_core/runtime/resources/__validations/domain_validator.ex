@@ -105,21 +105,24 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
     ~r/\A[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\z/
   end
 
-  # The scheme is mandatory: an `Origin` header always carries one, and the Site guardedstruct
-  # already rejects scheme-less entries on write, so accepting them here only disagreed with the
-  # resource without ever admitting a value.
-  defp origin_regex do
-    ~r/\Ahttps?:\/\/[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?(\/.*)?\z/
-  end
-
   defp valid_domain?(domain) when is_binary(domain) do
     String.match?(domain, domain_regex())
   end
 
   defp valid_domain?(_), do: false
 
+  # The scheme is mandatory: an `Origin` header always carries one, and the Site guardedstruct
+  # already rejects scheme-less entries on write, so accepting them here only disagreed with the
+  # resource without ever admitting a value. The host is read with `URI.new/1`, and a port that is
+  # not a number, a user name before the host or a line break anywhere is not an origin.
   defp valid_origin?(origin) when is_binary(origin) do
-    String.match?(origin, origin_regex())
+    with false <- String.contains?(origin, [" ", "\t", "\n", "\r"]),
+         {:ok, %URI{scheme: scheme, host: host, userinfo: nil}} when scheme in ["http", "https"] <-
+           URI.new(origin) do
+      valid_domain?(host)
+    else
+      _not_an_origin -> false
+    end
   end
 
   defp valid_origin?(_), do: false

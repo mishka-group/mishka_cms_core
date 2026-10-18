@@ -519,8 +519,10 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
     else
       case get_req_header(conn, "host") do
         [host | _] ->
-          clean_host = host |> String.split(":") |> List.first()
-          {:ok, clean_host}
+          case MishkaCmsCore.Runtime.OriginValidator.host_name(host) do
+            nil -> {:error, :no_host}
+            clean_host -> {:ok, clean_host}
+          end
 
         [] ->
           {:error, :no_host}

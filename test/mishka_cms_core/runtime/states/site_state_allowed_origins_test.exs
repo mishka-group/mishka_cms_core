@@ -36,6 +36,43 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
     :ok
   end
 
+  describe "a frontend domain" do
+    test "that only starts with http is a domain, not an address" do
+      assert :ok =
+               SiteState.save(%{
+                 id: "http_site",
+                 name: "Http Site",
+                 host: "http.example.com",
+                 priority: 100,
+                 active: true,
+                 frontend_domain: "httpbin.example.com"
+               })
+
+      for origin <- [
+            "https://httpbin.example.com",
+            "http://httpbin.example.com",
+            "httpbin.example.com"
+          ] do
+        assert {true, %{id: "http_site"}} = SiteState.is_allowed_origin?(origin)
+      end
+    end
+
+    test "that is a full address is indexed as it is written" do
+      assert :ok =
+               SiteState.save(%{
+                 id: "full_site",
+                 name: "Full Site",
+                 host: "full.example.com",
+                 priority: 100,
+                 active: true,
+                 frontend_domain: "https://app.example.com"
+               })
+
+      assert {true, %{id: "full_site"}} = SiteState.is_allowed_origin?("https://app.example.com")
+      assert SiteState.is_allowed_origin?("http://app.example.com") == false
+    end
+  end
+
   describe "allowed_origins indexing" do
     test "saves site with mode, frontend_domain, and allowed_origins" do
       attrs = %{

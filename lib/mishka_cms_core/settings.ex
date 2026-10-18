@@ -473,8 +473,8 @@ defmodule MishkaCmsCore.Settings do
 
     cond do
       value == "" -> {:ok, ""}
-      String.starts_with?(value, "//") -> :error
-      String.starts_with?(value, ["/", "https://", "http://"]) -> {:ok, value}
+      MishkaCmsCore.Runtime.OriginValidator.site_path?(value) -> {:ok, value}
+      MishkaCmsCore.Runtime.OriginValidator.web_url?(value) -> {:ok, value}
       true -> :error
     end
   end

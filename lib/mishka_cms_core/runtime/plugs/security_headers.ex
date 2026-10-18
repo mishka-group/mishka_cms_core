@@ -59,7 +59,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
 
   # An origin a page may frame: https, a host of dot-separated labels, an optional port. No path, no
   # wildcard — a frame source names exactly the player it trusts.
-  @frame_origin ~r/\Ahttps:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?\z/
+  @frame_host ~r/\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\z/
 
   def init(opts), do: opts
 
@@ -152,9 +152,23 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   """
   @spec frame_origins?(term()) :: boolean()
   def frame_origins?(origins) when is_list(origins),
-    do: Enum.all?(origins, &(is_binary(&1) and Regex.match?(@frame_origin, &1)))
+    do: Enum.all?(origins, &frame_origin?/1)
 
   def frame_origins?(_origins), do: false
+
+  defp frame_origin?(origin) when is_binary(origin) do
+    with false <- String.ends_with?(origin, ":"),
+         {:ok, %URI{scheme: "https", host: host, userinfo: nil, path: nil} = uri}
+         when is_binary(host) <- URI.new(origin),
+         nil <- uri.query,
+         nil <- uri.fragment do
+      String.match?(host, @frame_host)
+    else
+      _not_an_origin -> false
+    end
+  end
+
+  defp frame_origin?(_origin), do: false
 
   defp policy(conn, admin?, nonce),
     do: directives(admin?, nonce, captcha_sources(conn, admin?), frame_origins(conn))
@@ -312,5 +326,5 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   end
 
   defp keep?(:all, _origin), do: true
-  defp keep?(:http, origin), do: String.starts_with?(origin, "http")
+  defp keep?(:http, origin), do: MishkaCmsCore.Runtime.OriginValidator.web_url?(origin)
 end

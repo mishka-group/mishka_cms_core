@@ -354,7 +354,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       [host | _] ->
         # Remove port if present (e.g., "example.com:4000" -> "example.com")
         # This ensures consistent host matching regardless of development ports
-        host |> String.split(":") |> List.first()
+        MishkaCmsCore.Runtime.OriginValidator.host_name(host)
 
       [] ->
         # No host header found - this can happen in certain test scenarios

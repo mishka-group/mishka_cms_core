@@ -5215,7 +5215,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # Loose on purpose: a relative `/about` is as much a link as an absolute one, and refusing to offer
   # Open for one would be wrong more often than guessing right.
   defp openable?(value) when is_binary(value),
-    do: String.starts_with?(value, ["http://", "https://", "/"])
+    do:
+      MishkaCmsCore.Runtime.OriginValidator.web_url?(value) or
+        MishkaCmsCore.Runtime.OriginValidator.site_path?(value)
 
   defp openable?(_value), do: false
 
@@ -15244,7 +15246,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # Only an http(s) address is offered. The value comes from a kit's own bundle, and a `javascript:`
   # in a link the admin renders is the one way a third-party kit could reach into this page.
   defp docs_url(%{doc_url: url}) when is_binary(url) do
-    case String.starts_with?(url, ["https://", "http://"]) do
+    case MishkaCmsCore.Runtime.OriginValidator.web_url?(url) do
       true -> url
       false -> nil
     end

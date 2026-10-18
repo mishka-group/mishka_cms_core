@@ -241,7 +241,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
             is_nil(frontend) or frontend == "" ->
               []
 
-            String.starts_with?(frontend, "http") ->
+            MishkaCmsCore.Runtime.OriginValidator.web_url?(frontend) ->
               # It's already a full origin
               [frontend]
 
@@ -893,7 +893,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   defp index_allowed_origins(site_id, allowed_origins, frontend_domain) do
     # Index frontend_domain if present (supporting both full origin and domain-only)
     if frontend_domain && frontend_domain != "" do
-      if String.starts_with?(frontend_domain, "http") do
+      if MishkaCmsCore.Runtime.OriginValidator.web_url?(frontend_domain) do
         # It's already a full origin
         :ets.insert(@allowed_origins_index, {frontend_domain, site_id})
       else
