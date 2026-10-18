@@ -73,20 +73,25 @@ defmodule MishkaCmsCore.Dashboard.Widget do
   alias Phoenix.LiveView.JS
 
   guardedstruct do
-    field(:id, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:title, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+    field(:id, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+
+    field(:title, String.t(),
+      enforce: true,
+      derives: "sanitize(trim) validate(string, not_empty)"
+    )
+
     field(:component, tuple(), enforce: true)
-    field(:type, :atom, default: :function)
-    field(:size, :integer, default: 1)
+    field(:type, atom(), default: :function)
+    field(:size, integer(), default: 1)
     field(:permission, any())
-    field(:default_hidden, :boolean, default: false)
-    field(:icon, :string, default: "hero-squares-2x2")
-    field(:description, :string)
-    field(:category, :string, default: "general")
-    field(:settings_category, :string)
-    field(:link, :string)
-    field(:variant, :atom, default: :card)
-    field(:priority, :integer, default: 100)
+    field(:default_hidden, boolean(), default: false)
+    field(:icon, String.t(), default: "hero-squares-2x2")
+    field(:description, String.t())
+    field(:category, String.t(), default: "general")
+    field(:settings_category, String.t())
+    field(:link, String.t())
+    field(:variant, atom(), default: :card)
+    field(:priority, integer(), default: 100)
     field(:pubsub, list(), default: [])
     field(:config, list(), default: [])
   end

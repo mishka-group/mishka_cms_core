@@ -417,7 +417,11 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
         _not_cached -> %{id: site_id, name: name, host: host}
       end
 
-    %Plug.Conn{status: 503, assigns: %{current_site: site, current_user: nil}}
+    %Plug.Conn{
+      status: 503,
+      remote_ip: {127, 0, 0, 1},
+      assigns: %{current_site: site, current_user: nil}
+    }
   end
 
   # A LIVE COMPONENT WITH THE WRONG ROOT IS A COMPILE FAILURE, NOT A VISITOR'S CRASH.

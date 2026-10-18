@@ -1031,8 +1031,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp glow({cx, cy}, radius, color, strength) do
     {x, y} = axes(@width, @height)
-    dx = Op.linear!(x, [1.0], [-cx])
-    dy = Op.linear!(y, [1.0], [-cy])
+    dx = Op.linear!(x, [1.0], [-cx * 1.0])
+    dy = Op.linear!(y, [1.0], [-cy * 1.0])
 
     distance =
       Op.math2_const!(
@@ -1053,10 +1053,10 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     {x, y} = axes(@width, @height)
 
     on_x =
-      Op.relational_const!(Op.remainder_const!(x, [48]), :VIPS_OPERATION_RELATIONAL_EQUAL, [0])
+      Op.relational_const!(Op.remainder_const!(x, [48.0]), :VIPS_OPERATION_RELATIONAL_EQUAL, [0.0])
 
     on_y =
-      Op.relational_const!(Op.remainder_const!(y, [48]), :VIPS_OPERATION_RELATIONAL_EQUAL, [0])
+      Op.relational_const!(Op.remainder_const!(y, [48.0]), :VIPS_OPERATION_RELATIONAL_EQUAL, [0.0])
 
     lines = Op.boolean!(on_x, on_y, :VIPS_OPERATION_BOOLEAN_OR)
     layer([255, 255, 255], lines |> Op.linear!([9 / 255], [0.0]) |> uchar())
@@ -1069,7 +1069,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp gradient(t, from, to) do
     t
-    |> Op.linear!(Enum.zip_with(to, from, &(&1 - &2)), from)
+    |> Op.linear!(Enum.zip_with(to, from, &((&1 - &2) * 1.0)), Enum.map(from, &(&1 * 1.0)))
     |> uchar()
     |> Op.copy!(interpretation: :VIPS_INTERPRETATION_sRGB)
   end
@@ -1103,7 +1103,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
     positive =
       past
-      |> Op.relational_const!(:VIPS_OPERATION_RELATIONAL_MORE, [0])
+      |> Op.relational_const!(:VIPS_OPERATION_RELATIONAL_MORE, [0.0])
       |> Op.linear!([1 / 255], [0.0])
 
     Op.multiply!(past, positive)

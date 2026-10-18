@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Accounts.LiveSockets do
   @doc """
   The `live_socket_id` of a user, given the user or its id.
   """
-  @spec live_socket_id(Ash.Resource.record() | map() | String.t()) :: String.t()
+  @spec live_socket_id(Ash.Resource.Record.t() | map() | String.t()) :: String.t()
   def live_socket_id(%{id: id}), do: live_socket_id(id)
   def live_socket_id(user_id) when is_binary(user_id), do: "users_sessions:#{user_id}"
 
@@ -43,7 +43,7 @@ defmodule MishkaCmsCore.Accounts.LiveSockets do
   Cuts every live socket held by every session of this user, and drops what
   `MishkaCmsCore.Runtime.States.ViewerState` cached for them.
   """
-  @spec disconnect(Ash.Resource.record() | map() | String.t()) :: :ok
+  @spec disconnect(Ash.Resource.Record.t() | map() | String.t()) :: :ok
   def disconnect(%{id: id}), do: disconnect(id)
 
   def disconnect(user_id) when is_binary(user_id) do

@@ -41,38 +41,38 @@ defmodule MishkaCmsCore.Builder.PaletteEntry do
   use GuardedStruct
 
   guardedstruct do
-    field(:key, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:name, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:label, :string, derives: "sanitize(trim)")
-    field(:type, :string, default: "general")
-    field(:description, :string, derives: "sanitize(trim)")
+    field(:key, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+    field(:name, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+    field(:label, String.t(), derives: "sanitize(trim)")
+    field(:type, String.t(), default: "general")
+    field(:description, String.t(), derives: "sanitize(trim)")
     # The component's own markup. The layers tree parses it to show what is inside a component
     # in place, rather than making the author open the component's editor to find out.
-    field(:template, :string)
+    field(:template, String.t())
     field(:attrs, list(), default: [])
     field(:slots, list(), default: [])
     field(:helpers, list(), default: [])
     field(:examples, list(), default: [])
-    field(:features, :map, default: %{})
-    field(:priority, :integer, default: 50)
-    field(:global?, :boolean, default: true)
+    field(:features, map(), default: %{})
+    field(:priority, integer(), default: 50)
+    field(:global?, boolean(), default: true)
     # What this component declares it should look like on a fresh drop. Validated by
     # `MishkaCmsCore.Builder.Furnishing` at the point of use rather than here, because it arrives
     # from a third party's `extra` and a malformed one must cost the furnishing, not the palette.
-    field(:furnishing, :map)
+    field(:furnishing, map())
 
     # What part of a form this component plays. Validated by `MishkaCmsCore.Builder.FormRole` at the
     # point of use, not here: it arrives from a third party's `extra` and a malformed one must cost
     # the declaration, not the palette.
-    field(:form, :map)
+    field(:form, map())
     # The glyph the palette draws for this component. Authored in the component's own `extra.icon`
     # when someone has set one; otherwise `nil`, and the panel suggests one from the name and type.
-    field(:icon, :string, derives: "sanitize(trim)")
+    field(:icon, String.t(), derives: "sanitize(trim)")
 
     # The kit's own documentation page for this component. Carried on the entry because both places
     # that would offer it — the inspector's header and the examples modal's — read the entry, not the
     # row.
-    field(:doc_url, :string, derives: "sanitize(trim)")
+    field(:doc_url, String.t(), derives: "sanitize(trim)")
     field(:render, any())
     # Every assign this component's own markup and helpers read, scanned once when the entry is
     # built. It is derived from `template` and `helpers` and nothing else, so it cannot go stale
@@ -84,7 +84,7 @@ defmodule MishkaCmsCore.Builder.PaletteEntry do
     # Whether this entry's component keeps state, and therefore whether a drop of it has to carry an
     # `id`. A `Phoenix.LiveComponent` cannot exist without one, so this is not decoration: it is what
     # `EditorSession` asks before it mints.
-    field(:stateful?, :boolean, default: false)
+    field(:stateful?, boolean(), default: false)
   end
 
   @doc """

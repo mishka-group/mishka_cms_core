@@ -53,7 +53,7 @@ defmodule MishkaCmsCore.Builder.Furnishing do
   alias MishkaCmsCore.Builder.Literal
 
   guardedstruct do
-    field(:body, :string, default: "", derives: "sanitize(trim)")
+    field(:body, String.t(), default: "", derives: "sanitize(trim)")
     field(:slots, list(), default: [], derives: "validate(list)")
     # WHAT THE COMPONENT ARRIVES SET TO. A body says what goes inside; this says what the thing
     # itself is. `chelekom-gallery` is a grid whose column count and gap both default to the empty
@@ -66,7 +66,7 @@ defmodule MishkaCmsCore.Builder.Furnishing do
     # editor already draws a dashed well and the words "needs src" for a picture nobody has chosen,
     # and the grey box the furnishing used to supply sat on top of it, eating the click meant for it.
     # Without this the empty body reads as an absent one and the inference puts a starter line back.
-    field(:declares_body, :boolean, default: false, derives: "validate(boolean)")
+    field(:declares_body, boolean(), default: false, derives: "validate(boolean)")
   end
 
   @doc """

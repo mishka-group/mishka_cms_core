@@ -72,29 +72,29 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Op do
   }
 
   guardedstruct do
-    field(:kind, :atom,
+    field(:kind, atom(),
       enforce: true,
       derives:
         "validate(enum=Atom[insert::move::delete::duplicate::set_attr::delete_attr::set_text::set_style::reset_styles::wrap::wrap_many::unwrap])"
     )
 
-    field(:node_id, :string, derives: "validate(string, regex=^n[a-z0-9]{8}$)")
+    field(:node_id, String.t(), derives: "validate(string, regex=^n[a-z0-9]{8}$)")
     # SEVERAL nodes, for the one op that acts on a selection rather than an element — see
     # `Tree.wrap_many/3`. Kept separate from `node_id` so every other kind still reads as exactly
     # one target and cannot be handed a list by accident.
     field(:node_ids, list(), default: [])
-    field(:parent_id, :string)
-    field(:index, :integer, default: 0)
-    field(:template, :string)
-    field(:name, :string, derives: "sanitize(trim)")
-    field(:value, :string)
+    field(:parent_id, String.t())
+    field(:index, integer(), default: 0)
+    field(:template, String.t())
+    field(:name, String.t(), derives: "sanitize(trim)")
+    field(:value, String.t())
     # No default on purpose: "not stated" and "stated as a string" are different answers, and
     # `apply_to/2` reads the difference — see `attr_value/2`.
-    field(:value_kind, :atom)
-    field(:text, :string)
-    field(:bucket, :atom)
-    field(:prop, :string, derives: "sanitize(trim)")
-    field(:tag, :string, derives: "sanitize(trim)")
+    field(:value_kind, atom())
+    field(:text, String.t())
+    field(:bucket, atom())
+    field(:prop, String.t(), derives: "sanitize(trim)")
+    field(:tag, String.t(), derives: "sanitize(trim)")
   end
 
   @doc "Every op kind the editor can issue."

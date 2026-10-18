@@ -159,7 +159,7 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
   Signs `user` out on every device with AshAuthentication's `log_out_everywhere`, which revokes every
   token it holds for them, and cuts their open pages.
   """
-  @spec sign_out(Ash.Resource.record(), String.t() | nil) :: :ok
+  @spec sign_out(Ash.Resource.Record.t(), String.t() | nil) :: :ok
   def sign_out(user, site_id) do
     :ok =
       User

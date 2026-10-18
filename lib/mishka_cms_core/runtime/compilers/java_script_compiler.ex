@@ -777,7 +777,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         priv_dir -> Path.join([priv_dir, "static", "temp", "js_assets"])
       end
 
-    Enum.map(
+    Enum.each(
       [dir, Path.join(dir, "js"), Path.join(dir, "vendor"), Path.join(dir, "node_modules")],
       &File.mkdir_p!/1
     )

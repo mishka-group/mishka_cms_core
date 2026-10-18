@@ -21,11 +21,14 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.AiBackend do
 
   @type scope :: %{node_id: String.t() | nil, label: String.t()}
   @type message :: %{
-          role: :ai | :user,
-          text: String.t(),
-          plain: String.t() | nil,
-          scope: String.t() | nil,
-          ops: [map()]
+          required(:role) => :ai | :user,
+          required(:text) => String.t(),
+          required(:plain) => String.t() | nil,
+          required(:scope) => String.t() | nil,
+          required(:ops) => [map()],
+          optional(:attachment) => term(),
+          optional(:revision) => term(),
+          optional(:revision_note) => term()
         }
 
   @callback name() :: String.t()

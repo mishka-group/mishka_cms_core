@@ -52,20 +52,20 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Node do
   @comment_kinds [:eex_comment, :html_comment]
 
   guardedstruct do
-    field(:id, :string, enforce: true, derives: "validate(string, regex=^n[a-z0-9]{8}$)")
+    field(:id, String.t(), enforce: true, derives: "validate(string, regex=^n[a-z0-9]{8}$)")
 
-    field(:kind, :atom,
+    field(:kind, atom(),
       enforce: true,
       derives:
         "validate(enum=Atom[tag::component::slot::text::eex::eex_block::eex_comment::html_comment])"
     )
 
-    field(:tag, :string, derives: "sanitize(trim)")
+    field(:tag, String.t(), derives: "sanitize(trim)")
     field(:attrs, list(), default: [])
     field(:children, list(), default: [])
-    field(:parent_id, :string)
-    field(:text, :string)
-    field(:meta, :map, default: %{})
+    field(:parent_id, String.t())
+    field(:text, String.t())
+    field(:meta, map(), default: %{})
   end
 
   @doc "Every kind a node may declare."

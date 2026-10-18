@@ -370,7 +370,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   channel is fetched. `local_only: true` looks nothing up and downloads nothing — the bundles in
   `kits_dir/0` are the answer, which is what the Studio wants.
   """
-  @spec resolve_kits(keyword()) :: %{bundles: [map()], failures: [map()]}
+  @spec resolve_kits(keyword()) :: %{
+          bundles: [map()],
+          failures: [map()],
+          sources: [map()],
+          release: %{channel: atom(), tag: String.t(), fallback?: boolean()} | nil
+        }
   def resolve_kits(opts \\ []) do
     dir = Keyword.get_lazy(opts, :kits_dir, &kits_dir/0)
     progress = Keyword.get(opts, :progress)
@@ -651,17 +656,14 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp fallback({:ok, _bundle} = resolved, _next), do: resolved
 
+  # THE NETWORK REASON, when there is one. "Not on disk" is never news to whoever is reading the
+  # banner — they can see the file is not there. `HTTP 404` is the sentence they can act on.
   defp fallback({:error, primary}, next) do
     case next.() do
       {:ok, _bundle} = resolved -> resolved
-      {:error, secondary} -> {:error, reportable(primary, secondary)}
+      {:error, _not_on_disk} -> {:error, primary}
     end
   end
-
-  # THE NETWORK REASON, when there is one. "Not on disk" is never news to whoever is reading the
-  # banner — they can see the file is not there. `HTTP 404` is the sentence they can act on.
-  defp reportable(:absent, secondary), do: secondary
-  defp reportable(primary, _secondary), do: primary
 
   defp from_disk(path) do
     case load_bundle(path) do

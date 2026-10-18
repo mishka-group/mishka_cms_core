@@ -114,33 +114,33 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSession do
   @pseudos [:base, :hover, :focus, :active]
 
   guardedstruct do
-    field(:token, :string, enforce: true, derives: "validate(string, regex=^[a-z0-9]{32}$)")
+    field(:token, String.t(), enforce: true, derives: "validate(string, regex=^[a-z0-9]{32}$)")
 
-    field(:section, :string,
+    field(:section, String.t(),
       enforce: true,
       derives: "validate(enum=String[page::layout::error_page::component])"
     )
 
-    field(:resource_id, :string)
+    field(:resource_id, String.t())
     # WHICH OF THE DOCUMENT'S TEMPLATES THIS TREE CAME FROM. `nil` for every section but an error
     # page, which stores a LIST of `%{status, template, layout}` — so "the document" there is the
     # record AND a status, and a session that knows only the record is a session for five different
     # templates at once — a code, or `:offline` for the page an offline site shows. See
     # `MishkaCmsCore.Runtime.States.EditorSessionState.find/4`.
     field(:status, MishkaCmsCore.Runtime.ErrorStatus.t())
-    field(:site_id, :string)
-    field(:site_name, :string)
-    field(:actor_id, :string)
+    field(:site_id, String.t())
+    field(:site_name, String.t())
+    field(:actor_id, String.t())
     field(:tree, any())
-    field(:selection, :string)
-    field(:hover, :string)
-    field(:breakpoint, :atom, default: :base)
-    field(:pseudo, :atom, default: :base)
-    field(:dir, :string, default: "ltr")
+    field(:selection, String.t())
+    field(:hover, String.t())
+    field(:breakpoint, atom(), default: :base)
+    field(:pseudo, atom(), default: :base)
+    field(:dir, String.t(), default: "ltr")
     # The CSS an author wrote for individual elements, already compiled. It rides the session for
     # the same reason `dir` does: that is what gets it into the canvas frame without reloading it,
     # and the frame must show the change now rather than one recompile later.
-    field(:element_css, :string, default: "")
+    field(:element_css, String.t(), default: "")
 
     # THE ELEMENT CSS THIS SITTING HAS TYPED AND NOT PUBLISHED, as `%{scope => body}` with a blank
     # body for a box the author emptied, or nil when nothing is held. The row it ends up in IS the
@@ -152,16 +152,16 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSession do
     # one, and so does a second browser on this same session — so what a publish needs from here is
     # which elements were touched, never a whole map to write over everything else.
     field(:staged_element_css, any())
-    field(:preview?, :boolean, default: false)
-    field(:picked, :string)
+    field(:preview?, boolean(), default: false)
+    field(:picked, String.t())
     field(:clipboard, any())
-    field(:clipboard_label, :string)
+    field(:clipboard_label, String.t())
 
     # A SECOND CLIPBOARD, for looks rather than content — see `copy_styles/2`. Holding both in one
     # slot would mean copying a card to match its styling silently discarded whatever was waiting to
     # be pasted.
     field(:styles, any())
-    field(:styles_label, :string)
+    field(:styles_label, String.t())
     # THE OTHER SELECTED NODES. `selection` stays exactly one element — it is what the inspector
     # edits, what the toolbar names and what the breadcrumb walks — and these are the ones held with
     # it. Everything that reads a single selection therefore keeps working untouched, and the handful
@@ -169,12 +169,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSession do
     field(:marked, any())
     field(:past, list(), default: [])
     field(:future, list(), default: [])
-    field(:dirty?, :boolean, default: false)
+    field(:dirty?, boolean(), default: false)
     # HOW MANY TIMES THE DOCUMENT HAS MOVED, counted rather than measured. The chrome used to ask
     # `{length(past), length(future)}` whether anything had changed, and the undo stack was capped —
     # so once it filled, the answer was "no" forever, and the editor quietly stopped autosaving and
     # stopped recording history. A counter cannot saturate.
-    field(:revision, :integer, default: 0)
+    field(:revision, integer(), default: 0)
 
     # THE RUN OF UNDOS CURRENTLY UNDER WAY. Five taps are one row saying net movement, not five rows
     # saying one each — and the pending buffer cannot carry that, because every change flushes it, so
@@ -184,13 +184,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSession do
     # WHERE THE NEXT PRESS GOES, kept here and not only in the chrome so a reload can tell the two
     # apart: draft work is resumed, publish work is not — nothing was written for it, and the bar
     # promises a reload shows the original.
-    field(:stage, :atom, default: :draft)
+    field(:stage, atom(), default: :draft)
     field(:saved_at, any())
-    field(:draft_id, :string)
+    field(:draft_id, String.t())
     # The NAME of the draft being edited, or nil for the live document. The editor's top bar reads
     # this: an editor that silently writes somewhere you did not choose is the thing to avoid, so
     # every save target is named on screen.
-    field(:draft_label, :string)
+    field(:draft_label, String.t())
     field(:locked, any())
     field(:hidden, any())
 

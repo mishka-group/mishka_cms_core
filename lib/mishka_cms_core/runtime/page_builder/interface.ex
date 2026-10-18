@@ -315,7 +315,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
   def required?(row) do
     case row |> stringify() |> Map.get("opts") do
       %{} = opts -> Map.get(opts, "required") in [true, "true"]
-      _none -> value(row, "required") in ["true", true, "on"]
+      _none -> value(row, "required") in ["true", "on"]
     end
   end
 

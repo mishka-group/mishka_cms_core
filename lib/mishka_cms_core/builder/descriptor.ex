@@ -46,24 +46,24 @@ defmodule MishkaCmsCore.Builder.Descriptor do
   ]
 
   guardedstruct do
-    field(:key, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+    field(:key, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
 
-    field(:kind, :atom,
+    field(:kind, atom(),
       enforce: true,
       derives:
         "validate(enum=Atom[palette_entry::inspector_section::rail_tab::studio_tab::toolbar_action::command::audit_check::marketplace_source::ai_backend::node_kind::interaction])"
     )
 
-    field(:label, :string, derives: "sanitize(trim)")
-    field(:description, :string, derives: "sanitize(trim)")
-    field(:icon, :string)
-    field(:group, :string)
+    field(:label, String.t(), derives: "sanitize(trim)")
+    field(:description, String.t(), derives: "sanitize(trim)")
+    field(:icon, String.t())
+    field(:group, String.t())
     field(:permissions, list(), default: [])
-    field(:priority, :integer, default: 50)
+    field(:priority, integer(), default: 50)
     field(:render, any())
     field(:run, any())
-    field(:shortcut, :string)
-    field(:config, :map, default: %{})
+    field(:shortcut, String.t())
+    field(:config, map(), default: %{})
   end
 
   @doc "Every registry a descriptor can belong to."

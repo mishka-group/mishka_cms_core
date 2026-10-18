@@ -451,7 +451,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSession.Journal do
   patch in between — which is why this lives here rather than in the store: the session is the thing
   that knows the order.
   """
-  @spec steps_to(map(), String.t()) :: [map()] | nil
+  @spec steps_to(map(), reference()) :: [map()] | nil
   def steps_to(session, ref) do
     Enum.find_value([session.past, session.future], fn entries ->
       case Enum.find_index(entries, &(&1.ref == ref)) do
