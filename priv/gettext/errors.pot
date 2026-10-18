@@ -2364,3 +2364,18 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "contributor is required"
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/media.ex:2242
+#, elixir-autogen, elixir-format
+msgid "The content of this file is not a %{extension} file."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/page_uploads.ex:79
+#, elixir-autogen, elixir-format
+msgid "The upload %{name} cannot take %{unsupported}. HTML, SVG, XML and script files can never be uploaded; choose from: %{types}."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/page_uploads.ex:70
+#, elixir-autogen, elixir-format
+msgid "The upload %{name} needs Accepted Types, such as image/*, .pdf. Choose from: %{types}."
+msgstr ""
