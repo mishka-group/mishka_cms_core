@@ -719,13 +719,7 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      change fn changeset, context ->
-        if !is_nil(context.tenant) do
-          Ash.Changeset.force_change_attribute(changeset, :site_id, context.tenant)
-        else
-          changeset
-        end
-      end
+      change MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
 
       change slugify(:name, into: :name)
 
