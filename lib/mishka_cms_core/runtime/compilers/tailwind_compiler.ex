@@ -596,6 +596,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     ensure_installed()
     {global_pre, _global_post} = read_global_stylesheets()
 
+    {css, _removed} = author_css(css)
+
     case ran_tailwind(build_css_content_verify(global_pre, site_pre(site_id), css), "verify") do
       {0, _css, _output} -> :ok
       {_status, _css, output} -> {:error, tailwind_message(output)}
@@ -1680,9 +1682,74 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     sheets
     |> Enum.sort_by(&Stylesheet.load_order/1)
     |> Enum.map_join("\n\n", fn s ->
-      "/* Stylesheet##{s.id} kind=:#{s.kind} name=#{inspect(s.name)} */\n#{s.content}"
+      "/* Stylesheet##{s.id} kind=:#{s.kind} name=#{inspect(s.name)} */\n#{authored(s)}"
     end)
   end
+
+  defp authored(%{content: content, name: name}) do
+    case author_css(content) do
+      {css, []} ->
+        css
+
+      {css, removed} ->
+        Logger.warning(
+          "[TailwindCompiler] stylesheet #{inspect(name)}: left out #{Enum.join(removed, ", ")}, " <>
+            "which read a file or run code when Tailwind builds the page's CSS"
+        )
+
+        css
+    end
+  end
+
+  @unsafe_rules ~w(plugin config reference)
+
+  @doc """
+  The CSS an author wrote, without the at-rules that make the Tailwind binary read a file or run
+  code on the server, and the names of the ones left out: `{css, ["@import", …]}`.
+
+  A stylesheet row is pasted into the file Tailwind reads. There `@import "../x.css"` copies any
+  local CSS file into the page's public CSS, `@source "../x"` scans any local file for class names,
+  and `@plugin`, `@config` and `@reference` load a local file — a plugin is JavaScript Tailwind runs.
+  Left out:
+
+    * `@import`, unless it names an `http://` or `https://` address (a font stylesheet);
+    * `@source`, unless it is `@source inline(…)`, which only lists class names;
+    * `@plugin`, `@config` and `@reference`;
+    * any at-rule whose name is written with a backslash escape.
+
+  Everything else — `@theme`, `@apply`, `@media`, `@layer`, `@custom-variant`, `@utility` — is kept
+  as it was written.
+  """
+  @spec author_css(String.t()) :: {String.t(), [String.t()]}
+  def author_css(css) when is_binary(css) do
+    at_rule = ~r/@((?:[\w-]|\\.)+)([^;{}]*)(?:;|\{[^{}]*\})?/u
+
+    removed =
+      for [_whole, name, rest] <- Regex.scan(at_rule, css),
+          unsafe_rule?(name, rest),
+          do: "@" <> String.downcase(name)
+
+    cleaned =
+      Regex.replace(at_rule, css, fn whole, name, rest ->
+        if unsafe_rule?(name, rest), do: "", else: whole
+      end)
+
+    {cleaned, removed}
+  end
+
+  defp unsafe_rule?(name, rest) do
+    cond do
+      String.contains?(name, "\\") -> true
+      String.downcase(name) in @unsafe_rules -> true
+      String.downcase(name) == "source" -> not inline_source?(rest)
+      String.downcase(name) == "import" -> not remote_import?(rest)
+      true -> false
+    end
+  end
+
+  defp inline_source?(rest), do: Regex.match?(~r/\A\s*(?:not\s+)?inline\s*\(/i, rest)
+
+  defp remote_import?(rest), do: Regex.match?(~r/\A\s*(?:url\(\s*)?["']?https?:\/\//i, rest)
 
   # Resolve site name → site_id via SiteState (cached at boot). Falls back
   # to nil if the name isn't known — caller treats that as "no site rows".
