@@ -1138,14 +1138,12 @@ defmodule MishkaCmsCoreWeb.Test.EditorSectionsTest do
       test "and a helper that will not compile says so", %{conn: conn, site: site} do
         {view, record} = open(conn, unquote(section), site)
 
-        html =
-          render_click(view, "save_code", %{
-            "tab" => "helpers",
-            "entry" => %{"0" => %{"name" => "broken", "args" => "", "code" => "def ("}}
-          })
+        render_click(view, "save_code", %{
+          "tab" => "helpers",
+          "entry" => %{"0" => %{"name" => "broken", "args" => "", "code" => "def ("}}
+        })
 
-        assert html =~ "could not" or html =~ "syntax" or html =~ "broken",
-               "the refusal was silent"
+        assert has_element?(view, "#flash-error", "broken:"), "the refusal was silent"
 
         {:ok, reloaded} =
           Ash.get(resource(unquote(section)), record.id, action: :master_get, authorize?: false)

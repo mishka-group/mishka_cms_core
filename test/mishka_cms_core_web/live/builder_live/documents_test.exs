@@ -1428,7 +1428,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DocumentsTest do
       html =
         view |> form(essentials_form("page"), %{"form" => %{"title" => ""}}) |> render_submit()
 
-      assert html =~ "must be present" or html =~ "required"
+      assert html =~ "must be present"
       refute_redirected(view, "/admin/dashboard/runtime/builder/page")
     end
 

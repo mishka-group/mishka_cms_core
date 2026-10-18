@@ -346,9 +346,8 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryPropertyTest do
 
       assert changeset.valid?
 
-      # Test that defaults would be applied
-      assert changeset.attributes[:description] == nil or
-               is_binary(changeset.attributes[:description])
+      # The defaults the resource declares are on the changeset before anything is written.
+      assert changeset.attributes[:description] == nil
     end
   end
 

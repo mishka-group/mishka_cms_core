@@ -571,7 +571,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
       formatted = ast |> Macro.to_string() |> Code.format_string!() |> Enum.join()
       assert formatted =~ "root_layout"
       # The template is compiled, so check for the key parts
-      assert formatted =~ "status" || formatted =~ ":status"
+      assert formatted =~ "status"
       assert formatted =~ "inner_content"
     end
 

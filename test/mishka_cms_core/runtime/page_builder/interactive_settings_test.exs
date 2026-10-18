@@ -170,7 +170,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.InteractiveSettingsTest do
     for component <- interactive do
       slots = Enum.map(component["slots"] || [], & &1["name"])
 
-      assert "inner_block" in slots or slots != [],
+      assert slots != [],
              "#{component["name"]} is shown open on the canvas but takes no content"
     end
   end

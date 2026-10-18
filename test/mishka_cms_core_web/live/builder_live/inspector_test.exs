@@ -3440,7 +3440,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
       refute html =~ "SEO &amp; Meta"
 
       # The outline IS its own, though — an error page is a whole document, not a fragment.
-      assert html =~ "Heading order is sound" or html =~ "Heading order skips a level"
+      assert html =~ "Heading order is sound"
     end
 
     # And a page, which declares `seo_tags`, keeps the whole group — the gate is the resource's

@@ -271,8 +271,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       File.write!(path, Jason.encode!(bundle))
       on_exit(fn -> File.rm(path) end)
 
-      # A row the resource refuses raises out of the transaction; one the database refuses comes back
-      # as an error. A failed install either way.
+      # A row the resource refuses raises out of the transaction, so the whole install fails.
       failed =
         try do
           Installer.install_kit!(path)
@@ -280,7 +279,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
           error -> {:raised, error}
         end
 
-      assert match?({:error, _reason}, failed) or match?({:raised, _error}, failed)
+      assert {:raised, %Ash.Error.Invalid{}} = failed
 
       assert MishkaCmsCore.Runtime.JsHook
              |> Ash.Query.filter(name == "floating")

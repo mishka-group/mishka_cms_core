@@ -781,7 +781,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
 
       assert {:error, error} = result
       error_message = Exception.message(error)
-      assert error_message =~ "Tenant context must be nil" or error_message =~ "forbidden"
+      assert error_message =~ "Tenant context must be nil"
     end
 
     test "tenant user cannot create sites (TenantContext blocks non-master)", %{
@@ -801,7 +801,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
       # Should fail - TenantContext validation requires tenant to be nil for create action
       assert {:error, error} = result
       error_message = Exception.message(error)
-      assert error_message =~ "Tenant context must be nil" or error_message =~ "forbidden"
+      assert error_message =~ "Tenant context must be nil"
     end
   end
 

@@ -640,7 +640,7 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
         assert {:error, error} = save(site, [%{name: "cv", accept: accept}])
         message = Exception.message(error)
 
-        assert message =~ "can never be uploaded" or message =~ "needs Accepted Types",
+        assert message =~ "can never be uploaded",
                "#{accept} was saved"
       end
     end
