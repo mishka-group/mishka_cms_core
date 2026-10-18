@@ -516,7 +516,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     dir = Keyword.get_lazy(opts, :kits_dir, &kits_dir/0)
 
     with {:ok, url} <- valid_url(url),
-         {:ok, bundle} <- download_bundle(url),
+         {:ok, bundle} <- download_public_bundle(url),
          :ok <- validate_bundle_shape(bundle),
          :ok <- unique_name(bundle["name"], dir),
          {:ok, path} <- custom_kit_path(dir, bundle["name"]) do
@@ -707,15 +707,27 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   defp download_bundle(nil, _progress),
     do: {:error, gettext("no download URL is configured for this kit")}
 
-  defp download_bundle(url, progress) do
-    # ONE RETRY, not Req's default three. A 404 — the shape this fails as when a bundle has not been
-    # published for a tag — will never succeed on a retry, and the wizard sat on a spinner for eight
-    # seconds of exponential backoff before it could say so. One covers a genuine blip.
-    #
-    # STREAMED so the size limit is a real one. Reading the whole body and measuring it afterwards
-    # bounds nothing — the bytes are already in memory by then — and this URL can be one a stranger
-    # gave us. `:into` lets the read be abandoned mid-flight.
-    case Req.get(url, [max_retries: 1, into: bounded_collector(progress)] ++ req_options()) do
+  defp download_bundle(url, progress), do: url |> request(progress, true) |> bundle_from()
+
+  # ONE RETRY, not Req's default three. A 404 — the shape this fails as when a bundle has not been
+  # published for a tag — will never succeed on a retry, and the wizard sat on a spinner for eight
+  # seconds of exponential backoff before it could say so. One covers a genuine blip.
+  #
+  # STREAMED so the size limit is a real one. Reading the whole body and measuring it afterwards
+  # bounds nothing — the bytes are already in memory by then — and this URL can be one a stranger
+  # gave us. `:into` lets the read be abandoned mid-flight.
+  #
+  # `redirect?` is on for the packages we name, whose release assets are served from another host,
+  # and off for an address somebody pasted: `download_public_bundle/2` follows those itself.
+  defp request(url, progress, redirect?) do
+    Req.get(
+      url,
+      [max_retries: 1, redirect: redirect?, into: bounded_collector(progress)] ++ req_options()
+    )
+  end
+
+  defp bundle_from(response) do
+    case response do
       # THREE SHAPES a 200 can arrive in, and all three are reachable. Req's JSON step runs AFTER the
       # collector, on whatever it accumulated: a decoded map for good JSON, the untouched
       # `{:too_large, _}` sentinel when the collector gave up (nothing for the decoder to work on),
@@ -745,6 +757,93 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
         {:error, inspect(other)}
     end
   end
+
+  @redirects 5
+
+  # AN ADDRESS SOMEBODY PASTED is fetched from a public host or not at all. `/install` is open to
+  # whoever reaches a CMS that has no master yet, so an address on the machine's own network — a
+  # cloud's metadata service, a database, a router — is not one to fetch on their behalf, and
+  # what comes back (`HTTP 404`, "not valid JSON") would tell them whether something answered.
+  # Each redirect is read and checked the same way, instead of being followed.
+  defp download_public_bundle(url, redirects \\ @redirects) do
+    with :ok <- public_address(url) do
+      case request(url, nil, false) do
+        {:ok, %{status: status} = response}
+        when status in [301, 302, 303, 307, 308] and redirects > 0 ->
+          redirect_to(response, url, redirects)
+
+        response ->
+          bundle_from(response)
+      end
+    end
+  end
+
+  defp redirect_to(response, url, redirects) do
+    case Req.Response.get_header(response, "location") do
+      [location | _rest] ->
+        url |> URI.merge(location) |> URI.to_string() |> download_public_bundle(redirects - 1)
+
+      [] ->
+        {:error, gettext("HTTP %{status}", status: response.status)}
+    end
+  end
+
+  defp public_address(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) ->
+        case Enum.all?(addresses(host), &public_ip?/1) do
+          true -> :ok
+          false -> {:error, gettext("That address is on a private network.")}
+        end
+
+      _other ->
+        {:error, gettext("That is not an http:// or https:// address.")}
+    end
+  end
+
+  # Where a host is: the address it is written as, or every address its name resolves to. A name
+  # that resolves to none has nothing to refuse, and `Req` reports it.
+  defp addresses(host) do
+    charlist = String.to_charlist(host)
+
+    case :inet.parse_address(charlist) do
+      {:ok, ip} ->
+        [ip]
+
+      {:error, _not_an_address} ->
+        for family <- [:inet, :inet6],
+            {:ok, ips} <- [:inet.getaddrs(charlist, family, 3_000)],
+            ip <- ips,
+            do: ip
+    end
+  end
+
+  # What is not on the public internet: this network, private ranges, carrier-grade NAT, loopback,
+  # link-local (a cloud's metadata service is 169.254.169.254), and the multicast and reserved
+  # blocks; and in IPv6 the same — unspecified, loopback, unique-local, link-local, multicast — and
+  # an IPv4 address written inside one.
+  defp public_ip?({0, _b, _c, _d}), do: false
+  defp public_ip?({10, _b, _c, _d}), do: false
+  defp public_ip?({100, b, _c, _d}) when b in 64..127, do: false
+  defp public_ip?({127, _b, _c, _d}), do: false
+  defp public_ip?({169, 254, _c, _d}), do: false
+  defp public_ip?({172, b, _c, _d}) when b in 16..31, do: false
+  defp public_ip?({192, 0, 0, _d}), do: false
+  defp public_ip?({192, 168, _c, _d}), do: false
+  defp public_ip?({198, b, _c, _d}) when b in 18..19, do: false
+  defp public_ip?({a, _b, _c, _d}) when a >= 224, do: false
+  defp public_ip?({_a, _b, _c, _d}), do: true
+
+  defp public_ip?({0, 0, 0, 0, 0, 0, 0, 0}), do: false
+  defp public_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: false
+
+  defp public_ip?({0, 0, 0, 0, 0, 0xFFFF, high, low}),
+    do: public_ip?({div(high, 256), rem(high, 256), div(low, 256), rem(low, 256)})
+
+  defp public_ip?({a, _b, _c, _d, _e, _f, _g, _h}) when a in 0xFC00..0xFDFF, do: false
+  defp public_ip?({a, _b, _c, _d, _e, _f, _g, _h}) when a in 0xFE80..0xFEBF, do: false
+  defp public_ip?({a, _b, _c, _d, _e, _f, _g, _h}) when a >= 0xFF00, do: false
+  defp public_ip?({_a, _b, _c, _d, _e, _f, _g, _h}), do: true
 
   defp bounded_collector(progress) do
     limit = max_bundle_bytes()

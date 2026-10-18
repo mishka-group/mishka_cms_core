@@ -641,12 +641,170 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitSourcesTest do
     end
 
     test "a transport failure is reported, not raised", %{dir: dir} do
-      Application.put_env(:mishka_cms_core, :ui_kit_req_options, [])
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options, plug: {Req.Test, :kits})
+      Req.Test.stub(:kits, &Req.Test.transport_error(&1, :econnrefused))
 
       assert {:error, reason} =
-               UiKitHandler.add_custom_kit("https://127.0.0.1:1/a.json", kits_dir: dir)
+               UiKitHandler.add_custom_kit("https://example.test/a.json", kits_dir: dir)
 
       assert is_binary(reason)
+    end
+
+    # `/install` IS OPEN TO WHOEVER REACHES A CMS THAT HAS NO MASTER YET, and the address is theirs to
+    # choose: the machine's own network is not a place to fetch from on their behalf, whether it is
+    # written as an address or reached by a redirect.
+    test "an address on a private network is never requested", %{dir: dir} do
+      test = self()
+
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          send(test, {:requested, conn.host})
+          Plug.Conn.send_resp(conn, 200, Jason.encode!(bundle("acme")))
+        end
+      )
+
+      for address <- [
+            "http://127.0.0.1/kit.json",
+            "http://127.1.2.3:4000/kit.json",
+            "http://localhost:4000/kit.json",
+            "http://[::1]/kit.json",
+            "http://0.0.0.0/kit.json",
+            "http://10.0.0.5/kit.json",
+            "http://172.16.0.1/kit.json",
+            "http://172.31.255.255/kit.json",
+            "http://192.168.1.10/kit.json",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://100.64.0.1/kit.json",
+            "http://224.0.0.1/kit.json",
+            "http://[fd00::1]/kit.json",
+            "http://[fe80::1]/kit.json",
+            "http://[::ffff:10.0.0.1]/kit.json",
+            "http://[::ffff:169.254.169.254]/kit.json"
+          ] do
+        assert {:error, reason} = UiKitHandler.add_custom_kit(address, kits_dir: dir)
+        assert reason =~ "private network", address
+      end
+
+      refute_received {:requested, _host}
+      assert File.ls!(dir) == []
+    end
+
+    test "an address on the public internet is fetched", %{dir: dir} do
+      for {address, name} <- [
+            {"http://93.184.216.34/kit.json", "one"},
+            {"http://[2606:2800:220:1::1]/kit.json", "two"}
+          ] do
+        serve_body!(200, Jason.encode!(bundle(name)))
+
+        assert {:ok, %{"name" => ^name}} = UiKitHandler.add_custom_kit(address, kits_dir: dir)
+      end
+    end
+
+    test "a redirect is followed when it leads to a public host", %{dir: dir} do
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          case conn.host do
+            "example.test" ->
+              conn
+              |> Plug.Conn.put_resp_header("location", "https://cdn.example.test/acme.json")
+              |> Plug.Conn.send_resp(302, "")
+
+            "cdn.example.test" ->
+              Plug.Conn.send_resp(conn, 200, Jason.encode!(bundle("acme")))
+          end
+        end
+      )
+
+      assert {:ok, %{"name" => "acme"}} =
+               UiKitHandler.add_custom_kit("https://example.test/kit.json", kits_dir: dir)
+    end
+
+    test "a relative redirect stays on the host it came from", %{dir: dir} do
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          case conn.request_path do
+            "/kit.json" ->
+              conn
+              |> Plug.Conn.put_resp_header("location", "/real/acme.json")
+              |> Plug.Conn.send_resp(301, "")
+
+            "/real/acme.json" ->
+              Plug.Conn.send_resp(conn, 200, Jason.encode!(bundle("acme")))
+          end
+        end
+      )
+
+      assert {:ok, %{"name" => "acme"}} =
+               UiKitHandler.add_custom_kit("https://example.test/kit.json", kits_dir: dir)
+    end
+
+    test "a redirect to a private network is refused before it is requested", %{dir: dir} do
+      test = self()
+
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          send(test, {:requested, conn.host})
+
+          conn
+          |> Plug.Conn.put_resp_header("location", "http://169.254.169.254/latest/meta-data/")
+          |> Plug.Conn.send_resp(302, "")
+        end
+      )
+
+      assert {:error, reason} =
+               UiKitHandler.add_custom_kit("https://example.test/kit.json", kits_dir: dir)
+
+      assert reason =~ "private network"
+      assert_received {:requested, "example.test"}
+      refute_received {:requested, "169.254.169.254"}
+      assert File.ls!(dir) == []
+    end
+
+    test "redirects that never end stop", %{dir: dir} do
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          conn
+          |> Plug.Conn.put_resp_header("location", "https://example.test/again.json")
+          |> Plug.Conn.send_resp(302, "")
+        end
+      )
+
+      assert {:error, reason} =
+               UiKitHandler.add_custom_kit("https://example.test/kit.json", kits_dir: dir)
+
+      assert reason =~ "HTTP 302"
+    end
+
+    # The packages we name are served from release assets on another host, and still are.
+    test "an official package still follows a redirect", %{dir: dir} do
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn ->
+          case conn.host do
+            "github.test" ->
+              conn
+              |> Plug.Conn.put_resp_header("location", "https://objects.test/kit.json")
+              |> Plug.Conn.send_resp(302, "")
+
+            "objects.test" ->
+              Plug.Conn.send_resp(conn, 200, Jason.encode!(bundle("acme")))
+          end
+        end
+      )
+
+      Application.put_env(:mishka_cms_core, :prefer_local_ui_kits, false)
+
+      Application.put_env(:mishka_cms_core, :official_ui_kits, [
+        %{
+          key: :acme,
+          label: "Acme",
+          file: "acme.json",
+          tag: "v1",
+          url: "https://github.test/kit.json"
+        }
+      ])
+
+      assert %{bundles: [%{"name" => "acme"}], failures: []} =
+               UiKitHandler.resolve_kits(kits_dir: dir)
     end
   end
 
