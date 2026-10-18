@@ -1113,114 +1113,22 @@ defmodule MishkaCmsCore.Runtime.JsHook do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        # WHOSE SITE THIS CALL ACTS ON comes from the actor, not from the tenant alone: the reads
-        # and the restore below run as the system.
-        acting_site =
-          MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acting_site(context)
-
-        js_hook_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        case Ash.get(MishkaCmsCore.Runtime.JsHook, js_hook_id,
-               action: :get_any,
-               authorize?: false
-             ) do
-          {:ok, js_hook} when not is_nil(js_hook) ->
-            # Check tenant access: can access own site's js_hooks or global ones
-            can_access =
-              cond do
-                is_nil(acting_site) -> false
-                is_nil(js_hook.site_id) -> true
-                js_hook.site_id == acting_site -> true
-                true -> false
-              end
-
-            # Check if tenant can modify (not just access)
-            can_modify =
-              cond do
-                is_nil(acting_site) -> false
-                # Cannot modify global js_hooks
-                is_nil(js_hook.site_id) -> false
-                js_hook.site_id == acting_site -> true
-                true -> false
-              end
-
-            cond do
-              not can_access ->
-                {:error,
-                 Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.JsHook)}
-
-              not can_modify ->
-                {:error,
-                 Ash.Error.Invalid.exception(
-                   errors: [
-                     Ash.Error.Changes.InvalidAttribute.exception(
-                       field: :site_id,
-                       message:
-                         dgettext_noop(
-                           "errors",
-                           "Cannot restore version of global js_hook. Global js_hooks can only be modified by master users."
-                         )
-                     )
-                   ]
-                 )}
-
-              !is_nil(js_hook.archived_at) ->
-                {:error,
-                 Ash.Error.Invalid.exception(
-                   errors: [
-                     Ash.Error.Changes.InvalidAttribute.exception(
-                       field: :archived_at,
-                       message:
-                         dgettext_noop(
-                           "errors",
-                           "Cannot restore version of archived js_hook. Please unarchive it first."
-                         )
-                     )
-                   ]
-                 )}
-
-              true ->
-                tenant = js_hook.site_id
-
-                case Ash.get(MishkaCmsCore.Runtime.JsHook.Version, version_id,
-                       action: :get_any,
-                       authorize?: false
-                     ) do
-                  {:ok, version} when not is_nil(version) ->
-                    if version.version_source_id != js_hook_id do
-                      {:error,
-                       Ash.Error.Invalid.exception(
-                         errors: [
-                           Ash.Error.Changes.InvalidAttribute.exception(
-                             field: :version_id,
-                             message:
-                               dgettext_noop("errors", "Version does not belong to this js_hook.")
-                           )
-                         ]
-                       )}
-                    else
-                      js_hook
-                      |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                        tenant: tenant,
-                        authorize?: false
-                      )
-                      |> Ash.update()
-                    end
-
-                  _ ->
-                    {:error,
-                     Ash.Error.Query.NotFound.exception(
-                       resource: MishkaCmsCore.Runtime.JsHook.Version
-                     )}
-                end
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.JsHook)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.JsHook,
+           version: MishkaCmsCore.Runtime.JsHook.Version,
+           read: :get_any,
+           global?: true,
+           global:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of global js_hook. Global js_hooks can only be modified by master users."
+             ),
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived js_hook. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this js_hook.")}
     end
 
     update :restore_version do
@@ -1422,69 +1330,16 @@ defmodule MishkaCmsCore.Runtime.JsHook do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        js_hook_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        case Ash.get(MishkaCmsCore.Runtime.JsHook, js_hook_id,
-               action: :get_any,
-               authorize?: false
-             ) do
-          {:ok, js_hook} when not is_nil(js_hook) ->
-            if !is_nil(js_hook.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived js_hook. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = js_hook.site_id
-
-              case Ash.get(MishkaCmsCore.Runtime.JsHook.Version, version_id,
-                     action: :get_any,
-                     authorize?: false
-                   ) do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != js_hook_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop("errors", "Version does not belong to this js_hook.")
-                         )
-                       ]
-                     )}
-                  else
-                    js_hook
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.JsHook.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.JsHook)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.JsHook,
+           version: MishkaCmsCore.Runtime.JsHook.Version,
+           read: :get_any,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived js_hook. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this js_hook.")}
     end
 
     action :master_preview_version, :struct do

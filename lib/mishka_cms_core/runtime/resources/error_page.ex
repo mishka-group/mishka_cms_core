@@ -1407,81 +1407,17 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        # WHOSE SITE THIS CALL ACTS ON comes from the actor, not from the tenant alone: the reads
-        # and the restore below run as the system.
-        acting_site =
-          MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acting_site(context)
-
-        error_page_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaCmsCore.Runtime.ErrorPage, error_page_id,
-          action: :read,
-          tenant: acting_site,
-          authorize?: false
-        )
-        |> case do
-          {:ok, error_page} when not is_nil(error_page) ->
-            if !is_nil(error_page.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived error page. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = error_page.site_id
-
-              Ash.get(MishkaCmsCore.Runtime.ErrorPage.Version, version_id,
-                action: :get_any,
-                authorize?: false
-              )
-              |> case do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != error_page_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop(
-                               "errors",
-                               "Version does not belong to this error page."
-                             )
-                         )
-                       ]
-                     )}
-                  else
-                    error_page
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.ErrorPage.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error,
-             Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.ErrorPage)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.ErrorPage,
+           version: MishkaCmsCore.Runtime.ErrorPage.Version,
+           read: :read,
+           tenant_read?: true,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived error page. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this error page.")}
     end
 
     action :master_restore_version, :struct do
@@ -1493,75 +1429,16 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        error_page_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaCmsCore.Runtime.ErrorPage, error_page_id,
-          action: :master_get,
-          authorize?: false
-        )
-        |> case do
-          {:ok, error_page} when not is_nil(error_page) ->
-            if !is_nil(error_page.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived error page. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = error_page.site_id
-
-              Ash.get(MishkaCmsCore.Runtime.ErrorPage.Version, version_id,
-                action: :get_any,
-                authorize?: false
-              )
-              |> case do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != error_page_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop(
-                               "errors",
-                               "Version does not belong to this error page."
-                             )
-                         )
-                       ]
-                     )}
-                  else
-                    error_page
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.ErrorPage.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error,
-             Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.ErrorPage)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.ErrorPage,
+           version: MishkaCmsCore.Runtime.ErrorPage.Version,
+           read: :master_get,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived error page. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this error page.")}
     end
 
     action :preview_version, :struct do

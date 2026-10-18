@@ -282,10 +282,120 @@ defmodule MishkaCmsCore.Runtime.Resources.RestoreVersionOwnershipTest do
     end
   end
 
+  # WHAT THE SHARED ACTION BODY ANSWERS (`Actions.RestoreVersion`), the same for every resource.
+  defp refused_fields(%{errors: errors}),
+    do: Enum.map(errors, &(Map.get(&1, :field) || &1.__struct__))
+
+  defp archive!(record, tenant) do
+    record
+    |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: tenant, authorize?: false)
+    |> Ash.destroy!(authorize?: false)
+  end
+
+  for {resource, factory} <- @resources do
+    @resource resource
+    @factory factory
+    @label resource |> Module.split() |> List.last()
+
+    describe "#{@label} :restore_version_api and :master_restore_version refusals" do
+      test "a version of another record is refused on :version_id, for a site and for a master",
+           context do
+        mine = @factory.(context.site_a.id)
+        other = @factory.(context.site_b.id)
+        [their_version | _] = versions_of(@resource, other)
+
+        assert {:error, site_refusal} =
+                 run_wrapper(
+                   @resource,
+                   :restore_version_api,
+                   %{id: mine.id, version_id: their_version.id},
+                   context.star_a,
+                   context.site_a.id
+                 )
+
+        assert refused_fields(site_refusal) == [:version_id]
+
+        assert {:error, master_refusal} =
+                 run_wrapper(
+                   @resource,
+                   :master_restore_version,
+                   %{id: mine.id, version_id: their_version.id},
+                   context.master,
+                   nil
+                 )
+
+        assert refused_fields(master_refusal) == [:version_id]
+      end
+
+      test "a version that is not there is not found, and so is a record that is not", context do
+        mine = @factory.(context.site_a.id)
+
+        assert {:error, no_version} =
+                 run_wrapper(
+                   @resource,
+                   :restore_version_api,
+                   %{id: mine.id, version_id: Ash.UUID.generate()},
+                   context.star_a,
+                   context.site_a.id
+                 )
+
+        assert refused_fields(no_version) == [Ash.Error.Query.NotFound]
+
+        [version | _] = versions_of(@resource, mine)
+
+        assert {:error, no_record} =
+                 run_wrapper(
+                   @resource,
+                   :master_restore_version,
+                   %{id: Ash.UUID.generate(), version_id: version.id},
+                   context.master,
+                   nil
+                 )
+
+        assert refused_fields(no_record) == [Ash.Error.Query.NotFound]
+      end
+
+      test "an archived record is refused on :archived_at", context do
+        mine = @factory.(context.site_a.id)
+        [version | _] = versions_of(@resource, mine)
+        archive!(mine, context.site_a.id)
+
+        assert {:error, refusal} =
+                 run_wrapper(
+                   @resource,
+                   :master_restore_version,
+                   %{id: mine.id, version_id: version.id},
+                   context.master,
+                   nil
+                 )
+
+        assert refused_fields(refusal) == [:archived_at]
+      end
+    end
+  end
+
   for resource <- @global_capable do
     @resource resource
     @factory @resources |> List.keyfind(resource, 0) |> elem(1)
     @label resource |> Module.split() |> List.last()
+
+    describe "#{@label} :restore_version_api on a global record" do
+      test "is refused on :site_id for a site user, found for none without a site", context do
+        global = @factory.(nil)
+        [version | _] = versions_of(@resource, global)
+
+        assert {:error, site_refusal} =
+                 run_wrapper(
+                   @resource,
+                   :restore_version_api,
+                   %{id: global.id, version_id: version.id},
+                   context.star_a,
+                   context.site_a.id
+                 )
+
+        assert refused_fields(site_refusal) == [:site_id]
+      end
+    end
 
     describe "#{@label} :restore_version without a tenant" do
       test "a site user restores no other site's record", context do

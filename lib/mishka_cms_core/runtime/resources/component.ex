@@ -1634,118 +1634,22 @@ defmodule MishkaCmsCore.Runtime.Component do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        # WHOSE SITE THIS CALL ACTS ON comes from the actor, not from the tenant alone: the reads
-        # and the restore below run as the system.
-        acting_site =
-          MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acting_site(context)
-
-        component_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        case Ash.get(MishkaCmsCore.Runtime.Component, component_id,
-               action: :get_any,
-               authorize?: false
-             ) do
-          {:ok, component} when not is_nil(component) ->
-            # Check tenant access: can access own site's components or global ones
-            can_access =
-              cond do
-                is_nil(acting_site) -> false
-                is_nil(component.site_id) -> true
-                component.site_id == acting_site -> true
-                true -> false
-              end
-
-            # Check if tenant can modify (not just access)
-            can_modify =
-              cond do
-                is_nil(acting_site) -> false
-                # Cannot modify global components
-                is_nil(component.site_id) -> false
-                component.site_id == acting_site -> true
-                true -> false
-              end
-
-            cond do
-              not can_access ->
-                {:error,
-                 Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Component)}
-
-              not can_modify ->
-                {:error,
-                 Ash.Error.Invalid.exception(
-                   errors: [
-                     Ash.Error.Changes.InvalidAttribute.exception(
-                       field: :site_id,
-                       message:
-                         dgettext_noop(
-                           "errors",
-                           "Cannot restore version of global component. Global components can only be modified by master users."
-                         )
-                     )
-                   ]
-                 )}
-
-              !is_nil(component.archived_at) ->
-                {:error,
-                 Ash.Error.Invalid.exception(
-                   errors: [
-                     Ash.Error.Changes.InvalidAttribute.exception(
-                       field: :archived_at,
-                       message:
-                         dgettext_noop(
-                           "errors",
-                           "Cannot restore version of archived component. Please unarchive it first."
-                         )
-                     )
-                   ]
-                 )}
-
-              true ->
-                tenant = component.site_id
-
-                case Ash.get(MishkaCmsCore.Runtime.Component.Version, version_id,
-                       action: :get_any,
-                       authorize?: false
-                     ) do
-                  {:ok, version} when not is_nil(version) ->
-                    if version.version_source_id != component_id do
-                      {:error,
-                       Ash.Error.Invalid.exception(
-                         errors: [
-                           Ash.Error.Changes.InvalidAttribute.exception(
-                             field: :version_id,
-                             message:
-                               dgettext_noop(
-                                 "errors",
-                                 "Version does not belong to this component."
-                               )
-                           )
-                         ]
-                       )}
-                    else
-                      component
-                      |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                        tenant: tenant,
-                        authorize?: false
-                      )
-                      |> Ash.update()
-                    end
-
-                  _ ->
-                    {:error,
-                     Ash.Error.Query.NotFound.exception(
-                       resource: MishkaCmsCore.Runtime.Component.Version
-                     )}
-                end
-            end
-
-          _ ->
-            {:error,
-             Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Component)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.Component,
+           version: MishkaCmsCore.Runtime.Component.Version,
+           read: :get_any,
+           global?: true,
+           global:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of global component. Global components can only be modified by master users."
+             ),
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived component. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this component.")}
     end
 
     action :master_restore_version, :struct do
@@ -1757,70 +1661,16 @@ defmodule MishkaCmsCore.Runtime.Component do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        component_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        case Ash.get(MishkaCmsCore.Runtime.Component, component_id,
-               action: :get_any,
-               authorize?: false
-             ) do
-          {:ok, component} when not is_nil(component) ->
-            if !is_nil(component.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived component. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = component.site_id
-
-              case Ash.get(MishkaCmsCore.Runtime.Component.Version, version_id,
-                     action: :get_any,
-                     authorize?: false
-                   ) do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != component_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop("errors", "Version does not belong to this component.")
-                         )
-                       ]
-                     )}
-                  else
-                    component
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.Component.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error,
-             Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Component)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.Component,
+           version: MishkaCmsCore.Runtime.Component.Version,
+           read: :get_any,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived component. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this component.")}
     end
 
     update :restore_version do

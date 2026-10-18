@@ -651,81 +651,17 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        # WHOSE SITE THIS CALL ACTS ON comes from the actor, not from the tenant alone: the reads
-        # and the restore below run as the system.
-        acting_site =
-          MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acting_site(context)
-
-        category_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaCmsCore.Runtime.MediaCategory, category_id,
-          action: :read,
-          tenant: acting_site,
-          authorize?: false
-        )
-        |> case do
-          {:ok, category} when not is_nil(category) ->
-            if !is_nil(category.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore a version of an archived folder. Restore the folder first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = category.site_id
-
-              Ash.get(MishkaCmsCore.Runtime.MediaCategory.Version, version_id,
-                action: :get_any,
-                authorize?: false
-              )
-              |> case do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != category_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop(
-                               "errors",
-                               "That version is not one of this folder's."
-                             )
-                         )
-                       ]
-                     )}
-                  else
-                    category
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.MediaCategory.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error,
-             Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.MediaCategory)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.MediaCategory,
+           version: MishkaCmsCore.Runtime.MediaCategory.Version,
+           read: :read,
+           tenant_read?: true,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore a version of an archived folder. Restore the folder first."
+             ),
+           foreign: dgettext_noop("errors", "That version is not one of this folder's.")}
     end
 
     action :master_restore_version, :struct do
@@ -737,75 +673,16 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        category_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaCmsCore.Runtime.MediaCategory, category_id,
-          action: :master_get,
-          authorize?: false
-        )
-        |> case do
-          {:ok, category} when not is_nil(category) ->
-            if !is_nil(category.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore a version of an archived folder. Restore the folder first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = category.site_id
-
-              Ash.get(MishkaCmsCore.Runtime.MediaCategory.Version, version_id,
-                action: :get_any,
-                authorize?: false
-              )
-              |> case do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != category_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop(
-                               "errors",
-                               "That version is not one of this folder's."
-                             )
-                         )
-                       ]
-                     )}
-                  else
-                    category
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.MediaCategory.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error,
-             Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.MediaCategory)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.MediaCategory,
+           version: MishkaCmsCore.Runtime.MediaCategory.Version,
+           read: :master_get,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore a version of an archived folder. Restore the folder first."
+             ),
+           foreign: dgettext_noop("errors", "That version is not one of this folder's.")}
     end
 
     action :preview_version, :struct do
