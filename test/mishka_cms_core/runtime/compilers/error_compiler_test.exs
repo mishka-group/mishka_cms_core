@@ -7,6 +7,31 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
   alias MishkaCmsCore.Runtime.Compilers.ErrorCompiler
   @moduletag :unit
 
+  describe "the inline fallback of a site that never compiled" do
+    test "marks its style and its script with the request's CSP nonce" do
+      module = Module.concat(__MODULE__, "Nonced#{System.unique_integer([:positive])}")
+
+      {_result, _bindings} =
+        %{
+          title: "nonced_errors",
+          error_module: module,
+          site: "nonce-site-#{System.unique_integer([:positive])}",
+          error_pages: [%{status: 404, template: "<h1>Not Found</h1>"}],
+          root_layout_template: nil
+        }
+        |> ErrorCompiler.build_module()
+        |> Code.eval_quoted()
+
+      site = module.__error_information__([:private, :site])
+      conn = %Plug.Conn{assigns: %{current_site: %{name: site}, csp_nonce: "n0nce"}}
+
+      html = module |> ErrorCompiler.render_page(conn, 404) |> IO.iodata_to_binary()
+
+      assert html =~ ~s(<style nonce="n0nce">)
+      assert html =~ ~s(<script nonce="n0nce">)
+    end
+  end
+
   describe "build_module/1" do
     test "builds complete module AST with minimal params" do
       params = %{

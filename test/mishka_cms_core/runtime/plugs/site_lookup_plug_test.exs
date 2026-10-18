@@ -338,6 +338,71 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
     end
   end
 
+  # A POLICY THAT ENFORCES DROPS A `<style>` WITH NO NONCE, so each page this plug answers with its
+  # own styles marks them with the nonce `SecurityHeaders` minted, and carries none when it has not
+  # run.
+  describe "the pages it answers with" do
+    setup do
+      :ok =
+        SiteState.save(%{
+          id: "nonce-inactive",
+          name: "Nonce Inactive",
+          host: "nonce-inactive.example.com",
+          priority: 100,
+          active: false,
+          mode: :hybrid,
+          frontend_domain: nil,
+          allowed_origins: []
+        })
+
+      :ok =
+        SiteState.save(%{
+          id: "nonce-api",
+          name: "Nonce Api",
+          host: "nonce-api.example.com",
+          priority: 100,
+          active: true,
+          mode: :api_only,
+          frontend_domain: nil,
+          allowed_origins: []
+        })
+    end
+
+    for {label, host} <- [
+          {"an unknown host", "nonce-unknown.example.com"},
+          {"an inactive site", "nonce-inactive.example.com"},
+          {"an api-only site", "nonce-api.example.com"}
+        ] do
+      @host host
+
+      test "#{label} draws its style with the request's nonce" do
+        conn =
+          conn_with_host(:get, "/", @host)
+          |> init_test_session(%{})
+          |> fetch_query_params()
+          |> assign(:csp_nonce, "abc123+/=")
+
+        result_conn = SiteLookupPlug.call(conn, %{})
+
+        assert result_conn.halted
+        assert result_conn.resp_body =~ ~s(<style nonce="abc123+/=">)
+        refute result_conn.resp_body =~ "<style>"
+      end
+
+      test "#{label} draws a plain style when no nonce was minted" do
+        conn =
+          conn_with_host(:get, "/", @host)
+          |> init_test_session(%{})
+          |> fetch_query_params()
+
+        result_conn = SiteLookupPlug.call(conn, %{})
+
+        assert result_conn.halted
+        assert result_conn.resp_body =~ "<style>"
+      end
+    end
+  end
+
   describe "call/2 with missing site" do
     test "returns 503 for unknown host", %{} do
       conn =

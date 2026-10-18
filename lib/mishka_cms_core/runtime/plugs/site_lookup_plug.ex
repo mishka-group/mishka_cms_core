@@ -117,6 +117,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   alias MishkaCmsCore.Accounts.AuthGate
   alias MishkaCmsCore.Runtime.{Languages, Redirects}
+  alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.Hook
 
@@ -380,7 +381,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
           <html>
             <head>
               <title>#{gettext("Access Not Allowed")}</title>
-              <style>
+              <style#{nonce_attr(conn)}>
                 body {
                   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
                   text-align: center;
@@ -443,6 +444,15 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
     |> scope(site)
   end
 
+  # The page's own `<style>` is marked with the request's CSP nonce when `SecurityHeaders` has minted
+  # one, so a policy that enforces still lets this page draw.
+  defp nonce_attr(conn) do
+    case SecurityHeaders.nonce(conn) do
+      nonce when is_binary(nonce) -> ~s( nonce="#{Plug.HTML.html_escape(nonce)}")
+      _no_nonce -> ""
+    end
+  end
+
   @doc false
   @spec handle_site_not_found(Plug.Conn.t()) :: Plug.Conn.t()
   defp handle_site_not_found(conn) do
@@ -459,7 +469,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       <html>
         <head>
           <title>#{gettext("Service Unavailable")}</title>
-          <style>
+          <style#{nonce_attr(conn)}>
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
               text-align: center;
@@ -525,7 +535,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       <html>
         <head>
           <title>#{gettext("Site Not Available")}</title>
-          <style>
+          <style#{nonce_attr(conn)}>
             body {
               font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
               text-align: center;

@@ -437,7 +437,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
                 </style>
                 <script :if={js_href} defer src={js_href}>
                 </script>
-                <script :if={@conn.assigns[:current_site] && !js_href}>
+                <script :if={@conn.assigns[:current_site] && !js_href} nonce={@conn.assigns[:csp_nonce]}>
                   <%= raw(MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.get_compiled_js(@conn.assigns.current_site.name)) %>
                 </script>
               </head>
