@@ -56,6 +56,14 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Runtime.TranslationShareCards
   ]
 
+  # What is kept of a site's icons dropped when its App icon or Favicon setting is saved, on
+  # `cms_core:setting:after_save`, and when the media file either names is replaced, on
+  # `cms_core:media:after_save` (`MishkaCmsCore.Runtime.SiteIcon`).
+  @site_icon_plugins [
+    MishkaCmsCore.Runtime.SettingSiteIcons,
+    MishkaCmsCore.Runtime.MediaSiteIcons
+  ]
+
   # `settings:register` plugins — the core widgets' settings under the General tab, and every
   # sidebar entry's position/visibility switches under the Sidebar tab.
   @settings_plugins [
@@ -119,7 +127,8 @@ defmodule MishkaCmsCore.Application do
         @notify_producers ++
         @settings_plugins ++
         @cache_plugins ++
-        @share_card_plugins ++ @mail_providers ++ @captcha_providers ++ @account_notices
+        @share_card_plugins ++
+        @site_icon_plugins ++ @mail_providers ++ @captcha_providers ++ @account_notices
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

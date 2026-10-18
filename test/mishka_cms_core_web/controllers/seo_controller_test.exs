@@ -27,8 +27,8 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
-  alias MishkaCmsCore.Runtime.Seo
-  alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState}
+  alias MishkaCmsCore.Runtime.{Seo, SiteIcon}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState, TranslationsState}
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
   alias MishkaCmsCore.Settings
 
@@ -36,7 +36,8 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
     SeoManyUrls,
     SeoRobotsLines,
     SeoSitemapSlashes,
-    SeoSitemapUrls
+    SeoSitemapUrls,
+    SiteManifestTheme
   }
 
   alias MishkaCmsCore.Test.EventCannotRun
@@ -47,6 +48,9 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   @every_language %{"serves_all_languages" => true}
 
   @first_file "/sitemap-00001.xml.gz"
+
+  # Twice as wide as it is tall, violet.
+  @wide_svg ~s(<svg xmlns="http://www.w3.org/2000/svg" width="200" height="100" viewBox="0 0 200 100"><rect width="200" height="100" fill="#7c4dff"/></svg>)
 
   setup do
     Process.register(self(), :__plugin_hook_probe__)
@@ -71,6 +75,7 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       SettingsState.restore(snapshot)
       SiteState.delete(site.id)
       AssetsState.delete(site.name, "sitemap")
+      SiteIcon.forget(site.id)
     end)
 
     %{site: site}
@@ -111,6 +116,55 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
     conn = fetch(site, path)
     assert conn.status == 200, "#{path} was not served"
     :zlib.gunzip(conn.resp_body)
+  end
+
+  # The folder a site's media and icons are read from and written to: the test's own.
+  defp media_dir(_context) do
+    dir = Path.join(System.tmp_dir!(), "seo_icons_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    Application.put_env(:mishka_cms_core, :media_static_dir, dir)
+
+    on_exit(fn ->
+      Application.delete_env(:mishka_cms_core, :media_static_dir)
+      File.rm_rf(dir)
+    end)
+
+    %{dir: dir}
+  end
+
+  # A picture in the site's media library, and the address a setting names it by.
+  defp media!(dir, site, name, contents) do
+    path = Path.join([dir, "uploads", site.id, "media", "brand", name])
+    File.mkdir_p!(Path.dirname(path))
+    File.write!(path, contents)
+    "/uploads/#{site.id}/media/brand/#{name}"
+  end
+
+  defp png(width, height, color \\ :purple),
+    do: width |> Image.new!(height, color: color) |> Image.write!(:memory, suffix: ".png")
+
+  defp alpha(image, x, y) do
+    {:ok, pixel} = Image.get_pixel(image, x, y)
+    List.last(pixel)
+  end
+
+  # A second site the runtime knows, on its own host.
+  defp cached_site! do
+    host = "seo-#{System.unique_integer([:positive])}.test"
+    site = create_site!(name: host, host: host, active: true)
+
+    :ok =
+      SiteState.save(%{
+        id: site.id,
+        name: site.name,
+        host: site.host,
+        priority: site.priority,
+        active: site.active,
+        master: site.master
+      })
+
+    on_exit(fn -> SiteState.delete(site.id) end)
+    site
   end
 
   defp register!(plugin, event) do
@@ -251,7 +305,54 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   describe "favicon.ico" do
     @browser_accept "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
 
-    test "sends a browser to the site's own favicon, on the site", %{site: site} do
+    setup :media_dir
+
+    test "sends the site's own favicon file as it is, with the type its first bytes say", %{
+      site: site,
+      dir: dir
+    } do
+      bytes = png(32, 32)
+
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.png", bytes), site_id: site.id)
+
+      conn = fetch(site, "/favicon.ico", accept: @browser_accept)
+
+      assert conn.status == 200
+      assert conn.resp_body == bytes
+      assert get_resp_header(conn, "content-type") == ["image/png"]
+      assert get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+      refute conn |> get_resp_header("content-security-policy") |> Enum.join() =~ "sandbox"
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=86400"]
+      assert get_resp_header(conn, "location") == []
+      assert get_resp_header(conn, "set-cookie") == []
+    end
+
+    test "sandboxes an SVG favicon, and names an ICO one what it is", %{site: site, dir: dir} do
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.svg", @wide_svg), site_id: site.id)
+
+      conn = fetch(site, "/favicon.ico")
+      assert conn.resp_body == @wide_svg
+      assert get_resp_header(conn, "content-type") == ["image/svg+xml"]
+      # Sandboxed on top of the policy every response gets.
+      assert [policy] = get_resp_header(conn, "content-security-policy")
+      assert policy =~ "frame-ancestors 'self'"
+      assert String.ends_with?(policy, "; sandbox")
+
+      ico = <<0, 0, 1, 0, 1, 0, 16, 16, 0, 0, 1, 0, 32, 0>> <> :binary.copy(<<0>>, 64)
+
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.ico", ico), site_id: site.id)
+
+      conn = fetch(site, "/favicon.ico")
+      assert conn.resp_body == ico
+      assert get_resp_header(conn, "content-type") == ["image/x-icon"]
+    end
+
+    test "sends a browser to a favicon that is no file of the site's own, on the site", %{
+      site: site
+    } do
       {:ok, _} =
         Settings.put("site.favicon", "/uploads/#{site.id}/media/icon.png", site_id: site.id)
 
@@ -298,13 +399,260 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       end
     end
 
-    test "is kept by no cache while the site is offline", %{site: site} do
+    test "is kept by no cache while the site is offline", %{site: site, dir: dir} do
       {:ok, _} = Settings.put("site.favicon", "/icon.png", site_id: site.id)
       {:ok, _} = Settings.put("cms.offline", true, site_id: site.id)
 
       assert fetch(site, "/favicon.ico") |> get_resp_header("cache-control") == [
                "private, no-store"
              ]
+
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.png", png(8, 8)), site_id: site.id)
+
+      assert fetch(site, "/favicon.ico") |> get_resp_header("cache-control") == [
+               "private, no-store"
+             ]
+    end
+  end
+
+  describe "home-screen icons" do
+    setup :media_dir
+
+    test "the apple-touch icon is a 180×180 PNG of the App icon, an SVG fitted whole on transparency",
+         %{site: site, dir: dir} do
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.svg", @wide_svg), site_id: site.id)
+
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.png", png(16, 16, :red)),
+          site_id: site.id
+        )
+
+      for path <- ["/apple-touch-icon.png", "/apple-touch-icon-precomposed.png"] do
+        conn = fetch(site, path, accept: @browser_accept)
+
+        assert conn.status == 200
+        assert get_resp_header(conn, "content-type") == ["image/png"]
+        assert get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+        assert get_resp_header(conn, "set-cookie") == []
+
+        image = Image.from_binary!(conn.resp_body)
+        assert {Image.width(image), Image.height(image)} == {180, 180}
+        # The 2:1 picture spans the width, centered: clear above and below it, violet in it.
+        assert alpha(image, 90, 20) == 0
+        assert alpha(image, 90, 160) == 0
+        assert {:ok, [r, g, b, 255]} = Image.get_pixel(image, 90, 90)
+        assert_in_delta r, 124, 2
+        assert_in_delta g, 77, 2
+        assert_in_delta b, 255, 2
+      end
+    end
+
+    test "are drawn from the favicon, a PNG, for a site with no App icon", %{site: site, dir: dir} do
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.png", png(64, 32)), site_id: site.id)
+
+      image = fetch(site, "/apple-touch-icon.png").resp_body |> Image.from_binary!()
+
+      assert {Image.width(image), Image.height(image)} == {180, 180}
+      assert alpha(image, 90, 20) == 0
+      assert alpha(image, 90, 90) == 255
+    end
+
+    test "the manifest's icons are 192 and 512, kept a year at the address with their picture's hash",
+         %{site: site, dir: dir} do
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.png", png(600, 600)),
+          site_id: site.id
+        )
+
+      %{hash: hash} = SiteIcon.source(site.id)
+
+      for size <- [192, 512] do
+        conn = fetch(site, "/site-icon-#{size}.png?v=#{hash}")
+        image = Image.from_binary!(conn.resp_body)
+
+        assert {Image.width(image), Image.height(image)} == {size, size}
+        assert get_resp_header(conn, "cache-control") == ["public, max-age=31536000, immutable"]
+
+        for path <- ["/site-icon-#{size}.png", "/site-icon-#{size}.png?v=0123456789abcdef"] do
+          assert fetch(site, path) |> get_resp_header("cache-control") == [
+                   "public, max-age=86400"
+                 ]
+        end
+      end
+
+      assert File.ls!(SiteIcon.dir(site.id)) |> Enum.sort() ==
+               ["#{hash}-180.png", "#{hash}-192.png", "#{hash}-512.png"]
+    end
+
+    test "are a 404 no cache keeps for a site with no picture of its own to draw them from", %{
+      site: site,
+      dir: dir
+    } do
+      ico = <<0, 0, 1, 0, 1, 0>> <> :binary.copy(<<0>>, 64)
+
+      for value <- [
+            "",
+            "https://cdn.example.com/icon.png",
+            "/uploads/#{site.id}/media/brand/missing.png",
+            media!(dir, site, "icon.ico", ico)
+          ] do
+        {:ok, _} = Settings.put("site.favicon", value, site_id: site.id)
+
+        for path <-
+              ~w(/apple-touch-icon.png /site-icon-192.png /site-icon-512.png /site.webmanifest) do
+          conn = fetch(site, path)
+
+          assert conn.status == 404, "#{path} for #{inspect(value)}"
+          assert get_resp_header(conn, "cache-control") == ["no-store"]
+        end
+      end
+
+      refute File.exists?(SiteIcon.dir(site.id))
+    end
+
+    @tag :capture_log
+    test "are a 404 for a picture libvips cannot read, which is not tried again", %{
+      site: site,
+      dir: dir
+    } do
+      broken = <<0x89, "PNG\r\n", 0x1A, "\n">> <> "not the rest of a picture"
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.png", broken), site_id: site.id)
+
+      assert fetch(site, "/apple-touch-icon.png").status == 404
+      assert %{failed?: true} = SiteIcon.source(site.id)
+      assert SiteIcon.file(site.id, 512) == :error
+      refute File.exists?(SiteIcon.dir(site.id))
+    end
+
+    test "each site draws its own, from its own pictures", %{site: site, dir: dir} do
+      other = cached_site!()
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.png", png(32, 32, :red)),
+          site_id: site.id
+        )
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, other, "app.png", png(32, 32, :blue)),
+          site_id: other.id
+        )
+
+      red = fetch(site, "/apple-touch-icon.png").resp_body |> Image.from_binary!()
+      blue = fetch(other, "/apple-touch-icon.png").resp_body |> Image.from_binary!()
+
+      assert Image.get_pixel(red, 90, 90) == {:ok, [255, 0, 0, 255]}
+      assert Image.get_pixel(blue, 90, 90) == {:ok, [0, 0, 255, 255]}
+      assert [_, _, _] = File.ls!(SiteIcon.dir(site.id))
+      assert [_, _, _] = File.ls!(SiteIcon.dir(other.id))
+
+      # Another site's media is not the site's own: it draws nothing from it.
+      {:ok, _} =
+        Settings.put("site.app_icon", "/uploads/#{site.id}/media/brand/app.png",
+          site_id: other.id
+        )
+
+      assert fetch(other, "/apple-touch-icon.png").status == 404
+    end
+
+    test "are drawn again from the new picture once the setting changes, and the old ones deleted",
+         %{site: site, dir: dir} do
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "red.png", png(32, 32, :red)),
+          site_id: site.id
+        )
+
+      old = SiteIcon.url(site.id, 180)
+      red = fetch(site, old).resp_body |> Image.from_binary!()
+      assert Image.get_pixel(red, 90, 90) == {:ok, [255, 0, 0, 255]}
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "blue.png", png(32, 32, :blue)),
+          site_id: site.id
+        )
+
+      new = SiteIcon.url(site.id, 180)
+      refute new == old
+
+      conn = fetch(site, new)
+      blue = Image.from_binary!(conn.resp_body)
+      assert Image.get_pixel(blue, 90, 90) == {:ok, [0, 0, 255, 255]}
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=31536000, immutable"]
+
+      %{hash: hash} = SiteIcon.source(site.id)
+      assert File.ls!(SiteIcon.dir(site.id)) |> Enum.all?(&String.starts_with?(&1, hash))
+    end
+  end
+
+  describe "site.webmanifest" do
+    setup :media_dir
+
+    test "names the site, where it starts and its icons, as the JSON a browser installs it with",
+         %{
+           site: site,
+           dir: dir
+         } do
+      {:ok, _} = Settings.put("site.title", "Acme Studio", site_id: site.id)
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.png", png(512, 512)),
+          site_id: site.id
+        )
+
+      %{hash: hash} = SiteIcon.source(site.id)
+      conn = fetch(site, "/site.webmanifest", accept: "*/*")
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["application/manifest+json; charset=utf-8"]
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=60"]
+      assert get_resp_header(conn, "set-cookie") == []
+
+      assert Jason.decode!(conn.resp_body) == %{
+               "name" => "Acme Studio",
+               "short_name" => "Acme Studio",
+               "start_url" => "/",
+               "display" => "browser",
+               "icons" => [
+                 %{
+                   "src" => "/site-icon-192.png?v=#{hash}",
+                   "sizes" => "192x192",
+                   "type" => "image/png"
+                 },
+                 %{
+                   "src" => "/site-icon-512.png?v=#{hash}",
+                   "sizes" => "512x512",
+                   "type" => "image/png"
+                 }
+               ]
+             }
+
+      # Each address it names is served.
+      for %{"src" => src} <- Jason.decode!(conn.resp_body)["icons"],
+          do: assert(fetch(site, src).status == 200)
+    end
+
+    test "names the site in its primary language, and holds what a plugin adds", %{
+      site: site,
+      dir: dir
+    } do
+      register!(SiteManifestTheme, SiteIcon.manifest_event())
+      {:ok, _} = Settings.put("site.title", "Acme Studio", site_id: site.id)
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+      TranslationsState.put(site.id, "fa", "Acme Studio", "استودیو آکمه")
+
+      {:ok, _} =
+        Settings.put("site.favicon", media!(dir, site, "icon.svg", @wide_svg), site_id: site.id)
+
+      manifest = fetch(site, "/site.webmanifest").resp_body |> Jason.decode!()
+
+      assert manifest["name"] == "استودیو آکمه"
+      assert manifest["short_name"] == "استودیو آکمه"
+      assert manifest["theme_color"] == "#07070d"
+      assert manifest["background_color"] == "#07070d"
     end
   end
 
@@ -373,6 +721,13 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       assert entries(file) == [
                {origin(site) <> "/about", iso(about.updated_at)},
                {origin(site) <> "/contact", iso(contact.updated_at)}
+             ]
+
+      # Kept by no cache while the site is offline, and still sent as it is stored.
+      {:ok, _} = Settings.put("cms.offline", true, site_id: site.id)
+
+      assert fetch(site, @first_file) |> get_resp_header("cache-control") == [
+               "private, no-store, no-transform"
              ]
     end
 

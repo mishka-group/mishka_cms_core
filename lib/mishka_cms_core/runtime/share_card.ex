@@ -27,11 +27,11 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     * `byline`, `meta` — a line under the names: a team, a date, a reading time
     * `picture` — a picture behind the card, darkened under the text
 
-  A picture is a file of the site's own: a `/uploads/<site_id>/media/…` path of its media
-  (`MishkaCmsCore.Runtime.Media.storage_paths/2`), or a `/…` path under the host's static
+  A picture is a file of the site's own (`site_file/2`): a `/uploads/<site_id>/media/…` path of
+  its media (`MishkaCmsCore.Runtime.Media.storage_paths/2`), or a `/…` path under the host's static
   folder. An `http(s)://` address is never fetched. A photo is read only when it is a JPEG, PNG,
-  WebP or GIF; the logo may be an SVG too. One it cannot read is left out, and the card is drawn
-  without it.
+  WebP or GIF (`picture_type/1`); the logo may be an SVG too. One it cannot read is left out, and
+  the card is drawn without it.
 
   Text written right to left — Persian, Arabic, Hebrew — puts everything on the right. The fonts
   are in `priv/share_card`: Plus Jakarta Sans for Latin text and Vazirmatn for Arabic script, both
@@ -107,6 +107,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @logo 52
 
   @texts ~w(title description eyebrow site host logo byline picture)
+
+  @photo_types ~w(image/jpeg image/png image/webp image/gif)
 
   @title_sizes [60, 52, 44]
   @title_gap 22
@@ -585,7 +587,9 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @doc """
   The headers `Plug.Static` adds to a file it serves from the uploads folder:
 
-    * a card is named by what it shows (`key/1`), so any cache may keep it a year;
+    * a card is named by what it shows (`key/1`), and a site's icon
+      (`/uploads/<site_id>/icons/<hash>-<size>.png`, `MishkaCmsCore.Runtime.SiteIcon`) by the
+      picture it is drawn from, so any cache may keep either a year;
     * a file a visitor uploaded to a page (`/uploads/<site_id>/forms/<file>`) is saved rather than
       shown, never sniffed into another type, and sandboxed — see
       `MishkaCmsCore.Runtime.PageUpload.static_headers/0`;
@@ -596,8 +600,9 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       plug Plug.Static, at: "/", only: ~w(uploads), headers: {ShareCard, :static_headers, []}
   """
   @spec static_headers(Plug.Conn.t()) :: %{optional(String.t()) => String.t()}
-  def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, "share", _name]}),
-    do: %{"cache-control" => "public, max-age=31536000, immutable"}
+  def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, folder, _name]})
+      when folder in ["share", "icons"],
+      do: %{"cache-control" => "public, max-age=31536000, immutable"}
 
   def static_headers(%Plug.Conn{path_info: ["uploads", _site_id, "forms", _name]}),
     do: PageUpload.static_headers()
@@ -680,15 +685,25 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   defp with_files(card, site_id) do
     people =
       for person <- Map.get(card, "people", []),
-          do: Map.put(person, "image", file(person["image"], site_id))
+          do: Map.put(person, "image", site_file(person["image"], site_id))
 
     card
-    |> Map.put("picture", file(card["picture"], site_id))
-    |> Map.put("logo", file(card["logo"], site_id))
+    |> Map.put("picture", site_file(card["picture"], site_id))
+    |> Map.put("logo", site_file(card["logo"], site_id))
     |> Map.put("people", people)
   end
 
-  defp file("/uploads/" <> _ = path, site_id) do
+  @doc """
+  The file on disk a picture's address names, when it is a file of the site `site_id`'s own: a
+  `/uploads/<site_id>/media/…` path of its media (`MishkaCmsCore.Runtime.Media.storage_paths/2`),
+  or a `/…` path under the host's static folder outside `uploads`. `nil` for a file that is not
+  there, a path of another site or climbing out, an `http(s)://` address — never fetched — and
+  anything else.
+
+      site_file("/uploads/<site_id>/media/brand/logo.svg", site_id) #=> "<static>/uploads/<site_id>/media/brand/logo.svg"
+  """
+  @spec site_file(term(), String.t()) :: Path.t() | nil
+  def site_file("/uploads/" <> _ = path, site_id) do
     with {:ok, %{active: active}} <- Media.storage_paths(path, site_id),
          true <- File.regular?(active) do
       active
@@ -697,7 +712,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     end
   end
 
-  defp file("/" <> relative, _site_id) do
+  def site_file("/" <> relative, _site_id) do
     with {:ok, clean} <- Path.safe_relative(relative),
          false <- String.starts_with?(clean, "uploads"),
          path = Path.join(Media.static_dir(), clean),
@@ -708,7 +723,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     end
   end
 
-  defp file(_not_a_path, _site_id), do: nil
+  def site_file(_not_a_path, _site_id), do: nil
 
   # The fonts in `priv/share_card`, found through fontconfig on every system — macOS included,
   # whose own text backend cannot load a font file — and every loader allowed: only the formats
@@ -764,6 +779,52 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       description_size: texts.description_size,
       description: texts.shown
     }
+  end
+
+  @doc """
+  The picture at `path` drawn in a square of each of `sizes`, as PNGs: fitted whole and centered
+  on transparency, never stretched or cut. Drawn in a separate process, as a card is:
+  `{:ok, %{size => png}}`, else `{:error, reason}`.
+
+  `path` is a file on disk `picture_type/1` names a PNG, JPEG, WebP, GIF or SVG — a site's
+  home-screen icon (`MishkaCmsCore.Runtime.SiteIcon`).
+
+      squares("/srv/uploads/<site_id>/media/icon.svg", [180, 512])
+      #=> {:ok, %{180 => <<137, 80, 78, 71, …>>, 512 => <<137, 80, 78, 71, …>>}}
+  """
+  @spec squares(Path.t(), [pos_integer()]) ::
+          {:ok, %{pos_integer() => binary()}} | {:error, term()}
+  def squares(path, sizes) when is_binary(path) and is_list(sizes) do
+    case Isolated.run(__MODULE__, :draw_squares, [path, sizes],
+           env: env(),
+           nice: 10,
+           timeout: 60_000
+         ) do
+      {:ok, {:ok, pngs}} -> {:ok, pngs}
+      {:ok, {:error, reason}} -> {:error, reason}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  @doc false
+  # Runs in the separate process `squares/2` starts.
+  @spec draw_squares(Path.t(), [pos_integer()]) ::
+          {:ok, %{pos_integer() => binary()}} | {:error, term()}
+  def draw_squares(path, sizes) do
+    Enum.reduce_while(sizes, {:ok, %{}}, fn size, {:ok, pngs} ->
+      case square(path, size) do
+        {:ok, png} -> {:cont, {:ok, Map.put(pngs, size, png)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp square(path, size) do
+    with {:ok, img} <- Image.thumbnail(path, "#{size}x#{size}"),
+         {:ok, img} <- with_alpha(img),
+         {:ok, img} <- Image.embed(img, size, size) do
+      Image.write(img, :memory, suffix: ".png", strip_metadata: true)
+    end
   end
 
   # --- the parts ---------------------------------------------------------------------------------
@@ -1123,18 +1184,33 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   end
 
   # Only the formats a card reads: a photo is a JPEG, PNG, WebP or GIF, and a logo may be an SVG.
-  defp image?(path, svg?) when is_binary(path) do
-    case File.open(path, [:read, :binary], &IO.binread(&1, 256)) do
-      {:ok, <<0xFF, 0xD8, 0xFF, _::binary>>} -> true
-      {:ok, <<0x89, "PNG", _::binary>>} -> true
-      {:ok, <<"RIFF", _::binary-size(4), "WEBP", _::binary>>} -> true
-      {:ok, <<"GIF8", _::binary>>} -> true
-      {:ok, head} when is_binary(head) -> svg? and svg?(head)
-      _unreadable -> false
+  defp image?(path, svg?) do
+    case picture_type(path) do
+      type when type in @photo_types -> true
+      "image/svg+xml" -> svg?
+      _other -> false
     end
   end
 
-  defp image?(_no_path, _svg?), do: false
+  @doc """
+  The type of the picture file at `path`, read off its first bytes, never its name:
+  `"image/jpeg"`, `"image/png"`, `"image/webp"`, `"image/gif"`, `"image/svg+xml"` or
+  `"image/x-icon"`. `nil` for any other file, and for one that cannot be read.
+  """
+  @spec picture_type(term()) :: String.t() | nil
+  def picture_type(path) when is_binary(path) do
+    case File.open(path, [:read, :binary], &IO.binread(&1, 256)) do
+      {:ok, <<0xFF, 0xD8, 0xFF, _::binary>>} -> "image/jpeg"
+      {:ok, <<0x89, "PNG", _::binary>>} -> "image/png"
+      {:ok, <<"RIFF", _::binary-size(4), "WEBP", _::binary>>} -> "image/webp"
+      {:ok, <<"GIF8", _::binary>>} -> "image/gif"
+      {:ok, <<0, 0, 1, 0, _::binary>>} -> "image/x-icon"
+      {:ok, head} when is_binary(head) -> if svg?(head), do: "image/svg+xml"
+      _unreadable -> nil
+    end
+  end
+
+  def picture_type(_no_path), do: nil
 
   defp svg?(head), do: head |> String.trim_leading() |> String.starts_with?(["<svg", "<?xml"])
 
