@@ -1304,35 +1304,12 @@ defmodule MishkaCmsCore.Runtime.JsHook do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == js_hook_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.JsHook
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_js_hook =
-            Enum.reduce(restored_attrs, js_hook, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  if key_atom == :format and is_binary(value),
-                    do: String.to_atom(value),
-                    else: value
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              js_hook,
+              MishkaCmsCore.Runtime.JsHook,
+              version.changes
+            )
 
           {:ok, preview_js_hook}
         else
@@ -1534,35 +1511,12 @@ defmodule MishkaCmsCore.Runtime.JsHook do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == js_hook_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.JsHook
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_js_hook =
-            Enum.reduce(restored_attrs, js_hook, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  if key_atom == :format and is_binary(value),
-                    do: String.to_atom(value),
-                    else: value
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              js_hook,
+              MishkaCmsCore.Runtime.JsHook,
+              version.changes
+            )
 
           {:ok, preview_js_hook}
         else

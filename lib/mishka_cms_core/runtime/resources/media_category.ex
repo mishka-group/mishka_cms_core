@@ -837,29 +837,12 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == category_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.MediaCategory
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_category =
-            Enum.reduce(restored_attrs, category, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              category,
+              MishkaCmsCore.Runtime.MediaCategory,
+              version.changes
+            )
 
           {:ok, preview_category}
         else
@@ -909,29 +892,12 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == category_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.MediaCategory
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_category =
-            Enum.reduce(restored_attrs, category, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              category,
+              MishkaCmsCore.Runtime.MediaCategory,
+              version.changes
+            )
 
           {:ok, preview_category}
         else

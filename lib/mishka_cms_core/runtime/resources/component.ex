@@ -1909,35 +1909,12 @@ defmodule MishkaCmsCore.Runtime.Component do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == component_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.Component
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_component =
-            Enum.reduce(restored_attrs, component, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  if key_atom == :format and is_binary(value),
-                    do: String.to_atom(value),
-                    else: value
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              component,
+              MishkaCmsCore.Runtime.Component,
+              version.changes
+            )
 
           {:ok, preview_component}
         else
@@ -1991,35 +1968,12 @@ defmodule MishkaCmsCore.Runtime.Component do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == component_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.Component
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_component =
-            Enum.reduce(restored_attrs, component, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  if key_atom == :format and is_binary(value),
-                    do: String.to_atom(value),
-                    else: value
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              component,
+              MishkaCmsCore.Runtime.Component,
+              version.changes
+            )
 
           {:ok, preview_component}
         else

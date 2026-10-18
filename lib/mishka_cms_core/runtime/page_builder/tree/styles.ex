@@ -223,6 +223,16 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   @spec buckets() :: [atom()]
   def buckets, do: @bucket_order
 
+  @bucket_names Map.new(@bucket_order, &{Atom.to_string(&1), &1})
+
+  @doc """
+  The bucket a name stands for, `{:ok, bucket}`, or `:error` for a name no bucket has. For a name
+  that came from the browser, which must never be made into an atom.
+  """
+  @spec bucket_atom(term()) :: {:ok, atom()} | :error
+  def bucket_atom(name) when is_binary(name), do: Map.fetch(@bucket_names, name)
+  def bucket_atom(_name), do: :error
+
   # PROPERTIES THAT ONLY MEAN SOMETHING ON A FLEX CONTAINER. `flex-col-reverse` and `items-center` do
   # nothing to a `block` element, so leaving them behind when the author switches back writes dead
   # classes into the page and leaves the Inspector showing settings that have no effect — and they

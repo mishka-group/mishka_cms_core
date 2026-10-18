@@ -74,6 +74,18 @@ defmodule MishkaCmsCore.Builder.CollectionTest do
 
     # A STALE CLICK MUST NOT TAKE THE EDITOR DOWN. The panel and the document disagree for one render
     # after an undo, and a button pressed in that window addresses an item that is no longer there.
+    test "a field named by the text the browser sent is found among the item's own" do
+      assert Collection.put_in_item([%{src: "x"}], 0, "src", "y") == [%{src: "y"}]
+      assert Collection.put_in_item([%{"src" => "x"}], 0, "src", "y") == [%{"src" => "y"}]
+    end
+
+    test "a field the item does not have changes nothing, and no atom is made of its name" do
+      name = "field_nobody_declared_#{System.unique_integer([:positive])}"
+
+      assert Collection.put_in_item([%{src: "x"}], 0, name, "y") == [%{src: "x"}]
+      assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
+    end
+
     test "an index past the end changes nothing" do
       assert Collection.put(["a"], 4, "b") == ["a"]
       assert Collection.put_in_item(["a"], 4, :src, "b") == ["a"]

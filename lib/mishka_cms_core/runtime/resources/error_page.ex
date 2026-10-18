@@ -1593,37 +1593,13 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == error_page_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
           preview_error_page =
-            Enum.reduce(restored_attrs, error_page, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  cond do
-                    key_atom == :format and is_binary(value) ->
-                      String.to_atom(value)
-
-                    true ->
-                      value
-                  end
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              error_page,
+              MishkaCmsCore.Runtime.ErrorPage,
+              version.changes,
+              Enum.reject(@admin_fields, &(&1 == :site_id))
+            )
 
           {:ok, preview_error_page}
         else
@@ -1673,37 +1649,13 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == error_page_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            @admin_fields
-            |> Enum.filter(&(&1 != :site_id))
-            |> Enum.map(&to_string/1)
-
           preview_error_page =
-            Enum.reduce(restored_attrs, error_page, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  cond do
-                    key_atom == :format and is_binary(value) ->
-                      String.to_atom(value)
-
-                    true ->
-                      value
-                  end
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              error_page,
+              MishkaCmsCore.Runtime.ErrorPage,
+              version.changes,
+              Enum.reject(@admin_fields, &(&1 == :site_id))
+            )
 
           {:ok, preview_error_page}
         else

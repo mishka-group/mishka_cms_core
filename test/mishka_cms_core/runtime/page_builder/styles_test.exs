@@ -30,6 +30,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StylesTest do
     end
   end
 
+  describe "bucket_atom/1" do
+    test "names every bucket there is" do
+      for bucket <- Styles.buckets(),
+          do: assert(Styles.bucket_atom(Atom.to_string(bucket)) == {:ok, bucket})
+    end
+
+    test "refuses a name no bucket has, and makes no atom of it" do
+      name = "bucket_nobody_declared_#{System.unique_integer([:positive])}"
+
+      assert Styles.bucket_atom(name) == :error
+      assert Styles.bucket_atom(nil) == :error
+      assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
+    end
+  end
+
   describe "to_classes/1" do
     test "base overrides have no variant prefix" do
       assert Styles.to_classes(%{base: %{"gap" => "20px"}}) == ["gap-[20px]"]

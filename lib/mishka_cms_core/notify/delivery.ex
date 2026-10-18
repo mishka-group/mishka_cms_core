@@ -268,12 +268,15 @@ defmodule MishkaCmsCore.Notify.Delivery do
     for {k, v} <- Map.take(attrs, [:actor_id | @content_keys]), into: %{}, do: {to_string(k), v}
   end
 
+  @content_atoms Map.new([:actor_id | @content_keys], &{Atom.to_string(&1), &1})
+
+  # Text keys come back from Oban's args: those of a notification's content, and nothing else.
   defp atomize_content(attrs) when is_map(attrs) do
-    for {k, v} <- attrs, into: %{} do
-      key = if is_atom(k), do: k, else: String.to_existing_atom(k)
-      {key, v}
-    end
+    for {k, v} <- attrs, key = content_key(k), into: %{}, do: {key, v}
   end
+
+  defp content_key(key) when is_atom(key), do: key
+  defp content_key(key) when is_binary(key), do: Map.get(@content_atoms, key)
 
   defp blank?(nil), do: true
   defp blank?(""), do: true

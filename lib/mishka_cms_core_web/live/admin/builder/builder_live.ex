@@ -3389,7 +3389,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         {:noreply,
          socket
          |> assign(:mob_panel, :canvas)
-         |> show_sheet(String.to_existing_atom(panel))}
+         |> show_sheet(tab_atom(panel, [:assets, :studio, :review, :history]))}
 
   def handle_event("set_mob_panel", %{"panel" => "palette"}, socket),
     do: {:noreply, assign(socket, command_open: true, command_query: "", mob_panel: :canvas)}
@@ -3403,7 +3403,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   def handle_event("set_mob_panel", %{"panel" => panel}, socket)
       when panel in ~w(canvas components layers inspector assistant audit) do
-    panel = String.to_existing_atom(panel)
+    panel = tab_atom(panel, [:canvas, :components, :layers, :inspector, :assistant, :audit])
 
     {:noreply,
      socket
@@ -3983,12 +3983,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         blank when blank in [nil, ""] -> &Collection.put(&1, at, value)
         "__key" -> &Collection.put_side(&1, at, :key, value)
         "__value" -> &Collection.put_side(&1, at, :value, value)
-        key -> &Collection.put_in_item(&1, at, String.to_existing_atom(key), value)
+        key -> &Collection.put_in_item(&1, at, key, value)
       end
 
     write_collection(socket, node_id, name, change)
-  rescue
-    ArgumentError -> {:noreply, socket}
   end
 
   # THE SAME LIBRARY, FOR THE ONE PLACE A PICTURE IS NOT AN ATTRIBUTE. A hero's photograph is a
@@ -4228,11 +4226,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         socket
       ) do
     with part when not is_nil(part) <- shadow_part(field),
+         {:ok, bucket_key} <- Styles.bucket_atom(bucket),
          %Tree.Node{} = node <- Tree.get(socket.assigns.editor.tree, node_id) do
       value =
         node.meta
         |> Map.get(:styles, %{})
-        |> Map.get(String.to_existing_atom(bucket), %{})
+        |> Map.get(bucket_key, %{})
         |> Map.get("shadow")
         |> Shadow.put(part, shadow_value(part, params["value"]))
 
@@ -4896,12 +4895,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   defp item_target(%{"index" => index, "key" => key}) do
     with {number, ""} <- Integer.parse(to_string(index)),
          true <- key not in [nil, ""] do
-      %{index: number, key: String.to_existing_atom(to_string(key))}
+      %{index: number, key: to_string(key)}
     else
       _not_an_item -> nil
     end
-  rescue
-    ArgumentError -> nil
   end
 
   defp item_target(_params), do: nil
@@ -7037,11 +7034,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # A rail's key is whatever the registry answered with, so the open tab is matched against that
   # list rather than against a fixed set — and an unknown one falls back to the first rail there is.
   defp rail_tab(%{assigns: %{rails: rails}}, tab) do
-    keys = Enum.map(rails, &to_string(Descriptor.key(&1)))
+    key = to_string(tab)
 
-    case to_string(tab) in keys do
-      true -> String.to_existing_atom(to_string(tab))
-      false -> :layers
+    cond do
+      not Enum.any?(rails, &(to_string(Descriptor.key(&1)) == key)) -> :layers
+      core = Enum.find([:layers, :assistant, :audit], &(Atom.to_string(&1) == key)) -> core
+      true -> key
     end
   end
 

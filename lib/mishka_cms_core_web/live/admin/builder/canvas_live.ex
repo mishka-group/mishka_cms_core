@@ -1894,7 +1894,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   defp style_value(tree, id, bucket, prop) do
     with node when not is_nil(node) <- Tree.get(tree, id),
          styles when is_map(styles) <- node.meta[:styles],
-         props when is_map(props) <- Map.get(styles, String.to_existing_atom(bucket)) do
+         {:ok, bucket_key} <- Styles.bucket_atom(bucket),
+         props when is_map(props) <- Map.get(styles, bucket_key) do
       Map.get(props, prop)
     else
       _unset -> nil
@@ -3676,9 +3677,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
     slots
     |> Enum.group_by(&Node.slot_name/1)
-    |> Map.new(fn {name, entries} ->
-      {slot_key(name), Enum.map(entries, &slot_entry(&1, name, tree, assigns))}
+    |> Enum.flat_map(fn {name, entries} ->
+      case slot_key(name) do
+        nil -> []
+        key -> [{key, Enum.map(entries, &slot_entry(&1, name, tree, assigns))}]
+      end
     end)
+    |> Map.new()
     |> put_inner_block(plain, tree, assigns)
   end
 
@@ -3750,7 +3755,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     ArgumentError -> nil
   end
 
-  defp slot_key(name) when is_binary(name), do: String.to_atom(name)
+  # A slot nobody declared is dropped: the kit would ignore it, and its name is document text that
+  # must not be made into an atom.
+  defp slot_key(name) when is_binary(name), do: existing_atom(name)
   defp slot_key(_name), do: :inner_block
 
   defp render_children(children, tree, assigns) do
