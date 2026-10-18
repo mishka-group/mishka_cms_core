@@ -827,6 +827,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   defp applied(guard_ast, pattern_ast), do: {:when, [], [pattern_ast, guard_ast]}
 
   # PER CLAUSE, NOT PER COMPONENT, so a kit whose component normalises in two steps keeps both.
+  # sobelow_skip ["DOS.BinToAtom"]
   defp spent_key(index), do: :"__delegated_#{index}__"
 
   defp parse_clause_match(nil), do: quote(do: var!(assigns))
@@ -1698,6 +1699,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     Module.concat([struct_name])
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
   defp attr_type_to_atom(component_type, _struct_name)
        when component_type in @supported_attr_types do
     String.to_atom(component_type)

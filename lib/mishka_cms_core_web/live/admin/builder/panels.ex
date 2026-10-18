@@ -16487,12 +16487,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp meta_tag(tags, name), do: find_tag(tags, "name", name)
   defp property_tag(tags, property), do: find_tag(tags, "property", property)
 
+  @tag_keys %{"name" => :name, "property" => :property}
+
   defp find_tag(tags, key, value) do
     Enum.find_value(tags, fn tag ->
       attrs = Map.get(tag, :attrs) || Map.get(tag, "attrs") || %{}
       content = Map.get(tag, :content) || Map.get(tag, "content")
 
-      case Map.get(attrs, key) == value or Map.get(attrs, String.to_atom(key)) == value do
+      case Map.get(attrs, key) == value or Map.get(attrs, Map.fetch!(@tag_keys, key)) == value do
         true -> presence(to_string(content || ""))
         false -> nil
       end

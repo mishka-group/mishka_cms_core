@@ -98,6 +98,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Styles do
   def bucket(:base, :base), do: :base
   def bucket(breakpoint, :base), do: breakpoint
   def bucket(:base, pseudo), do: pseudo
+  # sobelow_skip ["DOS.BinToAtom"]
+  # Both parts are atoms already, and so is the whole: the twelve buckets are listed above.
   def bucket(breakpoint, pseudo), do: :"#{breakpoint}_#{pseudo}"
 
   @doc "The width and the state a bucket stands for — the inverse of `bucket/2`."

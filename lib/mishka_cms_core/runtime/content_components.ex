@@ -612,6 +612,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     end
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Only a name the component's own `include` list declares becomes an atom here.
   defp taken_globals(declared, attr, given) do
     own = MapSet.new(declared, &Inspector.name/1)
     include = for name <- List.wrap(Inspector.opts(attr)["include"]), is_binary(name), do: name
@@ -1626,6 +1628,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   # AN ATOM ONLY FROM THE DECLARATION. The value an author wrote picks one of the declared values,
   # and that declared value is what becomes the atom, so no text a visitor's page carries can mint
   # one.
+  # sobelow_skip ["DOS.StringToAtom"]
   defp cast_value("atom", given, values) when is_binary(given) do
     case Enum.find(values, &(to_string(&1) == given)) do
       nil -> :error
