@@ -947,15 +947,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      change fn changeset, _context ->
-        site_id = Ash.Changeset.get_attribute(changeset, :site_id)
-
-        if !is_nil(site_id) do
-          Ash.Changeset.set_tenant(changeset, site_id)
-        else
-          changeset
-        end
-      end
+      change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 

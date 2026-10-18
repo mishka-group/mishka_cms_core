@@ -4,14 +4,14 @@
 
 defmodule MishkaCmsCore.Runtime.Resources.TenantSiteChangesTest do
   @moduledoc """
-  The change that writes the tenant an action runs under into a record's `site_id`, used by the
+  The two changes that tie a record's `site_id` to the tenant an action runs under, used by the
   create actions of the layout, component, JavaScript hook, stylesheet, setting and notification
   resources.
   """
   use ExUnit.Case, async: true
 
   alias MishkaCmsCore.Runtime.Layout
-  alias MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
+  alias MishkaCmsCore.Runtime.Resources.Changes.{SiteFromTenant, TenantFromSite}
 
   @moduletag :unit
 
@@ -34,6 +34,21 @@ defmodule MishkaCmsCore.Runtime.Resources.TenantSiteChangesTest do
 
       assert SiteFromTenant.change(sent, [], %{tenant: nil}) == sent
       assert Ash.Changeset.get_attribute(sent, :site_id) == @other
+    end
+  end
+
+  describe "TenantFromSite" do
+    test "runs the action under the tenant of the site the record names" do
+      named = Ash.Changeset.force_change_attribute(changeset(), :site_id, @site)
+
+      assert TenantFromSite.change(named, [], %{}).tenant == @site
+    end
+
+    test "leaves a global record, which names no site, without a tenant" do
+      global = changeset()
+
+      assert TenantFromSite.change(global, [], %{}) == global
+      assert TenantFromSite.change(global, [], %{}).tenant == nil
     end
   end
 end
