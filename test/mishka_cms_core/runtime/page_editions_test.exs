@@ -413,6 +413,70 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
       assert Enum.map(listed, & &1.id) == [overrides.id, described.id]
       assert hidden == MapSet.new(["/a-own", "/b-none", "/c-layout"])
     end
+
+    # THE HEAD'S DEFAULT, when no robots meta is stored: `noindex, nofollow` for a sign-in page
+    # (`MishkaCmsCore.Runtime.Seo.noindex?/2`). A robots meta of the page's own, or its layout's,
+    # replaces that default in the head, so it decides here too.
+    test "leaves out a sign-in page that holds no robots meta, and lists one that says index", %{
+      site: site
+    } do
+      index = [%{tag: "meta", attrs: %{"name" => "robots"}, content: "index, follow"}]
+      layout = create_layout!(site_id: site.id, path: "/layouts/open", seo_tags: index)
+
+      create_page!(site_id: site.id, path: "/a-auth", extra: %{"auth_role" => "sign_in"})
+      create_page!(site_id: site.id, path: "/b-visitors", extra: %{"visitors_only" => true})
+
+      create_page!(
+        site_id: site.id,
+        path: "/c-signed-in",
+        extra: %{"auth_role" => "sign_out", "signed_in_only" => true}
+      )
+
+      said =
+        create_page!(
+          site_id: site.id,
+          path: "/d-says-index",
+          extra: %{"auth_role" => "sign_in"},
+          seo_tags: index
+        )
+
+      under =
+        create_page!(
+          site_id: site.id,
+          path: "/e-layout-says-index",
+          extra: %{"auth_role" => "sign_in"},
+          layout_id: layout.id
+        )
+
+      plain = create_page!(site_id: site.id, path: "/f-plain", extra: %{"record" => "blog:post"})
+
+      {listed, hidden} = PageEditions.indexable(site.id)
+
+      assert Enum.map(listed, & &1.id) == [said.id, under.id, plain.id]
+      assert hidden == MapSet.new(["/a-auth", "/b-visitors", "/c-signed-in"])
+    end
+  end
+
+  describe "robots/2" do
+    @says_noindex [%{tag: "meta", attrs: %{"name" => "robots"}, content: "none"}]
+    @says_index [%{"tag" => "meta", "attrs" => %{"name" => "Robots", "content" => "follow"}}]
+
+    test "reads what the robots meta says, and nil for a record that holds none" do
+      assert PageEditions.robots(@says_noindex) == :noindex
+      assert PageEditions.robots(@says_index) == :index
+      assert PageEditions.robots([]) == nil
+      assert PageEditions.robots(nil) == nil
+
+      assert PageEditions.robots([
+               %{tag: "meta", attrs: %{"name" => "description"}, content: "noindex"}
+             ]) == nil
+    end
+
+    test "reads the parent's tags only when the record's own hold no robots meta" do
+      assert PageEditions.robots([], @says_noindex) == :noindex
+      assert PageEditions.robots(@says_index, @says_noindex) == :index
+      assert PageEditions.robots(@says_noindex, @says_index) == :noindex
+    end
   end
 
   describe "listed?/2" do
