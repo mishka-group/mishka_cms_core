@@ -41,8 +41,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
   # starts the next instance beside the old one shares one database, so one Oban queue, and either
   # instance may take the job. One that is not this instance's is snoozed, for 1 second and twice as
   # long each time up to a minute, so the instance it names takes it. A node that does not serve the
-  # site pauses its bundle queues at boot (`BootHandler.pause_bundle_queues/1`), so it takes none to
-  # snooze, and the jobs it queues name no instance.
+  # site runs no queue (`BootHandler.oban_config/1`), so it takes none to snooze, and the jobs it
+  # queues name no instance.
   #
   # Snoozed only while it is younger than `@claim_window`, the same half hour the app's
   # `Oban.Lifeline` waits (`rescue_after`) before it takes an instance that holds a job for gone. An

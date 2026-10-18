@@ -116,14 +116,6 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
       assert [job] = enqueued_asset_jobs(site.name, "asset")
       assert job.args["boot_id"] == BootHandler.boot_id()
     end
-
-    test "leaves its bundle queues running" do
-      start_oban!(assets: [limit: 2], sitemaps: [limit: 1])
-
-      assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
-      refute paused?(:assets)
-      refute paused?(:sitemaps)
-    end
   end
 
   describe "the boot of a node that does not serve the site" do
@@ -139,20 +131,21 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
       assert compile_job_ids() == Enum.map(serving, & &1.id)
     end
 
-    test "pauses its own bundle queues, and no other" do
-      start_oban!(assets: [limit: 2], sitemaps: [limit: 1], default: [limit: 5])
+    # A pause sent from here would reach the serving node too: even a `local_only` signal is
+    # addressed to the node's Oban name, which every BEAM on one machine shares.
+    test "sends no queue signal, and says how to stop the queues it runs" do
+      start_oban!(default: [limit: 5], assets: [limit: 2])
+      watch_queue_signals()
 
-      assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
-      assert paused?(:assets)
-      assert paused?(:sitemaps)
+      log =
+        ExUnit.CaptureLog.capture_log(fn ->
+          assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
+        end)
+
+      refute_received {:signal, _payload}
       refute paused?(:default)
-    end
-
-    test "leaves a node that runs neither bundle queue as it is" do
-      start_oban!(default: [limit: 5])
-
-      assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
-      refute paused?(:default)
+      refute paused?(:assets)
+      assert log =~ "BootHandler.oban_config/1"
     end
 
     test "names no instance in a bundle job it queues, so a serving node builds it" do
@@ -167,6 +160,69 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
       # went past the instance rule, and `{:snooze, _}` that it stopped there.
       :ok = serve_the_site(%{})
       assert :ok = perform_job(RuntimeCompilerWorker, args)
+    end
+  end
+
+  describe "the Oban a node starts with" do
+    @queues [
+      default: 5,
+      modules: 8,
+      assets: 2,
+      sitemaps: 1,
+      mail: 2,
+      share_cards: [limit: 1, paused: true]
+    ]
+
+    test "runs none of its queues on a node that does not serve the site" do
+      refute BootHandler.serving?()
+
+      config = BootHandler.oban_config(queues: @queues, plugins: false)
+
+      assert config[:queues] == []
+      assert config[:plugins] == false
+
+      start_oban!(config[:queues])
+      assert Oban.check_all_queues(@oban) == []
+    end
+
+    test "still lands a job a node that does not serve the site inserts in the shared table" do
+      start_supervised!(
+        {Oban,
+         BootHandler.oban_config(
+           name: @oban,
+           repo: @repo,
+           notifier: Oban.Notifiers.Isolated,
+           peer: false,
+           stager: false,
+           plugins: false,
+           queues: @queues
+         )},
+        id: @oban
+      )
+
+      {:ok, job} =
+        Oban.insert(@oban, RuntimeCompilerWorker.new(%{"resource" => "none"}, queue: :modules))
+
+      assert Oban.Repo.reload(Oban.config(), job).state == "available"
+    end
+
+    test "runs every queue as the host configured it on a node that serves the site" do
+      :ok = serve_the_site(%{})
+
+      config = BootHandler.oban_config(queues: @queues, plugins: false)
+
+      assert config == [queues: @queues, plugins: false]
+
+      start_oban!(config[:queues])
+
+      assert @oban |> Oban.check_all_queues() |> Map.new(&{&1.queue, &1.paused}) == %{
+               "default" => false,
+               "modules" => false,
+               "assets" => false,
+               "sitemaps" => false,
+               "mail" => false,
+               "share_cards" => true
+             }
     end
   end
 
@@ -257,19 +313,6 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
 
   ## helpers
 
-  # A node serves the site when the host's endpoint is set to serve: what `mix phx.server` and a
-  # release's `PHX_SERVER` do. The suite's own endpoint is not, so a test without this runs as a node
-  # that does not.
-  defp serve_the_site(_context) do
-    app = Application.fetch_env!(:mishka_cms_core, :host_app)
-    endpoint = Application.fetch_env!(:mishka_cms_core, :endpoint)
-    conf = Application.get_env(app, endpoint, [])
-
-    Application.put_env(app, endpoint, Keyword.put(conf, :server, true))
-    on_exit(fn -> Application.put_env(app, endpoint, conf) end)
-    :ok
-  end
-
   defp cached_site!(attrs) do
     n = System.unique_integer([:positive])
     site = %{id: Ecto.UUID.generate(), name: "boot-#{n}", host: "boot-#{n}.test", priority: 0}
@@ -325,6 +368,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
 
   # The Inline engine keeps no defaults of its own, so a queue names its `refresh_interval`, and says
   # it is running for `paused?/1` to read it back.
+  defp running(limit) when is_integer(limit), do: running(limit: limit)
   defp running(opts), do: Keyword.merge([refresh_interval: 60_000, paused: false], opts)
 
   defp paused?(queue), do: Oban.check_queue(@oban, queue: queue).paused

@@ -41,7 +41,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   (`serving?/0`) touches the compile jobs the nodes share: it cancels the ones a previous run left
   (`take_over_compile_jobs/1`) and queues its sites' CSS/JS bundles (`queue_boot_jobs/0`). A
   standalone node — a `mix run` script, a release's `eval`, `iex -S mix` — compiles its own sites,
-  pages and sitemaps as every node does, cancels no job, queues no bundle and takes none.
+  pages and sitemaps as every node does, cancels no job and queues no bundle. It runs no job queue
+  either when the host starts Oban with `oban_config/1`, so every job it inserts is the serving
+  node's to run.
 
   ## Architecture Integration
 
@@ -230,8 +232,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
   A serving node (`serving?/0`) cancels every one a previous run left (`cancel_leftover_jobs/1`) and
   builds what they would have from the database, so a new instance supersedes the one it replaces. A
-  standalone node cancels none, because the jobs it finds are the serving node's, and pauses its own
-  bundle queues (`pause_bundle_queues/1`), so it takes none either. Returns how many were cancelled.
+  standalone node cancels none, because the jobs it finds are the serving node's, and sends no queue
+  signal: Oban addresses even a `local_only` one by the node's Oban name, which every BEAM on one
+  machine shares, and so does every instance of a deploy. It says so in the log when it runs a queue
+  anyway, which `oban_config/1` is the way to stop. Returns how many were cancelled.
 
   Options: `:oban`, the Oban instance, `Oban` by default.
   """
@@ -246,9 +250,35 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
         "[BootHandler] This node does not serve the site: it leaves the compile jobs to the node that does, and builds no site's CSS/JS bundle."
       )
 
-      :ok = pause_bundle_queues(oban)
+      if Oban.whereis(oban) && Oban.check_all_queues(oban) != [],
+        do:
+          Logger.warning(
+            "[BootHandler] This node does not serve the site but runs Oban queues, so it can take the serving node's jobs. Start Oban with `MishkaCmsCore.Runtime.Handlers.BootHandler.oban_config/1`."
+          )
+
       {:ok, 0}
     end
+  end
+
+  @doc """
+  The Oban config to start this node with: `config` as it is on a node that serves the site
+  (`serving?/0`), and with no queue on one that does not. A `mix run` script, a release's `eval` or
+  `iex -S mix` then runs none of the jobs the serving node is there to run: a page compile built into
+  its own memory, a stylesheet into its own `AssetsState`, a share card drawn on it. A job it inserts
+  still lands in the table they share, and a serving node takes it.
+
+  The host wraps what it starts Oban with, after anything that reads its queues, such as
+  `AshOban.config/2`:
+
+      {Oban, BootHandler.oban_config(AshOban.config(domains, Application.fetch_env!(:my_app, Oban)))}
+
+  A queue signal cannot do this once Oban runs: even a `local_only` one is addressed to the node's
+  Oban name, and the serving node carries the same one — every BEAM on one machine does, and every
+  instance of a deploy whose release names its node the same.
+  """
+  @spec oban_config(keyword()) :: keyword()
+  def oban_config(config) when is_list(config) do
+    if serving?(), do: config, else: Keyword.put(config, :queues, [])
   end
 
   @doc """
@@ -264,25 +294,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
 
     Oban.cancel_all_jobs(oban, query)
-  end
-
-  @bundle_queues [:assets, :sitemaps]
-
-  @doc """
-  Pauses this node's own `:assets` and `:sitemaps` queues, the two every bundle job runs on
-  (`asset_job/4`), so this node takes no bundle job: what one builds goes into the `AssetsState` of
-  the node that builds it. A queue this node does not run, and an Oban that is not running, are left
-  as they are. Takes the Oban instance, `Oban` by default.
-  """
-  @spec pause_bundle_queues(Oban.name()) :: :ok
-  def pause_bundle_queues(oban \\ Oban) do
-    if Oban.whereis(oban) do
-      for queue <- @bundle_queues, Oban.check_queue(oban, queue: queue) do
-        :ok = Oban.pause_queue(oban, queue: queue, local_only: true)
-      end
-    end
-
-    :ok
   end
 
   @doc """
@@ -1300,7 +1311,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   # `boot_id` names the serving instance that inserted it, which is the one `RuntimeCompilerWorker`
   # builds it on, and is part of the unique args, so a job one instance inserts never merges into
   # another's. A standalone node's names none, so a serving node builds it rather than waiting out
-  # the worker's claim window for a node that takes no bundle job (`pause_bundle_queues/1`).
+  # the worker's claim window for a node that runs no queue (`oban_config/1`).
   # `Oban.insert/1` (not insert_all) is required for uniqueness on the Basic engine.
   @doc false
   def asset_job(site_name, site_id, type, opts \\ []) do

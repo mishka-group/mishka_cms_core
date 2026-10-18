@@ -25,7 +25,9 @@ defmodule MishkaCmsCore.Runtime.ShareCardQueue do
       and scales, pauses or resumes the queue on every node of the cluster through Oban's notifier
       (`Oban.scale_queue/2`, `Oban.pause_queue/2`, `Oban.resume_queue/2`);
     * when a node starts: `MishkaCmsCore.Runtime.Handlers.BootHandler` calls `boot/1`, which applies
-      the stored value to that node's own queue.
+      the stored value to that node's own queue — on a node that serves the site. One that does not
+      (`MishkaCmsCore.Runtime.Handlers.BootHandler.serving?/0`) leaves the queue as the app started
+      it, paused, or not there at all under `MishkaCmsCore.Runtime.Handlers.BootHandler.oban_config/1`.
 
   Registered in `MishkaCmsCore.Application`.
   """
@@ -119,9 +121,19 @@ defmodule MishkaCmsCore.Runtime.ShareCardQueue do
   @doc """
   Applies the stored setting to this node's queue (`scale/2` with `local_only: true`), and says so
   in the log when the queue is not in the app's Oban `queues`. Takes `scale/2`'s `:oban`.
+
+  A node that does not serve the site (`MishkaCmsCore.Runtime.Handlers.BootHandler.serving?/0`)
+  sends nothing and leaves its queue as it is: the cards it would draw are the serving node's, and
+  even a `local_only` signal reaches every node of the same Oban name.
   """
   @spec boot(keyword()) :: :ok | {:error, term()}
   def boot(opts \\ []) do
+    if MishkaCmsCore.Runtime.Handlers.BootHandler.serving?(),
+      do: apply_stored(opts),
+      else: :ok
+  end
+
+  defp apply_stored(opts) do
     case scale(workers(), Keyword.put(opts, :local_only, true)) do
       :ok ->
         :ok
