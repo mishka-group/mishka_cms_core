@@ -102,14 +102,14 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
   end
 
   defp domain_regex do
-    ~r/^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/
+    ~r/\A[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\z/
   end
 
   # The scheme is mandatory: an `Origin` header always carries one, and the Site guardedstruct
   # already rejects scheme-less entries on write, so accepting them here only disagreed with the
   # resource without ever admitting a value.
   defp origin_regex do
-    ~r/^https?:\/\/[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?(\/.*)?$/
+    ~r/\Ahttps?:\/\/[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?(\/.*)?\z/
   end
 
   defp valid_domain?(domain) when is_binary(domain) do

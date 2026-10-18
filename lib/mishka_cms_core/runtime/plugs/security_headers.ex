@@ -59,7 +59,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
 
   # An origin a page may frame: https, a host of dot-separated labels, an optional port. No path, no
   # wildcard — a frame source names exactly the player it trusts.
-  @frame_origin ~r/^https:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?$/
+  @frame_origin ~r/\Ahttps:\/\/[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+(:\d{1,5})?\z/
 
   def init(opts), do: opts
 

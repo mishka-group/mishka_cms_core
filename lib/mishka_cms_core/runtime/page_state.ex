@@ -55,7 +55,7 @@ defmodule MishkaCmsCore.Runtime.PageState do
     inner_content
   )
 
-  @name ~r/^[a-z_][a-zA-Z0-9_]*$/
+  @name ~r/\A[a-z_][a-zA-Z0-9_]*\z/
 
   @doc "The assign names a page's state may not take."
   @spec reserved() :: [String.t()]
