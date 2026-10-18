@@ -52,6 +52,8 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.{Event, EventHandler}
 
+  doctest MishkaCmsCore.Runtime.ShareCard
+
   @base "https://cards.test"
 
   setup do
@@ -240,6 +242,159 @@ defmodule MishkaCmsCore.Runtime.ShareCardTest do
         assert Image.width(image) == 1200
       end
     end
+  end
+
+  describe "the description" do
+    @category "Release notes and news for Mishka's open-source projects: Mishka CMS, Mishka Chelekom, the Phoenix UI library, and GuardedStruct, a validation library for Elixir structs."
+
+    @long Enum.join(
+            [
+              "Mishka CMS is an open-source multi-site CMS built on Phoenix LiveView.",
+              "It keeps every page, setting and translation in one place.",
+              "It ships a visual editor, a blog, a documentation engine and a plugin system.",
+              "Each site has its own domain, theme, language and permissions.",
+              "Editors work in the browser with live previews while developers extend everything through typed events.",
+              "Releases are versioned, drafts are kept, and every change can be rolled back from the history.",
+              "Nothing is hidden behind a paywall: the core, the blog and the documentation extension are free."
+            ],
+            " "
+          )
+
+    test "is shown whole, however long the page's own text is, in as many lines as fit" do
+      for description <- [
+            @category,
+            "Lifetime access to Mishka CMS, the open-source multi-site CMS on Phoenix LiveView, is $250 until the offer ends.",
+            "A short one."
+          ] do
+        card = %{
+          "title" => "Mishka Projects",
+          "description" => description,
+          "eyebrow" => "Category"
+        }
+
+        assert {:ok, %{title_size: 60, description_size: size, description: ^description}} =
+                 ShareCard.layout(card)
+
+        assert size in 21..27
+      end
+    end
+
+    test "is set smaller, then the title steps down, before any of it is cut" do
+      title = "Introducing the share card, a title long enough to take more than one line on it"
+      card = %{"title" => title, "description" => @category, "eyebrow" => "Release"}
+
+      assert {:ok, %{title_size: title_size, description_size: size, description: @category}} =
+               ShareCard.layout(card)
+
+      assert title_size in [44, 52, 60]
+      assert size in 21..27
+    end
+
+    test "is shown whole beside a picture, where the text is narrower" do
+      card = %{
+        "title" => "With a picture",
+        "description" => @category,
+        "picture" => "/uploads/site/media/cover.png"
+      }
+
+      assert {:ok, %{description: @category}} = ShareCard.layout(card)
+    end
+
+    test "is shown whole in Persian, drawn from the right" do
+      description =
+        "این کتابخانه مجموعه‌ای از اجزای رابط کاربری برای فونیکس و لایووی است که با یک فرمان در پروژه شما کپی می‌شود، با حالت تاریک و رنگ‌های سفارشی."
+
+      card = %{"title" => "معرفی میشکا چلکم", "description" => description}
+      assert {:ok, %{description: ^description}} = ShareCard.layout(card)
+    end
+
+    test "is cut at the end of a sentence, else at a word, when no size shows it whole" do
+      title = "Introducing the share card, a title long enough to take more than one line on it"
+
+      card = %{
+        "title" => title,
+        "description" => @long,
+        "eyebrow" => "Docs",
+        "picture" => "/uploads/site/media/cover.png"
+      }
+
+      assert {:ok, %{title_size: 44, description_size: 21, description: shown}} =
+               ShareCard.layout(card)
+
+      assert shown != @long
+      assert String.starts_with?(@long, shown)
+      assert String.ends_with?(shown, ".")
+
+      one_sentence = String.replace(@long, ". ", ", ")
+
+      assert {:ok, %{description: words}} =
+               ShareCard.layout(%{card | "description" => one_sentence})
+
+      assert String.ends_with?(words, "…")
+      cut = String.trim_trailing(words, "…")
+      assert String.starts_with?(one_sentence, cut)
+      assert String.replace_prefix(one_sentence, cut, "") =~ ~r/^[\s,;:.]/
+    end
+
+    test "is left out when there is none, and the title keeps its size" do
+      assert {:ok, %{title_size: 60, description_size: nil, description: nil}} =
+               ShareCard.layout(%{"title" => "Just a title"})
+    end
+
+    test "is drawn as a 1200×630 JPEG", %{site: site} do
+      card = %{
+        "title" => "Mishka Projects",
+        "description" => @category,
+        "eyebrow" => "Category",
+        "site" => "Mishka Software Group",
+        "host" => "cards.test"
+      }
+
+      assert {:ok, image} = drawn(site, card)
+      assert {Image.width(image), Image.height(image)} == {1200, 630}
+    end
+  end
+
+  describe "shorten/1" do
+    test "drops the last sentence while there is more than one" do
+      assert ShareCard.shorten("First one. Second one! Third one?") == "First one. Second one!"
+      assert ShareCard.shorten("First one. Second one!") == "First one."
+    end
+
+    test "drops the last word of a single sentence and ends it with …" do
+      assert ShareCard.shorten("One sentence, with commas, and more.") ==
+               "One sentence, with commas, and…"
+
+      assert ShareCard.shorten("A sentence, with") == "A sentence…"
+      assert ShareCard.shorten("A sentence…") == "A…"
+      assert ShareCard.shorten("A…") == nil
+      assert ShareCard.shorten("Word") == nil
+    end
+
+    test "reads the sentence marks of Arabic script" do
+      assert ShareCard.shorten("آیا این کار می‌کند؟ بله، می‌کند.") == "آیا این کار می‌کند؟"
+    end
+
+    test "never ends inside a word: each step is the words of the text, whole" do
+      words = String.split(@long)
+
+      steps =
+        @long
+        |> Stream.iterate(&ShareCard.shorten/1)
+        |> Stream.take_while(&is_binary/1)
+        |> Enum.to_list()
+
+      assert List.last(steps) == "Mishka…"
+
+      for step <- steps do
+        kept = step |> String.trim_trailing("…") |> String.split()
+        assert Enum.take(words, length(kept) - 1) == Enum.take(kept, length(kept) - 1)
+        assert List.last(kept) in [Enum.at(words, length(kept) - 1) | stripped(words, kept)]
+      end
+    end
+
+    defp stripped(words, kept),
+      do: [String.replace(Enum.at(words, length(kept) - 1), ~r/[\s,;:.]+$/u, "")]
   end
 
   describe "a page's head" do

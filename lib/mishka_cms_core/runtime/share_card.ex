@@ -17,7 +17,9 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   `card` is a map; every key but `title` may be left out:
 
     * `title` — the page's title, up to three lines, smaller as it grows, then cut with `…`
-    * `description` — up to two lines, when there is room under the title
+    * `description` — all of it, in as many lines as fit under the title: set smaller, down to 21
+      pixels, before the title steps down a size; one that fits at no size is cut at the end of a
+      sentence, else at a word, with `…` (`shorten/1`)
     * `eyebrow` — a short label above the title: a post's category, "Team", "Author"
     * `site`, `host` — the site's name, in the page's language, and its address
     * `logo` — the `site.logo` setting, on a white tile; the site's first letter without one
@@ -95,7 +97,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   alias Vix.Vips.Operation, as: Op
 
   # Raise it when what a card looks like changes: every card is drawn again under a new key.
-  @version 1
+  @version 2
 
   @width 1200
   @height 630
@@ -105,6 +107,13 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   @logo 52
 
   @texts ~w(title description eyebrow site host logo byline picture)
+
+  @title_sizes [60, 52, 44]
+  @title_gap 22
+  @description_sizes [27, 25, 23, 21]
+
+  # A description beyond this many characters fits no card: it is shortened before it is measured.
+  @description_cap 600
 
   @targets_event "runtime:share_card:targets"
   @swept_event "runtime:share_card:swept"
@@ -732,6 +741,31 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     |> Image.write(:memory, suffix: ".jpg", quality: 88, strip_metadata: true)
   end
 
+  @doc """
+  Where `card`'s text goes, measured as `draw/1` sets it, in a separate process like the drawing and
+  without drawing it: `{:ok, %{title_size:, description_size:, description:}}` — the sizes in pixels
+  and the description as it is shown, which is the whole of it unless no size fits it. Never called
+  in a request.
+  """
+  @spec layout(card()) :: {:ok, map()} | {:error, term()}
+  def layout(card) do
+    Isolated.run(__MODULE__, :measure, [normalize(card)], env: env(), nice: 10, timeout: 60_000)
+  end
+
+  @doc false
+  # Runs in the separate process `layout/1` starts.
+  @spec measure(map()) :: map()
+  def measure(card) do
+    text_width = if card["picture"], do: 700, else: @width - 2 * @margin
+    texts = texts(card, text_width)
+
+    %{
+      title_size: texts.title_size,
+      description_size: texts.description_size,
+      description: texts.shown
+    }
+  end
+
   # --- the parts ---------------------------------------------------------------------------------
 
   defp header(canvas, card, rtl?) do
@@ -808,20 +842,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   defp host(canvas, _card, _rtl?), do: canvas
 
   defp body(canvas, card, rtl?, text_width) do
-    top = 140
-    bottom = @height - @margin - @avatar - 40
-
-    eyebrow =
-      card["eyebrow"] &&
-        text!(String.upcase(card["eyebrow"]), "Bold", 21, "#b69cff", text_width)
-
-    room = bottom - top - if(eyebrow, do: height(eyebrow) + 18, else: 0)
-    title = fit(card["title"], [60, 52, 44], "Bold", "#ffffff", text_width, 3)
-    left = room - height(title) - 22
-
-    description =
-      card["description"] && left > 40 &&
-        clipped(card["description"], "Regular", 27, "#b9b4dc", text_width, min(2, div(left, 40)))
+    %{eyebrow: eyebrow, title: title, description: description, top: top, bottom: bottom} =
+      texts(card, text_width)
 
     blocks = Enum.filter([{eyebrow, 18}, {title, 22}, {description, 0}], &elem(&1, 0))
     total = blocks |> Enum.map(fn {block, gap} -> height(block) + gap end) |> Enum.sum()
@@ -835,14 +857,128 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     canvas
   end
 
+  # The eyebrow, the title and the description as the card shows them, with the room they share.
+  defp texts(card, text_width) do
+    top = 140
+    bottom = @height - @margin - @avatar - 40
+
+    eyebrow =
+      card["eyebrow"] &&
+        text!(String.upcase(card["eyebrow"]), "Bold", 21, "#b69cff", text_width)
+
+    room = bottom - top - if(eyebrow, do: height(eyebrow) + 18, else: 0)
+
+    {title, title_size, description, description_size, shown} =
+      title_and_description(card, room, text_width)
+
+    %{
+      eyebrow: eyebrow,
+      title: title,
+      title_size: title_size,
+      description: description,
+      description_size: description_size,
+      shown: shown,
+      top: top,
+      bottom: bottom
+    }
+  end
+
+  # The largest title, and under it the largest description, that fit `room` together: the
+  # description is set smaller before the title steps down. One that fits at no size is shortened
+  # at the smallest of both.
+  defp title_and_description(%{"description" => description} = card, room, text_width)
+       when is_binary(description) do
+    string = card["title"]
+    capped = capped(description)
+
+    Enum.find_value(@title_sizes, fn size ->
+      title = text!(string, "Bold", size, "#ffffff", text_width)
+
+      if height(title) <= tallest(string, "Bold", size, 3),
+        do: described(title, size, capped, room, text_width)
+    end) || shortened(card, room, text_width)
+  end
+
+  defp title_and_description(card, _room, text_width) do
+    {title, size} = fit(card["title"], @title_sizes, "Bold", "#ffffff", text_width, 3)
+    {title, size, nil, nil, nil}
+  end
+
+  # The title with the largest description that leaves room for it; `nil` when none does.
+  defp described(title, size, description, room, text_width) do
+    Enum.find_value(@description_sizes, fn small ->
+      shown = text!(description, "Regular", small, "#b9b4dc", text_width)
+
+      if height(title) + @title_gap + height(shown) <= room,
+        do: {title, size, shown, small, description}
+    end)
+  end
+
+  defp shortened(card, room, text_width) do
+    small = List.last(@description_sizes)
+
+    {title, size} =
+      fit(card["title"], [List.last(@title_sizes)], "Bold", "#ffffff", text_width, 3)
+
+    left = room - height(title) - @title_gap
+
+    {description, shown} =
+      card["description"]
+      |> capped()
+      |> Stream.iterate(&shorten/1)
+      |> Stream.take_while(&is_binary/1)
+      |> Stream.map(&{text!(&1, "Regular", small, "#b9b4dc", text_width), &1})
+      |> Enum.find({nil, nil}, fn {img, _text} -> height(img) <= left end)
+
+    {title, size, description, description && small, shown}
+  end
+
+  defp capped(text) do
+    text
+    |> Stream.iterate(&shorten/1)
+    |> Enum.find(&(is_nil(&1) or String.length(&1) <= @description_cap))
+    |> Kernel.||(text)
+  end
+
+  @doc """
+  `text` one step shorter, for a text that has no room: without its last sentence while it has more
+  than one, else without its last word, the rest ending in `…`. `nil` once one word is left.
+
+      iex> MishkaCmsCore.Runtime.ShareCard.shorten("First one. Second one. Third one.")
+      "First one. Second one."
+      iex> MishkaCmsCore.Runtime.ShareCard.shorten("A single long sentence, with commas.")
+      "A single long sentence, with…"
+  """
+  @spec shorten(String.t()) :: String.t() | nil
+  def shorten(text) when is_binary(text) do
+    case Regex.split(~r/(?<=[.!?؟。])\s+/u, String.trim(text)) do
+      [_one_sentence] -> without_last_word(text)
+      sentences -> sentences |> Enum.drop(-1) |> Enum.join(" ")
+    end
+  end
+
+  defp without_last_word(text) do
+    case text |> String.trim_trailing("…") |> String.split() do
+      [_one_word] ->
+        nil
+
+      words ->
+        kept = words |> Enum.drop(-1) |> Enum.join(" ")
+        String.replace(kept, ~r/[\s,;:.،؛]+$/u, "") <> "…"
+    end
+  end
+
   # --- text --------------------------------------------------------------------------------------
 
-  # The largest of `sizes` that fits `lines` lines, else the smallest, cut to fit.
+  # The largest of `sizes` that fits `lines` lines, else the smallest, cut to fit: the picture and
+  # the size it is set at.
   defp fit(string, sizes, weight, color, width, lines) do
+    smallest = List.last(sizes)
+
     Enum.find_value(sizes, fn size ->
       img = text!(string, weight, size, color, width)
-      if height(img) <= tallest(string, weight, size, lines), do: img
-    end) || clipped(string, weight, List.last(sizes), color, width, lines)
+      if height(img) <= tallest(string, weight, size, lines), do: {img, size}
+    end) || {clipped(string, weight, smallest, color, width, lines), smallest}
   end
 
   defp clipped(string, weight, size, color, width, lines) do
