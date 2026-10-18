@@ -100,7 +100,9 @@ defmodule MishkaCmsCore.Settings do
     validate: nil,
     resolve: :override,
     global_label: nil,
-    visible: true
+    visible: true,
+    collapsed: false,
+    trim: false
   }
 
   @type input_type :: :string | :text | :boolean | :integer | :select | :list | :secret | :image
@@ -124,7 +126,9 @@ defmodule MishkaCmsCore.Settings do
           validate: (term() -> boolean()) | nil,
           resolve: :override | :any | :own,
           global_label: String.t() | nil,
-          visible: boolean() | (map() -> boolean())
+          visible: boolean() | (map() -> boolean()),
+          collapsed: boolean(),
+          trim: boolean()
         }
 
   @doc """
@@ -432,9 +436,12 @@ defmodule MishkaCmsCore.Settings do
   """
   @spec cast(definition() | map(), term()) :: {:ok, term()} | :error
   def cast(definition, value) do
-    with {:ok, cast} <- cast_type(definition, value),
+    with {:ok, cast} <- cast_type(definition, trimmed(definition, value)),
          do: validated(definition, cast)
   end
+
+  defp trimmed(%{trim: true}, value) when is_binary(value), do: String.trim(value)
+  defp trimmed(_definition, value), do: value
 
   defp validated(%{validate: validate}, value) when is_function(validate, 1) do
     case validate.(value) do
@@ -552,6 +559,19 @@ defmodule MishkaCmsCore.Settings do
   values as the admin has them on screen (key → value, typed or saved), for a field that only means
   something beside another one's choice: a provider's keys while that provider is chosen. The
   settings page draws and saves it only while it holds; see `visible?/2` and `shown_when/3`.
+
+  `:trim` (default `false`) strips the whitespace around a `:string` or `:text` before it is checked
+  and stored.
+
+  `:collapsed` (default `false`) makes the setting's `:group` an accordion on the settings page: a
+  group with any shown setting that declares it is drawn as a closed `<details>` titled by the group,
+  which opens by itself when one of its settings holds a value other than its default — blank counts
+  as none — or a value the last save refused, and otherwise stays as the admin left it. It needs a
+  `:group`, whose heading it becomes, and works for any tab, so an extension's optional settings can
+  stay out of the way until they are used:
+
+      Settings.define("site.theme_color", :string,
+        group: gettext_noop("App & home screen"), collapsed: true, default: "", scope: :site)
   """
   @spec define(String.t(), input_type(), keyword()) :: definition()
   def define(key, type, opts \\ []) do
@@ -690,6 +710,48 @@ defmodule MishkaCmsCore.Settings do
         description:
           gettext_noop(
             "A square image, at least 512×512 (PNG or SVG), for the home-screen icon on phones and the install manifest. Without it the favicon is used."
+          )
+      ),
+      define("site.app_short_name", :string,
+        default: "",
+        trim: true,
+        validate: &MishkaCmsCore.Runtime.SiteIcon.short_name?/1,
+        category: "general",
+        group: gettext_noop("App & home screen"),
+        collapsed: true,
+        scope: :site,
+        label: gettext_noop("Short name"),
+        description:
+          gettext_noop(
+            "The name under the icon on a phone's home screen. Keep it to about 12 characters. Empty: the site's name is used."
+          )
+      ),
+      define("site.theme_color", :string,
+        default: "",
+        trim: true,
+        validate: &MishkaCmsCore.Runtime.SiteIcon.color_or_empty?/1,
+        category: "general",
+        group: gettext_noop("App & home screen"),
+        collapsed: true,
+        scope: :site,
+        label: gettext_noop("Theme color"),
+        description:
+          gettext_noop(
+            "The color of the browser's toolbar on phones and of the installed app's title bar, as #rrggbb. Empty: none."
+          )
+      ),
+      define("site.background_color", :string,
+        default: "",
+        trim: true,
+        validate: &MishkaCmsCore.Runtime.SiteIcon.color_or_empty?/1,
+        category: "general",
+        group: gettext_noop("App & home screen"),
+        collapsed: true,
+        scope: :site,
+        label: gettext_noop("Background color"),
+        description:
+          gettext_noop(
+            "The color shown behind the icon while the installed app opens, as #rrggbb. Empty: none."
           )
       ),
       define("site.languages", :list,

@@ -34,6 +34,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   their page. A broadcast is also ignored while the viewer is mid-edit (`dirty?`), so someone else's
   save never clobbers unsaved input.
 
+  A group whose settings declare `collapsed: true` (`MishkaCmsCore.Settings.define/3`) is drawn as a
+  closed accordion titled by the group. It opens by itself when one of its settings holds a value
+  other than its default or a value the last save refused (`open_group?/4`), and once drawn it
+  stays as the admin left it, through every later change of the page. A refused value is said under
+  its field, whatever the tab.
+
   A `:secret` setting (a provider's API key) is never drawn back: its field is empty, says the
   last four characters of what is stored, and a save that leaves it empty keeps the stored one. The
   Email tab adds a test email to any address, through the scope's provider, and the email history
@@ -167,7 +173,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
 
   def handle_event("validate", %{"settings" => params}, socket) do
     merged = Map.merge(socket.assigns.form.params, params)
-    {:noreply, assign(socket, dirty?: true, form: to_form(merged, as: :settings))}
+    errors = Map.drop(socket.assigns.field_errors, Map.keys(params))
+
+    {:noreply,
+     assign(socket, dirty?: true, field_errors: errors, form: to_form(merged, as: :settings))}
   end
 
   # A save that would shut the admin making it out — sign them out, or leave them unable to sign in
@@ -273,6 +282,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
       active_tab: nil,
       fields: [],
       form: to_form(%{}, as: :settings),
+      field_errors: %{},
       secret_hints: %{},
       dirty?: false,
       attention: %{},
@@ -294,6 +304,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
       fields: fields,
       field_groups: group_fields(fields),
       form: to_form(values, as: :settings),
+      field_errors: %{},
       secret_hints: secret_hints(socket, fields),
       dirty?: false,
       attention: attention_map(socket),
@@ -438,6 +449,48 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
         do: {group, shown}
   end
 
+  # A group is an accordion while any setting shown in it declares `collapsed: true`.
+  defp collapsible?(fields),
+    do: Enum.any?(fields, fn {definition, _editable} -> definition.collapsed == true end)
+
+  # Whether an accordion is drawn open: one of its settings holds something other than its default
+  # on screen, a stored secret included, or was refused by the last save.
+  defp open_group?(fields, values, errors, secret_hints) do
+    Enum.any?(fields, fn {definition, _editable} ->
+      Map.has_key?(errors, definition.key) or
+        filled?(definition, Map.get(values, definition.key), secret_hints)
+    end)
+  end
+
+  defp filled?(%{type: :secret, key: key}, _typed, secret_hints),
+    do: Map.get(secret_hints, key) != nil
+
+  defp filled?(%{type: :boolean, default: default}, value, _secret_hints),
+    do: truthy?(value) != truthy?(default)
+
+  defp filled?(%{default: default}, value, _secret_hints),
+    do: shown_text(value) not in ["", shown_text(default)]
+
+  defp shown_text(value), do: value |> input_value() |> to_string() |> String.trim()
+
+  # An accordion's id names the scope as well, so another site's view draws its own closed or open
+  # rather than keeping the one the admin left in the last.
+  defp group_id(nil, _scope), do: "settings-ungrouped"
+
+  defp group_id(group, scope) do
+    slug =
+      group
+      |> group_name()
+      |> String.downcase()
+      |> then(&Regex.replace(~r/[^\p{L}\p{N}]+/u, &1, "-"))
+      |> String.trim("-")
+
+    "settings-group-#{slug}-#{scope || "global"}"
+  end
+
+  defp group_name({msgid, _bindings}), do: msgid
+  defp group_name(msgid), do: msgid
+
   # What this viewer may see in `tab`: whether they may write the setting gates it entirely, then the
   # active scope decides editable vs read-only vs gone (`field_visibility/2`).
   defp visible_fields(socket, tab) do
@@ -504,9 +557,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
       {:noreply,
        socket
        |> put_flash(:error, gettext("Some settings could not be saved."))
-       |> assign(form: to_form(params, as: :settings))}
+       |> assign(field_errors: refused(results), form: to_form(params, as: :settings))}
     end
   end
+
+  # The settings whose submitted value `Settings.cast/2` refused, by key.
+  defp refused(results),
+    do: for({:error, key} <- results, is_binary(key), into: %{}, do: {key, true})
 
   # What the tab would hold once saved, as `MishkaCmsCore.Accounts.AuthGate.pending()`.
   defp pending(params, socket, scope) do
@@ -606,6 +663,54 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   # attribute as a list, HEEx would join it with spaces, and the save would read one entry.
   defp input_value(value) when is_list(value), do: Enum.join(value, ", ")
   defp input_value(value), do: value
+
+  attr :id, :string, required: true
+  attr :title, :string, default: nil
+  attr :collapsible?, :boolean, default: false
+  attr :open?, :boolean, default: false
+  slot :inner_block, required: true
+
+  # A group of fields under its heading; an accordion when `collapsible?`. The browser owns
+  # `<details open>` after the first draw (`JS.ignore_attributes/1`), so a re-render of the form
+  # never shuts what the admin opened.
+  defp group_section(%{collapsible?: true} = assigns) do
+    ~H"""
+    <details
+      id={@id}
+      data-role="settings-group"
+      open={@open?}
+      phx-mounted={JS.ignore_attributes(["open"])}
+      class="group rounded-[13px] border border-[#f0efea] bg-[#faf9f6]"
+    >
+      <summary class="flex cursor-pointer list-none items-center justify-between gap-3 rounded-[13px] px-[18px] py-4 outline-none focus-visible:shadow-[0_0_0_3px_rgba(91,87,214,0.18)] [&::-webkit-details-marker]:hidden">
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.13em] text-[#8a877f]">
+          {@title}
+        </span>
+        <.icon
+          name="hero-chevron-down"
+          class="size-[14px] shrink-0 text-[#a8a5a0] transition-transform group-open:rotate-180"
+        />
+      </summary>
+      <div class="border-t border-[#f0efea] bg-white p-[18px] rounded-b-[13px]">
+        {render_slot(@inner_block)}
+      </div>
+    </details>
+    """
+  end
+
+  defp group_section(assigns) do
+    ~H"""
+    <div id={@id} data-role="settings-section">
+      <h3
+        :if={@title}
+        class="m-0 mb-[15px] text-[10.5px] font-bold uppercase tracking-[0.13em] text-[#a8a5a0]"
+      >
+        {@title}
+      </h3>
+      {render_slot(@inner_block)}
+    </div>
+    """
+  end
 
   defp badge_class, do: @badge_class
 

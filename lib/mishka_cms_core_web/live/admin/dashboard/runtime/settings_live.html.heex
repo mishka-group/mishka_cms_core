@@ -150,14 +150,13 @@ SPDX-License-Identifier: Apache-2.0
 
             <div class="p-[26px]">
               <div class="flex flex-col gap-[30px]">
-                <div :for={{group, group_fields} <- shown_groups(@field_groups, @form.params)}>
-                  <h3
-                    :if={group}
-                    class="m-0 mb-[15px] text-[10.5px] font-bold uppercase tracking-[0.13em] text-[#a8a5a0]"
-                  >
-                    {Settings.text(group)}
-                  </h3>
-
+                <.group_section
+                  :for={{group, group_fields} <- shown_groups(@field_groups, @form.params)}
+                  id={group_id(group, @active_scope)}
+                  title={Settings.text(group)}
+                  collapsible?={not is_nil(group) and collapsible?(group_fields)}
+                  open?={open_group?(group_fields, @form.params, @field_errors, @secret_hints)}
+                >
                   <div class="flex flex-col gap-5">
                     <div :for={{definition, editable} <- group_fields}>
                       <%= if definition.type == :boolean do %>
@@ -339,6 +338,15 @@ SPDX-License-Identifier: Apache-2.0
                         <% end %>
 
                         <p
+                          :if={@field_errors[definition.key]}
+                          id={"error-#{dom_id(definition.key)}"}
+                          data-role="field-error"
+                          class="mt-2 text-[12px] font-semibold text-[#a5352c]"
+                        >
+                          {gettext("This value is not accepted. See the description below.")}
+                        </p>
+
+                        <p
                           :if={definition.description}
                           class="mt-2 text-[12px] font-medium text-[#9a978f]"
                         >
@@ -347,7 +355,7 @@ SPDX-License-Identifier: Apache-2.0
                       <% end %>
                     </div>
                   </div>
-                </div>
+                </.group_section>
               </div>
 
               <p :if={@fields == []} class="text-[13px] font-medium text-[#9a978f]">
