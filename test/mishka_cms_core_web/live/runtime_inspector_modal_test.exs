@@ -226,6 +226,37 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
     # The Versions tab reads the database twice (a page and a count). Doing that in the LiveView
     # process froze every tab, the close button included; the tab now says it is loading and the
     # answer arrives after.
+    # A PAGE NUMBER IS WHAT THE BROWSER SENDS, so one that is not a whole number is no page: the modal
+    # stays as it was and the LiveView lives.
+    test "a page that is not a number changes nothing and takes nothing down", %{
+      conn: conn,
+      pages: pages
+    } do
+      for %{label: label, url: url, record: record} <- pages do
+        {:ok, view, _html} = live(conn, url)
+        send(view.pid, {:row_action, "show_preview_modal", %{"id" => record.id}})
+        render_async(view, @await)
+        render_click(view, "preview_set_tab", %{"tab" => "versions"})
+        render_async(view, @await)
+
+        for bad <- ["abc", "", "1.5", "2x", "-"] do
+          html = render_click(view, "preview_versions_page", %{"page" => bad})
+          refute html =~ "animate-spin", "#{label}: #{inspect(bad)} was taken for a page"
+          assert Process.alive?(view.pid)
+        end
+
+        assert render_click(view, "preview_versions_page", %{"page" => "1"}) =~ "animate-spin"
+        assert render_async(view, @await) =~ "Version History"
+
+        if label in ["pages", "layouts", "error pages"] do
+          for bad <- ["abc", "", "1.5"] do
+            render_click(view, "preview_drafts_page", %{"page" => bad})
+            assert Process.alive?(view.pid), "#{label}: drafts page #{inspect(bad)} took it down"
+          end
+        end
+      end
+    end
+
     test "paging versions draws a spinner first and the page after", %{conn: conn, pages: pages} do
       for %{label: label, url: url, record: record} <- pages do
         {:ok, view, _html} = live(conn, url)

@@ -677,8 +677,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     end)
   end
 
-  @doc "Load a page of the drafts picker (selection is left unchanged)."
-  def drafts_paginate(socket, page_num) do
+  @doc """
+  Load a page of the drafts picker (selection is left unchanged). `page_num` is a number or the text
+  the browser sent; text that is not a whole number leaves the picker as it is.
+  """
+  def drafts_paginate(socket, page_num) when is_binary(page_num) do
+    case Integer.parse(page_num) do
+      {number, ""} -> drafts_paginate(socket, number)
+      _not_a_number -> socket
+    end
+  end
+
+  def drafts_paginate(socket, page_num) when is_integer(page_num) do
     preview = socket.assigns.preview
 
     {drafts, total} =
@@ -1362,8 +1372,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   ## modal — every tab, the close button included — for as long as they took. They run in
   ## `start_async(:preview_versions, …)` instead and the tab draws a spinner in the meantime.
 
-  @doc "Go to a (clamped) versions page and reload it, off the LiveView process."
-  def versions_paginate(socket, page) do
+  @doc """
+  Go to a (clamped) versions page and reload it, off the LiveView process. `page` is a number or the
+  text the browser sent; text that is not a whole number leaves the modal as it is.
+  """
+  def versions_paginate(socket, page) when is_binary(page) do
+    case Integer.parse(page) do
+      {number, ""} -> versions_paginate(socket, number)
+      _not_a_number -> socket
+    end
+  end
+
+  def versions_paginate(socket, page) when is_integer(page) do
     p = socket.assigns.preview
     max_page = max(1, ceil(p.versions_total / @versions_per_page))
     page = page |> max(1) |> min(max_page)

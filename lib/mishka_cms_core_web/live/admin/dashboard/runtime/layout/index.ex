@@ -196,7 +196,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
 
   @impl true
   def handle_event("preview_drafts_page", %{"page" => page}, socket),
-    do: {:noreply, PreviewHelpers.drafts_paginate(socket, String.to_integer(page))}
+    do: {:noreply, PreviewHelpers.drafts_paginate(socket, page)}
 
   @impl true
   def handle_event("preview_publish_draft", _params, socket),
@@ -212,7 +212,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
 
   @impl true
   def handle_event("preview_versions_page", %{"page" => page}, socket),
-    do: {:noreply, PreviewHelpers.versions_paginate(socket, String.to_integer(page))}
+    do: {:noreply, PreviewHelpers.versions_paginate(socket, page)}
 
   @impl true
   def handle_event("preview_version_toggle", %{"id" => id}, socket),
