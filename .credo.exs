@@ -70,7 +70,6 @@
             #
             ## Consistency Checks
             #
-            {Credo.Check.Consistency.ExceptionNames, []},
             {Credo.Check.Consistency.LineEndings, []},
             {Credo.Check.Consistency.ParameterPatternMatching, []},
             {Credo.Check.Consistency.SpaceAroundOperators, []},
@@ -83,21 +82,12 @@
             # You can customize the priority of any check
             # Priority values are: `low, normal, high, higher`
             #
-            {Credo.Check.Design.AliasUsage,
-             [priority: :low, if_nested_deeper_than: 2, if_called_more_often_than: 0]},
             {Credo.Check.Design.TagFIXME, []},
-            # You can also customize the exit_status of each check.
-            # If you don't want TODO comments to cause `mix credo` to fail, just
-            # set this value to 0 (zero).
-            #
-            {Credo.Check.Design.TagTODO, [exit_status: 2]},
 
             #
             ## Readability Checks
             #
-            {Credo.Check.Readability.AliasOrder, []},
             {Credo.Check.Readability.FunctionNames, []},
-            {Credo.Check.Readability.LargeNumbers, []},
             {Credo.Check.Readability.MaxLineLength, [priority: :low, max_length: 120]},
             {Credo.Check.Readability.ModuleAttributeNames, []},
             {Credo.Check.Readability.ModuleDoc, []},
@@ -120,7 +110,6 @@
             #
             ## Refactoring Opportunities
             #
-            {Credo.Check.Refactor.Apply, []},
             {Credo.Check.Refactor.CondStatements, []},
             {Credo.Check.Refactor.CyclomaticComplexity, []},
             {Credo.Check.Refactor.FilterCount, []},
@@ -146,7 +135,6 @@
             {Credo.Check.Warning.ExpensiveEmptyEnumCheck, []},
             {Credo.Check.Warning.IExPry, []},
             {Credo.Check.Warning.IoInspect, []},
-            {Credo.Check.Warning.MissedMetadataKeyInLoggerConfig, []},
             {Credo.Check.Warning.OperationOnSameValues, []},
             {Credo.Check.Warning.OperationWithConstantResult, []},
             {Credo.Check.Warning.RaiseInsideRescue, []},
@@ -199,8 +187,37 @@
             {Jump.CredoChecks.UnusedLiveViewAssign, []},
             {Jump.CredoChecks.VacuousTest, []},
             {Jump.CredoChecks.WeakAssertion, []}
-          ] ++ Enum.map(ExSlop.recommended_checks(), &{&1, []}),
+          ] ++
+            Enum.map(
+              Enum.reject(
+                ExSlop.recommended_checks(),
+                &(&1 in [
+                  ExSlop.Check.Refactor.LengthComparison,
+                  ExSlop.Check.Warning.PathExpandPriv
+                ])
+              ),
+              &{&1, []}
+            ) ++
+            [{ExSlop.Check.Refactor.LengthComparison, files: %{excluded: [~r"/test/"]}}],
         disabled: [
+          # Switched off because the project's own convention differs, one reason each.
+          #
+          # Modules are written out in full or aliased as the reader needs; about 1,100 aliases for no
+          # change in behaviour.
+          {Credo.Check.Design.AliasUsage, []},
+          # Aliases are grouped by what they belong to, not sorted.
+          {Credo.Check.Readability.AliasOrder, []},
+          # `apply/3` is how a plugin's module and the host endpoint are called.
+          {Credo.Check.Refactor.Apply, []},
+          # Only one test file writes numbers of this size.
+          {Credo.Check.Readability.LargeNumbers, []},
+          # TODOs are tracked in the issue tracker, not by the build.
+          {Credo.Check.Design.TagTODO, []},
+          # An exception module is named for what it is (`Strict.Violation`), not forced to end in Error.
+          {Credo.Check.Consistency.ExceptionNames, []},
+          # The three `Path.expand` calls already start from `Application.app_dir/1`.
+          {ExSlop.Check.Warning.PathExpandPriv, []},
+
           #
           # Checks scheduled for next check update (opt-in for now)
           {Credo.Check.Refactor.UtcNowTruncate, []},
@@ -243,7 +260,9 @@
           {Credo.Check.Warning.LeakyEnvironment, []},
           {Credo.Check.Warning.MapGetUnsafePass, []},
           {Credo.Check.Warning.MixEnv, []},
-          {Credo.Check.Warning.UnsafeToAtom, []}
+          {Credo.Check.Warning.UnsafeToAtom, []},
+          # A library cannot know the host application's Logger metadata keys.
+          {Credo.Check.Warning.MissedMetadataKeyInLoggerConfig, []}
           # {Credo.Check.Warning.UnusedOperation, [{MyMagicModule, [:fun1, :fun2]}]}
 
           # {Credo.Check.Refactor.MapInto, []},
