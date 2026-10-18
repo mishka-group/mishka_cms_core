@@ -27,6 +27,7 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
+  alias MishkaCmsCore.Runtime.Seo
   alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState}
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
   alias MishkaCmsCore.Settings
@@ -423,6 +424,32 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
                origin(site) <> "/about",
                origin(site) <> "/guides"
              ]
+    end
+
+    test "lists a page at the address its canonical address and og:url name", %{site: site} do
+      create_page!(site_id: site.id, path: "/")
+      create_page!(site_id: site.id, path: "/about")
+
+      base = Seo.base(site.host)
+      page = %{title: "Page", language: "en", seo: %{description: nil, schema: []}}
+
+      addresses =
+        for path <- ["/", "/about"] do
+          head = Seo.resolve(page, site_id: site.id, url: Seo.absolute(path, base), base: base)
+
+          canonical =
+            for {"link", a} <- head.tags, {"rel", "canonical"} in a, {"href", h} <- a, do: h
+
+          og_url =
+            for {"meta", a} <- head.tags, {"property", "og:url"} in a, {"content", c} <- a, do: c
+
+          assert canonical == [head.url]
+          assert og_url == [head.url]
+          head.url
+        end
+
+      assert addresses == [origin(site), origin(site) <> "/about"]
+      assert built_locs(site) == addresses
     end
 
     # THE ADDRESSES ARE COUNTED AS THEY ARE WRITTEN, so a plugin's rows are read from the database

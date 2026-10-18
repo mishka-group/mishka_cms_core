@@ -396,17 +396,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
     end
   end
 
-  # One address however its slashes are written: none at its end and never two in a row, so
-  # `/blog/`, `//blog` and `/blog` are the one `/blog`. The query, if any, is kept as it is.
-  defp bare(path) do
-    {path, query} =
-      case String.split(path, "?", parts: 2) do
-        [path, query] -> {path, "?" <> query}
-        [path] -> {path, ""}
-      end
-
-    "/" <> Enum.join(String.split(path, "/", trim: true), "/") <> query
-  end
+  # One address however its slashes are written (`Helpers.address_path/1`): `/blog/`, `//blog` and
+  # `/blog` are the one `/blog`, and the home page stays `/`. The query, if any, is kept as it is.
+  defp bare(path), do: "/" <> String.trim_leading(Helpers.address_path(path), "/")
 
   # A literal page at its address; a page whose only capture is the language at one address per
   # language it answers; any other pattern page goes to the plugins, which own what fills it.
@@ -472,15 +464,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
 
   defp url(entry, host) do
     %Sitemapper.URL{
-      loc: host |> Helpers.site_url(loc_path(entry.path)) |> encoded(),
+      loc: host |> Helpers.site_url(entry.path) |> encoded(),
       lastmod: lastmod(Map.get(entry, :lastmod)),
       images: for(image <- List.wrap(Map.get(entry, :images)), loc <- image(image, host), do: loc)
     }
   end
-
-  # The home page is the site's address alone, so no address ends in a slash.
-  defp loc_path("/"), do: ""
-  defp loc_path(path), do: path
 
   defp lastmod(%DateTime{} = at), do: DateTime.truncate(at, :second)
   defp lastmod(_unknown), do: nil

@@ -97,6 +97,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
   (`absolute/2`). A stored `canonical`, `alternate`, `og:url`, `og:image` or `twitter:image` holding
   a `/…` path is written on the same base.
 
+  No address ends in a slash (`MishkaCmsCore.Helpers.address_path/1`): the home page is the site's
+  address alone, `https://example.com`, as the sitemap lists it, in the canonical address, `og:url`,
+  the `hreflang` alternates and the JSON-LD alike.
+
   ## Pages kept out of an index
 
   The default `robots` is `noindex, nofollow` for a page that names a permission or that is a
@@ -126,7 +130,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   # tag of its own.
   @value_attrs %{"meta" => "content", "link" => "href", "title" => "content"}
 
-  # The tags whose value is an address: a `/…` path stored in one is written on the site's base.
+  # The tags whose value is an address: a `/…` path stored in one is written on the site's base, and
+  # an address on the site itself has no slash at its end.
   @addresses [
     {"link", "rel", "canonical"},
     {"link", "rel", "alternate"},
@@ -842,15 +847,36 @@ defmodule MishkaCmsCore.Runtime.Seo do
   An `http://…` or `https://…` address as it is, a `/…` path on `base`, `nil` for anything else —
   a protocol-relative address, a `javascript:` one, a relative path.
 
-      absolute("/en/about", "https://example.com") #=> "https://example.com/en/about"
+  An address on the site itself, a path or one that starts with `base`, is written as
+  `MishkaCmsCore.Helpers.address_path/1` writes a path: no slash at its end, so the home page is
+  `base` alone.
+
+      absolute("/en/about/", "https://example.com") #=> "https://example.com/en/about"
+      absolute("/", "https://example.com") #=> "https://example.com"
+      absolute("https://example.com/", "https://example.com") #=> "https://example.com"
       absolute("//cdn.example.com/a.png", "https://example.com") #=> nil
   """
   @spec absolute(term(), String.t() | nil) :: String.t() | nil
-  def absolute("https://" <> rest = url, _base) when rest != "", do: url
-  def absolute("http://" <> rest = url, _base) when rest != "", do: url
+  def absolute("https://" <> rest = url, base) when rest != "", do: on_site(url, base)
+  def absolute("http://" <> rest = url, base) when rest != "", do: on_site(url, base)
   def absolute("//" <> _protocol_relative, _base), do: nil
-  def absolute("/" <> _ = path, base) when is_binary(base), do: base <> path
+
+  def absolute("/" <> _ = path, base) when is_binary(base),
+    do: base <> Helpers.address_path(path)
+
   def absolute(_not_an_address, _base), do: nil
+
+  defp on_site(url, base) when is_binary(base) and base != "" do
+    with true <- String.starts_with?(url, base),
+         rest = binary_part(url, byte_size(base), byte_size(url) - byte_size(base)),
+         true <- rest == "" or String.starts_with?(rest, ["/", "?", "#"]) do
+      base <> Helpers.address_path(rest)
+    else
+      _elsewhere -> url
+    end
+  end
+
+  defp on_site(url, _no_base), do: url
 
   @doc """
   Whether a page is kept out of an index unless a stored `robots` tag says otherwise: it names a
@@ -1556,8 +1582,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
     with true <-
            Enum.any?(@addresses, fn {name, by, id} -> name == tag and {by, id} in attrs end),
-         {^key, "/" <> _ = path} <- List.keyfind(attrs, key, 0),
-         url when is_binary(url) <- absolute(path, base) do
+         {^key, address} when is_binary(address) <- List.keyfind(attrs, key, 0),
+         url when is_binary(url) <- absolute(address, base) do
       {tag, List.keyreplace(attrs, key, 0, {key, url})}
     else
       _as_stored -> whole

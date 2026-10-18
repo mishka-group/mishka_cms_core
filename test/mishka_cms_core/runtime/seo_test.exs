@@ -101,6 +101,65 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert value(head, "meta", "property", "og:locale:alternate") == "en_US"
     end
 
+    test "writes the home page's address with no slash, as the sitemap lists it", %{site: site} do
+      languages = [%{language: "en", path: "/"}, %{language: "fa", path: "/fa"}]
+      home = seo(site, title: "Home", url: Seo.absolute("/", @base))
+
+      head = Seo.head(home, base: @base, languages: languages)
+
+      assert value(head, "link", "rel", "canonical") == @base
+      assert value(head, "meta", "property", "og:url") == @base
+      assert head.url == @base
+      assert alternates(head) == [{"en", @base}, {"fa", "#{@base}/fa"}, {"x-default", @base}]
+
+      assert [%{"@type" => "WebPage", "url" => @base} | _site_nodes] =
+               Enum.map(head.schema, &Jason.decode!/1)
+    end
+
+    test "writes a nested page's address with no slash either", %{site: site} do
+      languages = [%{language: "en", path: "/blog/"}, %{language: "fa", path: "/fa/blog/"}]
+      nested = seo(site, title: "Blog", url: "/blog/")
+
+      head = Seo.head(nested, base: @base, languages: languages)
+
+      assert value(head, "link", "rel", "canonical") == "#{@base}/blog"
+      assert value(head, "meta", "property", "og:url") == "#{@base}/blog"
+
+      assert alternates(head) == [
+               {"en", "#{@base}/blog"},
+               {"fa", "#{@base}/fa/blog"},
+               {"x-default", "#{@base}/blog"}
+             ]
+
+      assert [%{"@type" => "WebPage", "url" => "#{@base}/blog"} | _site_nodes] =
+               Enum.map(head.schema, &Jason.decode!/1)
+    end
+
+    test "writes a stored canonical, og:url or alternate on the site the same way", %{site: site} do
+      path = [meta("property", "og:url", "/"), link("canonical", "/blog/")]
+      head = Seo.head(seo(site), base: @base, layers: [[], path])
+
+      assert value(head, "meta", "property", "og:url") == @base
+      assert value(head, "link", "rel", "canonical") == "#{@base}/blog"
+
+      absolute = [
+        meta("property", "og:url", "#{@base}/"),
+        link("canonical", "#{@base}/blog/"),
+        link("alternate", "#{@base}/fa/")
+      ]
+
+      head = Seo.head(seo(site), base: @base, layers: [[], absolute])
+
+      assert value(head, "meta", "property", "og:url") == @base
+      assert value(head, "link", "rel", "canonical") == "#{@base}/blog"
+      assert value(head, "link", "rel", "alternate") == "#{@base}/fa"
+
+      elsewhere = [link("canonical", "https://other.test/")]
+      head = Seo.head(seo(site), base: @base, layers: [[], elsewhere])
+
+      assert value(head, "link", "rel", "canonical") == "https://other.test/"
+    end
+
     test "names no alternate for a page in one language", %{site: site} do
       assert alternates(Seo.head(seo(site), base: @base, languages: [])) == []
     end
@@ -764,6 +823,23 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     assert Seo.absolute("a.png", @base) == nil
   end
 
+  test "absolute/2 ends no address of the site in a slash" do
+    assert Seo.absolute("/", @base) == @base
+    assert Seo.absolute("/blog/", @base) == "#{@base}/blog"
+    assert Seo.absolute("/blog//post/", @base) == "#{@base}/blog/post"
+    assert Seo.absolute("/blog/?page=2", @base) == "#{@base}/blog?page=2"
+    assert Seo.absolute("#{@base}/", @base) == @base
+    assert Seo.absolute("#{@base}/blog/", @base) == "#{@base}/blog"
+    assert Seo.absolute("#{@base}/blog/?page=2", @base) == "#{@base}/blog?page=2"
+    assert Seo.absolute("#{@base}/blog", @base) == "#{@base}/blog"
+  end
+
+  test "absolute/2 leaves an address off the site as it is, whatever it ends in" do
+    assert Seo.absolute("https://cdn.test/", @base) == "https://cdn.test/"
+    assert Seo.absolute("#{@base}.evil.test/", @base) == "#{@base}.evil.test/"
+    assert Seo.absolute("#{@base}/", nil) == "#{@base}/"
+  end
+
   # The sitemap and robots.txt name a site on the same address.
   test "base/1 is the site's address as the sitemap writes it" do
     assert Seo.base("blog.test") == MishkaCmsCore.Helpers.site_url("blog.test", "")
@@ -1140,6 +1216,8 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
   end
 
   defp meta(key, name, content), do: %{tag: "meta", attrs: %{key => name}, content: content}
+
+  defp link(rel, href), do: %{tag: "link", attrs: %{"rel" => rel, "href" => href}}
 
   defp rendered_head(head) do
     assigns = %{seo: head}

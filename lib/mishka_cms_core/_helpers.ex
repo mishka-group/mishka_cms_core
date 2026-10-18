@@ -128,13 +128,16 @@ defmodule MishkaCmsCore.Helpers do
   @doc """
   The absolute URL of `path` on a site's own address: its `host`, with the scheme and port the
   endpoint answers on. Needs no conn or socket, so a sitemap, a robots.txt or an admin page can link
-  a site it is not being asked from. A port of 80, 443 or none is left out.
+  a site it is not being asked from. A port of 80, 443 or none is left out. `path` is written as
+  `address_path/1` writes it, so the home page is the address alone.
 
   ## Examples
 
       # In production:
       site_url("blog.example.com", "/sitemap.xml")
       # => "https://blog.example.com/sitemap.xml"
+      site_url("blog.example.com", "/")
+      # => "https://blog.example.com"
 
       # In development:
       site_url("blog.localhost", "/sitemap.xml")
@@ -147,6 +150,30 @@ defmodule MishkaCmsCore.Helpers do
   def site_url(host, path) when is_binary(host) and is_binary(path) do
     uri = apply(@host_endpoint, :struct_url, [])
     port = if uri.port in [80, 443, nil], do: "", else: ":#{uri.port}"
-    "#{uri.scheme}://#{host}#{port}#{path}"
+    "#{uri.scheme}://#{host}#{port}#{address_path(path)}"
+  end
+
+  @doc """
+  A path as every address of a site writes it: no slash at its end and never two in a row, so the
+  home page is empty and the site's address stands alone. The query and the fragment, if any, are
+  kept as they are.
+
+  The one rule behind the sitemap, the canonical address, `og:url`, the `hreflang` alternates, the
+  JSON-LD `url`s and `site_url/2`; none of them writes an address of its own.
+
+      address_path("/blog/")         #=> "/blog"
+      address_path("//blog//post/")  #=> "/blog/post"
+      address_path("/blog/?page=2")  #=> "/blog?page=2"
+      address_path("/")              #=> ""
+  """
+  @spec address_path(String.t()) :: String.t()
+  def address_path(path) when is_binary(path) do
+    {location, tail} =
+      case :binary.match(path, ["?", "#"]) do
+        {at, _length} -> {binary_part(path, 0, at), binary_part(path, at, byte_size(path) - at)}
+        :nomatch -> {path, ""}
+      end
+
+    for(segment <- String.split(location, "/", trim: true), into: "", do: "/" <> segment) <> tail
   end
 end
