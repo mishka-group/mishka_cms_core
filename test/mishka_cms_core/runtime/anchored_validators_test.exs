@@ -69,6 +69,25 @@ defmodule MishkaCmsCore.Runtime.AnchoredValidatorsTest do
   end
 
   describe "a frame origin" do
+    test "is https, a host of at least two labels, an optional port, and nothing after it" do
+      assert SecurityHeaders.frame_origins?(["https://player.example.com:8443"])
+
+      for bad <- [
+            "http://player.example.com",
+            "https://player",
+            "https://player.example.com/",
+            "https://player.example.com/x",
+            "https://player.example.com?x=1",
+            "https://user@player.example.com",
+            "https://player.example.com:",
+            "https://player.example.com:port",
+            "https://Player.example.com",
+            "https://*.example.com"
+          ] do
+        refute SecurityHeaders.frame_origins?([bad]), bad
+      end
+    end
+
     test "ends in a line break and is refused" do
       assert SecurityHeaders.frame_origins?(["https://player.example.com"])
 
@@ -99,6 +118,31 @@ defmodule MishkaCmsCore.Runtime.AnchoredValidatorsTest do
                frontend_domain: "app.example.com",
                allowed_origins: ["https://partner.example.com", "http://localhost:3000/"]
              }) == :ok
+    end
+
+    test "an allowed origin is an http(s) scheme, a host of labels and an optional port and path" do
+      for good <- [
+            "https://a.example.com",
+            "http://localhost:3000",
+            "https://a.example.com/x?y=1"
+          ] do
+        assert refused(%{allowed_origins: [good]}) == :ok, good
+      end
+
+      for bad <- [
+            "HTTPS://a.example.com",
+            "ftp://a.example.com",
+            "//a.example.com",
+            "a.example.com",
+            "https://",
+            "https://user@a.example.com",
+            "https://a.example.com:port",
+            "https://a b.example.com",
+            "https://-bad.example.com"
+          ] do
+        assert {:error, field: :allowed_origins, message: _} = refused(%{allowed_origins: [bad]}),
+               bad
+      end
     end
 
     test "end in a line break and are refused" do

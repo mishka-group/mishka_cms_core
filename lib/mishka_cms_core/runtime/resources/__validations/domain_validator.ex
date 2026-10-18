@@ -116,7 +116,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
   # resource without ever admitting a value. The host is read with `URI.new/1`, and a port that is
   # not a number, a user name before the host or a line break anywhere is not an origin.
   defp valid_origin?(origin) when is_binary(origin) do
-    with false <- String.contains?(origin, [" ", "\t", "\n", "\r"]),
+    with true <- String.starts_with?(origin, ["http://", "https://"]),
+         false <- String.contains?(origin, [" ", "\t", "\n", "\r"]),
          {:ok, %URI{scheme: scheme, host: host, userinfo: nil}} when scheme in ["http", "https"] <-
            URI.new(origin) do
       valid_domain?(host)
