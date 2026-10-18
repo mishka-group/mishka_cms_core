@@ -85,9 +85,9 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
 
       conn = run("/about", csp: :enforce)
 
-      assert [_policy] = get_resp_header(conn, "content-security-policy")
+      assert [policy] = get_resp_header(conn, "content-security-policy")
       assert get_resp_header(conn, "x-frame-options") == ["SAMEORIGIN"]
-      assert is_binary(conn.assigns.csp_nonce)
+      assert policy =~ "'nonce-#{conn.assigns.csp_nonce}'"
     end
   end
 
@@ -175,7 +175,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
     test "is assigned for the template to read" do
       conn = run("/about")
 
-      assert is_binary(conn.assigns.csp_nonce)
+      assert byte_size(conn.assigns.csp_nonce) >= 16
       assert SecurityHeaders.nonce(conn) == conn.assigns.csp_nonce
       assert csp(conn) =~ "'nonce-#{conn.assigns.csp_nonce}'"
     end

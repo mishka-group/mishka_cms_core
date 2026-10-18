@@ -197,8 +197,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
                  "attributes" => attributes
                } = first_permission
 
-        # Verify id is at top level and is a binary
-        assert is_binary(id)
+        # Verify id is at top level and is a UUID
+        assert {:ok, _uuid} = Ecto.UUID.cast(id)
 
         # Verify expected attributes
         assert Map.has_key?(attributes, "name")
@@ -298,7 +298,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
                }
              } = result
 
-      assert is_binary(id)
+      assert {:ok, _uuid} = Ecto.UUID.cast(id)
     end
 
     test "fails to create permission with duplicate name", %{master_user: master_user} do

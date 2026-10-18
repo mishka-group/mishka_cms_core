@@ -103,7 +103,7 @@ defmodule MishkaCmsCore.Runtime.GervazTableAuthorizationTest do
 
       assert state.master_user?
       assert {:ok, _} = RecordHandler.delete_record(state, site_row(other_site))
-      refute is_nil(site_row(other_site).archived_at)
+      assert %DateTime{} = site_row(other_site).archived_at
     end
   end
 
@@ -148,7 +148,7 @@ defmodule MishkaCmsCore.Runtime.GervazTableAuthorizationTest do
                RecordHandler.update_record(page_state(tenant_user), foreign, :master_unarchive)
 
       assert {:ok, %{archived_at: archived_at}} = archived_page(foreign)
-      refute is_nil(archived_at)
+      assert %DateTime{} = archived_at
     end
   end
 
@@ -162,7 +162,7 @@ defmodule MishkaCmsCore.Runtime.GervazTableAuthorizationTest do
 
       assert {:ok, _} = RecordHandler.delete_record(state, row(state, page, :active))
       assert {:ok, archived} = archived_page(page)
-      refute is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
 
       assert {:ok, _} = RecordHandler.unarchive_record(state, row(state, page, :archived))
       assert {:ok, %{archived_at: nil}} = live_page(page)
@@ -183,7 +183,7 @@ defmodule MishkaCmsCore.Runtime.GervazTableAuthorizationTest do
 
       assert {:ok, _} = RecordHandler.delete_record(state, row(state, page, :active))
       assert {:ok, archived} = archived_page(page)
-      refute is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
 
       assert {:ok, _} = RecordHandler.unarchive_record(state, row(state, page, :archived))
       assert {:ok, %{archived_at: nil}} = live_page(page)
@@ -210,7 +210,7 @@ defmodule MishkaCmsCore.Runtime.GervazTableAuthorizationTest do
                )
 
       assert {:ok, archived} = archived_page(page)
-      refute is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
 
       assert {:ok, _} = Ash.update(archived, action: :master_unarchive, authorize?: false)
       assert {:ok, %{archived_at: nil}} = live_page(page)

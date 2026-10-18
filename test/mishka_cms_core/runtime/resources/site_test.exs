@@ -995,12 +995,12 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
       binary_id = Ecto.UUID.dump!(archived.id)
 
       # Setting archived_at to NULL should work (unarchive)
-      {:ok, _} =
-        Ecto.Adapters.SQL.query(
-          @repo,
-          "UPDATE sites SET archived_at = NULL WHERE id = $1",
-          [binary_id]
-        )
+      assert {:ok, _} =
+               Ecto.Adapters.SQL.query(
+                 @repo,
+                 "UPDATE sites SET archived_at = NULL WHERE id = $1",
+                 [binary_id]
+               )
     end
 
     test "database enforces only one master site" do

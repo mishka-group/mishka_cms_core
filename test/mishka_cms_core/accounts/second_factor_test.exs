@@ -81,7 +81,8 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
       assert SecondFactor.refusal(sign_in_error(user, "000000")) == :invalid
       later!(user)
       assert {:ok, %User{} = signed_in} = sign_in(user, code(secret))
-      assert is_binary(signed_in.__metadata__.token)
+      assert {:ok, %{"sub" => subject}} = AshAuthentication.Jwt.peek(signed_in.__metadata__.token)
+      assert subject == "user?id=#{user.id}"
     end
 
     test "does not take the code that confirmed the setup again", %{user: user} do
