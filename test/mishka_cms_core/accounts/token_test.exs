@@ -77,6 +77,23 @@ defmodule MishkaCmsCore.Accounts.TokenTest do
   defp take_tokens_away!,
     do: MishkaCmsCore.Repo.query!("ALTER TABLE tokens RENAME TO tokens_taken")
 
+  describe "revoked/1" do
+    test "says false for a token that works, and true once it has been revoked", %{user: user} do
+      token = user |> signed_in() |> Ash.Resource.get_metadata(:token)
+
+      assert Token.revoked(token) == {:ok, false}
+      assert Token.revoke(token) == :ok
+      assert Token.revoked(token) == {:ok, true}
+    end
+
+    test "is an error, not 'revoked', when the revocation list cannot be read", %{user: user} do
+      token = user |> signed_in() |> Ash.Resource.get_metadata(:token)
+      take_tokens_away!()
+
+      assert {:error, _unreadable} = Token.revoked(token)
+    end
+  end
+
   describe "revoke/1" do
     test "revokes a token this application signed, and the token stops verifying", %{user: user} do
       token = signed_in(user).__metadata__.token

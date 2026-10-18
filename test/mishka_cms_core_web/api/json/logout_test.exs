@@ -164,6 +164,20 @@ defmodule MishkaCmsCoreWeb.Api.Json.LogoutTest do
     assert_receive %Phoenix.Socket.Broadcast{topic: ^topic, event: "disconnect"}
   end
 
+  test "cuts nobody's sockets a second time, with the token it already revoked", %{
+    master: master
+  } do
+    topic = LiveSockets.live_socket_id(master)
+    MishkaCmsCore.TestEndpoint.subscribe(topic)
+    token = sign_in_master(master, @password)
+
+    assert logout(token).status in 200..299
+    assert_receive %Phoenix.Socket.Broadcast{topic: ^topic, event: "disconnect"}
+
+    assert logout(token).status in 200..299
+    refute_receive %Phoenix.Socket.Broadcast{topic: ^topic}, 200
+  end
+
   test "leaves the account's live sockets alone when the revocation failed", %{master: master} do
     topic = LiveSockets.live_socket_id(master)
     MishkaCmsCore.TestEndpoint.subscribe(topic)

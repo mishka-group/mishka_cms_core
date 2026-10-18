@@ -2238,7 +2238,19 @@ defmodule MishkaCmsCore.Accounts.User do
   # THE ANSWER FOLLOWS THE REVOCATION. "Logged out successfully" while the token still works is the
   # one wrong answer here, so a revocation that fails is an error, logged without the token, and the
   # account's live sockets stay as they are.
+  #
+  # A TOKEN THAT WAS REVOKED ALREADY ENDS NOTHING, so it is answered and left alone: the account's
+  # sockets were cut when it was revoked, and cutting them again for whoever hands the same string
+  # over would keep a signed-in account reconnecting. A revocation list that cannot be read is not
+  # "already revoked" — the revocation is attempted and answers for itself.
   defp revoke_session(token, user_id) do
+    case MishkaCmsCore.Accounts.Token.revoked(token) do
+      {:ok, true} -> {:ok, logged_out()}
+      _live_or_unknown -> end_session(token, user_id)
+    end
+  end
+
+  defp end_session(token, user_id) do
     case MishkaCmsCore.Accounts.Token.revoke(token) do
       :ok ->
         MishkaCmsCore.Accounts.LiveSockets.disconnect(user_id)

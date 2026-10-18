@@ -28,8 +28,8 @@ defmodule MishkaCmsCore.Accounts.Token do
 
   `revoke/1`, `revoke_unissued/1` and `revoke_minted/1` are the ways this application revokes a
   token. Each answers `:ok` or `{:error, error}` and never raises, so a caller that says "logged
-  out" knows whether the token still works. `failure/1` names a failed revocation for a log line
-  without the token in it.
+  out" knows whether the token still works. `revoked/1` asks whether one already was. `failure/1`
+  names a failed revocation for a log line without the token in it.
   """
   use Ash.Resource,
     otp_app: :mishka_cms_core,
@@ -53,6 +53,19 @@ defmodule MishkaCmsCore.Accounts.Token do
   @spec revoke(String.t()) :: :ok | {:error, term()}
   def revoke(token) when is_binary(token),
     do: AshAuthentication.TokenResource.revoke(__MODULE__, token)
+
+  @doc """
+  Whether `token` has been revoked: `{:ok, true | false}`, or `{:error, error}` when the revocation
+  list could not be read. AshAuthentication's own `token_revoked?/3` answers `true` for a list it
+  could not read, which would let a caller report a token as ended that may still work.
+  """
+  @spec revoked(String.t()) :: {:ok, boolean()} | {:error, term()}
+  def revoked(token) when is_binary(token) do
+    __MODULE__
+    |> Ash.ActionInput.for_action(:revoked?, %{token: token}, domain: MishkaCmsCore.Accounts)
+    |> Ash.ActionInput.set_context(%{private: %{ash_authentication?: true}})
+    |> Ash.run_action()
+  end
 
   @doc """
   Revokes `token`, one that was signed and never handed to anybody — a sign-in turned away after
