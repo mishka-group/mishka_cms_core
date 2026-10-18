@@ -1083,23 +1083,9 @@ defmodule MishkaCmsCore.Runtime.JsHook do
       # tenant, only a master (`site_id` nil) or the system (`authorize?: false`) restores; with one,
       # whoever acts on that site restores its js_hooks alone. See
       # `MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acts_on?/2`.
-      validate fn changeset, context ->
-        case MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acts_on?(
-               context,
-               changeset.data.site_id
-             ) do
-          true ->
-            :ok
-
-          false ->
-            {:error,
-             message:
-               dgettext_noop(
-                 "errors",
-                 "Cannot restore version of js_hook from another site."
-               )}
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ActsOnRecordSite,
+                message:
+                  dgettext_noop("errors", "Cannot restore version of js_hook from another site.")}
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.JsHook.Version}
