@@ -51,14 +51,14 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.JsonEncoder do
 
   ## Example
 
-      iex> encode(~S|
+      encode(~S|
       <header>
         <.link patch="/">
           <h1 class="bg-red">My Site</h1>
         </.link>
       </header>
       |, :my_site)
-      [
+      #=> [
         %{
           "attrs" => %{},
           "content" => [

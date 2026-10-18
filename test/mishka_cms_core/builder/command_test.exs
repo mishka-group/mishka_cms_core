@@ -21,6 +21,8 @@ defmodule MishkaCmsCore.Builder.CommandTest do
   """
   use ExUnit.Case, async: true
 
+  doctest MishkaCmsCore.Builder.Command
+
   alias MishkaCmsCore.Builder.Command
   alias MishkaCmsCore.Builder.Literal
 

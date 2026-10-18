@@ -102,9 +102,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   ## Usage
 
-      iex> CssClosure.for_site("localhost")
-      %{components: ["chelekom-alert", "chelekom-icon"], templates: [...], scanned: 8, dynamic: [],
-        resolved: []}
+      CssClosure.for_site("localhost")
+      #=> %{components: ["chelekom-alert", "chelekom-icon"], templates: [...], scanned: 8, dynamic: [],
+        #=> resolved: []}
 
   See `MishkaCmsCore.Runtime.Compilers.TailwindCompiler`, which turns the result into `@source`
   lines, and `Mix.Tasks.Mishka.Css.Closure`, which prints it.
@@ -238,8 +238,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   ## Examples
 
-      iex> CssClosure.reached_components("localhost")
-      %{complete?: true, components: [%{name: "chelekom-alert", site: "Global"}]}
+      CssClosure.reached_components("localhost")
+      #=> %{complete?: true, components: [%{name: "chelekom-alert", site: "Global"}]}
 
       references = CssClosure.references(~s|<.component component_name="card" site="localhost" />|)
       CssClosure.reached_components("localhost", roots: [], references: [references])

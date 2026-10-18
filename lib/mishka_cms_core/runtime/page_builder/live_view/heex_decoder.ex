@@ -16,8 +16,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.HeexDecoder do
 
   ## Examples
 
-      iex> decode({:eex, "@project.name", %{line: 1, opt: ~c"=", column: 1}})
-      "<%= @project.name %>"
+      decode({:eex, "@project.name", %{line: 1, opt: ~c"=", column: 1}})
+      #=> "<%= @project.name %>"
 
   """
   @spec decode([JsonEncoder.token()] | eex_node()) :: String.t()

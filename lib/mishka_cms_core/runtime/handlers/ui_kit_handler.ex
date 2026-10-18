@@ -17,9 +17,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   prelude dedup, type-resolved attrs, dropped struct defaults) live in
   the upstream converter (Chelekom's `mix mishka.ui.export ... --cms`).
 
-      iex> MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!()
-      iex> MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!(site_id: tenant_id)
-      iex> MishkaCmsCore.Runtime.Handlers.UiKitHandler.uninstall_chelekom!()
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!()
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!(site_id: tenant_id)
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.uninstall_chelekom!()
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -471,17 +471,17 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   that into `nil`, and `nil` matched the "unspecified, so give them their own site" clause. Allowed,
   silently. `:global` has to be asked for by name.
 
-      iex> install_scope(%{site_id: nil}, :global)
-      {:ok, nil}
+      install_scope(%{site_id: nil}, :global)
+      #=> {:ok, nil}
 
-      iex> install_scope(%{site_id: nil}, "acme")
-      {:ok, "acme"}
+      install_scope(%{site_id: nil}, "acme")
+      #=> {:ok, "acme"}
 
-      iex> install_scope(%{site_id: "acme"}, nil)
-      {:ok, "acme"}
+      install_scope(%{site_id: "acme"}, nil)
+      #=> {:ok, "acme"}
 
-      iex> install_scope(%{site_id: "acme"}, :global)
-      {:error, :forbidden}
+      install_scope(%{site_id: "acme"}, :global)
+      #=> {:error, :forbidden}
   """
   @spec install_scope(map() | nil, :global | String.t() | nil) ::
           {:ok, String.t() | nil} | {:error, :forbidden}

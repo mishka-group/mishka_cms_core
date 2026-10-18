@@ -1967,11 +1967,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
 
   ## Example
 
-      iex> render_template("<div>{@name}</div>", %{name: "John"})
-      "<div>John</div>"
+      render_template("<div>{@name}</div>", %{name: "John"})
+      #=> "<div>John</div>"
 
-      iex> render_template("<.link patch='/users'>{@text}</.link>", %{text: "Users"})
-      "<a href=\"/users\" data-phx-link=\"patch\" data-phx-link-state=\"push\">Users</a>"
+      render_template("<.link patch='/users'>{@text}</.link>", %{text: "Users"})
+      #=> "<a href=\"/users\" data-phx-link=\"patch\" data-phx-link-state=\"push\">Users</a>"
   """
   @spec render_template(String.t(), map()) :: String.t() | {:error, term()}
   def render_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns) do
