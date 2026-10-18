@@ -8,8 +8,10 @@ defmodule MishkaCmsCore.Test.Plugins.CollapsedSettingsProvider do
   of its own tab, every one with a default of its own — a select, a switch, a number and a secret —
   and a plain group beside it that stays a heading.
 
-  The accordion opens for a value other than the setting's default, so these are what proves the
-  comparison is with the default and not with "empty". See `MishkaCmsCore.Settings.define/3`.
+  The accordion stays closed whatever these hold and opens only for a value a save refused. The
+  tab's order is what proves the sections: `Advanced` is declared again after `Plain` and the
+  ungrouped `alone`, and stays one section where it first stands; `alone` and `tail` are two runs
+  of ungrouped settings with the group `Last` between them. See `MishkaCmsCore.Settings.define/3`.
   """
   alias MishkaCmsCore.Settings
 
@@ -68,6 +70,29 @@ defmodule MishkaCmsCore.Test.Plugins.CollapsedSettingsProvider do
         scope: :master,
         source: :extension,
         label: "Alone"
+      ),
+      Settings.define("tuning.depth", :integer,
+        default: 3,
+        category: @category,
+        group: "Advanced",
+        scope: :master,
+        source: :extension,
+        label: "Depth"
+      ),
+      Settings.define("tuning.last", :string,
+        default: "",
+        category: @category,
+        group: "Last",
+        scope: :master,
+        source: :extension,
+        label: "Last"
+      ),
+      Settings.define("tuning.tail", :string,
+        default: "",
+        category: @category,
+        scope: :master,
+        source: :extension,
+        label: "Tail"
       )
     ]
   end

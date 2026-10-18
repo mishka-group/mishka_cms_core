@@ -565,10 +565,11 @@ defmodule MishkaCmsCore.Settings do
 
   `:collapsed` (default `false`) makes the setting's `:group` an accordion on the settings page: a
   group with any shown setting that declares it is drawn as a closed `<details>` titled by the group,
-  which opens by itself when one of its settings holds a value other than its default — blank counts
-  as none — or a value the last save refused, and otherwise stays as the admin left it. It needs a
-  `:group`, whose heading it becomes, and works for any tab, so an extension's optional settings can
-  stay out of the way until they are used:
+  whatever its settings hold. It opens by itself only when the last save refused a value of one of
+  its settings, so the message under the field is in view, and otherwise stays as the admin left it.
+  It needs a `:group`, whose heading it becomes, and works for any tab, so an extension's optional
+  settings can stay out of the way until they are used. The accordion stands where the group's first
+  setting is declared:
 
       Settings.define("site.theme_color", :string,
         group: gettext_noop("App & home screen"), collapsed: true, default: "", scope: :site)
@@ -695,6 +696,8 @@ defmodule MishkaCmsCore.Settings do
       define("site.favicon", :image,
         default: "",
         category: "general",
+        group: gettext_noop("App & home screen"),
+        collapsed: true,
         scope: :both,
         label: gettext_noop("Favicon"),
         description:
@@ -705,6 +708,8 @@ defmodule MishkaCmsCore.Settings do
       define("site.app_icon", :image,
         default: "",
         category: "general",
+        group: gettext_noop("App & home screen"),
+        collapsed: true,
         scope: :both,
         label: gettext_noop("App icon"),
         description:

@@ -34,11 +34,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   their page. A broadcast is also ignored while the viewer is mid-edit (`dirty?`), so someone else's
   save never clobbers unsaved input.
 
+  Settings are drawn in the order they are declared. A named `:group` is one section, where its first
+  setting stands; settings with no group form runs between the named groups, which have no heading.
   A group whose settings declare `collapsed: true` (`MishkaCmsCore.Settings.define/3`) is drawn as a
-  closed accordion titled by the group. It opens by itself when one of its settings holds a value
-  other than its default or a value the last save refused (`open_group?/4`), and once drawn it
-  stays as the admin left it, through every later change of the page. A refused value is said under
-  its field, whatever the tab.
+  closed accordion titled by the group, whatever its settings hold. It opens by itself only when a
+  setting in it was refused by the last save (`open_group?/2`), so the message under the field is
+  in view, and once drawn it stays as the admin left it, through every later change of the page. A
+  refused value is said under its field, whatever the tab.
 
   A `:secret` setting (a provider's API key) is never drawn back: its field is empty, says the
   last four characters of what is stored, and a save that leaves it empty keeps the stored one. The
@@ -421,63 +423,75 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
 
   defp held_globally?(_definition, _scope), do: false
 
-  # Split the visible fields into `{group, fields}` sections (nil group = ungrouped, no heading),
-  # preserving the order groups first appear in so the page layout is stable.
+  # Split the visible fields into `{section, fields}` in the order they are declared. A section is
+  # `{:group, name}` for a named group — one section, where its first field stands, however far
+  # apart its fields are declared — or `{:ungrouped, n}` for a run of fields with no group, which
+  # a named group's field ends: a tab that declares title, logo, a group, then more ungrouped
+  # fields draws two runs around the group, numbered from 1 in the order they are drawn.
   defp group_fields(fields) do
     fields
-    |> Enum.reduce({[], %{}}, fn {definition, _} = field, {order, acc} ->
-      group = definition.group
-
-      if Map.has_key?(acc, group),
-        do: {order, Map.update!(acc, group, &[field | &1])},
-        else: {[group | order], Map.put(acc, group, [field])}
-    end)
-    |> then(fn {order, acc} ->
-      order |> Enum.reverse() |> Enum.map(fn group -> {group, Enum.reverse(acc[group])} end)
-    end)
+    |> Enum.reduce([], &place_field/2)
+    |> Enum.map(fn {section, fields} -> {section, Enum.reverse(fields)} end)
+    |> Enum.reverse()
   end
 
-  # The groups and fields shown beside the tab's values as they stand on screen — a provider's fields
-  # while it is the one chosen (`MishkaCmsCore.Settings.visible?/2`); a group left empty goes too.
+  defp place_field({%{group: nil}, _} = field, [{{:ungrouped, _} = run, fields} | sections]),
+    do: [{run, [field | fields]} | sections]
+
+  defp place_field({%{group: nil}, _} = field, sections),
+    do: [{{:ungrouped, Enum.count(sections, &run?/1) + 1}, [field]} | sections]
+
+  defp place_field({%{group: group}, _} = field, sections) do
+    section = {:group, group}
+
+    if List.keymember?(sections, section, 0) do
+      Enum.map(sections, fn
+        {^section, fields} -> {section, [field | fields]}
+        other -> other
+      end)
+    else
+      [{section, [field]} | sections]
+    end
+  end
+
+  defp run?({{:ungrouped, _}, _fields}), do: true
+  defp run?({{:group, _}, _fields}), do: false
+
+  # The sections and fields shown beside the tab's values as they stand on screen — a provider's
+  # fields while it is the one chosen (`MishkaCmsCore.Settings.visible?/2`); a section left empty
+  # goes too.
   defp shown_groups(field_groups, values) do
-    for {group, fields} <- field_groups,
+    for {section, fields} <- field_groups,
         shown =
           Enum.filter(fields, fn {definition, _editable} ->
             Settings.visible?(definition, values)
           end),
         shown != [],
-        do: {group, shown}
+        do: {section, shown}
   end
 
-  # A group is an accordion while any setting shown in it declares `collapsed: true`.
-  defp collapsible?(fields),
+  # A named group is an accordion while any setting shown in it declares `collapsed: true`; a run
+  # of ungrouped settings is never one.
+  defp collapsible?({:group, _group}, fields),
     do: Enum.any?(fields, fn {definition, _editable} -> definition.collapsed == true end)
 
-  # Whether an accordion is drawn open: one of its settings holds something other than its default
-  # on screen, a stored secret included, or was refused by the last save.
-  defp open_group?(fields, values, errors, secret_hints) do
-    Enum.any?(fields, fn {definition, _editable} ->
-      Map.has_key?(errors, definition.key) or
-        filled?(definition, Map.get(values, definition.key), secret_hints)
-    end)
-  end
+  defp collapsible?({:ungrouped, _n}, _fields), do: false
 
-  defp filled?(%{type: :secret, key: key}, _typed, secret_hints),
-    do: Map.get(secret_hints, key) != nil
+  # Whether an accordion is drawn open: the last save refused one of its settings, so the message
+  # under the field is not hidden. It is the first draw only; the browser keeps what the admin did.
+  defp open_group?(fields, errors),
+    do: Enum.any?(fields, fn {definition, _editable} -> Map.has_key?(errors, definition.key) end)
 
-  defp filled?(%{type: :boolean, default: default}, value, _secret_hints),
-    do: truthy?(value) != truthy?(default)
+  defp section_title({:group, group}), do: Settings.text(group)
+  defp section_title({:ungrouped, _n}), do: nil
 
-  defp filled?(%{default: default}, value, _secret_hints),
-    do: shown_text(value) not in ["", shown_text(default)]
+  # A section's id names the scope as well, so another site's view draws its own closed or open
+  # rather than keeping the one the admin left in the last. The first run of ungrouped settings
+  # is `settings-ungrouped`, the next `settings-ungrouped-2`.
+  defp group_id({:ungrouped, 1}, _scope), do: "settings-ungrouped"
+  defp group_id({:ungrouped, n}, _scope), do: "settings-ungrouped-#{n}"
 
-  defp shown_text(value), do: value |> input_value() |> to_string() |> String.trim()
-
-  # An accordion's id names the scope as well, so another site's view draws its own closed or open
-  # rather than keeping the one the admin left in the last.
-  defp group_id(nil, _scope), do: "settings-ungrouped"
-
-  defp group_id(group, scope) do
+  defp group_id({:group, group}, scope) do
     slug =
       group
       |> group_name()

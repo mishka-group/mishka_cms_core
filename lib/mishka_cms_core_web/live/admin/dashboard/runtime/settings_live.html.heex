@@ -151,14 +151,14 @@ SPDX-License-Identifier: Apache-2.0
             <div class="p-[26px]">
               <div class="flex flex-col gap-[30px]">
                 <.group_section
-                  :for={{group, group_fields} <- shown_groups(@field_groups, @form.params)}
-                  id={group_id(group, @active_scope)}
-                  title={Settings.text(group)}
-                  collapsible?={not is_nil(group) and collapsible?(group_fields)}
-                  open?={open_group?(group_fields, @form.params, @field_errors, @secret_hints)}
+                  :for={{section, section_fields} <- shown_groups(@field_groups, @form.params)}
+                  id={group_id(section, @active_scope)}
+                  title={section_title(section)}
+                  collapsible?={collapsible?(section, section_fields)}
+                  open?={open_group?(section_fields, @field_errors)}
                 >
                   <div class="flex flex-col gap-5">
-                    <div :for={{definition, editable} <- group_fields}>
+                    <div :for={{definition, editable} <- section_fields}>
                       <%= if definition.type == :boolean do %>
                         <div class={[
                           "flex items-center gap-4 rounded-[13px] border border-[#f0efea] bg-[#faf9f6] px-[18px] py-4",
