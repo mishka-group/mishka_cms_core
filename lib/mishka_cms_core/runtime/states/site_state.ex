@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   - **Main Table**: Primary storage with complete site data
   - **Host Index**: O(1) lookups by hostname for request routing
   - **Name Index**: O(1) lookups by site name for administration
+  - **Origins Index**: O(1) lookup of whether a site allows a CORS origin — see `allows_origin?/2`
   - **Conflict Detection**: Automatic hostname and name uniqueness validation
 
   ## Data Structure
@@ -127,11 +128,15 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   require Logger
 
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
+  alias MishkaCmsCore.Runtime.OriginValidator
 
   # ETS table names
   @main_table :mishka_sites
   @host_index :mishka_sites_host_index
   @name_index :mishka_sites_name_index
+  # `{site_id, MapSet of OriginValidator.origin()}`: every CORS origin a site allows, worked out by
+  # `OriginValidator.site_origins/1` whenever the site is written. One row per site, so a save
+  # replaces the whole set in one insert and an origin the site no longer allows cannot outlive it.
   @allowed_origins_index :mishka_sites_allowed_origins_index
 
   # `{{site_id | nil, component name}}` for every ACTIVE component: what a site has, so a name an
@@ -189,6 +194,12 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
          :ok <- check_name_conflict(name, id) do
       cleanup_old_indexes(id)
 
+      # Before the host: a site a request can find already answers for its origins.
+      :ets.insert(
+        @allowed_origins_index,
+        origins_record(id, host, frontend_domain, allowed_origins)
+      )
+
       :ets.insert(
         @main_table,
         {id, name, host, priority, active, master, mode, frontend_domain, allowed_origins}
@@ -196,11 +207,6 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
 
       :ets.insert(@host_index, {host, id})
       :ets.insert(@name_index, {name, id})
-
-      # Index allowed_origins for fast lookup
-      # Also include frontend_domain if present
-      cleanup_old_allowed_origins(id)
-      index_allowed_origins(id, allowed_origins, frontend_domain)
 
       MishkaInstaller.Event.Hook.call("runtime:state:site:changed", %{op: :save, key: id},
         return: false
@@ -228,67 +234,38 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     host_records = Enum.map(sites, fn s -> {s.host, s.id} end)
     name_records = Enum.map(sites, fn s -> {s.name, s.id} end)
 
-    # Build allowed_origins index records
-    allowed_origins_records =
-      sites
-      |> Enum.flat_map(fn s ->
-        origins = Map.get(s, :allowed_origins, [])
-        frontend = Map.get(s, :frontend_domain)
-
-        # Build list of all origins to index
-        frontend_origins =
-          cond do
-            is_nil(frontend) or frontend == "" ->
-              []
-
-            MishkaCmsCore.Runtime.OriginValidator.web_url?(frontend) ->
-              # It's already a full origin
-              [frontend]
-
-            true ->
-              # It's just a domain, index both http and https variants
-              ["https://#{frontend}", "http://#{frontend}", frontend]
-          end
-
-        # Combine all origins
-        all_origins = frontend_origins ++ origins
-
-        Enum.map(all_origins, fn origin -> {origin, s.id} end)
+    origins_records =
+      Enum.map(sites, fn s ->
+        origins_record(
+          s.id,
+          s.host,
+          Map.get(s, :frontend_domain),
+          Map.get(s, :allowed_origins, [])
+        )
       end)
 
     # Batch insert
+    :ets.insert(@allowed_origins_index, origins_records)
     :ets.insert(@main_table, main_records)
     :ets.insert(@host_index, host_records)
     :ets.insert(@name_index, name_records)
-    :ets.insert(@allowed_origins_index, allowed_origins_records)
     :ok
   end
 
   @doc """
-  High-performance lookup by allowed origin (O(1)).
-  Returns the first site that allows this origin for CORS.
-  """
-  def get_by_allowed_origin(origin) do
-    case :ets.lookup(@allowed_origins_index, origin) do
-      [{^origin, id} | _] -> get(id)
-      [] -> {:error, :not_found}
-    end
-  end
+  Whether the site `site_id` allows `origin` for CORS, an origin as
+  `MishkaCmsCore.Runtime.OriginValidator.request_origin/1` reads a request's `Origin` header. One
+  ETS lookup: the origins a site allows are worked out by `OriginValidator.site_origins/1` when the
+  site is saved, and dropped with it.
 
-  @doc """
-  Checks if an origin is allowed for any active site (O(1)).
-  Returns {true, site} if allowed, false otherwise.
+      {:ok, origin} = OriginValidator.request_origin("https://app.example.com")
+      SiteState.allows_origin?(site.id, origin)  #=> true
   """
-  def allowed_origin?(origin) do
-    case :ets.lookup(@allowed_origins_index, origin) do
-      [{^origin, id} | _] ->
-        case get(id) do
-          {:ok, site} when site.active -> {true, site}
-          _ -> false
-        end
-
-      [] ->
-        false
+  @spec allows_origin?(term(), OriginValidator.origin()) :: boolean()
+  def allows_origin?(site_id, origin) do
+    case :ets.lookup(@allowed_origins_index, site_id) do
+      [{^site_id, origins}] -> MapSet.member?(origins, origin)
+      [] -> false
     end
   end
 
@@ -644,6 +621,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   """
   def delete(id) do
     cleanup_old_indexes(id)
+    :ets.delete(@allowed_origins_index, id)
     :ets.delete(@main_table, id)
 
     MishkaInstaller.Event.Hook.call("runtime:state:site:changed", %{op: :delete, key: id},
@@ -754,10 +732,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
       write_concurrency: true
     ])
 
-    # Create allowed_origins index table (allows duplicate keys)
     :ets.new(@allowed_origins_index, [
-      # bag allows duplicate keys with different values
-      :bag,
+      :set,
       :public,
       :named_table,
       read_concurrency: true,
@@ -885,32 +861,9 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     end
   end
 
-  defp cleanup_old_allowed_origins(site_id) do
-    # Remove all allowed_origins entries for this site
-    :ets.select_delete(@allowed_origins_index, [{{:"$1", :"$2"}, [{:==, :"$2", site_id}], [true]}])
-  end
-
-  defp index_allowed_origins(site_id, allowed_origins, frontend_domain) do
-    # Index frontend_domain if present (supporting both full origin and domain-only)
-    if frontend_domain && frontend_domain != "" do
-      if MishkaCmsCore.Runtime.OriginValidator.web_url?(frontend_domain) do
-        # It's already a full origin
-        :ets.insert(@allowed_origins_index, {frontend_domain, site_id})
-      else
-        # It's just a domain, index both http and https variants
-        :ets.insert(@allowed_origins_index, {"https://#{frontend_domain}", site_id})
-        :ets.insert(@allowed_origins_index, {"http://#{frontend_domain}", site_id})
-        # Also index the domain itself for flexible matching
-        :ets.insert(@allowed_origins_index, {frontend_domain, site_id})
-      end
-    end
-
-    # Index all allowed_origins
-    Enum.each(allowed_origins, fn origin ->
-      if origin && origin != "" do
-        :ets.insert(@allowed_origins_index, {origin, site_id})
-      end
-    end)
+  defp origins_record(id, host, frontend_domain, allowed_origins) do
+    site = %{host: host, frontend_domain: frontend_domain, allowed_origins: allowed_origins}
+    {id, MapSet.new(OriginValidator.site_origins(site))}
   end
 
   defp filter_by_active(sites, nil), do: sites
