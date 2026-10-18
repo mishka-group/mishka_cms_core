@@ -39,7 +39,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
   alias Phoenix.LiveView.AsyncResult
 
-  @extensions %{images: ~w(.jpg .jpeg .png .gif .webp .svg), videos: ~w(.mp4 .webm .mov)}
+  @extensions %{images: ~w(.jpg .jpeg .png .gif .webp), videos: ~w(.mp4 .webm .mov)}
   @shown 48
   @folders_shown 100
 

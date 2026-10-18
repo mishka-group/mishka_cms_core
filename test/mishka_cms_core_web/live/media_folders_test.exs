@@ -21,6 +21,7 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{Media, MediaCategory}
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Test.Files
 
   require Ash.Query
 
@@ -329,7 +330,7 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
 
     file =
       file_input(view, "#media_form-form", :media_files_media_form, [
-        %{name: "cover.png", content: "cover bytes", type: "image/png"}
+        %{name: "cover.png", content: Files.png() <> "cover bytes", type: "image/png"}
       ])
 
     render_upload(file, "cover.png")
@@ -339,7 +340,48 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
 
     assert media.media_category_id == covers.id
     assert String.starts_with?(media.relative_path, "/uploads/#{site.id}/media/#{covers.id}/")
-    assert File.read!(Path.join(dir, media.relative_path)) == "cover bytes"
+    assert File.read!(Path.join(dir, media.relative_path)) == Files.png() <> "cover bytes"
+  end
+
+  # THE LIBRARY IS SERVED FROM THE SITE'S OWN ORIGIN, so what an editor uploads is read, not trusted
+  # by its name: a script saved as `cover.png` is refused by the form with a message, and an SVG
+  # is not a type the form's file input takes at all.
+  test "a script saved as a picture is refused with a message, and nothing is stored", %{
+    conn: conn,
+    site: site,
+    covers: covers,
+    dir: dir
+  } do
+    view = conn |> tenant_conn(site) |> open(covers)
+
+    file =
+      file_input(view, "#media_form-form", :media_files_media_form, [
+        %{name: "cover.png", content: Files.html(), type: "image/png"}
+      ])
+
+    render_upload(file, "cover.png")
+    html = view |> element("#media_form-form") |> render_submit(%{"form" => %{}})
+
+    assert html =~ "is not a"
+    assert Ash.read!(Media, tenant: site.id, authorize?: false) == []
+    assert Path.wildcard(Path.join([dir, "uploads", "**", "*.png"])) == []
+  end
+
+  test "an SVG is not a file the form takes", %{conn: conn, site: site, covers: covers, dir: dir} do
+    view = conn |> tenant_conn(site) |> open(covers)
+
+    assert has_element?(view, ~s(#media_form-form input[type="file"][accept*=".png"]))
+    refute has_element?(view, ~s(#media_form-form input[type="file"][accept*="svg"]))
+
+    file =
+      file_input(view, "#media_form-form", :media_files_media_form, [
+        %{name: "logo.svg", content: Files.svg(), type: "image/svg+xml"}
+      ])
+
+    assert {:error, [[_ref, :not_accepted]]} = render_upload(file, "logo.svg")
+
+    assert Ash.read!(Media, tenant: site.id, authorize?: false) == []
+    assert Path.wildcard(Path.join([dir, "uploads", "**", "*.svg"])) == []
   end
 
   describe "moving" do

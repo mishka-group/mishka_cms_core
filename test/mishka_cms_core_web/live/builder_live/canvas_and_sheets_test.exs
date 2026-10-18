@@ -2496,7 +2496,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
 
       file =
         file_input(view, "#pb-media-upload #media_form-form", :media_files_media_form, [
-          %{name: "shot.png", content: "shot", type: "image/png"}
+          %{name: "shot.png", content: MishkaCmsCore.Test.Files.png(), type: "image/png"}
         ])
 
       render_upload(file, "shot.png")

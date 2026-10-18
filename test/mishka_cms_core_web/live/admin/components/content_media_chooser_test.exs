@@ -19,6 +19,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
   import Phoenix.LiveViewTest
 
   alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Test.Files
 
   @moduletag :integration
 
@@ -236,7 +237,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
 
     file =
       file_input(view, "#chooser-upload", :file, [
-        %{name: "cover.png", content: "cover bytes", type: "image/png"}
+        %{name: "cover.png", content: Files.png() <> "cover bytes", type: "image/png"}
       ])
 
     render_upload(file, "cover.png")
@@ -245,7 +246,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
     [media] = Ash.read!(Media, tenant: ctx.site.id, authorize?: false)
 
     assert media.type == :images
-    assert File.read!(Path.join(ctx.dir, media.relative_path)) == "cover bytes"
+    assert File.read!(Path.join(ctx.dir, media.relative_path)) == Files.png() <> "cover bytes"
     assert has_element?(view, "#chooser-file-#{media.id}")
   end
 
@@ -255,7 +256,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
 
     file =
       file_input(view, "#chooser-upload", :file, [
-        %{name: "logo.png", content: "logo bytes", type: "image/png"}
+        %{name: "logo.png", content: Files.png() <> "logo bytes", type: "image/png"}
       ])
 
     render_upload(file, "logo.png")
@@ -298,7 +299,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
     for name <- ["one.png", "two.png"] do
       view
       |> file_input("#chooser-upload", :file, [
-        %{name: name, content: name, type: "image/png"}
+        %{name: name, content: Files.png(), type: "image/png"}
       ])
       |> render_upload(name)
 
@@ -482,7 +483,9 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
   describe "where an upload goes" do
     defp upload(view, name) do
       view
-      |> file_input("#chooser-upload", :file, [%{name: name, content: name, type: "image/png"}])
+      |> file_input("#chooser-upload", :file, [
+        %{name: name, content: Files.png(), type: "image/png"}
+      ])
       |> render_upload(name)
 
       render_async(view, @await)

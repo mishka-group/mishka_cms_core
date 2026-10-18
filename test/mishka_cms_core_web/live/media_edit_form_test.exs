@@ -24,6 +24,7 @@ defmodule MishkaCmsCoreWeb.Test.MediaEditFormTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Media
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Test.Files
 
   require Ash.Query
 
@@ -206,7 +207,7 @@ defmodule MishkaCmsCoreWeb.Test.MediaEditFormTest do
 
     file =
       file_input(view, "#media_form-form", :media_files_media_form, [
-        %{name: "new.png", content: "new", type: "image/png"}
+        %{name: "new.png", content: Files.png() <> "new", type: "image/png"}
       ])
 
     render_upload(file, "new.png")
@@ -218,6 +219,6 @@ defmodule MishkaCmsCoreWeb.Test.MediaEditFormTest do
     saved = stored(row)
     assert saved.description == "Replaced", "the save did not go through"
     assert saved.relative_path == row.relative_path
-    assert File.read!(own) == "new"
+    assert File.read!(own) == Files.png() <> "new"
   end
 end

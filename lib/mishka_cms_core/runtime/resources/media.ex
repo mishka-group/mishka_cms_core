@@ -46,6 +46,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
+  alias MishkaCmsCore.Runtime.FileSignature
   alias MishkaCmsCore.Runtime.Resources.Changes
 
   @type_badge %{
@@ -882,7 +883,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       uploads do
         upload :media_files do
-          accept ~w(.jpg .jpeg .png .gif .webp .svg .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
+          accept ~w(.jpg .jpeg .png .gif .webp .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
           max_entries 1
           max_file_size 50_000_000
           style :dropzone
@@ -2207,20 +2208,32 @@ defmodule MishkaCmsCore.Runtime.Media do
   end
 
   @allowed_extensions %{
-    images: ~w(.jpg .jpeg .png .gif .webp .svg),
+    images: ~w(.jpg .jpeg .png .gif .webp),
     videos: ~w(.mp4 .webm .mov),
     documents: ~w(.pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
   }
 
   @max_file_size 50_000_000
 
+  @doc """
+  Checks an uploaded file before it is stored: its extension is one of the allowed ones, it is at most
+  50 MB, and its first bytes are the kind the extension names — see
+  `MishkaCmsCore.Runtime.FileSignature`.
+
+  Pass `%{file: file, original_filename: filename}`. Answers `{:ok, info}` with the `name`, `format`,
+  `type`, `size`, `extension` and `source_path` the row is made from, or `{:error, error}` naming what
+  was wrong with the file.
+  """
+  @spec validate_and_process_file(%{file: term(), original_filename: String.t()}) ::
+          {:ok, map()} | {:error, term()}
   def validate_and_process_file(%{file: file, original_filename: filename}) do
     ext = Path.extname(filename) |> String.downcase()
 
     with :ok <- validate_extension(ext),
          {:ok, path} <- get_file_path(file),
          {:ok, size} <- get_file_size(path),
-         :ok <- validate_file_size(size) do
+         :ok <- validate_file_size(size),
+         :ok <- validate_signature(path, ext) do
       {:ok,
        %{
          name: upload_name(filename),
@@ -2256,6 +2269,32 @@ defmodule MishkaCmsCore.Runtime.Media do
            )
          ]
        )}
+    end
+  end
+
+  # THE FIRST BYTES, NOT THE NAME. An extension is whatever the uploader typed, and the file is
+  # served from the site's own origin, so a page or a script saved as `cover.png` would run for
+  # whoever opened its address. `MishkaCmsCore.Runtime.FileSignature` reads what the file is.
+  defp validate_signature(path, ext) do
+    case FileSignature.matches?(path, ext) do
+      true ->
+        :ok
+
+      false ->
+        {:error,
+         Ash.Error.Invalid.exception(
+           errors: [
+             Ash.Error.Changes.InvalidAttribute.exception(
+               field: :file,
+               message:
+                 dgettext_noop(
+                   "errors",
+                   "The content of this file is not a %{extension} file."
+                 ),
+               vars: [extension: ext]
+             )
+           ]
+         )}
     end
   end
 
