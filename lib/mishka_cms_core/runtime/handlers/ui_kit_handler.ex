@@ -30,6 +30,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
   alias MishkaCmsCore.Runtime.PageBuilder.Markup
+  alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
   alias MishkaCmsCore.UiKit.Contract
 
   require Logger
@@ -1920,9 +1921,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   defp create_component(params, site_id, bundle, actor) do
     params
     |> stamp_kit(bundle)
-    |> stringify_to_atom_keys()
+    |> known_keys(accepted_names(Component))
     |> Map.put(:site_id, site_id)
-    |> Map.update(:format, :heex, &maybe_atom/1)
+    |> Map.update(:format, :heex, &coerce_enum(Component, :format, &1, :heex))
     |> normalize_helpers()
     |> normalize_attrs()
     |> normalize_slots()
@@ -1948,7 +1949,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp create_js_hook(params, site_id, actor) do
     params
-    |> stringify_to_atom_keys()
+    |> known_keys(accepted_names(JsHook))
     |> Map.put(:site_id, site_id)
     |> Map.update(:format, :js, &coerce_enum(JsHook, :format, &1, :js))
     # JsHook has no `extra` field; drop the converter's traceability stamp.
@@ -1975,7 +1976,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp create_stylesheet(params, site_id, actor) do
     params
-    |> stringify_to_atom_keys()
+    |> known_keys(accepted_names(Stylesheet))
     |> Map.put(:site_id, site_id)
     |> Map.update(:format, :css, &coerce_enum(Stylesheet, :format, &1, :css))
     |> Map.update(:kind, :theme, &coerce_enum(Stylesheet, :kind, &1, :theme))
@@ -2122,43 +2123,63 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     {Enum.reverse(ups), Enum.reverse(skips)}
   end
 
-  # Top-level keys (name, template, attrs, etc.) are atomized so Ash's
-  # changeset accepts them. Nested maps (`opts`, `extra`) keep string keys.
-  defp stringify_to_atom_keys(%{} = m) do
-    Enum.into(m, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
+  # A BUNDLE'S KEYS ARE WORDS A STRANGER WROTE, and `String.to_atom/1` on them mints an atom for each
+  # one that is never freed: a bundle with a million different keys fills the atom table and ends the
+  # VM for every site. So a key becomes an atom only by being looked up among the names the resource
+  # takes — `%{"name" => :name}`, built from its own attributes — and a key that is not one is
+  # dropped. `accepted_only/2` dropped them after the fact, once they were atoms.
+  defp known_keys(%{} = params, names) do
+    for {key, value} <- params, atom = Map.get(names, key), into: %{}, do: {atom, value}
+  end
+
+  defp accepted_names(resource) do
+    resource |> accepted_inputs() |> names()
+  end
+
+  # The names an embedded attribute's entries may carry, from the constraint that declares its
+  # fields: a component's `attrs` and `slots` are maps with `fields`.
+  defp field_names(resource, attribute) do
+    with %{constraints: constraints} <- Ash.Resource.Info.attribute(resource, attribute),
+         items when is_list(items) <- Keyword.get(constraints, :items),
+         fields when is_list(fields) <- Keyword.get(items, :fields) do
+      fields |> Keyword.keys() |> names()
+    else
+      _undeclared -> %{}
+    end
+  end
+
+  # What a helper entry may carry: the attributes of the embedded `Helper` resource.
+  defp helper_names do
+    Helper |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name) |> names()
+  end
+
+  defp names(atoms) do
+    Map.new(atoms, &{&1, &1}) |> Map.merge(Map.new(atoms, &{Atom.to_string(&1), &1}))
   end
 
   defp normalize_helpers(%{helpers: helpers} = params) when is_list(helpers) do
-    %{params | helpers: Enum.map(helpers, &atomize_helper/1)}
+    %{params | helpers: for(%{} = helper <- helpers, do: known_keys(helper, helper_names()))}
   end
 
   defp normalize_helpers(params), do: params
 
-  defp atomize_helper(%{} = h) do
-    Enum.into(h, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
-  end
-
   defp normalize_attrs(%{attrs: attrs} = params) when is_list(attrs) do
-    %{params | attrs: Enum.map(attrs, &atomize_attr/1)}
+    %{
+      params
+      | attrs: for(%{} = attr <- attrs, do: known_keys(attr, field_names(Component, :attrs)))
+    }
   end
 
   defp normalize_attrs(params), do: params
 
-  # Each attr has top-level atom keys (name, type, opts, struct_name);
-  # opts itself stays string-keyed (Ash :map type).
-  defp atomize_attr(%{} = a) do
-    Enum.into(a, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
-  end
-
   defp normalize_slots(%{slots: slots} = params) when is_list(slots) do
-    %{params | slots: Enum.map(slots, &atomize_slot/1)}
+    %{
+      params
+      | slots: for(%{} = slot <- slots, do: known_keys(slot, field_names(Component, :slots)))
+    }
   end
 
   defp normalize_slots(params), do: params
-
-  defp atomize_slot(%{} = s) do
-    Enum.into(s, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
-  end
 
   # THE RESOURCE ALREADY KNOWS WHAT IT ACCEPTS. `String.to_existing_atom/1` on a value from a file we
   # did not write is two failures wearing one hat: it raises for a word nobody has used, and for a
@@ -2174,9 +2195,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp coerce_enum(_resource, _key, value, _fallback) when is_atom(value), do: value
   defp coerce_enum(_resource, _key, _value, fallback), do: fallback
-
-  defp maybe_atom(s) when is_binary(s), do: String.to_existing_atom(s)
-  defp maybe_atom(s) when is_atom(s), do: s
 
   # Hard-deletes via `:master_permanent_destroy`; soft-deleted rows still
   # occupy the unique-name index.
