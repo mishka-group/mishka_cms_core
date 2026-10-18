@@ -559,7 +559,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       functions_ast = [
         quote do
-          def test_function(), do: "test"
+          def test_function, do: "test"
         end
       ]
 

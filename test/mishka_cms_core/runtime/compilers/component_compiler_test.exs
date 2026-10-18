@@ -548,7 +548,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       functions_ast = [
         quote do
-          def test_function(), do: "test"
+          def test_function, do: "test"
         end
       ]
 

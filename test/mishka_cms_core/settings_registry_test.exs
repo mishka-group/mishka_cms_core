@@ -81,7 +81,6 @@ defmodule MishkaCmsCore.Settings.RegistryTest do
     # The notifier hands plugins the changed record (value stored wrapped) + the read-only meta.
     assert_receive {:settings_after_change,
                     %{key: "site.title", value: %{"value" => "Changed Title"}},
-                    %{actor: _, site_id: _}},
-                   5000
+                    %{actor: _, site_id: _}}
   end
 end

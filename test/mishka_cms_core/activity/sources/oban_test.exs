@@ -339,10 +339,9 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
       ObanSource.handle_telemetry([:oban, :job, :stop], %{}, %{job: job}, nil)
 
       assert_receive %Phoenix.Socket.Broadcast{
-                       topic: "oban_activity",
-                       payload: %{__oban__: true, event: :stop}
-                     },
-                     500
+        topic: "oban_activity",
+        payload: %{__oban__: true, event: :stop}
+      }
     end
 
     test "fans out to global, site, resource and site+resource topics" do

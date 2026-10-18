@@ -232,7 +232,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CustomKitInstallTest do
       do: "kit_invented_" <> Base.encode16(:crypto.strong_rand_bytes(10), case: :lower)
 
     defp atom?(text) do
-      String.to_existing_atom(text)
+      _atom = String.to_existing_atom(text)
       true
     rescue
       ArgumentError -> false
