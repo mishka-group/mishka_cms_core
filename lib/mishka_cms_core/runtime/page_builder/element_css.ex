@@ -78,10 +78,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCss do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
+  alias MishkaCmsCore.Runtime.PageBuilder.StylesheetRow
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.Stylesheet
-
-  require Ash.Query
 
   # WHAT THE BUILDER WRITES IT GENERATED: the stylesheet row is written by whoever may open a
   # builder, rather than by the stylesheet area alone. See `MishkaCmsCore.Runtime.Stylesheet`.
@@ -715,41 +714,5 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCss do
   defp saved({:ok, _record}, rules), do: {:ok, rules}
   defp saved({:error, reason}, _rules), do: {:error, reason}
 
-  # SCOPED, NOT CAPPED. The same read `MishkaCmsCore.Runtime.PageBuilder.Classes` makes, and for the
-  # same reason: `:master_read` bypasses multitenancy, so asking for one row before saying which
-  # site it is for can answer with another site's. A tenant's read Ash has already scoped, and the
-  # globals are the scope whose `site_id` is `nil`, so the filter is written once for both. The
-  # identity is `[:name, :site_id]`, so the site belongs in the query.
-  defp row(actor, site_id, owner) do
-    name = row_name(owner)
-
-    Stylesheet
-    |> Ash.Query.filter(name == ^name)
-    |> scoped(site_id)
-    |> read(actor, site_id)
-  end
-
-  defp scoped(query, nil), do: Ash.Query.filter(query, is_nil(site_id))
-  defp scoped(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
-
-  defp read(query, %{site_id: nil} = actor, _site_id) do
-    query
-    |> Ash.Query.for_read(:master_read, %{}, actor: actor)
-    |> Ash.read()
-    |> first()
-  end
-
-  defp read(query, actor, site_id) do
-    query
-    |> Ash.Query.for_read(:read, %{}, actor: actor, tenant: site_id)
-    |> Ash.read()
-    |> first()
-  end
-
-  # The identity leaves a scoped query at most one row to answer with. Pagination is on for the
-  # master read, so what comes back is a page rather than a list.
-  defp first({:ok, %Ash.Page.Offset{results: rows}}), do: first({:ok, rows})
-  defp first({:ok, [row | _rest]}), do: row
-  defp first({:ok, []}), do: nil
-  defp first({:error, _reason}), do: nil
+  defp row(actor, site_id, owner), do: StylesheetRow.fetch(actor, site_id, row_name(owner))
 end
