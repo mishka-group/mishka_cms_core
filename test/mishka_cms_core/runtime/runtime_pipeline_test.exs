@@ -10,6 +10,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
     * asset jobs for the same {site, type} truly coalesce to one
     * `defer_runtime` truly suppresses the per-row compile job
     * rapid edits to the same resource truly coalesce (meta.slug uniqueness)
+    * only a node that serves the site takes the compile jobs over at boot and queues its bundles
 
   The defer / per-row tests flip `env_test?` off so `SendToOban` runs for real
   (it is a no-op under `env_test?: true`).
@@ -26,6 +27,9 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
   alias MishkaCmsCore.Runtime.JsHook
+  alias MishkaCmsCore.Runtime.States.SiteState
+
+  @oban __MODULE__.Oban
 
   describe "asset job dedup (anti-storm)" do
     test "repeated {site, type} asset jobs coalesce to a single enqueued job" do
@@ -48,14 +52,10 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
   end
 
   describe "a bundle job names the instance that queued it" do
+    setup :serve_the_site
+
     test "the boot's per-site jobs carry this instance's boot id" do
-      n = System.unique_integer([:positive])
-      site = %{id: Ecto.UUID.generate(), name: "boot-id-#{n}", host: "boot-id-#{n}.test"}
-
-      :ok =
-        MishkaCmsCore.Runtime.States.SiteState.save(Map.merge(site, %{priority: 0, active: true}))
-
-      on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.delete(site.id) end)
+      site = cached_site!(active: true)
 
       for type <- ["asset", "css", "js", "sitemap"] do
         :ok = BootHandler.create_assets_compilation_jobs(type)
@@ -63,6 +63,14 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
         assert [job] = enqueued_asset_jobs(site.name, type)
         assert job.args["boot_id"] == BootHandler.boot_id()
       end
+    end
+
+    test "a single job carries it too" do
+      args =
+        "site_a" |> BootHandler.asset_job("site-a-id", "css") |> Ecto.Changeset.get_change(:args)
+
+      assert is_binary(BootHandler.boot_id())
+      assert args.boot_id == BootHandler.boot_id()
     end
 
     test "another instance's job for the same site and type is kept beside this one's" do
@@ -78,6 +86,87 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
 
       assert length(boot_ids) == 2
       assert BootHandler.boot_id() in boot_ids
+    end
+  end
+
+  describe "whether this node serves the site" do
+    test "it does once the host's endpoint is set to serve" do
+      refute BootHandler.serving?()
+
+      :ok = serve_the_site(%{})
+      assert BootHandler.serving?()
+    end
+  end
+
+  describe "the boot of a node that serves the site" do
+    setup :serve_the_site
+
+    test "supersedes an older boot's queued and executing jobs" do
+      older = boot_jobs_of(Ecto.UUID.generate())
+
+      assert {:ok, 2} = BootHandler.take_over_compile_jobs()
+      assert states(older) == ["cancelled", "cancelled"]
+    end
+
+    test "queues every open site's bundle, named for itself" do
+      site = cached_site!(active: true)
+
+      :ok = BootHandler.queue_boot_jobs()
+
+      assert [job] = enqueued_asset_jobs(site.name, "asset")
+      assert job.args["boot_id"] == BootHandler.boot_id()
+    end
+
+    test "leaves its bundle queues running" do
+      start_oban!(assets: [limit: 2], sitemaps: [limit: 1])
+
+      assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
+      refute paused?(:assets)
+      refute paused?(:sitemaps)
+    end
+  end
+
+  describe "the boot of a node that does not serve the site" do
+    test "leaves a serving node's queued and executing boot jobs where they are, and queues none" do
+      refute BootHandler.serving?()
+      cached_site!(active: true)
+      serving = boot_jobs_of(Ecto.UUID.generate())
+
+      assert {:ok, 0} = BootHandler.take_over_compile_jobs()
+      assert :ok = BootHandler.queue_boot_jobs()
+
+      assert states(serving) == ["scheduled", "executing"]
+      assert compile_job_ids() == Enum.map(serving, & &1.id)
+    end
+
+    test "pauses its own bundle queues, and no other" do
+      start_oban!(assets: [limit: 2], sitemaps: [limit: 1], default: [limit: 5])
+
+      assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
+      assert paused?(:assets)
+      assert paused?(:sitemaps)
+      refute paused?(:default)
+    end
+
+    test "leaves a node that runs neither bundle queue as it is" do
+      start_oban!(default: [limit: 5])
+
+      assert {:ok, 0} = BootHandler.take_over_compile_jobs(oban: @oban)
+      refute paused?(:default)
+    end
+
+    test "names no instance in a bundle job it queues, so a serving node builds it" do
+      site = cached_site!(active: false)
+
+      args =
+        site.name |> BootHandler.asset_job(site.id, "css") |> Ecto.Changeset.get_change(:args)
+
+      assert Map.fetch(args, :boot_id) == {:ok, nil}
+
+      # A switched-off site's job ends in `:ok` without building anything, so `:ok` says the job
+      # went past the instance rule, and `{:snooze, _}` that it stopped there.
+      :ok = serve_the_site(%{})
+      assert :ok = perform_job(RuntimeCompilerWorker, args)
     end
   end
 
@@ -167,6 +256,78 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
   end
 
   ## helpers
+
+  # A node serves the site when the host's endpoint is set to serve: what `mix phx.server` and a
+  # release's `PHX_SERVER` do. The suite's own endpoint is not, so a test without this runs as a node
+  # that does not.
+  defp serve_the_site(_context) do
+    app = Application.fetch_env!(:mishka_cms_core, :host_app)
+    endpoint = Application.fetch_env!(:mishka_cms_core, :endpoint)
+    conf = Application.get_env(app, endpoint, [])
+
+    Application.put_env(app, endpoint, Keyword.put(conf, :server, true))
+    on_exit(fn -> Application.put_env(app, endpoint, conf) end)
+    :ok
+  end
+
+  defp cached_site!(attrs) do
+    n = System.unique_integer([:positive])
+    site = %{id: Ecto.UUID.generate(), name: "boot-#{n}", host: "boot-#{n}.test", priority: 0}
+
+    :ok = SiteState.save(Map.merge(site, Map.new(attrs)))
+    on_exit(fn -> SiteState.delete(site.id) end)
+    site
+  end
+
+  # One instance's boot bundles as it left them: one still waiting its turn, one being built.
+  defp boot_jobs_of(boot_id) do
+    for {site, state} <- [{"waiting", "scheduled"}, {"building", "executing"}] do
+      {:ok, job} =
+        site
+        |> BootHandler.asset_job("#{site}-id", "asset")
+        |> Ecto.Changeset.update_change(:args, &Map.put(&1, :boot_id, boot_id))
+        |> Oban.insert()
+
+      {:ok, job} = Oban.Repo.update(Oban.config(), Ecto.Changeset.change(job, state: state))
+      job
+    end
+  end
+
+  defp states(jobs), do: Enum.map(jobs, &Oban.Repo.reload(Oban.config(), &1).state)
+
+  defp compile_job_ids do
+    Oban.Repo.all(
+      Oban.config(),
+      from(j in Oban.Job,
+        where: j.worker == ^inspect(RuntimeCompilerWorker),
+        order_by: j.id,
+        select: j.id
+      )
+    )
+  end
+
+  # An Oban of the test's own, whose queues are real ones: the Inline engine fetches no job, and the
+  # Isolated notifier hands a pause straight to the queue, so its state is read back right after.
+  defp start_oban!(queues) do
+    start_supervised!(
+      {Oban,
+       name: @oban,
+       repo: @repo,
+       engine: Oban.Engines.Inline,
+       notifier: Oban.Notifiers.Isolated,
+       peer: false,
+       stager: false,
+       plugins: false,
+       queues: Enum.map(queues, fn {queue, opts} -> {queue, running(opts)} end)},
+      id: @oban
+    )
+  end
+
+  # The Inline engine keeps no defaults of its own, so a queue names its `refresh_interval`, and says
+  # it is running for `paused?/1` to read it back.
+  defp running(opts), do: Keyword.merge([refresh_interval: 60_000, paused: false], opts)
+
+  defp paused?(queue), do: Oban.check_queue(@oban, queue: queue).paused
 
   defp create_hook(name, opts \\ []) do
     ctx = if opts[:defer], do: %{defer_runtime: true}, else: %{}
