@@ -3492,11 +3492,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     name = Node.component_name(node)
     scope = component_site(node, site)
 
-    CompilerHelpers.module_name(name, scope, "Component")
-    |> then(& &1.__component_information__([:private, :stateful]))
-    |> Kernel.==(true)
-  rescue
-    _not_loaded_or_no_such_function -> false
+    module = CompilerHelpers.module_name(name, scope, "Component")
+
+    Code.ensure_loaded?(module) and function_exported?(module, :__component_information__, 1) and
+      module.__component_information__([:private, :stateful]) == true
   end
 
   defp component_assigns(%{node: node, tree: tree, site_scope: site} = assigns) do

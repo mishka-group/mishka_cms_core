@@ -361,9 +361,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   end
 
   defp stateful?(module) do
-    module.__component_information__([:private, :stateful]) == true
-  rescue
-    _no_such_function -> false
+    Code.ensure_loaded?(module) and function_exported?(module, :__component_information__, 1) and
+      module.__component_information__([:private, :stateful]) == true
   end
 
   # A LIVE COMPONENT IS NOTHING WITHOUT AN ID. `Phoenix.LiveView.Diff` raises on one that has none,

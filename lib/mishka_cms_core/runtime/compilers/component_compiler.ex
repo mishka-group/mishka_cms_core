@@ -973,11 +973,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   # Asked of the behaviour rather than listed, so a callback a later LiveView adds is covered.
-  defp lifecycle_callbacks do
-    Phoenix.LiveComponent.behaviour_info(:callbacks)
-  rescue
-    _no_such_behaviour -> [mount: 1, update: 2, update_many: 1, handle_event: 3, handle_async: 3]
-  end
+  defp lifecycle_callbacks, do: Phoenix.LiveComponent.behaviour_info(:callbacks)
 
   defp helper_signature(helper) do
     {head, _guard} = split_args_and_guard(helper_field(helper, :args) || "")
@@ -1273,9 +1269,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   defp stateful_module?(module) do
-    module.__component_information__([:private, :stateful]) == true
-  rescue
-    _no_such_function -> false
+    Code.ensure_loaded?(module) and function_exported?(module, :__component_information__, 1) and
+      module.__component_information__([:private, :stateful]) == true
   end
 
   defp rooted(module) do

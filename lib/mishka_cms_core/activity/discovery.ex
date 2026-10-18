@@ -105,9 +105,12 @@ defmodule MishkaCmsCore.Activity.Discovery do
   end
 
   defp version_resource(resource) do
-    AshPaperTrail.Resource.Info.version_resource(resource)
-  rescue
-    _ -> nil
+    with true <- Ash.Resource.Info.resource?(resource),
+         true <- AshPaperTrail.Resource in Spark.extensions(resource) do
+      AshPaperTrail.Resource.Info.version_resource(resource)
+    else
+      _not_versioned -> nil
+    end
   end
 
   defp memo(key, compute) do

@@ -577,12 +577,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.HtmlTokenizer do
   defp count_newlines_after_text(binary),
     do: count_newlines_until_text(binary, 0, byte_size(binary) - 1, -1)
 
+  defp count_newlines_until_text(binary, counter, pos, _inc)
+       when pos < 0 or pos >= byte_size(binary),
+       do: counter
+
   defp count_newlines_until_text(binary, counter, pos, inc) do
-    try do
-      :binary.at(binary, pos)
-    rescue
-      _ -> counter
-    else
+    case :binary.at(binary, pos) do
       char when char in [?\s, ?\t] -> count_newlines_until_text(binary, counter, pos + inc, inc)
       ?\n -> count_newlines_until_text(binary, counter + 1, pos + inc, inc)
       _ -> counter
