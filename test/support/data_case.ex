@@ -169,6 +169,47 @@ defmodule MishkaCmsCore.DataCase do
   end
 
   @doc """
+  Makes this node one that serves the site (`MishkaCmsCore.Runtime.Handlers.BootHandler.serving?/0`)
+  until the test ends, by setting the host's endpoint to serve — what `mix phx.server` and a
+  release's `PHX_SERVER` do. The suite's endpoint does not serve, so a test without it runs as a node
+  that does not. Only for a test that is not async: the setting is the node's.
+
+      setup :serve_the_site
+  """
+  @spec serve_the_site(map()) :: :ok
+  def serve_the_site(_context) do
+    app = Application.fetch_env!(:mishka_cms_core, :host_app)
+    endpoint = Application.fetch_env!(:mishka_cms_core, :endpoint)
+    config = Application.get_env(app, endpoint, [])
+
+    Application.put_env(app, endpoint, Keyword.put(config, :server, true))
+    ExUnit.Callbacks.on_exit(fn -> Application.put_env(app, endpoint, config) end)
+    :ok
+  end
+
+  @doc """
+  Sends the test `{:signal, payload}` for every Oban queue signal — a pause, resume, scale, start or
+  stop — sent from then on until it ends, by any Oban instance on the node.
+  """
+  @spec watch_queue_signals() :: :ok
+  def watch_queue_signals do
+    test = self()
+    handler = "queue-signals-#{System.unique_integer([:positive])}"
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:oban, :notifier, :notify, :start],
+        fn _event, _measure, meta, _config ->
+          if meta.channel == :signal, do: send(test, {:signal, meta.payload})
+        end,
+        nil
+      )
+
+    ExUnit.Callbacks.on_exit(fn -> :telemetry.detach(handler) end)
+  end
+
+  @doc """
   Turns changeset errors into a map of field to messages.
 
       assert %{password: ["password is too short"]} = errors_on(changeset)

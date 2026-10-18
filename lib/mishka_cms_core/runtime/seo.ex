@@ -58,7 +58,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `/…` path stays a path, so the browser asks the host it is on. A site whose `site.app_icon` or
   `site.favicon` is a picture of its own also gets `<link rel="apple-touch-icon" sizes="180x180">`
   and `<link rel="manifest" href="/site.webmanifest">` (`MishkaCmsCore.Runtime.SiteIcon`), both on
-  the host too.
+  the host too. A site that set its `site.theme_color` gets `<meta name="theme-color">` with it
+  (`MishkaCmsCore.Runtime.SiteIcon.theme_color/1`), icons or not.
 
   ## Layers
 
@@ -438,6 +439,12 @@ defmodule MishkaCmsCore.Runtime.Seo do
         help:
           gettext(
             "What a browser installs the site with: its name and icons. The site's own /site.webmanifest by default, when it has an icon."
+          )
+      ),
+      entry("theme-color", "meta", %{"name" => "theme-color"}, gettext("Theme color"),
+        help:
+          gettext(
+            "The color of the browser's toolbar on phones for this page, as #rrggbb. The site's Theme color setting by default, when it has one."
           )
       ),
       entry("alternate", "link", %{"rel" => "alternate"}, gettext("Language version"),
@@ -1300,6 +1307,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       link(%{"rel" => "icon"}, favicon(seo.site_id)),
       link(%{"rel" => "apple-touch-icon", "sizes" => "180x180"}, SiteIcon.url(seo.site_id, 180)),
       link(%{"rel" => "manifest"}, SiteIcon.manifest_url(seo.site_id)),
+      meta("name", "theme-color", SiteIcon.theme_color(seo.site_id)),
       alternate_links(languages, base, seo.site_id)
     ])
   end

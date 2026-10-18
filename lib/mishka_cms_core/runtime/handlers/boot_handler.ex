@@ -35,6 +35,16 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
   Once they are done, every open site's sitemap is built on this node (`build_sitemaps/0`).
 
+  ## A node that does not serve the site
+
+  Every node that starts the application boots, and only one whose endpoint serves the site
+  (`serving?/0`) touches the compile jobs the nodes share: it cancels the ones a previous run left
+  (`take_over_compile_jobs/1`) and queues its sites' CSS/JS bundles (`queue_boot_jobs/0`). A
+  standalone node — a `mix run` script, a release's `eval`, `iex -S mix` — compiles its own sites,
+  pages and sitemaps as every node does, cancels no job and queues no bundle. It runs no job queue
+  either when the host starts Oban with `oban_config/1`, so every job it inserts is the serving
+  node's to run.
+
   ## Architecture Integration
 
   The BootHandler integrates with several MishkaCms subsystems:
@@ -169,8 +179,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   ####################################################################################
   @doc """
   When this node started — the moment every compile job created before it stopped describing
-  anything: the boot cancels those still pending (`cancel_leftover_jobs/0`) and compiles from the
-  database itself, without a job.
+  anything: a serving node's boot cancels those still pending (`take_over_compile_jobs/1`) and
+  compiles from the database itself, without a job.
   """
   @spec booted_at() :: DateTime.t()
   def booted_at do
@@ -184,11 +194,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   This running instance's own id, made when `:mishka_cms_core` starts (`new_boot_id/0`) and `nil`
   before then.
 
-  Every bundle job carries it (`asset_job/4`), and `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker`
-  builds the job on the instance it names: the CSS, JS and sitemap a bundle job builds go into that
-  instance's own `MishkaCmsCore.Runtime.States.AssetsState`. A deploy that starts the next instance
-  beside the old one gives both the same `node()` and the same Oban queue; this id is what tells them
-  apart.
+  Every bundle job a serving instance (`serving?/0`) queues carries it (`asset_job/4`), and
+  `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` builds the job on the instance it names: the
+  CSS, JS and sitemap a bundle job builds go into that instance's own
+  `MishkaCmsCore.Runtime.States.AssetsState`. A deploy that starts the next instance beside the old
+  one gives both the same `node()` and the same Oban queue; this id is what tells them apart. A
+  standalone node's bundle job names no instance, and a serving one builds it.
   """
   @spec boot_id() :: String.t() | nil
   def boot_id, do: :persistent_term.get(@boot_id_key, nil)
@@ -200,16 +211,98 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   def new_boot_id, do: :persistent_term.put(@boot_id_key, Ecto.UUID.generate())
 
   @doc """
+  Whether this node serves the site: the host's endpoint (`config :mishka_cms_core, endpoint:`, in
+  the `host_app:` it names) is set to serve, as `Phoenix.Endpoint.server?/2` reads it — `mix
+  phx.server`, or `server: true`, which a release's `PHX_SERVER` sets. A node that does not is
+  standalone: a `mix run` script, a release's `eval`, `iex -S mix`, a test run, and a node whose app
+  names no endpoint.
+  """
+  @spec serving?() :: boolean()
+  def serving? do
+    with {:ok, host_app} <- Application.fetch_env(:mishka_cms_core, :host_app),
+         {:ok, endpoint} <- Application.fetch_env(:mishka_cms_core, :endpoint) do
+      Phoenix.Endpoint.server?(host_app, endpoint)
+    else
+      :error -> false
+    end
+  end
+
+  @doc """
+  What a boot does to the compile jobs already queued, before it compiles anything.
+
+  A serving node (`serving?/0`) cancels every one a previous run left (`cancel_leftover_jobs/1`) and
+  builds what they would have from the database, so a new instance supersedes the one it replaces. A
+  standalone node cancels none, because the jobs it finds are the serving node's, and sends no queue
+  signal: Oban addresses even a `local_only` one by the node's Oban name, which every BEAM on one
+  machine shares, and so does every instance of a deploy. It says so in the log when it runs a queue
+  anyway, which `oban_config/1` is the way to stop. Returns how many were cancelled.
+
+  Options: `:oban`, the Oban instance, `Oban` by default.
+  """
+  @spec take_over_compile_jobs(keyword()) :: {:ok, non_neg_integer()}
+  def take_over_compile_jobs(opts \\ []) do
+    oban = Keyword.get(opts, :oban, Oban)
+
+    if serving?() do
+      cancel_leftover_jobs(oban)
+    else
+      Logger.info(
+        "[BootHandler] This node does not serve the site: it leaves the compile jobs to the node that does, and builds no site's CSS/JS bundle."
+      )
+
+      if Oban.whereis(oban) && Oban.check_all_queues(oban) != [],
+        do:
+          Logger.warning(
+            "[BootHandler] This node does not serve the site but runs Oban queues, so it can take the serving node's jobs. Start Oban with `MishkaCmsCore.Runtime.Handlers.BootHandler.oban_config/1`."
+          )
+
+      {:ok, 0}
+    end
+  end
+
+  @doc """
+  The Oban config to start this node with: `config` as it is on a node that serves the site
+  (`serving?/0`), and with no queue on one that does not. A `mix run` script, a release's `eval` or
+  `iex -S mix` then runs none of the jobs the serving node is there to run: a page compile built into
+  its own memory, a stylesheet into its own `AssetsState`, a share card drawn on it. A job it inserts
+  still lands in the table they share, and a serving node takes it.
+
+  The host wraps what it starts Oban with, after anything that reads its queues, such as
+  `AshOban.config/2`:
+
+      {Oban, BootHandler.oban_config(AshOban.config(domains, Application.fetch_env!(:my_app, Oban)))}
+
+  A queue signal cannot do this once Oban runs: even a `local_only` one is addressed to the node's
+  Oban name, and the serving node carries the same one — every BEAM on one machine does, and every
+  instance of a deploy whose release names its node the same.
+  """
+  @spec oban_config(keyword()) :: keyword()
+  def oban_config(config) when is_list(config) do
+    if serving?(), do: config, else: Keyword.put(config, :queues, [])
+  end
+
+  @doc """
   Cancels every runtime compile job a previous run left pending or executing, in whichever queue it
   was put — the boot rebuilds what they would have. Other workers' jobs (mail, notifications) are
-  left to `Oban.Lifeline`.
+  left to `Oban.Lifeline`. Takes the Oban instance, `Oban` by default.
   """
-  @spec cancel_leftover_jobs() :: {:ok, non_neg_integer()}
-  def cancel_leftover_jobs do
-    Oban.Job
-    |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
-    |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
-    |> Oban.cancel_all_jobs()
+  @spec cancel_leftover_jobs(Oban.name()) :: {:ok, non_neg_integer()}
+  def cancel_leftover_jobs(oban \\ Oban) do
+    query =
+      Oban.Job
+      |> where([j], j.state in ["available", "scheduled", "retryable", "executing"])
+      |> where(worker: "MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker")
+
+    Oban.cancel_all_jobs(oban, query)
+  end
+
+  @doc """
+  Queues every open site's CSS/JS bundle job at the end of a serving node's boot
+  (`create_assets_compilation_jobs/0`), and none on a standalone one (`serving?/0`).
+  """
+  @spec queue_boot_jobs() :: :ok | {:error, term()}
+  def queue_boot_jobs do
+    if serving?(), do: create_assets_compilation_jobs(), else: :ok
   end
 
   @doc """
@@ -229,7 +322,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   def handle_continue(:boot, state) do
     Logger.info("[BootHandler] Starting boot process...")
 
-    _ = cancel_leftover_jobs()
+    _ = take_over_compile_jobs()
 
     if Oban.config().testing == :disabled and not lifeline?(),
       do:
@@ -305,7 +398,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       end)
 
     _ = TailwindCompiler.compile_and_store_shared_base()
-    _ = create_assets_compilation_jobs()
+    _ = queue_boot_jobs()
 
     # AFTER `load_sites`, the only pass that fills `SiteState`, and here rather than in a job so
     # every node fills its own cache.
@@ -319,9 +412,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     boot_time = System.monotonic_time(:millisecond) - boot_start
     site_count = MishkaCmsCore.Runtime.States.SiteState.count()
 
-    Logger.info(
-      "[BootHandler] #{site_count} sites queued for CSS/JS compilation in #{boot_time}ms"
-    )
+    Logger.info("[BootHandler] #{site_count} sites booted in #{boot_time}ms")
 
     failed_names = Enum.map(failed, fn {name, _} -> name end) ++ toolchain
 
@@ -1128,6 +1219,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       %{
         resource: "MishkaCmsCore.Runtime.Handlers.BootHandler",
         action: "boot_handler",
+        # `nil` on a node that does not serve the site
         boot_id: BootHandler.boot_id(),
         data: %{site_name: "example_site", site_id: "<uuid>", type: "asset"}
       }
@@ -1216,8 +1308,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   # burst, each insert moving a pending one later; `replace: []` leaves it where it is instead, and
   # `states:` widens which jobs already there count). `site_id` lives in `data` so the Oban→PubSub
   # bridge broadcasts on the per-site topic, letting that site's admins see the rebuild live.
-  # `boot_id` names the instance that inserted it, which is the one `RuntimeCompilerWorker` builds it
-  # on, and is part of the unique args, so a job one instance inserts never merges into another's.
+  # `boot_id` names the serving instance that inserted it, which is the one `RuntimeCompilerWorker`
+  # builds it on, and is part of the unique args, so a job one instance inserts never merges into
+  # another's. A standalone node's names none, so a serving node builds it rather than waiting out
+  # the worker's claim window for a node that runs no queue (`oban_config/1`).
   # `Oban.insert/1` (not insert_all) is required for uniqueness on the Basic engine.
   @doc false
   def asset_job(site_name, site_id, type, opts \\ []) do
@@ -1227,7 +1321,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       %{
         resource: "MishkaCmsCore.Runtime.Handlers.BootHandler",
         action: "boot_handler",
-        boot_id: boot_id(),
+        boot_id: if(serving?(), do: boot_id()),
         data: %{site_name: site_name, site_id: site_id, type: type}
       },
       queue: rules.queue,

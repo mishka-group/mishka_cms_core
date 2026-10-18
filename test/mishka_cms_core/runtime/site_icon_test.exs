@@ -177,6 +177,126 @@ defmodule MishkaCmsCore.Runtime.SiteIconTest do
     end
   end
 
+  describe "the app settings" do
+    test "short_name/1, theme_color/1 and background_color/1 read the site's own, else nil", %{
+      site: site
+    } do
+      other = create_site!(active: true)
+      on_exit(fn -> SiteIcon.forget(other.id) end)
+
+      for read <- [&SiteIcon.short_name/1, &SiteIcon.theme_color/1, &SiteIcon.background_color/1],
+          do: assert(read.(site.id) == nil)
+
+      {:ok, _} = Settings.put("site.app_short_name", "  Acme ", site_id: site.id)
+      {:ok, _} = Settings.put("site.theme_color", "#0b0a14", site_id: site.id)
+      {:ok, _} = Settings.put("site.background_color", "#abc", site_id: site.id)
+
+      assert SiteIcon.short_name(site.id) == "Acme"
+      assert SiteIcon.theme_color(site.id) == "#0b0a14"
+      assert SiteIcon.background_color(site.id) == "#abc"
+
+      assert SiteIcon.short_name(other.id) == nil
+      assert SiteIcon.theme_color(other.id) == nil
+      assert SiteIcon.background_color(other.id) == nil
+    end
+
+    test "an empty or blank value is none, and a color that is not a hex color is none", %{
+      site: site
+    } do
+      for blank <- ["", "   "] do
+        {:ok, _} = Settings.put("site.app_short_name", blank, site_id: site.id)
+        assert SiteIcon.short_name(site.id) == nil
+      end
+
+      for refused <- ["", "red", "#12", "#1234567", " #abc", "#abc\"><b>"] do
+        {:ok, _} = Settings.put("site.theme_color", refused, site_id: site.id)
+        {:ok, _} = Settings.put("site.background_color", refused, site_id: site.id)
+        assert SiteIcon.theme_color(site.id) == nil, inspect(refused)
+        assert SiteIcon.background_color(site.id) == nil, inspect(refused)
+      end
+    end
+
+    test "color?/1 takes #rgb and #rrggbb in either case, and nothing else" do
+      for color <- ["#abc", "#ABC", "#0b0a14", "#0B0A14", "#000", "#fFf"],
+          do: assert(SiteIcon.color?(color), color)
+
+      for refused <- ["", "#", "red", "#12", "#1234", "#12345", "#1234567", "#ggg", "abc", nil, 5],
+          do: refute(SiteIcon.color?(refused), inspect(refused))
+
+      assert SiteIcon.color_or_empty?("")
+      assert SiteIcon.color_or_empty?("#abc")
+      refute SiteIcon.color_or_empty?("red")
+    end
+
+    test "short_name?/1 counts characters up to the most a name may have" do
+      assert SiteIcon.short_name_max() == 30
+      assert SiteIcon.short_name?(String.duplicate("م", 30))
+      refute SiteIcon.short_name?(String.duplicate("م", 31))
+      refute SiteIcon.short_name?(nil)
+    end
+  end
+
+  describe "a page's theme color" do
+    test "is in the head only while the site has one, icons or not, and follows the setting", %{
+      site: site,
+      dir: dir
+    } do
+      assert meta(Seo.head(seo(site), base: @base), "theme-color") == nil
+
+      {:ok, _} = Settings.put("site.theme_color", "#0b0a14", site_id: site.id)
+      head = Seo.head(seo(site), base: @base)
+      assert meta(head, "theme-color") == "#0b0a14"
+      assert link(head, "manifest") == nil
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.png", png(512, 512)),
+          site_id: site.id
+        )
+
+      head = Seo.head(seo(site), base: @base)
+      assert meta(head, "theme-color") == "#0b0a14"
+      assert link(head, "manifest") == "/site.webmanifest"
+
+      # Saved again, it reads as saved on the next page: nothing is restarted or forgotten.
+      {:ok, _} = Settings.put("site.theme_color", "#fff", site_id: site.id)
+      assert meta(Seo.head(seo(site), base: @base), "theme-color") == "#fff"
+
+      {:ok, _} = Settings.put("site.theme_color", "", site_id: site.id)
+      assert meta(Seo.head(seo(site), base: @base), "theme-color") == nil
+      assert link(Seo.head(seo(site), base: @base), "manifest") == "/site.webmanifest"
+    end
+
+    test "is left out when what is saved is no hex color", %{site: site} do
+      for refused <- ["red", "#12", "#abc\"><script>"] do
+        {:ok, _} = Settings.put("site.theme_color", refused, site_id: site.id)
+        assert meta(Seo.head(seo(site), base: @base), "theme-color") == nil, refused
+      end
+    end
+
+    test "is each site's own", %{site: site} do
+      other = create_site!(active: true)
+
+      {:ok, _} = Settings.put("site.theme_color", "#111111", site_id: site.id)
+      {:ok, _} = Settings.put("site.theme_color", "#222222", site_id: other.id)
+
+      assert meta(Seo.head(seo(site), base: @base), "theme-color") == "#111111"
+      assert meta(Seo.head(seo(other), base: @base), "theme-color") == "#222222"
+      assert meta(Seo.head(seo(create_site!(active: true)), base: @base), "theme-color") == nil
+    end
+
+    test "is named in the catalog as a default, and a page's own tag replaces it", %{site: site} do
+      assert %{attrs: %{"name" => "theme-color"}, tag: "meta", default?: true} =
+               Enum.find(Seo.catalog(), &(&1.id == "theme-color"))
+
+      {:ok, _} = Settings.put("site.theme_color", "#0b0a14", site_id: site.id)
+      own = [Seo.stored_tag("meta", %{"name" => "theme-color"}, "#ff0000")]
+
+      head = Seo.head(seo(site), base: @base, layers: [own])
+      assert meta(head, "theme-color") == "#ff0000"
+      assert Enum.count(head.tags, &(meta_name(&1) == "theme-color")) == 1
+    end
+  end
+
   describe "file/2" do
     test "draws every size at once, the first time one is asked for, and announces it", %{
       site: site,
@@ -314,6 +434,18 @@ defmodule MishkaCmsCore.Runtime.SiteIconTest do
   end
 
   defp rel({"link", attrs}), do: attrs |> List.keyfind("rel", 0) |> elem(1)
+
+  defp meta_name({"meta", attrs}),
+    do: List.keyfind(attrs, "name", 0) |> then(&(&1 && elem(&1, 1)))
+
+  defp meta_name(_other), do: nil
+
+  defp meta(head, name) do
+    Enum.find_value(head.tags, fn
+      {"meta", attrs} -> {"name", name} in attrs && List.keyfind(attrs, "content", 0) |> elem(1)
+      _other -> nil
+    end)
+  end
 
   defp link(head, rel) do
     Enum.find_value(head.tags, fn

@@ -112,6 +112,8 @@ defmodule MishkaCmsCore.Runtime.ShareCardQueueTest do
   end
 
   describe "boot/1" do
+    setup :serve_the_site
+
     test "starts the queue with the stored number" do
       {:ok, 3} = Settings.put(@key, 3)
 
@@ -143,6 +145,18 @@ defmodule MishkaCmsCore.Runtime.ShareCardQueueTest do
         end)
 
       assert log =~ "share_cards: [limit: 1, paused: true]"
+    end
+  end
+
+  describe "boot/1 on a node that does not serve the site" do
+    test "leaves the queue paused and sends no signal, whatever the stored number" do
+      refute MishkaCmsCore.Runtime.Handlers.BootHandler.serving?()
+      {:ok, 3} = Settings.put(@key, 3)
+      watch_queue_signals()
+
+      assert :ok = ShareCardQueue.boot(oban: @oban)
+      assert queue() == %{limit: 1, paused: true}
+      refute_received {:signal, _payload}
     end
   end
 

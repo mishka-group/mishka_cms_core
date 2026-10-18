@@ -14,7 +14,12 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
-  alias MishkaCmsCore.Test.Plugins.{GatedSettingsProvider, ValidatedSettingsProvider}
+  alias MishkaCmsCore.Test.Plugins.{
+    CollapsedSettingsProvider,
+    GatedSettingsProvider,
+    ValidatedSettingsProvider
+  }
+
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
@@ -1335,6 +1340,513 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
 
       refute has_element?(view, "#flash-error")
       assert closed_here?(site)
+    end
+  end
+
+  # Where the ids stand in the page, in the order they are drawn: a test says the order it expects
+  # and gets the order it found.
+  defp in_page_order(view, ids) do
+    html = render(view)
+
+    Enum.sort_by(ids, fn id ->
+      {at, _length} = :binary.match(html, ~s(id="#{id}"))
+      at
+    end)
+  end
+
+  # THE OPTIONAL APP SETTINGS SIT IN A CLOSED ACCORDION: Favicon and App icon for any view, the short
+  # name and the colors for a site's. It is drawn closed whatever its fields hold, right under Site
+  # logo, and opens by itself only for a value the last save refused. Its fields stay in the form
+  # either way.
+  describe "the App & home screen section" do
+    @group "[data-role=settings-group]"
+    @global "#settings-group-app-home-screen-global"
+    @fields ~w(site.app_short_name site.theme_color site.background_color)
+    @inside ~w(site-favicon site-app_icon site-app_short_name site-theme_color site-background_color)
+
+    defp section(site), do: "#settings-group-app-home-screen-#{site.id}"
+
+    defp site_view(conn, site) do
+      {:ok, view, _html} = live(conn, @path <> "?tab=general")
+      view |> form("#scope-form") |> render_change(%{"scope" => site.id})
+      view
+    end
+
+    test "is a closed accordion holding Favicon, App icon, Short name and the two colors", %{
+      conn: conn,
+      site: site
+    } do
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+
+      assert has_element?(view, "#{section(site)}#{@group} > summary", "App & home screen")
+      refute has_element?(view, "#{section(site)}[open]")
+
+      # Closed, its fields are still in the form, so one typed after opening is submitted.
+      for key <- @inside do
+        assert has_element?(view, "#{section(site)} #set-#{key}")
+      end
+
+      ids = Enum.map(@inside, &"set-#{&1}")
+      assert in_page_order(view, Enum.reverse(ids)) == ids
+
+      assert render(element(view, section(site))) =~ "phx-mounted"
+    end
+
+    test "is in the Global view too, holding Favicon and App icon alone", %{conn: conn} do
+      {:ok, view, _html} =
+        conn |> log_in(create_admin("boss@example.com", nil)) |> live(@path <> "?tab=general")
+
+      assert has_element?(view, "#{@global}#{@group} > summary", "App & home screen")
+      refute has_element?(view, "#{@global}[open]")
+
+      fields =
+        view
+        |> render()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query("#{@global} [id^=set-]")
+        |> Enum.flat_map(&LazyHTML.attribute(&1, "id"))
+
+      assert fields == ["set-site-favicon", "set-site-app_icon"]
+
+      for key <- ~w(site-app_short_name site-theme_color site-background_color) do
+        refute has_element?(view, "#set-#{key}")
+      end
+    end
+
+    test "stands right under Site logo and before the languages, in a site's view and Global's",
+         %{conn: conn, site: site} do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+
+      {:ok, global, _html} = live(conn, @path <> "?tab=general")
+
+      expected = ~w(settings-ungrouped set-site-title set-site-logo
+          settings-group-app-home-screen-global set-site-favicon set-site-app_icon
+          settings-ungrouped-2 set-site-languages set-cms-offline)
+
+      assert in_page_order(global, Enum.reverse(expected)) == expected
+      assert has_element?(global, "#settings-ungrouped #set-site-logo")
+      assert has_element?(global, "#settings-ungrouped-2 #set-site-languages")
+      refute has_element?(global, "#settings-ungrouped-3")
+
+      view = site_view(conn, site)
+
+      expected = ~w(settings-ungrouped set-site-title set-site-logo
+          settings-group-app-home-screen-#{site.id} set-site-favicon set-site-app_icon
+          set-site-app_short_name set-site-theme_color set-site-background_color
+          settings-ungrouped-2 set-site-languages set-cms-offline)
+
+      assert in_page_order(view, Enum.reverse(expected)) == expected
+      assert has_element?(view, "#settings-ungrouped #set-site-logo")
+      refute has_element?(view, "#settings-ungrouped #set-site-favicon")
+      assert has_element?(view, "#settings-ungrouped-2 #set-site-languages")
+      refute has_element?(view, "#settings-ungrouped-3")
+    end
+
+    test "stays closed while its fields hold values, which are still in the fields", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+
+      values = [
+        {"site.favicon", "/uploads/brand/favicon.svg"},
+        {"site.app_icon", "https://example.test/app-icon.png"},
+        {"site.app_short_name", "Mishka"},
+        {"site.theme_color", "#07070d"},
+        {"site.background_color", "#fff"}
+      ]
+
+      for {key, value} <- values do
+        for {other, _value} <- values, do: {:ok, _} = Settings.put(other, "", site_id: site.id)
+        {:ok, _} = Settings.put(key, value, site_id: site.id)
+
+        view = site_view(conn, site)
+        refute has_element?(view, "#{section(site)}[open]"), key
+
+        assert has_element?(
+                 view,
+                 ~s(#{section(site)} #set-#{String.replace(key, ".", "-")}[value="#{value}"])
+               )
+      end
+
+      for {key, value} <- values, do: {:ok, _} = Settings.put(key, value, site_id: site.id)
+      view = site_view(conn, site)
+      refute has_element?(view, "#{section(site)}[open]")
+
+      {:ok, _} = Settings.put("site.favicon", "/uploads/brand/global.svg")
+      {:ok, global, _html} = live(conn, @path <> "?tab=general")
+      refute has_element?(global, "#{@global}[open]")
+
+      assert has_element?(
+               global,
+               ~s(#{@global} #set-site-favicon[value="/uploads/brand/global.svg"])
+             )
+    end
+
+    test "is drawn closed for the site in view, each its own", %{conn: conn, site: site} do
+      other = create_site!(name: "other.test", host: "other.test", active: true)
+      cache_site(other)
+      {:ok, _} = Settings.put("site.theme_color", "#07070d", site_id: site.id)
+
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+      assert has_element?(view, "#{section(site)}#{@group}")
+      refute has_element?(view, "#{section(site)}[open]")
+
+      view |> form("#scope-form") |> render_change(%{"scope" => other.id})
+      assert has_element?(view, "#{section(other)}#{@group}")
+      refute has_element?(view, "#{section(other)}[open]")
+      refute has_element?(view, section(site))
+
+      view |> form("#scope-form") |> render_change(%{"scope" => site.id})
+      assert has_element?(view, "#{section(site)}#{@group}")
+      refute has_element?(view, "#{section(site)}[open]")
+      assert has_element?(view, ~s(#set-site-theme_color[value="#07070d"]))
+    end
+
+    test "saves a short name and two colors for the site in view, trimmed, and not for Global", %{
+      conn: conn,
+      site: site
+    } do
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+
+      view
+      |> form("#settings-form",
+        settings: %{
+          "site.app_short_name" => "  Mishka ",
+          "site.theme_color" => " #07070d ",
+          "site.background_color" => "#ABC"
+        }
+      )
+      |> render_submit()
+
+      assert has_element?(view, "#flash-info")
+      assert Settings.get("site.app_short_name", nil, site.id) == "Mishka"
+      assert Settings.get("site.theme_color", nil, site.id) == "#07070d"
+      assert Settings.get("site.background_color", nil, site.id) == "#ABC"
+      assert Settings.get("site.theme_color") == nil
+
+      refute has_element?(view, "#{section(site)}[open]")
+      assert has_element?(view, ~s(#{section(site)} #set-site-theme_color[value="#07070d"]))
+      refute has_element?(view, "#{section(site)} [data-role=field-error]")
+
+      view
+      |> form("#settings-form",
+        settings: %{
+          "site.app_short_name" => "",
+          "site.theme_color" => "",
+          "site.background_color" => ""
+        }
+      )
+      |> render_submit()
+
+      for key <- @fields, do: assert(Settings.get(key, nil, site.id) == "")
+      refute has_element?(view, "#{section(site)}[open]")
+    end
+
+    test "saves a Favicon and an App icon, for the site in view and for Global", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      view = site_view(conn, site)
+
+      view
+      |> form("#settings-form",
+        settings: %{
+          "site.favicon" => "/uploads/brand/favicon.svg",
+          "site.app_icon" => "https://example.test/app-icon.png"
+        }
+      )
+      |> render_submit()
+
+      assert has_element?(view, "#flash-info")
+      assert Settings.get("site.favicon", nil, site.id) == "/uploads/brand/favicon.svg"
+      assert Settings.get("site.app_icon", nil, site.id) == "https://example.test/app-icon.png"
+      refute has_element?(view, "#{section(site)}[open]")
+
+      {:ok, global, _html} = live(conn, @path <> "?tab=general")
+
+      global
+      |> form("#settings-form", settings: %{"site.favicon" => "/uploads/brand/global.svg"})
+      |> render_submit()
+
+      assert Settings.get("site.favicon") == "/uploads/brand/global.svg"
+      refute has_element?(global, "#{@global}[open]")
+    end
+
+    test "refuses a color that is not #rgb or #rrggbb, says so under the field and opens", %{
+      conn: conn,
+      site: site
+    } do
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+      colors = ~w(site.theme_color site.background_color)
+
+      # The form sends every field it holds, so the other color is sent empty each time.
+      submit = fn key, value ->
+        typed = Map.new(colors, &{&1, if(&1 == key, do: value, else: "")})
+        view |> form("#settings-form", settings: typed) |> render_submit()
+      end
+
+      for key <- colors, refused <- ["red", "#12", "#1234567", "07070d"] do
+        field = String.replace(key, ".", "-")
+        submit.(key, refused)
+
+        assert has_element?(view, "#flash-error"), "#{key} #{refused}"
+        assert has_element?(view, "#error-#{field}[data-role=field-error]")
+        assert has_element?(view, "#{section(site)}[open]")
+        assert has_element?(view, ~s(#set-#{field}[value="#{refused}"]))
+        assert Settings.get(key, nil, site.id) == nil
+      end
+
+      for key <- colors, accepted <- ["#abc", "#0b0a14"] do
+        submit.(key, accepted)
+
+        assert has_element?(view, "#flash-info"), "#{key} #{accepted}"
+        refute has_element?(view, "#error-#{String.replace(key, ".", "-")}")
+        refute has_element?(view, "#{section(site)}[open]")
+        assert Settings.get(key, nil, site.id) == accepted
+      end
+    end
+
+    test "refuses an address that is neither a path nor a web address and opens, in any view", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      view = site_view(conn, site)
+
+      for field <- ~w(site.favicon site.app_icon) do
+        view
+        |> form("#settings-form", settings: %{field => "javascript:alert(1)"})
+        |> render_submit()
+
+        key = String.replace(field, ".", "-")
+        assert has_element?(view, "#error-#{key}[data-role=field-error]"), field
+        assert has_element?(view, "#{section(site)}[open]"), field
+        assert Settings.get(field, nil, site.id) in [nil, ""]
+
+        view |> form("#settings-form", settings: %{field => ""}) |> render_submit()
+        refute has_element?(view, "#error-#{key}"), field
+        refute has_element?(view, "#{section(site)}[open]"), field
+      end
+
+      {:ok, global, _html} = live(conn, @path <> "?tab=general")
+
+      global
+      |> form("#settings-form", settings: %{"site.favicon" => "javascript:alert(1)"})
+      |> render_submit()
+
+      assert has_element?(global, "#error-site-favicon[data-role=field-error]")
+      assert has_element?(global, "#{@global}[open]")
+    end
+
+    test "refuses a short name over 30 characters, and takes one of 30", %{
+      conn: conn,
+      site: site
+    } do
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+      thirty = String.duplicate("م", 30)
+
+      view
+      |> form("#settings-form", settings: %{"site.app_short_name" => thirty <> "م"})
+      |> render_submit()
+
+      assert has_element?(view, "#error-site-app_short_name")
+      assert has_element?(view, "#{section(site)}[open]")
+      assert Settings.get("site.app_short_name", nil, site.id) == nil
+
+      view
+      |> form("#settings-form", settings: %{"site.app_short_name" => thirty})
+      |> render_submit()
+
+      refute has_element?(view, "#error-site-app_short_name")
+      refute has_element?(view, "#{section(site)}[open]")
+      assert Settings.get("site.app_short_name", nil, site.id) == thirty
+    end
+
+    test "takes a refused value's message away when the field is edited again", %{
+      conn: conn,
+      site: site
+    } do
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+
+      view |> form("#settings-form", settings: %{"site.theme_color" => "red"}) |> render_submit()
+      assert has_element?(view, "#error-site-theme_color")
+
+      view |> form("#settings-form", settings: %{"site.theme_color" => "#ff"}) |> render_change()
+      refute has_element?(view, "#error-site-theme_color")
+    end
+
+    test "says a refused value under any tab's field, not just this section's", %{
+      conn: conn,
+      site: site
+    } do
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+
+      view
+      |> form("#settings-form", settings: %{"site.languages" => "English"})
+      |> render_submit()
+
+      assert has_element?(view, "#error-site-languages[data-role=field-error]")
+      refute has_element?(view, "#error-site-title")
+      refute has_element?(view, "#{section(site)}[open]")
+    end
+
+    test "is the tenant admin's too, on their own site", %{conn: conn, site: site} do
+      conn = log_in(conn, create_admin("tenant.admin@example.com", site.id), false)
+      {:ok, view, _html} = live(conn, @path <> "?tab=general")
+
+      assert has_element?(view, "#{section(site)}#{@group}")
+      refute has_element?(view, "#{section(site)}[open]")
+
+      view
+      |> form("#settings-form", settings: %{"site.theme_color" => "#07070d"})
+      |> render_submit()
+
+      assert Settings.get("site.theme_color", nil, site.id) == "#07070d"
+      refute has_element?(view, "#{section(site)}[open]")
+      assert has_element?(view, ~s(#{section(site)} #set-site-theme_color[value="#07070d"]))
+    end
+
+    test "a saved color is what the site's pages and manifest say next, with no restart", %{
+      conn: conn,
+      site: site
+    } do
+      alias MishkaCmsCore.Runtime.SiteIcon
+
+      view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
+      assert SiteIcon.theme_color(site.id) == nil
+
+      view
+      |> form("#settings-form",
+        settings: %{"site.theme_color" => "#07070d", "site.app_short_name" => "Mishka"}
+      )
+      |> render_submit()
+
+      assert SiteIcon.theme_color(site.id) == "#07070d"
+      assert SiteIcon.short_name(site.id) == "Mishka"
+
+      view |> form("#settings-form", settings: %{"site.theme_color" => ""}) |> render_submit()
+      assert SiteIcon.theme_color(site.id) == nil
+      assert SiteIcon.short_name(site.id) == "Mishka"
+    end
+  end
+
+  # AN ACCORDION IS A GROUP'S, FOR ANY TAB: closed whatever its settings hold, opened by a refused
+  # value alone. The tab's sections stand in the order its settings are declared.
+  describe "a collapsed group of another tab" do
+    setup do
+      Application.put_env(:mishka_cms_core, :settings_providers, [CollapsedSettingsProvider])
+      Settings.load_definitions()
+      on_exit(fn -> Application.put_env(:mishka_cms_core, :settings_providers, []) end)
+      :ok
+    end
+
+    defp tuning_view(conn) do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      {:ok, view, _html} = live(conn, @path <> "?tab=#{CollapsedSettingsProvider.category()}")
+      view
+    end
+
+    test "is closed while every setting holds its default, even a default that is not empty", %{
+      conn: conn
+    } do
+      view = tuning_view(conn)
+
+      assert has_element?(view, "#settings-group-advanced-global[data-role=settings-group]")
+      refute has_element?(view, "#settings-group-advanced-global[open]")
+      assert has_element?(view, "#settings-group-advanced-global #set-tuning-limit[value=\"10\"]")
+    end
+
+    test "stays closed for a select, a switch, a number or a secret that is not at its default",
+         %{conn: conn} do
+      conn = log_in(conn, create_admin("boss@example.com", nil))
+      path = @path <> "?tab=#{CollapsedSettingsProvider.category()}"
+
+      for {key, value} <- [
+            {"tuning.mode", "strict"},
+            {"tuning.verbose", true},
+            {"tuning.limit", 11},
+            {"tuning.token", "abcd-1234"}
+          ] do
+        {:ok, _} = Settings.put(key, value)
+        {:ok, view, _html} = live(conn, path)
+
+        assert has_element?(view, "#settings-group-advanced-global[data-role=settings-group]"),
+               key
+
+        refute has_element?(view, "#settings-group-advanced-global[open]"), key
+
+        default = Settings.definition(key).default
+        {:ok, _} = Settings.put(key, default)
+      end
+    end
+
+    test "stays closed once a save leaves one of its settings off its default", %{conn: conn} do
+      view = tuning_view(conn)
+
+      view
+      |> form("#settings-form", settings: %{"tuning.mode" => "strict"})
+      |> render_submit()
+
+      assert Settings.get("tuning.mode") == "strict"
+      refute has_element?(view, "#settings-group-advanced-global[open]")
+    end
+
+    test "opens for a value the save refused, and is drawn closed by the next save that passes",
+         %{conn: conn} do
+      view = tuning_view(conn)
+
+      view |> form("#settings-form", settings: %{"tuning.limit" => "many"}) |> render_submit()
+
+      assert has_element?(view, "#error-tuning-limit[data-role=field-error]")
+      assert has_element?(view, "#settings-group-advanced-global[open]")
+      assert Settings.get("tuning.limit") == 10
+
+      view |> form("#settings-form", settings: %{"tuning.limit" => "12"}) |> render_submit()
+
+      refute has_element?(view, "#error-tuning-limit")
+      refute has_element?(view, "#settings-group-advanced-global[open]")
+      assert Settings.get("tuning.limit") == 12
+    end
+
+    test "leaves a group that does not collapse a plain heading, and so a lone collapsed setting",
+         %{conn: conn} do
+      view = tuning_view(conn)
+
+      assert has_element?(view, "#settings-group-plain-global[data-role=settings-section]")
+      assert has_element?(view, "#settings-group-plain-global h3", "Plain")
+      assert has_element?(view, "#settings-group-plain-global #set-tuning-label")
+      refute has_element?(view, "#settings-group-plain-global[open]")
+
+      assert has_element?(view, "#settings-ungrouped[data-role=settings-section]")
+      assert has_element?(view, "#settings-ungrouped #set-tuning-alone")
+      refute has_element?(view, "#settings-ungrouped h3")
+
+      assert render(view) |> LazyHTML.from_fragment() |> LazyHTML.query("details") |> Enum.count() ==
+               1
+    end
+
+    test "draws its sections in the order its settings are declared", %{conn: conn} do
+      view = tuning_view(conn)
+
+      # `tuning.depth` is declared after Plain, and joins the Advanced group where it first stands.
+      assert has_element?(view, "#settings-group-advanced-global #set-tuning-depth")
+      refute has_element?(view, "#settings-group-plain-global #set-tuning-depth")
+
+      # The group between the two runs of ungrouped settings ends the first, and the next is numbered.
+      assert has_element?(view, "#settings-ungrouped-2[data-role=settings-section]")
+      assert has_element?(view, "#settings-ungrouped-2 #set-tuning-tail")
+      refute has_element?(view, "#settings-ungrouped-2 h3")
+      refute has_element?(view, "#settings-ungrouped-3")
+
+      expected = ~w(settings-group-advanced-global set-tuning-mode set-tuning-token
+          set-tuning-depth settings-group-plain-global set-tuning-label settings-ungrouped
+          set-tuning-alone settings-group-last-global set-tuning-last settings-ungrouped-2
+          set-tuning-tail)
+
+      assert in_page_order(view, Enum.reverse(expected)) == expected
     end
   end
 

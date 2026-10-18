@@ -234,5 +234,90 @@ defmodule MishkaCmsCore.SettingsWriteTest do
       assert Settings.cast(%{type: :colour}, "red") == :error
       assert Settings.cast(%{}, "red") == :error
     end
+
+    test "strips the whitespace around a string only when the definition asks to trim" do
+      plain = Settings.define("k", :string)
+      trimmed = Settings.define("k", :text, trim: true)
+
+      assert Settings.cast(plain, "  Acme ") == {:ok, "  Acme "}
+      assert Settings.cast(trimmed, "  Acme \n") == {:ok, "Acme"}
+      assert Settings.cast(trimmed, "   ") == {:ok, ""}
+
+      bounded = Settings.define("k", :string, trim: true, validate: &(String.length(&1) <= 3))
+      assert Settings.cast(bounded, "  abc ") == {:ok, "abc"}
+      assert Settings.cast(bounded, "  abcd ") == :error
+    end
+  end
+
+  describe "the App & home screen settings" do
+    setup do
+      Settings.load_definitions()
+      :ok
+    end
+
+    test "are a site's own, optional, and share one collapsed group on the general tab" do
+      for key <- ~w(site.app_short_name site.theme_color site.background_color) do
+        assert %{
+                 type: :string,
+                 default: "",
+                 scope: :site,
+                 category: "general",
+                 group: "App & home screen",
+                 collapsed: true,
+                 trim: true
+               } = Settings.definition(key),
+               key
+      end
+    end
+
+    test "take a color as #rgb or #rrggbb, trimmed, or nothing; nothing else" do
+      for key <- ~w(site.theme_color site.background_color) do
+        definition = Settings.definition(key)
+
+        for color <- ["#abc", "#ABC", "#0b0a14", "#07070D", "#000", "#ffffff"],
+            do: assert(Settings.cast(definition, color) == {:ok, color}, "#{key}: #{color}")
+
+        assert Settings.cast(definition, "  #0b0a14 \n") == {:ok, "#0b0a14"}
+        assert Settings.cast(definition, "") == {:ok, ""}
+        assert Settings.cast(definition, "   ") == {:ok, ""}
+
+        for refused <- [
+              "red",
+              "#12",
+              "#1234",
+              "#12345",
+              "#1234567",
+              "#ggg",
+              "#12345g",
+              "0b0a14",
+              "# 0b0a14",
+              "rgb(1, 2, 3)",
+              "#0b0a14;",
+              "#0b0a14\"><script>",
+              "url(x)",
+              nil,
+              5
+            ],
+            do:
+              assert(Settings.cast(definition, refused) == :error, "#{key}: #{inspect(refused)}")
+      end
+    end
+
+    test "take a short name of up to 30 characters, trimmed, or nothing" do
+      definition = Settings.definition("site.app_short_name")
+      thirty = String.duplicate("a", 30)
+
+      assert Settings.cast(definition, "  Mishka ") == {:ok, "Mishka"}
+      assert Settings.cast(definition, "") == {:ok, ""}
+      assert Settings.cast(definition, thirty) == {:ok, thirty}
+      assert Settings.cast(definition, " " <> thirty <> " ") == {:ok, thirty}
+      assert Settings.cast(definition, thirty <> "a") == :error
+
+      # Characters, not bytes.
+      persian = String.duplicate("م", 30)
+      assert Settings.cast(definition, persian) == {:ok, persian}
+      assert Settings.cast(definition, persian <> "م") == :error
+      assert Settings.cast(definition, nil) == :error
+    end
   end
 end

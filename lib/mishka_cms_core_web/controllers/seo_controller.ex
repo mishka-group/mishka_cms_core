@@ -53,10 +53,11 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   ## site.webmanifest
 
-  The site's name, `start_url`, `display` and the 192 and 512 icons, as
-  `MishkaCmsCore.Runtime.SiteIcon.manifest/1` builds them from ETS and a plugin on
-  `runtime:site:manifest` leaves them, sent as `application/manifest+json`. A 404 no cache keeps
-  for a site with no icons, which its pages do not link it for.
+  The site's name, `start_url`, `display` and the 192 and 512 icons, and its short name, theme color
+  and background color when it set them, as `MishkaCmsCore.Runtime.SiteIcon.manifest/1` builds
+  them from ETS and a plugin on `runtime:site:manifest` leaves them, sent as
+  `application/manifest+json`. A 404 no cache keeps for a site with no icons, which its pages do not
+  link it for.
 
   ## sitemap.xml and its files
 

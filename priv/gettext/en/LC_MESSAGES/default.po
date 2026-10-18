@@ -6266,6 +6266,11 @@ msgstr ""
 msgid "No settings in this category yet."
 msgstr ""
 
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:346
+#, elixir-autogen, elixir-format
+msgid "This value is not accepted. See the description below."
+msgstr ""
+
 #: lib/mishka_cms_core_web/templates/studio_snippets.ex:114
 #, elixir-autogen, elixir-format
 msgid "No snippets saved yet."
@@ -17969,6 +17974,44 @@ msgstr ""
 msgid "A square image, at least 512×512 (PNG or SVG), for the home-screen icon on phones and the install manifest. Without it the favicon is used."
 msgstr ""
 
+#: lib/mishka_cms_core/settings.ex:720
+#: lib/mishka_cms_core/settings.ex:734
+#: lib/mishka_cms_core/settings.ex:748
+#, elixir-autogen, elixir-format
+msgid "App & home screen"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:723
+#, elixir-autogen, elixir-format
+msgid "Short name"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:726
+#, elixir-autogen, elixir-format
+msgid "The name under the icon on a phone's home screen. Keep it to about 12 characters. Empty: the site's name is used."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:444
+#: lib/mishka_cms_core/settings.ex:737
+#, elixir-autogen, elixir-format
+msgid "Theme color"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:740
+#, elixir-autogen, elixir-format
+msgid "The color of the browser's toolbar on phones and of the installed app's title bar, as #rrggbb. Empty: none."
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:751
+#, elixir-autogen, elixir-format
+msgid "Background color"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:754
+#, elixir-autogen, elixir-format
+msgid "The color shown behind the icon while the installed app opens, as #rrggbb. Empty: none."
+msgstr ""
+
 #: lib/mishka_cms_core/runtime/seo.ex:431
 #, elixir-autogen, elixir-format
 msgid "Home-screen icon"
@@ -17987,4 +18030,9 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/seo.ex:439
 #, elixir-autogen, elixir-format
 msgid "What a browser installs the site with: its name and icons. The site's own /site.webmanifest by default, when it has an icon."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:447
+#, elixir-autogen, elixir-format
+msgid "The color of the browser's toolbar on phones for this page, as #rrggbb. The site's Theme color setting by default, when it has one."
 msgstr ""

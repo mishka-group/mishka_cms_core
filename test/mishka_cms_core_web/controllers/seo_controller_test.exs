@@ -613,7 +613,6 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
       assert Jason.decode!(conn.resp_body) == %{
                "name" => "Acme Studio",
-               "short_name" => "Acme Studio",
                "start_url" => "/",
                "display" => "browser",
                "icons" => [
@@ -650,9 +649,79 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       manifest = fetch(site, "/site.webmanifest").resp_body |> Jason.decode!()
 
       assert manifest["name"] == "استودیو آکمه"
-      assert manifest["short_name"] == "استودیو آکمه"
+      refute Map.has_key?(manifest, "short_name")
       assert manifest["theme_color"] == "#07070d"
       assert manifest["background_color"] == "#07070d"
+    end
+
+    test "holds a short name, a theme color and a background color only when the site set them",
+         %{site: site, dir: dir} do
+      {:ok, _} = Settings.put("site.title", "Acme Studio", site_id: site.id)
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, site, "app.png", png(512, 512)),
+          site_id: site.id
+        )
+
+      unset = ~w(short_name theme_color background_color)
+      manifest = fetch(site, "/site.webmanifest").resp_body |> Jason.decode!()
+      assert manifest["name"] == "Acme Studio"
+      for key <- unset, do: refute(Map.has_key?(manifest, key), key)
+
+      # Empty is unset, however it came to be stored.
+      for key <- ~w(site.app_short_name site.theme_color site.background_color),
+          do: {:ok, _} = Settings.put(key, "", site_id: site.id)
+
+      manifest = fetch(site, "/site.webmanifest").resp_body |> Jason.decode!()
+      for key <- unset, do: refute(Map.has_key?(manifest, key), key)
+
+      {:ok, _} = Settings.put("site.app_short_name", "Acme", site_id: site.id)
+      {:ok, _} = Settings.put("site.theme_color", "#0b0a14", site_id: site.id)
+      {:ok, _} = Settings.put("site.background_color", "#fff", site_id: site.id)
+
+      manifest = fetch(site, "/site.webmanifest").resp_body |> Jason.decode!()
+      assert manifest["name"] == "Acme Studio"
+      assert manifest["short_name"] == "Acme"
+      assert manifest["theme_color"] == "#0b0a14"
+      assert manifest["background_color"] == "#fff"
+
+      # A value that is no hex color is never written into the manifest.
+      {:ok, _} = Settings.put("site.theme_color", "red", site_id: site.id)
+      manifest = fetch(site, "/site.webmanifest").resp_body |> Jason.decode!()
+      refute Map.has_key?(manifest, "theme_color")
+      assert manifest["background_color"] == "#fff"
+    end
+
+    test "gives each site its own values, and none to one that set none", %{
+      site: site,
+      dir: dir
+    } do
+      other = cached_site!()
+
+      for {one, color, name} <- [{site, "#112233", "One"}, {other, "#445566", "Two"}] do
+        {:ok, _} =
+          Settings.put("site.app_icon", media!(dir, one, "app.png", png(512, 512)),
+            site_id: one.id
+          )
+
+        {:ok, _} = Settings.put("site.theme_color", color, site_id: one.id)
+        {:ok, _} = Settings.put("site.app_short_name", name, site_id: one.id)
+      end
+
+      third = cached_site!()
+
+      {:ok, _} =
+        Settings.put("site.app_icon", media!(dir, third, "app.png", png(512, 512)),
+          site_id: third.id
+        )
+
+      on_exit(fn -> for one <- [other, third], do: SiteIcon.forget(one.id) end)
+
+      read = fn one -> fetch(one, "/site.webmanifest").resp_body |> Jason.decode!() end
+
+      assert %{"theme_color" => "#112233", "short_name" => "One"} = read.(site)
+      assert %{"theme_color" => "#445566", "short_name" => "Two"} = read.(other)
+      assert read.(third) |> Map.take(~w(short_name theme_color background_color)) == %{}
     end
   end
 
