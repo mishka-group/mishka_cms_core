@@ -183,6 +183,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
     do: {:noreply, PreviewHelpers.cancel_edit(socket)}
 
   @impl true
+  def handle_event("preview_code_change", %{"source" => source} = params, socket),
+    do: {:noreply, PreviewHelpers.type_code(socket, source, params["label"])}
+
+  @impl true
   def handle_event("preview_code_submit", %{"op" => "save", "source" => source} = params, socket),
     do: {:noreply, PreviewHelpers.save_draft(socket, source, Map.get(params, "label"))}
 

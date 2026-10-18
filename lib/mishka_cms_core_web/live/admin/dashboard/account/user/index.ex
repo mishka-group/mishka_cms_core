@@ -21,6 +21,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       allowed: [],
       turn_off?: false,
       turn_off_error: nil,
+      turn_off_code: "",
       own_two_step?: false
     }
 
@@ -160,6 +161,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
   def handle_event("user_modal_turn_off_cancel", _params, socket),
     do: {:noreply, turn_off_step(socket, false, nil)}
 
+  def handle_event("user_modal_turn_off_typing", %{"code" => code}, socket) when is_binary(code),
+    do:
+      {:noreply, assign(socket, :user_modal, %{socket.assigns.user_modal | turn_off_code: code})}
+
   def handle_event("user_modal_turn_off_submit", %{"code" => code}, socket) do
     case SecurityCards.six_digits(code) do
       {:ok, code} ->
@@ -229,7 +234,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       assign(socket, :user_modal, %{
         socket.assigns.user_modal
         | turn_off?: open?,
-          turn_off_error: error
+          turn_off_error: error,
+          turn_off_code: if(open?, do: socket.assigns.user_modal.turn_off_code, else: "")
       })
 
   defp allowed?(user, action, actor),

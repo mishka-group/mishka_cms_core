@@ -111,6 +111,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # real, because `tab_atom/2` falls back to the head of this list for anything it does not know.
   @source_tabs [:template, :interface, :state, :events, :infos, :helpers, :styles]
 
+  # How many panel forms keep what was typed into them (`typed:<form id>`). The ones on screen at
+  # once are a handful.
+  @typed_forms 24
+
   # `layout: false` drops the admin shell — sidebar, topbar and the 1340px content column — so the
   # editor owns the whole viewport the way the prototype does. It is not a preference: the editor is
   # a `h-screen` three-column workspace, and nesting it inside a scrolling, padded, width-capped
@@ -329,6 +333,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       Map.put(fault, :template, Section.template(section, record, status: status))
     )
     |> assign(:recover_error, nil)
+    |> assign(:typed, %{})
   end
 
   defp mount_editor(socket, section, params, record, actor, opened, editor) do
@@ -809,6 +814,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign_new(:replace, fn -> "" end)
     |> assign_new(:find_hits, fn -> [] end)
     |> assign_new(:class_draft, fn -> %{} end)
+    |> assign_new(:typed, fn -> %{} end)
     |> assign_new(:class_error, fn -> nil end)
     |> assign_new(:component_presets, fn -> %{} end)
     |> assign_new(:presets_count, fn -> -1 end)
@@ -3748,6 +3754,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # A blank name is a no-op, not an error: the form is a text box, and typing nothing into it is a
   # way of changing your mind.
   def handle_event("add_extra_attr", %{"node_id" => id, "name" => name}, socket) do
+    socket = clear_typed(socket, "pb-extra-form-#{id}")
+
     case String.trim(name) do
       "" -> {:noreply, socket}
       trimmed -> attr_added(socket, Tree.get(socket.assigns.editor.tree, id), trimmed, nil)
@@ -4125,7 +4133,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # carries, so a name already in that list is a row to land on and not a second attribute. Typing
   # one with the value box left empty used to reach the empty-value rule below and REMOVE it.
   def handle_event("add_attr", %{"attr" => %{"name" => name} = attr}, socket) do
-    socket = assign(socket, :attr_form, false)
+    socket = socket |> assign(:attr_form, false) |> clear_typed("pb-attr-form")
 
     case String.trim(name) do
       "" ->
@@ -4459,6 +4467,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     {:noreply, socket}
   end
 
+  # What is typed in the class form is the form's draft, so a reconnect finds it where it was left.
+  def handle_event("class_change", %{"name" => name, "utilities" => utilities}, socket)
+      when is_binary(name) and is_binary(utilities),
+      do: {:noreply, assign(socket, :class_draft, %{name: name, utilities: utilities})}
+
   # REUSABLE CLASSES. Style once, apply to twenty, change in one place — the half the per-element
   # style panel cannot do. See `MishkaCmsCore.Runtime.PageBuilder.Classes`.
   def handle_event("save_class", %{"name" => name, "utilities" => utilities}, socket) do
@@ -4790,6 +4803,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       _kept -> {:noreply, assign(socket, :resumable, nil)}
     end
   end
+
+  # WHAT A PANEL'S FORM HOLDS WHILE IT IS BEING FILLED IN. A page that reconnects sends every form
+  # with a `phx-change` back through that event and is drawn again from what the server holds, so a
+  # form without one comes back empty. `typed:<form id>` keeps the values under the form's id — the
+  # panel draws its inputs from `typed` (`Panels.typed_in/4`) — and a form that lets go of them
+  # (`clear_typed/2`) is not drawn from them again. A bounded number of forms is kept: the ones on
+  # screen are few.
+  def handle_event("typed:pb-" <> rest, params, socket) when is_map(params) do
+    form_id = "pb-" <> rest
+    typed = socket.assigns.typed
+
+    if map_size(typed) < @typed_forms or is_map_key(typed, form_id) do
+      {:noreply, assign(socket, :typed, Map.put(typed, form_id, Map.delete(params, "_target")))}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  def handle_event("ai_change", %{"prompt" => prompt}, socket) when is_binary(prompt),
+    do: {:noreply, assign(socket, :ai_prompt, prompt)}
 
   # The Assistant rail is only honest if Send actually reaches a backend. The default one replies
   # that no model is configured rather than inventing an edit it never made.
@@ -6710,6 +6743,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         property: elem(Styles.declaration(prop, ""), 0)
       )
 
+  defp clear_typed(socket, form_id), do: update(socket, :typed, &Map.delete(&1, form_id))
+
   defp recover_template(socket, template) do
     with {:ok, _tree} <- Tree.parse(template),
          {:ok, _record} <- save_recovered(socket, template) do
@@ -7300,6 +7335,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     <Panels.recover
       fault={@recover}
       error={@recover_error}
+      typed={@typed}
       section={@section}
       record={@record}
     />
@@ -7371,6 +7407,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           mob_panel={@mob_panel}
           selected_node={@selected_node}
           attr_form={@attr_form}
+          typed={@typed}
           breakpoint={@breakpoint}
           pseudo={@pseudo}
           focus_attr={@focus_attr}

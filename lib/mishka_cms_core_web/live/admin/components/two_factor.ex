@@ -41,7 +41,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
        socket
      else
        socket
-       |> assign(setup: nil, message: nil)
+       |> assign(setup: nil, message: nil, code: "")
        |> load_status()
      end}
   end
@@ -74,6 +74,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
     end
   end
 
+  def handle_event("typing", %{"code" => code}, socket) when is_binary(code),
+    do: {:noreply, assign(socket, :code, code)}
+
   def handle_event("confirm", %{"code" => code}, %{assigns: %{setup: %{token: token}}} = socket) do
     case with_code(
            code,
@@ -85,6 +88,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
         {:noreply,
          assign(socket,
            setup: nil,
+           code: "",
            enabled: AsyncResult.ok(true),
            message:
              {:ok,
@@ -99,7 +103,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
   end
 
   def handle_event("cancel", _params, socket),
-    do: {:noreply, assign(socket, setup: nil, message: nil)}
+    do: {:noreply, assign(socket, setup: nil, message: nil, code: "")}
 
   def handle_event("disable", %{"code" => code}, socket) do
     case with_code(code, &write(socket, :disable_totp, %{code: &1})) do
@@ -108,6 +112,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
 
         {:noreply,
          assign(socket,
+           code: "",
            enabled: AsyncResult.ok(false),
            message:
              {:ok,
@@ -240,6 +245,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
             </div>
             <form
               id="two-factor-confirm"
+              phx-change="typing"
               phx-submit="confirm"
               phx-target={@myself}
               novalidate
@@ -266,6 +272,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
                 type="text"
                 id="two-factor-code"
                 name="code"
+                value={@code}
                 dir="ltr"
                 inputmode="numeric"
                 autocomplete="one-time-code"
@@ -298,6 +305,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
           <form
             :if={enabled}
             id="two-factor-disable"
+            phx-change="typing"
             phx-submit="disable"
             phx-target={@myself}
             novalidate
@@ -307,6 +315,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
               type="text"
               id="two-factor-disable-code"
               name="code"
+              value={@code}
               dir="ltr"
               inputmode="numeric"
               autocomplete="one-time-code"

@@ -63,6 +63,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
       subfolders: nil,
       choosing_folder?: false,
       naming_folder?: false,
+      folder_name: "",
       folder_failure: nil,
       browsing?: nil
     )
@@ -201,6 +202,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
     do: {:noreply, socket |> assign(:destination, destination(value, socket)) |> folder_chosen()}
 
   def handle_event("folder", _params, socket), do: {:noreply, socket}
+
+  def handle_event("folder_name", %{"name" => name}, socket) when is_binary(name),
+    do: {:noreply, assign(socket, :folder_name, name)}
+
+  def handle_event("folder_name", _params, socket), do: {:noreply, socket}
 
   def handle_event("create_folder", %{"name" => name}, socket) when is_binary(name) do
     %{current_user: user, site_id: site_id} = socket.assigns
@@ -356,7 +362,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   defp destination(_id, _socket), do: :default
 
   defp folder_chosen(socket),
-    do: assign(socket, choosing_folder?: false, naming_folder?: false, folder_failure: nil)
+    do:
+      assign(socket,
+        choosing_folder?: false,
+        naming_folder?: false,
+        folder_name: "",
+        folder_failure: nil
+      )
 
   defp destination_label(%{destination: {_id, path}}), do: path
   defp destination_label(%{destination: :none}), do: gettext("No folder")
@@ -597,6 +609,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
       <form
         :if={@site_id && !@in_form?}
         id={@id <> "-folder-form"}
+        phx-change="folder_name"
         phx-submit="create_folder"
         phx-target={@myself}
         class="hidden"
@@ -613,7 +626,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
             phx-target={@myself}
           >
           </form>
-          <form id={@id <> "-folder-form"} phx-submit="create_folder" phx-target={@myself}></form>
+          <form
+            id={@id <> "-folder-form"}
+            phx-change="folder_name"
+            phx-submit="create_folder"
+            phx-target={@myself}
+          >
+          </form>
         </.portal>
       </div>
 
@@ -627,6 +646,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
         folders={@folders}
         choosing?={@choosing_folder?}
         naming?={@naming_folder?}
+        name={@folder_name}
         failure={@folder_failure}
       />
 
@@ -740,6 +760,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
   attr :folders, :any, default: nil
   attr :choosing?, :boolean, default: false
   attr :naming?, :boolean, default: false
+  attr :name, :string, default: ""
   attr :failure, :string, default: nil
 
   # Where an upload is filed, and the way to file it elsewhere: one of the site's folders, none, or a
@@ -828,6 +849,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser do
           type="text"
           id={@id <> "-folder-name"}
           name="name"
+          value={@name}
           form={@id <> "-folder-form"}
           placeholder={gettext("New folder's name")}
           autocomplete="off"

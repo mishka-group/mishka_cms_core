@@ -1146,6 +1146,28 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
     for names <- [["admin:dashboard:runtime:page"], ["admin:dashboard:code"]] do
       @names names
 
+      test "#{Enum.join(names, " + ")} keeps a draft's label and code typed for a reconnect", %{
+        site: site,
+        page: page
+      } do
+        view =
+          site
+          |> tenant_conn(@names)
+          |> inspect_record("/admin/dashboard/runtime/pages", page)
+
+        render_click(view, "preview_set_tab", %{"tab" => "code"})
+        view |> element("#runtime-preview-new-draft") |> render_click()
+
+        view
+        |> form("#preview-code-form", %{"label" => "Hero redesign", "source" => "<p>typed</p>"})
+        |> render_change()
+
+        assert view |> element("#preview-code-form input[name=label]") |> render() =~
+                 ~s(value="Hero redesign")
+
+        assert view |> element("#preview-code-form textarea") |> render() =~ "&lt;p&gt;typed"
+      end
+
       test "#{Enum.join(names, " + ")} is offered every write, the Code tab's included", %{
         site: site,
         page: page
@@ -1374,6 +1396,30 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       render_async(view, @await)
       render_click(view, "preview_set_tab", %{"tab" => "code"})
       view
+    end
+
+    # A RECONNECT PUTS THE FORM BACK THROUGH ITS `phx-change`, and the editor is drawn again from
+    # what the server then holds — so what was typed has to be held, not only submitted.
+    test "what was typed in the editor is held for a reconnect", %{conn: conn, site: site} do
+      hook =
+        create_js_hook!(
+          site_id: site.id,
+          name: "held-#{unique()}",
+          content: "export default { mounted() {} };"
+        )
+
+      view = open_code(conn, "/admin/dashboard/runtime/js-hooks", hook)
+      view |> element("#runtime-preview-edit-code") |> render_click()
+
+      typed = "export default { mounted() { /* typed */ } };"
+      view |> form("#preview-code-save-form", %{source: typed}) |> render_change()
+
+      assert view |> element("#preview-code-save-form textarea") |> render() =~ "/* typed */"
+
+      view |> element("button[phx-click=preview_cancel_edit]") |> render_click()
+      view |> element("#runtime-preview-edit-code") |> render_click()
+
+      refute view |> element("#preview-code-save-form textarea") |> render() =~ "/* typed */"
     end
 
     test "a JS hook's source is edited and saved in place", %{conn: conn, site: site} do

@@ -141,6 +141,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.JsHook.Index do
     do: {:noreply, PreviewHelpers.cancel_edit(socket)}
 
   @impl true
+  def handle_event("preview_code_change", %{"source" => source} = params, socket),
+    do: {:noreply, PreviewHelpers.type_code(socket, source, params["label"])}
+
+  @impl true
   def handle_event("preview_code_save", %{"source" => source}, socket),
     do: {:noreply, PreviewHelpers.save_source(socket, source)}
 end

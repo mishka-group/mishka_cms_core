@@ -261,6 +261,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     code_visible?: true,
     editing?: false,
     edit_source: nil,
+    edit_label: nil,
     render_nonce: 0,
     draft: nil,
     drafts: [],
@@ -530,7 +531,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   def edit_code(socket) do
     put_preview(socket, fn p ->
-      %{p | active_tab: "code", editing?: true, edit_source: editor_source(p)}
+      %{p | active_tab: "code", editing?: true, edit_source: editor_source(p), edit_label: nil}
+    end)
+  end
+
+  @doc """
+  Keep what is typed in the Code tab's editor (`source`, and the draft's `label` when the form has
+  one), so the editor still holds it after a reconnect and a refused save leaves it as it was.
+  """
+  def type_code(socket, source, label) when is_binary(source) do
+    put_preview(socket, fn p ->
+      %{p | edit_source: source, edit_label: if(is_binary(label), do: label, else: p.edit_label)}
     end)
   end
 
@@ -538,7 +549,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp editor_source(%{record: record}), do: RuntimePreview.source(record)
 
   @doc "Leave edit mode."
-  def cancel_edit(socket), do: put_preview(socket, &%{&1 | editing?: false})
+  def cancel_edit(socket), do: put_preview(socket, &%{&1 | editing?: false, edit_label: nil})
 
   @doc """
   Save the Code tab's edit straight to the record, for a resource with no drafts — a JS Hook, a
@@ -660,6 +671,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
           editing?: true,
           active_tab: "code",
           edit_html: nil,
+          edit_label: nil,
           edit_source: RuntimePreview.source(p.record)
       }
     end)
@@ -698,6 +710,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
           draft: draft,
           editing?: false,
           edit_html: nil,
+          edit_label: nil,
           edit_source: RuntimePreview.source(draft || p.record)
       }
     end)

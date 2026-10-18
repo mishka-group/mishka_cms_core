@@ -23,7 +23,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RecoveryCodes do
 
   @impl true
   def update(%{refresh: true}, socket),
-    do: {:ok, socket |> assign(codes: nil, message: nil) |> load_status()}
+    do: {:ok, socket |> assign(codes: nil, message: nil, code: "") |> load_status()}
 
   def update(assigns, socket) do
     socket = assign(socket, id: assigns.id, current_user: assigns.current_user)
@@ -33,7 +33,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RecoveryCodes do
        socket
      else
        socket
-       |> assign(codes: nil, message: nil)
+       |> assign(codes: nil, message: nil, code: "")
        |> load_status()
      end}
   end
@@ -60,6 +60,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RecoveryCodes do
   end
 
   @impl true
+  def handle_event("typing", %{"code" => code}, socket) when is_binary(code),
+    do: {:noreply, assign(socket, :code, code)}
+
   def handle_event("generate", %{"code" => code}, socket) do
     with {:ok, code} <- SecurityCards.six_digits(code),
          {:ok, user} <- generate(socket, code) do
@@ -68,6 +71,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RecoveryCodes do
       {:noreply,
        assign(socket,
          codes: codes,
+         code: "",
          message: nil,
          status:
            AsyncResult.ok(%{
@@ -215,6 +219,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RecoveryCodes do
           <form
             :if={status.enabled and status.policy != :off and is_nil(@codes)}
             id="recovery-codes-form"
+            phx-change="typing"
             phx-submit="generate"
             phx-target={@myself}
             novalidate
@@ -233,6 +238,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RecoveryCodes do
                 type="text"
                 id="recovery-codes-code"
                 name="code"
+                value={@code}
                 dir="ltr"
                 inputmode="numeric"
                 autocomplete="one-time-code"

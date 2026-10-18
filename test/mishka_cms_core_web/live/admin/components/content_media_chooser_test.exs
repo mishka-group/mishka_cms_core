@@ -564,6 +564,23 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
       end
     end
 
+    test "a folder name typed for a reconnect is held, and let go of when the folder is chosen",
+         ctx do
+      view = open(ctx, %{})
+      choose_folders(view)
+      view |> element("#chooser-folder") |> render_change(%{"folder" => "new"})
+
+      view |> element("#chooser-folder-form") |> render_change(%{"name" => "Team Ph"})
+
+      assert view |> element("#chooser-folder-name") |> render() =~ ~s(value="Team Ph")
+
+      view |> element("#chooser-folder-form") |> render_submit(%{"name" => "Team Photos"})
+      choose_folders(view)
+      view |> element("#chooser-folder") |> render_change(%{"folder" => "new"})
+
+      refute view |> element("#chooser-folder-name") |> render() =~ "Team Ph"
+    end
+
     test "a name taken beside it, or none, is refused and says so", ctx do
       create_media_category!(site_id: ctx.site.id, name: "covers")
       view = open(ctx, %{})

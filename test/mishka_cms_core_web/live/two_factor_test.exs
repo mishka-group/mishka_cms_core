@@ -141,6 +141,60 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
     end
   end
 
+  describe "a code that was being typed when the page reconnected" do
+    test "is still in the box of the setup form", ctx do
+      admin = admin!(ctx.site, ["admin:dashboard:*"])
+      view = open(ctx.conn, admin, @preferences)
+
+      view |> element("#two-factor-start") |> render_click()
+      view |> form("#two-factor-confirm", %{"code" => "123 45"}) |> render_change()
+
+      assert view |> element("#two-factor-code") |> render() =~ ~s(value="123 45")
+
+      view |> element("#two-factor-cancel") |> render_click()
+      view |> element("#two-factor-start") |> render_click()
+
+      refute view |> element("#two-factor-code") |> render() =~ "123 45"
+    end
+
+    test "is still in the box of the turn-off and the recovery-code forms", ctx do
+      admin = admin!(ctx.site, ["admin:dashboard:*"])
+      enable!(admin)
+      view = open(ctx.conn, admin, @preferences)
+
+      view |> form("#two-factor-disable", %{"code" => "9876"}) |> render_change()
+      assert view |> element("#two-factor-disable-code") |> render() =~ ~s(value="9876")
+
+      view |> form("#recovery-codes-form", %{"code" => "5432"}) |> render_change()
+      assert view |> element("#recovery-codes-code") |> render() =~ ~s(value="5432")
+    end
+
+    test "is still in the box of the admin's turn-off step in the Users table", ctx do
+      owner = admin!(ctx.site, ["admin:dashboard:blog:*"])
+      enable!(owner)
+      master = admin!(nil, ["admin:dashboard:*"])
+      master |> enable!()
+
+      view = open(ctx.conn, master, @users)
+
+      view
+      |> element(
+        "button[phx-value-event=turn_off_two_step_modal][phx-value-values*='#{owner.id}']"
+      )
+      |> render_click()
+
+      render_async(view)
+
+      view |> form("#user-modal-turn-off-form", %{"code" => "246810"}) |> render_change()
+
+      assert view |> element("#user-modal-turn-off-code") |> render() =~ ~s(value="246810")
+
+      view |> element("button[phx-click=user_modal_turn_off_cancel]") |> render_click()
+
+      refute has_element?(view, "#user-modal-turn-off-form")
+    end
+  end
+
   describe "the Users table" do
     test "shows who has one, and turns it off with the admin's own code", ctx do
       owner = admin!(ctx.site, ["admin:dashboard:blog:*"])

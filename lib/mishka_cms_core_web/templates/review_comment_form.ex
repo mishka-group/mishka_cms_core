@@ -83,7 +83,7 @@ defmodule MishkaCmsCoreWeb.Templates.ReviewCommentForm do
       |> assign(:scope, (replying? && gettext("this note")) || scope(assigns.state))
 
     ~H"""
-    <form id="pb-comment-form" phx-submit="save" phx-target={@myself}>
+    <form id="pb-comment-form" phx-change="validate" phx-submit="save" phx-target={@myself}>
       <%!-- WHAT THIS NOTE WILL BE ABOUT, reported rather than chosen. It is whatever the canvas has
             selected, which is the only answer that can be right — a dropdown of every element on
             the page would be a worse way to say "this one" than clicking it. The type sits on the
@@ -163,6 +163,8 @@ defmodule MishkaCmsCoreWeb.Templates.ReviewCommentForm do
         id="pb-comment-body"
         class="mt-2 h-[68px]"
         rows={3}
+        value={typed(@state, :body)}
+        phx-debounce="blur"
         errors={field_errors(@state, :body)}
         placeholder={gettext("Leave a note for the team… @ names somebody")}
         phx-hook="MentionBox"
@@ -178,6 +180,11 @@ defmodule MishkaCmsCoreWeb.Templates.ReviewCommentForm do
     </form>
     """
   end
+
+  defp typed(%{form: %Phoenix.HTML.Form{params: %{} = params}}, field),
+    do: Map.get(params, to_string(field))
+
+  defp typed(_state, _field), do: nil
 
   defp defaults(%{defaults: defaults}) when is_map(defaults), do: defaults
   defp defaults(_state), do: %{}
