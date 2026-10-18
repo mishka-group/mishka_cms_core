@@ -84,13 +84,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     test "compiles shared base CSS" do
       TailwindCompiler.ensure_installed()
 
-      case TailwindCompiler.compile_shared_base() do
-        {:ok, css} when is_binary(css) ->
-          assert byte_size(css) > 0
-
-        {:error, reason} ->
-          assert is_binary(reason) or is_atom(reason)
-      end
+      assert {:ok, css} = TailwindCompiler.compile_shared_base()
+      assert byte_size(css) > 0
     end
   end
 
@@ -98,16 +93,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     test "compiles and stores shared base CSS" do
       TailwindCompiler.ensure_installed()
 
-      case TailwindCompiler.compile_and_store_shared_base() do
-        {:ok, css} when is_binary(css) ->
-          assert {:ok, asset} = AssetsState.get("__shared_base__", "css")
-          assert is_binary(asset.value)
-          assert {:ok, _} = AssetsState.get("__shared_base__", "brotli_css")
-          assert {:ok, _} = AssetsState.get("__shared_base__", "gzip_css")
+      assert {:ok, css} = TailwindCompiler.compile_and_store_shared_base()
 
-        {:error, reason} ->
-          assert is_binary(reason) or is_atom(reason)
-      end
+      assert {:ok, asset} = AssetsState.get("__shared_base__", "css")
+      assert asset.value == css
+      assert {:ok, _} = AssetsState.get("__shared_base__", "brotli_css")
+      assert {:ok, _} = AssetsState.get("__shared_base__", "gzip_css")
     end
   end
 
@@ -140,13 +131,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
 
   describe "compile/1 and compile/2" do
     test "returns compiled CSS for a site" do
-      case quiet_compile("test_site") do
-        {:ok, css} when is_binary(css) ->
-          assert String.contains?(css, "/*") or css == ""
-
-        {:error, reason} ->
-          assert is_binary(reason) or is_atom(reason)
-      end
+      assert {:ok, css} = quiet_compile("test_site")
+      assert css =~ "/* Site: test_site */"
     end
 
     # There is ONE way to assemble a site's stylesheet: the cached shared base plus the site's own
@@ -156,52 +142,36 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     test "the site's delta is appended to the shared base, under its own marker" do
       TailwindCompiler.ensure_installed()
 
-      case TailwindCompiler.compile("test_shared_site") do
-        {:ok, css} when is_binary(css) ->
-          assert String.contains?(css, "/* Site: test_shared_site */")
-
-        {:error, reason} ->
-          assert is_binary(reason) or is_atom(reason)
-      end
+      assert {:ok, css} = TailwindCompiler.compile("test_shared_site")
+      assert css =~ "/* Site: test_shared_site */"
     end
 
-    test "handles compile errors gracefully" do
+    test "a site with nothing of its own still compiles, and logs no error" do
       log =
-        capture_log(fn ->
-          result = quiet_compile("test_error_site")
-          assert match?({:ok, _}, result) or match?({:error, _}, result)
+        capture_log([level: :error], fn ->
+          assert {:ok, css} = quiet_compile("test_error_site")
+          assert css =~ "/* Site: test_error_site */"
         end)
 
-      # May or may not have logs depending on Tailwind availability
-      assert is_binary(log)
+      assert log == ""
     end
 
     test "handles different site names" do
       sites = ["site_one", "site-two", "site.three", "site_4"]
 
       for site <- sites do
-        result = quiet_compile(site)
-        assert match?({:ok, _}, result) or match?({:error, _}, result)
+        assert {:ok, css} = quiet_compile(site)
+        assert css =~ "/* Site: #{site} */"
       end
     end
 
     test "compile result is consistent for same site" do
       site_name = "test_consistent_#{System.unique_integer([:positive])}"
 
-      case quiet_compile(site_name) do
-        {:ok, css1} ->
-          case quiet_compile(site_name) do
-            {:ok, css2} ->
-              # CSS should be similar for same site
-              assert byte_size(css1) == byte_size(css2)
+      assert {:ok, css1} = quiet_compile(site_name)
+      assert {:ok, css2} = quiet_compile(site_name)
 
-            {:error, _} ->
-              :ok
-          end
-
-        {:error, _} ->
-          :ok
-      end
+      assert css1 == css2
     end
   end
 
@@ -212,25 +182,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       # Clean up any existing CSS first
       AssetsState.delete(site_name, "css")
 
-      case quiet_compile_and_store(site_name) do
-        {:ok, css} when is_binary(css) ->
-          # Check that all formats are stored
-          assert {:ok, asset} = AssetsState.get(site_name, "css")
-          assert {:ok, brotli} = AssetsState.get(site_name, "brotli_css")
-          assert {:ok, gzip} = AssetsState.get(site_name, "gzip_css")
+      assert {:ok, css} = quiet_compile_and_store(site_name)
 
-          # All should have same hash
-          assert asset.hash == brotli.hash
-          assert asset.hash == gzip.hash
+      assert {:ok, asset} = AssetsState.get(site_name, "css")
+      assert {:ok, brotli} = AssetsState.get(site_name, "brotli_css")
+      assert {:ok, gzip} = AssetsState.get(site_name, "gzip_css")
 
-          # Check metadata
-          assert asset.updated_at != nil
-          assert is_binary(asset.value)
-
-        {:error, reason} ->
-          # Tailwind might not be available
-          assert is_binary(reason) or is_atom(reason)
-      end
+      assert asset.hash == brotli.hash
+      assert asset.hash == gzip.hash
+      assert %DateTime{} = asset.updated_at
+      assert asset.value == css
 
       # Cleanup
       AssetsState.delete(site_name, "css")
@@ -249,72 +210,32 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     test "stores CSS with proper metadata" do
       site_name = "test_metadata_#{System.unique_integer([:positive])}"
 
-      case quiet_compile_and_store(site_name) do
-        {:ok, _css} ->
-          {:ok, asset} = AssetsState.get(site_name, "css")
+      assert {:ok, css} = quiet_compile_and_store(site_name)
+      assert {:ok, asset} = AssetsState.get(site_name, "css")
 
-          # Check metadata fields
-          assert asset.id == site_name
-          assert asset.type == "css"
-          assert is_binary(asset.hash)
-          # MD5 hash length in hex
-          assert String.length(asset.hash) == 32
-          assert %DateTime{} = asset.updated_at
-
-        {:error, _} ->
-          :ok
-      end
+      assert asset.id == site_name
+      assert asset.type == "css"
+      assert asset.hash == Base.encode16(:crypto.hash(:md5, css), case: :lower)
+      assert %DateTime{} = asset.updated_at
 
       # Cleanup
       AssetsState.delete(site_name, "css")
     end
 
-    test "logs success when CSS is compiled and stored" do
-      site_name = "test_log_success_#{System.unique_integer([:positive])}"
-
-      log =
-        capture_log([level: :debug], fn ->
-          case quiet_compile_and_store(site_name) do
-            {:ok, _css} ->
-              # Success case
-              :ok
-
-            {:error, _reason} ->
-              # Tailwind might not be available
-              :ok
-          end
-        end)
-
-      # May have debug log if successful
-      assert is_binary(log)
-
-      # Cleanup
-      AssetsState.delete(site_name, "css")
-    end
-
-    test "logs error when compilation fails" do
-      # Mock a failure by using compile directly with a site that might fail
+    test "logs no error when the compilation succeeds" do
       log =
         capture_log([level: :error], fn ->
-          # This might or might not fail depending on Tailwind availability
-          _result = quiet_compile_and_store("test_error_site")
+          assert {:ok, _css} = quiet_compile_and_store("test_error_site")
         end)
 
-      # May or may not have error logs
-      assert is_binary(log)
+      assert log == ""
     end
 
     test "returns same CSS that gets stored" do
       site_name = "test_return_store_#{System.unique_integer([:positive])}"
 
-      case quiet_compile_and_store(site_name) do
-        {:ok, returned_css} ->
-          stored_css = TailwindCompiler.get_compiled_css(site_name)
-          assert returned_css == stored_css
-
-        {:error, _} ->
-          :ok
-      end
+      assert {:ok, returned_css} = quiet_compile_and_store(site_name)
+      assert TailwindCompiler.get_compiled_css(site_name) == returned_css
 
       # Cleanup
       AssetsState.delete(site_name, "css")
@@ -441,19 +362,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       site_name = "test_refresh_#{System.unique_integer([:positive])}"
 
       # refresh_css should compile and store the CSS
-      case quiet_refresh_css(site_name) do
-        {:ok, css} ->
-          assert is_binary(css)
+      assert {:ok, css} = quiet_refresh_css(site_name)
 
-          # Verify CSS was stored
-          assert TailwindCompiler.css_exists?(site_name)
-          stored = TailwindCompiler.get_compiled_css(site_name)
-          assert stored == css
-
-        {:error, _reason} ->
-          # Tailwind might not be available
-          :ok
-      end
+      assert TailwindCompiler.css_exists?(site_name)
+      assert TailwindCompiler.get_compiled_css(site_name) == css
 
       # Cleanup
       AssetsState.delete(site_name, "css")
@@ -477,17 +389,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       assert TailwindCompiler.get_compiled_css(site_name) == old_css
 
       # Refresh CSS
-      case quiet_refresh_css(site_name) do
-        {:ok, new_css} ->
-          # Should have new CSS
-          assert new_css != old_css
-          stored = TailwindCompiler.get_compiled_css(site_name)
-          assert stored == new_css
+      assert {:ok, new_css} = quiet_refresh_css(site_name)
 
-        {:error, _} ->
-          # Tailwind not available
-          :ok
-      end
+      assert new_css != old_css
+      assert TailwindCompiler.get_compiled_css(site_name) == new_css
 
       # Cleanup
       AssetsState.delete(site_name, "css")
@@ -496,16 +401,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     test "updates all compression formats on refresh" do
       site_name = "test_refresh_formats_#{System.unique_integer([:positive])}"
 
-      case quiet_refresh_css(site_name) do
-        {:ok, _css} ->
-          # All formats should be updated
-          assert {:ok, _} = AssetsState.get(site_name, "css")
-          assert {:ok, _} = AssetsState.get(site_name, "brotli_css")
-          assert {:ok, _} = AssetsState.get(site_name, "gzip_css")
+      assert {:ok, _css} = quiet_refresh_css(site_name)
 
-        {:error, _} ->
-          :ok
-      end
+      assert {:ok, _} = AssetsState.get(site_name, "css")
+      assert {:ok, _} = AssetsState.get(site_name, "brotli_css")
+      assert {:ok, _} = AssetsState.get(site_name, "gzip_css")
 
       # Cleanup
       AssetsState.delete(site_name, "css")
@@ -555,27 +455,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       # Start with no CSS
       assert TailwindCompiler.css_exists?(site_name) == false
 
-      # Compile and store (might fail if Tailwind not available)
-      case quiet_compile_and_store(site_name) do
-        {:ok, css} ->
-          assert is_binary(css)
+      assert {:ok, css} = quiet_compile_and_store(site_name)
 
-          # CSS should now exist
-          assert TailwindCompiler.css_exists?(site_name) == true
+      assert TailwindCompiler.css_exists?(site_name) == true
+      assert TailwindCompiler.get_compiled_css(site_name) == css
 
-          # Should be retrievable
-          retrieved = TailwindCompiler.get_compiled_css(site_name)
-          assert retrieved == css
-
-          # Status should show compiled
-          status = TailwindCompiler.get_css_status(site_name)
-          assert status.compiled == true
-          assert status.css_size > 0
-
-        {:error, _reason} ->
-          # Tailwind not available - that's ok for tests
-          :ok
-      end
+      status = TailwindCompiler.get_css_status(site_name)
+      assert status.compiled == true
+      assert status.css_size == byte_size(css)
 
       # Delete CSS
       assert TailwindCompiler.delete_compiled_css(site_name) == :ok
@@ -622,32 +509,19 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     test "compression formats are properly linked" do
       site_name = "test_compression_#{System.unique_integer([:positive])}"
 
-      case quiet_compile_and_store(site_name) do
-        {:ok, _css} ->
-          # Get all formats
-          {:ok, raw} = AssetsState.get(site_name, "css")
-          {:ok, brotli} = AssetsState.get(site_name, "brotli_css")
-          {:ok, gzip} = AssetsState.get(site_name, "gzip_css")
+      assert {:ok, css} = quiet_compile_and_store(site_name)
 
-          # All should have same hash (content identifier)
-          assert raw.hash == brotli.hash
-          assert raw.hash == gzip.hash
+      {:ok, raw} = AssetsState.get(site_name, "css")
+      {:ok, brotli} = AssetsState.get(site_name, "brotli_css")
+      {:ok, gzip} = AssetsState.get(site_name, "gzip_css")
 
-          # All should have same timestamp
-          assert raw.updated_at == brotli.updated_at
-          assert raw.updated_at == gzip.updated_at
+      assert raw.hash == brotli.hash
+      assert raw.hash == gzip.hash
+      assert raw.updated_at == brotli.updated_at
+      assert raw.updated_at == gzip.updated_at
 
-          # Brotli and gzip should be binary (compressed)
-          assert is_binary(brotli.value)
-          assert is_binary(gzip.value)
-
-          # Raw CSS should be different from compressed
-          assert raw.value != brotli.value
-          assert raw.value != gzip.value
-
-        {:error, _} ->
-          :ok
-      end
+      assert raw.value == css
+      assert :zlib.gunzip(gzip.value) == css
 
       # Cleanup
       AssetsState.delete(site_name, "css")
