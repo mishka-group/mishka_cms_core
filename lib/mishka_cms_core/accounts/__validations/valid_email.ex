@@ -62,7 +62,7 @@ defmodule MishkaCmsCore.Accounts.Validations.ValidEmail do
       !String.contains?(email_string, "@") ->
         {:error, field: field, message: dgettext_noop("errors", "must contain @ symbol")}
 
-      email_string |> String.graphemes() |> Enum.count(&(&1 == "@")) > 1 ->
+      match?([_, _, _ | _], String.split(email_string, "@")) ->
         {:error,
          field: field, message: dgettext_noop("errors", "cannot contain multiple @ symbols")}
 

@@ -405,7 +405,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   def build_assigns(params) do
     assigns_ast =
       quote do
-        def __page_information__() do
+        def __page_information__ do
           %{
             page: %{
               title: unquote(params[:title]),

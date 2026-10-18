@@ -45,8 +45,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Hooks do
   def available(actor, site_id, site_name) do
     actor
     |> rows(site_id)
-    |> Enum.filter(& &1.active)
-    |> Enum.filter(&offerable?(&1, site_name))
+    |> Enum.filter(&(&1.active && offerable?(&1, site_name)))
     |> Enum.map(&entry(&1, site_name))
     |> Enum.sort_by(& &1.name)
   end

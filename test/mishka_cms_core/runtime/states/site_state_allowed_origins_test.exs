@@ -53,7 +53,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
             "http://httpbin.example.com",
             "httpbin.example.com"
           ] do
-        assert {true, %{id: "http_site"}} = SiteState.is_allowed_origin?(origin)
+        assert {true, %{id: "http_site"}} = SiteState.allowed_origin?(origin)
       end
     end
 
@@ -68,8 +68,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
                  frontend_domain: "https://app.example.com"
                })
 
-      assert {true, %{id: "full_site"}} = SiteState.is_allowed_origin?("https://app.example.com")
-      assert SiteState.is_allowed_origin?("http://app.example.com") == false
+      assert {true, %{id: "full_site"}} = SiteState.allowed_origin?("https://app.example.com")
+      assert SiteState.allowed_origin?("http://app.example.com") == false
     end
   end
 
@@ -181,7 +181,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
     end
   end
 
-  describe "is_allowed_origin?/1" do
+  describe "allowed_origin?/1" do
     setup do
       sites = [
         %{
@@ -211,21 +211,21 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
     end
 
     test "returns {true, site} for allowed origin of active site" do
-      assert {true, site} = SiteState.is_allowed_origin?("https://admin.active.com")
+      assert {true, site} = SiteState.allowed_origin?("https://admin.active.com")
       assert site.id == "active_site"
 
       # Frontend domain also works
-      assert {true, site} = SiteState.is_allowed_origin?("https://app.active.com")
+      assert {true, site} = SiteState.allowed_origin?("https://app.active.com")
       assert site.id == "active_site"
     end
 
     test "returns false for allowed origin of inactive site" do
-      assert false == SiteState.is_allowed_origin?("https://admin.inactive.com")
-      assert false == SiteState.is_allowed_origin?("https://app.inactive.com")
+      assert false == SiteState.allowed_origin?("https://admin.inactive.com")
+      assert false == SiteState.allowed_origin?("https://app.inactive.com")
     end
 
     test "returns false for unknown origin" do
-      assert false == SiteState.is_allowed_origin?("https://unknown.com")
+      assert false == SiteState.allowed_origin?("https://unknown.com")
     end
   end
 

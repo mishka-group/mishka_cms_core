@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.JsHook.Index do
+  @moduledoc false
   use MishkaCmsCore.ExtensionLiveView
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers

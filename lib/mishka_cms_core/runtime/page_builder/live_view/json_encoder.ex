@@ -4,6 +4,7 @@
 
 # Copied and changed from https://github.com/BeaconCMS/beacon_live_admin/blob/main/lib/beacon/live_admin/visual_editor/heex/json_encoder.ex
 defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.JsonEncoder do
+  @moduledoc false
   require Logger
 
   @type token :: map()

@@ -83,8 +83,9 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Sequence do
   defp siblings(tree, %Node{parent_id: parent_id} = node) do
     tree
     |> Tree.children(parent_id || :root)
-    |> Enum.filter(&(&1.kind == :component))
-    |> Enum.filter(&(Node.component_name(&1) == Node.component_name(node)))
+    |> Enum.filter(
+      &(&1.kind == :component and Node.component_name(&1) == Node.component_name(node))
+    )
   end
 
   # Every one an integer literal, and every step exactly one. `[2, 3]` is a run and so is `[1]`;

@@ -246,11 +246,10 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
       slots: Enum.reject(used_slots, &(&1 in declared_slots)),
       attrs:
         used_attrs
-        |> Enum.reject(&(&1 in declared_attrs))
-        |> Enum.reject(&(&1 in declared_slots))
-        |> Enum.reject(&(&1 in used_slots))
-        |> Enum.reject(&(&1 in @implicit))
-        |> Enum.reject(&(&1 in @slot_like))
+        |> Enum.reject(
+          &(&1 in declared_attrs or &1 in declared_slots or &1 in used_slots or &1 in @implicit or
+              &1 in @slot_like)
+        )
     }
   end
 

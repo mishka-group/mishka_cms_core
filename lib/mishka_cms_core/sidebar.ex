@@ -572,7 +572,7 @@ defmodule MishkaCmsCore.Sidebar do
     %{groups: groups, items: items} = collect()
     user = load_permissions(user)
     site_id = site_id(user)
-    visible = items |> Enum.filter(& &1.nav) |> Enum.filter(&visible?(&1, user, site_id))
+    visible = Enum.filter(items, &(&1.nav && visible?(&1, user, site_id)))
 
     groups
     |> Enum.filter(&visible?(&1, user, site_id))

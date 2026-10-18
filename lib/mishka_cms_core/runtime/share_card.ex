@@ -753,7 +753,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp footer(canvas, %{"people" => [_ | _] = people} = card, rtl?) do
     stack = avatar_stack(people)
-    names = people |> Enum.map(& &1["name"]) |> Enum.join(if(rtl?, do: "، ", else: ", "))
+    names = Enum.map_join(people, if(rtl?, do: "، ", else: ", "), & &1["name"])
     names = text!(names, "Bold", 24, "#f1eeff", 620)
     second = byline(card)
     second = second && text!(second, "Regular", 21, "#a7a2cc", 620)

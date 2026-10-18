@@ -990,7 +990,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp publish_error(_error), do: gettext("Could not publish the draft.")
 
   defp invalid_message(%Ash.Error.Invalid{errors: errors}),
-    do: errors |> Enum.map(&error_message/1) |> Enum.join(", ")
+    do: Enum.map_join(errors, ", ", &error_message/1)
 
   defp error_message(error) do
     MishkaGervaz.Errors.translate_error(

@@ -1566,8 +1566,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
     loose_attrs =
       attrs
-      |> Enum.reject(&is_nil/1)
-      |> Enum.reject(&MapSet.member?(bound_attrs, &1))
+      |> Enum.reject(&(is_nil(&1) or MapSet.member?(bound_attrs, &1)))
 
     direct ++ pair_leftovers(loose_axes, loose_attrs, component)
   end
@@ -1722,8 +1721,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   defp log_unreadable_roles(unreadable, path) do
     Logger.warning(
       "[UiKitHandler] #{Path.basename(path)}: installed #{length(unreadable)} component" <>
-        "#{(length(unreadable) == 1 && "") || "s"} whose declared form role could not be read, " <>
-        "so the editor infers a role for #{(length(unreadable) == 1 && "it") || "them"} — " <>
+        "#{(match?([_], unreadable) && "") || "s"} whose declared form role could not be read, " <>
+        "so the editor infers a role for #{(match?([_], unreadable) && "it") || "them"} — " <>
         Enum.map_join(unreadable, ", ", fn {name, declared} ->
           "#{name || "(unnamed)"}: #{inspect(declared)}"
         end)
@@ -1742,7 +1741,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
       {kept, rejected} ->
         Logger.warning(
           "[UiKitHandler] #{Path.basename(path)}: skipped #{length(rejected)} #{key} entr" <>
-            "#{(length(rejected) == 1 && "y") || "ies"} that do not meet the bundle contract — " <>
+            "#{(match?([_], rejected) && "y") || "ies"} that do not meet the bundle contract — " <>
             Enum.map_join(rejected, ", ", fn {name, reason} ->
               "#{name || "(unnamed)"}: #{inspect(reason)}"
             end)

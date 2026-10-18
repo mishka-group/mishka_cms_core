@@ -196,7 +196,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
 
     component_info_ast =
       quote do
-        def __component_information__() do
+        def __component_information__ do
           %{
             component: %{
               name: unquote(params[:title]),
@@ -963,7 +963,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   defp maybe_total_catch_all({name, arity} = signature, clauses, true) do
     with false <- {String.to_atom(name), arity} in lifecycle_callbacks(),
          true <- is_integer(arity),
-         true <- length(clauses) > 1,
+         true <- match?([_, _ | _], clauses),
          true <- narrowable_dispatcher?(clauses),
          false <- has_total_catch_all?(clauses) do
       [build_total_catch_all(signature)]
@@ -1633,7 +1633,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   Failed imports are logged but don't stop the compilation process, ensuring robustness
   even when some modules aren't available.
   """
-  def make_env() do
+  def make_env do
     imports = [
       Phoenix.HTML,
       Phoenix.Component,

@@ -205,7 +205,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.TenantContext do
   defp master_requirement?(_change), do: false
 
   @impl true
-  def has_validate?(), do: true
+  def has_validate?, do: true
 
   @impl true
   def supports(_opts), do: [Ash.Changeset, Ash.ActionInput, Ash.Query]

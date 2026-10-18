@@ -157,9 +157,9 @@ defmodule MishkaCmsCoreWeb.Templates.SnippetForm do
 
     @scopes
     |> Enum.reject(fn {value, _label} ->
-      value == "page" and is_nil(defaults[:editor_document_id])
+      (value == "page" and is_nil(defaults[:editor_document_id])) or
+        (value == "global" and !master?(state))
     end)
-    |> Enum.reject(fn {value, _label} -> value == "global" and !master?(state) end)
     |> Enum.map(fn {value, label} -> {value, Gettext.gettext(MishkaCmsCore.Gettext, label)} end)
   end
 

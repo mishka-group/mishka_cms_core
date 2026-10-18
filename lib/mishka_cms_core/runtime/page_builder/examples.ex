@@ -300,7 +300,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Examples do
   defp furnished?(%{source: source}) do
     stripped = source |> String.replace(~r/<[^>]*>/, "") |> String.trim()
 
-    stripped != "" or length(Regex.scan(~r/<[a-zA-Z.:]/, source)) > 1
+    stripped != "" or match?([_, _ | _], Regex.scan(~r/<[a-zA-Z.:]/, source))
   end
 
   # Stable across renders, and readable in the DOM: the index alone would move an example's id when

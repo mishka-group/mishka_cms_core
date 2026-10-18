@@ -201,7 +201,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   def build_error_information(params) do
     error_info_ast =
       quote do
-        def __error_information__() do
+        def __error_information__ do
           %{
             error: %{
               title: unquote(params[:title]),
@@ -716,7 +716,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   If any module fails to import, the error is logged as a warning and compilation continues
   with the remaining successfully imported modules.
   """
-  def make_env() do
+  def make_env do
     imports = [
       Phoenix.HTML,
       Phoenix.Component,

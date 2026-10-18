@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCore.Runtime.Compilers.Helpers do
+  @moduledoc false
   @doc """
   Generates a unique module name for runtime-compiled resources.
 

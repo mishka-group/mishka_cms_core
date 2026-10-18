@@ -737,7 +737,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree do
 
   defp unshare_scope(tree, %Node{} = node, worn) do
     case Enum.uniq(scopes_of(node)) do
-      shared when length(shared) > 1 ->
+      [_, _ | _] = shared ->
         keep_own_scope(tree, node, shared, Enum.filter(shared, &(worn[&1] == 1)))
 
       _own_or_none ->

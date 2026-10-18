@@ -319,7 +319,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
   def build_layout_information(params) do
     layout_info_ast =
       quote do
-        def __layout_information__() do
+        def __layout_information__ do
           %{
             layout: %{
               title: unquote(params[:title]),

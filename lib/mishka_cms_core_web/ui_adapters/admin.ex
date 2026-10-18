@@ -28,8 +28,8 @@ defmodule MishkaCmsCoreWeb.UIAdapters.Admin do
 
   # The content editor's look, written on its root because the engine and the hook build the DOM
   # these reach: the document, a placed component's block and its code, the grip and lines that
-  # move what it holds, the drag handle, the fallback box. What a preview draws is in a shadow root with the site's own stylesheet — see
-  # `ContentComponentPicker` — so nothing here reaches inside it.
+  # move what it holds, the drag handle, the fallback box. What a preview draws is in a shadow root
+  # with the site's own stylesheet — see `ContentComponentPicker` — so nothing here reaches inside it.
   @content_editor_classes [
     "relative rounded-[12px] border border-[#ecebe6] bg-white transition-shadow",
     "data-[focused]:border-[#c3c1f0] data-[focused]:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]",

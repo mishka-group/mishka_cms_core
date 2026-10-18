@@ -68,7 +68,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
     placements
     |> Enum.filter(fn {name, _id} -> name in live end)
     |> Enum.group_by(fn {_name, id} -> id end)
-    |> Enum.find(fn {_id, group} -> length(group) > 1 end)
+    |> Enum.find(fn {_id, group} -> match?([_, _ | _], group) end)
     |> case do
       nil ->
         :ok

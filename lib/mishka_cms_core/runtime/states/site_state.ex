@@ -279,7 +279,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   Checks if an origin is allowed for any active site (O(1)).
   Returns {true, site} if allowed, false otherwise.
   """
-  def is_allowed_origin?(origin) do
+  def allowed_origin?(origin) do
     case :ets.lookup(@allowed_origins_index, origin) do
       [{^origin, id} | _] ->
         case get(id) do

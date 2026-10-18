@@ -459,7 +459,7 @@ defmodule MishkaCmsCore.Runtime.Languages do
   defp filled_segment("*" <> name, captures) do
     case Map.get(captures, name) do
       rest when is_binary(rest) and rest != "" ->
-        rest |> String.split("/") |> Enum.map(&encode/1) |> Enum.join("/")
+        rest |> String.split("/") |> Enum.map_join("/", &encode/1)
 
       _missing ->
         nil
