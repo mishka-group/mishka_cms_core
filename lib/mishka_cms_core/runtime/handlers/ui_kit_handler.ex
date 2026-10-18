@@ -517,9 +517,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     with {:ok, url} <- valid_url(url),
          {:ok, bundle} <- download_bundle(url),
          :ok <- validate_bundle_shape(bundle),
-         :ok <- unique_name(bundle["name"], dir) do
+         :ok <- unique_name(bundle["name"], dir),
+         {:ok, path} <- custom_kit_path(dir, bundle["name"]) do
       bundle = Map.put(bundle, "source_url", url)
-      cache_bundle(bundle, Path.join(dir, "#{slug(bundle["name"])}.json"))
+      cache_bundle(bundle, path)
 
       Logger.info("[UiKitHandler] added custom kit #{bundle["name"]} from #{url}")
       {:ok, bundle}
@@ -551,6 +552,24 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
          gettext(
            "That response is not a mishka.ui_kit.bundle.v3 — it needs a \"$schema\", a \"name\" and a \"components\" list."
          )}
+
+      {:error, :invalid_kit_name} ->
+        {:error,
+         gettext(
+           "That kit's name is not valid — use lowercase letters, numbers, - and _, start with a letter or a number, and stay within 64 characters."
+         )}
+    end
+  end
+
+  # THE NAME IS A FILE NAME, so it is the one place a bundle's text becomes a path. `validate_bundle/1`
+  # has already refused anything but a plain name; the base name and the relative check are the
+  # second lock, so a change to that rule cannot let a name climb out of the kits folder.
+  defp custom_kit_path(dir, name) do
+    file = name |> slug() |> Path.basename() |> Kernel.<>(".json")
+
+    case Path.safe_relative(file, dir) do
+      {:ok, relative} -> {:ok, Path.join(dir, relative)}
+      :error -> {:error, gettext("That kit's name cannot be used as a file name.")}
     end
   end
 
@@ -1677,10 +1696,19 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   # Revisit when a SECOND kit ships. That is the first moment the guesses here can be wrong, and the
   # moment a declared contract starts paying for itself.
   defp validate_bundle(%{"$schema" => "mishka.ui_kit.bundle.v3", "name" => n, "components" => cs})
-       when is_binary(n) and is_list(cs),
-       do: :ok
+       when is_binary(n) and is_list(cs) do
+    case Regex.match?(kit_name_pattern(), n) do
+      true -> :ok
+      false -> {:error, :invalid_kit_name}
+    end
+  end
 
   defp validate_bundle(_), do: {:error, :not_a_v3_bundle}
+
+  # The name becomes the kit's file name and its component prefix: a lowercase letter or number,
+  # then letters, numbers, `-` and `_`, 64 characters at most. `\A…\z` and not `^…$`, which let a
+  # trailing newline through.
+  defp kit_name_pattern, do: ~r/\A[a-z0-9][a-z0-9_-]{0,63}\z/
 
   defp apply_selection(components, :all, _kit_name), do: components
 

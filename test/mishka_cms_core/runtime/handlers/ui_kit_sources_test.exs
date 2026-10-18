@@ -577,6 +577,69 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitSourcesTest do
       assert File.ls!(dir) == []
     end
 
+    # THE NAME BECOMES A FILE NAME. A kit called `../../x` once wrote `x.json`, with the bundle's text
+    # in it, outside the kits folder.
+    test "a name that could leave the kits folder is refused, and nothing is written", %{dir: dir} do
+      kits = Path.join(dir, "kits")
+      File.mkdir_p!(kits)
+
+      for name <- [
+            "../escaped",
+            "../../escaped",
+            "a/b",
+            "/etc/escaped",
+            "..",
+            ".",
+            "a\nb",
+            "acme\n",
+            "Acme",
+            "-acme",
+            "_acme",
+            "ac me",
+            "acme.json",
+            "evil/../../x",
+            "",
+            String.duplicate("a", 65)
+          ] do
+        serve_body!(200, Jason.encode!(bundle(name)))
+
+        assert {:error, reason} =
+                 UiKitHandler.add_custom_kit("https://example.test/kit.json", kits_dir: kits)
+
+        assert reason =~ "name is not valid", inspect(name)
+      end
+
+      assert File.ls!(kits) == []
+      assert File.ls!(dir) == ["kits"], "nothing may be written beside the kits folder either"
+    end
+
+    test "a plain name is stored as its own file inside the kits folder", %{dir: dir} do
+      kits = Path.join(dir, "kits")
+      File.mkdir_p!(kits)
+
+      for name <- ["a", "acme9", "my_kit", String.duplicate("a", 64)] do
+        serve_body!(200, Jason.encode!(bundle(name)))
+
+        assert {:ok, %{"name" => ^name}} =
+                 UiKitHandler.add_custom_kit("https://example.test/kit.json", kits_dir: kits)
+      end
+
+      assert kits |> File.ls!() |> Enum.sort() ==
+               Enum.sort([
+                 "a.json",
+                 "acme9.json",
+                 "my-kit.json",
+                 String.duplicate("a", 64) <> ".json"
+               ])
+    end
+
+    test "a bundle on disk whose name is not a plain name is not read", %{dir: dir} do
+      path = place!(dir, "odd.json", bundle("../odd"))
+
+      assert UiKitHandler.read_bundle(path) == {:error, :invalid_kit_name}
+      assert UiKitHandler.available_kits(dir) == []
+    end
+
     test "a transport failure is reported, not raised", %{dir: dir} do
       Application.put_env(:mishka_cms_core, :ui_kit_req_options, [])
 
