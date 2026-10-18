@@ -10,6 +10,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.MentionsTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  doctest MishkaCmsCore.Runtime.PageBuilder.Mentions
+
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Notify.Notification

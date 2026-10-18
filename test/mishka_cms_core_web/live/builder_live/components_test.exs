@@ -570,7 +570,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
           "index" => "0"
         })
 
-      assert html =~ "inside itself" or html =~ "text and inline"
+      assert html =~ "inside itself"
       refute html =~ "Placed after"
       assert view |> editor() |> Map.fetch!(:tree) |> Tree.size() == before
     end
@@ -587,7 +587,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
           "index" => "0"
         })
 
-      assert html =~ "inside itself" or html =~ "text and inline"
+      assert html =~ "inside itself"
       assert Tree.get(view |> editor() |> Map.fetch!(:tree), section.id).parent_id == nil
     end
 
@@ -2665,8 +2665,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
         refute "form-fieldset" in ids, section
         refute "form-newsletter" in ids, section
 
-        assert "hero-split" in ids or ids != [],
-               "everything else still belongs everywhere"
+        assert ids != [], "everything else still belongs everywhere"
       end
     end
 

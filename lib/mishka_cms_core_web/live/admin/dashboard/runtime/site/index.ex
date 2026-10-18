@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index do
+  @moduledoc false
   use MishkaCmsCore.ExtensionLiveView
   alias MishkaGervaz.Table.Web.UrlSync
   alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed

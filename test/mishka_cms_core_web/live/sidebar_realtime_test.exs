@@ -131,8 +131,8 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
     end
   end
 
-  defp gone(view, selector), do: until(view, fn -> not shows?(view, selector) end)
-  defp back(view, selector), do: until(view, fn -> shows?(view, selector) end)
+  defp assert_gone(view, selector), do: until(view, fn -> not shows?(view, selector) end)
+  defp assert_back(view, selector), do: until(view, fn -> shows?(view, selector) end)
 
   describe "a site's admins" do
     test "every open page of the site loses a place switched off, and gets it back when on", %{
@@ -146,14 +146,14 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       save_media(settings, false)
 
-      gone(settings, @media_link)
-      gone(elsewhere, @media_link)
+      assert_gone(settings, @media_link)
+      assert_gone(elsewhere, @media_link)
       assert shows?(elsewhere, @pages_link)
 
       save_media(settings, true)
 
-      back(settings, @media_link)
-      back(elsewhere, @media_link)
+      assert_back(settings, @media_link)
+      assert_back(elsewhere, @media_link)
     end
 
     test "another site's admin keeps the place", %{site: site, other: other} do
@@ -161,7 +161,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
       outsider = open("other.test", "outsider@example.com", other.id, @other_page)
 
       save_media(settings, false)
-      gone(settings, @media_link)
+      assert_gone(settings, @media_link)
 
       assert shows?(outsider, @media_link)
       refute Settings.get(@media_key, true, other.id) == false
@@ -173,7 +173,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       {:ok, _} = Settings.put(@media_key, false, site_id: other.id)
 
-      gone(there, @media_link)
+      assert_gone(there, @media_link)
       assert shows?(here, @media_link)
     end
   end
@@ -186,14 +186,14 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       save_media(master, false)
 
-      gone(master, @media_link)
-      gone(here, @media_link)
-      gone(there, @media_link)
+      assert_gone(master, @media_link)
+      assert_gone(here, @media_link)
+      assert_gone(there, @media_link)
 
       save_media(master, true)
 
-      back(here, @media_link)
-      back(there, @media_link)
+      assert_back(here, @media_link)
+      assert_back(there, @media_link)
     end
   end
 
@@ -225,14 +225,14 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       {:ok, _} = Settings.put("mishka_probe.active", false, site_id: site.id)
 
-      gone(here, @probe_link)
-      gone(second, @probe_link)
+      assert_gone(here, @probe_link)
+      assert_gone(second, @probe_link)
       assert shows?(there, @probe_link)
 
       {:ok, _} = Settings.put("mishka_probe.active", true, site_id: site.id)
 
-      back(here, @probe_link)
-      back(second, @probe_link)
+      assert_back(here, @probe_link)
+      assert_back(second, @probe_link)
     end
 
     test "switched off for every site, drops it on all of them", %{site: site, other: other} do
@@ -241,8 +241,8 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       {:ok, _} = Settings.put("mishka_probe.active", false)
 
-      gone(here, @probe_link)
-      gone(there, @probe_link)
+      assert_gone(here, @probe_link)
+      assert_gone(there, @probe_link)
     end
   end
 

@@ -320,7 +320,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SiteDetailsModal do
   defp master_user?(_), do: false
 
   defp domain_url(domain) do
-    if String.starts_with?(domain, "http"), do: domain, else: "https://" <> domain
+    if MishkaCmsCore.Runtime.OriginValidator.web_url?(domain),
+      do: domain,
+      else: "https://" <> domain
   end
 
   defp parts_total(parts) when is_list(parts), do: Enum.sum(Enum.map(parts, &(&1.active || 0)))

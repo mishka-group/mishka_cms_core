@@ -960,7 +960,6 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
       h1 = node_with_tag(view, "h1")
       render_click(canvas, "select", %{"id" => h1.id})
 
-      assert render(view) =~ "Attributes" or editor(view).selection == h1.id
       assert editor(view).selection == h1.id
     end
 
@@ -2018,13 +2017,9 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
       # with a tick box on each, and the tick box is for Archive and Featured — it picks nothing.
       assert html =~ "press <b>Use</b> on a file below"
 
-      # The Use button is the resource's own row action, rendered by the Gervaz gallery. It reaches
-      # this LiveView as `{:row_action, "use_media", %{"id" => id}}`.
-      html = render(view)
-
-      assert html =~ "editor_pick_node" or html =~ "Use",
-             "the gallery must offer the editor's own action while something is choosing"
-
+      # The Use button is the resource's own row action, rendered by the Gervaz gallery (see
+      # `AssetsSheetRoutesTest`). It reaches this LiveView as
+      # `{:row_action, "use_media", %{"id" => id}}`.
       send(view.pid, {:row_action, "use_media", %{"id" => media_id}})
       _rendered = render(view)
 
@@ -2496,7 +2491,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
 
       file =
         file_input(view, "#pb-media-upload #media_form-form", :media_files_media_form, [
-          %{name: "shot.png", content: "shot", type: "image/png"}
+          %{name: "shot.png", content: MishkaCmsCore.Test.Files.png(), type: "image/png"}
         ])
 
       render_upload(file, "shot.png")

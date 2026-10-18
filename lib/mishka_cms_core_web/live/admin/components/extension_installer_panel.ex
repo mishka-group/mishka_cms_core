@@ -424,6 +424,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
         <form
           :if={clashes(@setup.report) != []}
           id={"#{@id}-clashes"}
+          phx-auto-recover="ignore"
           phx-submit="extension_retry"
           class="mt-[13px] rounded-lg border border-[#f3e3c3] bg-[#fdf8ee] p-[13px]"
         >

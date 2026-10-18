@@ -17,6 +17,8 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  require Ash.Query
+
   import MishkaCmsCore.Test.Factory
   import Swoosh.TestAssertions
 
@@ -391,6 +393,95 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
       SendMagicLinkEmail.send(user_with(["probe:role"], site.id), "token", tenant: site.id)
 
       assert_receive {:email_held, ^site_id}
+    end
+  end
+
+  # A WAY IN THAT ASKED NO AUTHENTICATOR CODE opens no session for an account that has one. The token
+  # AshAuthentication signed for the reset was never handed out, and is revoked so none is left valid.
+  describe "a password reset of an account with an authenticator" do
+    defp enable_authenticator!(user) do
+      started =
+        user
+        |> Ash.Changeset.for_update(:setup_with_totp, %{}, actor: user, tenant: user.site_id)
+        |> Ash.update!()
+
+      secret =
+        started.__metadata__.totp_url
+        |> URI.parse()
+        |> Map.fetch!(:query)
+        |> URI.decode_query()
+        |> Map.fetch!("secret")
+        |> Base.decode32!(padding: false)
+
+      user
+      |> Ash.Changeset.for_update(
+        :confirm_setup_with_totp,
+        %{
+          setup_token: started.__metadata__.setup_token,
+          code: NimbleTOTP.verification_code(secret)
+        },
+        actor: user,
+        tenant: user.site_id
+      )
+      |> Ash.update!()
+    end
+
+    defp reset(conn, user) do
+      strategy = AshAuthentication.Info.strategy!(User, :password)
+      {:ok, token} = AshAuthentication.Strategy.Password.reset_token_for(strategy, user)
+
+      post(conn, "/api/auth/user/password/reset", %{
+        "user" => %{
+          "reset_token" => token,
+          "password" => @password,
+          "password_confirmation" => @password
+        }
+      })
+    end
+
+    defp token_purposes(user) do
+      subject = "user?id=#{user.id}"
+
+      MishkaCmsCore.Accounts.Token
+      |> Ash.Query.for_read(:read, %{}, authorize?: false)
+      |> Ash.Query.filter(subject == ^subject)
+      |> Ash.read!(authorize?: false)
+      |> Enum.map(& &1.purpose)
+      |> Enum.frequencies()
+    end
+
+    test "sends the visitor to sign in with the code, and leaves no new token valid", %{
+      conn: conn,
+      site: site
+    } do
+      user = "reset-totp@example.com" |> register_user(site.id) |> enable_authenticator!()
+      before = token_purposes(user)
+      assert Map.get(before, "user", 0) > 0, "the account holds a valid token to begin with"
+
+      conn = reset(conn, user)
+
+      assert redirected_to(conn) == "/auth"
+
+      assert Phoenix.Flash.get(conn.assigns.flash, :info) ==
+               "Sign in with your password and the code from your authenticator app."
+
+      refute get_session(conn, "user_token"), "a session was opened without the code"
+
+      after_reset = token_purposes(user)
+
+      assert Map.keys(after_reset) == ["revocation"],
+             "the reset left a token that is not revoked: #{inspect(after_reset)}"
+
+      assert after_reset["revocation"] > Map.get(before, "revocation", 0)
+    end
+
+    test "an account without one is signed in by the same reset", %{conn: conn, site: site} do
+      user = register_user("reset-plain@example.com", site.id)
+
+      conn = reset(conn, user)
+
+      assert redirected_to(conn) == "/"
+      assert get_session(conn, "user_token")
     end
   end
 

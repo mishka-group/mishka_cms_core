@@ -1649,7 +1649,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         page
         |> Ash.Changeset.for_update(:master_update, %{name: "With Tenant"}, tenant: site.id)
 
-      assert changeset.errors != [] or not changeset.valid?
+      refute changeset.valid?
     end
   end
 
@@ -1695,7 +1695,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         page
         |> Ash.Changeset.for_update(:master_unarchive, %{}, authorize?: false)
 
-      assert not changeset.valid? or changeset.errors != []
+      refute changeset.valid?
     end
   end
 

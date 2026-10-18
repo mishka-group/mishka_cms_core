@@ -68,7 +68,7 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   require Ash.Expr
   require Ash.Query
 
-  alias MishkaCmsCore.Accounts.{AuthRateLimit, Helper, RecoveryCode, User}
+  alias MishkaCmsCore.Accounts.{AuthRateLimit, Helper, RecoveryCode, Token, User}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Accounts.SecondFactor.Needed
@@ -386,25 +386,13 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   end
 
   defp refused(user, error) do
-    revoke_minted(user)
+    Token.revoke_minted(user)
 
     Hook.call(
       "auth:second_factor:refused",
       %{user_id: user.id, site_id: user.site_id, reason: reason(error)},
       return: false
     )
-  end
-
-  # AshAuthentication signs — and, with `store_all_tokens?`, stores — the account's token before
-  # this check runs. It is never handed out, and is revoked here so no unused one is left valid.
-  defp revoke_minted(user) do
-    case Ash.Resource.get_metadata(user, :token) do
-      token when is_binary(token) ->
-        AshAuthentication.TokenResource.revoke(MishkaCmsCore.Accounts.Token, token)
-
-      _none ->
-        :ok
-    end
   end
 
   defp reason(%Needed{reason: reason}), do: reason

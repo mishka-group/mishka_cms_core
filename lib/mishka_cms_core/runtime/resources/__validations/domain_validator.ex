@@ -21,9 +21,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
   @impl true
   def validate(changeset, _opts, _context) do
     with :ok <- validate_host(changeset),
-         :ok <- validate_frontend_domain(changeset),
-         :ok <- validate_allowed_origins(changeset) do
-      :ok
+         :ok <- validate_frontend_domain(changeset) do
+      validate_allowed_origins(changeset)
     end
   end
 
@@ -102,14 +101,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
   end
 
   defp domain_regex do
-    ~r/^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$/
-  end
-
-  # The scheme is mandatory: an `Origin` header always carries one, and the Site guardedstruct
-  # already rejects scheme-less entries on write, so accepting them here only disagreed with the
-  # resource without ever admitting a value.
-  defp origin_regex do
-    ~r/^https?:\/\/[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*(:[0-9]{1,5})?(\/.*)?$/
+    ~r/\A[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*\z/
   end
 
   defp valid_domain?(domain) when is_binary(domain) do
@@ -118,8 +110,19 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
 
   defp valid_domain?(_), do: false
 
+  # The scheme is mandatory: an `Origin` header always carries one, and the Site guardedstruct
+  # already rejects scheme-less entries on write, so accepting them here only disagreed with the
+  # resource without ever admitting a value. The host is read with `URI.new/1`, and a port that is
+  # not a number, a user name before the host or a line break anywhere is not an origin.
   defp valid_origin?(origin) when is_binary(origin) do
-    String.match?(origin, origin_regex())
+    with true <- String.starts_with?(origin, ["http://", "https://"]),
+         false <- String.contains?(origin, [" ", "\t", "\n", "\r"]),
+         {:ok, %URI{scheme: scheme, host: host, userinfo: nil}} when scheme in ["http", "https"] <-
+           URI.new(origin) do
+      valid_domain?(host)
+    else
+      _not_an_origin -> false
+    end
   end
 
   defp valid_origin?(_), do: false

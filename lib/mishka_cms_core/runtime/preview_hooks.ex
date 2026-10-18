@@ -99,7 +99,7 @@ defmodule MishkaCmsCore.Runtime.PreviewHooks do
   defp names_for(_site), do: {[], []}
 
   defp base_of(hook),
-    do: hook.name |> String.split("-") |> Enum.map(&String.capitalize/1) |> Enum.join("")
+    do: hook.name |> String.split("-") |> Enum.map_join("", &String.capitalize/1)
 
   defp rewrite(template, registered, bases) do
     case Tree.parse(template) do

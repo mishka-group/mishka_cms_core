@@ -737,7 +737,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree do
 
   defp unshare_scope(tree, %Node{} = node, worn) do
     case Enum.uniq(scopes_of(node)) do
-      shared when length(shared) > 1 ->
+      [_, _ | _] = shared ->
         keep_own_scope(tree, node, shared, Enum.filter(shared, &(worn[&1] == 1)))
 
       _own_or_none ->
@@ -971,9 +971,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree do
       parent = node.parent_id || :root
       index = index_of(tree, id) || 0
 
-      with {:ok, tree} <- insert(tree, %{wrapper | children: []}, parent, index),
-           {:ok, tree} <- move(tree, id, wrapper.id, 0) do
-        {:ok, tree}
+      with {:ok, tree} <- insert(tree, %{wrapper | children: []}, parent, index) do
+        move(tree, id, wrapper.id, 0)
       end
     end
   end

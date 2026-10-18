@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCore.Secrets do
+  @moduledoc false
   use AshAuthentication.Secret
 
   def secret_for(

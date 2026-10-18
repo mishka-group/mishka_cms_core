@@ -104,11 +104,13 @@ defmodule MishkaCmsCoreWeb.Templates.SnippetForm do
         </span>
       </div>
 
-      <form id="pb-snippet-form" phx-submit="save" phx-target={@myself}>
+      <form id="pb-snippet-form" phx-change="validate" phx-submit="save" phx-target={@myself}>
         <input
           type="text"
           id="pb-snippet-name"
           name="form[name]"
+          value={typed(@state, :name)}
+          phx-debounce="blur"
           dir="auto"
           placeholder={gettext("Name this snippet…")}
           autocomplete="off"
@@ -155,18 +157,23 @@ defmodule MishkaCmsCoreWeb.Templates.SnippetForm do
 
     @scopes
     |> Enum.reject(fn {value, _label} ->
-      value == "page" and is_nil(defaults[:editor_document_id])
+      (value == "page" and is_nil(defaults[:editor_document_id])) or
+        (value == "global" and !master?(state))
     end)
-    |> Enum.reject(fn {value, _label} -> value == "global" and !master?(state) end)
     |> Enum.map(fn {value, label} -> {value, Gettext.gettext(MishkaCmsCore.Gettext, label)} end)
   end
 
   defp selected_scope(state) do
     allowed = state |> scopes() |> Enum.map(&elem(&1, 0))
-    preferred = defaults(state)[:visibility] || "shared"
+    preferred = typed(state, :visibility) || defaults(state)[:visibility] || "shared"
 
     if preferred in allowed, do: preferred, else: List.first(allowed) || "shared"
   end
+
+  defp typed(%{form: %Phoenix.HTML.Form{params: %{} = params}}, field),
+    do: Map.get(params, to_string(field))
+
+  defp typed(_state, _field), do: nil
 
   defp defaults(%{defaults: defaults}) when is_map(defaults), do: defaults
   defp defaults(_state), do: %{}

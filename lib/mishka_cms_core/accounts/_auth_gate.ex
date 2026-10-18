@@ -62,7 +62,7 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
 
   alias MishkaCmsCore.Accounts.AuthGate.Closed
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
-  alias MishkaCmsCore.Accounts.{LiveSockets, User}
+  alias MishkaCmsCore.Accounts.{LiveSockets, Token, User}
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
@@ -159,7 +159,7 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
   Signs `user` out on every device with AshAuthentication's `log_out_everywhere`, which revokes every
   token it holds for them, and cuts their open pages.
   """
-  @spec sign_out(Ash.Resource.record(), String.t() | nil) :: :ok
+  @spec sign_out(Ash.Resource.Record.t(), String.t() | nil) :: :ok
   def sign_out(user, site_id) do
     :ok =
       User
@@ -190,23 +190,11 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
             {:cont, ok}
 
           {:error, closed} ->
-            revoke_minted(user)
+            Token.revoke_minted(user)
             {:halt, {:error, closed}}
         end
       end)
     end)
-  end
-
-  # AshAuthentication signs — and, with `store_all_tokens?`, stores — the account's token before
-  # this check runs. It is never handed out, and is revoked here so no unused one is left valid.
-  defp revoke_minted(user) do
-    case Ash.Resource.get_metadata(user, :token) do
-      token when is_binary(token) ->
-        AshAuthentication.TokenResource.revoke(MishkaCmsCore.Accounts.Token, token)
-
-      _none ->
-        :ok
-    end
   end
 
   @doc """

@@ -3,7 +3,13 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
+  @moduledoc """
+  The CORS origins each site allows, held in `SiteState` as `{scheme, host, port}` the way
+  `MishkaCmsCore.Runtime.OriginValidator.site_origins/1` reads them, and asked for by
+  `SiteState.allows_origin?/2` with the origin a request names.
+  """
   use ExUnit.Case, async: false
+  alias MishkaCmsCore.Runtime.OriginValidator
   alias MishkaCmsCore.Runtime.States.SiteState
   @moduletag :unit
 
@@ -34,6 +40,67 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
     end)
 
     :ok
+  end
+
+  defp allows?(site_id, value) do
+    {:ok, origin} = OriginValidator.request_origin(value)
+    SiteState.allows_origin?(site_id, origin)
+  end
+
+  describe "a frontend domain" do
+    test "that only starts with http is a domain, not an address" do
+      assert :ok =
+               SiteState.save(%{
+                 id: "http_site",
+                 name: "Http Site",
+                 host: "http.example.com",
+                 priority: 100,
+                 active: true,
+                 frontend_domain: "httpbin.example.com"
+               })
+
+      assert allows?("http_site", "https://httpbin.example.com")
+      refute allows?("http_site", "http://httpbin.example.com")
+    end
+
+    test "that is a full address is indexed as it is written" do
+      assert :ok =
+               SiteState.save(%{
+                 id: "full_site",
+                 name: "Full Site",
+                 host: "full.example.com",
+                 priority: 100,
+                 active: true,
+                 frontend_domain: "https://app.example.com"
+               })
+
+      assert allows?("full_site", "https://app.example.com")
+      refute allows?("full_site", "http://app.example.com")
+    end
+
+    test "that is a loopback domain allows http as well, on the port it writes" do
+      :ok =
+        SiteState.save(%{
+          id: "dev_site",
+          name: "Dev Site",
+          host: "site-a.localhost",
+          priority: 1,
+          active: true,
+          frontend_domain: "localhost:5173"
+        })
+
+      for origin <- [
+            "https://site-a.localhost",
+            "http://site-a.localhost",
+            "https://localhost:5173",
+            "http://localhost:5173"
+          ] do
+        assert allows?("dev_site", origin), origin
+      end
+
+      refute allows?("dev_site", "http://localhost:5174")
+      refute allows?("dev_site", "http://site-a.localhost:4000")
+    end
   end
 
   describe "allowed_origins indexing" do
@@ -70,10 +137,11 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
       assert site.mode == :hybrid
       assert site.frontend_domain == nil
       assert site.allowed_origins == []
+      assert allows?("default_site", "https://default.com")
     end
   end
 
-  describe "get_by_allowed_origin/1" do
+  describe "allows_origin?/2" do
     setup do
       sites = [
         %{
@@ -112,83 +180,40 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
       :ok
     end
 
-    test "finds site by allowed origin" do
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://admin1.com")
-      assert site.id == "site_1"
+    test "answers for the site's own host, frontend domain and allowed origins" do
+      for origin <- [
+            "https://api1.com",
+            "https://app1.com",
+            "https://admin1.com",
+            "https://partner1.com"
+          ] do
+        assert allows?("site_1", origin), origin
+      end
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://partner1.com")
-      assert site.id == "site_1"
-
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://admin2.com")
-      assert site.id == "site_2"
+      for origin <- ["https://api2.com", "https://app2.com", "https://admin2.com"] do
+        assert allows?("site_2", origin), origin
+      end
     end
 
-    test "finds site by frontend_domain when it's a full origin" do
-      # site_2 has frontend_domain as full origin
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://app2.com")
-      assert site.id == "site_2"
+    test "answers for the site asked about, not for another that allows the origin" do
+      refute allows?("site_2", "https://admin1.com")
+      refute allows?("site_1", "https://app2.com")
     end
 
-    test "finds site by frontend_domain when it's just a domain" do
-      # site_1 has frontend_domain as just domain, should match both http and https
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://app1.com")
-      assert site.id == "site_1"
-
-      assert {:ok, site} = SiteState.get_by_allowed_origin("http://app1.com")
-      assert site.id == "site_1"
+    test "a bare frontend domain is https only, on its own port" do
+      assert allows?("site_1", "https://app1.com")
+      refute allows?("site_1", "http://app1.com")
+      refute allows?("site_1", "https://app1.com:8443")
     end
 
-    test "returns not found for unknown origin" do
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://unknown.com")
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("http://notallowed.com")
-    end
-  end
-
-  describe "is_allowed_origin?/1" do
-    setup do
-      sites = [
-        %{
-          id: "active_site",
-          name: "Active Site",
-          host: "api.active.com",
-          priority: 100,
-          active: true,
-          mode: "api_only",
-          frontend_domain: "app.active.com",
-          allowed_origins: ["https://admin.active.com"]
-        },
-        %{
-          id: "inactive_site",
-          name: "Inactive Site",
-          host: "api.inactive.com",
-          priority: 90,
-          active: false,
-          mode: "api_only",
-          frontend_domain: "app.inactive.com",
-          allowed_origins: ["https://admin.inactive.com"]
-        }
-      ]
-
-      SiteState.save_batch(sites)
-      :ok
+    test "answers whether the site is active or not — the plug decides what to do with that" do
+      assert allows?("site_3", "https://api3.com")
     end
 
-    test "returns {true, site} for allowed origin of active site" do
-      assert {true, site} = SiteState.is_allowed_origin?("https://admin.active.com")
-      assert site.id == "active_site"
-
-      # Frontend domain also works
-      assert {true, site} = SiteState.is_allowed_origin?("https://app.active.com")
-      assert site.id == "active_site"
-    end
-
-    test "returns false for allowed origin of inactive site" do
-      assert false == SiteState.is_allowed_origin?("https://admin.inactive.com")
-      assert false == SiteState.is_allowed_origin?("https://app.inactive.com")
-    end
-
-    test "returns false for unknown origin" do
-      assert false == SiteState.is_allowed_origin?("https://unknown.com")
+    test "is false for an unknown origin, an unknown site and a site id of nil" do
+      refute allows?("site_1", "https://unknown.com")
+      refute allows?("no_such_site", "https://api1.com")
+      refute allows?(nil, "https://api1.com")
     end
   end
 
@@ -231,34 +256,38 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       SiteState.save_batch(sites)
 
-      # Check site_a origins
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://app-a.com")
-      assert site.id == "site_a"
+      for origin <- ["https://app-a.com", "https://admin-a.com", "https://partner-a.com"] do
+        assert allows?("site_a", origin), origin
+      end
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("http://app-a.com")
-      assert site.id == "site_a"
+      refute allows?("site_a", "http://app-a.com")
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://admin-a.com")
-      assert site.id == "site_a"
+      assert allows?("site_b", "https://app-b.com")
+      assert allows?("site_b", "https://admin-b.com")
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://partner-a.com")
-      assert site.id == "site_a"
+      refute allows?("site_c", "https://app-c.com")
+    end
 
-      # Check site_b origins
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://app-b.com")
-      assert site.id == "site_b"
+    test "a batch over a site already held replaces what it allows" do
+      site = %{
+        id: "site_r",
+        name: "Site R",
+        host: "api-r.com",
+        priority: 1,
+        active: true,
+        allowed_origins: ["https://old-r.com"]
+      }
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://admin-b.com")
-      assert site.id == "site_b"
+      :ok = SiteState.save(site)
+      :ok = SiteState.save_batch([%{site | allowed_origins: ["https://new-r.com"]}])
 
-      # Site_c has no allowed origins
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://app-c.com")
+      refute allows?("site_r", "https://old-r.com")
+      assert allows?("site_r", "https://new-r.com")
     end
   end
 
   describe "updating site with allowed_origins" do
     test "properly updates allowed_origins index when site is updated" do
-      # Initial save
       attrs1 = %{
         id: "update_test",
         name: "Update Test",
@@ -272,40 +301,37 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       SiteState.save(attrs1)
 
-      # Verify initial origins work
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://old-app.test.com")
-      assert site.id == "update_test"
+      assert allows?("update_test", "https://old-app.test.com")
+      assert allows?("update_test", "https://old-admin.test.com")
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://old-admin.test.com")
-      assert site.id == "update_test"
-
-      # Update with new origins
       attrs2 = %{
-        id: "update_test",
-        name: "Update Test",
-        host: "api.test.com",
-        priority: 100,
-        active: true,
-        mode: "api_only",
-        frontend_domain: "new-app.test.com",
-        allowed_origins: ["https://new-admin.test.com", "https://new-partner.test.com"]
+        attrs1
+        | frontend_domain: "new-app.test.com",
+          allowed_origins: ["https://new-admin.test.com", "https://new-partner.test.com"]
       }
 
       SiteState.save(attrs2)
 
-      # Old origins should not work
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://old-app.test.com")
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://old-admin.test.com")
+      refute allows?("update_test", "https://old-app.test.com")
+      refute allows?("update_test", "https://old-admin.test.com")
 
-      # New origins should work
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://new-app.test.com")
-      assert site.id == "update_test"
+      for origin <- [
+            "https://new-app.test.com",
+            "https://new-admin.test.com",
+            "https://new-partner.test.com"
+          ] do
+        assert allows?("update_test", origin), origin
+      end
+    end
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://new-admin.test.com")
-      assert site.id == "update_test"
+    test "a new host takes the old one's origin with it" do
+      attrs = %{id: "rehost", name: "Rehost", host: "old-host.com", priority: 1, active: true}
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://new-partner.test.com")
-      assert site.id == "update_test"
+      :ok = SiteState.save(attrs)
+      :ok = SiteState.save(%{attrs | host: "new-host.com"})
+
+      refute allows?("rehost", "https://old-host.com")
+      assert allows?("rehost", "https://new-host.com")
     end
 
     test "handles clearing allowed_origins" do
@@ -322,27 +348,32 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       SiteState.save(attrs1)
 
-      # Verify origins work
-      assert {:ok, _} = SiteState.get_by_allowed_origin("https://app.clear.com")
-      assert {:ok, _} = SiteState.get_by_allowed_origin("https://admin.clear.com")
+      assert allows?("clear_test", "https://app.clear.com")
+      assert allows?("clear_test", "https://admin.clear.com")
 
-      # Update with no origins
-      attrs2 = %{
-        id: "clear_test",
-        name: "Clear Test",
-        host: "api.clear.com",
-        priority: 100,
-        active: true,
-        mode: "phoenix_only",
-        frontend_domain: nil,
-        allowed_origins: []
-      }
+      SiteState.save(%{attrs1 | mode: "phoenix_only", frontend_domain: nil, allowed_origins: []})
 
-      SiteState.save(attrs2)
+      refute allows?("clear_test", "https://app.clear.com")
+      refute allows?("clear_test", "https://admin.clear.com")
+      assert allows?("clear_test", "https://api.clear.com")
+    end
 
-      # Origins should not work anymore
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://app.clear.com")
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://admin.clear.com")
+    test "set_master/1 and unset_master/0 keep what the site allows" do
+      :ok =
+        SiteState.save(%{
+          id: "master_test",
+          name: "Master Test",
+          host: "master.test.com",
+          priority: 1,
+          active: true,
+          allowed_origins: ["https://partner.test.com"]
+        })
+
+      {:ok, _site} = SiteState.set_master("master_test")
+      assert allows?("master_test", "https://partner.test.com")
+
+      {:ok, _site} = SiteState.unset_master()
+      assert allows?("master_test", "https://partner.test.com")
     end
   end
 
@@ -361,16 +392,35 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       SiteState.save(attrs)
 
-      # Verify origins work
-      assert {:ok, _} = SiteState.get_by_allowed_origin("https://app.delete.com")
-      assert {:ok, _} = SiteState.get_by_allowed_origin("https://admin.delete.com")
+      assert allows?("delete_test", "https://app.delete.com")
+      assert allows?("delete_test", "https://admin.delete.com")
 
-      # Delete the site
       SiteState.delete("delete_test")
 
-      # Origins should not work anymore
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://app.delete.com")
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("https://admin.delete.com")
+      for origin <- [
+            "https://api.delete.com",
+            "https://app.delete.com",
+            "https://admin.delete.com"
+          ] do
+        refute allows?("delete_test", origin), origin
+      end
+
+      assert :ets.lookup(:mishka_sites_allowed_origins_index, "delete_test") == []
+    end
+
+    test "clear/0 drops every site's origins" do
+      :ok =
+        SiteState.save(%{
+          id: "clear_all",
+          name: "Clear All",
+          host: "all.com",
+          priority: 1,
+          active: true
+        })
+
+      SiteState.clear()
+
+      refute allows?("clear_all", "https://all.com")
     end
   end
 
@@ -481,13 +531,15 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       SiteState.save_batch(sites)
 
-      # Both sites allow the same origin
-      # get_by_allowed_origin will return one of them (first found)
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://shared-app.com")
-      assert site.id in ["site_1", "site_2"]
+      for site_id <- ["site_1", "site_2"],
+          origin <- ["https://shared-app.com", "https://shared-admin.com"] do
+        assert allows?(site_id, origin), "#{site_id} #{origin}"
+      end
 
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://shared-admin.com")
-      assert site.id in ["site_1", "site_2"]
+      SiteState.delete("site_1")
+
+      refute allows?("site_1", "https://shared-admin.com")
+      assert allows?("site_2", "https://shared-admin.com")
     end
 
     test "handles empty strings in frontend_domain and allowed_origins" do
@@ -504,12 +556,12 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       SiteState.save(attrs)
 
-      # Empty strings should be ignored
-      assert {:error, :not_found} = SiteState.get_by_allowed_origin("")
+      assert allows?("empty_test", "https://valid.com")
 
-      # Valid origin should work
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://valid.com")
-      assert site.id == "empty_test"
+      assert :ets.lookup(:mishka_sites_allowed_origins_index, "empty_test") == [
+               {"empty_test",
+                MapSet.new([{"https", "empty.com", 443}, {"https", "valid.com", 443}])}
+             ]
     end
 
     test "handles nil frontend_domain" do
@@ -528,17 +580,13 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
 
       assert {:ok, site} = SiteState.get("nil_test")
       assert site.frontend_domain == nil
-
-      # Allowed origins still work
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://admin.nil.com")
-      assert site.id == "nil_test"
+      assert allows?("nil_test", "https://admin.nil.com")
     end
   end
 
   describe "performance with allowed_origins" do
     @tag :performance
     test "handles large number of allowed_origins efficiently" do
-      # Create site with many allowed origins
       allowed_origins = for i <- 1..100, do: "https://origin#{i}.com"
 
       attrs = %{
@@ -552,18 +600,15 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
         allowed_origins: allowed_origins
       }
 
-      # Measure save time
       {save_time, :ok} = :timer.tc(fn -> SiteState.save(attrs) end)
-      # Should be fast even with 100 origins
       assert save_time < 10_000
 
-      # Measure lookup time
-      {lookup_time, {:ok, site}} =
-        :timer.tc(fn -> SiteState.get_by_allowed_origin("https://origin50.com") end)
-
-      assert site.id == "many_origins"
-      # Lookup should be O(1) - very fast
+      {:ok, origin} = OriginValidator.request_origin("https://origin50.com")
+      {lookup_time, true} = :timer.tc(fn -> SiteState.allows_origin?("many_origins", origin) end)
       assert lookup_time < 1000
+
+      for i <- [1, 100], do: assert(allows?("many_origins", "https://origin#{i}.com"))
+      refute allows?("many_origins", "https://origin101.com")
     end
 
     @tag :performance
@@ -583,15 +628,11 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
         end
 
       {time, :ok} = :timer.tc(fn -> SiteState.save_batch(sites) end)
-      # Should handle 100 sites with origins quickly
       assert time < 50_000
 
-      # Verify indexing worked
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://app50.com")
-      assert site.id == "site_50"
-
-      assert {:ok, site} = SiteState.get_by_allowed_origin("https://admin75.com")
-      assert site.id == "site_75"
+      assert allows?("site_50", "https://app50.com")
+      assert allows?("site_75", "https://admin75.com")
+      refute allows?("site_75", "https://admin76.com")
     end
   end
 end

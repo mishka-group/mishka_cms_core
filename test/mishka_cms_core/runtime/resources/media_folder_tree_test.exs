@@ -16,6 +16,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaFolderTreeTest do
 
   alias MishkaCmsCore.Runtime.{Media, MediaCategory}
   alias MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion
+  alias MishkaCmsCore.Test.Files
 
   require Ash.Query
 
@@ -486,7 +487,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaFolderTreeTest do
     } do
       covers = folder!(site, "Covers", folder!(site, "Photos"))
       staged = Path.join(System.tmp_dir!(), "gervaz_#{System.unique_integer([:positive])}_c.png")
-      File.write!(staged, "cover bytes")
+      File.write!(staged, Files.png() <> "cover bytes")
 
       assert {:ok, media} =
                Media
@@ -503,7 +504,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaFolderTreeTest do
 
       assert media.media_category_id == covers.id
       assert String.starts_with?(media.relative_path, "/uploads/#{site.id}/media/#{covers.id}/")
-      assert File.read!(Path.join(dir, media.relative_path)) == "cover bytes"
+      assert File.read!(Path.join(dir, media.relative_path)) == Files.png() <> "cover bytes"
     end
   end
 end

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCore.Runtime.Compilers.Helpers do
+  @moduledoc false
   @doc """
   Generates a unique module name for runtime-compiled resources.
 
@@ -18,11 +19,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.Helpers do
 
   ## Examples
 
-     iex> module_name("550e8400-e29b-41d4-a716-446655440000", "blog", "page")
-     MishkaCmsCore.Runtime.A1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.Page
+     module_name("550e8400-e29b-41d4-a716-446655440000", "blog", "page")
+     #=> MishkaCmsCore.Runtime.A1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6.Page
 
-     iex> module_name("123-456-789", "my_site", "component")
-     MishkaCmsCore.Runtime.B2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7.Component
+     module_name("123-456-789", "my_site", "component")
+     #=> MishkaCmsCore.Runtime.B2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7.Component
 
   ## Implementation Details
 

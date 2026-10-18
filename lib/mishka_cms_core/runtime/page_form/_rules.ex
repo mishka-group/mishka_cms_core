@@ -56,7 +56,6 @@ defmodule MishkaCmsCore.Runtime.PageForm.Rules do
   import Ecto.Changeset
 
   @email ~r/^[^\s@]+@[^\s@]+\.[^\s@]+$/
-  @url ~r{^https?://\S+$}
 
   @number_messages %{
     greater_than_or_equal_to:
@@ -110,7 +109,7 @@ defmodule MishkaCmsCore.Runtime.PageForm.Rules do
       on_string(
         changeset,
         key,
-        &validate_format(&1, key, @url, message: dgettext_noop("errors", "must start with http"))
+        &validate_change(&1, key, {:format, :url}, fn ^key, value -> web_address(value, key) end)
       )
 
   defp rule(changeset, key, {:pattern, source}), do: pattern(changeset, key, compiled(source))
@@ -119,6 +118,17 @@ defmodule MishkaCmsCore.Runtime.PageForm.Rules do
     do: confirms(changeset, key, declared_key(changeset, other))
 
   defp rule(changeset, _key, _unknown), do: changeset
+
+  defp web_address(value, key) do
+    case MishkaCmsCore.Runtime.OriginValidator.web_url?(value) and
+           not String.match?(value, ~r/\s/) do
+      true ->
+        []
+
+      false ->
+        [{key, {dgettext_noop("errors", "must start with http"), [validation: :format]}}]
+    end
+  end
 
   defp pattern(changeset, _key, nil), do: changeset
 

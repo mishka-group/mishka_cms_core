@@ -170,6 +170,18 @@ defmodule MishkaCmsCore.Runtime.PageForm.RulesTest do
       assert valid?(fields, %{"site" => "https://mishka.tools"})
     end
 
+    test "a url with no host, a bare domain that starts with http and a trailing line break fail" do
+      fields = [field(:site, [{:format, :url}])]
+
+      for bad <- ["http://", "https://", "httpbin.example.com", "http://a.co\n", "http://a b.co"] do
+        assert error(fields, %{"site" => bad}, :site) ==
+                 {"must start with http", [validation: :format]},
+               inspect(bad)
+      end
+
+      assert valid?(fields, %{"site" => "http://example.com:8080/a?b=c#d"})
+    end
+
     test "a format rule on a field cast to a number is skipped instead of raising" do
       assert valid?([field(:age, [{:format, :email}], :integer)], %{"age" => "7"})
     end

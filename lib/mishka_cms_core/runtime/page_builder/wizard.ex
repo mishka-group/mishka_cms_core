@@ -66,8 +66,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Wizard do
     entry
     |> Inspector.grouped()
     |> Enum.flat_map(fn {_group, attrs} -> attrs end)
-    |> Enum.filter(&(values_for(&1, features) != []))
-    |> Enum.filter(&reads?(read, Inspector.name(&1)))
+    |> Enum.filter(&(values_for(&1, features) != [] and reads?(read, Inspector.name(&1))))
     |> Enum.map(fn attr ->
       %{
         name: Inspector.name(attr),

@@ -321,7 +321,7 @@ defmodule MishkaCmsCore.Builder.PaletteEntryTest do
         %{key: "b", name: "b", priority: 50}
       ])
 
-      assert_receive {:builder_components, 2}, 2000
+      assert_receive {:builder_components, 2}
     end
 
     # THE ONE THAT WAS MISSING, and the reason a contributed component took the editor down. Every

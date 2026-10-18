@@ -52,7 +52,8 @@ defmodule MishkaCmsCoreWeb.Runtime.ComponentExamplesTest do
           ~S|<.component component_name="does_not_exist_xyz" site="Global" />|
         )
 
-      assert doc =~ "failed to render" or doc =~ "does_not_exist_xyz"
+      assert doc =~ "failed to render"
+      assert doc =~ "does_not_exist_xyz"
       refute doc =~ "<.component"
     end
   end

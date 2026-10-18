@@ -916,13 +916,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      change fn changeset, context ->
-        if !is_nil(context.tenant) do
-          Ash.Changeset.force_change_attribute(changeset, :site_id, context.tenant)
-        else
-          changeset
-        end
-      end
+      change MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
@@ -953,15 +947,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      change fn changeset, _context ->
-        site_id = Ash.Changeset.get_attribute(changeset, :site_id)
-
-        if !is_nil(site_id) do
-          Ash.Changeset.set_tenant(changeset, site_id)
-        else
-          changeset
-        end
-      end
+      change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
@@ -994,31 +980,13 @@ defmodule MishkaCmsCore.Runtime.Layout do
       end
 
       # Prevent tenant from modifying global layouts
-      validate fn changeset, context ->
-        layout = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(layout.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot modify global layout. Global layouts can only be modified by master users."
-                 )}
-
-            layout.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot modify layout from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot modify global layout. Global layouts can only be modified by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot modify layout from another site.")}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
@@ -1292,31 +1260,13 @@ defmodule MishkaCmsCore.Runtime.Layout do
       end
 
       # Prevent tenant from archiving global layouts
-      validate fn changeset, context ->
-        layout = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(layout.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot archive global layout. Global layouts can only be archived by master users."
-                 )}
-
-            layout.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot archive layout from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot archive global layout. Global layouts can only be archived by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot archive layout from another site.")}
 
       change set_attribute(:active, false)
 
@@ -1348,32 +1298,14 @@ defmodule MishkaCmsCore.Runtime.Layout do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       # Prevent tenant from permanently deleting global layouts
-      validate fn changeset, context ->
-        layout = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(layout.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot permanently delete global layout. Global layouts can only be deleted by master users."
-                 )}
-
-            layout.site_id != context.tenant ->
-              {:error,
-               message:
-                 dgettext_noop("errors", "Cannot permanently delete layout from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete global layout. Global layouts can only be deleted by master users."
+                  ),
+                foreign:
+                  dgettext_noop("errors", "Cannot permanently delete layout from another site.")}
 
       description "Permanently removes layout and version history from database (tenant users) - use with extreme caution"
     end
@@ -1395,114 +1327,22 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        # WHOSE SITE THIS CALL ACTS ON comes from the actor, not from the tenant alone: the reads
-        # and the restore below run as the system.
-        acting_site =
-          MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acting_site(context)
-
-        layout_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        case Ash.get(MishkaCmsCore.Runtime.Layout, layout_id,
-               action: :get_any,
-               authorize?: false
-             ) do
-          {:ok, layout} when not is_nil(layout) ->
-            # Check tenant access: can access own site's layouts or global ones
-            can_access =
-              cond do
-                is_nil(acting_site) -> false
-                is_nil(layout.site_id) -> true
-                layout.site_id == acting_site -> true
-                true -> false
-              end
-
-            # Check if tenant can modify (not just access)
-            can_modify =
-              cond do
-                is_nil(acting_site) -> false
-                # Cannot modify global layouts
-                is_nil(layout.site_id) -> false
-                layout.site_id == acting_site -> true
-                true -> false
-              end
-
-            cond do
-              not can_access ->
-                {:error,
-                 Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Layout)}
-
-              not can_modify ->
-                {:error,
-                 Ash.Error.Invalid.exception(
-                   errors: [
-                     Ash.Error.Changes.InvalidAttribute.exception(
-                       field: :site_id,
-                       message:
-                         dgettext_noop(
-                           "errors",
-                           "Cannot restore version of global layout. Global layouts can only be modified by master users."
-                         )
-                     )
-                   ]
-                 )}
-
-              !is_nil(layout.archived_at) ->
-                {:error,
-                 Ash.Error.Invalid.exception(
-                   errors: [
-                     Ash.Error.Changes.InvalidAttribute.exception(
-                       field: :archived_at,
-                       message:
-                         dgettext_noop(
-                           "errors",
-                           "Cannot restore version of archived layout. Please unarchive it first."
-                         )
-                     )
-                   ]
-                 )}
-
-              true ->
-                tenant = layout.site_id
-
-                case Ash.get(MishkaCmsCore.Runtime.Layout.Version, version_id,
-                       action: :get_any,
-                       authorize?: false
-                     ) do
-                  {:ok, version} when not is_nil(version) ->
-                    if version.version_source_id != layout_id do
-                      {:error,
-                       Ash.Error.Invalid.exception(
-                         errors: [
-                           Ash.Error.Changes.InvalidAttribute.exception(
-                             field: :version_id,
-                             message:
-                               dgettext_noop("errors", "Version does not belong to this layout.")
-                           )
-                         ]
-                       )}
-                    else
-                      layout
-                      |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                        tenant: tenant,
-                        authorize?: false
-                      )
-                      |> Ash.update()
-                    end
-
-                  _ ->
-                    {:error,
-                     Ash.Error.Query.NotFound.exception(
-                       resource: MishkaCmsCore.Runtime.Layout.Version
-                     )}
-                end
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Layout)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.Layout,
+           version: MishkaCmsCore.Runtime.Layout.Version,
+           read: :get_any,
+           global?: true,
+           global:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of global layout. Global layouts can only be modified by master users."
+             ),
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived layout. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this layout.")}
     end
 
     update :restore_version do
@@ -1525,23 +1365,9 @@ defmodule MishkaCmsCore.Runtime.Layout do
       # tenant, only a master (`site_id` nil) or the system (`authorize?: false`) restores; with one,
       # whoever acts on that site restores its layouts alone. See
       # `MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acts_on?/2`.
-      validate fn changeset, context ->
-        case MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acts_on?(
-               context,
-               changeset.data.site_id
-             ) do
-          true ->
-            :ok
-
-          false ->
-            {:error,
-             message:
-               dgettext_noop(
-                 "errors",
-                 "Cannot restore version of layout from another site."
-               )}
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.ActsOnRecordSite,
+                message:
+                  dgettext_noop("errors", "Cannot restore version of layout from another site.")}
 
       change {MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion,
               version: MishkaCmsCore.Runtime.Layout.Version}
@@ -1591,35 +1417,12 @@ defmodule MishkaCmsCore.Runtime.Layout do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == layout_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.Layout
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_layout =
-            Enum.reduce(restored_attrs, layout, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  if key_atom == :format and is_binary(value),
-                    do: String.to_atom(value),
-                    else: value
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              layout,
+              MishkaCmsCore.Runtime.Layout,
+              version.changes
+            )
 
           {:ok, preview_layout}
         else
@@ -1732,69 +1535,16 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        layout_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        case Ash.get(MishkaCmsCore.Runtime.Layout, layout_id,
-               action: :get_any,
-               authorize?: false
-             ) do
-          {:ok, layout} when not is_nil(layout) ->
-            if !is_nil(layout.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived layout. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = layout.site_id
-
-              case Ash.get(MishkaCmsCore.Runtime.Layout.Version, version_id,
-                     action: :get_any,
-                     authorize?: false
-                   ) do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != layout_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop("errors", "Version does not belong to this layout.")
-                         )
-                       ]
-                     )}
-                  else
-                    layout
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.Layout.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Layout)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.Layout,
+           version: MishkaCmsCore.Runtime.Layout.Version,
+           read: :get_any,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived layout. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this layout.")}
     end
 
     action :master_preview_version, :struct do
@@ -1821,35 +1571,12 @@ defmodule MishkaCmsCore.Runtime.Layout do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == layout_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.Layout
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_layout =
-            Enum.reduce(restored_attrs, layout, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  if key_atom == :format and is_binary(value),
-                    do: String.to_atom(value),
-                    else: value
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              layout,
+              MishkaCmsCore.Runtime.Layout,
+              version.changes
+            )
 
           {:ok, preview_layout}
         else

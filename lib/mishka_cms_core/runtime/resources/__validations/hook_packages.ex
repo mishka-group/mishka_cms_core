@@ -15,7 +15,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.HookPackages do
 
   alias MishkaCmsCore.Runtime.Compilers.NpmPackages
 
-  @module_file ~r/^[A-Za-z0-9][A-Za-z0-9_-]*\.js$/
+  @module_file ~r/\A[A-Za-z0-9][A-Za-z0-9_-]*\.js\z/
 
   @impl true
   def init(opts), do: {:ok, opts}

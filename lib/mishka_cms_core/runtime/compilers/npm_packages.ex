@@ -49,9 +49,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
   @max_unpacked_bytes 256 * 1024 * 1024
   @max_files 20_000
 
-  @name ~r/^(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/
-  @version ~r/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/
-  @integrity ~r/^sha512-[A-Za-z0-9+\/]{86}==$/
+  @name ~r/\A(@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*\z/
+  @version ~r/\A\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?\z/
+  @integrity ~r/\Asha512-[A-Za-z0-9+\/]{86}==\z/
 
   @doc """
   Puts every package of `entries` in place under `root`, in path order so a package is in place

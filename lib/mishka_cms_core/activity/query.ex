@@ -626,8 +626,8 @@ defmodule MishkaCmsCore.Activity.Query do
   defp table_for(nil), do: nil
   defp table_for(resource), do: AshPostgres.DataLayer.Info.table(resource)
 
-  defp valid_ident?(table) when is_binary(table), do: Regex.match?(~r/^[a-zA-Z0-9_]+$/, table)
+  defp valid_ident?(table) when is_binary(table), do: Regex.match?(~r/\A[a-zA-Z0-9_]+\z/, table)
   defp valid_ident?(_), do: false
 
-  defp valid_module?(module), do: Regex.match?(~r/^[a-zA-Z0-9_.]+$/, module)
+  defp valid_module?(module), do: Regex.match?(~r/\A[a-zA-Z0-9_.]+\z/, module)
 end

@@ -44,7 +44,7 @@ defmodule MishkaCmsCore.PluginHooksTest do
     page = create_page!()
     id = page.id
 
-    assert_receive {:core_page_after_create, ^id, _meta}, 5000
+    assert_receive {:core_page_after_create, ^id, _meta}
   end
 
   describe "cms_core:page:after_save" do
@@ -53,19 +53,19 @@ defmodule MishkaCmsCore.PluginHooksTest do
       page = create_page!(site_id: site.id, title: "Made")
       {id, site_id} = {page.id, site.id}
 
-      assert_receive {:core_page_after_save, ^id, "Made", %{site_id: ^site_id}}, 5000
+      assert_receive {:core_page_after_save, ^id, "Made", %{site_id: ^site_id}}
     end
 
     test "follows an update too, whatever the action is called" do
       page = create_page!(title: "Before")
       id = page.id
-      assert_receive {:core_page_after_save, ^id, "Before", _meta}, 5000
+      assert_receive {:core_page_after_save, ^id, "Before", _meta}
 
       page
       |> Ash.Changeset.for_update(:master_update, %{title: "After"}, authorize?: false)
       |> Ash.update!()
 
-      assert_receive {:core_page_after_save, ^id, "After", _meta}, 5000
+      assert_receive {:core_page_after_save, ^id, "After", _meta}
     end
 
     test "is named for any resource by save_event_name/1" do
@@ -79,7 +79,7 @@ defmodule MishkaCmsCore.PluginHooksTest do
     user = create_user!()
     id = user.id
 
-    assert_receive {:accounts_user_after_register, ^id, _meta}, 5000
+    assert_receive {:accounts_user_after_register, ^id, _meta}
   end
 
   describe "auth:account:withheld" do
@@ -109,7 +109,7 @@ defmodule MishkaCmsCore.PluginHooksTest do
     } do
       Ash.load!(notification, [actor: [:site, :permissions]], actor: recipient, tenant: site.id)
 
-      assert_receive {:account_withheld, withheld}, 5000
+      assert_receive {:account_withheld, withheld}
       assert Enum.sort(withheld) == [:permissions, :site]
     end
 

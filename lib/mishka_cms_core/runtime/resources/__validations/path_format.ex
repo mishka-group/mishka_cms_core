@@ -27,7 +27,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
   use Ash.Resource.Validation
 
   @max_length 255
-  @allowed_chars ~r|^[a-zA-Z0-9/_.:*-]+$|
+  @allowed_chars ~r|\A[a-zA-Z0-9/_.:*-]+\z|
 
   @impl true
   def init(opts), do: {:ok, opts}

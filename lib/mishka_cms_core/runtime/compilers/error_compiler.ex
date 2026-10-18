@@ -201,7 +201,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   def build_error_information(params) do
     error_info_ast =
       quote do
-        def __error_information__() do
+        def __error_information__ do
           %{
             error: %{
               title: unquote(params[:title]),
@@ -437,7 +437,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
                 </style>
                 <script :if={js_href} defer src={js_href}>
                 </script>
-                <script :if={@conn.assigns[:current_site] && !js_href}>
+                <script :if={@conn.assigns[:current_site] && !js_href} nonce={@conn.assigns[:csp_nonce]}>
                   <%= raw(MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.get_compiled_js(@conn.assigns.current_site.name)) %>
                 </script>
               </head>
@@ -716,7 +716,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   If any module fails to import, the error is logged as a warning and compilation continues
   with the remaining successfully imported modules.
   """
-  def make_env() do
+  def make_env do
     imports = [
       Phoenix.HTML,
       Phoenix.Component,

@@ -184,11 +184,11 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsStateTest do
     test "hears a rule kept and a rule let go", %{site: site} do
       redirect = create!(site, %{from_path: "/old", to: "/new"})
       id = redirect.id
-      assert_receive {:redirect_changed, :save, ^id}, 5000
+      assert_receive {:redirect_changed, :save, ^id}
 
       :ok = Ash.destroy(redirect, tenant: site.id, authorize?: false)
       settled()
-      assert_receive {:redirect_changed, :delete, ^id}, 5000
+      assert_receive {:redirect_changed, :delete, ^id}
     end
   end
 

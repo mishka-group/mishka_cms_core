@@ -261,6 +261,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     code_visible?: true,
     editing?: false,
     edit_source: nil,
+    edit_label: nil,
     render_nonce: 0,
     draft: nil,
     drafts: [],
@@ -530,7 +531,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   def edit_code(socket) do
     put_preview(socket, fn p ->
-      %{p | active_tab: "code", editing?: true, edit_source: editor_source(p)}
+      %{p | active_tab: "code", editing?: true, edit_source: editor_source(p), edit_label: nil}
+    end)
+  end
+
+  @doc """
+  Keep what is typed in the Code tab's editor (`source`, and the draft's `label` when the form has
+  one), so the editor still holds it after a reconnect and a refused save leaves it as it was.
+  """
+  def type_code(socket, source, label) when is_binary(source) do
+    put_preview(socket, fn p ->
+      %{p | edit_source: source, edit_label: if(is_binary(label), do: label, else: p.edit_label)}
     end)
   end
 
@@ -538,7 +549,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp editor_source(%{record: record}), do: RuntimePreview.source(record)
 
   @doc "Leave edit mode."
-  def cancel_edit(socket), do: put_preview(socket, &%{&1 | editing?: false})
+  def cancel_edit(socket), do: put_preview(socket, &%{&1 | editing?: false, edit_label: nil})
 
   @doc """
   Save the Code tab's edit straight to the record, for a resource with no drafts — a JS Hook, a
@@ -660,13 +671,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
           editing?: true,
           active_tab: "code",
           edit_html: nil,
+          edit_label: nil,
           edit_source: RuntimePreview.source(p.record)
       }
     end)
   end
 
-  @doc "Load a page of the drafts picker (selection is left unchanged)."
-  def drafts_paginate(socket, page_num) do
+  @doc """
+  Load a page of the drafts picker (selection is left unchanged). `page_num` is a number or the text
+  the browser sent; text that is not a whole number leaves the picker as it is.
+  """
+  def drafts_paginate(socket, page_num) when is_binary(page_num) do
+    case Integer.parse(page_num) do
+      {number, ""} -> drafts_paginate(socket, number)
+      _not_a_number -> socket
+    end
+  end
+
+  def drafts_paginate(socket, page_num) when is_integer(page_num) do
     preview = socket.assigns.preview
 
     {drafts, total} =
@@ -698,6 +720,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
           draft: draft,
           editing?: false,
           edit_html: nil,
+          edit_label: nil,
           edit_source: RuntimePreview.source(draft || p.record)
       }
     end)
@@ -977,7 +1000,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp publish_error(_error), do: gettext("Could not publish the draft.")
 
   defp invalid_message(%Ash.Error.Invalid{errors: errors}),
-    do: errors |> Enum.map(&error_message/1) |> Enum.join(", ")
+    do: Enum.map_join(errors, ", ", &error_message/1)
 
   defp error_message(error) do
     MishkaGervaz.Errors.translate_error(
@@ -1349,8 +1372,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   ## modal — every tab, the close button included — for as long as they took. They run in
   ## `start_async(:preview_versions, …)` instead and the tab draws a spinner in the meantime.
 
-  @doc "Go to a (clamped) versions page and reload it, off the LiveView process."
-  def versions_paginate(socket, page) do
+  @doc """
+  Go to a (clamped) versions page and reload it, off the LiveView process. `page` is a number or the
+  text the browser sent; text that is not a whole number leaves the modal as it is.
+  """
+  def versions_paginate(socket, page) when is_binary(page) do
+    case Integer.parse(page) do
+      {number, ""} -> versions_paginate(socket, number)
+      _not_a_number -> socket
+    end
+  end
+
+  def versions_paginate(socket, page) when is_integer(page) do
     p = socket.assigns.preview
     max_page = max(1, ceil(p.versions_total / @versions_per_page))
     page = page |> max(1) |> min(max_page)

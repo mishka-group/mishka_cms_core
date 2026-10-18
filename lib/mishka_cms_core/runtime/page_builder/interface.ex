@@ -124,13 +124,14 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
 
   # A name reaches the compiler as `String.to_atom/1` and is written into a `def`, so anything that
   # is not an identifier is not a mistake to report later.
-  defp name?(:identifier, name), do: Regex.match?(~r/^[a-z_][a-zA-Z0-9_]*$/, name)
+  defp name?(:identifier, name), do: Regex.match?(~r/\A[a-z_][a-zA-Z0-9_]*\z/, name)
 
   # A SLOT'S ATTRIBUTE IS NEVER WRITTEN INTO A `def`: the compiler emits slots without their
   # attributes, and the entry reaches the template as a map read by `item[:"aria-label"]`. So an
   # HTML name is one, as Phoenix allows in a slot block — Chelekom's headless `toggle-group` declares
   # `aria-label` on its `item`.
-  defp name?(:slot_attr, name), do: Regex.match?(~r/^[a-z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*$/, name)
+  defp name?(:slot_attr, name),
+    do: Regex.match?(~r/\A[a-z_][a-zA-Z0-9_]*(-[a-zA-Z0-9_]+)*\z/, name)
 
   defp unnamed(name, :identifier),
     do:
@@ -245,11 +246,10 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
       slots: Enum.reject(used_slots, &(&1 in declared_slots)),
       attrs:
         used_attrs
-        |> Enum.reject(&(&1 in declared_attrs))
-        |> Enum.reject(&(&1 in declared_slots))
-        |> Enum.reject(&(&1 in used_slots))
-        |> Enum.reject(&(&1 in @implicit))
-        |> Enum.reject(&(&1 in @slot_like))
+        |> Enum.reject(
+          &(&1 in declared_attrs or &1 in declared_slots or &1 in used_slots or &1 in @implicit or
+              &1 in @slot_like)
+        )
     }
   end
 
@@ -314,7 +314,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Interface do
   def required?(row) do
     case row |> stringify() |> Map.get("opts") do
       %{} = opts -> Map.get(opts, "required") in [true, "true"]
-      _none -> value(row, "required") in ["true", true, "on"]
+      _none -> value(row, "required") in ["true", "on"]
     end
   end
 

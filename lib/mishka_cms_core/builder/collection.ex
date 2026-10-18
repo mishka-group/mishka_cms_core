@@ -69,13 +69,30 @@ defmodule MishkaCmsCore.Builder.Collection do
     end
   end
 
-  @spec put_in_item(list(), non_neg_integer(), atom(), term()) :: list()
+  @doc """
+  One field of one item changed. The key is the field's name, as an atom or as the text the browser
+  sent: a name the item has no field for leaves the collection as it was, and no atom is made of it.
+  """
+  @spec put_in_item(list(), non_neg_integer(), atom() | String.t(), term()) :: list()
   def put_in_item(items, index, key, value) when is_atom(key) do
     case Enum.at(items, index) do
       %{} = item -> put(items, index, Map.put(item, key, value))
       _other -> items
     end
   end
+
+  def put_in_item(items, index, key, value) when is_binary(key) do
+    with %{} = item <- Enum.at(items, index),
+         field when not is_nil(field) <- Enum.find(Map.keys(item), &(field_name(&1) == key)) do
+      put(items, index, Map.put(item, field, value))
+    else
+      _no_such_field -> items
+    end
+  end
+
+  defp field_name(key) when is_atom(key), do: Atom.to_string(key)
+  defp field_name(key) when is_binary(key), do: key
+  defp field_name(_key), do: nil
 
   @spec add(list(), term()) :: list()
   def add(items, value) when is_list(items), do: items ++ [value]

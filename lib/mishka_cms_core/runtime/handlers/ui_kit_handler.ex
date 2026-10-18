@@ -17,9 +17,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   prelude dedup, type-resolved attrs, dropped struct defaults) live in
   the upstream converter (Chelekom's `mix mishka.ui.export ... --cms`).
 
-      iex> MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!()
-      iex> MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!(site_id: tenant_id)
-      iex> MishkaCmsCore.Runtime.Handlers.UiKitHandler.uninstall_chelekom!()
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!()
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.install_chelekom!(site_id: tenant_id)
+      MishkaCmsCore.Runtime.Handlers.UiKitHandler.uninstall_chelekom!()
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -30,6 +30,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
   alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
   alias MishkaCmsCore.Runtime.PageBuilder.Markup
+  alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
   alias MishkaCmsCore.UiKit.Contract
 
   require Logger
@@ -369,7 +370,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   channel is fetched. `local_only: true` looks nothing up and downloads nothing — the bundles in
   `kits_dir/0` are the answer, which is what the Studio wants.
   """
-  @spec resolve_kits(keyword()) :: %{bundles: [map()], failures: [map()]}
+  @spec resolve_kits(keyword()) :: %{
+          bundles: [map()],
+          failures: [map()],
+          sources: [map()],
+          release: %{channel: atom(), tag: String.t(), fallback?: boolean()} | nil
+        }
   def resolve_kits(opts \\ []) do
     dir = Keyword.get_lazy(opts, :kits_dir, &kits_dir/0)
     progress = Keyword.get(opts, :progress)
@@ -465,17 +471,17 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   that into `nil`, and `nil` matched the "unspecified, so give them their own site" clause. Allowed,
   silently. `:global` has to be asked for by name.
 
-      iex> install_scope(%{site_id: nil}, :global)
-      {:ok, nil}
+      install_scope(%{site_id: nil}, :global)
+      #=> {:ok, nil}
 
-      iex> install_scope(%{site_id: nil}, "acme")
-      {:ok, "acme"}
+      install_scope(%{site_id: nil}, "acme")
+      #=> {:ok, "acme"}
 
-      iex> install_scope(%{site_id: "acme"}, nil)
-      {:ok, "acme"}
+      install_scope(%{site_id: "acme"}, nil)
+      #=> {:ok, "acme"}
 
-      iex> install_scope(%{site_id: "acme"}, :global)
-      {:error, :forbidden}
+      install_scope(%{site_id: "acme"}, :global)
+      #=> {:error, :forbidden}
   """
   @spec install_scope(map() | nil, :global | String.t() | nil) ::
           {:ok, String.t() | nil} | {:error, :forbidden}
@@ -515,11 +521,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     dir = Keyword.get_lazy(opts, :kits_dir, &kits_dir/0)
 
     with {:ok, url} <- valid_url(url),
-         {:ok, bundle} <- download_bundle(url),
+         {:ok, bundle} <- download_public_bundle(url),
          :ok <- validate_bundle_shape(bundle),
-         :ok <- unique_name(bundle["name"], dir) do
+         :ok <- unique_name(bundle["name"], dir),
+         {:ok, path} <- custom_kit_path(dir, bundle["name"]) do
       bundle = Map.put(bundle, "source_url", url)
-      cache_bundle(bundle, Path.join(dir, "#{slug(bundle["name"])}.json"))
+      cache_bundle(bundle, path)
 
       Logger.info("[UiKitHandler] added custom kit #{bundle["name"]} from #{url}")
       {:ok, bundle}
@@ -551,6 +558,24 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
          gettext(
            "That response is not a mishka.ui_kit.bundle.v3 — it needs a \"$schema\", a \"name\" and a \"components\" list."
          )}
+
+      {:error, :invalid_kit_name} ->
+        {:error,
+         gettext(
+           "That kit's name is not valid — use lowercase letters, numbers, - and _, start with a letter or a number, and stay within 64 characters."
+         )}
+    end
+  end
+
+  # THE NAME IS A FILE NAME, so it is the one place a bundle's text becomes a path. `validate_bundle/1`
+  # has already refused anything but a plain name; the base name and the relative check are the
+  # second lock, so a change to that rule cannot let a name climb out of the kits folder.
+  defp custom_kit_path(dir, name) do
+    file = name |> slug() |> Path.basename() |> Kernel.<>(".json")
+
+    case Path.safe_relative(file, dir) do
+      {:ok, relative} -> {:ok, Path.join(dir, relative)}
+      :error -> {:error, gettext("That kit's name cannot be used as a file name.")}
     end
   end
 
@@ -631,17 +656,14 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp fallback({:ok, _bundle} = resolved, _next), do: resolved
 
+  # THE NETWORK REASON, when there is one. "Not on disk" is never news to whoever is reading the
+  # banner — they can see the file is not there. `HTTP 404` is the sentence they can act on.
   defp fallback({:error, primary}, next) do
     case next.() do
       {:ok, _bundle} = resolved -> resolved
-      {:error, secondary} -> {:error, reportable(primary, secondary)}
+      {:error, _not_on_disk} -> {:error, primary}
     end
   end
-
-  # THE NETWORK REASON, when there is one. "Not on disk" is never news to whoever is reading the
-  # banner — they can see the file is not there. `HTTP 404` is the sentence they can act on.
-  defp reportable(:absent, secondary), do: secondary
-  defp reportable(primary, _secondary), do: primary
 
   defp from_disk(path) do
     case load_bundle(path) do
@@ -687,15 +709,27 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   defp download_bundle(nil, _progress),
     do: {:error, gettext("no download URL is configured for this kit")}
 
-  defp download_bundle(url, progress) do
-    # ONE RETRY, not Req's default three. A 404 — the shape this fails as when a bundle has not been
-    # published for a tag — will never succeed on a retry, and the wizard sat on a spinner for eight
-    # seconds of exponential backoff before it could say so. One covers a genuine blip.
-    #
-    # STREAMED so the size limit is a real one. Reading the whole body and measuring it afterwards
-    # bounds nothing — the bytes are already in memory by then — and this URL can be one a stranger
-    # gave us. `:into` lets the read be abandoned mid-flight.
-    case Req.get(url, [max_retries: 1, into: bounded_collector(progress)] ++ req_options()) do
+  defp download_bundle(url, progress), do: url |> request(progress, true) |> bundle_from()
+
+  # ONE RETRY, not Req's default three. A 404 — the shape this fails as when a bundle has not been
+  # published for a tag — will never succeed on a retry, and the wizard sat on a spinner for eight
+  # seconds of exponential backoff before it could say so. One covers a genuine blip.
+  #
+  # STREAMED so the size limit is a real one. Reading the whole body and measuring it afterwards
+  # bounds nothing — the bytes are already in memory by then — and this URL can be one a stranger
+  # gave us. `:into` lets the read be abandoned mid-flight.
+  #
+  # `redirect?` is on for the packages we name, whose release assets are served from another host,
+  # and off for an address somebody pasted: `download_public_bundle/2` follows those itself.
+  defp request(url, progress, redirect?) do
+    Req.get(
+      url,
+      [max_retries: 1, redirect: redirect?, into: bounded_collector(progress)] ++ req_options()
+    )
+  end
+
+  defp bundle_from(response) do
+    case response do
       # THREE SHAPES a 200 can arrive in, and all three are reachable. Req's JSON step runs AFTER the
       # collector, on whatever it accumulated: a decoded map for good JSON, the untouched
       # `{:too_large, _}` sentinel when the collector gave up (nothing for the decoder to work on),
@@ -725,6 +759,93 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
         {:error, inspect(other)}
     end
   end
+
+  @redirects 5
+
+  # AN ADDRESS SOMEBODY PASTED is fetched from a public host or not at all. `/install` is open to
+  # whoever reaches a CMS that has no master yet, so an address on the machine's own network — a
+  # cloud's metadata service, a database, a router — is not one to fetch on their behalf, and
+  # what comes back (`HTTP 404`, "not valid JSON") would tell them whether something answered.
+  # Each redirect is read and checked the same way, instead of being followed.
+  defp download_public_bundle(url, redirects \\ @redirects) do
+    with :ok <- public_address(url) do
+      case request(url, nil, false) do
+        {:ok, %{status: status} = response}
+        when status in [301, 302, 303, 307, 308] and redirects > 0 ->
+          redirect_to(response, url, redirects)
+
+        response ->
+          bundle_from(response)
+      end
+    end
+  end
+
+  defp redirect_to(response, url, redirects) do
+    case Req.Response.get_header(response, "location") do
+      [location | _rest] ->
+        url |> URI.merge(location) |> URI.to_string() |> download_public_bundle(redirects - 1)
+
+      [] ->
+        {:error, gettext("HTTP %{status}", status: response.status)}
+    end
+  end
+
+  defp public_address(url) do
+    case URI.parse(url) do
+      %URI{scheme: scheme, host: host} when scheme in ["http", "https"] and is_binary(host) ->
+        case Enum.all?(addresses(host), &public_ip?/1) do
+          true -> :ok
+          false -> {:error, gettext("That address is on a private network.")}
+        end
+
+      _other ->
+        {:error, gettext("That is not an http:// or https:// address.")}
+    end
+  end
+
+  # Where a host is: the address it is written as, or every address its name resolves to. A name
+  # that resolves to none has nothing to refuse, and `Req` reports it.
+  defp addresses(host) do
+    charlist = String.to_charlist(host)
+
+    case :inet.parse_address(charlist) do
+      {:ok, ip} ->
+        [ip]
+
+      {:error, _not_an_address} ->
+        for family <- [:inet, :inet6],
+            {:ok, ips} <- [:inet.getaddrs(charlist, family, 3_000)],
+            ip <- ips,
+            do: ip
+    end
+  end
+
+  # What is not on the public internet: this network, private ranges, carrier-grade NAT, loopback,
+  # link-local (a cloud's metadata service is 169.254.169.254), and the multicast and reserved
+  # blocks; and in IPv6 the same — unspecified, loopback, unique-local, link-local, multicast — and
+  # an IPv4 address written inside one.
+  defp public_ip?({0, _b, _c, _d}), do: false
+  defp public_ip?({10, _b, _c, _d}), do: false
+  defp public_ip?({100, b, _c, _d}) when b in 64..127, do: false
+  defp public_ip?({127, _b, _c, _d}), do: false
+  defp public_ip?({169, 254, _c, _d}), do: false
+  defp public_ip?({172, b, _c, _d}) when b in 16..31, do: false
+  defp public_ip?({192, 0, 0, _d}), do: false
+  defp public_ip?({192, 168, _c, _d}), do: false
+  defp public_ip?({198, b, _c, _d}) when b in 18..19, do: false
+  defp public_ip?({a, _b, _c, _d}) when a >= 224, do: false
+  defp public_ip?({_a, _b, _c, _d}), do: true
+
+  defp public_ip?({0, 0, 0, 0, 0, 0, 0, 0}), do: false
+  defp public_ip?({0, 0, 0, 0, 0, 0, 0, 1}), do: false
+
+  defp public_ip?({0, 0, 0, 0, 0, 0xFFFF, high, low}),
+    do: public_ip?({div(high, 256), rem(high, 256), div(low, 256), rem(low, 256)})
+
+  defp public_ip?({a, _b, _c, _d, _e, _f, _g, _h}) when a in 0xFC00..0xFDFF, do: false
+  defp public_ip?({a, _b, _c, _d, _e, _f, _g, _h}) when a in 0xFE80..0xFEBF, do: false
+  defp public_ip?({a, _b, _c, _d, _e, _f, _g, _h}) when a >= 0xFF00, do: false
+  defp public_ip?({_a, _b, _c, _d, _e, _f, _g, _h}), do: true
 
   defp bounded_collector(progress) do
     limit = max_bundle_bytes()
@@ -1445,8 +1566,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
     loose_attrs =
       attrs
-      |> Enum.reject(&is_nil/1)
-      |> Enum.reject(&MapSet.member?(bound_attrs, &1))
+      |> Enum.reject(&(is_nil(&1) or MapSet.member?(bound_attrs, &1)))
 
     direct ++ pair_leftovers(loose_axes, loose_attrs, component)
   end
@@ -1601,8 +1721,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   defp log_unreadable_roles(unreadable, path) do
     Logger.warning(
       "[UiKitHandler] #{Path.basename(path)}: installed #{length(unreadable)} component" <>
-        "#{(length(unreadable) == 1 && "") || "s"} whose declared form role could not be read, " <>
-        "so the editor infers a role for #{(length(unreadable) == 1 && "it") || "them"} — " <>
+        "#{(match?([_], unreadable) && "") || "s"} whose declared form role could not be read, " <>
+        "so the editor infers a role for #{(match?([_], unreadable) && "it") || "them"} — " <>
         Enum.map_join(unreadable, ", ", fn {name, declared} ->
           "#{name || "(unnamed)"}: #{inspect(declared)}"
         end)
@@ -1621,7 +1741,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
       {kept, rejected} ->
         Logger.warning(
           "[UiKitHandler] #{Path.basename(path)}: skipped #{length(rejected)} #{key} entr" <>
-            "#{(length(rejected) == 1 && "y") || "ies"} that do not meet the bundle contract — " <>
+            "#{(match?([_], rejected) && "y") || "ies"} that do not meet the bundle contract — " <>
             Enum.map_join(rejected, ", ", fn {name, reason} ->
               "#{name || "(unnamed)"}: #{inspect(reason)}"
             end)
@@ -1677,10 +1797,19 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   # Revisit when a SECOND kit ships. That is the first moment the guesses here can be wrong, and the
   # moment a declared contract starts paying for itself.
   defp validate_bundle(%{"$schema" => "mishka.ui_kit.bundle.v3", "name" => n, "components" => cs})
-       when is_binary(n) and is_list(cs),
-       do: :ok
+       when is_binary(n) and is_list(cs) do
+    case Regex.match?(kit_name_pattern(), n) do
+      true -> :ok
+      false -> {:error, :invalid_kit_name}
+    end
+  end
 
   defp validate_bundle(_), do: {:error, :not_a_v3_bundle}
+
+  # The name becomes the kit's file name and its component prefix: a lowercase letter or number,
+  # then letters, numbers, `-` and `_`, 64 characters at most. `\A…\z` and not `^…$`, which let a
+  # trailing newline through.
+  defp kit_name_pattern, do: ~r/\A[a-z0-9][a-z0-9_-]{0,63}\z/
 
   defp apply_selection(components, :all, _kit_name), do: components
 
@@ -1892,9 +2021,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   defp create_component(params, site_id, bundle, actor) do
     params
     |> stamp_kit(bundle)
-    |> stringify_to_atom_keys()
+    |> known_keys(accepted_names(Component))
     |> Map.put(:site_id, site_id)
-    |> Map.update(:format, :heex, &maybe_atom/1)
+    |> Map.update(:format, :heex, &coerce_enum(Component, :format, &1, :heex))
     |> normalize_helpers()
     |> normalize_attrs()
     |> normalize_slots()
@@ -1920,7 +2049,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp create_js_hook(params, site_id, actor) do
     params
-    |> stringify_to_atom_keys()
+    |> known_keys(accepted_names(JsHook))
     |> Map.put(:site_id, site_id)
     |> Map.update(:format, :js, &coerce_enum(JsHook, :format, &1, :js))
     # JsHook has no `extra` field; drop the converter's traceability stamp.
@@ -1947,7 +2076,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp create_stylesheet(params, site_id, actor) do
     params
-    |> stringify_to_atom_keys()
+    |> known_keys(accepted_names(Stylesheet))
     |> Map.put(:site_id, site_id)
     |> Map.update(:format, :css, &coerce_enum(Stylesheet, :format, &1, :css))
     |> Map.update(:kind, :theme, &coerce_enum(Stylesheet, :kind, &1, :theme))
@@ -2094,43 +2223,63 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     {Enum.reverse(ups), Enum.reverse(skips)}
   end
 
-  # Top-level keys (name, template, attrs, etc.) are atomized so Ash's
-  # changeset accepts them. Nested maps (`opts`, `extra`) keep string keys.
-  defp stringify_to_atom_keys(%{} = m) do
-    Enum.into(m, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
+  # A BUNDLE'S KEYS ARE WORDS A STRANGER WROTE, and `String.to_atom/1` on them mints an atom for each
+  # one that is never freed: a bundle with a million different keys fills the atom table and ends the
+  # VM for every site. So a key becomes an atom only by being looked up among the names the resource
+  # takes — `%{"name" => :name}`, built from its own attributes — and a key that is not one is
+  # dropped. `accepted_only/2` dropped them after the fact, once they were atoms.
+  defp known_keys(%{} = params, names) do
+    for {key, value} <- params, atom = Map.get(names, key), into: %{}, do: {atom, value}
+  end
+
+  defp accepted_names(resource) do
+    resource |> accepted_inputs() |> names()
+  end
+
+  # The names an embedded attribute's entries may carry, from the constraint that declares its
+  # fields: a component's `attrs` and `slots` are maps with `fields`.
+  defp field_names(resource, attribute) do
+    with %{constraints: constraints} <- Ash.Resource.Info.attribute(resource, attribute),
+         items when is_list(items) <- Keyword.get(constraints, :items),
+         fields when is_list(fields) <- Keyword.get(items, :fields) do
+      fields |> Keyword.keys() |> names()
+    else
+      _undeclared -> %{}
+    end
+  end
+
+  # What a helper entry may carry: the attributes of the embedded `Helper` resource.
+  defp helper_names do
+    Helper |> Ash.Resource.Info.attributes() |> Enum.map(& &1.name) |> names()
+  end
+
+  defp names(atoms) do
+    Map.new(atoms, &{&1, &1}) |> Map.merge(Map.new(atoms, &{Atom.to_string(&1), &1}))
   end
 
   defp normalize_helpers(%{helpers: helpers} = params) when is_list(helpers) do
-    %{params | helpers: Enum.map(helpers, &atomize_helper/1)}
+    %{params | helpers: for(%{} = helper <- helpers, do: known_keys(helper, helper_names()))}
   end
 
   defp normalize_helpers(params), do: params
 
-  defp atomize_helper(%{} = h) do
-    Enum.into(h, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
-  end
-
   defp normalize_attrs(%{attrs: attrs} = params) when is_list(attrs) do
-    %{params | attrs: Enum.map(attrs, &atomize_attr/1)}
+    %{
+      params
+      | attrs: for(%{} = attr <- attrs, do: known_keys(attr, field_names(Component, :attrs)))
+    }
   end
 
   defp normalize_attrs(params), do: params
 
-  # Each attr has top-level atom keys (name, type, opts, struct_name);
-  # opts itself stays string-keyed (Ash :map type).
-  defp atomize_attr(%{} = a) do
-    Enum.into(a, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
-  end
-
   defp normalize_slots(%{slots: slots} = params) when is_list(slots) do
-    %{params | slots: Enum.map(slots, &atomize_slot/1)}
+    %{
+      params
+      | slots: for(%{} = slot <- slots, do: known_keys(slot, field_names(Component, :slots)))
+    }
   end
 
   defp normalize_slots(params), do: params
-
-  defp atomize_slot(%{} = s) do
-    Enum.into(s, %{}, fn {k, v} when is_binary(k) -> {String.to_atom(k), v} end)
-  end
 
   # THE RESOURCE ALREADY KNOWS WHAT IT ACCEPTS. `String.to_existing_atom/1` on a value from a file we
   # did not write is two failures wearing one hat: it raises for a word nobody has used, and for a
@@ -2146,9 +2295,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
   defp coerce_enum(_resource, _key, value, _fallback) when is_atom(value), do: value
   defp coerce_enum(_resource, _key, _value, fallback), do: fallback
-
-  defp maybe_atom(s) when is_binary(s), do: String.to_existing_atom(s)
-  defp maybe_atom(s) when is_atom(s), do: s
 
   # Hard-deletes via `:master_permanent_destroy`; soft-deleted rows still
   # occupy the unique-name index.

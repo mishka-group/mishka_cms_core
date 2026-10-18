@@ -25,45 +25,32 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindVerifyTest do
   """
   use ExUnit.Case, async: true
 
+  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
+
   @moduletag :unit
-
-  # The pattern and the strip as `TailwindCompiler` applies them.
-  @version ~r/tailwindcss v(\d+\.\d+\.\d+)/
-  @ansi ~r/\e\[[0-9;]*[a-zA-Z]/
-
-  defp uncoloured(output), do: String.replace(output, @ansi, "")
 
   @painted "\e[3m\e[1m\e[34m≈\e[39m\e[22m\e[23m tailwindcss \e[34mv4.3.2\e[39m\n\nUsage:\n"
   @plain "≈ tailwindcss v4.3.2\n\nUsage:\n"
 
-  test "the coloured output is what the old check could not read" do
-    refute Regex.run(@version, @painted),
-           "if this matches, the bug this test is about cannot happen and the strip is dead code"
+  test "reads the version out of output the binary painted" do
+    assert TailwindCompiler.reported_version(@painted) == "4.3.2"
   end
 
-  test "stripping the colour finds the version the binary reported" do
-    assert [_whole, "4.3.2"] = Regex.run(@version, uncoloured(@painted))
-  end
-
-  # The uncoloured case is the one that always worked; it must keep working.
   test "output that was never painted is unaffected" do
-    assert [_whole, "4.3.2"] = Regex.run(@version, uncoloured(@plain))
+    assert TailwindCompiler.reported_version(@plain) == "4.3.2"
   end
 
   test "a version mismatch is still a mismatch, not a pass" do
     other = String.replace(@painted, "4.3.2", "3.4.17")
 
-    assert [_whole, "3.4.17"] = Regex.run(@version, uncoloured(other))
+    assert TailwindCompiler.reported_version(other) == "3.4.17"
   end
 
   # A TRUNCATED OR FOREIGN BINARY still has to fail. Stripping escapes must not make anything match.
   test "output with no version in it reads as no version" do
     for junk <- ["", "\e[34m\e[39m", "bash: no such file", "\e[1msome other tool v1.2.3\e[0m"] do
-      refute Regex.run(@version, uncoloured(junk)), "#{inspect(junk)} was read as a version"
+      assert TailwindCompiler.reported_version(junk) == nil,
+             "#{inspect(junk)} was read as a version"
     end
-  end
-
-  test "the strip leaves the text itself alone" do
-    assert uncoloured(@painted) == "≈ tailwindcss v4.3.2\n\nUsage:\n"
   end
 end

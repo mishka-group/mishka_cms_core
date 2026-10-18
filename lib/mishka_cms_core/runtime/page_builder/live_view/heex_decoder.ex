@@ -4,6 +4,7 @@
 
 # Copied and changed from https://github.com/BeaconCMS/beacon_live_admin/blob/main/lib/beacon/live_admin/visual_editor/heex/heex_decoder.ex
 defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.HeexDecoder do
+  @moduledoc false
   alias MishkaCmsCore.Runtime.PageBuilder.LiveView.JsonEncoder
 
   @type eex_node :: tuple()
@@ -15,8 +16,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.HeexDecoder do
 
   ## Examples
 
-      iex> decode({:eex, "@project.name", %{line: 1, opt: ~c"=", column: 1}})
-      "<%= @project.name %>"
+      decode({:eex, "@project.name", %{line: 1, opt: ~c"=", column: 1}})
+      #=> "<%= @project.name %>"
 
   """
   @spec decode([JsonEncoder.token()] | eex_node()) :: String.t()

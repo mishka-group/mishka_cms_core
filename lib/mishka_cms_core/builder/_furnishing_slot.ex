@@ -17,9 +17,9 @@ defmodule MishkaCmsCore.Builder.FurnishingSlot do
   use GuardedStruct
 
   guardedstruct do
-    field(:name, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:body, :string, default: "", derives: "sanitize(trim)")
-    field(:attrs, :map, default: %{}, derives: "validate(map)")
+    field(:name, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+    field(:body, String.t(), default: "", derives: "sanitize(trim)")
+    field(:attrs, map(), default: %{}, derives: "validate(map)")
   end
 
   @doc """

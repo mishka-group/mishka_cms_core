@@ -152,8 +152,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.RequirePermissionTest do
       # This shouldn't crash
       result = RequirePermission.call(conn, nil)
 
-      # Should process even with unexpected input
-      assert is_map(result)
+      # Nobody is signed in, so it is a refusal like the empty list's
+      assert result.halted
+      assert result.status == 302
     end
 
     test "handles conn without assigns", %{conn: conn} do
@@ -459,7 +460,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.RequirePermissionTest do
 
         # Should handle all formats without crashing
         assert result.halted
-        assert is_map(result)
       end
     end
   end

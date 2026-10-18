@@ -147,6 +147,53 @@ defmodule MishkaCmsCoreWeb.Test.CollectionFieldTest do
     end
   end
 
+  describe "editing an item's field" do
+    defp placed(view) do
+      token = :sys.get_state(view.pid).socket.assigns.token
+      {:ok, editor} = MishkaCmsCore.Runtime.PageBuilder.EditorSession.fetch(token)
+      Enum.find(Tree.walk(editor.tree), &(&1.kind == :component))
+    end
+
+    defp media(view),
+      do: view |> placed() |> MishkaCmsCore.Runtime.PageBuilder.Tree.Node.attr("media")
+
+    defp items(view) do
+      {:expr, source} = media(view)
+      {items, _bindings} = Code.eval_string(source)
+      items
+    end
+
+    test "writes the field that was named", %{conn: conn, page: page} do
+      view = selected_panel(conn, page)
+
+      view |> element(form_for("alt")) |> render_change(%{"value" => "a new caption"})
+
+      assert {:expr, source} = media(view)
+      assert source =~ "a new caption"
+      refute source =~ "a photograph"
+    end
+
+    # A KEY IS WHAT THE BROWSER SENDS, so one nobody declared is a typo or a hand-made event: the
+    # panel stays open and the document stays as it was, and no atom is made of the name.
+    test "and leaves the page alone for a field the item does not have", %{conn: conn, page: page} do
+      view = selected_panel(conn, page)
+      before = items(view)
+      name = "field_nobody_declared_#{System.unique_integer([:positive])}"
+
+      render_click(view, "collection_set", %{
+        "node_id" => placed(view).id,
+        "name" => "media",
+        "index" => "0",
+        "key" => name,
+        "value" => "x"
+      })
+
+      assert items(view) == before
+      assert has_element?(view, form_for("alt"))
+      assert_raise ArgumentError, fn -> String.to_existing_atom(name) end
+    end
+  end
+
   describe "a list-of-maps property" do
     test "draws a dropdown for the key the sibling list is a list of", %{conn: conn, page: page} do
       view = selected_panel(conn, page)

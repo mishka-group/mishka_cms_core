@@ -18,7 +18,10 @@ defmodule MishkaCmsCore.MixProject do
       package: package(),
       # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
       # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
-      gettext: [excluded_refs_from_purging: ~r{^\.\./}]
+      gettext: [excluded_refs_from_purging: ~r{^\.\./}],
+      # `lib/mix/` calls `Mix`, which is not in the default PLT. `.dialyzer_ignore.exs` lists what
+      # dialyzer reports that is not a defect, each with the reason.
+      dialyzer: [plt_add_apps: [:mix], ignore_warnings: ".dialyzer_ignore.exs"]
     ]
   end
 
@@ -37,6 +40,8 @@ defmodule MishkaCmsCore.MixProject do
         ~w(lib priv/cms_ui_kits priv/dev_seed_media priv/share_card .formatter.exs mix.exs LICENSE README*)
     ]
   end
+
+  def cli, do: [preferred_envs: [ci: :test]]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -110,12 +115,33 @@ defmodule MishkaCmsCore.MixProject do
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
       {:localize, "~> 1.3"},
-      {:mishka_gervaz, path: "../mishka_gervaz"}
+      {:mishka_gervaz, path: "../mishka_gervaz"},
+      {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
+      {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
+      {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
+      {:jump_credo_checks, "~> 0.6", only: [:dev, :test], runtime: false},
+      {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
+      {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+      {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
   end
 
   defp aliases() do
-    [test: ["ash.setup --quiet", "test"], setup: "ash.setup"]
+    [
+      test: ["ash.setup --quiet", "test"],
+      setup: "ash.setup",
+      ci: [
+        "compile --warnings-as-errors",
+        "format --check-formatted",
+        "credo --strict",
+        "sobelow --config",
+        "deps.audit",
+        "hex.audit",
+        "dialyzer",
+        "ex_dna --max-clones 0",
+        "test"
+      ]
+    ]
   end
 
   defp elixirc_paths(:test),

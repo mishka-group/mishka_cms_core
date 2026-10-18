@@ -76,6 +76,44 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion do
     |> Map.new(&{to_string(&1), &1})
   end
 
+  @doc """
+  `record` as a version's snapshot says it was, for showing and never for saving.
+
+  Pass the record, its resource, the version's `changes` (a map, its JSON, or `nil`) and, to name
+  the fields yourself, the attributes that may be shown (the resource's primary `:update` accepts
+  by default). A key that is not one of them is left out, and a value stored as text for an
+  attribute of type `:atom` comes back as the atom, cast by the attribute's own type.
+  """
+  @spec preview(struct(), module(), map() | String.t() | nil, [atom()] | nil) :: struct()
+  def preview(record, resource, changes, fields \\ nil) do
+    fields = fields || accepted_fields(resource)
+    known = Map.new(fields, &{to_string(&1), &1})
+
+    changes
+    |> decode()
+    |> Enum.reduce(record, fn {key, value}, acc ->
+      case Map.fetch(known, to_string(key)) do
+        {:ok, field} -> Map.put(acc, field, cast(resource, field, value))
+        :error -> acc
+      end
+    end)
+  end
+
+  defp accepted_fields(resource),
+    do: resource |> Ash.Resource.Info.primary_action!(:update) |> Map.get(:accept)
+
+  defp cast(resource, field, value) when is_binary(value) do
+    with %{type: Ash.Type.Atom, constraints: constraints} <-
+           Ash.Resource.Info.attribute(resource, field),
+         {:ok, atom} <- Ash.Type.cast_input(Ash.Type.Atom, value, constraints) do
+      atom
+    else
+      _not_an_atom_attribute -> value
+    end
+  end
+
+  defp cast(_resource, _field, value), do: value
+
   @doc "A version's snapshot as a map: `%{}` when it holds none or cannot be read."
   @spec decode(map() | String.t() | nil) :: map()
   def decode(nil), do: %{}

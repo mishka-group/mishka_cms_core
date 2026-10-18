@@ -38,6 +38,23 @@ defmodule MishkaCmsCore.Test.Notify.DeliveryTest do
     |> Ash.count!(actor: user, tenant: user.site_id)
   end
 
+  describe "fan_out/4 — content that comes back from Oban's args" do
+    test "is read by the keys a notification has, and no atom is made of any other" do
+      site = create_site!()
+      user = create_user!(site_id: site.id)
+      stray = "stray_key_nobody_declared_#{System.unique_integer([:positive])}"
+
+      MishkaCmsCore.Notify.Delivery.fan_out(
+        {:user, user.id},
+        %{"type" => "test:event:created", "title" => "From a job", stray => "x"},
+        site.id
+      )
+
+      assert [%{title: "From a job", type: "test:event:created"}] = feed(user)
+      assert_raise ArgumentError, fn -> String.to_existing_atom(stray) end
+    end
+  end
+
   # ── audiences ──────────────────────────────────────────────────────────────
 
   describe "deliver/3 — audiences" do
@@ -297,7 +314,7 @@ defmodule MishkaCmsCore.Test.Notify.DeliveryTest do
 
       Notify.deliver({:user, alice.id}, @content)
 
-      assert_receive %Phoenix.Socket.Broadcast{topic: ^alice_topic}, 1000
+      assert_receive %Phoenix.Socket.Broadcast{topic: ^alice_topic}
       refute_receive %Phoenix.Socket.Broadcast{topic: ^bob_topic}, 200
     end
   end

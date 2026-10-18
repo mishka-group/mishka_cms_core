@@ -196,7 +196,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
 
     component_info_ast =
       quote do
-        def __component_information__() do
+        def __component_information__ do
           %{
             component: %{
               name: unquote(params[:title]),
@@ -827,6 +827,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   defp applied(guard_ast, pattern_ast), do: {:when, [], [pattern_ast, guard_ast]}
 
   # PER CLAUSE, NOT PER COMPONENT, so a kit whose component normalises in two steps keeps both.
+  # sobelow_skip ["DOS.BinToAtom"]
   defp spent_key(index), do: :"__delegated_#{index}__"
 
   defp parse_clause_match(nil), do: quote(do: var!(assigns))
@@ -962,7 +963,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   defp maybe_total_catch_all({name, arity} = signature, clauses, true) do
     with false <- {String.to_atom(name), arity} in lifecycle_callbacks(),
          true <- is_integer(arity),
-         true <- length(clauses) > 1,
+         true <- match?([_, _ | _], clauses),
          true <- narrowable_dispatcher?(clauses),
          false <- has_total_catch_all?(clauses) do
       [build_total_catch_all(signature)]
@@ -972,11 +973,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   # Asked of the behaviour rather than listed, so a callback a later LiveView adds is covered.
-  defp lifecycle_callbacks do
-    Phoenix.LiveComponent.behaviour_info(:callbacks)
-  rescue
-    _no_such_behaviour -> [mount: 1, update: 2, update_many: 1, handle_event: 3, handle_async: 3]
-  end
+  defp lifecycle_callbacks, do: Phoenix.LiveComponent.behaviour_info(:callbacks)
 
   defp helper_signature(helper) do
     {head, _guard} = split_args_and_guard(helper_field(helper, :args) || "")
@@ -1272,9 +1269,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   defp stateful_module?(module) do
-    module.__component_information__([:private, :stateful]) == true
-  rescue
-    _no_such_function -> false
+    Code.ensure_loaded?(module) and function_exported?(module, :__component_information__, 1) and
+      module.__component_information__([:private, :stateful]) == true
   end
 
   defp rooted(module) do
@@ -1637,7 +1633,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   Failed imports are logged but don't stop the compilation process, ensuring robustness
   even when some modules aren't available.
   """
-  def make_env() do
+  def make_env do
     imports = [
       Phoenix.HTML,
       Phoenix.Component,
@@ -1698,6 +1694,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     Module.concat([struct_name])
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
   defp attr_type_to_atom(component_type, _struct_name)
        when component_type in @supported_attr_types do
     String.to_atom(component_type)

@@ -91,7 +91,7 @@ defmodule MishkaCmsCore.Accounts.GrantScopeTest do
 
     test "cannot raise ITSELF, even to something it already holds", %{admin: admin} do
       assert {:error, error} = grant(admin, admin, ["admin:dashboard:blog:*"])
-      assert Exception.message(error) =~ "forbidden" or Exception.message(error) =~ "Forbidden"
+      assert Exception.message(error) =~ "forbidden"
     end
 
     test "cannot touch a user of another site", %{admin: admin} do

@@ -46,6 +46,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [copy_button: 1]
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
+  alias MishkaCmsCore.Runtime.FileSignature
   alias MishkaCmsCore.Runtime.Resources.Changes
 
   @type_badge %{
@@ -882,7 +883,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       uploads do
         upload :media_files do
-          accept ~w(.jpg .jpeg .png .gif .webp .svg .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
+          accept ~w(.jpg .jpeg .png .gif .webp .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
           max_entries 1
           max_file_size 50_000_000
           style :dropzone
@@ -1575,77 +1576,17 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      run fn input, context ->
-        # WHOSE SITE THIS CALL ACTS ON comes from the actor, not from the tenant alone: the reads
-        # and the restore below run as the system.
-        acting_site =
-          MishkaCmsCore.Runtime.Resources.Preparations.SiteWithGlobals.acting_site(context)
-
-        media_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaCmsCore.Runtime.Media, media_id,
-          action: :read,
-          tenant: acting_site,
-          authorize?: false
-        )
-        |> case do
-          {:ok, media} when not is_nil(media) ->
-            if !is_nil(media.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived media. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = media.site_id
-
-              Ash.get(MishkaCmsCore.Runtime.Media.Version, version_id,
-                action: :get_any,
-                authorize?: false
-              )
-              |> case do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != media_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop("errors", "Version does not belong to this media.")
-                         )
-                       ]
-                     )}
-                  else
-                    media
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.Media.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Media)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.Media,
+           version: MishkaCmsCore.Runtime.Media.Version,
+           read: :read,
+           tenant_read?: true,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived media. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this media.")}
     end
 
     action :master_restore_version, :struct do
@@ -1657,71 +1598,16 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
 
-      run fn input, _context ->
-        media_id = input.arguments.id
-        version_id = input.arguments.version_id
-
-        Ash.get(MishkaCmsCore.Runtime.Media, media_id,
-          action: :master_get,
-          authorize?: false
-        )
-        |> case do
-          {:ok, media} when not is_nil(media) ->
-            if !is_nil(media.archived_at) do
-              {:error,
-               Ash.Error.Invalid.exception(
-                 errors: [
-                   Ash.Error.Changes.InvalidAttribute.exception(
-                     field: :archived_at,
-                     message:
-                       dgettext_noop(
-                         "errors",
-                         "Cannot restore version of archived media. Please unarchive it first."
-                       )
-                   )
-                 ]
-               )}
-            else
-              tenant = media.site_id
-
-              Ash.get(MishkaCmsCore.Runtime.Media.Version, version_id,
-                action: :get_any,
-                authorize?: false
-              )
-              |> case do
-                {:ok, version} when not is_nil(version) ->
-                  if version.version_source_id != media_id do
-                    {:error,
-                     Ash.Error.Invalid.exception(
-                       errors: [
-                         Ash.Error.Changes.InvalidAttribute.exception(
-                           field: :version_id,
-                           message:
-                             dgettext_noop("errors", "Version does not belong to this media.")
-                         )
-                       ]
-                     )}
-                  else
-                    media
-                    |> Ash.Changeset.for_update(:restore_version, %{version_id: version_id},
-                      tenant: tenant,
-                      authorize?: false
-                    )
-                    |> Ash.update()
-                  end
-
-                _ ->
-                  {:error,
-                   Ash.Error.Query.NotFound.exception(
-                     resource: MishkaCmsCore.Runtime.Media.Version
-                   )}
-              end
-            end
-
-          _ ->
-            {:error, Ash.Error.Query.NotFound.exception(resource: MishkaCmsCore.Runtime.Media)}
-        end
-      end
+      run {MishkaCmsCore.Runtime.Resources.Actions.RestoreVersion,
+           resource: MishkaCmsCore.Runtime.Media,
+           version: MishkaCmsCore.Runtime.Media.Version,
+           read: :master_get,
+           archived:
+             dgettext_noop(
+               "errors",
+               "Cannot restore version of archived media. Please unarchive it first."
+             ),
+           foreign: dgettext_noop("errors", "Version does not belong to this media.")}
     end
 
     action :preview_version, :struct do
@@ -1753,36 +1639,12 @@ defmodule MishkaCmsCore.Runtime.Media do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == media_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.Media
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_media =
-            Enum.reduce(restored_attrs, media, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  cond do
-                    key_atom == :type and is_binary(value) -> String.to_atom(value)
-                    true -> value
-                  end
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              media,
+              MishkaCmsCore.Runtime.Media,
+              version.changes
+            )
 
           {:ok, preview_media}
         else
@@ -1830,36 +1692,12 @@ defmodule MishkaCmsCore.Runtime.Media do
                  authorize?: false
                ),
              :valid <- if(version.version_source_id == media_id, do: :valid, else: :invalid) do
-          restored_attrs =
-            case version.changes do
-              nil -> %{}
-              changes when is_map(changes) -> changes
-              changes when is_binary(changes) -> Jason.decode!(changes)
-            end
-
-          accepted_fields =
-            MishkaCmsCore.Runtime.Media
-            |> Ash.Resource.Info.actions()
-            |> Enum.find(fn action -> action.name == :update and action.primary? end)
-            |> Map.get(:accept)
-            |> Enum.map(&to_string/1)
-
           preview_media =
-            Enum.reduce(restored_attrs, media, fn {key, value}, acc ->
-              if key in accepted_fields do
-                key_atom = String.to_atom(key)
-
-                value =
-                  cond do
-                    key_atom == :type and is_binary(value) -> String.to_atom(value)
-                    true -> value
-                  end
-
-                Map.put(acc, key_atom, value)
-              else
-                acc
-              end
-            end)
+            MishkaCmsCore.Runtime.Resources.Changes.RestoreVersion.preview(
+              media,
+              MishkaCmsCore.Runtime.Media,
+              version.changes
+            )
 
           {:ok, preview_media}
         else
@@ -2207,20 +2045,32 @@ defmodule MishkaCmsCore.Runtime.Media do
   end
 
   @allowed_extensions %{
-    images: ~w(.jpg .jpeg .png .gif .webp .svg),
+    images: ~w(.jpg .jpeg .png .gif .webp),
     videos: ~w(.mp4 .webm .mov),
     documents: ~w(.pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
   }
 
   @max_file_size 50_000_000
 
+  @doc """
+  Checks an uploaded file before it is stored: its extension is one of the allowed ones, it is at most
+  50 MB, and its first bytes are the kind the extension names — see
+  `MishkaCmsCore.Runtime.FileSignature`.
+
+  Pass `%{file: file, original_filename: filename}`. Answers `{:ok, info}` with the `name`, `format`,
+  `type`, `size`, `extension` and `source_path` the row is made from, or `{:error, error}` naming what
+  was wrong with the file.
+  """
+  @spec validate_and_process_file(%{file: term(), original_filename: String.t()}) ::
+          {:ok, map()} | {:error, term()}
   def validate_and_process_file(%{file: file, original_filename: filename}) do
     ext = Path.extname(filename) |> String.downcase()
 
     with :ok <- validate_extension(ext),
          {:ok, path} <- get_file_path(file),
          {:ok, size} <- get_file_size(path),
-         :ok <- validate_file_size(size) do
+         :ok <- validate_file_size(size),
+         :ok <- validate_signature(path, ext) do
       {:ok,
        %{
          name: upload_name(filename),
@@ -2256,6 +2106,32 @@ defmodule MishkaCmsCore.Runtime.Media do
            )
          ]
        )}
+    end
+  end
+
+  # THE FIRST BYTES, NOT THE NAME. An extension is whatever the uploader typed, and the file is
+  # served from the site's own origin, so a page or a script saved as `cover.png` would run for
+  # whoever opened its address. `MishkaCmsCore.Runtime.FileSignature` reads what the file is.
+  defp validate_signature(path, ext) do
+    case FileSignature.matches?(path, ext) do
+      true ->
+        :ok
+
+      false ->
+        {:error,
+         Ash.Error.Invalid.exception(
+           errors: [
+             Ash.Error.Changes.InvalidAttribute.exception(
+               field: :file,
+               message:
+                 dgettext_noop(
+                   "errors",
+                   "The content of this file is not a %{extension} file."
+                 ),
+               vars: [extension: ext]
+             )
+           ]
+         )}
     end
   end
 

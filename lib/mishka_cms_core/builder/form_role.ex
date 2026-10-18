@@ -46,13 +46,13 @@ defmodule MishkaCmsCore.Builder.FormRole do
   @roles ~w(wrapper field error fieldset submit)
 
   guardedstruct do
-    field(:role, :string,
+    field(:role, String.t(),
       enforce: true,
       derives:
         "sanitize(trim, downcase) validate(enum=String[wrapper::field::error::fieldset::submit])"
     )
 
-    field(:bindings, :map, default: %{}, derives: "validate(map)")
+    field(:bindings, map(), default: %{}, derives: "validate(map)")
   end
 
   @doc "Every role a kit may declare, so it can be read rather than guessed."

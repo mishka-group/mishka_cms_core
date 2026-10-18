@@ -362,7 +362,7 @@ defmodule MishkaCmsCore.Runtime.Site do
             url =
               cond do
                 domain in [nil, ""] -> nil
-                String.starts_with?(domain, "http") -> domain
+                MishkaCmsCore.Runtime.OriginValidator.web_url?(domain) -> domain
                 true -> "https://" <> domain
               end
 

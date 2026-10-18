@@ -9,6 +9,8 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  doctest MishkaCmsCore.Runtime.ErrorStatus
+
   import MishkaCmsCore.Test.Factory
 
   require Ash.Query

@@ -164,7 +164,7 @@ defmodule MishkaCmsCore.Accounts.Checks.AccessPermissions do
   actor hand out that permission" is "does what they hold cover it".
   """
   @spec covers?(String.t(), String.t()) :: boolean()
-  def covers?(permission, action), do: is_permitted?(action: action, permission: permission)
+  def covers?(permission, action), do: permitted?(action: action, permission: permission)
 
   @doc """
   The names among `names` that nothing `actor` holds covers (`covers?/2`): what the actor would
@@ -243,7 +243,7 @@ defmodule MishkaCmsCore.Accounts.Checks.AccessPermissions do
 
   # Validates if a specific permission grants access to an action.
   # Splits both into segments and compares hierarchically.
-  defp is_permitted?(action: action, permission: permission) do
+  defp permitted?(action: action, permission: permission) do
     permission_chunks = String.split(permission, @separator)
 
     String.split(action, @separator, parts: length(permission_chunks))

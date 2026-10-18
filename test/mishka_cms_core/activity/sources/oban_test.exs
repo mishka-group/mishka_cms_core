@@ -339,10 +339,9 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
       ObanSource.handle_telemetry([:oban, :job, :stop], %{}, %{job: job}, nil)
 
       assert_receive %Phoenix.Socket.Broadcast{
-                       topic: "oban_activity",
-                       payload: %{__oban__: true, event: :stop}
-                     },
-                     500
+        topic: "oban_activity",
+        payload: %{__oban__: true, event: :stop}
+      }
     end
 
     test "fans out to global, site, resource and site+resource topics" do
@@ -366,10 +365,10 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
 
       ObanSource.handle_telemetry([:oban, :job, :stop], %{}, %{job: job}, nil)
 
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity"}, 500
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:site:" <> _}, 500
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:res:" <> _}, 500
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:site:" <> rest}, 500
+      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity"}
+      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:site:" <> _}
+      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:res:" <> _}
+      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:site:" <> rest}
       assert rest == "#{@site_id}:res:#{res}" or rest == @site_id
     end
 
@@ -383,7 +382,7 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
 
       ObanSource.handle_telemetry([:oban, :job, :stop], %{}, %{job: stub_job()}, nil)
 
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity"}, 500
+      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity"}
       refute_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:res:" <> _}, 200
     end
   end

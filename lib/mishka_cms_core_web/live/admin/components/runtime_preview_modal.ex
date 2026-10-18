@@ -107,6 +107,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
       |> assign(:code_visible?, p.code_visible?)
       |> assign(:editing?, p.editing?)
       |> assign(:edit_source, p.edit_source)
+      |> assign(:edit_label, p.edit_label)
       |> assign(:render_nonce, p.render_nonce)
       |> assign(:edit_html, p.edit_html)
       |> assign(:draft, p.draft)
@@ -909,9 +910,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         <% @editing? and @direct_save? -> %>
           <%!-- NO DRAFT TO SAVE INTO: the edit is the record's, saved by the same update the
               Configuration tab runs. --%>
-          <form id="preview-code-save-form" phx-submit="preview_code_save" class="space-y-3">
+          <form
+            id="preview-code-save-form"
+            phx-change="preview_code_change"
+            phx-submit="preview_code_save"
+            class="space-y-3"
+          >
             <textarea
               name="source"
+              phx-debounce="500"
               dir="ltr"
               rows="18"
               spellcheck="false"
@@ -936,11 +943,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             </div>
           </form>
         <% @editing? -> %>
-          <form id="preview-code-form" phx-submit="preview_code_submit" class="space-y-3">
+          <form
+            id="preview-code-form"
+            phx-change="preview_code_change"
+            phx-submit="preview_code_submit"
+            class="space-y-3"
+          >
             <input
               type="text"
               name="label"
-              value={@draft && @draft.label}
+              phx-debounce="500"
+              value={@edit_label || (@draft && @draft.label)}
               dir="auto"
               maxlength="120"
               placeholder={
@@ -952,6 +965,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             />
             <textarea
               name="source"
+              phx-debounce="500"
               dir="ltr"
               rows="18"
               spellcheck="false"

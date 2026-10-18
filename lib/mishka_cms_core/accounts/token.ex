@@ -23,6 +23,13 @@ defmodule MishkaCmsCore.Accounts.Token do
   manipulation. The resource supports various token operations including storage,
   retrieval, revocation, and validation checks, forming the backbone of the system's
   token-based authentication infrastructure.
+
+  ## Revoking
+
+  `revoke/1`, `revoke_unissued/1` and `revoke_minted/1` are the ways this application revokes a
+  token. Each answers `:ok` or `{:error, error}` and never raises, so a caller that says "logged
+  out" knows whether the token still works. `revoked/1` asks whether one already was. `failure/1`
+  names a failed revocation for a log line without the token in it.
   """
   use Ash.Resource,
     otp_app: :mishka_cms_core,
@@ -36,6 +43,71 @@ defmodule MishkaCmsCore.Accounts.Token do
     table "tokens"
     repo Application.compile_env!(:mishka_cms_core, :repo)
   end
+
+  require Logger
+
+  @doc """
+  Revokes `token`, a token this application signed and handed out. `:ok` when it no longer works,
+  `{:error, error}` when it may still.
+  """
+  @spec revoke(String.t()) :: :ok | {:error, term()}
+  def revoke(token) when is_binary(token),
+    do: AshAuthentication.TokenResource.revoke(__MODULE__, token)
+
+  @doc """
+  Whether `token` has been revoked: `{:ok, true | false}`, or `{:error, error}` when the revocation
+  list could not be read. AshAuthentication's own `token_revoked?/3` answers `true` for a list it
+  could not read, which would let a caller report a token as ended that may still work.
+  """
+  @spec revoked(String.t()) :: {:ok, boolean()} | {:error, term()}
+  def revoked(token) when is_binary(token) do
+    __MODULE__
+    |> Ash.ActionInput.for_action(:revoked?, %{token: token}, domain: MishkaCmsCore.Accounts)
+    |> Ash.ActionInput.set_context(%{private: %{ash_authentication?: true}})
+    |> Ash.run_action()
+  end
+
+  @doc """
+  Revokes `token`, one that was signed and never handed to anybody — a sign-in turned away after
+  AshAuthentication had already minted its token — so no unused one is left valid.
+
+  `:ok`, or `{:error, error}` once the failure is logged.
+  """
+  @spec revoke_unissued(String.t()) :: :ok | {:error, term()}
+  def revoke_unissued(token) when is_binary(token) do
+    case revoke(token) do
+      :ok ->
+        :ok
+
+      {:error, error} = failed ->
+        Logger.error(
+          "[Token] a token that was never handed out could not be revoked: #{failure(error)}"
+        )
+
+        failed
+    end
+  end
+
+  @doc """
+  `revoke_unissued/1` for the token AshAuthentication put on `user`'s metadata as it signed them
+  in; `:ok` for a user that carries none.
+  """
+  @spec revoke_minted(struct()) :: :ok | {:error, term()}
+  def revoke_minted(user) do
+    case Ash.Resource.get_metadata(user, :token) do
+      token when is_binary(token) -> revoke_unissued(token)
+      _none -> :ok
+    end
+  end
+
+  @doc """
+  What failed, for a log line: the modules of the errors and nothing of their values, which can hold
+  the token.
+  """
+  @spec failure(term()) :: String.t()
+  def failure(%{errors: [_ | _] = errors}), do: Enum.map_join(errors, ", ", &failure/1)
+  def failure(%{__struct__: module}), do: inspect(module)
+  def failure(_other), do: "an unexpected error"
 
   actions do
     defaults [:read]

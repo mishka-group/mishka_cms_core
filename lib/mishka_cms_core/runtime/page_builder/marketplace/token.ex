@@ -13,17 +13,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Marketplace.Token do
   use GuardedStruct
 
   guardedstruct do
-    field(:category, :string,
+    field(:category, String.t(),
       enforce: true,
       derives: "validate(enum=String[color::type::space::radius::shadow::motion::screen])"
     )
 
-    field(:label, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:key, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:value, :string, enforce: true, derives: "validate(string, not_empty)")
-    field(:usage, :integer, default: 0)
-    field(:custom?, :boolean, default: false)
-    field(:glyph, :string, default: "")
+    field(:label, String.t(),
+      enforce: true,
+      derives: "sanitize(trim) validate(string, not_empty)"
+    )
+
+    field(:key, String.t(), enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
+    field(:value, String.t(), enforce: true, derives: "validate(string, not_empty)")
+    field(:usage, integer(), default: 0)
+    field(:custom?, boolean(), default: false)
+    field(:glyph, String.t(), default: "")
   end
 
   @doc "Builds a token, raising on an invalid one — seeds are compile-time data, not user input."

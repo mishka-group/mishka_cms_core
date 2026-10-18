@@ -1467,6 +1467,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:mob_panel, :atom, default: :canvas)
   attr(:selected_node, :any, default: nil)
   attr(:attr_form, :any, default: nil)
+
+  attr(:typed, :map,
+    default: %{},
+    doc: "what the panels' forms hold, typed and not yet applied, by form id — see `typed_in/4`"
+  )
+
   attr(:breakpoint, :atom, default: :base)
   attr(:pseudo, :atom, default: :base)
   attr(:focus_attr, :string, default: nil)
@@ -1629,6 +1635,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           editor={@editor}
           selected_node={@selected_node}
           attr_form={@attr_form}
+          typed={@typed}
           breakpoint={@breakpoint}
           pseudo={@pseudo}
           focus_attr={@focus_attr}
@@ -2801,6 +2808,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           icon_variant={@icon_variant}
           icon_library={@icon_library}
           group_folds={@group_folds}
+          typed={@typed}
         />
 
         <%!-- A SLOT AN AUTHOR HAS TO ADD IS NOT A DETAIL. Folded, the row that says "End section +"
@@ -3445,12 +3453,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               for={%{}}
               as={:attr}
               id="pb-attr-form"
+              phx-change="typed:pb-attr-form"
               phx-submit="add_attr"
               class="mt-[9px] flex items-center gap-1.5"
             >
               <input
                 type="text"
                 name="attr[name]"
+                phx-debounce="blur"
+                value={typed_in(@typed, "pb-attr-form", ["attr", "name"])}
                 placeholder={gettext("name")}
                 autocomplete="off"
                 class="h-7 w-[86px] flex-none rounded-[7px] border border-[#c9c6f0] bg-white px-2 font-['Space_Grotesk'] text-[11px] font-bold text-[#3a382f] outline-none"
@@ -3458,6 +3469,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               <input
                 type="text"
                 name="attr[value]"
+                phx-debounce="blur"
+                value={typed_in(@typed, "pb-attr-form", ["attr", "value"])}
                 placeholder={gettext("value")}
                 autocomplete="off"
                 class="h-7 min-w-0 flex-1 rounded-[7px] border border-[#ecebe6] bg-white px-2 text-[11.5px] font-medium text-[#3a382f] outline-none focus:border-[#c9c6f0]"
@@ -3492,6 +3505,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           css={@element_css}
           error={@element_css_error}
           advice={@element_css_advice}
+          typed={@typed}
         />
 
         <%!-- NOT ON AN ERROR PAGE. Both of these write a binding the LiveView client attaches —
@@ -3547,6 +3561,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:icon_library, :string, default: nil)
   attr(:group_folds, :map, default: %{}, doc: "the sections the reader has explicitly folded")
   attr(:hidden, :list, default: [], doc: "attributes another section of the panel writes")
+  attr(:typed, :map, default: %{}, doc: "what the forms hold, typed and not yet applied")
 
   defp props(assigns) do
     assigns =
@@ -3699,6 +3714,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
         <form
           id={"pb-extra-form-#{@node.id}"}
+          phx-change={"typed:pb-extra-form-#{@node.id}"}
           phx-submit="add_extra_attr"
           class="flex items-center gap-1.5"
         >
@@ -3706,6 +3722,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <input
             type="text"
             name="name"
+            phx-debounce="blur"
+            value={typed_in(@typed, "pb-extra-form-#{@node.id}", "name")}
             placeholder="aria-label"
             autocomplete="off"
             class="h-[26px] min-w-0 flex-1 rounded-[7px] border border-[#ecebe6] bg-white px-2 font-['Space_Grotesk'] text-[11px] text-[#1b1a18] focus:border-[#c3c1f0] focus:outline-none"
@@ -3727,6 +3745,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:css, :string, default: "")
   attr(:error, :string, default: nil)
   attr(:advice, :string, default: nil)
+  attr(:typed, :map, default: %{}, doc: "what the forms hold, typed and not yet applied")
 
   @doc """
   One element's own CSS.
@@ -3823,17 +3842,24 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           />
         </p>
 
-        <form :if={@targetable?} id={"pb-css-form-#{@node.id}"} phx-submit="save_element_css">
+        <form
+          :if={@targetable?}
+          id={"pb-css-form-#{@node.id}"}
+          phx-change={"typed:pb-css-form-#{@node.id}"}
+          phx-submit="save_element_css"
+        >
           <input type="hidden" name="node_id" value={@node.id} />
+          <input type="hidden" name="base" value={@css} />
           <textarea
             id="pb-css-text"
             name="css"
+            phx-debounce="blur"
             spellcheck="false"
             rows="6"
             placeholder="padding: 20px;&#10;&#10;&:hover {&#10;  opacity: .8;&#10;}"
             data-accent-panel
             class="w-full resize-y rounded-[10px] border-0 bg-[#17161a] px-3 py-2.5 font-['Space_Grotesk'] text-[11.5px] leading-[1.7] text-[#c9c7d1] outline-none [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
-          >{@css}</textarea>
+          >{typed_over(@typed, "pb-css-form-#{@node.id}", "css", @css)}</textarea>
 
           <p
             :if={@error}
@@ -5189,7 +5215,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # Loose on purpose: a relative `/about` is as much a link as an absolute one, and refusing to offer
   # Open for one would be wrong more often than guessing right.
   defp openable?(value) when is_binary(value),
-    do: String.starts_with?(value, ["http://", "https://", "/"])
+    do:
+      MishkaCmsCore.Runtime.OriginValidator.web_url?(value) or
+        MishkaCmsCore.Runtime.OriginValidator.site_path?(value)
 
   defp openable?(_value), do: false
 
@@ -7679,6 +7707,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:error, :string, default: nil)
   attr(:section, :string, default: "page")
   attr(:record, :any, default: nil)
+  attr(:typed, :map, default: %{}, doc: "what the forms hold, typed and not yet applied")
 
   @doc """
   What the editor shows for a document it cannot parse.
@@ -7730,15 +7759,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           </span>
         </p>
 
-        <form id="pb-recover-form" phx-submit="recover_template" class="flex flex-col gap-2.5">
+        <form
+          id="pb-recover-form"
+          phx-change="typed:pb-recover-form"
+          phx-submit="recover_template"
+          class="flex flex-col gap-2.5"
+        >
+          <input type="hidden" name="base" value={@fault[:template]} />
           <textarea
             id="pb-recover-source"
             name="template"
+            phx-debounce="blur"
             spellcheck="false"
             rows="16"
             data-accent-panel
             class="w-full resize-y rounded-[12px] border-0 bg-[#17161a] px-4 py-3.5 font-['Space_Grotesk'] text-[12.5px] leading-[1.7] text-[#c9c7d1] outline-none [[data-theme=dark]_&]:[filter:invert(1)_hue-rotate(180deg)]"
-          >{@fault[:template]}</textarea>
+          >{typed_over(@typed, "pb-recover-form", "template", @fault[:template])}</textarea>
 
           <p
             :if={@error}
@@ -8525,6 +8561,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <form
             :if={@heex_editable?}
             id="pb-drawer-heex-form"
+            phx-auto-recover="ignore"
             phx-submit="apply_element_heex"
             class="flex min-h-0 flex-1 flex-col"
           >
@@ -8591,6 +8628,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <form
             :if={@css_targetable?}
             id="pb-drawer-css-form"
+            phx-auto-recover="ignore"
             phx-submit="save_element_css"
             class="flex min-h-0 flex-1 flex-col"
           >
@@ -9926,6 +9964,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           for={%{}}
           as={:ai}
           id="pb-ai-form"
+          phx-change="ai_change"
           phx-submit="ai_submit"
           class="rounded-[13px] border border-[#ecebe6] bg-[#faf9f6] p-2.5 focus-within:border-[#c3c1f0] focus-within:bg-white"
         >
@@ -9952,6 +9991,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <textarea
             id="pb-ai-prompt"
             name="prompt"
+            phx-debounce="blur"
             rows="2"
             placeholder={
               gettext("Describe a change — e.g. “add a testimonials section under the hero”")
@@ -10648,6 +10688,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         <form
           :if={@tab == :template}
           id="pb-source-form"
+          phx-auto-recover="ignore"
           phx-submit="apply_source"
           class="flex min-h-0 flex-1 flex-col"
         >
@@ -11103,7 +11144,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # cheapest way to never have that conversation.
   defp code_entries(assigns) do
     ~H"""
-    <form id="pb-code-form" phx-submit="save_code" class="flex min-h-0 flex-1 flex-col">
+    <form
+      id="pb-code-form"
+      phx-auto-recover="ignore"
+      phx-submit="save_code"
+      class="flex min-h-0 flex-1 flex-col"
+    >
       <input type="hidden" name="tab" value={@tab} />
 
       <div class={["min-h-0 flex-1 overflow-y-auto px-5 py-4", quiet_scroll(:light)]}>
@@ -11376,6 +11422,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         <form
           :if={@state != :custom}
           id={"pb-act-form-#{@node.id}"}
+          phx-auto-recover="ignore"
           phx-submit="save_interaction"
           class="flex flex-col gap-1.5"
         >
@@ -11636,6 +11683,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
         <form
           :if={@hooks != []}
           id={"pb-hook-form-#{@node.id}"}
+          phx-auto-recover="ignore"
           phx-submit="save_hook"
           class="flex flex-col gap-1.5"
         >
@@ -12790,6 +12838,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     <div class="pt-3">
       <form
         id="pb-class-form"
+        phx-change="class_change"
         phx-submit="save_class"
         class="mb-3 flex gap-2 rounded-[12px] border border-[#ecebe6] bg-[#faf9f6] p-2.5"
       >
@@ -12797,6 +12846,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           type="text"
           name="name"
           id="pb-class-name"
+          phx-debounce="blur"
           value={@class_draft[:name]}
           placeholder="card-shell"
           autocomplete="off"
@@ -12806,6 +12856,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           type="text"
           name="utilities"
           id="pb-class-utilities"
+          phx-debounce="blur"
           value={@class_draft[:utilities]}
           placeholder="rounded-xl bg-white p-6"
           autocomplete="off"
@@ -14644,11 +14695,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp drafts_sheet(assigns) do
     ~H"""
     <div class="flex flex-col gap-4">
-      <form phx-submit="save_as_draft" class="flex items-center gap-2">
+      <form
+        id="pb-draft-form"
+        phx-change="typed:pb-draft-form"
+        phx-submit="save_as_draft"
+        class="flex items-center gap-2"
+      >
+        <input type="hidden" name="base" value={@editor.draft_label} />
         <input
           id="pb-draft-name"
           name="label"
-          value={@editor.draft_label}
+          phx-debounce="blur"
+          value={typed_over(@typed, "pb-draft-form", "label", @editor.draft_label)}
           placeholder={gettext("Name this draft")}
           autocomplete="off"
           class="h-8 min-w-0 flex-1 rounded-[9px] border border-[#e6e4de] bg-white px-2.5 font-['Space_Grotesk'] text-[12px] font-medium text-[#1b1a18] placeholder:text-[#a8a5a0] focus:border-[#c3c1f0] focus:outline-none"
@@ -15188,7 +15246,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   # Only an http(s) address is offered. The value comes from a kit's own bundle, and a `javascript:`
   # in a link the admin renders is the one way a third-party kit could reach into this page.
   defp docs_url(%{doc_url: url}) when is_binary(url) do
-    case String.starts_with?(url, ["https://", "http://"]) do
+    case MishkaCmsCore.Runtime.OriginValidator.web_url?(url) do
       true -> url
       false -> nil
     end
@@ -16029,6 +16087,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp translate(text) when is_binary(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
   defp translate(other), do: other
 
+  # WHAT A FORM HOLDS WHILE IT IS BEING FILLED IN. A form with a `phx-change` is sent back through
+  # that event when the page reconnects, and the page is drawn again from what the server then holds
+  # — so the event stores the form's values under `typed:<form id>` (see the builder's handler), and
+  # the input is drawn from them. `name` is the input's name as the form posts it (a list for
+  # `attr[name]`); `default` is what it holds when nothing was typed.
+  @doc false
+  def typed_in(typed, form_id, name, default \\ "")
+
+  def typed_in(typed, form_id, name, default) when is_map(typed) do
+    case get_in(typed, [form_id | List.wrap(name)]) do
+      value when is_binary(value) -> value
+      _nothing -> default
+    end
+  end
+
+  # The same for a box that already shows something stored: what was typed is kept only while the
+  # stored text is still the text it was typed over (the form posts it as `base`), so an undo or a
+  # control moving a line out of the box is not answered with the older text typed before it.
+  @doc false
+  def typed_over(typed, form_id, name, stored) when is_map(typed) do
+    case get_in(typed, [form_id, "base"]) do
+      ^stored -> typed_in(typed, form_id, name, stored)
+      _moved_on -> stored
+    end
+  end
+
   attr(:text, :string, required: true, doc: "a `gettext_noop` sentence with a `%{name}` per part")
 
   attr(:parts, :map,
@@ -16403,12 +16487,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp meta_tag(tags, name), do: find_tag(tags, "name", name)
   defp property_tag(tags, property), do: find_tag(tags, "property", property)
 
+  @tag_keys %{"name" => :name, "property" => :property}
+
   defp find_tag(tags, key, value) do
     Enum.find_value(tags, fn tag ->
       attrs = Map.get(tag, :attrs) || Map.get(tag, "attrs") || %{}
       content = Map.get(tag, :content) || Map.get(tag, "content")
 
-      case Map.get(attrs, key) == value or Map.get(attrs, String.to_atom(key)) == value do
+      case Map.get(attrs, key) == value or Map.get(attrs, Map.fetch!(@tag_keys, key)) == value do
         true -> presence(to_string(content || ""))
         false -> nil
       end

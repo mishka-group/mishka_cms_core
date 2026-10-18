@@ -2014,7 +2014,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
       assign(assigns,
         suggested: suggested,
         others: Enum.take(others, 40),
-        more: length(others) > 40
+        more: Enum.count_until(others, 41) > 40
       )
 
     ~H"""

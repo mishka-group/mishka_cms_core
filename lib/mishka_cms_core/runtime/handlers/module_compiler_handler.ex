@@ -417,7 +417,11 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
         _not_cached -> %{id: site_id, name: name, host: host}
       end
 
-    %Plug.Conn{status: 503, assigns: %{current_site: site, current_user: nil}}
+    %Plug.Conn{
+      status: 503,
+      remote_ip: {127, 0, 0, 1},
+      assigns: %{current_site: site, current_user: nil}
+    }
   end
 
   # A LIVE COMPONENT WITH THE WRONG ROOT IS A COMPILE FAILURE, NOT A VISITOR'S CRASH.
@@ -949,7 +953,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
         end
       end
   """
-  def partition_count() do
+  def partition_count do
     System.schedulers_online()
   end
 
@@ -1051,7 +1055,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
         end
       end
   """
-  def get_dynamic_supervisor_key() do
+  def get_dynamic_supervisor_key do
     counter_ref = :persistent_term.get(:module_compiler_partition_counter)
     counter = :atomics.add_get(counter_ref, 1, 1)
 
@@ -1093,7 +1097,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
 
       IO.puts("Total compilation workers: \#{total_workers}")
   """
-  def partition_health_stats() do
+  def partition_health_stats do
     for partition <- 0..(System.schedulers_online() - 1) do
       pid =
         GenServer.whereis(

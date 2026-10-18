@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCore.Runtime.Helpers do
+  @moduledoc false
   # The application this library is installed into: its priv holds the assets the compilers read,
   # and its esbuild profile is the one they run. Named by configuration, never hardcoded.
   @host_app Application.compile_env!(:mishka_cms_core, :host_app)

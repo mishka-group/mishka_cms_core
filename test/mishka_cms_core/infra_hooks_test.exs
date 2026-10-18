@@ -47,7 +47,7 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
       MishkaCmsCore.Runtime.Plugs.SiteLookupPlug.init([])
     )
 
-    assert_receive {:web_after_site_resolve}, 5000
+    assert_receive {:web_after_site_resolve}
 
     Event.unregister(:name, WebAfterSiteResolve, false)
   end
@@ -85,7 +85,7 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
 
     assert conn.halted
     assert conn.resp_body == "A plugin's own page"
-    assert_receive {:site_unavailable, :inactive}, 5000
+    assert_receive {:site_unavailable, :inactive}
   end
 
   # A MASTER SIGNS IN ON THE MASTER SITE ALONE. Another site asked for the master accounts refuses,
@@ -126,7 +126,7 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
       |> browser_request(site.host)
       |> SiteLookupPlug.call(SiteLookupPlug.init([]))
 
-      assert_receive {:master_sign_in_refused, ^site_id}, 5000
+      assert_receive {:master_sign_in_refused, ^site_id}
 
       "/auth?master_user=false"
       |> browser_request(site.host)
@@ -161,7 +161,7 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
       {user_id, site_id} = {moved.id, master_site.id}
 
       assert signed_in(moved, master_site.host).assigns.current_user == nil
-      assert_receive {:session_refused, ^user_id, ^site_id}, 5000
+      assert_receive {:session_refused, ^user_id, ^site_id}
     end
 
     test "the API's master switch on any other site is heard on api:request:no_tenant_refused", %{
@@ -172,7 +172,7 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
       site_id = site.id
 
       api_request(site.host, [{"x-no-tenant", "true"}])
-      assert_receive {:no_tenant_refused, ^site_id}, 5000
+      assert_receive {:no_tenant_refused, ^site_id}
 
       api_request(site.host, [])
       api_request(master_site.host, [{"x-no-tenant", "true"}])
@@ -206,7 +206,7 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
       {user_id, site_id} = {moved.id, master_site.id}
 
       assert api_signed_in(moved, master_site.host).assigns.current_user == nil
-      assert_receive {:token_refused, ^user_id, ^site_id}, 5000
+      assert_receive {:token_refused, ^user_id, ^site_id}
     end
   end
 

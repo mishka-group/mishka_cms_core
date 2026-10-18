@@ -42,9 +42,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Classes do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
+  alias MishkaCmsCore.Runtime.PageBuilder.StylesheetRow
   alias MishkaCmsCore.Runtime.Stylesheet
-
-  require Ash.Query
 
   # WHAT THE BUILDER WRITES IT GENERATED: the stylesheet row is written by whoever may open a
   # builder, rather than by the stylesheet area alone. See `MishkaCmsCore.Runtime.Stylesheet`.
@@ -276,46 +275,5 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Classes do
   defp saved({:ok, _record}, classes), do: {:ok, classes}
   defp saved({:error, reason}, _classes), do: {:error, reason}
 
-  # SCOPED, NOT CAPPED. The reserved name is the same constant on every site and the identity is
-  # `[:name, :site_id]`, so the name alone matches one row per site. Asking for one row before
-  # saying which site it is for hands back whichever rows the read reached — a capped page answers
-  # with two, so a third site is simply invisible — and the site's own row then reads as absent: the
-  # panel empties, the next save collides with the row that is there, and a delete writes nothing.
-  #
-  # THE MASTER READ IS THE ONE THAT HAS TO BE TOLD: `:master_read` bypasses multitenancy, so every
-  # site's row is a candidate. A tenant's read is already scoped — Ash adds `site_id == ^tenant`,
-  # and `global? true` only makes the tenant optional rather than folding the globals in — so there
-  # the filter restates what Ash applied anyway. It is written once, before the branch, because the
-  # globals are a scope too: theirs is `is_nil(site_id)`, and `site_id == ^nil` is a comparison Ash
-  # warns about precisely because it can never match.
-  defp row(actor, site_id) do
-    Stylesheet
-    |> Ash.Query.filter(name == ^@row_name)
-    |> scoped(site_id)
-    |> read(actor, site_id)
-  end
-
-  defp scoped(query, nil), do: Ash.Query.filter(query, is_nil(site_id))
-  defp scoped(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
-
-  defp read(query, %{site_id: nil} = actor, _site_id) do
-    query
-    |> Ash.Query.for_read(:master_read, %{}, actor: actor)
-    |> Ash.read()
-    |> first()
-  end
-
-  defp read(query, actor, site_id) do
-    query
-    |> Ash.Query.for_read(:read, %{}, actor: actor, tenant: site_id)
-    |> Ash.read()
-    |> first()
-  end
-
-  # The identity leaves a scoped query at most one row to answer with. Pagination is on for the
-  # master read, so what comes back is a page rather than a list.
-  defp first({:ok, %Ash.Page.Offset{results: rows}}), do: first({:ok, rows})
-  defp first({:ok, [row | _rest]}), do: row
-  defp first({:ok, []}), do: nil
-  defp first({:error, _reason}), do: nil
+  defp row(actor, site_id), do: StylesheetRow.fetch(actor, site_id, @row_name)
 end

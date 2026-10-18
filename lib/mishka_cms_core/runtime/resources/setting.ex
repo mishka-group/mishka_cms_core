@@ -105,11 +105,7 @@ defmodule MishkaCmsCore.Runtime.Setting do
 
       validate {TenantContext, require_master: false}
 
-      change fn changeset, context ->
-        if !is_nil(context.tenant),
-          do: Ash.Changeset.force_change_attribute(changeset, :site_id, context.tenant),
-          else: changeset
-      end
+      change MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
 
       description "Create-or-update a setting for the current tenant (auto-stamps site_id)."
     end

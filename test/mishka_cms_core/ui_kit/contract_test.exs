@@ -125,7 +125,8 @@ defmodule MishkaCmsCore.UiKit.ContractTest do
     end
 
     test "a rejected component with no name is still reported" do
-      {[], [{nil, {:missing, :name}}]} = Contract.partition([%{"template" => "<div></div>"}])
+      assert {[], [{nil, {:missing, :name}}]} =
+               Contract.partition([%{"template" => "<div></div>"}])
     end
 
     test "an empty or non-list components key partitions to nothing" do

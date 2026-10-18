@@ -712,9 +712,9 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentPropertyTest do
 
       assert changeset.valid?
 
-      # Test that defaults would be applied (we can't test the actual values without creating)
-      assert changeset.attributes[:format] == nil or changeset.attributes[:format] == :heex
-      assert changeset.attributes[:priority] == nil or changeset.attributes[:priority] == 0
+      # The defaults the resource declares are on the changeset before anything is written.
+      assert changeset.attributes[:format] == :heex
+      assert changeset.attributes[:priority] == 0
     end
   end
 

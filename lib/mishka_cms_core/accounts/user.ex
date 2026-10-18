@@ -40,6 +40,7 @@ defmodule MishkaCmsCore.Accounts.User do
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [cell_stacked: 1]
   require Ash.Query
+  require Logger
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
   @admin_fields [:email]
@@ -1759,26 +1760,20 @@ defmodule MishkaCmsCore.Accounts.User do
       run fn input, _context ->
         token = input.arguments.token
 
-        # WHOSE LIVE SOCKETS GO WITH THE TOKEN, asked before the revocation below makes the answer
-        # unreadable. The account is the one the TOKEN names and nobody else: the policy above lets
-        # anyone call this with any string, and the router's `:api` pipeline puts an actor on every
-        # request from its own bearer token — so a caller handing over somebody else's token would
-        # otherwise revoke that account's token while cutting its own sockets.
-        signed_out = token_holder(token)
-
-        try do
-          MishkaCmsCore.Accounts.Token
-          |> AshAuthentication.TokenResource.revoke(token)
-        rescue
-          _ -> :ok
+        # WHOSE TOKEN IT IS comes from its signature, not from the revocation list: a token this
+        # application signed, still inside its lifetime. That is the only kind there is anything to
+        # revoke for, and the only one whose claims are to be believed — revoking writes a row for
+        # the `jti` and subject a token names, so a token that merely says so must not. A string
+        # that is not one has nothing to revoke, and logging out with it is not a failure.
+        #
+        # The account is the one the TOKEN names and nobody else: the policy above lets anyone call
+        # this with any string, and the router's `:api` pipeline puts an actor on every request from
+        # its own bearer token — so a caller handing over somebody else's token would otherwise
+        # revoke that account's token while cutting its own sockets.
+        case signed_token(token) do
+          {:ok, user_id} -> revoke_session(token, user_id)
+          :error -> {:ok, logged_out()}
         end
-
-        case signed_out do
-          {:ok, user_id} -> MishkaCmsCore.Accounts.LiveSockets.disconnect(user_id)
-          :error -> :ok
-        end
-
-        {:ok, %{success: true, message: gettext("Logged out successfully")}}
       end
     end
 
@@ -2240,25 +2235,61 @@ defmodule MishkaCmsCore.Accounts.User do
 
   defp withhold_account_relationships(query, _context), do: query
 
-  # The account a `:logout` is ending, or `:error` when the token proves none.
-  # `AshAuthentication.Jwt.verify/3` is the whole test — signature, expiry, and a `jti` still present
-  # and unrevoked in the token resource — so a token somebody once had, or one this application never
-  # signed, cannot cut an account's sockets.
+  # THE ANSWER FOLLOWS THE REVOCATION. "Logged out successfully" while the token still works is the
+  # one wrong answer here, so a revocation that fails is an error, logged without the token, and the
+  # account's live sockets stay as they are.
   #
-  # THE TENANT COMES OUT OF THE TOKEN, NOT OUT OF THE REQUEST. A tenant user's token carries the site
-  # it was issued for as a claim, and verification only checks that claim against the tenant it is
-  # given — so reading it back first makes the check an identity and costs nothing, while the
-  # signature is what makes the value trustworthy. Taking it from the request instead meant that
-  # `POST /logout` without a tenant — which `MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug` allows
-  # deliberately, for `x-no-tenant` on the master site's address — revoked the token and left its
-  # live sockets running.
-  defp token_holder(token) do
-    with {:ok, claims} <- AshAuthentication.Jwt.peek(token),
-         {:ok, %{"sub" => "user?id=" <> user_id}, _resource} <-
-           AshAuthentication.Jwt.verify(token, __MODULE__, tenant: claims["tenant"]) do
+  # A TOKEN THAT WAS REVOKED ALREADY ENDS NOTHING, so it is answered and left alone: the account's
+  # sockets were cut when it was revoked, and cutting them again for whoever hands the same string
+  # over would keep a signed-in account reconnecting. A revocation list that cannot be read is not
+  # "already revoked" — the revocation is attempted and answers for itself.
+  defp revoke_session(token, user_id) do
+    case MishkaCmsCore.Accounts.Token.revoked(token) do
+      {:ok, true} -> {:ok, logged_out()}
+      _live_or_unknown -> end_session(token, user_id)
+    end
+  end
+
+  defp end_session(token, user_id) do
+    case MishkaCmsCore.Accounts.Token.revoke(token) do
+      :ok ->
+        MishkaCmsCore.Accounts.LiveSockets.disconnect(user_id)
+        {:ok, logged_out()}
+
+      {:error, error} ->
+        Logger.error(
+          "[User] logout could not revoke the token of #{user_id}: " <>
+            MishkaCmsCore.Accounts.Token.failure(error)
+        )
+
+        {:error,
+         Ash.Error.Unknown.UnknownError.exception(
+           error: gettext("You could not be logged out. Try again.")
+         )}
+    end
+  end
+
+  defp logged_out, do: %{success: true, message: gettext("Logged out successfully")}
+
+  # The account a `:logout` is ending, or `:error` when the token proves none: a token this
+  # application signed that has not run out. The signature and the expiry are read without the
+  # database, so a database that is down cannot make a live token look like a string that is not
+  # one, and a token somebody forged cannot name an account's `jti` to revoke or sockets to cut.
+  #
+  # NOT `AshAuthentication.Jwt.verify/3`, which also asks the revocation list and reads the tenant
+  # claim back: an unreadable list is answered as "revoked", and a token with no tenant carries
+  # `:null` there, which verification takes for a tenant named `:null`. Either made a live token
+  # look like nothing to revoke.
+  defp signed_token(token) do
+    signer = AshAuthentication.Jwt.Config.token_signer(__MODULE__)
+
+    with {:ok, claims} <- Joken.verify(token, signer),
+         expires when is_integer(expires) <- claims["exp"],
+         true <- expires > System.os_time(:second),
+         "user?id=" <> user_id <- claims["sub"] do
       {:ok, user_id}
     else
-      _no_live_token -> :error
+      _not_a_live_token -> :error
     end
   end
 end

@@ -234,7 +234,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
 
   @impl true
   def handle_event("preview_versions_page", %{"page" => page}, socket),
-    do: {:noreply, PreviewHelpers.versions_paginate(socket, String.to_integer(page))}
+    do: {:noreply, PreviewHelpers.versions_paginate(socket, page)}
 
   @impl true
   def handle_event("preview_version_toggle", %{"id" => id}, socket),
@@ -251,6 +251,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   @impl true
   def handle_event("preview_cancel_edit", _params, socket),
     do: {:noreply, PreviewHelpers.cancel_edit(socket)}
+
+  @impl true
+  def handle_event("preview_code_change", %{"source" => source} = params, socket),
+    do: {:noreply, PreviewHelpers.type_code(socket, source, params["label"])}
 
   @impl true
   def handle_event("preview_code_submit", %{"op" => "save", "source" => source} = params, socket),
@@ -270,7 +274,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
 
   @impl true
   def handle_event("preview_drafts_page", %{"page" => page}, socket),
-    do: {:noreply, PreviewHelpers.drafts_paginate(socket, String.to_integer(page))}
+    do: {:noreply, PreviewHelpers.drafts_paginate(socket, page)}
 
   @impl true
   def handle_event("preview_publish_draft", _params, socket),
@@ -341,21 +345,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
 
   defp create_translation(socket, translation, %{"language" => language, "path" => path})
        when is_binary(path) do
-    with {:ok, created} <-
-           PageEditions.translate(
-             translation.page,
-             language,
-             String.trim(path),
-             socket.assigns.current_user
-           ) do
-      socket
-      |> assign(:translation, nil)
-      |> put_flash(
-        :info,
-        gettext("Translation created as inactive — translate it, then activate it to go live.")
-      )
-      |> PreviewHelpers.open_configuration(created.id)
-    else
+    case PageEditions.translate(
+           translation.page,
+           language,
+           String.trim(path),
+           socket.assigns.current_user
+         ) do
+      {:ok, created} ->
+        socket
+        |> assign(:translation, nil)
+        |> put_flash(
+          :info,
+          gettext("Translation created as inactive — translate it, then activate it to go live.")
+        )
+        |> PreviewHelpers.open_configuration(created.id)
+
       {:error, %Ash.Error.Invalid{errors: errors}} ->
         refuse_translation(socket, translation, Enum.map_join(errors, ", ", &reason/1))
 

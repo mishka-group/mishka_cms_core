@@ -223,4 +223,97 @@ defmodule MishkaCmsCore.Runtime.Handlers.CustomKitInstallTest do
       assert %{"source_url" => @url} = path |> File.read!() |> Jason.decode!()
     end
   end
+
+  # A BUNDLE IS A STRANGER'S FILE, and every key in it was once turned into an atom that is never
+  # freed: a bundle with a million different keys filled the atom table and ended the VM for every
+  # site. A key that is not one the resource takes is dropped as text.
+  describe "keys a bundle invents" do
+    defp invented,
+      do: "kit_invented_" <> Base.encode16(:crypto.strong_rand_bytes(10), case: :lower)
+
+    defp atom?(text) do
+      _atom = String.to_existing_atom(text)
+      true
+    rescue
+      ArgumentError -> false
+    end
+
+    defp bundle_with(keys) do
+      %{top: top, attr: attr, slot: slot, helper: helper, hook: hook, sheet: sheet} = keys
+      base = bundle()
+
+      components =
+        Enum.map(base["components"], fn
+          %{"name" => "acme-chip"} = chip ->
+            chip
+            |> Map.put(top, "anything")
+            |> Map.update!("attrs", fn attrs -> Enum.map(attrs, &Map.put(&1, attr, 1)) end)
+            |> Map.update!("helpers", fn helpers -> Enum.map(helpers, &Map.put(&1, helper, 1)) end)
+            |> Map.put("slots", [%{"name" => "inner_block", "opts" => %{}, slot => 1}])
+
+          other ->
+            other
+        end)
+
+      %{
+        base
+        | "components" => components,
+          "js_hooks" => Enum.map(base["js_hooks"], &Map.put(&1, hook, 1)),
+          "stylesheets" => Enum.map(base["stylesheets"], &Map.put(&1, sheet, 1))
+      }
+    end
+
+    test "are not made into atoms, and cost the kit nothing", %{dir: dir} do
+      keys = %{
+        top: invented(),
+        attr: invented(),
+        slot: invented(),
+        helper: invented(),
+        hook: invented(),
+        sheet: invented()
+      }
+
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 200, Jason.encode!(bundle_with(keys))) end
+      )
+
+      add_and_install!(dir)
+
+      for {level, key} <- keys do
+        refute atom?(key), "the #{level} key #{key} became an atom"
+      end
+
+      [chip] = rows(Component, ["acme-chip"])
+      assert length(chip.helpers) == 4
+      assert Enum.map(chip.attrs, & &1.name) |> Enum.sort() == ["color", "tone"]
+      assert [%{name: "inner_block"}] = chip.slots
+      assert rows(JsHook, ["acmegood"]) != []
+      assert rows(Stylesheet, ["acme-theme"]) != []
+    end
+
+    test "a format the component does not have falls back to heex instead of raising", %{dir: dir} do
+      base = bundle()
+
+      body =
+        Map.update!(base, "components", fn components ->
+          Enum.map(
+            components,
+            &Map.put(
+              &1,
+              "format",
+              "no_such_format_" <> Base.encode16(:crypto.strong_rand_bytes(6))
+            )
+          )
+        end)
+
+      Application.put_env(:mishka_cms_core, :ui_kit_req_options,
+        plug: fn conn -> Plug.Conn.send_resp(conn, 200, Jason.encode!(body)) end
+      )
+
+      add_and_install!(dir)
+
+      assert rows(Component, ["acme-icon", "acme-chip", "acme-gauge"]) |> Enum.map(& &1.format) ==
+               [:heex, :heex, :heex]
+    end
+  end
 end

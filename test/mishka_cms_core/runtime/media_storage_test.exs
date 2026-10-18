@@ -21,6 +21,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Runtime.Media
+  alias MishkaCmsCore.Test.Files
   alias MishkaCmsCore.Test.Plugins.MediaPathRefused
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -91,6 +92,10 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
     on_exit(fn -> File.rm(path) end)
     %{path: path, client_name: name}
   end
+
+  # A file of the kind its name says, which `validate_and_process_file/1` reads from its first bytes.
+  defp png(text), do: Files.png() <> text
+  defp jpeg(text), do: Files.jpeg() <> text
 
   # An upload as `validate_and_process_file/1` hands it to storage.
   defp file_info(content), do: %{source_path: upload("new.png", content).path, extension: ".png"}
@@ -266,22 +271,22 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
            Media,
            :upload,
            %{
-             file: Ash.Type.File.from_path(upload("site.png", "site bytes").path),
+             file: Ash.Type.File.from_path(upload("site.png", png("site bytes")).path),
              original_filename: "site.png"
            },
            actor: admin,
            tenant: site.id
-         ), "site bytes"},
+         ), png("site bytes")},
         {Ash.ActionInput.for_action(
            Media,
            :master_upload,
            %{
-             file: Ash.Type.File.from_path(upload("master.png", "master bytes").path),
+             file: Ash.Type.File.from_path(upload("master.png", png("master bytes")).path),
              original_filename: "master.png",
              site_id: site.id
            },
            actor: master
-         ), "master bytes"}
+         ), png("master bytes")}
       ]
 
       for {input, content} <- uploads do
@@ -406,7 +411,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
           Media,
           :upload,
           %{
-            file: Ash.Type.File.from_path(upload("site.png", "site bytes").path),
+            file: Ash.Type.File.from_path(upload("site.png", png("site bytes")).path),
             original_filename: "site.png",
             media_category_id: theirs.id
           },
@@ -417,7 +422,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
           Media,
           :master_upload,
           %{
-            file: Ash.Type.File.from_path(upload("master.png", "master bytes").path),
+            file: Ash.Type.File.from_path(upload("master.png", png("master bytes")).path),
             original_filename: "master.png",
             site_id: site.id,
             media_category_id: theirs.id
@@ -475,10 +480,10 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
       path = own_path(site)
       live = on_disk!(dir, "uploads", under_uploads(path), "old")
 
-      updated = site |> row!(path) |> replace!(admin, upload("new.png", "new"))
+      updated = site |> row!(path) |> replace!(admin, upload("new.png", png("new")))
 
       assert updated.relative_path == path
-      assert File.read!(live) == "new"
+      assert File.read!(live) == png("new")
     end
 
     test "leaves the site's media folder in place when its last file goes", %{
@@ -587,7 +592,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
       theirs: theirs,
       live: live
     } do
-      updated = site |> row!(theirs) |> replace!(admin, upload("new.jpg", "new"))
+      updated = site |> row!(theirs) |> replace!(admin, upload("new.jpg", jpeg("new")))
 
       assert File.read!(live) == "their bytes"
 
@@ -597,7 +602,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
              )
 
       assert File.read!(Path.join([dir, "uploads", under_uploads(updated.relative_path)])) ==
-               "new"
+               jpeg("new")
     end
   end
 
@@ -725,13 +730,13 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
       folder: folder,
       sibling: sibling
     } do
-      updated = site |> row!(folder) |> replace!(admin, upload("new.png", "new"))
+      updated = site |> row!(folder) |> replace!(admin, upload("new.png", png("new")))
 
       assert File.read!(sibling) == "sibling bytes"
       assert Path.dirname(updated.relative_path) == folder
 
       assert File.read!(Path.join([dir, "uploads", under_uploads(updated.relative_path)])) ==
-               "new"
+               png("new")
     end
 
     test "deletes the row for good, and leaves the folder's files in place", %{
@@ -828,7 +833,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
                Media
                |> Ash.Changeset.for_create(
                  :form_upload,
-                 %{media_files: [upload("staged.png", "staged bytes")]},
+                 %{media_files: [upload("staged.png", png("staged bytes"))]},
                  actor: c.admin,
                  tenant: site.id
                )
@@ -837,7 +842,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
       assert String.starts_with?(row.relative_path, "/uploads/#{site.id}/media/uncategorized/")
 
       assert File.read!(Path.join([dir, "uploads", under_uploads(row.relative_path)])) ==
-               "staged bytes"
+               png("staged bytes")
     end
   end
 
@@ -876,7 +881,7 @@ defmodule MishkaCmsCore.Runtime.MediaStorageTest do
       restored = restore!(archived, admin)
       assert_receive {:media_path_refused, :unarchive, ^site_id, ^theirs}
 
-      replace!(restored, admin, upload("new.png", "new"))
+      replace!(restored, admin, upload("new.png", png("new")))
       assert_receive {:media_path_refused, :replace, ^site_id, ^theirs}
 
       :ok = site |> row!(theirs) |> delete_for_good!(admin)

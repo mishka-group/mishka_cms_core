@@ -384,7 +384,9 @@ defmodule MishkaCmsCore.Settings do
       Settings.write_permission("site.title")          #=> ["admin:dashboard:setting"]
       Settings.write_permission("studio.lock_tokens")  #=> ["admin:dashboard:runtime:page", …]
   """
-  @spec write_permission(definition() | String.t() | nil) :: [AccessPermissions.requirement()]
+  @spec write_permission(definition() | map() | String.t() | nil) :: [
+          AccessPermissions.requirement()
+        ]
   def write_permission(%{permission: permission}) when permission not in [nil, []],
     do: List.wrap(permission)
 
@@ -471,8 +473,8 @@ defmodule MishkaCmsCore.Settings do
 
     cond do
       value == "" -> {:ok, ""}
-      String.starts_with?(value, "//") -> :error
-      String.starts_with?(value, ["/", "https://", "http://"]) -> {:ok, value}
+      MishkaCmsCore.Runtime.OriginValidator.site_path?(value) -> {:ok, value}
+      MishkaCmsCore.Runtime.OriginValidator.web_url?(value) -> {:ok, value}
       true -> :error
     end
   end

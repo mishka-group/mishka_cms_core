@@ -146,12 +146,20 @@ defmodule MishkaCmsCore.Sidebar do
     use GuardedStruct
 
     guardedstruct do
-      field(:key, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-      field(:label, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-      field(:icon, :string, default: "hero-squares-2x2")
-      field(:order, :integer, default: 100)
+      field(:key, String.t(),
+        enforce: true,
+        derives: "sanitize(trim) validate(string, not_empty)"
+      )
+
+      field(:label, String.t(),
+        enforce: true,
+        derives: "sanitize(trim) validate(string, not_empty)"
+      )
+
+      field(:icon, String.t(), default: "hero-squares-2x2")
+      field(:order, integer(), default: 100)
       field(:permissions, list(), default: [])
-      field(:position, :atom, default: :main)
+      field(:position, atom(), default: :main)
       field(:items, list(), default: [])
     end
 
@@ -201,27 +209,39 @@ defmodule MishkaCmsCore.Sidebar do
     use GuardedStruct
 
     guardedstruct do
-      field(:key, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-      field(:label, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-      field(:path, :string, enforce: true, derives: "sanitize(trim) validate(string, not_empty)")
-      field(:icon, :string, default: "hero-squares-2x2")
-      field(:group, :string)
-      field(:order, :integer, default: 100)
+      field(:key, String.t(),
+        enforce: true,
+        derives: "sanitize(trim) validate(string, not_empty)"
+      )
+
+      field(:label, String.t(),
+        enforce: true,
+        derives: "sanitize(trim) validate(string, not_empty)"
+      )
+
+      field(:path, String.t(),
+        enforce: true,
+        derives: "sanitize(trim) validate(string, not_empty)"
+      )
+
+      field(:icon, String.t(), default: "hero-squares-2x2")
+      field(:group, String.t())
+      field(:order, integer(), default: 100)
       field(:permissions, list(), default: [])
-      field(:position, :atom, default: :main)
-      field(:nav, :boolean, default: true)
-      field(:module, :atom)
+      field(:position, atom(), default: :main)
+      field(:nav, boolean(), default: true)
+      field(:module, atom())
       # WHICH EXTENSION OWNS THIS ENTRY, for the switch a site has over it — see
       # `MishkaCmsCore.Install.Extensions.active?/2`. Core's own items leave it blank and are never
       # switchable; an extension naming its OTP app here is asking to be hideable, and nothing in
       # this module ever names one back.
-      field(:extension, :atom)
+      field(:extension, atom())
 
       # WHO THE EXTENSION IS AND WHERE ITS OWN PAGE IS, for the "Powered by" line under every page it
       # owns — see `MishkaCmsCore.Sidebar.credit/1`. Both declared once, on one of the extension's
       # entries; an entry that names only one of them credits nobody.
-      field(:credit_name, :string)
-      field(:credit_url, :string)
+      field(:credit_name, String.t())
+      field(:credit_url, String.t())
     end
 
     @doc """
@@ -552,7 +572,7 @@ defmodule MishkaCmsCore.Sidebar do
     %{groups: groups, items: items} = collect()
     user = load_permissions(user)
     site_id = site_id(user)
-    visible = items |> Enum.filter(& &1.nav) |> Enum.filter(&visible?(&1, user, site_id))
+    visible = Enum.filter(items, &(&1.nav && visible?(&1, user, site_id)))
 
     groups
     |> Enum.filter(&visible?(&1, user, site_id))

@@ -379,19 +379,21 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.History do
   # alone is another author's OPEN draft, which is its own branch and has not shipped anything, and
   # that is the whole reason this is not simply "every row on the anchor".
   defp anchored_rows(source_type, source_id, draft_id, actor) do
-    with {:ok, query} <- rows_query(actor) do
-      query
-      |> Ash.Query.filter(source_type == ^source_type and source_id == ^source_id)
-      |> then(fn query ->
-        case draft_id do
-          nil -> Ash.Query.filter(query, is_nil(draft_id))
-          id -> Ash.Query.filter(query, is_nil(draft_id) or draft_id == ^id)
-        end
-      end)
-      |> Ash.Query.load([:snapshot])
-      |> Ash.read(actor: actor)
-    else
-      :error -> {:ok, []}
+    case rows_query(actor) do
+      {:ok, query} ->
+        query
+        |> Ash.Query.filter(source_type == ^source_type and source_id == ^source_id)
+        |> then(fn query ->
+          case draft_id do
+            nil -> Ash.Query.filter(query, is_nil(draft_id))
+            id -> Ash.Query.filter(query, is_nil(draft_id) or draft_id == ^id)
+          end
+        end)
+        |> Ash.Query.load([:snapshot])
+        |> Ash.read(actor: actor)
+
+      :error ->
+        {:ok, []}
     end
   end
 

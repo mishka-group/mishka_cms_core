@@ -184,13 +184,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
 
       module = Helpers.module_name(component.name, nil, "Component")
       assert {:ok, ^module} = component_module(component)
-      assert_receive {:span, :stop, %{cache: :miss, module: ^module}}, 5_000
+      assert_receive {:span, :stop, %{cache: :miss, module: ^module}}
       md5 = module.module_info(:md5)
 
       restart(module)
 
       assert {:ok, ^module} = component_module(component)
-      assert_receive {:span, :stop, %{cache: :hit, module: ^module}}, 5_000
+      assert_receive {:span, :stop, %{cache: :hit, module: ^module}}
       refute_received {:span, :stop, %{cache: :miss, module: ^module}}
       assert module.module_info(:md5) == md5
       assert ComponentCompiler.check_root(module) == :ok
@@ -221,14 +221,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
 
       module = Helpers.module_name(component.name, nil, "Component")
       assert {:error, {:compilation_error, why}} = component_module(component)
-      assert_receive {:span, :stop, %{cache: :miss, module: ^module}}, 5_000
+      assert_receive {:span, :stop, %{cache: :miss, module: ^module}}
       assert CompileFailureState.failed?(module)
 
       restart(module)
       CompileFailureState.clear(module)
 
       assert {:error, {:compilation_error, ^why}} = component_module(component)
-      assert_receive {:span, :stop, %{cache: :hit, module: ^module}}, 5_000
+      assert_receive {:span, :stop, %{cache: :hit, module: ^module}}
       assert CompileFailureState.failed?(module)
     end
 
@@ -582,9 +582,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
     :erlang.trace(self(), false, [:call])
     :erlang.trace_pattern(mfa, false, flags)
     ref = :erlang.trace_delivered(self())
-    assert_receive {:trace_delivered, _pid, ^ref}, 5_000
+    assert_receive {:trace_delivered, _pid, ^ref}
     send(tracer, {:calls, self()})
-    assert_receive {:traced, calls}, 5_000
+    assert_receive {:traced, calls}
     {result, calls}
   end
 
@@ -710,7 +710,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
   defp sweeps_done do
     for pid <- Task.Supervisor.children(MishkaCmsCore.Runtime.TaskSupervisor) do
       ref = Process.monitor(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 10_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}
     end
 
     :ok

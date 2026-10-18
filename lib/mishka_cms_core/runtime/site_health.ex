@@ -242,15 +242,13 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
   # One UNION query: per-resource active/inactive/archived counts, site-specific only.
   defp part_counts(site_id) do
     sql =
-      @parts
-      |> Enum.map(fn {label, table} ->
+      Enum.map_join(@parts, " UNION ALL ", fn {label, table} ->
         "SELECT '#{label}' AS kind, " <>
           "COUNT(*) FILTER (WHERE active AND archived_at IS NULL) AS active, " <>
           "COUNT(*) FILTER (WHERE NOT active AND archived_at IS NULL) AS inactive, " <>
           "COUNT(*) FILTER (WHERE archived_at IS NOT NULL) AS archived " <>
           "FROM #{table} WHERE site_id = $1::text::uuid"
       end)
-      |> Enum.join(" UNION ALL ")
 
     case Ecto.Adapters.SQL.query(@repo, sql, [site_id]) do
       {:ok, %{rows: rows}} ->

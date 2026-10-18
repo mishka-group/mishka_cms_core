@@ -27,17 +27,17 @@ defmodule MishkaCmsCore.UiKit.Contract do
   use GuardedStruct
 
   guardedstruct do
-    field(:name, :string,
+    field(:name, String.t(),
       derives: "sanitize(trim) validate(string, not_empty, min_len=2, max_len=200)"
     )
 
-    field(:template, :string, derives: "sanitize(trim) validate(string, not_empty)")
-    field(:type, :string, default: "general", derives: "sanitize(trim, downcase)")
+    field(:template, String.t(), derives: "sanitize(trim) validate(string, not_empty)")
+    field(:type, String.t(), default: "general", derives: "sanitize(trim, downcase)")
     field(:attrs, list(), default: [], derives: "validate(list)")
     field(:slots, list(), default: [], derives: "validate(list)")
     field(:helpers, list(), default: [], derives: "validate(list)")
     field(:dependencies, list(), default: [], derives: "validate(list)")
-    field(:extra, :map, default: %{}, derives: "validate(map)")
+    field(:extra, map(), default: %{}, derives: "validate(map)")
 
     # THREE BOOLEANS, AND ONLY ONE OF THEM IS NEW. `precompile` and `required` have been accepted
     # from a bundle since they existed and governed by nothing, so a kit shipping `"required": "yes"`
@@ -47,9 +47,9 @@ defmodule MishkaCmsCore.UiKit.Contract do
     #
     # None of the three joins `@required`: a kit that says nothing about them gets the resource's own
     # defaults, and a kit written before this change installs unchanged.
-    field(:stateful, :boolean, default: false, derives: "validate(boolean)")
-    field(:precompile, :boolean, default: false, derives: "validate(boolean)")
-    field(:required, :boolean, default: false, derives: "validate(boolean)")
+    field(:stateful, boolean(), default: false, derives: "validate(boolean)")
+    field(:precompile, boolean(), default: false, derives: "validate(boolean)")
+    field(:required, boolean(), default: false, derives: "validate(boolean)")
   end
 
   @doc """

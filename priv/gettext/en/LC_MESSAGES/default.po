@@ -17938,3 +17938,23 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "%{name} cannot read %{attrs}, so visitors see nothing here."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:796
+#, elixir-autogen, elixir-format
+msgid "That address is on a private network."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:573
+#, elixir-autogen, elixir-format
+msgid "That kit's name cannot be used as a file name."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:559
+#, elixir-autogen, elixir-format
+msgid "That kit's name is not valid — use lowercase letters, numbers, - and _, start with a letter or a number, and stay within 64 characters."
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/user.ex:2267
+#, elixir-autogen, elixir-format
+msgid "You could not be logged out. Try again."
+msgstr ""

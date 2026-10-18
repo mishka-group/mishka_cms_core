@@ -483,8 +483,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Blocks do
   @spec filter([block()], String.t() | nil, String.t() | nil) :: [block()]
   def filter(entries, category, query) do
     entries
-    |> Enum.filter(&in_category?(&1, category))
-    |> Enum.filter(&matches?(&1, query))
+    |> Enum.filter(&(in_category?(&1, category) and matches?(&1, query)))
   end
 
   defp in_category?(_block, nil), do: true

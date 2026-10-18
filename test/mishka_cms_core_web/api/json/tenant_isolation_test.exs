@@ -100,4 +100,91 @@ defmodule MishkaCmsCoreWeb.Api.Json.TenantIsolationTest do
     assert own.status == 200
     assert get_resp_header(own, "x-tenant-id") == [ctx.site_a.id]
   end
+
+  # LOCALHOST IS THE MASTER SITE'S ADDRESS in dev and test while no site has that host, as it is in
+  # the browser, so every request there is answered as it is on the master site's own address.
+  describe "at localhost, while no site has that host" do
+    setup do
+      master_site =
+        create_site!(name: "master", host: "master.localhost", active: true, master: true)
+
+      cache_site(master_site)
+
+      create_user!(
+        email: "own@example.com",
+        password: @password,
+        password_confirmation: @password,
+        site_id: master_site.id
+      )
+
+      create_user!(
+        email: "master@example.com",
+        password: @password,
+        password_confirmation: @password
+      )
+
+      {:ok, master_site: master_site}
+    end
+
+    test "a token of the master site works there as on its own address", ctx do
+      for sign_in_host <- ["localhost", ctx.master_site.host],
+          host <- ["localhost", "127.0.0.1", ctx.master_site.host] do
+        me = "own@example.com" |> sign_in(sign_in_host) |> get_me(host, "false")
+
+        assert me.status == 200
+        assert get_resp_header(me, "x-tenant-id") == [ctx.master_site.id]
+        assert Jason.decode!(me.resp_body)["data"]["attributes"]["site_id"] == ctx.master_site.id
+      end
+    end
+
+    test "a token of another site is refused there as on the master site's address", ctx do
+      token = sign_in("a@example.com", ctx.site_a.host)
+
+      for host <- ["localhost", "127.0.0.1", ctx.master_site.host],
+          no_tenant <- ["false", "true"] do
+        assert get_me(token, host, no_tenant).status == 403
+      end
+    end
+
+    test "a master signs in and is recognised there with x-no-tenant, as on the master site's address",
+         ctx do
+      for host <- ["localhost", "127.0.0.1", ctx.master_site.host] do
+        token = master_sign_in(host)
+
+        me = get_me(token, host, "true")
+        assert me.status == 200
+        assert get_resp_header(me, "x-tenant-id") == ["none"]
+        assert Jason.decode!(me.resp_body)["data"]["attributes"]["site_id"] == nil
+
+        scoped = get_me(token, host, "false")
+        assert scoped.status == 403
+        assert get_resp_header(scoped, "x-tenant-id") == [ctx.master_site.id]
+      end
+    end
+
+    test "any other host still has no site" do
+      for host <- ["unknown.example", "localhost.example", "c.localhost", "::1"] do
+        response = make_api_request(@me, nil, method: "GET", host: host)
+
+        assert response.status == 404
+        assert Jason.decode!(response.resp_body)["error"]["code"] == "domain_not_found"
+      end
+    end
+  end
+
+  defp master_sign_in(host) do
+    response =
+      make_api_request(
+        "/api/json/v1/auth/user/sign-in",
+        %{
+          "type" => "user",
+          "attributes" => %{"email" => "master@example.com", "password" => @password}
+        },
+        headers: [{"x-no-tenant", "true"}],
+        host: host
+      )
+
+    assert response.status == 201
+    Jason.decode!(response.resp_body)["meta"]["token"]
+  end
 end

@@ -96,7 +96,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.SendToOban do
   it rather than "System" — the same actor AshPaperTrail stamps on the version of that very save, so
   the two rows agree. A job nobody triggered (a cron, a boot) has no actor and the key is absent.
   """
-  @spec build_job_args(Ash.Changeset.t(), Ash.Resource.record()) :: map()
+  @spec build_job_args(Ash.Changeset.t(), Ash.Resource.Record.t()) :: map()
   def build_job_args(changeset, record) do
     action =
       if(changeset.action.name == :unarchive,

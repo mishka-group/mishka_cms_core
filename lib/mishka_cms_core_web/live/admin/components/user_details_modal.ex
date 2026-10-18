@@ -43,6 +43,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
       |> assign(:allowed, Map.get(um, :allowed, []))
       |> assign(:turn_off?, Map.get(um, :turn_off?) == true)
       |> assign(:turn_off_error, Map.get(um, :turn_off_error))
+      |> assign(:turn_off_code, Map.get(um, :turn_off_code, ""))
       |> assign(:own_two_step?, Map.get(um, :own_two_step?) == true)
       |> assign(:head_button, @head_button)
       |> assign(:form_id, MishkaGervaz.Resource.Info.Form.component_id(User))
@@ -227,6 +228,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
       <%= if @own_two_step? do %>
         <form
           id="user-modal-turn-off-form"
+          phx-change="user_modal_turn_off_typing"
           phx-submit="user_modal_turn_off_submit"
           novalidate
           class="mt-1.5 flex flex-col gap-3"
@@ -248,6 +250,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
               type="text"
               id="user-modal-turn-off-code"
               name="code"
+              value={@turn_off_code}
               dir="ltr"
               inputmode="numeric"
               autocomplete="one-time-code"

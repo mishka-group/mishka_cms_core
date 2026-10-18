@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
+  @moduledoc false
   use MishkaCmsCore.ExtensionLiveView
 
   alias MishkaGervaz.Table.Web.UrlSync
@@ -21,6 +22,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       allowed: [],
       turn_off?: false,
       turn_off_error: nil,
+      turn_off_code: "",
       own_two_step?: false
     }
 
@@ -160,6 +162,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
   def handle_event("user_modal_turn_off_cancel", _params, socket),
     do: {:noreply, turn_off_step(socket, false, nil)}
 
+  def handle_event("user_modal_turn_off_typing", %{"code" => code}, socket) when is_binary(code),
+    do:
+      {:noreply, assign(socket, :user_modal, %{socket.assigns.user_modal | turn_off_code: code})}
+
   def handle_event("user_modal_turn_off_submit", %{"code" => code}, socket) do
     case SecurityCards.six_digits(code) do
       {:ok, code} ->
@@ -217,8 +223,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
 
   # Whether the admin has an authenticator of their own to confirm a turn-off with, as stored: the
   # session's copy can be older than it.
-  defp own_two_step?(%{id: id, site_id: site_id}) do
-    case Ash.get(User, id, tenant: site_id, authorize?: false) do
+  defp own_two_step?(%{id: id, site_id: site_id} = admin) do
+    case Ash.get(User, id, tenant: site_id, actor: admin) do
       {:ok, stored} -> SecondFactor.enabled?(stored)
       {:error, _error} -> false
     end
@@ -229,7 +235,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
       assign(socket, :user_modal, %{
         socket.assigns.user_modal
         | turn_off?: open?,
-          turn_off_error: error
+          turn_off_error: error,
+          turn_off_code: if(open?, do: socket.assigns.user_modal.turn_off_code, else: "")
       })
 
   defp allowed?(user, action, actor),

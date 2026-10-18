@@ -310,13 +310,7 @@ defmodule MishkaCmsCore.Notify.Notification do
       accept @recipient_fields
 
       # global? true: stamp the recipient's site from the tenant context (nil for masters).
-      change fn changeset, context ->
-        if !is_nil(context.tenant) do
-          Ash.Changeset.force_change_attribute(changeset, :site_id, context.tenant)
-        else
-          changeset
-        end
-      end
+      change MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
 
       # The recipient and whoever caused it are accounts of the row's site, or masters.
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,

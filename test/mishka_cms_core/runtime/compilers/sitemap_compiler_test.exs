@@ -104,7 +104,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompilerTest do
     for pid <- Task.Supervisor.children(MishkaCmsCore.Runtime.TaskSupervisor),
         not MapSet.member?(before, pid) do
       ref = Process.monitor(pid)
-      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}, 5_000
+      assert_receive {:DOWN, ^ref, :process, ^pid, _reason}
     end
 
     result

@@ -29,29 +29,29 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Comment do
   # note that was nothing but markup or whitespace is refused rather than posted, which is what
   # makes an accidental Enter on an empty box a no-op.
   guardedstruct do
-    field(:id, :string, enforce: true, derives: "validate(string)")
-    field(:node_id, :string, derives: "validate(string, regex=^n[a-z0-9]{8}$)")
+    field(:id, String.t(), enforce: true, derives: "validate(string)")
+    field(:node_id, String.t(), derives: "validate(string, regex=^n[a-z0-9]{8}$)")
 
-    field(:node_label, :string,
+    field(:node_label, String.t(),
       validator: {MishkaCmsCore.PlainText, :field},
       derives: "sanitize(trim)"
     )
 
-    field(:author, :string,
+    field(:author, String.t(),
       validator: {MishkaCmsCore.PlainText, :field},
       derives: "sanitize(trim)"
     )
 
-    field(:author_id, :string)
+    field(:author_id, String.t())
 
-    field(:text, :string,
+    field(:text, String.t(),
       enforce: true,
       validator: {MishkaCmsCore.PlainText, :field},
       derives: "sanitize(trim) validate(not_empty)"
     )
 
-    field(:resolved?, :boolean, default: false)
-    field(:at, :any)
+    field(:resolved?, boolean(), default: false)
+    field(:at, any())
   end
 
   @doc """
@@ -92,7 +92,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Comment do
   Deliberately coarse: a review thread wants "roughly when", and a coarse label does not need the
   page to re-render every second to stay honest.
   """
-  @spec ago(t(), DateTime.t()) :: String.t()
+  @spec ago(t() | map(), DateTime.t()) :: String.t()
   def ago(%{at: %DateTime{} = at}, now),
     do: MishkaCmsCore.Localized.ago(at, relative_to: now, format: :narrow)
 

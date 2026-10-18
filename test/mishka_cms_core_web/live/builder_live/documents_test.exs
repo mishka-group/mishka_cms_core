@@ -1428,7 +1428,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DocumentsTest do
       html =
         view |> form(essentials_form("page"), %{"form" => %{"title" => ""}}) |> render_submit()
 
-      assert html =~ "must be present" or html =~ "required"
+      assert html =~ "must be present"
       refute_redirected(view, "/admin/dashboard/runtime/builder/page")
     end
 
@@ -2376,7 +2376,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DocumentsTest do
 
       ref = Process.monitor(first.pid)
       GenServer.stop(first.pid)
-      assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2_000
+      assert_receive {:DOWN, ^ref, :process, _pid, _reason}
 
       {open, picked}
     end
@@ -2414,7 +2414,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.DocumentsTest do
 
       ref = Process.monitor(first.pid)
       GenServer.stop(first.pid)
-      assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2_000
+      assert_receive {:DOWN, ^ref, :process, _pid, _reason}
 
       html = conn |> open_with_draft(page, open) |> render()
 

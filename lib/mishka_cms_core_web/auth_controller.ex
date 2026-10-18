@@ -139,7 +139,15 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # Extensions compile before the host's router exists, so `~p` is unavailable here.
   import MishkaCmsCore.Helpers, only: [path: 2]
 
-  alias MishkaCmsCore.Accounts.{AuthGate, AuthRateLimit, CaptchaCheck, LiveSockets, SecondFactor}
+  alias MishkaCmsCore.Accounts.{
+    AuthGate,
+    AuthRateLimit,
+    CaptchaCheck,
+    LiveSockets,
+    SecondFactor,
+    Token
+  }
+
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.{AuthRateLimitPlug, SiteLookupPlug}
   alias MishkaCmsCore.Runtime.SiteAvailability
@@ -190,8 +198,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
   defp second_factor_skipped?(_activity, user), do: SecondFactor.asked?(user)
 
   defp second_factor_owed(conn, token) do
-    if is_binary(token),
-      do: AshAuthentication.TokenResource.revoke(MishkaCmsCore.Accounts.Token, token)
+    if is_binary(token), do: Token.revoke_unissued(token)
 
     conn
     |> put_flash(

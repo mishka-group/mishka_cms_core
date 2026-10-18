@@ -60,7 +60,7 @@ defmodule MishkaCmsCore.Builder.Command do
       {:ok, ~s|JS.add_class("is-open", to: ".pb-1")|}
 
       iex> MishkaCmsCore.Builder.Command.write({:show, [], [to: ".pb-1", speed: "fast"]})
-      {:error, "invalid option for show\\nExpected keys to be one of [:to, :transition, :display, :time, :blocking], got: :speed"}
+      {:error, "invalid option for show\\nExpected keys to be one of [:to, :transition, :display, :time, :blocking], got: :speed\\n"}
   """
   @spec write(t() | [t()]) :: {:ok, String.t()} | {:error, String.t()}
   def write(commands) do

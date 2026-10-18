@@ -226,6 +226,37 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
     # The Versions tab reads the database twice (a page and a count). Doing that in the LiveView
     # process froze every tab, the close button included; the tab now says it is loading and the
     # answer arrives after.
+    # A PAGE NUMBER IS WHAT THE BROWSER SENDS, so one that is not a whole number is no page: the modal
+    # stays as it was and the LiveView lives.
+    test "a page that is not a number changes nothing and takes nothing down", %{
+      conn: conn,
+      pages: pages
+    } do
+      for %{label: label, url: url, record: record} <- pages do
+        {:ok, view, _html} = live(conn, url)
+        send(view.pid, {:row_action, "show_preview_modal", %{"id" => record.id}})
+        render_async(view, @await)
+        render_click(view, "preview_set_tab", %{"tab" => "versions"})
+        render_async(view, @await)
+
+        for bad <- ["abc", "", "1.5", "2x", "-"] do
+          html = render_click(view, "preview_versions_page", %{"page" => bad})
+          refute html =~ "animate-spin", "#{label}: #{inspect(bad)} was taken for a page"
+          assert Process.alive?(view.pid)
+        end
+
+        assert render_click(view, "preview_versions_page", %{"page" => "1"}) =~ "animate-spin"
+        assert render_async(view, @await) =~ "Version History"
+
+        if label in ["pages", "layouts", "error pages"] do
+          for bad <- ["abc", "", "1.5"] do
+            render_click(view, "preview_drafts_page", %{"page" => bad})
+            assert Process.alive?(view.pid), "#{label}: drafts page #{inspect(bad)} took it down"
+          end
+        end
+      end
+    end
+
     test "paging versions draws a spinner first and the page after", %{conn: conn, pages: pages} do
       for %{label: label, url: url, record: record} <- pages do
         {:ok, view, _html} = live(conn, url)
@@ -1146,6 +1177,28 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
     for names <- [["admin:dashboard:runtime:page"], ["admin:dashboard:code"]] do
       @names names
 
+      test "#{Enum.join(names, " + ")} keeps a draft's label and code typed for a reconnect", %{
+        site: site,
+        page: page
+      } do
+        view =
+          site
+          |> tenant_conn(@names)
+          |> inspect_record("/admin/dashboard/runtime/pages", page)
+
+        render_click(view, "preview_set_tab", %{"tab" => "code"})
+        view |> element("#runtime-preview-new-draft") |> render_click()
+
+        view
+        |> form("#preview-code-form", %{"label" => "Hero redesign", "source" => "<p>typed</p>"})
+        |> render_change()
+
+        assert view |> element("#preview-code-form input[name=label]") |> render() =~
+                 ~s(value="Hero redesign")
+
+        assert view |> element("#preview-code-form textarea") |> render() =~ "&lt;p&gt;typed"
+      end
+
       test "#{Enum.join(names, " + ")} is offered every write, the Code tab's included", %{
         site: site,
         page: page
@@ -1374,6 +1427,30 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       render_async(view, @await)
       render_click(view, "preview_set_tab", %{"tab" => "code"})
       view
+    end
+
+    # A RECONNECT PUTS THE FORM BACK THROUGH ITS `phx-change`, and the editor is drawn again from
+    # what the server then holds — so what was typed has to be held, not only submitted.
+    test "what was typed in the editor is held for a reconnect", %{conn: conn, site: site} do
+      hook =
+        create_js_hook!(
+          site_id: site.id,
+          name: "held-#{unique()}",
+          content: "export default { mounted() {} };"
+        )
+
+      view = open_code(conn, "/admin/dashboard/runtime/js-hooks", hook)
+      view |> element("#runtime-preview-edit-code") |> render_click()
+
+      typed = "export default { mounted() { /* typed */ } };"
+      view |> form("#preview-code-save-form", %{source: typed}) |> render_change()
+
+      assert view |> element("#preview-code-save-form textarea") |> render() =~ "/* typed */"
+
+      view |> element("button[phx-click=preview_cancel_edit]") |> render_click()
+      view |> element("#runtime-preview-edit-code") |> render_click()
+
+      refute view |> element("#preview-code-save-form textarea") |> render() =~ "/* typed */"
     end
 
     test "a JS hook's source is edited and saved in place", %{conn: conn, site: site} do

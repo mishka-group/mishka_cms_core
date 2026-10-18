@@ -777,7 +777,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         priv_dir -> Path.join([priv_dir, "static", "temp", "js_assets"])
       end
 
-    Enum.map(
+    Enum.each(
       [dir, Path.join(dir, "js"), Path.join(dir, "vendor"), Path.join(dir, "node_modules")],
       &File.mkdir_p!/1
     )
@@ -1331,7 +1331,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   def browser_name(hook, site_name), do: format_hook_name(hook, site_name)
 
   defp format_hook_name(hook, site_name) do
-    base_name = hook.name |> String.split("-") |> Enum.map(&String.capitalize/1) |> Enum.join("")
+    base_name = hook.name |> String.split("-") |> Enum.map_join("", &String.capitalize/1)
 
     case {hook.is_global, site_name} do
       {true, _any} ->
@@ -1345,8 +1345,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         base_name
 
       {_site_scoped, name} ->
-        prefix =
-          name |> String.split(["_", "-"]) |> Enum.map(&String.capitalize/1) |> Enum.join("")
+        prefix = name |> String.split(["_", "-"]) |> Enum.map_join("", &String.capitalize/1)
 
         "#{prefix}#{base_name}"
     end

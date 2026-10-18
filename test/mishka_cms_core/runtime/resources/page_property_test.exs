@@ -743,11 +743,9 @@ defmodule MishkaCmsCore.Runtime.Resources.PagePropertyTest do
 
       assert changeset.valid?
 
-      # Test that defaults would be applied (we can't test the actual values without creating)
-      assert changeset.attributes[:format] == nil or changeset.attributes[:format] == :heex
-      assert changeset.attributes[:priority] == nil or changeset.attributes[:priority] == 0
-      assert changeset.attributes[:extra] == nil or changeset.attributes[:extra] == %{}
-      assert changeset.attributes[:content] == nil or changeset.attributes[:content] == %{}
+      # The defaults the resource declares are on the changeset before anything is written.
+      assert Map.take(changeset.attributes, [:format, :priority, :extra, :content]) ==
+               %{format: :heex, priority: 0, extra: %{}, content: %{}}
     end
   end
 

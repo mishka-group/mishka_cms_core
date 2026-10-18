@@ -128,7 +128,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Stylesheet.Index do
 
   @impl true
   def handle_event("preview_versions_page", %{"page" => page}, socket),
-    do: {:noreply, PreviewHelpers.versions_paginate(socket, String.to_integer(page))}
+    do: {:noreply, PreviewHelpers.versions_paginate(socket, page)}
 
   @impl true
   def handle_event("preview_version_toggle", %{"id" => id}, socket),
@@ -145,6 +145,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Stylesheet.Index do
   @impl true
   def handle_event("preview_cancel_edit", _params, socket),
     do: {:noreply, PreviewHelpers.cancel_edit(socket)}
+
+  @impl true
+  def handle_event("preview_code_change", %{"source" => source} = params, socket),
+    do: {:noreply, PreviewHelpers.type_code(socket, source, params["label"])}
 
   @impl true
   def handle_event("preview_code_save", %{"source" => source}, socket),
