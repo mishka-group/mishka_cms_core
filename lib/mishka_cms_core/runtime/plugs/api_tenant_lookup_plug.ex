@@ -102,6 +102,16 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
   password are wrong there and a master's token names nobody. `confirm_bearer_tenant/2`, straight
   after `:load_from_bearer`, holds the rest: an unscoped request carries a master or nobody.
 
+  In a build whose config sets `:env_dev?` or `:env_test?`, `localhost` and `127.0.0.1` are the
+  master site's address while no site has that host, as they are in the browser
+  (`MishkaCmsCore.Runtime.Plugs.SiteLookupPlug.site_for/1`), and the switch works there as it does
+  on the master site's own address. A release has no such address.
+
+      # In dev, while no site's host is localhost
+      curl -H "Host: localhost:4000" \
+           -H "x-no-tenant: true" \
+           http://localhost:4000/api/json/v1/master/admin/runtime/site
+
   An unscoped request reads and writes through the master routes. A route that works on one site —
   the public `/v1/user/…` ones and the tenant admin ones — answers it `400` with the code
   `tenant_required` (`_tenant_required_errors.ex`):
@@ -166,7 +176,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
   require Logger
 
   alias MishkaCmsCore.Accounts.AuthGate
-  alias MishkaCmsCore.Runtime.Plugs.ApiCorsPlug
+  alias MishkaCmsCore.Runtime.Plugs.{ApiCorsPlug, SiteLookupPlug}
   alias MishkaInstaller.Event.Hook
 
   @default_opts [
@@ -530,8 +540,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
     end
   end
 
+  # THE SAME SITE THE BROWSER REACHES ON THIS ADDRESS, `localhost` in dev and test included.
   defp lookup_site(host) do
-    case MishkaCmsCore.Runtime.States.SiteState.get_by_host(host) do
+    case SiteLookupPlug.site_for(host) do
       {:ok, site} ->
         {:ok, site}
 

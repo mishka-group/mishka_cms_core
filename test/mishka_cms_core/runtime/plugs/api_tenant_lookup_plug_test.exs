@@ -8,7 +8,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
   import Plug.Conn
   import ExUnit.CaptureLog
 
-  alias MishkaCmsCore.Runtime.Plugs.{ApiCorsPlug, ApiTenantLookupPlug}
+  alias MishkaCmsCore.Runtime.OriginValidator
+  alias MishkaCmsCore.Runtime.Plugs.{ApiCorsPlug, ApiTenantLookupPlug, SiteLookupPlug}
+  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
 
@@ -589,6 +591,136 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
     end
   end
 
+  # LOCALHOST IS THE MASTER SITE'S ADDRESS while no site has that host, as it is for the browser
+  # (`SiteLookupPlug.site_for/1`). Dev and test builds only — a release compiles no such clause. The
+  # test env reads `conn.host`, which an adapter fills from the `Host` header without its port.
+  describe "call/2 at localhost" do
+    setup do
+      SiteState.clear()
+      n = System.unique_integer([:positive])
+
+      master_site = cache_site!("api-master-#{n}.test", true)
+      other_site = cache_site!("api-other-#{n}.test", false)
+
+      on_exit(fn -> SiteState.clear() end)
+      {:ok, master_site: master_site, other_site: other_site}
+    end
+
+    test "is the master site while no site has that host", %{master_site: master} do
+      for address <- ["localhost", "localhost:4000", "127.0.0.1", "127.0.0.1:4000"] do
+        conn = loopback_request(address)
+
+        refute conn.halted
+        assert conn.assigns.current_site.id == master.id
+        assert tenant(conn) == master.id
+        assert get_resp_header(conn, "x-tenant-id") == [master.id]
+
+        assert {:ok, %{id: id}} =
+                 address |> OriginValidator.host_name() |> SiteLookupPlug.site_for()
+
+        assert id == master.id
+      end
+    end
+
+    test "is the site whose host is localhost when there is one", %{master_site: master} do
+      local = cache_site!("localhost", false)
+
+      conn = api_request("localhost", [{"x-no-tenant", "true"}])
+
+      refute conn.halted
+      assert conn.assigns.current_site.id == local.id
+      assert tenant(conn) == local.id
+      refute local.id == master.id
+
+      # 127.0.0.1 has no site of its own, so it is still the master site's.
+      assert api_request("127.0.0.1").assigns.current_site.id == master.id
+    end
+
+    test "changes nothing for any other host" do
+      for host <- [
+            "unknown-#{System.unique_integer([:positive])}.test",
+            "localhost.evil.com",
+            "evil-localhost.com",
+            "site-a.localhost",
+            "127.0.0.2",
+            "::1"
+          ] do
+        conn = api_request(host)
+
+        assert conn.halted
+        assert conn.status == 404
+        assert Jason.decode!(conn.resp_body)["error"]["code"] == "domain_not_found"
+      end
+    end
+
+    test "is still a 404 with no master site", %{master_site: master} do
+      SiteState.delete(master.id)
+
+      for host <- ["localhost", "127.0.0.1"] do
+        conn = api_request(host)
+
+        assert conn.halted
+        assert conn.status == 404
+      end
+    end
+
+    test "takes the master accounts' switch as the master site's address does", %{
+      master_site: master
+    } do
+      for host <- [master.host, "localhost", "127.0.0.1"] do
+        header = api_request(host, [{"x-no-tenant", "true"}])
+        param = api_request(host, [], %{"no_tenant" => "true"})
+
+        for conn <- [header, param] do
+          refute conn.halted
+          assert conn.assigns.current_site.id == master.id
+          assert tenant(conn) == nil
+          assert get_resp_header(conn, "x-tenant-id") == ["none"]
+        end
+
+        assert tenant(api_request(host, [{"x-no-tenant", "false"}])) == master.id
+      end
+    end
+
+    test "an unscoped request there carries a master or nobody", %{
+      master_site: site,
+      other_site: other
+    } do
+      unscoped = api_request("localhost", [{"x-no-tenant", "true"}])
+
+      refute unscoped.halted
+      assert unscoped.assigns.current_site.id == site.id
+
+      refused =
+        unscoped
+        |> assign(:current_user, %{id: "u1", site_id: other.id})
+        |> ApiTenantLookupPlug.confirm_bearer_tenant([])
+
+      assert refused.assigns.current_user == nil
+      assert tenant(refused) == nil
+
+      master = %{id: "m1", site_id: nil}
+
+      assert unscoped
+             |> assign(:current_user, master)
+             |> ApiTenantLookupPlug.confirm_bearer_tenant([])
+             |> Map.fetch!(:assigns)
+             |> Map.fetch!(:current_user) == master
+    end
+
+    test "is refused as the master site is when it is switched off", %{master_site: master} do
+      :ok = SiteState.save(%{master | active: false})
+
+      for host <- [master.host, "localhost"] do
+        conn = api_request(host)
+
+        assert conn.halted
+        assert conn.status == 503
+        assert Jason.decode!(conn.resp_body)["error"]["code"] == "website_unavailable"
+      end
+    end
+  end
+
   # AN EVENT ONE OF WHOSE PLUGINS IS NOT LOADED answers with the conn it was handed, so the request
   # is answered as it is with no plugin listening.
   describe "the API's events while they cannot run" do
@@ -686,6 +818,14 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
       put_req_header(conn, key, value)
     end)
     |> Map.put(:params, params)
+    |> ApiTenantLookupPlug.call(ApiTenantLookupPlug.init([]))
+  end
+
+  # A request to `http://<address>/api/test` with `Host: <address>`, as an adapter hands it on.
+  defp loopback_request(address) do
+    :get
+    |> conn("http://#{address}/api/test")
+    |> Map.put(:req_headers, [{"host", address}])
     |> ApiTenantLookupPlug.call(ApiTenantLookupPlug.init([]))
   end
 

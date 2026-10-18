@@ -333,7 +333,23 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
     Languages.url(@sign_in_page <> under, %{Languages.capture() => language}, site_id)
   end
 
-  # Private functions
+  @doc """
+  The site a request's `host` names — the `Host` header without its port, as
+  `MishkaCmsCore.Runtime.OriginValidator.host_name/1` reads it — as
+  `MishkaCmsCore.Runtime.States.SiteState.get_by_host/1` answers.
+
+  In a build whose config sets `:env_dev?` or `:env_test?`, `localhost` and `127.0.0.1` are the
+  master site while no site has that host. A release has no such clause: there they name the site
+  that has them, as every other host does, or none.
+
+  This plug and `MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug` both resolve a request's site
+  through it, so a page and an API call on the same address reach the same site.
+
+      SiteLookupPlug.site_for("blog.example.com")  #=> {:ok, %{host: "blog.example.com", ...}}
+      SiteLookupPlug.site_for("localhost")         #=> {:ok, %{master: true, ...}} in dev and test
+      SiteLookupPlug.site_for("unknown.example")   #=> {:error, :not_found}
+  """
+  @spec site_for(String.t() | nil) :: {:ok, map()} | {:error, :not_found}
 
   # LOCALHOST IS THE MASTER SITE while no site claims it, so a site whose database knows it only by
   # its public address opens locally with nothing to configure. Compiled only where the app's config
@@ -341,12 +357,14 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   # is compiled in `:prod` whatever the app runs in.
   if Application.compile_env(:mishka_cms_core, :env_dev?, false) or
        Application.compile_env(:mishka_cms_core, :env_test?, false) do
-    defp site_for(host) when host in ["localhost", "127.0.0.1"] do
+    def site_for(host) when host in ["localhost", "127.0.0.1"] do
       with {:error, :not_found} <- SiteState.get_by_host(host), do: SiteState.get_by_master()
     end
   end
 
-  defp site_for(host), do: SiteState.get_by_host(host)
+  def site_for(host), do: SiteState.get_by_host(host)
+
+  # Private functions
 
   @doc false
   @spec get_host(Plug.Conn.t(), map()) :: String.t() | nil
