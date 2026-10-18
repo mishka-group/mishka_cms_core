@@ -370,14 +370,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     with {:ok, %File.Stat{type: :regular, mode: mode, size: size}} <- File.stat(path),
          true <- Bitwise.band(mode, 0o111) != 0,
          {:ran, output, status} <- ran(path) do
-      reported(
-        Regex.run(~r/tailwindcss v(\d+\.\d+\.\d+)/, output),
-        version,
-        path,
-        output,
-        status,
-        size
-      )
+      reported(reported_version(output), version, path, output, status, size)
     else
       {:error, :enoent} -> {:error, "Tailwind binary missing at #{path}"}
       {:error, posix} -> {:error, "cannot stat Tailwind binary at #{path} (#{inspect(posix)})"}
@@ -412,9 +405,23 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # and a later version may paint regardless.
   defp uncoloured(output), do: String.replace(output, ~r/\e\[[0-9;]*[a-zA-Z]/, "")
 
-  defp reported([_whole, version], version, _path, _output, _status, _size), do: :ok
+  @doc """
+  Reads the version a `tailwindcss --help` output names, whether or not the binary painted it.
 
-  defp reported([_whole, other], version, path, _output, _status, _size),
+  Pass the raw output. Returns the number as text (`"4.3.2"`), or `nil` when the output names no
+  version.
+  """
+  @spec reported_version(String.t()) :: String.t() | nil
+  def reported_version(output) do
+    case Regex.run(~r/tailwindcss v(\d+\.\d+\.\d+)/, uncoloured(output)) do
+      [_whole, version] -> version
+      nil -> nil
+    end
+  end
+
+  defp reported(version, version, _path, _output, _status, _size), do: :ok
+
+  defp reported(other, version, path, _output, _status, _size) when is_binary(other),
     do: {:error, "binary at #{path} reports v#{other}, config pins v#{version}"}
 
   # WHAT IT ACTUALLY SAID, because "could not read a version" is not a diagnosis. A binary that is
