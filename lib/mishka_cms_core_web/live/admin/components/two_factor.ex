@@ -50,7 +50,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
     user = socket.assigns.current_user
 
     MishkaGervaz.Messages.assign_async(socket, :enabled, fn ->
-      case Ash.get(User, user.id, tenant: user.site_id, authorize?: false) do
+      case Ash.get(User, user.id, tenant: user.site_id, actor: user) do
         {:ok, stored} -> {:ok, %{enabled: SecondFactor.enabled?(stored)}}
         {:error, error} -> {:error, error}
       end
@@ -128,7 +128,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
   defp write(socket, action, params) do
     user = socket.assigns.current_user
 
-    with {:ok, stored} <- Ash.get(User, user.id, tenant: user.site_id, authorize?: false) do
+    with {:ok, stored} <- Ash.get(User, user.id, tenant: user.site_id, actor: user) do
       stored
       |> Ash.Changeset.for_update(action, params, actor: user, tenant: user.site_id)
       |> Ash.update()

@@ -222,8 +222,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
 
   # Whether the admin has an authenticator of their own to confirm a turn-off with, as stored: the
   # session's copy can be older than it.
-  defp own_two_step?(%{id: id, site_id: site_id}) do
-    case Ash.get(User, id, tenant: site_id, authorize?: false) do
+  defp own_two_step?(%{id: id, site_id: site_id} = admin) do
+    case Ash.get(User, id, tenant: site_id, actor: admin) do
       {:ok, stored} -> SecondFactor.enabled?(stored)
       {:error, _error} -> false
     end
