@@ -46,6 +46,7 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
   alias MishkaCmsCore.Runtime.PageLanguageBackfill
   alias MishkaCmsCore.Runtime.PageProvision
+  alias MishkaCmsCore.Runtime.Seo
 
   # What makes a translation a page of its own rather than a copy of its original: `translate/4`
   # sets each of these and takes everything else the create action accepts from the original.
@@ -273,7 +274,10 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   A login-only page is left out because a crawler is sent to sign in. A page is asking to be left
   out when the robots meta its head renders says `noindex` or `none`: its own, when its `seo_tags`
   hold one, else its layout's — a page's robots meta replaces its layout's in the head
-  (`MishkaCmsWeb.RuntimeLive.page_head/1`), and the tags are read the way the head reads them.
+  (`MishkaCmsWeb.RuntimeLive.page_head/1`), and the tags are read the way the head reads them. A
+  page that holds no robots meta at all says what the head defaults to
+  (`MishkaCmsCore.Runtime.Seo.noindex?/2`): a sign-in page, one whose `extra` holds `"visitors_only"`
+  or an `"auth_role"`, is left out.
 
   The paths, as public addresses (`MishkaCmsCore.Runtime.Languages.url/3`), are what no sitemap may
   name: the resolver answers a literal page before any pattern, so `/fa/blog/archive` is the
@@ -292,10 +296,7 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
       |> Ash.Query.load(tenant_layout: Ash.Query.select(Layout, [:seo_tags]))
       |> Ash.Query.sort(:path)
       |> Ash.read!(tenant: site_id, authorize?: false, page: false)
-      |> Enum.split_with(
-        &(&1.permissions in [nil, []] and
-            not noindex?(&1.seo_tags, layout_tags(&1.tenant_layout)))
-      )
+      |> Enum.split_with(&(&1.permissions in [nil, []] and indexed?(&1)))
 
     {listed,
      hidden
@@ -318,18 +319,41 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   @spec listed?(map(), map()) :: boolean()
   def listed?(record, parent \\ %{}) do
     Enum.all?([record, parent], &(Map.get(&1, :permissions) in [nil, []])) and
-      not noindex?(Map.get(record, :seo_tags), Map.get(parent, :seo_tags))
+      robots(Map.get(record, :seo_tags), Map.get(parent, :seo_tags)) != :noindex
   end
 
-  # The robots metas of `tags`, else of `parent_tags` — a page's own replace its layout's in the head.
-  defp noindex?(tags, parent_tags) do
+  @doc """
+  What the robots meta in `tags` says, read the way the head reads it: `:noindex` when a directive
+  is `noindex` or `none`, `:index` when there is a robots meta that says neither, and `nil` when
+  there is no robots meta, so whatever the page defaults to stands. `parent_tags` are read instead
+  when `tags` hold none — a page's own robots meta replaces its layout's in the head.
+
+      robots([%{tag: "meta", attrs: %{"name" => "robots"}, content: "noindex, follow"}]) #=> :noindex
+      robots([%{tag: "meta", attrs: %{"name" => "robots"}, content: "index"}])           #=> :index
+      robots([])                                                                         #=> nil
+  """
+  @spec robots(term(), term()) :: :index | :noindex | nil
+  def robots(tags, parent_tags \\ []) do
     metas =
-      case robots(tags) do
-        [] -> robots(parent_tags)
+      case robot_metas(tags) do
+        [] -> robot_metas(parent_tags)
         own -> own
       end
 
-    metas |> Enum.concat() |> Enum.any?(&(&1 in @unindexed))
+    cond do
+      metas == [] -> nil
+      metas |> Enum.concat() |> Enum.any?(&(&1 in @unindexed)) -> :noindex
+      true -> :index
+    end
+  end
+
+  # A page with a robots meta of its own, or its layout's, is indexed by what it says; one without
+  # is by the head's default, which keeps a sign-in page out.
+  defp indexed?(page) do
+    case robots(page.seo_tags, layout_tags(page.tenant_layout)) do
+      nil -> not Seo.noindex?([], page.extra)
+      verdict -> verdict == :index
+    end
   end
 
   defp layout_tags(%Layout{seo_tags: tags}), do: tags
@@ -338,7 +362,7 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   # The directives of each robots meta in `tags`, one list per meta — an empty one still replaces the
   # layout's. A tag's keys are atoms or strings, and a meta's `content` stored beside `attrs` wins
   # over one inside them, as in the head.
-  defp robots(tags) do
+  defp robot_metas(tags) do
     for %{} = tag <- List.wrap(tags),
         meta?(field(tag, :tag)),
         %{} = attrs <- [field(tag, :attrs)],
