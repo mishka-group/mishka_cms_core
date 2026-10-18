@@ -971,9 +971,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree do
       parent = node.parent_id || :root
       index = index_of(tree, id) || 0
 
-      with {:ok, tree} <- insert(tree, %{wrapper | children: []}, parent, index),
-           {:ok, tree} <- move(tree, id, wrapper.id, 0) do
-        {:ok, tree}
+      with {:ok, tree} <- insert(tree, %{wrapper | children: []}, parent, index) do
+        move(tree, id, wrapper.id, 0)
       end
     end
   end

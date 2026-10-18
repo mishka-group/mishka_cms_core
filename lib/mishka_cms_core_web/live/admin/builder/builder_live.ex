@@ -3646,16 +3646,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("set_token", %{"key" => key, "value" => value}, socket) do
     editor = socket.assigns.editor
 
-    with {:ok, value} <-
-           Events.before_token_set(%{
-             key: key,
-             value: value,
-             site_id: editor.site_id,
-             site_name: editor.site_name,
-             actor_id: actor_id(socket)
-           }) do
-      set_token(socket, editor, key, value)
-    else
+    case Events.before_token_set(%{
+           key: key,
+           value: value,
+           site_id: editor.site_id,
+           site_name: editor.site_name,
+           actor_id: actor_id(socket)
+         }) do
+      {:ok, value} -> set_token(socket, editor, key, value)
       {:error, message} -> {:noreply, put_flash(socket, :error, message)}
     end
   end

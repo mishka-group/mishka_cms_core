@@ -21,9 +21,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.DomainValidator do
   @impl true
   def validate(changeset, _opts, _context) do
     with :ok <- validate_host(changeset),
-         :ok <- validate_frontend_domain(changeset),
-         :ok <- validate_allowed_origins(changeset) do
-      :ok
+         :ok <- validate_frontend_domain(changeset) do
+      validate_allowed_origins(changeset)
     end
   end
 
