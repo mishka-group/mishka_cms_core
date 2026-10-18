@@ -17958,3 +17958,33 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "You could not be logged out. Try again."
 msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:689
+#, elixir-autogen, elixir-format
+msgid "App icon"
+msgstr ""
+
+#: lib/mishka_cms_core/settings.ex:691
+#, elixir-autogen, elixir-format
+msgid "A square image, at least 512×512 (PNG or SVG), for the home-screen icon on phones and the install manifest. Without it the favicon is used."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:431
+#, elixir-autogen, elixir-format
+msgid "Home-screen icon"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:433
+#, elixir-autogen, elixir-format
+msgid "The icon a phone shows for this page on its home screen, 180×180. Drawn from the site's App icon setting, else its Favicon, by default."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:437
+#, elixir-autogen, elixir-format
+msgid "Web manifest"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/seo.ex:439
+#, elixir-autogen, elixir-format
+msgid "What a browser installs the site with: its name and icons. The site's own /site.webmanifest by default, when it has an icon."
+msgstr ""

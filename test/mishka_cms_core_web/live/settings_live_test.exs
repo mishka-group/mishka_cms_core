@@ -220,20 +220,20 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
     assert Settings.get("site.title") == global_before
   end
 
-  describe "the site's logo and favicon" do
+  describe "the site's logo, favicon and app icon" do
     test "a site's view offers Media Manager under each address; Global takes an address alone",
          %{conn: conn, site: site} do
       conn = log_in(conn, create_admin("boss@example.com", nil))
       {:ok, view, _html} = live(conn, @path <> "?tab=general")
 
-      for key <- ~w(site-logo site-favicon) do
+      for key <- ~w(site-logo site-favicon site-app_icon) do
         assert has_element?(view, "#set-#{key}")
         refute has_element?(view, "#media-#{key}-library")
       end
 
       view |> form("#scope-form") |> render_change(%{"scope" => site.id})
 
-      for key <- ~w(site-logo site-favicon) do
+      for key <- ~w(site-logo site-favicon site-app_icon) do
         assert has_element?(view, "#set-#{key}")
         assert has_element?(view, "#media-#{key}-library")
       end

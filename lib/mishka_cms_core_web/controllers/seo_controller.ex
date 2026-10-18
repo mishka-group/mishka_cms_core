@@ -4,8 +4,9 @@
 
 defmodule MishkaCmsCoreWeb.SeoController do
   @moduledoc """
-  A site's `/robots.txt`, `/favicon.ico` and `/sitemap.xml`, with the `/sitemap-00001.xml.gz`…
-  files it lists, each its own, answered on the site's own address.
+  A site's `/robots.txt`, `/favicon.ico`, its home-screen icons and `/site.webmanifest`, and
+  `/sitemap.xml`, with the `/sitemap-00001.xml.gz`… files it lists, each its own, answered on the
+  site's own address.
 
   All are routed through `MishkaCmsCoreWeb.Routes`' `:public` list, so the site is the one the
   request's host resolved to (`conn.assigns.current_site`), and an offline site answers them with
@@ -31,11 +32,31 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   ## favicon.ico
 
-  A redirect to the site's favicon, the picture its pages name in `<link rel="icon">`
-  (`MishkaCmsCore.Runtime.Seo.favicon/1`): a `/…` path on the site itself, or an `http://…` or
-  `https://…` address. A browser asks for it on a page that names none, such as an admin page. A
-  site with no favicon, or one set to anything else, is a 404 no cache keeps. Answers whatever
-  `Accept` a browser sends.
+  The site's favicon, the picture its pages name in `<link rel="icon">`
+  (`MishkaCmsCore.Runtime.Seo.favicon/1`). A file of the site's own is sent as it is, with the type
+  its first bytes say (`MishkaCmsCore.Runtime.SiteIcon.favicon/1`), never sniffed into another, and
+  an SVG sandboxed; any cache may keep it a day. A favicon the site does not own — an `http://…`
+  or `https://…` address, which is never fetched, or another site's file — is a redirect to it,
+  kept a minute. A browser asks for it on a page that names none, such as an admin page. A site
+  with no favicon, or one set to anything else, is a 404 no cache keeps. Answers whatever `Accept`
+  a browser sends.
+
+  ## Home-screen icons
+
+  `/apple-touch-icon.png` and `/apple-touch-icon-precomposed.png` are the 180×180 PNG a phone puts
+  on its home screen, `/site-icon-192.png` and `/site-icon-512.png` the ones the manifest names,
+  drawn from the site's App icon, else its Favicon, the first time one is asked for
+  (`MishkaCmsCore.Runtime.SiteIcon.file/2`). Asked with `?v=` and the hash of the picture they are
+  drawn from, as a page's head and the manifest name them, any cache may keep one a year
+  (`immutable`); asked without it, or with an older one, a day. A site with no picture to draw
+  them from is a 404 no cache keeps.
+
+  ## site.webmanifest
+
+  The site's name, `start_url`, `display` and the 192 and 512 icons, as
+  `MishkaCmsCore.Runtime.SiteIcon.manifest/1` builds them from ETS and a plugin on
+  `runtime:site:manifest` leaves them, sent as `application/manifest+json`. A 404 no cache keeps
+  for a site with no icons, which its pages do not link it for.
 
   ## sitemap.xml and its files
 
@@ -50,11 +71,11 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   ## Caching
 
-  `public, max-age=60`, and no session cookie: the session is read, as the gates in front of these
-  need it, and never written back, so a shared cache may keep the answer. An admin let through to an
-  offline site gets `private, no-store`, as the gate gives every page it lets them through to. A
-  gzipped file adds `no-transform`, which keeps the server's response compression from gzipping it
-  again on every request.
+  `public, max-age=60` unless said otherwise above, and no session cookie: the session is read, as
+  the gates in front of these need it, and never written back, so a shared cache may keep the
+  answer. An admin let through to an offline site gets `private, no-store`, as the gate gives every
+  page it lets them through to. A gzipped file adds `no-transform`, which keeps the server's
+  response compression from gzipping it again on every request.
 
   ## Refusals
 
@@ -75,7 +96,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
-  alias MishkaCmsCore.Runtime.Seo
+  alias MishkaCmsCore.Runtime.{Seo, SiteIcon}
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
@@ -89,6 +110,10 @@ defmodule MishkaCmsCoreWeb.SeoController do
   # Seconds a crawler is told to wait for a sitemap not built yet.
   @retry_after "60"
 
+  @minute "public, max-age=60"
+  @day "public, max-age=86400"
+  @year "public, max-age=31536000, immutable"
+
   # The only names `SitemapCompiler` gives a file.
   @file_name ~r/\Asitemap-\d{5}\.xml\.gz\z/
 
@@ -96,6 +121,17 @@ defmodule MishkaCmsCoreWeb.SeoController do
     do: answer(conn, site, "text/plain", robots_txt(site))
 
   def favicon(%{assigns: %{current_site: %{} = site}} = conn, _params) do
+    with %{path: path, type: type} <- SiteIcon.favicon(site.id),
+         true <- File.regular?(path) do
+      send_picture(conn, site, type, path, @day)
+    else
+      _not_its_own -> favicon_elsewhere(conn, site)
+    end
+  end
+
+  def favicon(conn, _params), do: refused(conn, :no_site)
+
+  defp favicon_elsewhere(conn, site) do
     case Seo.favicon(site.id) do
       "/" <> _ = path -> conn |> cache_control(site) |> redirect(to: path)
       url when is_binary(url) -> conn |> cache_control(site) |> redirect(external: url)
@@ -103,7 +139,58 @@ defmodule MishkaCmsCoreWeb.SeoController do
     end
   end
 
-  def favicon(conn, _params), do: refused(conn, :no_site)
+  def site_icon(
+        %{assigns: %{current_site: %{} = site}, private: %{icon_size: size}} = conn,
+        params
+      ) do
+    case SiteIcon.file(site.id, size) do
+      {:ok, %{path: path, hash: hash}} ->
+        send_picture(
+          conn,
+          site,
+          "image/png",
+          path,
+          if(params["v"] == hash, do: @year, else: @day)
+        )
+
+      :error ->
+        refused(conn, :no_icon)
+    end
+  end
+
+  def site_icon(conn, _params), do: refused(conn, :no_site)
+
+  def manifest(%{assigns: %{current_site: %{} = site}} = conn, _params) do
+    case SiteIcon.manifest(site) do
+      %{} = manifest -> answer(conn, site, "application/manifest+json", Jason.encode!(manifest))
+      nil -> refused(conn, :no_icon)
+    end
+  end
+
+  def manifest(conn, _params), do: refused(conn, :no_site)
+
+  defp send_picture(conn, site, type, path, cache) do
+    conn
+    |> put_resp_content_type(type, nil)
+    |> put_resp_header("x-content-type-options", "nosniff")
+    |> sandbox(type)
+    |> cache_control(site, cache)
+    |> send_file(200, path)
+  end
+
+  # An SVG opened at its own address runs no script: `sandbox` is added to the policy the response
+  # already has.
+  defp sandbox(conn, "image/svg+xml") do
+    policy =
+      case get_resp_header(conn, "content-security-policy") do
+        [own | _] -> String.trim_trailing(own, "; ") <> "; sandbox"
+        [] -> "sandbox"
+      end
+
+    put_resp_header(conn, "content-security-policy", policy)
+  end
+
+  defp sandbox(conn, _type), do: conn
 
   def sitemap(%{assigns: %{current_site: %{} = site}} = conn, _params) do
     case stored(site) do
@@ -135,14 +222,12 @@ defmodule MishkaCmsCoreWeb.SeoController do
   defp answer(conn, site, type, body) do
     conn
     |> put_resp_content_type(type, charset(type))
-    |> cache_control(site, transform(type))
+    |> cache_control(site, @minute, transform(type))
     |> send_resp(200, body)
   end
 
-  defp cache_control(conn, site, extra \\ "") do
-    cache_control =
-      if Settings.offline?(site), do: "private, no-store", else: "public, max-age=60"
-
+  defp cache_control(conn, site, public \\ @minute, extra \\ "") do
+    cache_control = if Settings.offline?(site), do: "private, no-store", else: public
     put_resp_header(conn, "cache-control", cache_control <> extra)
   end
 

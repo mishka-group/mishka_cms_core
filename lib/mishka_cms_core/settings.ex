@@ -682,6 +682,16 @@ defmodule MishkaCmsCore.Settings do
             "The small picture a browser tab and a search result show for the site's pages: a square PNG or SVG, from Media or an address."
           )
       ),
+      define("site.app_icon", :image,
+        default: "",
+        category: "general",
+        scope: :both,
+        label: gettext_noop("App icon"),
+        description:
+          gettext_noop(
+            "A square image, at least 512×512 (PNG or SVG), for the home-screen icon on phones and the install manifest. Without it the favicon is used."
+          )
+      ),
       define("site.languages", :list,
         default: MishkaCmsCore.Runtime.Languages.default(),
         validate: &MishkaCmsCore.Runtime.Languages.valid?/1,

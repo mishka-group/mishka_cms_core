@@ -55,7 +55,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `card: true`; until it is drawn the head shows the plugin's image.
 
   The page's `<link rel="icon">` is the `site.favicon` setting, when it is set (`favicon/1`): a
-  `/…` path stays a path, so the browser asks the host it is on.
+  `/…` path stays a path, so the browser asks the host it is on. A site whose `site.app_icon` or
+  `site.favicon` is a picture of its own also gets `<link rel="apple-touch-icon" sizes="180x180">`
+  and `<link rel="manifest" href="/site.webmanifest">` (`MishkaCmsCore.Runtime.SiteIcon`), both on
+  the host too.
 
   ## Layers
 
@@ -118,7 +121,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Helpers
-  alias MishkaCmsCore.Runtime.{Languages, ShareCard}
+  alias MishkaCmsCore.Runtime.{Languages, ShareCard, SiteIcon}
   alias MishkaCmsCore.Runtime.States.TranslationsState
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
@@ -419,6 +422,22 @@ defmodule MishkaCmsCore.Runtime.Seo do
         help:
           gettext(
             "The small picture a browser tab and a search result show for this page. The site's Favicon setting by default."
+          )
+      ),
+      entry(
+        "apple-touch-icon",
+        "link",
+        %{"rel" => "apple-touch-icon", "sizes" => "180x180"},
+        gettext("Home-screen icon"),
+        help:
+          gettext(
+            "The icon a phone shows for this page on its home screen, 180×180. Drawn from the site's App icon setting, else its Favicon, by default."
+          )
+      ),
+      entry("manifest", "link", %{"rel" => "manifest"}, gettext("Web manifest"),
+        help:
+          gettext(
+            "What a browser installs the site with: its name and icons. The site's own /site.webmanifest by default, when it has an icon."
           )
       ),
       entry("alternate", "link", %{"rel" => "alternate"}, gettext("Language version"),
@@ -1279,6 +1298,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
       meta("name", "twitter:image", image),
       meta("name", "twitter:image:alt", image && title),
       link(%{"rel" => "icon"}, favicon(seo.site_id)),
+      link(%{"rel" => "apple-touch-icon", "sizes" => "180x180"}, SiteIcon.url(seo.site_id, 180)),
+      link(%{"rel" => "manifest"}, SiteIcon.manifest_url(seo.site_id)),
       alternate_links(languages, base, seo.site_id)
     ])
   end
@@ -1325,16 +1346,25 @@ defmodule MishkaCmsCore.Runtime.Seo do
   end
 
   @doc """
-  The site's favicon as a page or a redirect names it — its `site.favicon` setting, its own value
-  else the global one — read off the address `URI.new/1` parses, never off its text: a path on the
-  site (no scheme, host or user info, starting with one `/`) as it is, or an `http`/`https` address
-  with a host and no user info. `nil` for no favicon and for anything else — `//host/…`, a `\\`
-  a browser would read as `/`, `javascript:`, `data:`.
+  The site's favicon as a page or a redirect names it: its `site.favicon` setting, read as
+  `site_picture/2` reads one.
 
       favicon(site_id) #=> "/uploads/<site>/media/icon.png"
   """
   @spec favicon(String.t() | nil) :: String.t() | nil
-  def favicon(site_id), do: "site.favicon" |> Settings.get(nil, site_id) |> favicon_address()
+  def favicon(site_id), do: site_picture("site.favicon", site_id)
+
+  @doc """
+  The picture the setting `key` names for the site `site_id` — its own value else the global one —
+  read off the address `URI.new/1` parses, never off its text: a path on the site (no scheme, host
+  or user info, starting with one `/`) as it is, or an `http`/`https` address with a host and no
+  user info. `nil` for no picture and for anything else — `//host/…`, a `\\` a browser would read
+  as `/`, `javascript:`, `data:`.
+
+      site_picture("site.app_icon", site_id) #=> "/uploads/<site>/media/app-icon.png"
+  """
+  @spec site_picture(String.t(), String.t() | nil) :: String.t() | nil
+  def site_picture(key, site_id), do: key |> Settings.get(nil, site_id) |> favicon_address()
 
   defp favicon_address(value) when is_binary(value) do
     case URI.new(String.trim(value)) do
