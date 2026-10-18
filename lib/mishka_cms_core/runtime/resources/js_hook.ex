@@ -729,31 +729,13 @@ defmodule MishkaCmsCore.Runtime.JsHook do
       end
 
       # Prevent tenant from modifying global js_hooks
-      validate fn changeset, context ->
-        js_hook = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(js_hook.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot modify global JS hook. Global JS hooks can only be modified by master users."
-                 )}
-
-            js_hook.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot modify JS hook from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot modify global JS hook. Global JS hooks can only be modified by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot modify JS hook from another site.")}
 
       change slugify(:name, into: :name)
 
@@ -980,31 +962,13 @@ defmodule MishkaCmsCore.Runtime.JsHook do
       end
 
       # Prevent tenant from archiving global js_hooks
-      validate fn changeset, context ->
-        js_hook = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(js_hook.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot archive global JS hook. Global JS hooks can only be archived by master users."
-                 )}
-
-            js_hook.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot archive JS hook from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot archive global JS hook. Global JS hooks can only be archived by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot archive JS hook from another site.")}
 
       change set_attribute(:active, false)
 
@@ -1036,32 +1000,14 @@ defmodule MishkaCmsCore.Runtime.JsHook do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       # Prevent tenant from permanently deleting global js_hooks
-      validate fn changeset, context ->
-        js_hook = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(js_hook.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot permanently delete global JS hook. Global JS hooks can only be deleted by master users."
-                 )}
-
-            js_hook.site_id != context.tenant ->
-              {:error,
-               message:
-                 dgettext_noop("errors", "Cannot permanently delete JS hook from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete global JS hook. Global JS hooks can only be deleted by master users."
+                  ),
+                foreign:
+                  dgettext_noop("errors", "Cannot permanently delete JS hook from another site.")}
 
       description "Permanently removes JS hook and version history from database (tenant users) - use with extreme caution"
     end

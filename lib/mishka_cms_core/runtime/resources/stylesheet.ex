@@ -752,30 +752,13 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
                 )
       end
 
-      validate fn changeset, context ->
-        sheet = changeset.data
-
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(sheet.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot modify global stylesheet. Global stylesheets can only be modified by master users."
-                 )}
-
-            sheet.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot modify stylesheet from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot modify global stylesheet. Global stylesheets can only be modified by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot modify stylesheet from another site.")}
 
       change slugify(:name, into: :name)
 
@@ -1039,30 +1022,13 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
         end
       end
 
-      validate fn changeset, context ->
-        sheet = changeset.data
-
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(sheet.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot archive global stylesheet. Global stylesheets can only be archived by master users."
-                 )}
-
-            sheet.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot archive stylesheet from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot archive global stylesheet. Global stylesheets can only be archived by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot archive stylesheet from another site.")}
 
       change set_attribute(:active, false)
 
@@ -1094,34 +1060,17 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
-      validate fn changeset, context ->
-        sheet = changeset.data
-
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(sheet.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot permanently delete global stylesheet. Only master users can."
-                 )}
-
-            sheet.site_id != context.tenant ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot permanently delete stylesheet from another site."
-                 )}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete global stylesheet. Only master users can."
+                  ),
+                foreign:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete stylesheet from another site."
+                  )}
 
       description "Permanently remove stylesheet (tenant users)"
     end

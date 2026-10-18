@@ -1207,31 +1207,13 @@ defmodule MishkaCmsCore.Runtime.Component do
       end
 
       # Prevent tenant from modifying global components
-      validate fn changeset, context ->
-        component = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(component.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot modify global component. Global components can only be modified by master users."
-                 )}
-
-            component.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot modify component from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot modify global component. Global components can only be modified by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot modify component from another site.")}
 
       change slugify(:name, into: :name)
 
@@ -1288,31 +1270,13 @@ defmodule MishkaCmsCore.Runtime.Component do
       end
 
       # Prevent tenant from archiving global components
-      validate fn changeset, context ->
-        component = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(component.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot archive global component. Global components can only be archived by master users."
-                 )}
-
-            component.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot archive component from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot archive global component. Global components can only be archived by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot archive component from another site.")}
 
       change set_attribute(:active, false)
 
@@ -1516,32 +1480,17 @@ defmodule MishkaCmsCore.Runtime.Component do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       # Prevent tenant from permanently deleting global components
-      validate fn changeset, context ->
-        component = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(component.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot permanently delete global component. Global components can only be deleted by master users."
-                 )}
-
-            component.site_id != context.tenant ->
-              {:error,
-               message:
-                 dgettext_noop("errors", "Cannot permanently delete component from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete global component. Global components can only be deleted by master users."
+                  ),
+                foreign:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete component from another site."
+                  )}
 
       description "Permanently removes component and version history from database (tenant users) - use with extreme caution"
     end

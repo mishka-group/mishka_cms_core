@@ -980,31 +980,13 @@ defmodule MishkaCmsCore.Runtime.Layout do
       end
 
       # Prevent tenant from modifying global layouts
-      validate fn changeset, context ->
-        layout = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(layout.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot modify global layout. Global layouts can only be modified by master users."
-                 )}
-
-            layout.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot modify layout from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot modify global layout. Global layouts can only be modified by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot modify layout from another site.")}
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
@@ -1278,31 +1260,13 @@ defmodule MishkaCmsCore.Runtime.Layout do
       end
 
       # Prevent tenant from archiving global layouts
-      validate fn changeset, context ->
-        layout = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(layout.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot archive global layout. Global layouts can only be archived by master users."
-                 )}
-
-            layout.site_id != context.tenant ->
-              {:error,
-               message: dgettext_noop("errors", "Cannot archive layout from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot archive global layout. Global layouts can only be archived by master users."
+                  ),
+                foreign: dgettext_noop("errors", "Cannot archive layout from another site.")}
 
       change set_attribute(:active, false)
 
@@ -1334,32 +1298,14 @@ defmodule MishkaCmsCore.Runtime.Layout do
       validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: false}
 
       # Prevent tenant from permanently deleting global layouts
-      validate fn changeset, context ->
-        layout = changeset.data
-
-        # Only check for tenant operations, not master operations
-        if !is_nil(context.tenant) do
-          cond do
-            is_nil(layout.site_id) ->
-              {:error,
-               message:
-                 dgettext_noop(
-                   "errors",
-                   "Cannot permanently delete global layout. Global layouts can only be deleted by master users."
-                 )}
-
-            layout.site_id != context.tenant ->
-              {:error,
-               message:
-                 dgettext_noop("errors", "Cannot permanently delete layout from another site.")}
-
-            true ->
-              :ok
-          end
-        else
-          :ok
-        end
-      end
+      validate {MishkaCmsCore.Runtime.Resources.Validations.TenantOwnsRecord,
+                global:
+                  dgettext_noop(
+                    "errors",
+                    "Cannot permanently delete global layout. Global layouts can only be deleted by master users."
+                  ),
+                foreign:
+                  dgettext_noop("errors", "Cannot permanently delete layout from another site.")}
 
       description "Permanently removes layout and version history from database (tenant users) - use with extreme caution"
     end
