@@ -42,7 +42,7 @@ defmodule MishkaCmsCore.PluginRegistrationsTest do
 
   defp create_page_and_await do
     id = create_page!().id
-    assert_receive {:core_page_after_create, ^id, _meta}, 2_000
+    assert_receive {:core_page_after_create, ^id, _meta}
   end
 
   defp create_page_and_refute do

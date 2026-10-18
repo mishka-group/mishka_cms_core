@@ -236,7 +236,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
 
       conn = request("/old?x=1", site.host)
 
-      assert_receive {:redirected, ^site_id, "/old", "/new?x=1", 302}, 5000
+      assert_receive {:redirected, ^site_id, "/old", "/new?x=1", 302}
       assert conn.status == 302
       assert location(conn) == "/chosen-by-a-plugin"
 

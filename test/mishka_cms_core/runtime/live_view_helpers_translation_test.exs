@@ -325,7 +325,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
       socket = module.in_task(connected_socket())
       {_ref, pid, _kind} = socket.private.live_async[:probe]
       monitor = Process.monitor(pid)
-      assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}, 5_000
+      assert_receive {:DOWN, ^monitor, :process, ^pid, _reason}
 
       assert_received {:phoenix, :async_result, {:start, {_ref, _cid, :probe, {:ok, in_task}}}}
       assert in_task == outside

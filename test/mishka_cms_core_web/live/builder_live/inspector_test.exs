@@ -214,7 +214,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
       recorded = actor(view)
 
       view |> element("#pb-publish-keep") |> render_click()
-      assert_receive {:draft_write_paused, writing}, 2_000
+      assert_receive {:draft_write_paused, writing}
 
       render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
       send(writing, :release)
@@ -245,13 +245,13 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
       recorded = actor(view)
 
       view |> element("#pb-publish-keep") |> render_click()
-      assert_receive {:draft_write_paused, first}, 2_000
+      assert_receive {:draft_write_paused, first}
 
       render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
       render_click(view, "save", %{})
       send(first, :release)
 
-      assert_receive {:draft_write_paused, queued}, 2_000
+      assert_receive {:draft_write_paused, queued}
       send(queued, :release)
       _written = render_async(view)
 
@@ -273,11 +273,11 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.InspectorTest do
       render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "h1").id})
       recorded = actor(view)
 
-      assert_receive {:draft_write_paused, first}, 2_000
+      assert_receive {:draft_write_paused, first}
       render_click(view, "op", %{"kind" => "delete", "node_id" => node_with_tag(view, "p").id})
       send(first, :release)
 
-      assert_receive {:draft_write_paused, queued}, 2_000
+      assert_receive {:draft_write_paused, queued}
       send(queued, :release)
       _written = render_async(view)
 

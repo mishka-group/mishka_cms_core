@@ -314,7 +314,7 @@ defmodule MishkaCmsCore.Test.Notify.DeliveryTest do
 
       Notify.deliver({:user, alice.id}, @content)
 
-      assert_receive %Phoenix.Socket.Broadcast{topic: ^alice_topic}, 1000
+      assert_receive %Phoenix.Socket.Broadcast{topic: ^alice_topic}
       refute_receive %Phoenix.Socket.Broadcast{topic: ^bob_topic}, 200
     end
   end

@@ -609,7 +609,7 @@ defmodule MishkaCmsCore.BuilderLiveCase do
   def reopen(view, conn, page) do
     ref = Process.monitor(view.pid)
     GenServer.stop(view.pid)
-    assert_receive {:DOWN, ^ref, :process, _pid, _reason}, 2_000
+    assert_receive {:DOWN, ^ref, :process, _pid, _reason}
 
     {:ok, again, _html} = open_builder(conn, page)
     again

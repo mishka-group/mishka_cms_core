@@ -64,7 +64,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
     watch_compiles([page], hold?: true)
 
     starter = spawn(fn -> visit(page) end)
-    assert_receive {:compiling, path, compile}, 5_000
+    assert_receive {:compiling, path, compile}
     assert path == page.path
 
     late = for _ <- 1..500, do: Task.async(fn -> visit(page) end)
@@ -108,7 +108,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
     watch_compiles([page], hold?: true)
 
     first_viewer = Task.async(fn -> visit(page, :update) end)
-    assert_receive {:compiling, _path, first}, 5_000
+    assert_receive {:compiling, _path, first}
 
     # They ask while that compile runs: it may have read the page before the change.
     viewers = for _ <- 1..199, do: Task.async(fn -> visit(page, :update) end)
@@ -116,7 +116,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
     send(first, :go)
 
     # The next one, started after they asked, is the one they all take.
-    assert_receive {:compiling, _path, second}, 5_000
+    assert_receive {:compiling, _path, second}
     second_worker = worker_with_waiters!(page, 199)
     assert second_worker != first_worker
     send(second, :go)
@@ -138,7 +138,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
       )
 
     ref = Process.monitor(worker)
-    assert_receive {:DOWN, ^ref, :process, ^worker, _reason}, 5_000
+    assert_receive {:DOWN, ^ref, :process, ^worker, _reason}
     assert compiles(page) == 0
   end
 
@@ -203,7 +203,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
   end
 
   defp next_compile! do
-    assert_receive {:compiling, _path, compile}, 5_000
+    assert_receive {:compiling, _path, compile}
     compile
   end
 

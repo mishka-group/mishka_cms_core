@@ -369,7 +369,7 @@ defmodule MishkaCmsCore.Runtime.ComponentPrefetchTest do
   end
 
   defp compile_started! do
-    assert_receive {:compiling, _name, pid}, 5_000
+    assert_receive {:compiling, _name, pid}
     pid
   end
 

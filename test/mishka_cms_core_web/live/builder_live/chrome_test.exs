@@ -1407,7 +1407,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ChromeTest do
       assert_redirect(view, "/admin/dashboard/runtime/pages")
       [kept] = Drafts.list("page", page, recorded)
 
-      assert_receive {MishkaCmsCore.Test.Plugins.BuilderDraftAnnounceProbe, announced}, 2_000
+      assert_receive {MishkaCmsCore.Test.Plugins.BuilderDraftAnnounceProbe, announced}
       assert announced.section == "page"
 
       assert announced.draft_id == kept.id,
