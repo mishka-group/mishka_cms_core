@@ -349,6 +349,27 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
     end
   end
 
+  describe "locked_ids/1" do
+    test "are the ids of the site's active pages that name permissions, a pattern included",
+         %{site: site} do
+      create_page!(site_id: site.id, path: "/open")
+      create_page!(site_id: site.id, path: "/unset", permissions: nil)
+      create_page!(site_id: site.id, path: "/off", permissions: ["members:read"], active: false)
+      members = create_page!(site_id: site.id, path: "/members", permissions: ["members:read"])
+      pattern = create_page!(site_id: site.id, path: "/blog/:slug", permissions: ["a:b", "c:d"])
+
+      assert PageEditions.locked_ids(site.id) == MapSet.new([members.id, pattern.id])
+    end
+
+    test "are none on a site that locks nothing, and none of another site's", %{site: site} do
+      create_page!(site_id: site.id, path: "/open")
+      other = create_site!(name: "other#{System.unique_integer([:positive])}", active: true)
+      create_page!(site_id: other.id, path: "/members", permissions: ["members:read"])
+
+      assert PageEditions.locked_ids(site.id) == MapSet.new()
+    end
+  end
+
   describe "indexable/1" do
     test "is the site's active pages every visitor may open", %{site: site} do
       open = create_page!(site_id: site.id, path: "/open")

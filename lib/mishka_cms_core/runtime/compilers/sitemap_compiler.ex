@@ -27,6 +27,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
 
   None is listed at the path of a literal page `indexable/1` leaves out — a login-only or a noindex
   one — whichever of them names it: the resolver answers that page there before any pattern. Nor at
+  an address the page that serves it names permissions for, a pattern page included
+  (`MishkaCmsCore.Runtime.PageEditions.locked_ids/1`, read when the sitemap is built): a plugin's
+  `/blog/hello` is left out while `/blog/:slug` is locked, since a crawler is answered the 404
+  there. Nor at
   a path a route in front of the pages answers — every `:public` GET or live route of the
   configured extensions (`MishkaCmsCore.ExtensionRouter`), `/robots.txt`, `/sitemap.xml` and this
   sitemap's own files among them — since a page stored there is never served. A `path` that does
@@ -134,7 +138,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   alias MishkaCmsCore.Helpers
   alias MishkaCmsCore.Runtime.{Languages, PageEditions}
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
-  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState, WebRunTimeMetaDataState}
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.{Hook, ModuleStateCompiler}
 
@@ -364,7 +368,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
         _refused -> own
       end
 
-    rules = %{hidden: MapSet.new(hidden, &bare/1), routes: routed()}
+    rules = %{
+      hidden: MapSet.new(hidden, &bare/1),
+      routes: routed(),
+      locked: locked_pages(site)
+    }
 
     urls
     |> Stream.filter(&match?(%{path: "/" <> _}, &1))
@@ -421,8 +429,29 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   defp once(%{path: path} = entry, seen, rules) do
     cond do
       MapSet.member?(rules.hidden, path) or routed?(path, rules.routes) -> {[], seen}
+      locked?(path, rules.locked) -> {[], seen}
       MapSet.member?(seen, path) -> {[], seen}
       true -> {[entry], MapSet.put(seen, path)}
+    end
+  end
+
+  # The site's locked pages, as the ids the resolver answers an address with. Read once a build, and
+  # none come back from a site that locks no page.
+  defp locked_pages(site) do
+    ids = PageEditions.locked_ids(site.id)
+    if MapSet.size(ids) == 0, do: nil, else: {site.name, ids}
+  end
+
+  # An address a locked page serves is a 404 to a crawler, however a plugin came by it:
+  # `/blog/:slug` locked answers `/blog/hello` with it.
+  defp locked?(_path, nil), do: false
+
+  defp locked?(path, {site_name, ids}) do
+    [bare | _query] = String.split(path, ["?", "#"], parts: 2)
+
+    case WebRunTimeMetaDataState.resolve(bare, site_name) do
+      {:ok, %{id: id, section: "Page"}, _captured} -> MapSet.member?(ids, id)
+      _not_a_page -> false
     end
   end
 
