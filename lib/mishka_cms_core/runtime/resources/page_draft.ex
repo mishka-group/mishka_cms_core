@@ -355,8 +355,8 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
         end
 
         # WHO MAY OPEN THE PAGE: any of the permission names that exist, stored by name. Empty, it is
-        # public. `MishkaCmsWeb.RuntimeLive` sends a signed-out visitor to sign in and shows a
-        # signed-in one without any of them the 404.
+        # public. `MishkaCmsWeb.RuntimeLive` shows the 404 to anybody holding none of them, a
+        # signed-out visitor included.
         field :permissions, :relation do
           resource MishkaCmsCore.Accounts.Permission
           display_field :name

@@ -6,11 +6,11 @@ defmodule MishkaCmsCoreWeb.ReturnTo do
   @moduledoc """
   Where a sign-in goes back to, as a token this application signed.
 
-  A page that refuses a visitor who is not signed in sends them to `/auth` with the address they
-  asked for, and that address then travels through the URL, through the sign-in and register form
-  actions and through the `sign_in_with_token` handoff before `MishkaCmsCoreWeb.AuthController`
-  redirects to it. Everything on that road is writable by whoever is walking it, so a `return_to`
-  taken at its word would make `/auth` the front door of a phishing site.
+  A page that sends a visitor to `/auth` with the address to come back to puts that address in the
+  URL, and it then travels through the sign-in and register form actions and through the
+  `sign_in_with_token` handoff before `MishkaCmsCoreWeb.AuthController` redirects to it. Everything
+  on that road is writable by whoever is walking it, so a `return_to` taken at its word would make
+  `/auth` the front door of a phishing site.
 
   Nothing here parses what arrives. `sign/2` takes a path the router itself matched — built with
   `~p`, never assembled from a parameter — and returns a `Phoenix.Token`; `verify/2` hands that

@@ -271,9 +271,9 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   not asking to be left out of an index, sorted by path — and the literal paths of its other active
   pages.
 
-  A login-only page is left out because a crawler is sent to sign in. A page is asking to be left
-  out when the robots meta its head renders says `noindex` or `none`: its own, when its `seo_tags`
-  hold one, else its layout's — a page's robots meta replaces its layout's in the head
+  A login-only page is left out because a crawler is answered with the 404. A page is asking to be
+  left out when the robots meta its head renders says `noindex` or `none`: its own, when its
+  `seo_tags` hold one, else its layout's — a page's robots meta replaces its layout's in the head
   (`MishkaCmsWeb.RuntimeLive.page_head/1`), and the tags are read the way the head reads them. A
   page that holds no robots meta at all says what the head defaults to
   (`MishkaCmsCore.Runtime.Seo.noindex?/2`): a sign-in page, one whose `extra` holds `"visitors_only"`
