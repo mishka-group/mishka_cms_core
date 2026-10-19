@@ -5,13 +5,14 @@
 defmodule MishkaCmsCore.MixProject do
   use Mix.Project
 
+  @version "0.0.1"
   @source_url "https://github.com/mishka-group/mishka_cms_core"
 
   def project do
     [
       app: :mishka_cms_core,
       name: "Mishka CMS Core",
-      version: "0.0.1",
+      version: @version,
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
@@ -22,7 +23,12 @@ defmodule MishkaCmsCore.MixProject do
       package: package(),
       homepage_url: "https://mishka.tools/cms",
       source_url: @source_url,
-      docs: [main: "readme", extras: ["README.md"], source_url: @source_url],
+      docs: [
+        main: "readme",
+        source_ref: "v#{@version}",
+        extras: ["README.md"],
+        source_url: @source_url
+      ],
       # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
       # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
       gettext: [excluded_refs_from_purging: ~r{^\.\./}],
