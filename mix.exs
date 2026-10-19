@@ -5,17 +5,24 @@
 defmodule MishkaCmsCore.MixProject do
   use Mix.Project
 
+  @source_url "https://github.com/mishka-group/mishka_cms_core"
+
   def project do
     [
       app: :mishka_cms_core,
+      name: "Mishka CMS Core",
       version: "0.0.1",
-      elixir: "~> 1.18",
+      elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       consolidate_protocols: Mix.env() != :dev,
       aliases: aliases(),
       elixirc_paths: elixirc_paths(Mix.env()),
+      description: description(),
       package: package(),
+      homepage_url: "https://mishka.tools/cms",
+      source_url: @source_url,
+      docs: [main: "readme", extras: ["README.md"], source_url: @source_url],
       # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
       # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
       gettext: [excluded_refs_from_purging: ~r{^\.\./}],
@@ -23,6 +30,10 @@ defmodule MishkaCmsCore.MixProject do
       # dialyzer reports that is not a defect, each with the reason.
       dialyzer: [plt_add_apps: [:mix], ignore_warnings: ".dialyzer_ignore.exs"]
     ]
+  end
+
+  defp description do
+    "The engine of Mishka CMS: a multi-tenant runtime, a visual page builder, accounts and an admin dashboard for Elixir and Phoenix LiveView."
   end
 
   # `priv/cms_ui_kits`, `priv/dev_seed_media` and `priv/share_card` ship: each is real content read
@@ -36,8 +47,16 @@ defmodule MishkaCmsCore.MixProject do
   defp package do
     [
       licenses: ["Apache-2.0"],
+      maintainers: ["Shahryar Tavakkoli"],
       files:
-        ~w(lib priv/cms_ui_kits priv/dev_seed_media priv/share_card .formatter.exs mix.exs LICENSE README*)
+        ~w(lib priv/cms_ui_kits priv/dev_seed_media priv/share_card .formatter.exs mix.exs LICENSE README*),
+      links: %{
+        "Mishka CMS" => "https://mishka.tools/cms",
+        "Official document" => "https://mishka.tools/cms/docs",
+        "GitHub" => @source_url,
+        "Sponsor" => "https://github.com/sponsors/mishka-group",
+        "Contributors" => "#{@source_url}/graphs/contributors"
+      }
     ]
   end
 
