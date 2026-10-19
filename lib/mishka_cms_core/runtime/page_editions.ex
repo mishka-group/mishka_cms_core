@@ -306,6 +306,24 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   end
 
   @doc """
+  The ids of the site's active pages that name permissions — a locked page, whatever it is stored
+  at, a pattern such as `/blog/:slug` included. One read of those rows alone: none come back, and
+  nothing else is read, on a site that locks no page.
+
+  `indexable/1` leaves out the literal addresses of such pages; this names the pages themselves, for
+  a caller that matches an address to the page that serves it
+  (`MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.resolve/2`).
+  """
+  @spec locked_ids(String.t()) :: MapSet.t(String.t())
+  def locked_ids(site_id) when is_binary(site_id) do
+    Page
+    |> Ash.Query.filter(active == true and fragment("cardinality(?) > 0", permissions))
+    |> Ash.Query.select([:id])
+    |> Ash.read!(tenant: site_id, authorize?: false, page: false)
+    |> MapSet.new(& &1.id)
+  end
+
+  @doc """
   Whether a record a page shows may be listed in a sitemap, by the rule `indexable/1` holds a page
   to: it names no permission, and the robots meta of its own `seo_tags` does not say `noindex` or
   `none`. `parent` is what the record belongs to — a document for one of its pages: a permission of

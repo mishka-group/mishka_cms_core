@@ -28,7 +28,15 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
   alias MishkaCmsCore.Runtime.{Seo, SiteIcon}
-  alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState, TranslationsState}
+
+  alias MishkaCmsCore.Runtime.States.{
+    AssetsState,
+    SettingsState,
+    SiteState,
+    TranslationsState,
+    WebRunTimeMetaDataState
+  }
+
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
   alias MishkaCmsCore.Settings
 
@@ -165,6 +173,22 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
     on_exit(fn -> SiteState.delete(site.id) end)
     site
+  end
+
+  # The routing row the runtime keeps for a page — all the sitemap build resolves an address with.
+  defp route!(site, page) do
+    :ok =
+      WebRunTimeMetaDataState.save(%{
+        id: page.id,
+        site: site.name,
+        path: page.path,
+        title: page.path,
+        created_at: DateTime.utc_now(),
+        section: "Page",
+        priority: 0
+      })
+
+    on_exit(fn -> WebRunTimeMetaDataState.delete(page.id) end)
   end
 
   defp register!(plugin, event) do
@@ -935,6 +959,55 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
                origin(site) <> "/fa/guide",
                origin(site) <> "/%C3%BCber%20uns"
              ]
+    end
+
+    # AN ADDRESS THE PAGE THAT SERVES IT LOCKS is a 404 to a crawler, however a plugin came by it:
+    # the pattern `/:slug` names permissions, so what a plugin lists under it is left out, while a
+    # literal page stored beside it is still its own.
+    test "leaves out an address a locked pattern page serves, whoever names it", %{site: site} do
+      register!(SeoSitemapUrls, "seo:sitemap:urls")
+      route!(site, create_page!(site_id: site.id, path: "/about"))
+      route!(site, create_page!(site_id: site.id, path: "/:slug", permissions: ["members:read"]))
+
+      assert built_locs(site) == [origin(site) <> "/about"]
+    end
+
+    test "lists the same addresses while the pattern page names no permission", %{site: site} do
+      register!(SeoSitemapUrls, "seo:sitemap:urls")
+      route!(site, create_page!(site_id: site.id, path: "/about"))
+      route!(site, create_page!(site_id: site.id, path: "/:slug", permissions: []))
+
+      assert (origin(site) <> "/from-plugin") in built_locs(site)
+    end
+
+    test "leaves out an address of the site's own list a locked page serves", %{site: site} do
+      create_page!(site_id: site.id, path: "/pricing")
+
+      route!(
+        site,
+        create_page!(site_id: site.id, path: "/members/*rest", permissions: ["members:read"])
+      )
+
+      {:ok, _} =
+        Settings.put("seo.sitemap.paths", ["/pricing", "/members/a/b", "/search"],
+          site_id: site.id
+        )
+
+      assert built_locs(site) == [origin(site) <> "/pricing", origin(site) <> "/search"]
+    end
+
+    test "a page that is not active locks nothing", %{site: site} do
+      register!(SeoSitemapUrls, "seo:sitemap:urls")
+      route!(site, create_page!(site_id: site.id, path: "/about"))
+
+      create_page!(
+        site_id: site.id,
+        path: "/:slug",
+        permissions: ["members:read"],
+        active: false
+      )
+
+      assert (origin(site) <> "/from-plugin") in built_locs(site)
     end
 
     # A ROUTE IN FRONT OF THE PAGES ANSWERS ITS PATHS, so a page stored at one is never served. Every
