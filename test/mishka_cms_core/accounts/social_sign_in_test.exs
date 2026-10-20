@@ -21,6 +21,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
   alias MishkaCmsCore.Accounts.{SecondFactor, SignInProvider, SocialSignIn, User, UserIdentity}
   alias MishkaCmsCore.Accounts.AuthGate.Closed
   alias MishkaCmsCore.Accounts.SignInProvider.Widget
+  alias MishkaCmsCore.Test.Plugins.SignInDiscord, as: Discord
   alias MishkaCmsCore.Test.Plugins.SignInGitHub, as: GitHub
   alias MishkaCmsCore.Test.Plugins.SignInGoogle, as: Google
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
@@ -73,6 +74,41 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       offer!(site, GitHub)
       refute redirected?(request(site, "gitlab"))
       assert redirected?(request(site, "github"))
+    end
+
+    test "reaches each provider at the address its plugin and Assent give", %{site: site} do
+      offer!(site, Discord)
+
+      [location] = Plug.Conn.get_resp_header(request(site, "discord"), "location")
+      uri = URI.parse(location)
+
+      assert {uri.host, uri.path} == {"discordapp.com", "/api/oauth2/authorize"}
+      assert URI.decode_query(uri.query)["scope"] == "identify email"
+    end
+
+    test "keeps which provider it started with for the callback every provider shares", %{
+      site: site
+    } do
+      offer!(site, GitHub)
+      conn = request(site, "github")
+      assert Plug.Conn.get_session(conn, "user/provider/id") == "github"
+
+      # The callback goes on with that provider, and forgets it: AshAuthentication then refuses a
+      # state it never issued.
+      callback = callback(site, %{"user/provider/id" => "github"})
+      assert Plug.Conn.get_session(callback, "user/provider/id") == nil
+      assert {:error, _} = callback.private.authentication_result
+      refute offered_refusal?(callback)
+    end
+
+    test "a callback is refused with no sign-in started, or one the site stopped offering", %{
+      site: site
+    } do
+      offer!(site, GitHub)
+      assert offered_refusal?(callback(site, %{}))
+
+      {:ok, _} = Settings.put(SignInProvider.enabled_key(GitHub), false, site_id: site.id)
+      assert offered_refusal?(callback(site, %{"user/provider/id" => "github"}))
     end
   end
 
@@ -397,6 +433,23 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
   end
 
   defp redirected?(conn), do: Plug.Conn.get_resp_header(conn, "location") != []
+
+  defp callback(site, session) do
+    Plug.Test.conn(:get, "/api/auth/user/provider/callback?code=code&state=state")
+    |> Plug.Test.init_test_session(session)
+    |> Plug.Conn.fetch_query_params()
+    |> Plug.Conn.assign(:current_site, site)
+    |> MishkaCmsCore.Accounts.ProviderStrategy.Plug.callback(
+      AshAuthentication.Info.strategy!(User, :provider)
+    )
+  end
+
+  defp offered_refusal?(conn) do
+    match?(
+      {:error, %{caused_by: %{message: "This site does not offer that sign-in provider"}}},
+      conn.private[:authentication_result]
+    )
+  end
 
   defp provider_sign_in(id, user_info, tenant) do
     id
