@@ -16,6 +16,7 @@ defmodule MishkaCmsCore.Accounts.SecondFactor.Pending do
   """
 
   use Ash.Resource.Preparation
+  use Gettext, backend: MishkaCmsCore.Gettext
 
   require Ash.Query
 
@@ -88,7 +89,7 @@ defmodule MishkaCmsCore.Accounts.SecondFactor.Pending do
         module: __MODULE__,
         action: query.action,
         resource: User,
-        message: "The second step's token is invalid or expired"
+        message: dgettext_noop("errors", "The second step's token is invalid or expired")
       }
     )
   end
