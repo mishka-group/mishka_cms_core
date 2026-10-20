@@ -60,6 +60,13 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       assert query["redirect_uri"] =~ "://#{site.host}"
       assert String.ends_with?(query["redirect_uri"], "/api/auth/user/provider/callback")
       assert is_binary(query["state"])
+
+      # PKCE, since the plugin asks for it: the challenge goes out, the verifier waits in the session.
+      assert query["code_challenge_method"] == "S256"
+      assert %{code_verifier: verifier} = Plug.Conn.get_session(conn, "user/provider")
+
+      assert query["code_challenge"] ==
+               Base.url_encode64(:crypto.hash(:sha256, verifier), padding: false)
     end
 
     test "is refused while the site does not offer it, lacks a key, or no plugin has that id", %{

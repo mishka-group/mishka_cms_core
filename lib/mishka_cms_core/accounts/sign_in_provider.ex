@@ -52,7 +52,7 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
   (`Assent.Strategy.Github`, or `Assent.Strategy.OAuth2` / `Assent.Strategy.OIDC` with its addresses
   for one Assent does not name), and any `MishkaCmsCore.Accounts.ProviderStrategy` field set over
   Assent's own defaults for it — `base_url`, `authorize_url`, `token_url`, `user_url`,
-  `authorization_params`.
+  `authorization_params`, and `code_verifier: true` for PKCE (S256) where the provider takes it.
   """
   @callback oauth() :: %{required(:assent) => module(), optional(atom()) => term()}
 

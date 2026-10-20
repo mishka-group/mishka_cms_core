@@ -12,7 +12,7 @@ defmodule MishkaCmsCore.Test.Plugins.SignInGitHub do
   alias MishkaCmsCore.Test.SignInProviders
 
   @impl true
-  def oauth, do: %{assent: Assent.Strategy.Github}
+  def oauth, do: %{assent: Assent.Strategy.Github, code_verifier: true}
 
   @impl true
   def icon, do: %{color: "text-[#1b1a18]", path: "M0 0h24v24H0z"}
