@@ -21,13 +21,15 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
   alias MishkaCmsCore.Accounts.{SecondFactor, SignInProvider, SocialSignIn, User, UserIdentity}
   alias MishkaCmsCore.Accounts.AuthGate.Closed
   alias MishkaCmsCore.Accounts.SignInProvider.Widget
-  alias MishkaCmsCore.Accounts.SignInProviders.{GitHub, Google}
+  alias MishkaCmsCore.Test.Plugins.SignInGitHub, as: GitHub
+  alias MishkaCmsCore.Test.Plugins.SignInGoogle, as: Google
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
 
   @password "Password123!"
 
   setup do
+    MishkaCmsCore.Test.SignInProviders.start()
     snapshot = SettingsState.snapshot()
     on_exit(fn -> SettingsState.restore(snapshot) end)
 

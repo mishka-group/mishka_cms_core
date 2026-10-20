@@ -1252,6 +1252,12 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
     do: view |> element("#settings-form") |> render_change(%{"settings" => %{key => value}})
 
   describe "the Security tab's sign-in methods" do
+    setup do
+      MishkaCmsCore.Test.SignInProviders.start()
+      Settings.load_definitions()
+      :ok
+    end
+
     test "are one table of switches, the closed ways drawn on while open", %{
       conn: conn,
       site: site
@@ -1315,7 +1321,7 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       assert Settings.get_own("auth.providers.google.enabled", false, site.id) == true
       assert Settings.get_own("auth.providers.google.client_id", nil, site.id) == "an-id"
       assert Settings.secret("auth.providers.google.client_secret", site.id) == "a-secret"
-      assert MishkaCmsCore.Accounts.SignInProviders.Google.ready?(site.id)
+      assert MishkaCmsCore.Test.Plugins.SignInGoogle.ready?(site.id)
     end
 
     test "switching password off stores it closed", %{conn: conn, site: site} do

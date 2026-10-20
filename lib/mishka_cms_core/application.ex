@@ -95,15 +95,6 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Captcha.Providers.HCaptcha
   ]
 
-  # `auth:providers` plugins — the services a site can sign in with, under Sign-in methods on the
-  # Security tab (see `MishkaCmsCore.Accounts.SignInProvider`).
-  @sign_in_providers [
-    MishkaCmsCore.Accounts.SignInProviders.Google,
-    MishkaCmsCore.Accounts.SignInProviders.GitHub,
-    MishkaCmsCore.Accounts.SignInProviders.Slack,
-    MishkaCmsCore.Accounts.SignInProviders.Discord
-  ]
-
   # THE REGISTRY EVERY PLUGIN BELOW REGISTERS IN, WHEN THE LIBRARY DID NOT START IT ITSELF.
   # `MishkaInstaller.Application` picks its own supervision tree in a COMPILE-TIME branch on
   # `MishkaInstaller.__information__().env`, and that reads an exported `MIX_ENV` BEFORE the
@@ -138,7 +129,7 @@ defmodule MishkaCmsCore.Application do
         @cache_plugins ++
         @share_card_plugins ++
         @site_icon_plugins ++
-        @mail_providers ++ @captcha_providers ++ @sign_in_providers ++ @account_notices
+        @mail_providers ++ @captcha_providers ++ @account_notices
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

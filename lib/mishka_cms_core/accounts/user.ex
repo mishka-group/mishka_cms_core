@@ -145,9 +145,11 @@ defmodule MishkaCmsCore.Accounts.User do
         generate_action_name :generate_recovery_codes
       end
 
-      # SIGNING IN WITH ANOTHER SERVICE'S ACCOUNT — see `MishkaCmsCore.Accounts.SignInProvider`. Every
-      # key comes from the site the request reached, through `MishkaCmsCore.Secrets`, and a site that
-      # does not offer the provider has none: the sign-in stops before the visitor is sent anywhere.
+      # SIGNING IN WITH ANOTHER SERVICE'S ACCOUNT — see `MishkaCmsCore.Accounts.SignInProvider`. Each
+      # strategy does nothing until its package (`mishka_cms_auth_google`, …) registers its plugin:
+      # every key comes from that plugin, for the site the request reached, through
+      # `MishkaCmsCore.Secrets`, and without one there are none — the sign-in stops before the
+      # visitor is sent anywhere.
       google do
         client_id MishkaCmsCore.Secrets
         client_secret MishkaCmsCore.Secrets
@@ -173,7 +175,7 @@ defmodule MishkaCmsCore.Accounts.User do
 
       # DISCORD HAS NO STRATEGY OF ITS OWN: the generic one, at Discord's addresses. Its answer is
       # Discord's user object, read as claims before anything trusts it
-      # (`MishkaCmsCore.Accounts.SignInProviders.Discord.user_info/1`).
+      # (`user_info/1` of the `mishka_cms_auth_discord` package).
       oauth2 :discord do
         client_id MishkaCmsCore.Secrets
         client_secret MishkaCmsCore.Secrets

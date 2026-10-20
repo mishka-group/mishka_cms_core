@@ -4,20 +4,24 @@
 
 defmodule MishkaCmsCore.Accounts.SignInProvider do
   @moduledoc """
-  Signing in with another service's account — Google, GitHub, Apple — as `mishka_installer`
-  plugins, the way `MishkaCmsCore.Captcha.Provider` makes captchas.
+  Signing in with another service's account — Google, GitHub, Slack, Discord — as `mishka_installer`
+  plugins on `"auth:providers"`, the way `MishkaCmsCore.Captcha.Provider` makes captchas. Each one
+  ships as its own package (`mishka_cms_auth_google`, `mishka_cms_auth_github`,
+  `mishka_cms_auth_slack`, `mishka_cms_auth_discord`) whose application starts its plugin: added as a
+  dependency, it registers itself and appears on every site's Security tab.
 
   AshAuthentication does the sign-in itself: each provider is a strategy on
-  `MishkaCmsCore.Accounts.User` (`google`, `github`, `apple`) with its routes under
+  `MishkaCmsCore.Accounts.User` (`google`, `github`, `slack`, `discord`) with its routes under
   `/api/auth/user/<strategy>`, and every account it signs in keeps one
-  `MishkaCmsCore.Accounts.UserIdentity` per provider. A provider plugin adds what differs per site:
-  its keys, whether the site offers it, and its button.
+  `MishkaCmsCore.Accounts.UserIdentity` per provider. The strategies are compiled into the core,
+  since a package compiles after it; a strategy with no plugin has no keys and refuses every
+  request. The plugin adds what differs per site: its keys, whether the site offers it, and its
+  button.
 
   The strategy reads its keys through `MishkaCmsCore.Secrets`, which asks `secret_for/3`. A site
   that has not switched the provider on, has no keys for it, or whose provider plugin is stopped
-  answers `:error`, and AshAuthentication stops before the visitor is sent anywhere. The strategies
-  are compiled into the User resource, so a plugin can only switch on one of those three; another
-  provider is a strategy there first.
+  answers `:error`, and AshAuthentication stops before the visitor is sent anywhere. A plugin can
+  only switch on a strategy the User resource declares; another provider is a strategy there first.
 
   ## Settings
 
