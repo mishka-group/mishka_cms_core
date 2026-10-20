@@ -43,44 +43,36 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
     %{site: site}
   end
 
-  describe "the keys a strategy reads" do
-    test "are the site's own while it offers the provider, and none otherwise", %{site: site} do
-      conn = conn_for(site)
+  # THE CORE NAMES NO PROVIDER: the one strategy fills itself from the plugin the path names, and
+  # AshAuthentication's own OAuth2 plug sends the visitor there.
+  describe "a provider's request" do
+    test "goes to the provider with the site's own keys and callback", %{site: site} do
+      offer!(site, GitHub)
 
-      assert SignInProvider.secret_for(:google, :client_id, conn) == :error
+      conn = request(site, "github")
+      [location] = Plug.Conn.get_resp_header(conn, "location")
+      uri = URI.parse(location)
+      query = URI.decode_query(uri.query)
 
-      offer!(site, Google)
-
-      assert SignInProvider.secret_for(:google, :client_id, conn) == {:ok, "google-id"}
-      assert SignInProvider.secret_for(:google, :client_secret, conn) == {:ok, "google-secret"}
-
-      assert {:ok, callback} = SignInProvider.secret_for(:google, :redirect_uri, conn)
-      assert callback =~ "://#{site.host}"
-      assert String.ends_with?(callback, "/api/auth/user/google/callback")
-
-      {:ok, _} = Settings.put(SignInProvider.enabled_key(Google), false, site_id: site.id)
-      assert SignInProvider.secret_for(:google, :client_id, conn) == :error
+      assert {uri.host, uri.path} == {"github.com", "/login/oauth/authorize"}
+      assert query["client_id"] == "github-id"
+      assert query["redirect_uri"] =~ "://#{site.host}"
+      assert String.ends_with?(query["redirect_uri"], "/api/auth/user/provider/callback")
+      assert is_binary(query["state"])
     end
 
-    test "are none without a site, or for a provider missing a key", %{site: site} do
-      assert SignInProvider.secret_for(:google, :client_id, %Plug.Conn{}) == :error
+    test "is refused while the site does not offer it, lacks a key, or no plugin has that id", %{
+      site: site
+    } do
+      refute redirected?(request(site, "github"))
 
       {:ok, _} = Settings.put(SignInProvider.enabled_key(GitHub), true, site_id: site.id)
       {:ok, _} = Settings.put("auth.providers.github.client_id", "only-id", site_id: site.id)
+      refute redirected?(request(site, "github"))
 
-      refute GitHub.ready?(site.id)
-      assert SignInProvider.secret_for(:github, :client_id, conn_for(site)) == :error
-    end
-
-    test "come from MishkaCmsCore.Secrets as AshAuthentication asks them", %{site: site} do
       offer!(site, GitHub)
-
-      assert MishkaCmsCore.Secrets.secret_for(
-               [:authentication, :strategies, :github, :client_secret],
-               User,
-               [],
-               %{conn: conn_for(site)}
-             ) == {:ok, "github-secret"}
+      refute redirected?(request(site, "gitlab"))
+      assert redirected?(request(site, "github"))
     end
   end
 
@@ -93,7 +85,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       assert user.site_id == site.id
       assert user.confirmed_at
       assert is_nil(reload(user).hashed_password)
-      assert [%{strategy: "google", uid: "g-1"}] = identities(user)
+      assert [%{strategy: "provider/google", uid: "g-1"}] = identities(user)
     end
 
     test "the next sign-in with the same provider account lands on the same account", %{
@@ -111,7 +103,9 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       {:ok, github} = provider_sign_in(:github, info("both@example.com", "h-3"), site.id)
 
       assert github.id == google.id
-      assert google |> identities() |> Enum.map(& &1.strategy) |> Enum.sort() == ~w(github google)
+
+      assert google |> identities() |> Enum.map(& &1.strategy) |> Enum.sort() ==
+               ~w(provider/github provider/google)
     end
 
     test "an email the provider did not verify does nothing", %{site: site} do
@@ -156,7 +150,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
 
       assert user.id == existing.id
       assert reload(user).hashed_password == reload(existing).hashed_password
-      assert [%{strategy: "github"}] = identities(user)
+      assert [%{strategy: "provider/github"}] = identities(user)
     end
 
     test "an account nobody confirmed is claimed: confirmed, its password and sessions gone", %{
@@ -178,8 +172,8 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
   describe "every provider" do
     test "keeps none of the provider's tokens", %{site: site} do
       {:ok, user} =
-        User
-        |> AshAuthentication.Info.strategy!(:google)
+        "google"
+        |> provider_strategy()
         |> AshAuthentication.Strategy.action(
           :register,
           %{
@@ -201,40 +195,15 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
 
     test "Slack signs in by its verified email", %{site: site} do
       assert {:ok, user} = provider_sign_in(:slack, info("slack@example.com", "U123"), site.id)
-      assert [%{strategy: "slack", uid: "U123"}] = identities(user)
-    end
-
-    test "Discord's own user object is read as claims: id and verified", %{site: site} do
-      discord = %{
-        "id" => 80_351_110_224_678_912,
-        "email" => "disco@example.com",
-        "verified" => true
-      }
-
-      assert {:ok, user} = provider_sign_in(:discord, discord, site.id)
-      assert user.confirmed_at
-      assert [%{strategy: "discord", uid: "80351110224678912"}] = identities(user)
-    end
-
-    test "a Discord email Discord did not verify, or no email at all, signs nobody in", %{
-      site: site
-    } do
-      for discord <- [
-            %{"id" => 1, "email" => "unverified@example.com", "verified" => false},
-            %{"id" => 2, "email" => "missing-flag@example.com"},
-            %{"id" => 3, "email" => "says-so@example.com", "email_verified" => true},
-            %{"id" => 4, "verified" => true}
-          ] do
-        assert {:error, error} = provider_sign_in(:discord, discord, site.id)
-        assert SocialSignIn.refusal(error) == %{reason: :unverified_email}, inspect(discord)
-      end
+      assert [%{strategy: "provider/slack", uid: "U123"}] = identities(user)
     end
 
     test "a Discord account links to a confirmed account with its verified email", %{site: site} do
       existing = register!("both-ways@example.com", site.id) |> confirm!()
-      discord = %{"id" => 77, "email" => "both-ways@example.com", "verified" => true}
 
-      assert {:ok, user} = provider_sign_in(:discord, discord, site.id)
+      assert {:ok, user} =
+               provider_sign_in(:discord, info("both-ways@example.com", "77"), site.id)
+
       assert user.id == existing.id
     end
   end
@@ -357,8 +326,8 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       offer!(site, Google)
       html = render_component(&Widget.sign_in_providers/1, site: site)
 
-      assert html =~ ~s(href="/api/auth/user/google")
-      refute html =~ "/api/auth/user/github"
+      assert html =~ ~s(href="/api/auth/user/provider/google/request")
+      refute html =~ "/api/auth/user/provider/github"
     end
 
     test "keys drawn beside their switch, whether it reads true or the form's \"true\"" do
@@ -407,13 +376,31 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
     :ok
   end
 
-  defp conn_for(site), do: %Plug.Conn{assigns: %{current_site: site}}
-
   defp info(email, sub), do: %{"sub" => sub, "email" => email, "email_verified" => true}
 
-  defp provider_sign_in(strategy, user_info, tenant) do
-    User
-    |> AshAuthentication.Info.strategy!(strategy)
+  # The strategy as a request for provider `id` runs it, which its register action reads the
+  # provider from.
+  defp provider_strategy(id),
+    do:
+      User
+      |> AshAuthentication.Info.strategy!(:provider)
+      |> Map.put(:__connection_id__, to_string(id))
+
+  defp request(site, id) do
+    Plug.Test.conn(:get, "/api/auth/user/provider/#{id}/request")
+    |> Plug.Test.init_test_session(%{})
+    |> Map.put(:path_params, %{"provider" => id})
+    |> Plug.Conn.assign(:current_site, site)
+    |> MishkaCmsCore.Accounts.ProviderStrategy.Plug.request(
+      AshAuthentication.Info.strategy!(User, :provider)
+    )
+  end
+
+  defp redirected?(conn), do: Plug.Conn.get_resp_header(conn, "location") != []
+
+  defp provider_sign_in(id, user_info, tenant) do
+    id
+    |> provider_strategy()
     |> AshAuthentication.Strategy.action(
       :register,
       %{user_info: user_info, oauth_tokens: %{"access_token" => "token"}},

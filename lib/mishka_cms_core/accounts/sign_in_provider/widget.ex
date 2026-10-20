@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Accounts.SignInProvider.Widget do
   @moduledoc """
   The buttons of the services a site signs in with, for the sign-in and registration pages: one
   link per provider the site offers (`MishkaCmsCore.Accounts.SignInProvider.available/1`), to its
-  strategy's request route, which sends the visitor to the provider. A site that offers none draws
+  provider's request route, which sends the visitor to the provider. A site that offers none draws
   its `empty` slot instead, and no `divider`. Every runtime template can call it
   (`MishkaCmsCore.Runtime.LiveViewHelpers.imports/1`):
 
@@ -54,7 +54,7 @@ defmodule MishkaCmsCore.Accounts.SignInProvider.Widget do
         <a
           :for={provider <- @providers}
           id={"auth-provider-#{provider.id()}"}
-          href={"/api/auth/user/#{provider.strategy()}"}
+          href={"/api/auth/user/provider/#{provider.id()}/request"}
           aria-label={continue_with(@continue_with, provider.label())}
           class={button()}
         >

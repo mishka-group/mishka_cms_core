@@ -4,35 +4,35 @@
 
 defmodule MishkaCmsCore.Accounts.SignInProvider do
   @moduledoc """
-  Signing in with another service's account — Google, GitHub, Slack, Discord — as `mishka_installer`
-  plugins on `"auth:providers"`, the way `MishkaCmsCore.Captcha.Provider` makes captchas. Each one
-  ships as its own package (`mishka_cms_auth_google`, `mishka_cms_auth_github`,
-  `mishka_cms_auth_slack`, `mishka_cms_auth_discord`) whose application starts its plugin: added as a
-  dependency, it registers itself and appears on every site's Security tab.
+  Signing in with another service's account as `mishka_installer` plugins on `"auth:providers"`,
+  the way `MishkaCmsCore.Captcha.Provider` makes captchas. The core names no provider: each ships as
+  its own package (`mishka_cms_auth_google`, `mishka_cms_auth_github`, …) whose application starts
+  its plugin, so a host that adds the dependency has the provider on every site's Security tab.
 
-  AshAuthentication does the sign-in itself: each provider is a strategy on
-  `MishkaCmsCore.Accounts.User` (`google`, `github`, `slack`, `discord`) with its routes under
-  `/api/auth/user/<strategy>`, and every account it signs in keeps one
-  `MishkaCmsCore.Accounts.UserIdentity` per provider. The strategies are compiled into the core,
-  since a package compiles after it; a strategy with no plugin has no keys and refuses every
-  request. The plugin adds what differs per site: its keys, whether the site offers it, and its
-  button.
+  AshAuthentication does the sign-in itself, through one strategy for every provider
+  (`MishkaCmsCore.Accounts.ProviderStrategy`: `/api/auth/user/provider/<id>/request`, and one
+  callback for all, `/api/auth/user/provider/callback`). A plugin
+  says which Assent strategy speaks to its provider (`c:oauth/0`) — Assent knows each provider's
+  addresses and how its answer reads — and adds what differs per site: its keys, whether the site
+  offers it, and its button. Every account a provider signs in keeps one
+  `MishkaCmsCore.Accounts.UserIdentity` for it, named `"provider/<id>"`.
 
-  The strategy reads its keys through `MishkaCmsCore.Secrets`, which asks `secret_for/3`. A site
-  that has not switched the provider on, has no keys for it, or whose provider plugin is stopped
-  answers `:error`, and AshAuthentication stops before the visitor is sent anywhere. A plugin can
-  only switch on a strategy the User resource declares; another provider is a strategy there first.
+  A site that has not switched the provider on, has no keys for it, or whose provider plugin is
+  stopped refuses it before the visitor is sent anywhere.
 
   ## Settings
 
   The Security tab's "Sign-in methods" table: each provider switched on per site
-  (`auth.providers.<id>.enabled`) with its keys below it, and `auth.social.register`, whether a
+  (`auth.providers.<id>.enabled`) with its keys in its row, and `auth.social.register`, whether a
   first sign-in makes an account. A master signs in on the master site's address with the master
-  site's providers. The address each provider sends the visitor back to is `callback_url/2`, which
+  site's providers. The address each provider sends the visitor back to is `callback_url/1`, which
   its console has to list.
 
       use MishkaCmsCore.Accounts.SignInProvider,
-        id: "google", strategy: :google, label: gettext_noop("Google"), priority: 10
+        id: "github", label: gettext_noop("GitHub"), priority: 20
+
+      @impl true
+      def oauth, do: %{assent: Assent.Strategy.Github}
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -44,11 +44,17 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
 
   @type site_id :: String.t() | nil
 
-  @doc "The provider's id, in its setting keys: `\"google\"`."
+  @doc "The provider's id, in its route and its setting keys: `\"github\"`."
   @callback id() :: String.t()
 
-  @doc "The `MishkaCmsCore.Accounts.User` strategy it switches on: `:google`."
-  @callback strategy() :: atom()
+  @doc """
+  How it signs in: `:assent`, the Assent strategy that speaks to the provider
+  (`Assent.Strategy.Github`, or `Assent.Strategy.OAuth2` / `Assent.Strategy.OIDC` with its addresses
+  for one Assent does not name), and any `MishkaCmsCore.Accounts.ProviderStrategy` field set over
+  Assent's own defaults for it — `base_url`, `authorize_url`, `token_url`, `user_url`,
+  `authorization_params`.
+  """
+  @callback oauth() :: %{required(:assent) => module(), optional(atom()) => term()}
 
   @doc "The name on the button and the settings page, as a `gettext_noop/1` msgid."
   @callback label() :: String.t()
@@ -62,25 +68,17 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
   @doc "Whether `site_id` holds every key the provider needs."
   @callback ready?(site_id()) :: boolean()
 
-  @doc "One of the strategy's keys for `site_id`, by the name AshAuthentication asks it by."
+  @doc "One of its keys for `site_id`: `:client_id` or `:client_secret`."
   @callback secret(name :: atom(), site_id()) :: {:ok, String.t()} | :error
-
-  @doc """
-  The provider's answer about the visitor as the other providers' claims — `"sub"`, `"email"`,
-  `"email_verified"` — for one whose strategy hands over its own user object. Never `true` for
-  `"email_verified"` unless the provider said the email is verified.
-  """
-  @callback user_info(map()) :: map()
 
   @doc "Whether the provider is offered on this installation. Every provider is, unless it says not."
   @callback offered?() :: boolean()
 
-  @optional_callbacks user_info: 1, offered?: 0
+  @optional_callbacks offered?: 0
 
   @doc false
   defmacro __using__(opts) do
     id = Keyword.fetch!(opts, :id)
-    strategy = Keyword.fetch!(opts, :strategy)
     label = Keyword.fetch!(opts, :label)
     priority = Keyword.get(opts, :priority, 50)
 
@@ -100,9 +98,6 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
       def id, do: unquote(id)
 
       @impl MishkaCmsCore.Accounts.SignInProvider
-      def strategy, do: unquote(strategy)
-
-      @impl MishkaCmsCore.Accounts.SignInProvider
       def label, do: unquote(label)
     end
   end
@@ -119,29 +114,9 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
   @spec offered() :: [module()]
   def offered, do: ProviderRegistry.offered(@event, __MODULE__)
 
-  @doc "The offered provider that switches on `strategy`, or `:error`."
-  @spec for_strategy(atom()) :: {:ok, module()} | :error
-  def for_strategy(strategy) do
-    case Enum.find(offered(), &(&1.strategy() == strategy)) do
-      nil -> :error
-      provider -> {:ok, provider}
-    end
-  end
-
-  @doc """
-  What the provider of `strategy` said about the visitor, as claims (`c:user_info/1`); as it came
-  for a provider that already answers claims. Whatever the provider plugin, a strategy no offered
-  provider switches on is read as it came.
-  """
-  @spec user_info(atom(), map()) :: map()
-  def user_info(strategy, info) do
-    with {:ok, provider} <- for_strategy(strategy),
-         true <- function_exported?(provider, :user_info, 1) do
-      provider.user_info(info)
-    else
-      _as_it_came -> info
-    end
-  end
+  @doc "The offered provider registered under `id`."
+  @spec fetch(String.t() | nil) :: {:ok, module()} | {:error, :unknown_provider | :cannot_run}
+  def fetch(id), do: ProviderRegistry.fetch(@event, __MODULE__, id)
 
   @doc "The setting that switches `provider` on for a site."
   @spec enabled_key(module() | String.t()) :: String.t()
@@ -165,34 +140,14 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
   def register?(site_id), do: Settings.get_own(@register_key, true, site_id) == true
 
   @doc """
-  The address `provider` sends a visitor back to on `site`, which its console has to list: the
-  strategy's callback route on the site's own address.
+  The address a provider sends a visitor back to on `site`, which its console has to list: the
+  callback every provider shares, on the site's own address, read from the site record.
 
-      SignInProvider.callback_url(Google, site) #=> "https://example.com/api/auth/user/google/callback"
+      SignInProvider.callback_url(site) #=> "https://example.com/api/auth/user/provider/callback"
   """
-  @spec callback_url(module(), %{host: String.t()}) :: String.t()
-  def callback_url(provider, %{host: host}),
-    do: MishkaCmsCore.Helpers.site_url(host, "/api/auth/user/#{provider.strategy()}/callback")
-
-  @doc """
-  A strategy key for the request in `conn`, for `MishkaCmsCore.Secrets`: the provider's own from
-  the site the request reached, and the callback address on that site's address — read from the
-  site record, not from the request's Host. `:error` while the site does not offer the provider.
-  """
-  @spec secret_for(atom(), atom(), Plug.Conn.t() | term()) :: {:ok, String.t()} | :error
-  def secret_for(strategy, name, %Plug.Conn{assigns: %{current_site: %{id: site_id} = site}}) do
-    with {:ok, provider} <- for_strategy(strategy),
-         true <- on?(provider, site_id) do
-      case name do
-        :redirect_uri -> {:ok, callback_url(provider, site)}
-        name -> provider.secret(name, site_id)
-      end
-    else
-      _not_offered -> :error
-    end
-  end
-
-  def secret_for(_strategy, _name, _no_site), do: :error
+  @spec callback_url(%{host: String.t()}) :: String.t()
+  def callback_url(%{host: host}),
+    do: MishkaCmsCore.Helpers.site_url(host, "/api/auth/user/provider/callback")
 
   @doc """
   The rows of the Security tab's "Sign-in methods" table that are about providers — one switch per

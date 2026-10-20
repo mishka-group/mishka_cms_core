@@ -4,7 +4,7 @@
 
 defmodule MishkaCmsCore.Accounts.SocialSignIn do
   @moduledoc """
-  What a sign-in with a provider — Google, GitHub, Apple — may do, on each provider's register
+  What a sign-in with a provider — Google, GitHub, any `SignInProvider` plugin — may do, on each provider's register
   action on `MishkaCmsCore.Accounts.User`, beside AshAuthentication's own rules
   (`AshAuthentication.Strategy.OAuth2.IdentityChange`):
 
@@ -27,8 +27,9 @@ defmodule MishkaCmsCore.Accounts.SocialSignIn do
 
   **The provider's tokens are not kept.** Nothing here calls the provider after the sign-in, so the
   identity row holds the provider and its user id and no access or refresh token that a leaked
-  database would hand over. A provider answering its own user object is read as claims first
-  (`MishkaCmsCore.Accounts.SignInProvider.user_info/2`), before anything reads its email.
+  database would hand over. The provider's answer arrives as claims — `sub`, `email`,
+  `email_verified` — as Assent reads each provider's own, and its identity is named after the
+  provider the request ran (`"provider/<id>"`, `MishkaCmsCore.Accounts.ProviderStrategy`).
 
   Refusals are `MishkaCmsCore.Accounts.SocialSignIn.Refused`, or the gate's own
   `MishkaCmsCore.Accounts.AuthGate.Closed`.
@@ -47,11 +48,10 @@ defmodule MishkaCmsCore.Accounts.SocialSignIn do
 
   @impl true
   def change(changeset, _opts, _context) do
-    with {:ok, strategy} <- Info.strategy_for_action(User, changeset.action.name),
-         user_info = claims(changeset, strategy),
+    with {:ok, strategy} <- strategy(changeset),
+         user_info = Changeset.get_argument(changeset, :user_info) || %{},
          {:ok, email} <- verified_email(user_info) do
       changeset
-      |> Changeset.set_argument(:user_info, user_info)
       |> Changeset.set_argument(:oauth_tokens, %{})
       |> site_of(changeset.tenant)
       |> Changeset.before_transaction(&decide(&1, strategy, email, user_info))
@@ -98,12 +98,13 @@ defmodule MishkaCmsCore.Accounts.SocialSignIn do
   def refusal(errors) when is_list(errors), do: Enum.find_value(errors, &refusal/1)
   def refusal(_other), do: nil
 
-  defp claims(changeset, strategy),
-    do:
-      SignInProvider.user_info(
-        strategy.name,
-        Changeset.get_argument(changeset, :user_info) || %{}
-      )
+  # THE STRATEGY AS THE REQUEST RAN IT, named after its provider: the one the action belongs to,
+  # with the provider's id AshAuthentication carried in the action's context.
+  defp strategy(changeset) do
+    with {:ok, strategy} <- Info.strategy_for_action(User, changeset.action.name) do
+      OAuth2.put_connection_id(strategy, OAuth2.connection_id_from_context(changeset.context))
+    end
+  end
 
   defp verified_email(%{"email_verified" => verified} = user_info)
        when verified in [true, "true"] do

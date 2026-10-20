@@ -161,8 +161,8 @@ msgstr ""
 msgid "JS hook"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1596
-#: lib/mishka_cms_core/accounts/user.ex:1625
+#: lib/mishka_cms_core/accounts/user.ex:1477
+#: lib/mishka_cms_core/accounts/user.ex:1506
 #, elixir-autogen
 msgid "account"
 msgstr ""
@@ -478,14 +478,14 @@ msgstr ""
 msgid "Cannot archive stylesheet from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1526
+#: lib/mishka_cms_core/accounts/user.ex:1407
 #, elixir-autogen, elixir-format
 msgid "Cannot delete users from other sites."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1529
-#: lib/mishka_cms_core/accounts/user.ex:1561
-#: lib/mishka_cms_core/accounts/user.ex:1688
+#: lib/mishka_cms_core/accounts/user.ex:1410
+#: lib/mishka_cms_core/accounts/user.ex:1442
+#: lib/mishka_cms_core/accounts/user.ex:1569
 #, elixir-autogen, elixir-format
 msgid "Cannot delete yourself."
 msgstr ""
@@ -679,7 +679,7 @@ msgstr ""
 msgid "Cannot set archived site as master."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1384
+#: lib/mishka_cms_core/accounts/user.ex:1265
 #, elixir-autogen, elixir-format
 msgid "Cannot update users from other sites."
 msgstr ""
@@ -987,13 +987,13 @@ msgstr ""
 msgid "cannot grant permissions you do not hold yourself: %{over}"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1368
-#: lib/mishka_cms_core/accounts/user.ex:1456
+#: lib/mishka_cms_core/accounts/user.ex:1249
+#: lib/mishka_cms_core/accounts/user.ex:1337
 #, elixir-autogen, elixir-format
 msgid "does not match password"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1765
+#: lib/mishka_cms_core/accounts/user.ex:1646
 #, elixir-autogen, elixir-format
 msgid "is invalid or expired"
 msgstr ""
@@ -1372,7 +1372,7 @@ msgstr ""
 msgid "This site already has an error page — open that one instead of making another."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:2091
+#: lib/mishka_cms_core/accounts/user.ex:1972
 #, elixir-autogen, elixir-format
 msgid "This site is offline and is not taking new accounts. Sign in if you have one."
 msgstr ""
@@ -1432,7 +1432,7 @@ msgstr ""
 msgid "Tenant required"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1928
+#: lib/mishka_cms_core/accounts/user.ex:1809
 #, elixir-autogen, elixir-format
 msgid "is already confirmed"
 msgstr ""
@@ -2385,12 +2385,12 @@ msgstr ""
 msgid "The second step's token is invalid or expired"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1124
+#: lib/mishka_cms_core/accounts/user.ex:1005
 #, elixir-autogen, elixir-format, fuzzy
 msgid "is already set"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:724
+#: lib/mishka_cms_core/accounts/user.ex:692
 #, elixir-autogen, elixir-format
 msgid "is not set yet: set a first password instead"
 msgstr ""
@@ -2398,4 +2398,9 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/__validations/for_site.ex:21
 #, elixir-autogen, elixir-format
 msgid "run with no site"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/provider_strategy/plug.ex:122
+#, elixir-autogen, elixir-format
+msgid "This site does not offer that sign-in provider"
 msgstr ""

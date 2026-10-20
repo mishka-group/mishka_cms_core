@@ -6,11 +6,13 @@ defmodule MishkaCmsCore.Test.Plugins.SignInGitHub do
   @moduledoc false
   use MishkaCmsCore.Accounts.SignInProvider,
     id: "github",
-    strategy: :github,
     label: "GitHub",
     priority: 20
 
   alias MishkaCmsCore.Test.SignInProviders
+
+  @impl true
+  def oauth, do: %{assent: Assent.Strategy.Github}
 
   @impl true
   def icon, do: %{color: "text-[#1b1a18]", path: "M0 0h24v24H0z"}

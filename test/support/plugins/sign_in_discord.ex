@@ -6,11 +6,13 @@ defmodule MishkaCmsCore.Test.Plugins.SignInDiscord do
   @moduledoc false
   use MishkaCmsCore.Accounts.SignInProvider,
     id: "discord",
-    strategy: :discord,
     label: "Discord",
     priority: 40
 
   alias MishkaCmsCore.Test.SignInProviders
+
+  @impl true
+  def oauth, do: %{assent: Assent.Strategy.Discord}
 
   @impl true
   def icon, do: %{color: "text-[#5865f2]", path: "M0 0h24v24H0z"}
@@ -23,12 +25,4 @@ defmodule MishkaCmsCore.Test.Plugins.SignInDiscord do
 
   @impl true
   def secret(name, site_id), do: SignInProviders.secret("discord", name, site_id)
-
-  # Discord's user object, read as claims, as the package reads it.
-  @impl true
-  def user_info(%{} = info) do
-    info
-    |> Map.put("sub", to_string(info["id"]))
-    |> Map.put("email_verified", info["verified"] == true)
-  end
 end

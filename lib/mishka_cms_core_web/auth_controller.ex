@@ -145,7 +145,6 @@ defmodule MishkaCmsCoreWeb.AuthController do
     CaptchaCheck,
     LiveSockets,
     SecondFactor,
-    SignInProvider,
     SocialSignIn,
     Token
   }
@@ -156,10 +155,10 @@ defmodule MishkaCmsCoreWeb.AuthController do
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
 
-  # The strategies a sign-in provider signs in with (`MishkaCmsCore.Accounts.SignInProvider`).
+  # The strategy every sign-in provider signs in with (`MishkaCmsCore.Accounts.ProviderStrategy`).
   @provider_strategies MishkaCmsCore.Accounts.User
                        |> AshAuthentication.Info.authentication_strategies()
-                       |> Enum.filter(&is_struct(&1, AshAuthentication.Strategy.OAuth2))
+                       |> Enum.filter(&is_struct(&1, MishkaCmsCore.Accounts.ProviderStrategy))
                        |> Enum.map(& &1.name)
 
   # Whose session the sign-out clears: AshAuthentication enumerates that app's authenticated resources
@@ -199,8 +198,8 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # A PROVIDER'S SIGN-IN OF AN ACCOUNT WITH AN AUTHENTICATOR goes on to the sign-in page's code step
   # with a token that only waits for the code (`MishkaCmsCore.Accounts.SecondFactor.Pending`),
   # and no session.
-  defp code_step?({strategy, :callback}, user),
-    do: match?({:ok, _}, SignInProvider.for_strategy(strategy)) and SecondFactor.asked?(user)
+  defp code_step?({strategy, :callback}, user) when strategy in @provider_strategies,
+    do: SecondFactor.asked?(user)
 
   defp code_step?(_activity, _user), do: false
 

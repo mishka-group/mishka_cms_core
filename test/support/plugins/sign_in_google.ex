@@ -6,11 +6,13 @@ defmodule MishkaCmsCore.Test.Plugins.SignInGoogle do
   @moduledoc false
   use MishkaCmsCore.Accounts.SignInProvider,
     id: "google",
-    strategy: :google,
     label: "Google",
     priority: 10
 
   alias MishkaCmsCore.Test.SignInProviders
+
+  @impl true
+  def oauth, do: %{assent: Assent.Strategy.Google}
 
   @impl true
   def icon, do: %{color: "text-[#4285f4]", path: "M0 0h24v24H0z"}

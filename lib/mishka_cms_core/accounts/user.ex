@@ -35,7 +35,13 @@ defmodule MishkaCmsCore.Accounts.User do
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
       MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets
     ],
-    extensions: [AshAuthentication, AshJsonApi.Resource, MishkaGervaz.Resource, AshRateLimiter]
+    extensions: [
+      AshAuthentication,
+      MishkaCmsCore.Accounts.ProviderStrategy,
+      AshJsonApi.Resource,
+      MishkaGervaz.Resource,
+      AshRateLimiter
+    ]
 
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [cell_stacked: 1]
@@ -80,10 +86,7 @@ defmodule MishkaCmsCore.Accounts.User do
         # email the provider verified (`MishkaCmsCore.Accounts.SocialSignIn`).
         auto_confirm_actions [
           :reset_password_with_token,
-          :register_with_google,
-          :register_with_github,
-          :register_with_slack,
-          :register_with_discord
+          :register_with_provider
         ]
 
         sender MishkaCmsCore.Accounts.User.Senders.SendNewUserConfirmationEmail
@@ -145,49 +148,12 @@ defmodule MishkaCmsCore.Accounts.User do
         generate_action_name :generate_recovery_codes
       end
 
-      # SIGNING IN WITH ANOTHER SERVICE'S ACCOUNT — see `MishkaCmsCore.Accounts.SignInProvider`. Each
-      # strategy does nothing until its package (`mishka_cms_auth_google`, …) registers its plugin:
-      # every key comes from that plugin, for the site the request reached, through
-      # `MishkaCmsCore.Secrets`, and without one there are none — the sign-in stops before the
-      # visitor is sent anywhere.
-      google do
-        client_id MishkaCmsCore.Secrets
-        client_secret MishkaCmsCore.Secrets
-        redirect_uri MishkaCmsCore.Secrets
+      # SIGNING IN WITH ANOTHER SERVICE'S ACCOUNT, whichever ones are installed: one strategy for
+      # every provider, which the core names none of — see `MishkaCmsCore.Accounts.ProviderStrategy`
+      # and `MishkaCmsCore.Accounts.SignInProvider`.
+      sign_in_providers :provider do
         identity_resource MishkaCmsCore.Accounts.UserIdentity
-      end
-
-      github do
-        client_id MishkaCmsCore.Secrets
-        client_secret MishkaCmsCore.Secrets
-        redirect_uri MishkaCmsCore.Secrets
-        identity_resource MishkaCmsCore.Accounts.UserIdentity
-      end
-
-      slack do
-        client_id MishkaCmsCore.Secrets
-        client_secret MishkaCmsCore.Secrets
-        redirect_uri MishkaCmsCore.Secrets
-        # `openid` is added by the strategy itself; naming it here too asked for it twice.
-        authorization_params scope: "email profile"
-        identity_resource MishkaCmsCore.Accounts.UserIdentity
-      end
-
-      # DISCORD HAS NO STRATEGY OF ITS OWN: the generic one, at Discord's addresses. Its answer is
-      # Discord's user object, read as claims before anything trusts it
-      # (`user_info/1` of the `mishka_cms_auth_discord` package).
-      oauth2 :discord do
-        client_id MishkaCmsCore.Secrets
-        client_secret MishkaCmsCore.Secrets
-        redirect_uri MishkaCmsCore.Secrets
-        base_url "https://discord.com/api"
-        authorize_url "https://discord.com/oauth2/authorize"
-        token_url "https://discord.com/api/oauth2/token"
-        user_url "https://discord.com/api/users/@me"
-        authorization_params scope: "identify email"
-        auth_method :client_secret_post
-        trust_email_verified? true
-        identity_resource MishkaCmsCore.Accounts.UserIdentity
+        register_action_name :register_with_provider
       end
     end
   end
@@ -974,97 +940,10 @@ defmodule MishkaCmsCore.Accounts.User do
       end
     end
 
-    # Signing in, or registering, with Google — see `MishkaCmsCore.Accounts.SocialSignIn`, which
-    # reads the provider's answer first and keeps none of its tokens.
-    create :register_with_google do
-      description "Signs in with a Google account, and makes one on a first sign-in when the site allows."
-      argument :user_info, :map, allow_nil?: false
-      argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
-      upsert? true
-      upsert_identity :unique_email
-      upsert_fields []
-
-      change AshRateLimiter.BuiltinChanges.rate_limit(
-               limit: 30,
-               per: :timer.minutes(5),
-               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
-               on: :before_transaction
-             )
-
-      change MishkaCmsCore.Accounts.SocialSignIn
-      change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
-      change AshAuthentication.GenerateTokenChange
-
-      change AshAuthentication.Strategy.OAuth2.IdentityChange,
-        where: [MishkaCmsCore.Accounts.Validations.ForSite]
-
-      metadata :token, :string do
-        allow_nil? false
-      end
-    end
-
-    # Signing in, or registering, with GitHub — see `MishkaCmsCore.Accounts.SocialSignIn`, which
-    # reads the provider's answer first and keeps none of its tokens.
-    create :register_with_github do
-      description "Signs in with a GitHub account, and makes one on a first sign-in when the site allows."
-      argument :user_info, :map, allow_nil?: false
-      argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
-      upsert? true
-      upsert_identity :unique_email
-      upsert_fields []
-
-      change AshRateLimiter.BuiltinChanges.rate_limit(
-               limit: 30,
-               per: :timer.minutes(5),
-               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
-               on: :before_transaction
-             )
-
-      change MishkaCmsCore.Accounts.SocialSignIn
-      change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
-      change AshAuthentication.GenerateTokenChange
-
-      change AshAuthentication.Strategy.OAuth2.IdentityChange,
-        where: [MishkaCmsCore.Accounts.Validations.ForSite]
-
-      metadata :token, :string do
-        allow_nil? false
-      end
-    end
-
-    # Signing in, or registering, with Slack — see `MishkaCmsCore.Accounts.SocialSignIn`, which
-    # reads the provider's answer first and keeps none of its tokens.
-    create :register_with_slack do
-      description "Signs in with a Slack account, and makes one on a first sign-in when the site allows."
-      argument :user_info, :map, allow_nil?: false
-      argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
-      upsert? true
-      upsert_identity :unique_email
-      upsert_fields []
-
-      change AshRateLimiter.BuiltinChanges.rate_limit(
-               limit: 30,
-               per: :timer.minutes(5),
-               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
-               on: :before_transaction
-             )
-
-      change MishkaCmsCore.Accounts.SocialSignIn
-      change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
-      change AshAuthentication.GenerateTokenChange
-
-      change AshAuthentication.Strategy.OAuth2.IdentityChange,
-        where: [MishkaCmsCore.Accounts.Validations.ForSite]
-
-      metadata :token, :string do
-        allow_nil? false
-      end
-    end
-
-    # Signing in, or registering, with Discord — see `MishkaCmsCore.Accounts.SocialSignIn`, which
-    # reads the provider's answer first and keeps none of its tokens.
-    create :register_with_discord do
-      description "Signs in with a Discord account, and makes one on a first sign-in when the site allows."
+    # Signing in, or registering, with a sign-in provider — whichever the request ran; see
+    # `MishkaCmsCore.Accounts.SocialSignIn`, which keeps none of its tokens.
+    create :register_with_provider do
+      description "Signs in with a sign-in provider's account, and makes one on a first sign-in when the site allows."
       argument :user_info, :map, allow_nil?: false
       argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
       upsert? true

@@ -2079,7 +2079,7 @@ msgstr ""
 msgid "Back to one element"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:412
+#: lib/mishka_cms_core_web/auth_controller.ex:411
 #, elixir-autogen, elixir-format
 msgid "Back to sign in"
 msgstr ""
@@ -4739,7 +4739,7 @@ msgstr ""
 msgid "INFO"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:176
+#: lib/mishka_cms_core_web/auth_controller.ex:175
 #, elixir-autogen, elixir-format
 msgid "If an account exists for that email, a link is on its way."
 msgstr ""
@@ -4817,7 +4817,7 @@ msgstr ""
 msgid "Inbox"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:546
+#: lib/mishka_cms_core_web/auth_controller.ex:545
 #, elixir-autogen, elixir-format
 msgid "Incorrect email or password"
 msgstr ""
@@ -5546,7 +5546,7 @@ msgstr ""
 msgid "Locked"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:2544
+#: lib/mishka_cms_core/accounts/user.ex:2425
 #, elixir-autogen, elixir-format
 msgid "Logged out successfully"
 msgstr ""
@@ -10191,7 +10191,7 @@ msgstr ""
 msgid "This site is not available"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:268
+#: lib/mishka_cms_core_web/auth_controller.ex:267
 #, elixir-autogen, elixir-format
 msgid "This site is offline. Only its administrators can sign in."
 msgstr ""
@@ -11284,12 +11284,12 @@ msgstr ""
 msgid "You are not allowed to update this site's pages."
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:318
+#: lib/mishka_cms_core_web/auth_controller.ex:317
 #, elixir-autogen, elixir-format
 msgid "You are now signed in"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:585
+#: lib/mishka_cms_core_web/auth_controller.ex:584
 #, elixir-autogen, elixir-format
 msgid "You are now signed out"
 msgstr ""
@@ -11347,7 +11347,7 @@ msgstr ""
 msgid "You don't have permission to access this resource"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:521
+#: lib/mishka_cms_core_web/auth_controller.ex:520
 #, elixir-autogen, elixir-format
 msgid "You have already signed in another way, but have not confirmed your account. You can confirm your account using the link we sent to you, or by resetting your password."
 msgstr ""
@@ -11382,7 +11382,7 @@ msgstr ""
 msgid "Your document is fine and still being saved. Its history is not being recorded just now — it will catch up on its own."
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:303
+#: lib/mishka_cms_core_web/auth_controller.ex:302
 #, elixir-autogen, elixir-format
 msgid "Your email address has now been confirmed"
 msgstr ""
@@ -11402,7 +11402,7 @@ msgstr ""
 msgid "Your own code handles this form when they press Send. Making it a working form keeps that code and the names its fields send."
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:312
+#: lib/mishka_cms_core_web/auth_controller.ex:311
 #, elixir-autogen, elixir-format
 msgid "Your password has successfully been reset"
 msgstr ""
@@ -13894,7 +13894,7 @@ msgstr ""
 msgid "Sign in with your password"
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:237
+#: lib/mishka_cms_core_web/auth_controller.ex:236
 #, elixir-autogen, elixir-format
 msgid "Sign in with your password and the code from your authenticator app."
 msgstr ""
@@ -17948,7 +17948,7 @@ msgstr ""
 msgid "That kit's name is not valid — use lowercase letters, numbers, - and _, start with a letter or a number, and stay within 64 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:2539
+#: lib/mishka_cms_core/accounts/user.ex:2420
 #, elixir-autogen, elixir-format
 msgid "You could not be logged out. Try again."
 msgstr ""
@@ -18038,49 +18038,9 @@ msgstr ""
 msgid "Continue with %{provider}"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:211
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:170
 #, elixir-autogen, elixir-format
 msgid "Create an account on a first sign-in with a provider"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/github.ex:40
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From the same app. Stored sealed and never shown again."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/google.ex:41
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From the same client. Stored sealed and never shown again."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/github.ex:16
-#, elixir-autogen, elixir-format
-msgid "GitHub"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/github.ex:33
-#, elixir-autogen, elixir-format
-msgid "GitHub client ID"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/github.ex:39
-#, elixir-autogen, elixir-format
-msgid "GitHub client secret"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/google.ex:17
-#, elixir-autogen, elixir-format
-msgid "Google"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/google.ex:34
-#, elixir-autogen, elixir-format
-msgid "Google client ID"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/google.ex:40
-#, elixir-autogen, elixir-format
-msgid "Google client secret"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:168
@@ -18103,7 +18063,7 @@ msgstr ""
 msgid "Off for every site from Global — this site's own switch cannot turn it on."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:213
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:172
 #, elixir-autogen, elixir-format
 msgid "Off, a provider signs in only an account that already has its email. Closing registration stops it too. Masters are never made this way."
 msgstr ""
@@ -18123,7 +18083,7 @@ msgstr ""
 msgid "Password sign-in is off"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:241
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:200
 #, elixir-autogen, elixir-format
 msgid "Sign in with an account there. Its keys appear below once it is on."
 msgstr ""
@@ -18138,7 +18098,7 @@ msgstr ""
 msgid "Sign-in links by email on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:247
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:206
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Sign-in methods"
 msgstr ""
@@ -18148,7 +18108,7 @@ msgstr ""
 msgid "Signing in and registering with an email and a password. Off, only the people allowed under Still allowed use one."
 msgstr ""
 
-#: lib/mishka_cms_core_web/auth_controller.ex:536
+#: lib/mishka_cms_core_web/auth_controller.ex:535
 #, elixir-autogen, elixir-format
 msgid "Signing in with that service did not finish. Try again."
 msgstr ""
@@ -18171,60 +18131,4 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/_auth_gate.ex:270
 #, elixir-autogen, elixir-format
 msgid "This site does not take passwords for now. Sign in another way."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:21
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Discord"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:38
-#, elixir-autogen, elixir-format
-msgid "Discord client ID"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:44
-#, elixir-autogen, elixir-format
-msgid "Discord client secret"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:45
-#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:41
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From the same page. Stored sealed and never shown again."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:17
-#, elixir-autogen, elixir-format, fuzzy
-msgid "Slack"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:34
-#, elixir-autogen, elixir-format
-msgid "Slack client ID"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:40
-#, elixir-autogen, elixir-format
-msgid "Slack client secret"
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:36
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From Basic Information of the Slack app made for this site, at api.slack.com/apps. Its redirect address is this site's address followed by /api/auth/user/slack/callback."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/github.ex:35
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From the OAuth app made for this site in GitHub's developer settings. Its redirect address is this site's address followed by /api/auth/user/github/callback."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/google.ex:36
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From the OAuth client made for this site in the Google Cloud console, type \"Web application\". Its redirect address is this site's address followed by /api/auth/user/google/callback."
-msgstr ""
-
-#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:40
-#, elixir-autogen, elixir-format, fuzzy
-msgid "From the OAuth2 page of the Discord application made for this site, at discord.com/developers/applications. Its redirect address is this site's address followed by /api/auth/user/discord/callback."
 msgstr ""

@@ -6,11 +6,13 @@ defmodule MishkaCmsCore.Test.Plugins.SignInSlack do
   @moduledoc false
   use MishkaCmsCore.Accounts.SignInProvider,
     id: "slack",
-    strategy: :slack,
     label: "Slack",
     priority: 30
 
   alias MishkaCmsCore.Test.SignInProviders
+
+  @impl true
+  def oauth, do: %{assent: Assent.Strategy.Slack}
 
   @impl true
   def icon, do: %{color: "text-[#4a154b]", path: "M0 0h24v24H0z"}

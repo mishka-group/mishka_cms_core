@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Accounts.UserIdentity do
   @moduledoc """
   One sign-in provider an account has used: AshAuthentication's user identity, a row per provider
   per account, keyed on the provider's stable user id (`uid`, its `sub`) — never the email. Google,
-  GitHub and Apple can all sit on one account. See `MishkaCmsCore.Accounts.SignInProvider`.
+  GitHub and Slack can all sit on one account. See `MishkaCmsCore.Accounts.SignInProvider`.
 
   Kept per site, as accounts are: the same Google account signs in to each site as that site's own
   account. A master's identities have no site. Unique on the provider and its user id within a site,

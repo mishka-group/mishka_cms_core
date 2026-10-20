@@ -163,7 +163,7 @@ msgstr ""
 msgid "Accepted Types"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:620
+#: lib/mishka_cms_core/accounts/user.ex:588
 #, elixir-autogen, elixir-format
 msgid "Access Control"
 msgstr ""
@@ -311,7 +311,7 @@ msgstr ""
 msgid "Base"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:602
+#: lib/mishka_cms_core/accounts/user.ex:570
 #, elixir-autogen, elixir-format
 msgid "Basic Information"
 msgstr ""
@@ -353,13 +353,13 @@ msgstr ""
 msgid "Component"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:562
+#: lib/mishka_cms_core/accounts/user.ex:530
 #, elixir-autogen, elixir-format
 msgid "Confirm Password"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:292
-#: lib/mishka_cms_core/accounts/user.ex:306
+#: lib/mishka_cms_core/accounts/user.ex:260
+#: lib/mishka_cms_core/accounts/user.ex:274
 #, elixir-autogen, elixir-format
 msgid "Confirmed"
 msgstr ""
@@ -486,7 +486,7 @@ msgid "Each one becomes an allow_upload/3 the page calls when a visitor opens it
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/permission.ex:209
-#: lib/mishka_cms_core/accounts/user.ex:422
+#: lib/mishka_cms_core/accounts/user.ex:390
 #: lib/mishka_cms_core/runtime/resources/component.ex:585
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:542
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:358
@@ -500,7 +500,7 @@ msgstr ""
 msgid "Edit"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:542
+#: lib/mishka_cms_core/accounts/user.ex:510
 #, elixir-autogen, elixir-format
 msgid "Email"
 msgstr ""
@@ -864,7 +864,7 @@ msgstr ""
 msgid "Page"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:552
+#: lib/mishka_cms_core/accounts/user.ex:520
 #, elixir-autogen, elixir-format
 msgid "Password"
 msgstr ""
@@ -901,7 +901,7 @@ msgstr ""
 msgid "Permission Name"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:370
+#: lib/mishka_cms_core/accounts/user.ex:338
 #: lib/mishka_cms_core/runtime/resources/component.ex:1000
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:594
 #: lib/mishka_cms_core/runtime/resources/layout.ex:786
@@ -1015,7 +1015,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:401
+#: lib/mishka_cms_core/accounts/user.ex:369
 #: lib/mishka_cms_core/runtime/resources/component.ex:486
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:493
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:292
@@ -1034,7 +1034,7 @@ msgstr ""
 msgid "Section"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:611
+#: lib/mishka_cms_core/accounts/user.ex:579
 #, elixir-autogen, elixir-format
 msgid "Security"
 msgstr ""
@@ -1055,7 +1055,7 @@ msgstr ""
 msgid "Severity"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:343
+#: lib/mishka_cms_core/accounts/user.ex:311
 #: lib/mishka_cms_core/activity/activity_entry.ex:146
 #: lib/mishka_cms_core/mail/delivery.ex:124
 #: lib/mishka_cms_core/runtime/resources/component.ex:456
@@ -1241,7 +1241,7 @@ msgid "TypeScript"
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/_helper.ex:93
-#: lib/mishka_cms_core/accounts/user.ex:359
+#: lib/mishka_cms_core/accounts/user.ex:327
 #, elixir-autogen, elixir-format
 msgid "Unknown"
 msgstr ""
@@ -1276,7 +1276,7 @@ msgstr ""
 msgid "Used"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:261
+#: lib/mishka_cms_core/accounts/user.ex:229
 #, elixir-autogen, elixir-format
 msgid "User"
 msgstr ""
@@ -1302,7 +1302,7 @@ msgid "Videos"
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/permission.ex:198
-#: lib/mishka_cms_core/accounts/user.ex:412
+#: lib/mishka_cms_core/accounts/user.ex:380
 #: lib/mishka_cms_core/runtime/resources/component.ex:569
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:526
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:342
@@ -1559,7 +1559,7 @@ msgstr ""
 msgid "Archived %{succeeded} component(s); %{failed} failed."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:465
+#: lib/mishka_cms_core/accounts/user.ex:433
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete this user? This action cannot be undone."
 msgstr ""
@@ -1589,7 +1589,7 @@ msgstr ""
 msgid "Color"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:563
+#: lib/mishka_cms_core/accounts/user.ex:531
 #, elixir-autogen, elixir-format
 msgid "Confirm password"
 msgstr ""
@@ -1631,7 +1631,7 @@ msgstr ""
 msgid "Copy site ID"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:282
+#: lib/mishka_cms_core/accounts/user.ex:250
 #, elixir-autogen, elixir-format
 msgid "Copy user ID"
 msgstr ""
@@ -1691,7 +1691,7 @@ msgstr ""
 msgid "Delete the selected permissions? This action cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:477
+#: lib/mishka_cms_core/accounts/user.ex:445
 #, elixir-autogen, elixir-format
 msgid "Delete the selected users? This action cannot be undone."
 msgstr ""
@@ -1760,7 +1760,7 @@ msgstr ""
 msgid "General"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:358
+#: lib/mishka_cms_core/accounts/user.ex:326
 #: lib/mishka_cms_core/activity/activity_entry.ex:561
 #: lib/mishka_cms_core/activity/activity_entry.ex:564
 #, elixir-autogen, elixir-format
@@ -1795,7 +1795,7 @@ msgstr ""
 msgid "History timeline"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:277
+#: lib/mishka_cms_core/accounts/user.ex:245
 #, elixir-autogen, elixir-format
 msgid "ID: %{id}"
 msgstr ""
@@ -1835,7 +1835,7 @@ msgstr ""
 msgid "Leave empty for every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:533
+#: lib/mishka_cms_core/accounts/user.ex:501
 #, elixir-autogen, elixir-format
 msgid "Leave empty for global (master) user"
 msgstr ""
@@ -1881,7 +1881,7 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:553
+#: lib/mishka_cms_core/accounts/user.ex:521
 #, elixir-autogen, elixir-format
 msgid "Minimum 8 characters"
 msgstr ""
@@ -1968,7 +1968,7 @@ msgstr ""
 msgid "No translations yet — write t(\"…\") in a template and save it."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:502
+#: lib/mishka_cms_core/accounts/user.ex:470
 #, elixir-autogen, elixir-format
 msgid "No users found"
 msgstr ""
@@ -2017,7 +2017,7 @@ msgstr ""
 msgid "Overlays"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:307
+#: lib/mishka_cms_core/accounts/user.ex:275
 #, elixir-autogen, elixir-format
 msgid "Pending"
 msgstr ""
@@ -2344,7 +2344,7 @@ msgstr ""
 msgid "Select mode..."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:589
+#: lib/mishka_cms_core/accounts/user.ex:557
 #, elixir-autogen, elixir-format
 msgid "Select permissions to assign to this user"
 msgstr ""
@@ -2567,7 +2567,7 @@ msgstr ""
 msgid "undo"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:543
+#: lib/mishka_cms_core/accounts/user.ex:511
 #, elixir-autogen, elixir-format
 msgid "user@example.com"
 msgstr ""
@@ -2664,32 +2664,32 @@ msgstr ""
 msgid "From"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:332
+#: lib/mishka_cms_core/accounts/user.ex:300
 #, elixir-autogen, elixir-format
 msgid "Off"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:331
+#: lib/mishka_cms_core/accounts/user.ex:299
 #, elixir-autogen, elixir-format
 msgid "On"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:438
+#: lib/mishka_cms_core/accounts/user.ex:406
 #, elixir-autogen, elixir-format
 msgid "Turn off two-step"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:317
+#: lib/mishka_cms_core/accounts/user.ex:285
 #, elixir-autogen, elixir-format
 msgid "Two-step"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:456
+#: lib/mishka_cms_core/accounts/user.ex:424
 #, elixir-autogen, elixir-format
 msgid "Confirm account"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:449
+#: lib/mishka_cms_core/accounts/user.ex:417
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:79
 #, elixir-autogen, elixir-format
 msgid "Confirm this account's email address without the confirmation email?"
