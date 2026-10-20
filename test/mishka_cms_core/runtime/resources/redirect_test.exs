@@ -92,6 +92,18 @@ defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
         assert Redirects.normalize_target(bad) == :error, "#{inspect(bad)} was accepted"
       end
     end
+
+    test "refuses a backslash anywhere, which a browser reads as a slash" do
+      for bad <- [
+            "/\\evil.example",
+            "/\\\\evil.example/x",
+            "\\\\evil.example",
+            "/docs\\..\\x",
+            "https://example.com\\@evil.example/x"
+          ] do
+        assert Redirects.normalize_target(bad) == :error, "#{inspect(bad)} was accepted"
+      end
+    end
   end
 
   describe "a save" do
