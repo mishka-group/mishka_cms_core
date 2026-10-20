@@ -25,6 +25,11 @@ defmodule MishkaCmsCore.Accounts.SocialSignIn do
   An account made by a provider has no password; it can set one later (`:set_password`). Every
   account made or found here is confirmed: the provider's verified email is the confirmation.
 
+  **The provider's tokens are not kept.** Nothing here calls the provider after the sign-in, so the
+  identity row holds the provider and its user id and no access or refresh token that a leaked
+  database would hand over. A provider answering its own user object is read as claims first
+  (`MishkaCmsCore.Accounts.SignInProvider.user_info/2`), before anything reads its email.
+
   Refusals are `MishkaCmsCore.Accounts.SocialSignIn.Refused`, or the gate's own
   `MishkaCmsCore.Accounts.AuthGate.Closed`.
   """
@@ -42,11 +47,12 @@ defmodule MishkaCmsCore.Accounts.SocialSignIn do
 
   @impl true
   def change(changeset, _opts, _context) do
-    user_info = Changeset.get_argument(changeset, :user_info) || %{}
-
     with {:ok, strategy} <- Info.strategy_for_action(User, changeset.action.name),
+         user_info = claims(changeset, strategy),
          {:ok, email} <- verified_email(user_info) do
       changeset
+      |> Changeset.set_argument(:user_info, user_info)
+      |> Changeset.set_argument(:oauth_tokens, %{})
       |> site_of(changeset.tenant)
       |> Changeset.before_transaction(&decide(&1, strategy, email, user_info))
     else
@@ -91,6 +97,13 @@ defmodule MishkaCmsCore.Accounts.SocialSignIn do
   def refusal(%{errors: errors}) when is_list(errors), do: refusal(errors)
   def refusal(errors) when is_list(errors), do: Enum.find_value(errors, &refusal/1)
   def refusal(_other), do: nil
+
+  defp claims(changeset, strategy),
+    do:
+      SignInProvider.user_info(
+        strategy.name,
+        Changeset.get_argument(changeset, :user_info) || %{}
+      )
 
   defp verified_email(%{"email_verified" => verified} = user_info)
        when verified in [true, "true"] do

@@ -81,5 +81,7 @@ defmodule MishkaCmsCore.Accounts.SignInProvider.Widget do
 
   defp columns(1), do: "grid-cols-1"
   defp columns(2), do: "grid-cols-2"
+  defp columns(3), do: "grid-cols-3"
+  defp columns(4), do: "grid-cols-4"
   defp columns(_more), do: "grid-cols-3"
 end

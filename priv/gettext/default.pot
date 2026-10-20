@@ -5546,7 +5546,7 @@ msgstr ""
 msgid "Locked"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:2458
+#: lib/mishka_cms_core/accounts/user.ex:2542
 #, elixir-autogen, elixir-format
 msgid "Logged out successfully"
 msgstr ""
@@ -17948,7 +17948,7 @@ msgstr ""
 msgid "That kit's name is not valid — use lowercase letters, numbers, - and _, start with a letter or a number, and stay within 64 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:2453
+#: lib/mishka_cms_core/accounts/user.ex:2537
 #, elixir-autogen, elixir-format
 msgid "You could not be logged out. Try again."
 msgstr ""
@@ -18038,7 +18038,7 @@ msgstr ""
 msgid "Continue with %{provider}"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:189
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:211
 #, elixir-autogen, elixir-format
 msgid "Create an account on a first sign-in with a provider"
 msgstr ""
@@ -18108,12 +18108,12 @@ msgstr ""
 msgid "Method"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_social_sign_in.ex:71
+#: lib/mishka_cms_core/accounts/_social_sign_in.ex:77
 #, elixir-autogen, elixir-format
 msgid "No account with that email"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_social_sign_in.ex:80
+#: lib/mishka_cms_core/accounts/_social_sign_in.ex:86
 #, elixir-autogen, elixir-format
 msgid "No master account with that email"
 msgstr ""
@@ -18123,12 +18123,12 @@ msgstr ""
 msgid "Off for every site from Global — this site's own switch cannot turn it on."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:191
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:213
 #, elixir-autogen, elixir-format
 msgid "Off, a provider signs in only an account that already has its email. Closing registration stops it too. Masters are never made this way."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_social_sign_in.ex:81
+#: lib/mishka_cms_core/accounts/_social_sign_in.ex:87
 #, elixir-autogen, elixir-format
 msgid "Only an existing master account can sign in here this way."
 msgstr ""
@@ -18143,7 +18143,7 @@ msgstr ""
 msgid "Password sign-in is off"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:212
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:234
 #, elixir-autogen, elixir-format
 msgid "Sign in with an account there. Its keys appear below once it is on."
 msgstr ""
@@ -18158,7 +18158,7 @@ msgstr ""
 msgid "Sign-in links by email on every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/sign_in_provider.ex:218
+#: lib/mishka_cms_core/accounts/sign_in_provider.ex:240
 #, elixir-autogen, elixir-format
 msgid "Sign-in methods"
 msgstr ""
@@ -18173,17 +18173,17 @@ msgstr ""
 msgid "Signing in with that service did not finish. Try again."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_social_sign_in.ex:62
+#: lib/mishka_cms_core/accounts/_social_sign_in.ex:68
 #, elixir-autogen, elixir-format
 msgid "That email is not verified"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_social_sign_in.ex:64
+#: lib/mishka_cms_core/accounts/_social_sign_in.ex:70
 #, elixir-autogen, elixir-format
 msgid "The service you signed in with did not confirm your email address. Verify it there, then try again."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/_social_sign_in.ex:73
+#: lib/mishka_cms_core/accounts/_social_sign_in.ex:79
 #, elixir-autogen, elixir-format
 msgid "This site does not make accounts this way. Create one first, or sign in another way."
 msgstr ""
@@ -18191,4 +18191,60 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/_auth_gate.ex:270
 #, elixir-autogen, elixir-format
 msgid "This site does not take passwords for now. Sign in another way."
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:21
+#, elixir-autogen, elixir-format
+msgid "Discord"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:40
+#, elixir-autogen, elixir-format
+msgid "Discord client ID"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:47
+#, elixir-autogen, elixir-format
+msgid "Discord client secret"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:37
+#, elixir-autogen, elixir-format
+msgid "Discord sign-in"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:39
+#, elixir-autogen, elixir-format
+msgid "From Basic Information of the Slack app made for this site, at api.slack.com/apps."
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:43
+#, elixir-autogen, elixir-format
+msgid "From the OAuth2 page of the Discord application made for this site, at discord.com/developers/applications."
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/discord.ex:49
+#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:45
+#, elixir-autogen, elixir-format
+msgid "From the same page. Stored sealed and never shown again."
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:17
+#, elixir-autogen, elixir-format
+msgid "Slack"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:36
+#, elixir-autogen, elixir-format
+msgid "Slack client ID"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:43
+#, elixir-autogen, elixir-format
+msgid "Slack client secret"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/sign_in_providers/slack.ex:33
+#, elixir-autogen, elixir-format
+msgid "Slack sign-in"
 msgstr ""

@@ -99,7 +99,9 @@ defmodule MishkaCmsCore.Application do
   # Security tab (see `MishkaCmsCore.Accounts.SignInProvider`).
   @sign_in_providers [
     MishkaCmsCore.Accounts.SignInProviders.Google,
-    MishkaCmsCore.Accounts.SignInProviders.GitHub
+    MishkaCmsCore.Accounts.SignInProviders.GitHub,
+    MishkaCmsCore.Accounts.SignInProviders.Slack,
+    MishkaCmsCore.Accounts.SignInProviders.Discord
   ]
 
   # THE REGISTRY EVERY PLUGIN BELOW REGISTERS IN, WHEN THE LIBRARY DID NOT START IT ITSELF.

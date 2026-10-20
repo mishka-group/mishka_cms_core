@@ -173,6 +173,70 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
     end
   end
 
+  describe "every provider" do
+    test "keeps none of the provider's tokens", %{site: site} do
+      {:ok, user} =
+        User
+        |> AshAuthentication.Info.strategy!(:google)
+        |> AshAuthentication.Strategy.action(
+          :register,
+          %{
+            user_info: info("tokens@example.com", "g-t"),
+            oauth_tokens: %{
+              "access_token" => "secret-access",
+              "refresh_token" => "secret-refresh",
+              "expires_in" => 3600
+            }
+          },
+          tenant: site.id
+        )
+
+      assert [identity] = identities(user)
+      assert is_nil(identity.access_token)
+      assert is_nil(identity.refresh_token)
+      assert is_nil(identity.access_token_expires_at)
+    end
+
+    test "Slack signs in by its verified email", %{site: site} do
+      assert {:ok, user} = provider_sign_in(:slack, info("slack@example.com", "U123"), site.id)
+      assert [%{strategy: "slack", uid: "U123"}] = identities(user)
+    end
+
+    test "Discord's own user object is read as claims: id and verified", %{site: site} do
+      discord = %{
+        "id" => 80_351_110_224_678_912,
+        "email" => "disco@example.com",
+        "verified" => true
+      }
+
+      assert {:ok, user} = provider_sign_in(:discord, discord, site.id)
+      assert user.confirmed_at
+      assert [%{strategy: "discord", uid: "80351110224678912"}] = identities(user)
+    end
+
+    test "a Discord email Discord did not verify, or no email at all, signs nobody in", %{
+      site: site
+    } do
+      for discord <- [
+            %{"id" => 1, "email" => "unverified@example.com", "verified" => false},
+            %{"id" => 2, "email" => "missing-flag@example.com"},
+            %{"id" => 3, "email" => "says-so@example.com", "email_verified" => true},
+            %{"id" => 4, "verified" => true}
+          ] do
+        assert {:error, error} = provider_sign_in(:discord, discord, site.id)
+        assert SocialSignIn.refusal(error) == %{reason: :unverified_email}, inspect(discord)
+      end
+    end
+
+    test "a Discord account links to a confirmed account with its verified email", %{site: site} do
+      existing = register!("both-ways@example.com", site.id) |> confirm!()
+      discord = %{"id" => 77, "email" => "both-ways@example.com", "verified" => true}
+
+      assert {:ok, user} = provider_sign_in(:discord, discord, site.id)
+      assert user.id == existing.id
+    end
+  end
+
   describe "a master" do
     setup do
       %{master: create_user!(email: "boss-#{System.unique_integer([:positive])}@example.com")}

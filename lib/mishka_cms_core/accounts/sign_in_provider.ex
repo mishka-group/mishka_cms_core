@@ -61,10 +61,17 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
   @doc "One of the strategy's keys for `site_id`, by the name AshAuthentication asks it by."
   @callback secret(name :: atom(), site_id()) :: {:ok, String.t()} | :error
 
+  @doc """
+  The provider's answer about the visitor as the other providers' claims — `"sub"`, `"email"`,
+  `"email_verified"` — for one whose strategy hands over its own user object. Never `true` for
+  `"email_verified"` unless the provider said the email is verified.
+  """
+  @callback user_info(map()) :: map()
+
   @doc "Whether the provider is offered on this installation. Every provider is, unless it says not."
   @callback offered?() :: boolean()
 
-  @optional_callbacks offered?: 0
+  @optional_callbacks user_info: 1, offered?: 0
 
   @doc false
   defmacro __using__(opts) do
@@ -114,6 +121,21 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
     case Enum.find(offered(), &(&1.strategy() == strategy)) do
       nil -> :error
       provider -> {:ok, provider}
+    end
+  end
+
+  @doc """
+  What the provider of `strategy` said about the visitor, as claims (`c:user_info/1`); as it came
+  for a provider that already answers claims. Whatever the provider plugin, a strategy no offered
+  provider switches on is read as it came.
+  """
+  @spec user_info(atom(), map()) :: map()
+  def user_info(strategy, info) do
+    with {:ok, provider} <- for_strategy(strategy),
+         true <- function_exported?(provider, :user_info, 1) do
+      provider.user_info(info)
+    else
+      _as_it_came -> info
     end
   end
 

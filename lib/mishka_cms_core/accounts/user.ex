@@ -81,7 +81,9 @@ defmodule MishkaCmsCore.Accounts.User do
         auto_confirm_actions [
           :reset_password_with_token,
           :register_with_google,
-          :register_with_github
+          :register_with_github,
+          :register_with_slack,
+          :register_with_discord
         ]
 
         sender MishkaCmsCore.Accounts.User.Senders.SendNewUserConfirmationEmail
@@ -157,6 +159,30 @@ defmodule MishkaCmsCore.Accounts.User do
         client_id MishkaCmsCore.Secrets
         client_secret MishkaCmsCore.Secrets
         redirect_uri MishkaCmsCore.Secrets
+        identity_resource MishkaCmsCore.Accounts.UserIdentity
+      end
+
+      slack do
+        client_id MishkaCmsCore.Secrets
+        client_secret MishkaCmsCore.Secrets
+        redirect_uri MishkaCmsCore.Secrets
+        identity_resource MishkaCmsCore.Accounts.UserIdentity
+      end
+
+      # DISCORD HAS NO STRATEGY OF ITS OWN: the generic one, at Discord's addresses. Its answer is
+      # Discord's user object, read as claims before anything trusts it
+      # (`MishkaCmsCore.Accounts.SignInProviders.Discord.user_info/1`).
+      oauth2 :discord do
+        client_id MishkaCmsCore.Secrets
+        client_secret MishkaCmsCore.Secrets
+        redirect_uri MishkaCmsCore.Secrets
+        base_url "https://discord.com/api"
+        authorize_url "https://discord.com/oauth2/authorize"
+        token_url "https://discord.com/api/oauth2/token"
+        user_url "https://discord.com/api/users/@me"
+        authorization_params scope: "identify email"
+        auth_method :client_secret_post
+        trust_email_verified? true
         identity_resource MishkaCmsCore.Accounts.UserIdentity
       end
     end
@@ -944,7 +970,8 @@ defmodule MishkaCmsCore.Accounts.User do
       end
     end
 
-    # Signing in, or registering, with Google — see `MishkaCmsCore.Accounts.SocialSignIn`.
+    # Signing in, or registering, with Google — see `MishkaCmsCore.Accounts.SocialSignIn`, which
+    # reads the provider's answer first and keeps none of its tokens.
     create :register_with_google do
       description "Signs in with a Google account, and makes one on a first sign-in when the site allows."
       argument :user_info, :map, allow_nil?: false
@@ -960,20 +987,20 @@ defmodule MishkaCmsCore.Accounts.User do
                on: :before_transaction
              )
 
+      change MishkaCmsCore.Accounts.SocialSignIn
       change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
       change AshAuthentication.GenerateTokenChange
 
       change AshAuthentication.Strategy.OAuth2.IdentityChange,
         where: [MishkaCmsCore.Accounts.Validations.ForSite]
 
-      change MishkaCmsCore.Accounts.SocialSignIn
-
       metadata :token, :string do
         allow_nil? false
       end
     end
 
-    # Signing in, or registering, with GitHub — see `MishkaCmsCore.Accounts.SocialSignIn`.
+    # Signing in, or registering, with GitHub — see `MishkaCmsCore.Accounts.SocialSignIn`, which
+    # reads the provider's answer first and keeps none of its tokens.
     create :register_with_github do
       description "Signs in with a GitHub account, and makes one on a first sign-in when the site allows."
       argument :user_info, :map, allow_nil?: false
@@ -989,13 +1016,70 @@ defmodule MishkaCmsCore.Accounts.User do
                on: :before_transaction
              )
 
+      change MishkaCmsCore.Accounts.SocialSignIn
       change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
       change AshAuthentication.GenerateTokenChange
 
       change AshAuthentication.Strategy.OAuth2.IdentityChange,
         where: [MishkaCmsCore.Accounts.Validations.ForSite]
 
+      metadata :token, :string do
+        allow_nil? false
+      end
+    end
+
+    # Signing in, or registering, with Slack — see `MishkaCmsCore.Accounts.SocialSignIn`, which
+    # reads the provider's answer first and keeps none of its tokens.
+    create :register_with_slack do
+      description "Signs in with a Slack account, and makes one on a first sign-in when the site allows."
+      argument :user_info, :map, allow_nil?: false
+      argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
+      upsert? true
+      upsert_identity :unique_email
+      upsert_fields []
+
+      change AshRateLimiter.BuiltinChanges.rate_limit(
+               limit: 30,
+               per: :timer.minutes(5),
+               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
+               on: :before_transaction
+             )
+
       change MishkaCmsCore.Accounts.SocialSignIn
+      change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
+      change AshAuthentication.GenerateTokenChange
+
+      change AshAuthentication.Strategy.OAuth2.IdentityChange,
+        where: [MishkaCmsCore.Accounts.Validations.ForSite]
+
+      metadata :token, :string do
+        allow_nil? false
+      end
+    end
+
+    # Signing in, or registering, with Discord — see `MishkaCmsCore.Accounts.SocialSignIn`, which
+    # reads the provider's answer first and keeps none of its tokens.
+    create :register_with_discord do
+      description "Signs in with a Discord account, and makes one on a first sign-in when the site allows."
+      argument :user_info, :map, allow_nil?: false
+      argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
+      upsert? true
+      upsert_identity :unique_email
+      upsert_fields []
+
+      change AshRateLimiter.BuiltinChanges.rate_limit(
+               limit: 30,
+               per: :timer.minutes(5),
+               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
+               on: :before_transaction
+             )
+
+      change MishkaCmsCore.Accounts.SocialSignIn
+      change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
+      change AshAuthentication.GenerateTokenChange
+
+      change AshAuthentication.Strategy.OAuth2.IdentityChange,
+        where: [MishkaCmsCore.Accounts.Validations.ForSite]
 
       metadata :token, :string do
         allow_nil? false
