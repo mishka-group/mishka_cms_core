@@ -632,26 +632,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     # ALWAYS THE ADMIN'S OWN ORIGIN, never the record's site host — see
     # `MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.frame_url/1`. A site's domain can
     # resolve to a different machine entirely, and the admin's `frame-src 'self'` refuses it anyway.
-    live_src =
+    framed =
       cond do
-        show_edit? ->
-          nil
-
-        draft_view? and assigns.draft ->
-          with_status(frame_url(assigns.draft), assigns)
-
-        draft_view? ->
-          nil
-
-        true ->
-          with_status(frame_url(assigns.record), assigns)
+        show_edit? -> nil
+        draft_view? -> assigns.draft
+        true -> assigns.record
       end
 
+    live_src = framed && with_status(frame_url(framed), assigns)
+
+    # The address bar names the frame's full address: the same preview on the admin's own domain.
     url_text =
       cond do
-        show_edit? -> gettext("Unsaved edit · %{label}", label: draft_label(assigns.draft || %{}))
-        live_src -> live_src
-        true -> "#{site_name(assigns.record)}#{subtitle(assigns.record)}"
+        show_edit? ->
+          gettext("Unsaved edit · %{label}", label: draft_label(assigns.draft || %{}))
+
+        live_src ->
+          with_status(draft_url(framed, assigns.current_user), assigns)
+
+        true ->
+          "#{site_name(assigns.record)}#{subtitle(assigns.record)}"
       end
 
     assigns =
@@ -1150,8 +1150,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp active_error_record(%{record: record}), do: record
 
-  defp draft_url(draft),
-    do: MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.preview_url(draft)
+  defp draft_url(draft, viewer),
+    do: MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.preview_url(draft, viewer)
 
   # What the modal FRAMES: the same preview, on this admin's origin. A record with no token — a
   # Component — has no such route, and `nil` sends the tab to its static document instead.
@@ -1172,22 +1172,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   # The shareable link for whatever is currently in focus: the selected draft's preview when a draft
   # context is active (Code tab, or the Preview tab's Draft view), else the original page's live URL.
   #
-  # This one keeps the SITE's host, unlike what the modal frames. It is the link you send to somebody
-  # so they can look at that site's content, and it is opened rather than embedded, so neither the
-  # admin's frame policy nor the admin's own reachability applies to it.
+  # A preview link names the sharing admin's domain, the master site's or their own site's
+  # (`PreviewHelpers.preview_url/2`); a page's live URL stays the page's own address.
   defp share_link(assigns) do
     cond do
       assigns.draft && draft_context?(assigns) ->
-        with_status(draft_url(assigns.draft), assigns)
+        with_status(draft_url(assigns.draft, assigns.current_user), assigns)
 
       assigns.live_url ->
         assigns.live_url
 
       assigns.draft ->
-        with_status(draft_url(assigns.draft), assigns)
+        with_status(draft_url(assigns.draft, assigns.current_user), assigns)
 
       true ->
-        with_status(draft_url(assigns.record), assigns) || ""
+        with_status(draft_url(assigns.record, assigns.current_user), assigns) || ""
     end
   end
 

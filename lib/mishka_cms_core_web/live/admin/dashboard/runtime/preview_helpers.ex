@@ -71,6 +71,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   alias MishkaCmsCore.Runtime.{RuntimePreview, RuntimeStatus, DraftPreviewAssets, ComponentCopy}
   alias MishkaCmsCore.Runtime.{Languages, PageEditions}
+  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
@@ -1203,38 +1204,56 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   # matched, and it ran on modal open, which is exactly where nothing should compile.
 
   @doc """
-  Absolute shareable URL for a record's `/_preview/<resource>/:token`, on the record's OWN site host
-  + the endpoint scheme/port. A global layout has no site, so it falls back to the endpoint's own
-  host. Resource segment (`page`/`layout`/`error_page`) is derived from the struct.
+  Absolute shareable URL for a record's `/_preview/<resource>/:token`, on the domain of the admin
+  who shares it: the master site's for a master, the admin's own site's for a site admin. With no
+  admin given, the record's own site's, or the master site's for a record with no site. Resource
+  segment (`page`/`layout`/`error_page`) is derived from the struct.
 
-  This is the link you SEND someone — it names the site's public domain, which is where a reviewer of
-  that site's content expects to look. For the link the modal FRAMES, see `frame_url/1`.
+  The domain is read from the site records, never from a request. The preview route serves a record
+  on its own site's domain and on the master site's
+  (`MishkaCmsCore.Runtime.DraftPreviewAssets.served_on?/2`), so the link opens where it is sent.
+  For the URL the modal FRAMES, see `frame_url/1`.
   """
-  def preview_url(%{preview_token: token, site: %{host: host}} = record) when is_binary(host),
-    do: build_preview_url(host, draft_slug(record), token)
+  def preview_url(record, viewer \\ nil)
 
-  def preview_url(%{preview_token: token} = record) when is_binary(token),
-    do: build_preview_url(endpoint_host(), draft_slug(record), token)
+  def preview_url(%{preview_token: token} = record, viewer) when is_binary(token),
+    do: build_preview_url(share_host(record, viewer), draft_slug(record), token)
 
-  def preview_url(_record), do: ""
+  def preview_url(_record, _viewer), do: ""
 
   @doc """
-  The same preview, addressed on the ADMIN's own origin.
+  The same preview as a path with no host, so the browser loads it from the admin's own address.
 
-  A SITE'S DOMAIN IS NOT NECESSARILY THIS MACHINE. `api.mishka.tools` resolves to a public IP; a
-  developer's `localhost` build serves the record being edited. Framing the preview at the site's
-  host therefore did not show a stale copy — it showed a different server's page, or, once the
-  admin's `frame-src 'self'` policy was enforced, nothing at all. Two other cases fail the same way:
-  a master previewing another site's record, and any deployment whose sites are not DNS-resolvable
-  from the admin's browser.
-
-  Nothing is lost by moving it: the preview LiveView resolves the record from the TOKEN, not from
-  the Host header, so it answers identically on any host this endpoint serves.
+  That address is the master site's for a master and a site admin's own site's for them:
+  `MishkaCmsCore.Runtime.Plugs.SiteLookupPlug` signs neither in anywhere else. So the frame is
+  always same-origin, as the admin's `frame-src 'self'` requires, and never names a host of its own.
+  Building it from the endpoint's host named `localhost` in production, where a multi-site endpoint
+  has no host configured, and the frame stayed empty.
   """
   def frame_url(%{preview_token: token} = record) when is_binary(token),
-    do: build_preview_url(endpoint_host(), draft_slug(record), token)
+    do: "/_preview/#{draft_slug(record)}/#{token}"
 
   def frame_url(_record), do: nil
+
+  defp share_host(_record, %{site_id: nil}), do: master_host()
+  defp share_host(_record, %{site: %{host: host}}) when is_binary(host), do: host
+  defp share_host(_record, %{site_id: site_id}) when is_binary(site_id), do: site_host(site_id)
+  defp share_host(%{site: %{host: host}}, _no_viewer) when is_binary(host), do: host
+  defp share_host(_record, _no_viewer), do: master_host()
+
+  defp site_host(site_id) do
+    case SiteState.get(site_id) do
+      {:ok, %{host: host}} when is_binary(host) -> host
+      _unknown -> master_host()
+    end
+  end
+
+  defp master_host do
+    case SiteState.get_by_master() do
+      {:ok, %{host: host}} when is_binary(host) -> host
+      _no_master_site -> endpoint_host()
+    end
+  end
 
   defp endpoint_host, do: apply(@host_endpoint, :struct_url, []).host
 
