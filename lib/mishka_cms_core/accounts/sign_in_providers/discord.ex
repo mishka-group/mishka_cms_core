@@ -34,18 +34,14 @@ defmodule MishkaCmsCore.Accounts.SignInProviders.Discord do
 
   @impl true
   def settings do
-    group = gettext_noop("Discord sign-in")
-
     [
       key(@client_id, gettext_noop("Discord client ID"),
-        group: group,
         description:
           gettext_noop(
-            "From the OAuth2 page of the Discord application made for this site, at discord.com/developers/applications."
+            "From the OAuth2 page of the Discord application made for this site, at discord.com/developers/applications. Its redirect address is this site's address followed by /api/auth/user/discord/callback."
           )
       ),
       key(@client_secret, :secret, gettext_noop("Discord client secret"),
-        group: group,
         description: gettext_noop("From the same page. Stored sealed and never shown again.")
       )
     ]

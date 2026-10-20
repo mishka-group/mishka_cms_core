@@ -30,18 +30,14 @@ defmodule MishkaCmsCore.Accounts.SignInProviders.Slack do
 
   @impl true
   def settings do
-    group = gettext_noop("Slack sign-in")
-
     [
       key(@client_id, gettext_noop("Slack client ID"),
-        group: group,
         description:
           gettext_noop(
-            "From Basic Information of the Slack app made for this site, at api.slack.com/apps."
+            "From Basic Information of the Slack app made for this site, at api.slack.com/apps. Its redirect address is this site's address followed by /api/auth/user/slack/callback."
           )
       ),
       key(@client_secret, :secret, gettext_noop("Slack client secret"),
-        group: group,
         description: gettext_noop("From the same page. Stored sealed and never shown again.")
       )
     ]

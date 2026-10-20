@@ -29,16 +29,14 @@ defmodule MishkaCmsCore.Accounts.SignInProviders.GitHub do
 
   @impl true
   def settings do
-    group = gettext_noop("GitHub sign-in")
-
     [
       key(@client_id, gettext_noop("GitHub client ID"),
-        group: group,
         description:
-          gettext_noop("From the OAuth app made for this site in GitHub's developer settings.")
+          gettext_noop(
+            "From the OAuth app made for this site in GitHub's developer settings. Its redirect address is this site's address followed by /api/auth/user/github/callback."
+          )
       ),
       key(@client_secret, :secret, gettext_noop("GitHub client secret"),
-        group: group,
         description: gettext_noop("From the same app. Stored sealed and never shown again.")
       )
     ]

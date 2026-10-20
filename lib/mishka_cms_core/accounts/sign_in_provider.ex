@@ -216,8 +216,15 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
         )
       ] ++
       Enum.flat_map(providers, fn provider ->
-        Enum.map(provider.settings(), &Settings.shown_when(&1, enabled_key(provider), true))
+        Enum.map(provider.settings(), &under_switch(&1, provider))
       end)
+  end
+
+  # A provider's keys sit in its own row of the table, under its switch, while it is on.
+  defp under_switch(definition, provider) do
+    definition
+    |> Map.merge(%{group: methods_group(), under: enabled_key(provider)})
+    |> Settings.shown_when(enabled_key(provider), true)
   end
 
   defp switch(provider) do
@@ -240,8 +247,8 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
   def methods_group, do: gettext_noop("Sign-in methods")
 
   @doc """
-  A provider's key field: a `:string` (or `type`) setting on the Security tab, in the provider's own
-  accordion, that each site sets for itself. `opts` are `MishkaCmsCore.Settings.define/3`'s.
+  A provider's key field: a `:string` (or `type`) setting on the Security tab that each site sets for
+  itself, drawn in the provider's own row of the "Sign-in methods" table while it is on. `opts` are `MishkaCmsCore.Settings.define/3`'s.
   """
   @spec key(String.t(), atom(), String.t(), keyword()) :: Settings.definition()
   def key(key, type \\ :string, label, opts) do
@@ -253,7 +260,6 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
           default: "",
           label: label,
           category: "security",
-          collapsed: true,
           scope: :site,
           source: :plugin,
           trim: type != :secret

@@ -104,6 +104,7 @@ defmodule MishkaCmsCore.Settings do
     collapsed: false,
     layout: nil,
     inverted: false,
+    under: nil,
     trim: false
   }
 
@@ -132,6 +133,7 @@ defmodule MishkaCmsCore.Settings do
           collapsed: boolean(),
           layout: :table | nil,
           inverted: boolean(),
+          under: String.t() | nil,
           trim: boolean()
         }
 
@@ -581,6 +583,10 @@ defmodule MishkaCmsCore.Settings do
   `:layout` (default `nil`) set to `:table` draws the setting's `:group` as one table, a row per
   setting — for a group of switches read together, such as the ways of signing in. Like
   `:collapsed`, one setting declaring it is enough.
+
+  `:under` (default `nil`), in a `:table` group, names the switch whose row the setting is drawn
+  in, below that switch's description, rather than as a row of its own — a provider's keys under the
+  provider. Pair it with `shown_when/3` on that switch to draw it only while the switch is on.
 
   `:inverted` (default `false`) draws a `:boolean` as its opposite: the switch is on while the stored
   value is `false`. A `*.closed` key reads as the way it closes, on while open, beside switches that
@@ -1084,9 +1090,19 @@ defmodule MishkaCmsCore.Settings do
       )
     ] ++
       email_definitions() ++
-      MishkaCmsCore.Accounts.AuthGate.definitions() ++
-      MishkaCmsCore.Accounts.SignInProvider.settings() ++
+      sign_in_definitions() ++
       MishkaCmsCore.Captcha.settings() ++ MishkaCmsCore.Runtime.ShareCardQueue.settings()
+  end
+
+  # THE SIGN-IN METHODS FIRST, each provider's keys straight under their table, then what the gate
+  # closes and who still gets in: a provider switched on shows its keys where it was switched.
+  defp sign_in_definitions do
+    methods = MishkaCmsCore.Accounts.SignInProvider.methods_group()
+
+    {table, gate} =
+      Enum.split_with(MishkaCmsCore.Accounts.AuthGate.definitions(), &(&1.group == methods))
+
+    table ++ MishkaCmsCore.Accounts.SignInProvider.settings() ++ gate
   end
 
   # THE EMAIL TAB. Which provider a scope sends through and that provider's own fields come from

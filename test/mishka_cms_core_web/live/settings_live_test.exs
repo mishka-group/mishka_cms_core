@@ -1284,6 +1284,24 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       assert has_element?(view, "#set-auth-providers-google-client_id")
       assert has_element?(view, "#set-auth-providers-google-client_secret[type=password]")
 
+      # In Google's own row, under its description, and nowhere else.
+      assert has_element?(
+               view,
+               "#row-auth-providers-google-enabled #set-auth-providers-google-client_id"
+             )
+
+      assert has_element?(
+               view,
+               "#row-auth-providers-google-enabled #set-auth-providers-google-client_secret"
+             )
+
+      refute has_element?(
+               view,
+               "#row-auth-providers-github-enabled [data-role=settings-row-fields]"
+             )
+
+      refute has_element?(view, "#row-auth-providers-google-client_id")
+
       view
       |> form("#settings-form",
         settings: %{

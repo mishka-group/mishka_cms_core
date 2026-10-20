@@ -478,11 +478,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   defp collapsible?({:ungrouped, _n}, _fields), do: false
 
   # A group drawn as one table, a row per switch, while any setting shown in it declares
-  # `layout: :table` and every one of them is a switch.
+  # `layout: :table` and every row is a switch. A setting `:under` a switch is no row of its own: it
+  # is drawn in that switch's row, below its description (`under/2`).
   defp table?(fields),
     do:
       Enum.any?(fields, fn {definition, _editable} -> definition.layout == :table end) and
-        Enum.all?(fields, fn {definition, _editable} -> definition.type == :boolean end)
+        Enum.all?(rows(fields), fn {definition, _editable} -> definition.type == :boolean end)
+
+  defp rows(fields),
+    do: Enum.filter(fields, fn {definition, _editable} -> is_nil(definition.under) end)
+
+  defp under(fields, key),
+    do: Enum.filter(fields, fn {definition, _editable} -> definition.under == key end)
 
   # Whether an accordion is drawn open: the last save refused one of its settings, so the message
   # under the field is not hidden. It is the first draw only; the browser keeps what the admin did.
@@ -684,6 +691,158 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   # attribute as a list, HEEx would join it with spaces, and the save would read one entry.
   defp input_value(value) when is_list(value), do: Enum.join(value, ", ")
   defp input_value(value), do: value
+
+  attr :definition, :map, required: true
+  attr :editable, :boolean, required: true
+  attr :form, :any, required: true
+  attr :active_scope, :any, required: true
+  attr :secret_hints, :map, required: true
+  attr :field_errors, :map, required: true
+  attr :current_user, :any, required: true
+
+  # One setting that is not a switch: its label, its input by type, a refused value's note and its
+  # description — on its own, or under the table row of the switch it belongs to (`:under`).
+  defp field(assigns) do
+    ~H"""
+    <label
+      for={"set-#{dom_id(@definition.key)}"}
+      class="mb-2 flex flex-wrap items-center gap-[9px] text-[13px] font-semibold text-[#3a382f]"
+    >
+      {field_label(@definition, @active_scope)}
+      <span class={[
+        badge_class(),
+        scope_badge_class(@definition, @active_scope)
+      ]}>
+        {scope_badge_label(@definition, @active_scope)}
+      </span>
+    </label>
+
+    <%= cond do %>
+      <% @definition.type == :select -> %>
+        <div class="relative">
+          <select
+            id={"set-#{dom_id(@definition.key)}"}
+            name={field_name(@definition)}
+            disabled={!@editable}
+            class={[
+              input_class(),
+              "h-[46px] appearance-none ps-[15px] pe-[34px]"
+            ]}
+          >
+            <option
+              :for={option <- @definition.options}
+              value={option_value(option)}
+              selected={
+                to_string(@form[@definition.key].value) ==
+                  to_string(option_value(option))
+              }
+            >
+              {option_label(option)}
+            </option>
+          </select>
+          <.icon
+            name="hero-chevron-down"
+            class="pointer-events-none absolute end-3 top-1/2 size-[14px] -translate-y-1/2 text-[#a8a5a0]"
+          />
+        </div>
+      <% @definition.type == :secret -> %>
+        <%!-- A stored secret is never drawn back: the field starts empty and
+            says how the stored one ends; empty on save keeps it. What it holds
+            is only what is being typed now, which the save then clears. --%>
+        <div class="flex items-center gap-2.5">
+          <input
+            type="password"
+            id={"set-#{dom_id(@definition.key)}"}
+            name={field_name(@definition)}
+            value={@form[@definition.key].value}
+            autocomplete="new-password"
+            disabled={!@editable}
+            placeholder={secret_placeholder(@secret_hints[@definition.key])}
+            class={[input_class(), "h-[46px] min-w-0 flex-1 px-[15px]"]}
+          />
+          <button
+            :if={@editable && @secret_hints[@definition.key]}
+            type="button"
+            id={"clear-#{dom_id(@definition.key)}"}
+            phx-click="clear_secret"
+            phx-value-key={@definition.key}
+            data-confirm={gettext("Remove this key? What uses it stops until a new one is saved.")}
+            class="h-[46px] shrink-0 rounded-xl border border-[#ecebe6] bg-white px-3.5 text-[12.5px] font-semibold text-[#c0473d] hover:bg-[#fdf3f1]"
+          >
+            {gettext("Remove")}
+          </button>
+        </div>
+        <p
+          :if={@secret_hints[@definition.key] == :unreadable}
+          id={"unreadable-#{dom_id(@definition.key)}"}
+          class="mt-2 text-[12px] font-semibold text-[#a5352c]"
+        >
+          {gettext(
+            "This key was saved under an older server key (SECRET_KEY_BASE) and can no longer be read, so nothing uses it. Type it again and save."
+          )}
+        </p>
+      <% @definition.type == :image -> %>
+        <%!-- A picture: the address, and Media Manager to pick or upload one
+              for the site in view. The Global view has no site's files to
+              offer, so it takes an address alone. --%>
+        <.live_component
+          module={MediaField}
+          id={"media-#{dom_id(@definition.key)}"}
+          input_id={"set-#{dom_id(@definition.key)}"}
+          name={field_name(@definition)}
+          value={@form[@definition.key].value}
+          field={@definition.key}
+          form={nil}
+          site_id={@active_scope}
+          current_user={@current_user}
+          accepts={:images}
+          folder="site"
+          placeholder="/uploads/…"
+          disabled={!@editable}
+          debounce="300"
+          class={[input_class(), "h-[46px] px-[15px]"]}
+          opened={nil}
+          library={is_binary(@active_scope)}
+          select={pick(@definition.key)}
+        />
+      <% @definition.type == :text -> %>
+        <textarea
+          id={"set-#{dom_id(@definition.key)}"}
+          name={field_name(@definition)}
+          rows="3"
+          disabled={!@editable}
+          class={[input_class(), "resize-y px-[15px] py-3.5 leading-relaxed"]}
+        >{@form[@definition.key].value}</textarea>
+      <% true -> %>
+        <input
+          type={html_input_type(@definition.type)}
+          id={"set-#{dom_id(@definition.key)}"}
+          name={field_name(@definition)}
+          value={input_value(@form[@definition.key].value)}
+          min={Map.get(@definition, :min)}
+          max={Map.get(@definition, :max)}
+          disabled={!@editable}
+          class={[input_class(), "h-[46px] px-[15px]"]}
+        />
+    <% end %>
+
+    <p
+      :if={@field_errors[@definition.key]}
+      id={"error-#{dom_id(@definition.key)}"}
+      data-role="field-error"
+      class="mt-2 text-[12px] font-semibold text-[#a5352c]"
+    >
+      {gettext("This value is not accepted. See the description below.")}
+    </p>
+
+    <p
+      :if={@definition.description}
+      class="mt-2 text-[12px] font-medium text-[#9a978f]"
+    >
+      {Settings.text(@definition.description)}
+    </p>
+    """
+  end
 
   attr :definition, :map, required: true
   attr :editable, :boolean, required: true
