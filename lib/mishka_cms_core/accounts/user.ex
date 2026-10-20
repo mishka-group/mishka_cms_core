@@ -166,6 +166,8 @@ defmodule MishkaCmsCore.Accounts.User do
         client_id MishkaCmsCore.Secrets
         client_secret MishkaCmsCore.Secrets
         redirect_uri MishkaCmsCore.Secrets
+        # `openid` is added by the strategy itself; naming it here too asked for it twice.
+        authorization_params scope: "email profile"
         identity_resource MishkaCmsCore.Accounts.UserIdentity
       end
 

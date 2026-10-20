@@ -372,6 +372,13 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       refute Settings.visible?(definition, %{enabled => false})
     end
 
+    test "hand every class they draw with to the site's stylesheet" do
+      classes = Widget.classes()
+
+      for class <- ~w(size-[18px] grid-cols-4 h-11 text-[#5865f2] text-[#4285f4]),
+          do: assert(class in String.split(classes), class)
+    end
+
     test "sit in a table of their own on the Security tab" do
       methods = SignInProvider.methods_group()
 

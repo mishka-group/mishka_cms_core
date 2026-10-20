@@ -722,6 +722,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     /* The box a component that could not be drawn is drawn as. */
     @source inline("#{ComponentBoundary.box_class()}");
 
+    /* The sign-in pages' provider buttons, drawn by the core rather than written in a page. */
+    @source inline("#{MishkaCmsCore.Accounts.SignInProvider.Widget.classes()}");
+
     #{tailwind_preamble()}
     #{icon_css(closure, site_name, content.icons)}
 
@@ -2001,6 +2004,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
     /* The box a component that could not be drawn is drawn as. */
     @source inline("#{ComponentBoundary.box_class()}");
+
+    /* The sign-in pages' provider buttons, drawn by the core rather than written in a page. */
+    @source inline("#{MishkaCmsCore.Accounts.SignInProvider.Widget.classes()}");
 
     /* THE CLASSES THE SITE'S STORED CONTENT WRITES, which no template holds. */
     #{class_sources(content.classes)}

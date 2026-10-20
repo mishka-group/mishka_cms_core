@@ -23,6 +23,15 @@ defmodule MishkaCmsCore.Accounts.SignInProvider.Widget do
 
   alias MishkaCmsCore.Accounts.SignInProvider
 
+  # Every class the buttons draw with, in one place: a site's stylesheet is built from its own
+  # pages, which name none of these, so `classes/0` hands them to it.
+  @row "grid gap-[9px] max-[620px]:gap-[7px]!"
+  @columns %{1 => "grid-cols-1", 2 => "grid-cols-2", 3 => "grid-cols-3", 4 => "grid-cols-4"}
+  @button "flex h-11 items-center justify-center gap-2 rounded-[12px] border border-[#ecebe6] bg-white text-[12px] font-semibold text-[#3a382f] shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-[#dcdbf5] hover:bg-[#faf9f6] max-[620px]:p-0!"
+  @mark "flex items-center justify-center"
+  @icon "size-[18px] shrink-0"
+  @label "max-[620px]:hidden!"
+
   attr :site, :map, default: nil, doc: "The site the page is on (`@current_site`)."
   attr :id, :string, default: "auth-providers"
   attr :class, :any, default: nil
@@ -41,29 +50,20 @@ defmodule MishkaCmsCore.Accounts.SignInProvider.Widget do
     ~H"""
     {if @providers == [], do: render_slot(@empty)}
     <div :if={@providers != []} id={@id} data-role="auth-providers">
-      <div class={[
-        "grid gap-[9px] max-[620px]:gap-[7px]!",
-        columns(length(@providers)),
-        @class
-      ]}>
+      <div class={[row(), columns(length(@providers)), @class]}>
         <a
           :for={provider <- @providers}
           id={"auth-provider-#{provider.id()}"}
           href={"/api/auth/user/#{provider.strategy()}"}
           aria-label={continue_with(@continue_with, provider.label())}
-          class="flex h-11 items-center justify-center gap-2 rounded-[12px] border border-[#ecebe6] bg-white text-[12px] font-semibold text-[#3a382f] shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-[#dcdbf5] hover:bg-[#faf9f6] max-[620px]:p-0!"
+          class={button()}
         >
-          <span class={["flex items-center justify-center", provider.icon().color]}>
-            <svg
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-              class="size-[18px] shrink-0"
-            >
+          <span class={[mark(), provider.icon().color]}>
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class={icon()}>
               <path d={provider.icon().path} />
             </svg>
           </span>
-          <span class="max-[620px]:hidden!">{provider.label()}</span>
+          <span class={label()}>{provider.label()}</span>
         </a>
       </div>
       {render_slot(@divider)}
@@ -79,9 +79,24 @@ defmodule MishkaCmsCore.Accounts.SignInProvider.Widget do
   defp site_id(%{id: id}), do: id
   defp site_id(_none), do: nil
 
-  defp columns(1), do: "grid-cols-1"
-  defp columns(2), do: "grid-cols-2"
-  defp columns(3), do: "grid-cols-3"
-  defp columns(4), do: "grid-cols-4"
-  defp columns(_more), do: "grid-cols-3"
+  @doc """
+  Every class the buttons draw with, each provider's colour included, for whatever builds a site's
+  stylesheet (`MishkaCmsCore.Runtime.Compilers.TailwindCompiler`).
+  """
+  @spec classes() :: String.t()
+  def classes do
+    Enum.join(
+      [@row, @button, @mark, @icon, @label] ++
+        Map.values(@columns) ++ Enum.map(SignInProvider.offered(), & &1.icon().color),
+      " "
+    )
+  end
+
+  defp row, do: @row
+  defp button, do: @button
+  defp mark, do: @mark
+  defp icon, do: @icon
+  defp label, do: @label
+
+  defp columns(count), do: Map.get(@columns, count, @columns[3])
 end
