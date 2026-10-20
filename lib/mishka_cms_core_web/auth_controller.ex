@@ -145,6 +145,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
     CaptchaCheck,
     LiveSockets,
     SecondFactor,
+    SocialSignIn,
     Token
   }
 
@@ -153,6 +154,12 @@ defmodule MishkaCmsCoreWeb.AuthController do
   alias MishkaCmsCore.Runtime.SiteAvailability
   alias MishkaCmsCoreWeb.ReturnTo
   alias MishkaInstaller.Event.Hook
+
+  # The strategy every sign-in provider signs in with (`MishkaCmsCore.Accounts.ProviderStrategy`).
+  @provider_strategies MishkaCmsCore.Accounts.User
+                       |> AshAuthentication.Info.authentication_strategies()
+                       |> Enum.filter(&is_struct(&1, MishkaCmsCore.Accounts.ProviderStrategy))
+                       |> Enum.map(& &1.name)
 
   # Whose session the sign-out clears: AshAuthentication enumerates that app's authenticated resources
   # to revoke their tokens, and they are declared under the HOST's `:ash_domains`.
@@ -182,8 +189,31 @@ defmodule MishkaCmsCoreWeb.AuthController do
   def success(conn, activity, user, token) do
     cond do
       refused?(conn, user) -> refuse(conn, user)
+      code_step?(activity, user) -> code_step(conn, user, token)
       second_factor_skipped?(activity, user) -> second_factor_owed(conn, token)
       true -> signed_in(conn, activity, user, token)
+    end
+  end
+
+  # A PROVIDER'S SIGN-IN OF AN ACCOUNT WITH AN AUTHENTICATOR goes on to the sign-in page's code step
+  # with a token that only waits for the code (`MishkaCmsCore.Accounts.SecondFactor.Pending`),
+  # and no session.
+  defp code_step?({strategy, :callback}, user) when strategy in @provider_strategies,
+    do: SecondFactor.asked?(user)
+
+  defp code_step?(_activity, _user), do: false
+
+  defp code_step(conn, user, token) do
+    if is_binary(token), do: Token.revoke_unissued(token)
+
+    case SecondFactor.Pending.token(user) do
+      {:ok, pending} ->
+        redirect(conn,
+          to: sign_in_page(conn) <> "?" <> URI.encode_query(%{"second_step" => pending})
+        )
+
+      {:error, _error} ->
+        second_factor_owed(conn, nil)
     end
   end
 
@@ -437,6 +467,18 @@ defmodule MishkaCmsCoreWeb.AuthController do
   # A CAPTCHA NOT PASSED, likewise, and before either: the refusal comes before the password is
   # checked. See `MishkaCmsCore.Accounts.CaptchaCheck`.
   defp failure_message(conn, activity, reason) do
+    case SocialSignIn.refusal(reason) do
+      %{reason: refused} -> {:social_sign_in, social_text(refused)}
+      nil -> refusal_message(conn, activity, reason)
+    end
+  end
+
+  defp social_text(reason) do
+    %{title: title, text: text} = SocialSignIn.describe(reason)
+    "#{title}. #{text}"
+  end
+
+  defp refusal_message(conn, activity, reason) do
     with nil <- CaptchaCheck.refusal(reason),
          nil <- AuthGate.refusal(reason),
          nil <- SecondFactor.refusal(reason) do
@@ -482,6 +524,18 @@ defmodule MishkaCmsCoreWeb.AuthController do
         %{conn: conn, activity: activity, reason: reason, message: msg}
         |> then(&Hook.call("AuthController.Failure.UnconfirmedUser", &1))
         |> then(&{:unconfirmed_user, &1.message})
+
+      # A PROVIDER'S SIGN-IN THAT DID NOT FINISH — cancelled there, expired, or the site does not
+      # offer it — says so, not that a password was wrong.
+      {{strategy, _phase}, _reason} when strategy in @provider_strategies ->
+        %{
+          conn: conn,
+          activity: activity,
+          reason: reason,
+          message: gettext("Signing in with that service did not finish. Try again.")
+        }
+        |> then(&Hook.call("AuthController.Failure.Provider", &1))
+        |> then(&{:provider, &1.message})
 
       _ ->
         %{

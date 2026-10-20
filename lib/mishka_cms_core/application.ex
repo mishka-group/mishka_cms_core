@@ -128,7 +128,8 @@ defmodule MishkaCmsCore.Application do
         @settings_plugins ++
         @cache_plugins ++
         @share_card_plugins ++
-        @site_icon_plugins ++ @mail_providers ++ @captcha_providers ++ @account_notices
+        @site_icon_plugins ++
+        @mail_providers ++ @captcha_providers ++ @account_notices
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's

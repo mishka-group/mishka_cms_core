@@ -1251,6 +1251,93 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
   defp choose!(view, key, value),
     do: view |> element("#settings-form") |> render_change(%{"settings" => %{key => value}})
 
+  describe "the Security tab's sign-in methods" do
+    setup do
+      MishkaCmsCore.Test.SignInProviders.start()
+      Settings.load_definitions()
+      :ok
+    end
+
+    test "are one table of switches, the closed ways drawn on while open", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", site.id))
+      {:ok, view, _html} = live(conn, @path <> "?tab=security")
+
+      assert has_element?(view, ~s([data-role="settings-table"] #row-auth-password-closed))
+
+      assert has_element?(
+               view,
+               ~s([data-role="settings-table"] #row-auth-providers-google-enabled)
+             )
+
+      assert has_element?(view, "#set-auth-password-closed[value=false][checked]")
+      refute has_element?(view, "#set-auth-providers-google-enabled[checked]")
+    end
+
+    test "a provider switched on shows its keys at once, and they are saved", %{
+      conn: conn,
+      site: site
+    } do
+      conn = log_in(conn, create_admin("boss@example.com", site.id))
+      {:ok, view, _html} = live(conn, @path <> "?tab=security")
+
+      refute has_element?(view, "#set-auth-providers-google-client_id")
+
+      # As the browser sends a switch: text.
+      choose!(view, "auth.providers.google.enabled", "true")
+      assert has_element?(view, "#set-auth-providers-google-client_id")
+      assert has_element?(view, "#set-auth-providers-google-client_secret[type=password]")
+
+      # In Google's own row, under its description, and nowhere else.
+      assert has_element?(
+               view,
+               "#row-auth-providers-google-enabled #set-auth-providers-google-client_id"
+             )
+
+      assert has_element?(
+               view,
+               "#row-auth-providers-google-enabled #set-auth-providers-google-client_secret"
+             )
+
+      refute has_element?(
+               view,
+               "#row-auth-providers-github-enabled [data-role=settings-row-fields]"
+             )
+
+      refute has_element?(view, "#row-auth-providers-google-client_id")
+
+      view
+      |> form("#settings-form",
+        settings: %{
+          "auth.providers.google.enabled" => "true",
+          "auth.providers.google.client_id" => "an-id",
+          "auth.providers.google.client_secret" => "a-secret"
+        }
+      )
+      |> render_submit()
+
+      assert Settings.get_own("auth.providers.google.enabled", false, site.id) == true
+      assert Settings.get_own("auth.providers.google.client_id", nil, site.id) == "an-id"
+      assert Settings.secret("auth.providers.google.client_secret", site.id) == "a-secret"
+      assert MishkaCmsCore.Test.Plugins.SignInGoogle.ready?(site.id)
+    end
+
+    test "switching password off stores it closed", %{conn: conn, site: site} do
+      conn = log_in(conn, create_admin("boss@example.com", site.id))
+      {:ok, view, _html} = live(conn, @path <> "?tab=security")
+
+      # The switch off sends the hidden field, which says closed.
+      view
+      |> form("#settings-form", settings: %{"auth.password.closed" => "true"})
+      |> render_submit()
+
+      assert Settings.get_own("auth.password.closed", false, site.id) == true
+      refute has_element?(view, "#set-auth-password-closed[checked]")
+    end
+  end
+
   describe "the scope badge" do
     defp badge(view, id),
       do:

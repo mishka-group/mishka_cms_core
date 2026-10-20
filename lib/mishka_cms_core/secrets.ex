@@ -14,4 +14,6 @@ defmodule MishkaCmsCore.Secrets do
       ) do
     Application.fetch_env(:mishka_cms_core, :token_signing_secret)
   end
+
+  def secret_for(_path, _resource, _opts, _context), do: :error
 end

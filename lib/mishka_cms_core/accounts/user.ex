@@ -35,7 +35,13 @@ defmodule MishkaCmsCore.Accounts.User do
       MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
       MishkaCmsCore.Accounts.Notifiers.DisconnectLiveSockets
     ],
-    extensions: [AshAuthentication, AshJsonApi.Resource, MishkaGervaz.Resource, AshRateLimiter]
+    extensions: [
+      AshAuthentication,
+      MishkaCmsCore.Accounts.ProviderStrategy,
+      AshJsonApi.Resource,
+      MishkaGervaz.Resource,
+      AshRateLimiter
+    ]
 
   import Phoenix.Component, only: [sigil_H: 2]
   import MishkaGervaz.UIAdapters.Tailwind, only: [cell_stacked: 1]
@@ -76,8 +82,13 @@ defmodule MishkaCmsCore.Accounts.User do
 
         # Magic-link sign-in is a read now, and a read runs no change, so the confirmation hook that
         # reads this list never sees it. Someone who signed up and never confirmed still confirms
-        # from the mail they were sent.
-        auto_confirm_actions [:reset_password_with_token]
+        # from the mail they were sent. A provider's sign-in confirms: it only gets this far with an
+        # email the provider verified (`MishkaCmsCore.Accounts.SocialSignIn`).
+        auto_confirm_actions [
+          :reset_password_with_token,
+          :register_with_provider
+        ]
+
         sender MishkaCmsCore.Accounts.User.Senders.SendNewUserConfirmationEmail
       end
     end
@@ -135,6 +146,14 @@ defmodule MishkaCmsCore.Accounts.User do
         hash_provider AshAuthentication.BcryptProvider
         brute_force_strategy :rate_limit
         generate_action_name :generate_recovery_codes
+      end
+
+      # SIGNING IN WITH ANOTHER SERVICE'S ACCOUNT, whichever ones are installed: one strategy for
+      # every provider, which the core names none of — see `MishkaCmsCore.Accounts.ProviderStrategy`
+      # and `MishkaCmsCore.Accounts.SignInProvider`.
+      sign_in_providers :provider do
+        identity_resource MishkaCmsCore.Accounts.UserIdentity
+        register_action_name :register_with_provider
       end
     end
   end
@@ -668,6 +687,10 @@ defmodule MishkaCmsCore.Accounts.User do
 
       validate confirm(:password, :password_confirmation)
 
+      # An account with no password sets its first one instead (`set_password`).
+      validate present(:hashed_password),
+        message: dgettext_noop("errors", "is not set yet: set a first password instead")
+
       # Counted before the current password is checked, right or wrong, so a stolen session cannot
       # guess it; both run as before_action hooks, in this order, and a refusal stops the check.
       change AshRateLimiter.BuiltinChanges.rate_limit(
@@ -740,14 +763,18 @@ defmodule MishkaCmsCore.Accounts.User do
             do: Ash.Query.filter(query, site_id == ^current_tenant),
             else: Ash.Query.filter(query, is_nil(site_id))
 
-        query |> Ash.Query.load(:site)
+        # AN ACCOUNT WITH NO PASSWORD — made by a provider — is no account to a password, whatever is
+        # typed: found here, the strategy would compare the password with nothing.
+        query
+        |> Ash.Query.filter(not is_nil(hashed_password))
+        |> Ash.Query.load(:site)
       end
 
       # validates the provided email and password and generates a token
       prepare AshAuthentication.Strategy.Password.SignInPreparation
 
-      # Refused here, after the password, when sign-in is closed — see `AuthGate`.
-      prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in])
+      # Refused here, after the password, when sign-in or password sign-in is closed — see `AuthGate`.
+      prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in, :password])
 
       # And without a current code from an account's authenticator — see `SecondFactor`.
       prepare &MishkaCmsCore.Accounts.SecondFactor.prepare(&1, &2, :code)
@@ -784,6 +811,45 @@ defmodule MishkaCmsCore.Accounts.User do
 
       metadata :token, :string do
         description "A JWT that can be used to authenticate the user."
+        allow_nil? false
+      end
+    end
+
+    # THE CODE STEP OF A PROVIDER'S SIGN-IN, for an account with an authenticator: the token the
+    # sign-in page was handed instead of a session, and a current code — see
+    # `MishkaCmsCore.Accounts.SecondFactor.Pending`. Answers a sign-in token, as the password does.
+    read :sign_in_with_second_factor do
+      description "Finishes a sign-in with a provider with a code from the account's authenticator."
+      get? true
+
+      argument :token, :string do
+        description "The token the sign-in page was handed in place of a session."
+        allow_nil? false
+        sensitive? true
+      end
+
+      argument :totp_code, :string do
+        description "A current code from the account's authenticator app."
+        allow_nil? true
+        sensitive? true
+      end
+
+      argument :recovery_code, :string do
+        description "One of the account's recovery codes, in place of `totp_code`."
+        allow_nil? true
+        sensitive? true
+      end
+
+      prepare fn query, _context ->
+        Ash.Query.set_context(query, %{private: %{ash_authentication?: true}})
+      end
+
+      prepare &MishkaCmsCore.Accounts.SecondFactor.prepare(&1, &2, :code)
+      prepare MishkaCmsCore.Accounts.SecondFactor.Pending
+      prepare &MishkaCmsCore.Accounts.AuthGate.prepare(&1, &2, [:sign_in])
+
+      metadata :token, :string do
+        description "A short sign-in token, exchanged for the session by `sign_in_with_token`."
         allow_nil? false
       end
     end
@@ -872,6 +938,73 @@ defmodule MishkaCmsCore.Accounts.User do
         description "A JWT that can be used to authenticate the user."
         allow_nil? false
       end
+    end
+
+    # Signing in, or registering, with a sign-in provider — whichever the request ran; see
+    # `MishkaCmsCore.Accounts.SocialSignIn`, which keeps none of its tokens.
+    create :register_with_provider do
+      description "Signs in with a sign-in provider's account, and makes one on a first sign-in when the site allows."
+      argument :user_info, :map, allow_nil?: false
+      argument :oauth_tokens, :map, allow_nil?: false, sensitive?: true
+      upsert? true
+      upsert_identity :unique_email
+      upsert_fields []
+
+      change AshRateLimiter.BuiltinChanges.rate_limit(
+               limit: 30,
+               per: :timer.minutes(5),
+               key: &MishkaCmsCore.Accounts.AuthRateLimit.by_address/2,
+               on: :before_transaction
+             )
+
+      change MishkaCmsCore.Accounts.SocialSignIn
+      change {AshAuthentication.Strategy.OAuth2.UserInfoToAttributes, fields: [:email]}
+      change AshAuthentication.GenerateTokenChange
+
+      change AshAuthentication.Strategy.OAuth2.IdentityChange,
+        where: [MishkaCmsCore.Accounts.Validations.ForSite]
+
+      metadata :token, :string do
+        allow_nil? false
+      end
+    end
+
+    # A PROVIDER'S VERIFIED EMAIL CLAIMS AN ACCOUNT NOBODY CONFIRMED: whoever made it without the
+    # mailbox keeps no way in. Run by `MishkaCmsCore.Accounts.SocialSignIn` alone; the password going
+    # signs every session of the account out (`LogOutEverywhereOnPasswordChange`).
+    update :claim_unconfirmed do
+      description "Confirms an unconfirmed account a provider vouched for, and removes what its maker set."
+      accept []
+      require_atomic? false
+
+      change set_attribute(:confirmed_at, &DateTime.utc_now/0)
+      change set_attribute(:hashed_password, nil)
+      change atomic_update(:totp_secret, expr(nil))
+      change atomic_update(:last_totp_at, expr(nil))
+      change after_action(&MishkaCmsCore.Accounts.SecondFactor.cleared_recovery_codes/3)
+    end
+
+    # AN ACCOUNT WITH NO PASSWORD — made by a provider, or claimed from one nobody confirmed — sets
+    # its first one without a current one to give. One that has a password changes it instead
+    # (`change_password`).
+    update :set_password do
+      description "Sets the first password of an account that has none."
+      require_atomic? false
+      accept []
+
+      argument :password, :string,
+        sensitive?: true,
+        allow_nil?: false,
+        constraints: [min_length: 8]
+
+      argument :password_confirmation, :string, sensitive?: true, allow_nil?: false
+
+      validate confirm(:password, :password_confirmation)
+
+      # Asked of the account as stored, before the password below is hashed onto it.
+      validate absent(:hashed_password), message: dgettext_noop("errors", "is already set")
+
+      change {AshAuthentication.Strategy.Password.HashPasswordChange, strategy_name: :password}
     end
 
     action :request_password_reset_token do
@@ -1856,6 +1989,13 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if always()
     end
 
+    policy action(:register_with_password) do
+      description "A site that switched passwords off takes no account with one but the addresses it allows"
+      error_message &MishkaCmsCore.Accounts.AuthGate.refused(&1, &2, :password)
+      forbid_unless {MishkaCmsCore.Accounts.Checks.AuthGateOpen, action: :password}
+      authorize_if always()
+    end
+
     policy action(:reset_password_with_token) do
       description "A site that closed password reset resets only the accounts it allows"
       error_message &MishkaCmsCore.Accounts.AuthGate.refused(&1, &2, :reset)
@@ -1888,7 +2028,12 @@ defmodule MishkaCmsCore.Accounts.User do
       authorize_if always()
     end
 
-    policy action([:verify_with_totp, :verify_with_recovery_code, :record_totp_use]) do
+    policy action([
+             :verify_with_totp,
+             :verify_with_recovery_code,
+             :record_totp_use,
+             :claim_unconfirmed
+           ]) do
       description "Run by the sign-in itself"
       forbid_if always()
     end
@@ -2058,6 +2203,14 @@ defmodule MishkaCmsCore.Accounts.User do
       access_type :strict
       forbid_unless actor_present()
       authorize_if always()
+    end
+
+    # One's own first password, and nobody else's: whoever set one on another account could sign in
+    # as it.
+    policy action(:set_password) do
+      description "Only the account itself sets its first password"
+      forbid_unless actor_present()
+      authorize_if expr(id == ^actor(:id))
     end
 
     bypass action(:logout) do

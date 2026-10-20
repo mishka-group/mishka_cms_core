@@ -1158,6 +1158,28 @@ defmodule MishkaCmsCore.Install.StarterContent do
     end)
   end
 
+  @doc """
+  What the sign-in page of `role` (`"sign_in"`, `"register"`, …, its `extra["auth_role"]`) is
+  written with today: `%{template:, events:, helpers:}`, as `ensure_auth!/1` writes them. Nothing
+  here updates a page a site already has; this is for a script that brings one up to date, written
+  with `context: %{page_code: :package}` as these are. `nil` for a role there is no page for.
+  """
+  @spec auth_page_code(String.t()) ::
+          %{template: String.t(), events: list(), helpers: list()} | nil
+  def auth_page_code(role) do
+    case Enum.find(auth_pages(), &(&1.role == role)) do
+      nil ->
+        nil
+
+      page ->
+        %{
+          template: page.template,
+          events: Enum.map(page.events, &auth_event/1),
+          helpers: Enum.map(page.helpers, &auth_helper/1)
+        }
+    end
+  end
+
   # SIGNING OUT IS FOR SOMEBODY SIGNED IN; every other flow is for a visitor.
   defp auth_extra("sign_out" = role), do: %{"auth_role" => role, "signed_in_only" => true}
   defp auth_extra(role), do: %{"auth_role" => role, "visitors_only" => true}
@@ -1535,7 +1557,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp sign_in_template do
     ~s"""
     <div>
-      <%= if assigns[:second_factor] do %>
+      <%= if assigns[:second_factor] || (assigns[:query_params] || %{})["second_step"] do %>
         <div>
           <.link
             navigate={returning(assigns, site_path("/:lang/auth", @page.language))}
@@ -1654,48 +1676,22 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <h1 class="#{@title_class}">{t("Welcome back")}</h1>
         <p class="#{@lede_class}">{t("Sign in to manage your content, media and team.")}</p>
 
-        <div class="mt-[26px] grid grid-cols-3 gap-[9px] max-[620px]:gap-[7px]!">
-          <button
-            :for={
-              provider <- [
-                %{
-                  label: "Google",
-                  color: "text-[#4285f4]",
-                  path:
-                    "M21.4 12.2c0-.7-.1-1.4-.2-2H12v3.9h5.3a4.5 4.5 0 0 1-2 3v2.4h3.1c1.9-1.7 3-4.3 3-7.3z M12 22c2.7 0 5-.9 6.7-2.4l-3.2-2.4c-.9.6-2 1-3.5 1a5.9 5.9 0 0 1-5.5-4H3.2v2.5A10 10 0 0 0 12 22z M6.5 14.2a6 6 0 0 1 0-3.8V7.9H3.2a10 10 0 0 0 0 8.6l3.3-2.3z M12 6c1.5 0 2.8.5 3.8 1.5l2.8-2.8A10 10 0 0 0 3.2 7.9l3.3 2.5A5.9 5.9 0 0 1 12 6z"
-                },
-                %{
-                  label: "GitHub",
-                  color: "text-[#1b1a18]",
-                  path:
-                    "M12 2a10 10 0 0 0-3.2 19.5c.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.3-3.4-1.3-.4-1.2-1.1-1.5-1.1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.5 2.3 1.1 2.9.8.1-.7.4-1.1.7-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.4-1.3.1-2.7 0 0 .8-.3 2.7 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.7-1 2.7-1 .5 1.4.2 2.4.1 2.7.6.7 1 1.6 1 2.7 0 3.9-2.4 4.7-4.6 5 .4.3.7 1 .7 2v3c0 .3.2.6.7.5A10 10 0 0 0 12 2z"
-                },
-                %{
-                  label: "Apple",
-                  color: "text-[#1b1a18]",
-                  path:
-                    "M16.4 12.7c0-2.4 2-3.6 2.1-3.6-1.1-1.7-2.9-1.9-3.5-1.9-1.5-.1-2.9.9-3.7.9-.8 0-2-.9-3.3-.8-1.7 0-3.2 1-4.1 2.5-1.7 3-.4 7.5 1.3 10 .8 1.2 1.8 2.5 3.1 2.5 1.2 0 1.7-.8 3.2-.8s1.9.8 3.2.8c1.3 0 2.2-1.2 3-2.4a11 11 0 0 0 1.4-2.8c-.1 0-2.7-1-2.7-4.4z M14.6 5.6c.7-.8 1.1-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.1 1.9-1 3 1.1.1 2.2-.6 2.9-1.4z"
-                }
-              ]
-            }
-            type="button"
-            aria-label={t("Continue with %{provider}", provider: provider.label)}
-            class="flex h-11 items-center justify-center gap-2 rounded-[12px] border border-[#ecebe6] bg-white text-[12px] font-semibold text-[#3a382f] shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-[#dcdbf5] hover:bg-[#faf9f6] max-[620px]:p-0!"
-          >
-            <span class={["flex items-center justify-center", provider.color]}>
-              <.filled_svg path={provider.path} />
-            </span>
-            <span class="max-[620px]:hidden!">{provider.label}</span>
-          </button>
-        </div>
-
-        <div class="my-[22px] flex items-center gap-3">
-          <span class="h-px flex-1 bg-[#e6e4de]"></span>
-          <span class="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[#6d6a63]">
-            {t("or with email")}
-          </span>
-          <span class="h-px flex-1 bg-[#e6e4de]"></span>
-        </div>
+        <.sign_in_providers
+          site={assigns[:current_site]}
+          continue_with={t("Continue with %{provider}")}
+          class="mt-[26px]"
+        >
+          <:divider>
+            <div class="my-[22px] flex items-center gap-3">
+              <span class="h-px flex-1 bg-[#e6e4de]"></span>
+              <span class="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[#6d6a63]">
+                {t("or with email")}
+              </span>
+              <span class="h-px flex-1 bg-[#e6e4de]"></span>
+            </div>
+          </:divider>
+          <:empty><div class="h-[22px]"></div></:empty>
+        </.sign_in_providers>
 
         <div :if={assigns[:message]} id={Map.get(@message, :id, "auth-alert")} class="#{@alert_class}">
           <span class="mt-px shrink-0 text-[#c0473d]"><.alert_svg /></span>
@@ -1829,6 +1825,23 @@ defmodule MishkaCmsCore.Install.StarterContent do
         <h1 class="#{@title_class}">{t("Create your account")}</h1>
         <p class="#{@lede_class}">{t("Enter your details to get started.")}</p>
       </div>
+
+      <.sign_in_providers
+        site={assigns[:current_site]}
+        id="auth-register-providers"
+        continue_with={t("Continue with %{provider}")}
+        class="mt-6"
+      >
+        <:divider>
+          <div class="mt-[22px] flex items-center gap-3">
+            <span class="h-px flex-1 bg-[#e6e4de]"></span>
+            <span class="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[#6d6a63]">
+              {t("or with email")}
+            </span>
+            <span class="h-px flex-1 bg-[#e6e4de]"></span>
+          </div>
+        </:divider>
+      </.sign_in_providers>
 
       <div
         :if={assigns[:message]}
@@ -2295,57 +2308,84 @@ defmodule MishkaCmsCore.Install.StarterContent do
     %{
       name: "sign_in",
       code: ~S"""
-      # THE SECOND STEP SENDS ONLY THE CODE. The email and password it follows stay in this process,
-      # never in the page, and nothing the page sends replaces them; see
-      # `MishkaCmsCore.Accounts.SecondFactor`.
-      second_factor = socket.assigns[:second_factor]
-      user = Map.merge(params["user"] || %{}, second_factor || %{})
+      # A PROVIDER'S SIGN-IN WAITING FOR ITS CODE holds only the token the page was handed, never an
+      # email or a password; see `MishkaCmsCore.Accounts.SecondFactor.Pending`.
+      second_step = (socket.assigns[:query_params] || %{})["second_step"]
 
-      # AND ASKS NO CAPTCHA, which the password step passed: a form built for this one submit says so,
-      # and is never kept. See `MishkaCmsCore.Accounts.CaptchaCheck`.
-      form =
-        if second_factor,
-          do: code_step_form(socket.assigns),
-          else: sign_in_form(socket.assigns)
+      if is_binary(second_step) and second_step != "" do
+        code = Map.take(params["user"] || %{}, ["totp_code", "recovery_code"])
 
-      if password_strategy().sign_in_tokens_enabled? do
-        case AshPhoenix.Form.submit(form, params: user, read_one?: true) do
-          {:ok, signed_in} ->
+        MishkaCmsCore.Accounts.User
+        |> Ash.Query.for_read(:sign_in_with_second_factor, Map.put(code, "token", second_step),
+          tenant: socket.assigns[:current_tenant],
+          context: %{private: %{ash_authentication?: true}}
+        )
+        |> Ash.read_one()
+        |> case do
+          {:ok, %{} = signed_in} ->
             {:noreply, redirect(socket, to: token_path(socket.assigns, signed_in))}
 
-          {:error, form} ->
-            case form
-                 |> AshPhoenix.Form.raw_errors(for_path: :all)
-                 |> MishkaCmsCore.Accounts.SecondFactor.refusal() do
-              :required ->
-                {:noreply,
-                 socket
-                 |> assign(:sign_in_form, nil)
-                 |> assign(:message, nil)
-                 |> assign(:second_factor, Map.take(user, ["email", "password"]))}
+          {:error, error} when not is_nil(error) ->
+            if MishkaCmsCore.Accounts.SecondFactor.refusal(error) in [:invalid, :required],
+              do: {:noreply, assign(socket, :message, second_factor_message(:invalid))},
+              else: {:noreply, assign(socket, :message, second_factor_message(:expired))}
 
-              :invalid ->
-                {:noreply, assign(socket, :message, second_factor_message(:invalid))}
-
-              _not_the_code ->
-                {:noreply,
-                 socket
-                 |> assign(:sign_in_form, if(second_factor, do: nil, else: form))
-                 |> assign(:second_factor, nil)
-                 |> refused_or(
-                   form,
-                   &assign(&1, :message, %{
-                     title: t("Invalid email or password"),
-                     text: t("Check your details and try again.")
-                   })
-                 )}
-            end
+          _nobody ->
+            {:noreply, assign(socket, :message, second_factor_message(:expired))}
         end
       else
-        form = AshPhoenix.Form.validate(form, user)
+        # THE SECOND STEP SENDS ONLY THE CODE. The email and password it follows stay in this process,
+        # never in the page, and nothing the page sends replaces them; see
+        # `MishkaCmsCore.Accounts.SecondFactor`.
+        second_factor = socket.assigns[:second_factor]
+        user = Map.merge(params["user"] || %{}, second_factor || %{})
 
-        {:noreply,
-         socket |> assign(:sign_in_form, form) |> assign(:trigger_action, form.source.valid?)}
+        # AND ASKS NO CAPTCHA, which the password step passed: a form built for this one submit says so,
+        # and is never kept. See `MishkaCmsCore.Accounts.CaptchaCheck`.
+        form =
+          if second_factor,
+            do: code_step_form(socket.assigns),
+            else: sign_in_form(socket.assigns)
+
+        if password_strategy().sign_in_tokens_enabled? do
+          case AshPhoenix.Form.submit(form, params: user, read_one?: true) do
+            {:ok, signed_in} ->
+              {:noreply, redirect(socket, to: token_path(socket.assigns, signed_in))}
+
+            {:error, form} ->
+              case form
+                   |> AshPhoenix.Form.raw_errors(for_path: :all)
+                   |> MishkaCmsCore.Accounts.SecondFactor.refusal() do
+                :required ->
+                  {:noreply,
+                   socket
+                   |> assign(:sign_in_form, nil)
+                   |> assign(:message, nil)
+                   |> assign(:second_factor, Map.take(user, ["email", "password"]))}
+
+                :invalid ->
+                  {:noreply, assign(socket, :message, second_factor_message(:invalid))}
+
+                _not_the_code ->
+                  {:noreply,
+                   socket
+                   |> assign(:sign_in_form, if(second_factor, do: nil, else: form))
+                   |> assign(:second_factor, nil)
+                   |> refused_or(
+                     form,
+                     &assign(&1, :message, %{
+                       title: t("Invalid email or password"),
+                       text: t("Check your details and try again.")
+                     })
+                   )}
+              end
+          end
+        else
+          form = AshPhoenix.Form.validate(form, user)
+
+          {:noreply,
+           socket |> assign(:sign_in_form, form) |> assign(:trigger_action, form.source.valid?)}
+        end
       end
       """
     }
@@ -2820,9 +2860,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
           :sign_in -> t("Sign-in is closed")
           :register -> t("Registration is closed")
           :reset -> t("Password reset is closed")
+          :password -> t("Password sign-in is off")
           _magic_link -> t("Sign-in links are closed")
         end,
-      text: t("This site has switched it off for now.")
+      text:
+        if(action == :password,
+          do: t("This site does not take passwords for now. Sign in another way."),
+          else: t("This site has switched it off for now.")
+        )
     }
     ''')
   end
@@ -2880,6 +2925,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
           id: "auth-second-factor-invalid",
           title: t("That code did not match"),
           text: t("Enter the current code from your authenticator app.")
+        }
+
+      :expired ->
+        %{
+          id: "auth-second-factor-expired",
+          title: t("This sign-in has expired"),
+          text: t("Go back to sign in and start again.")
         }
 
       _password ->
@@ -3029,6 +3081,11 @@ defmodule MishkaCmsCore.Install.StarterContent do
         "وارد شوید تا محتوا، رسانه و تیمتان را مدیریت کنید.",
       "Continue with %{provider}" => "ادامه با %{provider}",
       "or with email" => "یا با ایمیل",
+      "This sign-in has expired" => "این ورود منقضی شده است",
+      "Password sign-in is off" => "ورود با رمز عبور خاموش است",
+      "This site does not take passwords for now. Sign in another way." =>
+        "این سایت فعلاً رمز عبور نمی‌پذیرد. از راه دیگری وارد شوید.",
+      "Go back to sign in and start again." => "به صفحه ورود برگردید و دوباره شروع کنید.",
       "Email" => "ایمیل",
       "Password" => "رمز عبور",
       "Magic link" => "لینک جادویی",

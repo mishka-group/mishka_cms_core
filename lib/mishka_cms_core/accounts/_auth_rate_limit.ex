@@ -18,6 +18,7 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
   | `request_password_reset_token` | 10 per hour | 3 per hour | `security.reset_request_per_*` |
   | `request_magic_link` | 10 per hour | 3 per hour | `security.magic_link_per_*` |
   | `register_with_password` | 10 per hour | — | `security.register_per_ip` |
+  | `register_with_provider`, every sign-in provider's | 30 per 5 minutes | — | `security.sign_in_per_ip` |
   | `change_password` | — | 10 per 15 minutes | `security.change_password_per_account` |
   | `verify_with_totp`, `confirm_setup_with_totp`, `verify_with_recovery_code` | — | 5 per 5 minutes, together | `security.totp_per_account` |
 
@@ -53,6 +54,8 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
     request_password_reset_token: "reset_request",
     request_magic_link: "magic_link",
     register_with_password: "register",
+    # A provider's sign-in is a sign-in, whether or not it makes the account.
+    register_with_provider: "sign_in",
     change_password: "change_password",
     verify_with_totp: "totp",
     confirm_setup_with_totp: "totp",
@@ -131,7 +134,9 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
     do: key(input, "account", input |> Ash.ActionInput.get_argument(:user) |> Map.get(:id))
 
   defp key(%{action: %{name: name}, tenant: tenant}, scope, id),
-    do: "auth:#{Map.fetch!(@buckets, name)}:#{scope}:#{tenant || "master"}:#{id}"
+    do: "auth:#{bucket(name)}:#{scope}:#{tenant || "master"}:#{id}"
+
+  defp bucket(name), do: Map.fetch!(@buckets, name)
 
   defp email(%Ash.Query{} = query), do: Ash.Query.get_argument(query, :email)
   defp email(%Ash.ActionInput{} = input), do: Ash.ActionInput.get_argument(input, :email)
