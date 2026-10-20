@@ -111,7 +111,8 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   @doc """
   Where a rule may send a visitor, trimmed: a path on the site (`/x`, with a query or a fragment if
   it has one) or an absolute `http(s)` URL with a host. `:error` for anything else — `//host`
-  included, which a browser reads as another host.
+  included, which a browser reads as another host, and any `\\`, which a browser reads as `/`, so
+  `/\\host` is another host too.
   """
   @spec normalize_target(String.t()) :: {:ok, String.t()} | :error
   def normalize_target(value) when is_binary(value) do
@@ -119,6 +120,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
     cond do
       value == "" or not String.valid?(value) or spaced?(value) -> :error
+      String.contains?(value, "\\") -> :error
       site_path?(value) -> {:ok, value}
       absolute?(value) -> {:ok, value}
       true -> :error
