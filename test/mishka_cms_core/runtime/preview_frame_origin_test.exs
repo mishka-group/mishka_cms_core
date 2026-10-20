@@ -22,8 +22,12 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewFrameOriginTest do
   not from the Host header, so the very same preview answers on the admin's own origin — and now
   a Page has a token too, which it never did.
 
+  The frame is a path with no host. Built on the endpoint's host, it named `localhost` in production,
+  where a multi-site endpoint has no host configured. The shared link names the sharing admin's
+  domain: the master site's for a master, their own site's for a site admin.
+
   See `MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.frame_url/1` (framed) versus
-  `preview_url/1` (shared).
+  `preview_url/2` (shared), and `MishkaCmsCore.Runtime.DraftPreviewAssets.served_on?/2`.
   """
   use MishkaCmsCore.DataCase, async: false
 
@@ -31,7 +35,8 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewFrameOriginTest do
 
   alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
-  alias MishkaCmsCore.Runtime.{ErrorPage, Layout, Page}
+  alias MishkaCmsCore.Runtime.{DraftPreviewAssets, ErrorPage, Layout, Page}
+  alias MishkaCmsCore.Runtime.States.SiteState
 
   @endpoint_host Application.compile_env!(:mishka_cms_core, :endpoint)
 
@@ -55,15 +60,15 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewFrameOriginTest do
   end
 
   describe "the URL the modal frames" do
-    test "is on the admin's own origin, never the record's site host" do
+    test "is a path on the admin's own origin, naming no host at all" do
       for mod <- [Page, Layout, ErrorPage] do
         url = PreviewHelpers.frame_url(record(mod, []))
 
-        assert url =~ admin_host(),
-               "#{inspect(mod)} is framed somewhere other than the admin — CSP will refuse it"
+        assert String.starts_with?(url, "/_preview/"),
+               "#{inspect(mod)} is framed at a host of its own — CSP will refuse it"
 
-        refute url =~ "api.example.test",
-               "#{inspect(mod)} is framed at its site's domain, which may be a different machine"
+        refute url =~ "://"
+        refute url =~ admin_host(), "#{inspect(mod)} is framed at the endpoint's host"
       end
     end
 
@@ -87,17 +92,78 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewFrameOriginTest do
   end
 
   describe "the URL the modal SHARES" do
-    # Different job, different answer: this is the link you send to a reviewer, opened rather than
-    # embedded, so it names the site's own public domain.
-    test "keeps the record's site host" do
-      url = PreviewHelpers.preview_url(record(Page, []))
+    setup do
+      SiteState.clear()
 
-      assert url =~ "api.example.test"
-      refute url =~ admin_host()
+      master = %{
+        id: Ecto.UUID.generate(),
+        name: "main",
+        host: "master.example.test",
+        master: true
+      }
+
+      tenant = %{id: Ecto.UUID.generate(), name: "shop", host: "shop.example.test", master: false}
+
+      for site <- [master, tenant],
+          do: SiteState.save(Map.merge(site, %{priority: 0, active: true}))
+
+      on_exit(&SiteState.clear/0)
+      %{master: master, tenant: tenant}
     end
 
-    test "and falls back to the endpoint's host for a record with no site" do
-      assert PreviewHelpers.preview_url(record(Layout, site: nil)) =~ admin_host()
+    test "a master's link is on the master site's domain, whatever site the record is on" do
+      master_user = %{site_id: nil}
+
+      for record <- [record(Page, []), record(Layout, site: nil)] do
+        url = PreviewHelpers.preview_url(record, master_user)
+
+        assert url =~ "://master.example.test"
+        refute url =~ "api.example.test"
+      end
+    end
+
+    test "a site admin's link is on their own site's domain, a global record's too", %{
+      tenant: tenant
+    } do
+      admin = %{site_id: tenant.id, site: %{host: tenant.host}}
+      unloaded = %{site_id: tenant.id, site: %Ash.NotLoaded{}}
+
+      for viewer <- [admin, unloaded],
+          record <- [record(Page, site: tenant), record(ErrorPage, site: nil)] do
+        assert PreviewHelpers.preview_url(record, viewer) =~
+                 ~r{://shop\.example\.test(:\d+)?/_preview/}
+      end
+    end
+
+    test "with no admin, a record's own site's domain, and the master site's for a global one" do
+      assert PreviewHelpers.preview_url(record(Page, [])) =~
+               ~r{://api\.example\.test(:\d+)?/_preview/page/}
+
+      assert PreviewHelpers.preview_url(record(Layout, site: nil)) =~ "://master.example.test"
+    end
+
+    test "never the endpoint's host while a master site exists" do
+      refute PreviewHelpers.preview_url(record(ErrorPage, site: nil)) =~ "://#{admin_host()}"
+    end
+  end
+
+  # A PREVIEW OF SITE A IS NEVER SHOWN ON SITE B. Its own site's address and the master site's serve
+  # it; a global record belongs to every site.
+  describe "the addresses a preview is served on" do
+    test "its own site's and the master site's, never another site's" do
+      a = Ecto.UUID.generate()
+      b = Ecto.UUID.generate()
+      master = %{id: Ecto.UUID.generate(), master: true}
+
+      assert DraftPreviewAssets.served_on?(a, %{id: a, master: false})
+      assert DraftPreviewAssets.served_on?(a, master)
+      refute DraftPreviewAssets.served_on?(a, %{id: b, master: false})
+    end
+
+    test "a global record on any site's address, and nothing where no site answers" do
+      assert DraftPreviewAssets.served_on?(nil, %{id: Ecto.UUID.generate(), master: false})
+      refute DraftPreviewAssets.served_on?(nil, nil)
+      refute DraftPreviewAssets.served_on?(Ecto.UUID.generate(), nil)
     end
   end
 
@@ -214,6 +280,40 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewFrameOriginTest do
         )
 
       assert html =~ "/_preview/error_page/#{err.preview_token}?status=500"
+    end
+
+    test "the frame loads a path and the address bar names the reader's domain" do
+      SiteState.clear()
+      on_exit(&SiteState.clear/0)
+
+      SiteState.save(%{
+        id: Ecto.UUID.generate(),
+        name: "main",
+        host: "master.example.test",
+        priority: 0,
+        active: true,
+        master: true
+      })
+
+      err = record(ErrorPage, site: nil, error_pages: [%{status: 404, template: "x"}])
+
+      html =
+        render_component(&RuntimePreviewModal.modal/1,
+          preview:
+            preview(%{
+              resource: ErrorPage,
+              record: err,
+              preview_error_status: 404,
+              current_user: %{site_id: nil}
+            })
+        )
+
+      assert html =~ ~s(src="/_preview/error_page/#{err.preview_token}?status=404")
+
+      assert html =~
+               ~r{://master\.example\.test(:\d+)?/_preview/error_page/#{err.preview_token}\?status=404}
+
+      refute html =~ "://#{admin_host()}/_preview"
     end
   end
 end

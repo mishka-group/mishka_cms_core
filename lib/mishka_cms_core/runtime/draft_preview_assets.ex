@@ -16,7 +16,7 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   template's `phx-hook` references `JsHook` rows in that bundle), so hooks run with no extra work.
   The token records the site its assets belong to (`remember_site/2`) — the record's own, or for a
   global record the host's its CSS was compiled against — so they are handed to whoever holds the
-  link, on whatever address they open it, by that site's state (`site/1`).
+  link, by that site's state (`site/1`), on an address `served_on?/2` allows.
 
   A page or a layout is drawn by its compiled module (`ensure_module/2`), built by the compiler its
   site uses, so its own helpers and the live components it nests render as on the published page.
@@ -93,6 +93,25 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   end
 
   def site(_token), do: :error
+
+  @doc """
+  Whether a preview of a record of `site_id` (`nil` for a global one) may be served on the address of
+  `current_site`, the site the request's host resolved to.
+
+  The master site's address serves every site's previews, and a site's own address serves its own.
+  A global record belongs to every site, so any site's address serves it. Another site's address,
+  or a request no site answers for, serves nothing: a preview of site A is never shown on site B.
+
+      served_on?(site_a_id, %{id: site_a_id, master: false})  #=> true
+      served_on?(site_a_id, %{id: master_id, master: true})   #=> true
+      served_on?(site_a_id, %{id: site_b_id, master: false})  #=> false
+      served_on?(nil, %{id: site_b_id, master: false})        #=> true
+  """
+  @spec served_on?(String.t() | nil, map() | nil) :: boolean()
+  def served_on?(_site_id, %{master: true}), do: true
+  def served_on?(nil, %{id: id}) when is_binary(id), do: true
+  def served_on?(site_id, %{id: site_id}) when is_binary(site_id), do: true
+  def served_on?(_site_id, _current_site), do: false
 
   @doc "Delete the draft's temp CSS, its site and its compiled module (on publish / discard)."
   def purge(%{preview_token: token} = record) when is_binary(token) do
