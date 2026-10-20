@@ -18,6 +18,7 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
   | `request_password_reset_token` | 10 per hour | 3 per hour | `security.reset_request_per_*` |
   | `request_magic_link` | 10 per hour | 3 per hour | `security.magic_link_per_*` |
   | `register_with_password` | 10 per hour | — | `security.register_per_ip` |
+  | a provider's `register_with_<provider>` | 30 per 5 minutes | — | `security.sign_in_per_ip` |
   | `change_password` | — | 10 per 15 minutes | `security.change_password_per_account` |
   | `verify_with_totp`, `confirm_setup_with_totp`, `verify_with_recovery_code` | — | 5 per 5 minutes, together | `security.totp_per_account` |
 
@@ -131,7 +132,17 @@ defmodule MishkaCmsCore.Accounts.AuthRateLimit do
     do: key(input, "account", input |> Ash.ActionInput.get_argument(:user) |> Map.get(:id))
 
   defp key(%{action: %{name: name}, tenant: tenant}, scope, id),
-    do: "auth:#{Map.fetch!(@buckets, name)}:#{scope}:#{tenant || "master"}:#{id}"
+    do: "auth:#{bucket(name)}:#{scope}:#{tenant || "master"}:#{id}"
+
+  # A PROVIDER'S SIGN-IN — every `register_with_<provider>` but the password's — is a sign-in.
+  defp bucket(name) do
+    case Map.fetch(@buckets, name) do
+      {:ok, bucket} -> bucket
+      :error -> if social?(name), do: "sign_in", else: Map.fetch!(@buckets, name)
+    end
+  end
+
+  defp social?(name), do: name |> Atom.to_string() |> String.starts_with?("register_with_")
 
   defp email(%Ash.Query{} = query), do: Ash.Query.get_argument(query, :email)
   defp email(%Ash.ActionInput{} = input), do: Ash.ActionInput.get_argument(input, :email)

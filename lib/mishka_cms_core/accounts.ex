@@ -159,6 +159,7 @@ defmodule MishkaCmsCore.Accounts do
         get :read
 
         patch :change_password, route: "/change-password", read_action: :read_current_user
+        patch :set_password, route: "/set-password", read_action: :read_current_user
 
         post :reset_password_api do
           route "/reset-password"
@@ -221,6 +222,7 @@ defmodule MishkaCmsCore.Accounts do
     resource MishkaCmsCore.Accounts.Token
     resource MishkaCmsCore.Accounts.RecoveryCode
     resource MishkaCmsCore.Accounts.User
+    resource MishkaCmsCore.Accounts.UserIdentity
     resource MishkaCmsCore.Accounts.Permission
     resource MishkaCmsCore.Accounts.UserPermission
   end

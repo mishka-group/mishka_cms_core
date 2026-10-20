@@ -477,6 +477,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
 
   defp collapsible?({:ungrouped, _n}, _fields), do: false
 
+  # A group drawn as one table, a row per switch, while any setting shown in it declares
+  # `layout: :table` and every one of them is a switch.
+  defp table?(fields),
+    do:
+      Enum.any?(fields, fn {definition, _editable} -> definition.layout == :table end) and
+        Enum.all?(fields, fn {definition, _editable} -> definition.type == :boolean end)
+
   # Whether an accordion is drawn open: the last save refused one of its settings, so the message
   # under the field is not hidden. It is the first draw only; the browser keeps what the admin did.
   defp open_group?(fields, errors),
@@ -677,6 +684,37 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   # attribute as a list, HEEx would join it with spaces, and the save would read one entry.
   defp input_value(value) when is_list(value), do: Enum.join(value, ", ")
   defp input_value(value), do: value
+
+  attr :definition, :map, required: true
+  attr :editable, :boolean, required: true
+  attr :value, :any, default: nil
+
+  # A boolean setting's switch. An `inverted` one is on while the stored value is false, so the
+  # hidden field sends the value the switch means when it is off, and the box the one when on.
+  defp switch(assigns) do
+    assigns =
+      assign(assigns,
+        on: if(assigns.definition.inverted, do: "false", else: "true"),
+        off: if(assigns.definition.inverted, do: "true", else: "false"),
+        checked?: truthy?(assigns.value) != assigns.definition.inverted
+      )
+
+    ~H"""
+    <label class={["relative inline-flex shrink-0", @editable && "cursor-pointer"]}>
+      <input type="hidden" name={field_name(@definition)} value={@off} />
+      <input
+        type="checkbox"
+        id={"set-#{dom_id(@definition.key)}"}
+        name={field_name(@definition)}
+        value={@on}
+        checked={@checked?}
+        disabled={!@editable}
+        class="peer sr-only"
+      />
+      <span class="flex h-[29px] w-[50px] items-center rounded-[20px] bg-[#d9d7d0] p-[3px] transition-colors after:size-[23px] after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgba(0,0,0,0.25)] after:transition-transform peer-checked:bg-[#5b57d6] peer-checked:after:translate-x-[21px] rtl:peer-checked:after:-translate-x-[21px]"></span>
+    </label>
+    """
+  end
 
   attr :id, :string, required: true
   attr :title, :string, default: nil

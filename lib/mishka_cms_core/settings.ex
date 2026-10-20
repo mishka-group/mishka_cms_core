@@ -102,6 +102,8 @@ defmodule MishkaCmsCore.Settings do
     global_label: nil,
     visible: true,
     collapsed: false,
+    layout: nil,
+    inverted: false,
     trim: false
   }
 
@@ -128,6 +130,8 @@ defmodule MishkaCmsCore.Settings do
           global_label: String.t() | nil,
           visible: boolean() | (map() -> boolean()),
           collapsed: boolean(),
+          layout: :table | nil,
+          inverted: boolean(),
           trim: boolean()
         }
 
@@ -573,6 +577,14 @@ defmodule MishkaCmsCore.Settings do
 
       Settings.define("site.theme_color", :string,
         group: gettext_noop("App & home screen"), collapsed: true, default: "", scope: :site)
+
+  `:layout` (default `nil`) set to `:table` draws the setting's `:group` as one table, a row per
+  setting — for a group of switches read together, such as the ways of signing in. Like
+  `:collapsed`, one setting declaring it is enough.
+
+  `:inverted` (default `false`) draws a `:boolean` as its opposite: the switch is on while the stored
+  value is `false`. A `*.closed` key reads as the way it closes, on while open, beside switches that
+  are on while on.
   """
   @spec define(String.t(), input_type(), keyword()) :: definition()
   def define(key, type, opts \\ []) do
@@ -602,8 +614,13 @@ defmodule MishkaCmsCore.Settings do
   @spec shown_when(definition(), String.t(), term()) :: definition()
   def shown_when(definition, key, value) do
     own = Map.get(definition, :visible, true)
-    Map.put(definition, :visible, &(&1[key] == value and visible?(%{visible: own}, &1)))
+    Map.put(definition, :visible, &(holds?(&1[key], value) and visible?(%{visible: own}, &1)))
   end
+
+  # A SWITCH ON SCREEN IS TEXT: a saved boolean reads `true`, the same switch as the form sends it
+  # reads `"true"`, and both are the switch on.
+  defp holds?(current, value) when is_boolean(value), do: current in [value, to_string(value)]
+  defp holds?(current, value), do: current == value
 
   @doc """
   Aggregates every definition (core + config providers + the `settings:register` hook), caches them in
@@ -1068,6 +1085,7 @@ defmodule MishkaCmsCore.Settings do
     ] ++
       email_definitions() ++
       MishkaCmsCore.Accounts.AuthGate.definitions() ++
+      MishkaCmsCore.Accounts.SignInProvider.settings() ++
       MishkaCmsCore.Captcha.settings() ++ MishkaCmsCore.Runtime.ShareCardQueue.settings()
   end
 

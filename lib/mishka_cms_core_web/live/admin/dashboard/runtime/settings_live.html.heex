@@ -157,7 +157,57 @@ SPDX-License-Identifier: Apache-2.0
                   collapsible?={collapsible?(section, section_fields)}
                   open?={open_group?(section_fields, @field_errors)}
                 >
-                  <div class="flex flex-col gap-5">
+                  <div
+                    :if={table?(section_fields)}
+                    data-role="settings-table"
+                    class="overflow-hidden rounded-[13px] border border-[#f0efea]"
+                  >
+                    <table class="w-full border-collapse">
+                      <thead class="bg-[#faf9f6]">
+                        <tr class="text-[10.5px] font-bold uppercase tracking-[0.13em] text-[#a8a5a0]">
+                          <th class="px-[18px] py-3 text-start font-bold">{gettext("Method")}</th>
+                          <th class="w-[86px] px-[18px] py-3 text-end font-bold">
+                            {gettext("On")}
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody class="divide-y divide-[#f0efea] bg-white">
+                        <tr
+                          :for={{definition, editable} <- section_fields}
+                          id={"row-#{dom_id(definition.key)}"}
+                          class={[!editable && "opacity-60"]}
+                        >
+                          <td class="px-[18px] py-[14px] align-middle">
+                            <div class="flex flex-wrap items-center gap-[9px]">
+                              <span class="text-[13.5px] font-semibold text-[#1b1a18]">
+                                {field_label(definition, @active_scope)}
+                              </span>
+                              <span class={[
+                                badge_class(),
+                                scope_badge_class(definition, @active_scope)
+                              ]}>
+                                {scope_badge_label(definition, @active_scope)}
+                              </span>
+                            </div>
+                            <div
+                              :if={definition.description}
+                              class="mt-[3px] text-[11.5px] font-medium text-[#9a978f]"
+                            >
+                              {Settings.text(definition.description)}
+                            </div>
+                          </td>
+                          <td class="px-[18px] py-[14px] text-end align-middle">
+                            <.switch
+                              definition={definition}
+                              editable={editable}
+                              value={@form[definition.key].value}
+                            />
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                  <div :if={!table?(section_fields)} class="flex flex-col gap-5">
                     <div :for={{definition, editable} <- section_fields}>
                       <%= if definition.type == :boolean do %>
                         <div class={[
@@ -188,27 +238,22 @@ SPDX-License-Identifier: Apache-2.0
                               class="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[#f0e2c4] bg-[#fbf1df] px-2.5 py-1 text-[11.5px] font-semibold text-[#a5691a]"
                             >
                               <.icon name="hero-lock-closed" class="size-[13px]" />
-                              {gettext(
-                                "On for every site from Global — this site's own switch cannot turn it off."
-                              )}
+                              {if definition.inverted,
+                                do:
+                                  gettext(
+                                    "Off for every site from Global — this site's own switch cannot turn it on."
+                                  ),
+                                else:
+                                  gettext(
+                                    "On for every site from Global — this site's own switch cannot turn it off."
+                                  )}
                             </div>
                           </div>
-                          <label class={[
-                            "relative inline-flex shrink-0",
-                            editable && "cursor-pointer"
-                          ]}>
-                            <input type="hidden" name={field_name(definition)} value="false" />
-                            <input
-                              type="checkbox"
-                              id={"set-#{dom_id(definition.key)}"}
-                              name={field_name(definition)}
-                              value="true"
-                              checked={truthy?(@form[definition.key].value)}
-                              disabled={!editable}
-                              class="peer sr-only"
-                            />
-                            <span class="flex h-[29px] w-[50px] items-center rounded-[20px] bg-[#d9d7d0] p-[3px] transition-colors after:size-[23px] after:rounded-full after:bg-white after:shadow-[0_1px_3px_rgba(0,0,0,0.25)] after:transition-transform peer-checked:bg-[#5b57d6] peer-checked:after:translate-x-[21px] rtl:peer-checked:after:-translate-x-[21px]"></span>
-                          </label>
+                          <.switch
+                            definition={definition}
+                            editable={editable}
+                            value={@form[definition.key].value}
+                          />
                         </div>
                       <% else %>
                         <label

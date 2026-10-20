@@ -5,8 +5,9 @@
 defmodule MishkaCmsCore.Accounts.AuthGate do
   @moduledoc """
   The ways into an account a site's admin — or a master, for any site or every site — can close:
-  `:sign_in`, `:register`, `:reset` (forgot password) and `:magic_link` (sign-in links). Set on the
-  settings page's Security tab; see `definitions/0`.
+  `:sign_in`, `:register`, `:reset` (forgot password), `:password` (signing in or registering with
+  a password) and `:magic_link` (sign-in links). Set on the settings page's Security tab, the last
+  two as switches in its "Sign-in methods" table; see `definitions/0`.
 
   ## Who still gets in
 
@@ -66,9 +67,9 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
-  @actions [:sign_in, :register, :reset, :magic_link]
+  @actions [:sign_in, :register, :reset, :password, :magic_link]
 
-  @type action :: :sign_in | :register | :reset | :magic_link
+  @type action :: :sign_in | :register | :reset | :password | :magic_link
   @type who :: %{optional(:user) => map() | nil, optional(:email) => String.t() | nil}
 
   @typedoc "Values about to be saved, by scope (`nil` for Global) and key, read before the saved ones."
@@ -263,6 +264,12 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
       text: gettext("Resetting a password is switched off on this site for now.")
     }
 
+  def describe(:password),
+    do: %{
+      title: gettext("Password sign-in is off"),
+      text: gettext("This site does not take passwords for now. Sign in another way.")
+    }
+
   def describe(:magic_link),
     do: %{
       title: gettext("Sign-in links are closed"),
@@ -273,6 +280,24 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
   @spec definitions() :: [Settings.definition()]
   def definitions do
     [
+      closed(
+        :password,
+        gettext_noop("Password"),
+        gettext_noop("Password on every site"),
+        gettext_noop(
+          "Signing in and registering with an email and a password. Off, only the people allowed under Still allowed use one."
+        ),
+        method()
+      ),
+      closed(
+        :magic_link,
+        gettext_noop("Sign-in links by email"),
+        gettext_noop("Sign-in links by email on every site"),
+        gettext_noop(
+          "A one-time link sent to the account's email. Off, links go only to the people allowed under Still allowed, and one already sent stops working for everyone else."
+        ),
+        method()
+      ),
       closed(
         :sign_in,
         gettext_noop("Close sign-in"),
@@ -308,14 +333,6 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
           "Reset emails go only to the people allowed below, and a reset link already sent stops working for everyone else."
         )
       ),
-      closed(
-        :magic_link,
-        gettext_noop("Close sign-in links"),
-        gettext_noop("Close sign-in links on every site"),
-        gettext_noop(
-          "Sign-in link emails go only to the people allowed below, and a link already sent stops working for everyone else."
-        )
-      ),
       Settings.define("auth.allowed_permissions", :list,
         default: ["*"],
         validate: &permission_names?/1,
@@ -343,17 +360,33 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
     ]
   end
 
-  defp closed(action, label, global_label, description),
+  # A WAY OF SIGNING IN is a row of the "Sign-in methods" table, switched on while it is open.
+  defp method,
+    do: [
+      group: MishkaCmsCore.Accounts.SignInProvider.methods_group(),
+      collapsed: true,
+      layout: :table,
+      inverted: true
+    ]
+
+  defp closed(action, label, global_label, description, opts \\ []),
     do:
-      Settings.define("auth.#{action}.closed", :boolean,
-        default: false,
-        category: "security",
-        group: gettext_noop("Closed"),
-        scope: :both,
-        resolve: :any,
-        label: label,
-        global_label: global_label,
-        description: description
+      Settings.define(
+        "auth.#{action}.closed",
+        :boolean,
+        Keyword.merge(
+          [
+            default: false,
+            category: "security",
+            group: gettext_noop("Closed"),
+            scope: :both,
+            resolve: :any,
+            label: label,
+            global_label: global_label,
+            description: description
+          ],
+          opts
+        )
       )
 
   defp decide(_action, _site_id, %{site_id: nil, id: id}, _email, _pending) when not is_nil(id),

@@ -29,11 +29,12 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
   @categories "دسته‌بندی‌ها"
 
   describe "imports/1 — what a runtime template imports from LiveViewHelpers" do
-    test "is component/1,2, captcha/1, rich_content/1, t/1,2, csp_nonce/0 and site_path/2 when there are no helpers" do
+    test "is component/1,2, captcha/1, sign_in_providers/1, rich_content/1, t/1,2, csp_nonce/0 and site_path/2 when there are no helpers" do
       all = [
         component: 1,
         component: 2,
         captcha: 1,
+        sign_in_providers: 1,
         rich_content: 1,
         t: 1,
         t: 2,
@@ -57,6 +58,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                  component: 1,
                  component: 2,
                  captcha: 1,
+                 sign_in_providers: 1,
                  rich_content: 1,
                  csp_nonce: 0,
                  site_path: 2
@@ -81,6 +83,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                component: 1,
                component: 2,
                captcha: 1,
+               sign_in_providers: 1,
                rich_content: 1,
                csp_nonce: 0,
                site_path: 2
@@ -92,6 +95,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
                [
                  component: 1,
                  component: 2,
+                 sign_in_providers: 1,
                  rich_content: 1,
                  t: 1,
                  t: 2,
@@ -102,10 +106,28 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
 
     test "and rich_content, for a component that draws its own" do
       assert LiveViewHelpers.imports([%{"name" => "rich_content"}]) ==
-               [component: 1, component: 2, captcha: 1, t: 1, t: 2, csp_nonce: 0, site_path: 2]
+               [
+                 component: 1,
+                 component: 2,
+                 captcha: 1,
+                 sign_in_providers: 1,
+                 t: 1,
+                 t: 2,
+                 csp_nonce: 0,
+                 site_path: 2
+               ]
 
       assert LiveViewHelpers.imports([%{name: "site_path"}]) ==
-               [component: 1, component: 2, captcha: 1, rich_content: 1, t: 1, t: 2, csp_nonce: 0]
+               [
+                 component: 1,
+                 component: 2,
+                 captcha: 1,
+                 sign_in_providers: 1,
+                 rich_content: 1,
+                 t: 1,
+                 t: 2,
+                 csp_nonce: 0
+               ]
     end
   end
 

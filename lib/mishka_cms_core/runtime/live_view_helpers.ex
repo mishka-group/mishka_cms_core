@@ -80,13 +80,14 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaInstaller.Event.Hook
 
-  @renders [component: 1, component: 2, captcha: 1, rich_content: 1]
+  @renders [component: 1, component: 2, captcha: 1, sign_in_providers: 1, rich_content: 1]
   @translates [t: 1, t: 2]
   @nonces [csp_nonce: 0]
   @addresses [site_path: 2]
 
   @doc """
-  What a runtime template imports from here — `component/1,2`, `captcha/1`, `rich_content/1`,
+  What a runtime template imports from here — `component/1,2`, `captcha/1`, `sign_in_providers/1`,
+  `rich_content/1`,
   `t/1,2`, `csp_nonce/0` and `site_path/2` — less any name its own `helpers` already define.
 
   Every compiler — component, page and layout — asks this rather than writing the list itself, so
@@ -136,6 +137,14 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
       <.captcha form={f} for="sign_in" tenant={assigns[:current_tenant]} />
   """
   defdelegate captcha(assigns), to: MishkaCmsCore.Captcha.Widget
+
+  @doc """
+  The buttons of the services the site signs in with — see
+  `MishkaCmsCore.Accounts.SignInProvider.Widget.sign_in_providers/1`.
+
+      <.sign_in_providers site={assigns[:current_site]} />
+  """
+  defdelegate sign_in_providers(assigns), to: MishkaCmsCore.Accounts.SignInProvider.Widget
 
   @doc """
   Stored HTML with the components its markers name drawn in place — a post's body, say.
