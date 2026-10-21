@@ -279,6 +279,27 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
                |> Ash.update()
     end
 
+    # AshAuthentication's default is SHA256Provider: fast, unsalted, for 12 characters (~62 bits).
+    # One guess then checks every account's codes at once in a leaked database; bcrypt is salted
+    # and slow (NIST SP 800-63B, look-up secrets).
+    test "are kept as bcrypt hashes, never as the codes", %{user: user} do
+      codes = recovery_codes!(user)
+
+      stored =
+        MishkaCmsCore.Accounts.RecoveryCode
+        |> Ash.Query.filter(user_id == ^user.id)
+        |> Ash.read!(authorize?: false)
+        |> Enum.map(& &1.code)
+
+      assert length(stored) == 10
+      assert Enum.all?(stored, &String.starts_with?(&1, "$2b$"))
+      assert Enum.all?(codes, &(&1 not in stored))
+
+      # Checked with the same hash they are made with.
+      assert AshAuthentication.Info.strategy!(User, :recovery_code).hash_provider ==
+               AshAuthentication.BcryptProvider
+    end
+
     test "sign in once each in place of the app's code, typed any way", %{user: user} do
       [first, second | _rest] = recovery_codes!(user)
 

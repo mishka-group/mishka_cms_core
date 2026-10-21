@@ -12,10 +12,17 @@ defmodule MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange do
   and the reset's own single-use revocation of that token finds it revoked already ("token has
   already been revoked"). After the commit, the reset has spent its token first.
 
+  **Whether the password changed is decided after the commit, not when the change is attached.**
+  `AshAuthentication.Strategy.Password.HashPasswordChange` writes the hash in a `before_action` hook,
+  so a `where: [changing(:hashed_password)]` on this change reads "not changing" for every action
+  that hashes a password itself, and the change is never attached: a changed password then signed
+  nobody out. The hook is attached to each action that can set a password, and does nothing when
+  the write left the hash as it was.
+
       changes do
         change LogOutEverywhereOnPasswordChange,
           on: [:update],
-          where: [changing(:hashed_password, touching?: true)]
+          where: [action_is([:change_password, :set_password, :reset_password_with_token])]
       end
   """
   use Ash.Resource.Change
@@ -25,18 +32,10 @@ defmodule MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange do
   @impl true
   def change(changeset, _opts, context) do
     Ash.Changeset.after_transaction(changeset, fn
-      changeset, {:ok, user} ->
-        strategy = Info.strategy!(changeset.resource, :log_out_everywhere)
-
-        case Strategy.action(
-               strategy,
-               :log_out_everywhere,
-               %{user: user},
-               Ash.Context.to_opts(context)
-             ) do
-          :ok -> {:ok, user}
-          {:error, error} -> {:error, error}
-        end
+      changeset, {:ok, user} = result ->
+        if Ash.Changeset.changing_attribute?(changeset, :hashed_password),
+          do: log_out_everywhere(changeset, user, context),
+          else: result
 
       _changeset, error ->
         error
@@ -45,4 +44,18 @@ defmodule MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange do
 
   @impl true
   def atomic(changeset, opts, context), do: {:ok, change(changeset, opts, context)}
+
+  defp log_out_everywhere(changeset, user, context) do
+    strategy = Info.strategy!(changeset.resource, :log_out_everywhere)
+
+    case Strategy.action(
+           strategy,
+           :log_out_everywhere,
+           %{user: user},
+           Ash.Context.to_opts(context)
+         ) do
+      :ok -> {:ok, user}
+      {:error, error} -> {:error, error}
+    end
+  end
 end

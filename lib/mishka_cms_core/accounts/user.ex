@@ -65,6 +65,18 @@ defmodule MishkaCmsCore.Accounts.User do
   # another resource by someone who is not an admin.
   @account_relationships [:site, :permissions, :permissions_join_assoc]
 
+  # Every update that can set or clear an account's password, an admin's and `master_update`'s
+  # (through `:update`) included: a new password signs every session out after them (`changes`).
+  @password_actions [
+    :update,
+    :change_password,
+    :set_password,
+    :reset_password_with_token,
+    :claim_unconfirmed,
+    :tenant_update,
+    :master_form_update
+  ]
+
   authentication do
     add_ons do
       # A changed password revokes every token, after the write commits: see
@@ -2254,9 +2266,13 @@ defmodule MishkaCmsCore.Accounts.User do
   end
 
   changes do
+    # A NEW PASSWORD SIGNS EVERY SESSION OUT, after the commit. Every update that can set or clear
+    # one is listed: the change decides from the finished write whether the hash changed, since
+    # `HashPasswordChange` writes it after a `changing(:hashed_password)` condition is read. A test
+    # holds this list against the actions that hash a password.
     change MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange,
       on: [:update],
-      where: [changing(:hashed_password, touching?: true)]
+      where: [action_is(@password_actions)]
   end
 
   # Multi-tenancy configuration using site_id attribute
