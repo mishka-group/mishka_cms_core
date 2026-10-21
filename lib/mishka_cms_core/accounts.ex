@@ -158,8 +158,25 @@ defmodule MishkaCmsCore.Accounts do
 
         get :read
 
-        patch :change_password, route: "/change-password", read_action: :read_current_user
-        patch :set_password, route: "/set-password", read_action: :read_current_user
+        # The device that changes the password stays signed in with a new token; every other
+        # session is signed out (`MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange`).
+        patch :change_password do
+          route "/change-password"
+          read_action :read_current_user
+
+          metadata fn _subject, user, _request ->
+            %{token: user.__metadata__.token}
+          end
+        end
+
+        patch :set_password do
+          route "/set-password"
+          read_action :read_current_user
+
+          metadata fn _subject, user, _request ->
+            %{token: user.__metadata__.token}
+          end
+        end
 
         post :reset_password_api do
           route "/reset-password"
