@@ -3092,6 +3092,17 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert is_binary(auth_token)
 
+      # The token the reset hands back signs in: the device that reset the password stays signed in,
+      # though every older session of the account is signed out.
+      me =
+        make_api_request("#{@api_user_path}/me", nil,
+          method: "GET",
+          headers: [{"authorization", "Bearer #{auth_token}"}, {"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert me.status == 200, me.resp_body
+
       # Verify password was changed using helper
       verify_password_changed(
         user,
@@ -3338,9 +3349,29 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert %{"meta" => %{"token" => auth_token}} = result
       assert is_binary(auth_token)
 
-      # Verify the token works
-      :error =
-        AshAuthentication.Jwt.verify(auth_token, MishkaCmsCore.Accounts.User, tenant: site.id)
+      # The token the reset hands back works
+      assert {:ok, _claims, MishkaCmsCore.Accounts.User} =
+               AshAuthentication.Jwt.verify(auth_token, MishkaCmsCore.Accounts.User,
+                 tenant: site.id
+               )
+
+      # and the reset link does not work twice
+      reused =
+        make_api_request(
+          "#{@api_user_path}/reset-password",
+          %{
+            "type" => "user",
+            "attributes" => %{
+              "reset_token" => reset_token,
+              "password" => "AnotherPassword123!",
+              "password_confirmation" => "AnotherPassword123!"
+            }
+          },
+          headers: [{"x-no-tenant", "false"}],
+          host: site.host
+        )
+
+      assert reused.status in 400..499
     end
   end
 

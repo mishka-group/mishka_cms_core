@@ -222,6 +222,46 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
       assert password_reset(conn, forged, "https://evil.example/en/members") == "/"
     end
 
+    test "a password reset leaves the browser that made it signed in, and no other session", %{
+      conn: conn,
+      site: site
+    } do
+      user = register_user("reset-signed-in@example.com", site.id)
+
+      {:ok, earlier} =
+        User
+        |> Ash.Query.for_read(
+          :sign_in_with_password,
+          %{email: to_string(user.email), password: @password},
+          tenant: site.id
+        )
+        |> Ash.read_one()
+
+      strategy = AshAuthentication.Info.strategy!(User, :password)
+      {:ok, reset_token} = AshAuthentication.Strategy.Password.reset_token_for(strategy, user)
+
+      reset =
+        post(conn, "/api/auth/user/password/reset", %{
+          "user" => %{
+            "reset_token" => reset_token,
+            "password" => "NewPassword456!",
+            "password_confirmation" => "NewPassword456!"
+          }
+        })
+
+      assert token = Plug.Conn.get_session(reset, "user_token")
+
+      refute AshAuthentication.TokenResource.Actions.token_revoked?(
+               MishkaCmsCore.Accounts.Token,
+               token
+             )
+
+      assert AshAuthentication.TokenResource.Actions.token_revoked?(
+               MishkaCmsCore.Accounts.Token,
+               earlier.__metadata__.token
+             )
+    end
+
     test "is not signed for anywhere but this site in the first place" do
       for elsewhere <- [
             "https://evil.example/en/members",
