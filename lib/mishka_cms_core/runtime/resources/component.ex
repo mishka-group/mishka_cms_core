@@ -883,9 +883,12 @@ defmodule MishkaCmsCore.Runtime.Component do
           nested_field :opts, :key_map do
             options [
               [name: :required, type: :toggle, label: dgettext_noop("mishka_gervaz", "Required")],
+              # A DEFAULT IS TEXT ON ONE ATTRIBUTE AND A MAP OR A LIST ON ANOTHER (`default: %{}`), and
+              # a text control cannot draw a map: the form crashed for every component holding one.
+              # `:json` shows it as JSON and reads it back as one (gervaz's `:json` key type).
               [
                 name: :default,
-                type: :text,
+                type: :json,
                 label: dgettext_noop("mishka_gervaz", "Default"),
                 placeholder: dgettext_noop("mishka_gervaz", "e.g. medium")
               ],

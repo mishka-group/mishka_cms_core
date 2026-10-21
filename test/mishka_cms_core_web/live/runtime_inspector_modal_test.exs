@@ -529,6 +529,32 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
     # The pencil on the table's one row, then the form's own submit with `changes` typed in — the
     # browser sends every other control as it was drawn.
+    # A DEFAULT THAT IS A MAP (`default: %{}`, as the docs blocks' `params` carries) was drawn in a
+    # text box, which cannot draw a map: opening the form crashed the page's LiveView, and the modal
+    # came back empty. It is drawn as JSON now and read back as the map it was.
+    test "a map default opens, and is still a map after a save", %{conn: conn} do
+      source =
+        create_component!(
+          name: "map-default-#{unique()}",
+          template: ~s|<div data-size={map_size(@params)}>go</div>|,
+          attrs: [%{"name" => "params", "type" => "any", "opts" => %{"default" => %{}}}],
+          slots: [],
+          active: true,
+          precompile: false
+        )
+
+      html = save_through_the_form(conn, %{"description" => "opened and saved"})
+
+      assert html =~ "opened and saved" or
+               Ash.get!(Component, source.id, authorize?: false).description == "opened and saved"
+
+      assert options(Ash.get!(Component, source.id, authorize?: false)) == %{
+               "params" => %{"default" => %{}}
+             }
+
+      assert render_by_name(source.name) =~ ~s(data-size="0")
+    end
+
     defp save_through_the_form(conn, changes) do
       {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/components")
       render_async(view, @await)
