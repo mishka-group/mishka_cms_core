@@ -4,9 +4,10 @@
 
 defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
   @moduledoc """
-  A new password signs every session of the account out once the write has committed
-  (`MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange`), and a password reset still
-  succeeds.
+  A new password signs every other session of the account out once the write has committed, and
+  keeps the device that made it signed in with a new token
+  (`MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange`); a password reset still
+  succeeds, and a link sent before the change dies with the rest.
 
   AshAuthentication's own `apply_on_password_change?` revokes the tokens inside the write. The reset
   token is stored like a session's, so it goes with them, and the reset's own single-use revocation
@@ -44,10 +45,7 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
       assert revoked?(session)
       assert revoked?(other)
       # The device that reset it stays signed in: the token the reset hands back is a live one.
-      assert {:ok, %{"sub" => _subject}, User} =
-               Jwt.verify(reset.__metadata__.token, User, tenant: user.site_id)
-
-      refute revoked?(reset.__metadata__.token)
+      assert live?(reset.__metadata__.token, user)
       assert {:ok, %User{}} = sign_in(user, @new_password)
       assert {:error, _refused} = sign_in(user, @password)
     end
@@ -62,14 +60,26 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
   end
 
   describe "changing the password" do
-    test "signs every session of the account out", %{user: user} do
+    test "signs every other session out, and keeps the device that changed it signed in", %{
+      user: user
+    } do
       session = signed_in!(user, @password)
       other = signed_in!(user, @password)
 
-      assert {:ok, %User{}} = change_password(user, @password, @new_password)
+      assert {:ok, %User{} = changed} = change_password(user, @password, @new_password)
 
       assert revoked?(session)
       assert revoked?(other)
+      assert live?(changed.__metadata__.token, user)
+      assert {:ok, %User{}} = sign_in(user, @new_password)
+    end
+
+    test "kills a reset link sent before it", %{user: user} do
+      link = reset_token!(user)
+
+      assert {:ok, %User{}} = change_password(user, @password, @new_password)
+
+      assert {:error, _dead} = reset(user, link, "Another789!")
       assert {:ok, %User{}} = sign_in(user, @new_password)
     end
 
@@ -89,7 +99,7 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
       session = signed_in!(user, @password)
       admins = signed_in!(admin, "Password123!")
 
-      assert {:ok, %User{}} =
+      assert {:ok, %User{} = edited} =
                admin_update(user, admin, %{
                  password: @new_password,
                  password_confirmation: @new_password
@@ -97,6 +107,8 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
 
       assert revoked?(session)
       refute revoked?(admins)
+      # The account gets no token: its owner did not sign in anywhere.
+      refute Ash.Resource.get_metadata(edited, :token)
       assert {:ok, %User{}} = sign_in(user, @new_password)
     end
 
@@ -115,8 +127,9 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
       passwordless = claim!(user)
       {:ok, session, _claims} = AshAuthentication.Jwt.token_for_user(passwordless)
 
-      assert {:ok, %User{}} =
+      assert {:ok, %User{} = set} =
                passwordless
+               |> fresh()
                |> Ash.Changeset.for_update(
                  :set_password,
                  %{password: @new_password, password_confirmation: @new_password},
@@ -126,6 +139,7 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
                |> Ash.update()
 
       assert revoked?(session)
+      assert live?(set.__metadata__.token, user)
       assert {:ok, %User{}} = sign_in(user, @new_password)
     end
   end
@@ -159,6 +173,7 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
 
   defp admin_update(user, admin, params) do
     user
+    |> fresh()
     |> Ash.Changeset.for_update(:tenant_update, params, actor: admin, tenant: user.site_id)
     |> Ash.update()
   end
@@ -214,6 +229,7 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
 
   defp change_password(user, current, password) do
     user
+    |> fresh()
     |> Ash.Changeset.for_update(
       :change_password,
       %{current_password: current, password: password, password_confirmation: password},
@@ -223,5 +239,13 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
     |> Ash.update()
   end
 
+  # The account as a request reads it: no token from an earlier sign-in rides along.
+  defp fresh(user), do: Ash.get!(User, user.id, tenant: user.site_id, authorize?: false)
+
   defp revoked?(token), do: Tokens.token_revoked?(Token, token)
+
+  defp live?(token, user) do
+    match?({:ok, %{"sub" => _subject}, User}, Jwt.verify(token, User, tenant: user.site_id)) and
+      not revoked?(token)
+  end
 end

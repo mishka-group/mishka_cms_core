@@ -2909,6 +2909,12 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert response.status == 200
 
+      # The device that changed it gets a new token and stays signed in; the token it used is dead.
+      assert %{"meta" => %{"token" => new_token}} = Jason.decode!(response.resp_body)
+      bearer = &[{"authorization", "Bearer #{&1}"}, {"x-no-tenant", "false"}]
+      assert me(site.host, bearer.(new_token)).status == 200
+      assert me(site.host, bearer.(token)).status in 400..499
+
       # Verify old password no longer works for sign in
       old_password_response =
         make_api_request(
