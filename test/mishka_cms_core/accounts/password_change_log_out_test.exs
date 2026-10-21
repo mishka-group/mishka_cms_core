@@ -17,7 +17,7 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
 
   import MishkaCmsCore.Test.Factory
 
-  alias AshAuthentication.{Info, Strategy}
+  alias AshAuthentication.{Info, Jwt, Strategy}
   alias AshAuthentication.TokenResource.Actions, as: Tokens
   alias MishkaCmsCore.Accounts.{Token, User}
 
@@ -39,10 +39,15 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
       session = signed_in!(user, @password)
       other = signed_in!(user, @password)
 
-      assert {:ok, %User{}} = reset(user, reset_token!(user), @new_password)
+      assert {:ok, %User{} = reset} = reset(user, reset_token!(user), @new_password)
 
       assert revoked?(session)
       assert revoked?(other)
+      # The device that reset it stays signed in: the token the reset hands back is a live one.
+      assert {:ok, %{"sub" => _subject}, User} =
+               Jwt.verify(reset.__metadata__.token, User, tenant: user.site_id)
+
+      refute revoked?(reset.__metadata__.token)
       assert {:ok, %User{}} = sign_in(user, @new_password)
       assert {:error, _refused} = sign_in(user, @password)
     end

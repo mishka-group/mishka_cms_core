@@ -27,7 +27,7 @@ defmodule MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange do
   """
   use Ash.Resource.Change
 
-  alias AshAuthentication.{Info, Strategy}
+  alias AshAuthentication.{Info, Jwt, Strategy}
 
   @impl true
   def change(changeset, _opts, context) do
@@ -54,8 +54,24 @@ defmodule MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange do
            %{user: user},
            Ash.Context.to_opts(context)
          ) do
-      :ok -> {:ok, user}
+      :ok -> reissue(user, context)
       {:error, error} -> {:error, error}
+    end
+  end
+
+  # THE WRITE'S OWN SIGN-IN SURVIVES. A reset signs the account in (`GenerateTokenChange`), and that
+  # token was revoked with the rest, so the device that reset the password would be signed out at
+  # once: it gets a new token in its place. A write that signed nobody in gets none.
+  defp reissue(user, context) do
+    case Ash.Resource.get_metadata(user, :token) do
+      nil ->
+        {:ok, user}
+
+      _revoked ->
+        case Jwt.token_for_user(user, %{"purpose" => "user"}, Ash.Context.to_opts(context)) do
+          {:ok, token, _claims} -> {:ok, Ash.Resource.put_metadata(user, :token, token)}
+          {:error, error} -> {:error, error}
+        end
     end
   end
 end
