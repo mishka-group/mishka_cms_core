@@ -73,6 +73,8 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
     * `params`: `@query_params`, the path's captures (`"slug"`, `"lang"`) and the query.
     * `language`: the language of this response, `page.language`.
     * `site_id`: the site's id.
+    * `current_user`: the signed-in visitor, or `nil` for a guest. A plugin reads the other
+      editions as this visitor, so an edition only some readers may open is offered to them.
     * `translations`: what the layout shows when no plugin says otherwise, already normalised
       (`translations/3`).
     * `section_bar`: `nil`.
@@ -301,8 +303,8 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
   for each key.
 
   `page` is the `:page` section of a page module's `__page_information__/0`, with the language
-  of this response. Options: `:site_id`, `:extra` (the page's `extra`), `:params`
-  (`@query_params`) and `:translations`, the page's own editions
+  of this response. Options: `:site_id`, `:current_user`, `:extra` (the page's `extra`),
+  `:params` (`@query_params`) and `:translations`, the page's own editions
   (`MishkaCmsCore.Runtime.PageEditions.alternates/3`), which `translations/3` normalises.
   """
   @spec given(map(), keyword()) :: map()
@@ -318,6 +320,7 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
       params: Keyword.get(opts, :params) || %{},
       language: Map.get(page, :language),
       site_id: site_id,
+      current_user: Keyword.get(opts, :current_user),
       translations: translations(Keyword.get(opts, :translations, []), site_id),
       section_bar: nil
     }
@@ -376,6 +379,7 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
     %{translations: translations, section_bar: bar} =
       frame(assigns.page,
         site_id: assigns |> Map.get(:private, %{}) |> Map.get(:site_id),
+        current_user: Map.get(assigns, :current_user),
         extra: Map.get(assigns, :extra),
         params: Map.get(assigns, :query_params),
         translations: Map.get(assigns, :page_languages) || []

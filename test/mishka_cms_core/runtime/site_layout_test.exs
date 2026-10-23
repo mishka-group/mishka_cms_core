@@ -340,6 +340,13 @@ defmodule MishkaCmsCore.Runtime.SiteLayoutTest do
       assert given.page.path == "/:lang/probe/post/:slug"
       assert length(given.translations) == 3
       assert given.section_bar == nil
+      assert given.current_user == nil
+    end
+
+    test "names the signed-in visitor, so a plugin reads as them" do
+      visitor = %{id: "visitor"}
+
+      assert SiteLayout.given(page("/x"), current_user: visitor).current_user == visitor
     end
   end
 
