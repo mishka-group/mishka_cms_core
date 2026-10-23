@@ -6,10 +6,17 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   @moduledoc """
   Runs the first-run install: creates every permission name of `permissions/0` that is missing,
   grants `"*"` to the master user (auto-confirmed, no email), creates the first (master) site,
-  installs the chosen Chelekom components, writes the site's sign-in pages whatever the starter
-  checkbox says (`MishkaCmsCore.Install.StarterContent.ensure_auth!/1`), compiles the new site's
-  runtime — exactly as a normal boot would — and flips the install flag. A name already stored is
-  left as it is, so re-running after seeds is safe.
+  installs the chosen Chelekom components, writes the site's starter content — the theme, the
+  header, the footer, the `site-main` layout and the home page
+  (`MishkaCmsCore.Install.StarterContent.seed!/2`) — and its sign-in pages
+  (`MishkaCmsCore.Install.StarterContent.ensure_auth!/1`), compiles the new site's runtime —
+  exactly as a normal boot would — and flips the install flag. A name already stored is left as it
+  is, so re-running after seeds is safe.
+
+  THE STARTER IS NOT A CHOICE. Every page of a site, an extension's included, is drawn in the
+  `site-main` layout (`MishkaCmsCore.Runtime.SiteLayout`), so a site without it has no frame for
+  any of them; and a first install whose `/` answers nothing is a broken one. The installer's box
+  says so and cannot be unticked; a `:starter_content` given here is not read.
 
   Everything runs `authorize?: false` because no privileged actor exists yet — which is why
   this is reachable only while the CMS is uninstalled (`MishkaCms.Plugs.InstallGate`).
@@ -58,7 +65,6 @@ defmodule MishkaCmsCore.Install.Bootstrap do
           required(:site_name) => String.t(),
           required(:host) => String.t(),
           optional(:component_selection) => map(),
-          optional(:starter_content) => boolean(),
           optional(:languages) => [String.t()],
           optional(:language_urls) => String.t(),
           optional(:settings) => %{optional(String.t()) => term()},
@@ -302,34 +308,31 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   end
 
   # BEFORE THE COMPILE STEP, because that is what turns the rows just written into modules and a
-  # stylesheet. Off is a real answer — an install migrating its own content wants an empty site —
-  # so the step reports what it did rather than being skipped silently.
+  # stylesheet, and before the extensions, whose pages hang on the layout it writes. Always: see
+  # "The starter is not a choice" above. An install migrating its own content replaces the home
+  # page; the frame is what every page of it is drawn in.
   defp run_step(:starter_content, acc, progress) do
-    if Map.get(acc.params, :starter_content, false) do
-      # THE NAME AS TYPED. `Site :create` slugifies it, so the row says `acme-docs` where the user
-      # wrote "Acme Docs" — the tenant key, and not what belongs in the header of their first page.
-      report = StarterContent.seed!(acc.site, brand: acc.params[:site_name])
+    # THE NAME AS TYPED. `Site :create` slugifies it, so the row says `acme-docs` where the user
+    # wrote "Acme Docs" — the tenant key, and not what belongs in the header of their first page.
+    report = StarterContent.seed!(acc.site, brand: acc.params[:site_name])
 
-      progress.(
-        {:starter_content, :log,
-         ngettext(
-           "%{pages} page, %{components} components",
-           "%{pages} pages, %{components} components",
-           length(report.pages),
-           pages: length(report.pages),
-           components: length(report.components)
-         )}
-      )
-    else
-      progress.({:starter_content, :log, gettext("Skipped — this site starts empty")})
-    end
+    progress.(
+      {:starter_content, :log,
+       ngettext(
+         "%{pages} page, %{components} components",
+         "%{pages} pages, %{components} components",
+         length(report.pages),
+         pages: length(report.pages),
+         components: length(report.components)
+       )}
+    )
 
     {:ok, acc}
   end
 
-  # WHATEVER THE STARTER CHECKBOX SAYS: a site with no sign-in page lets nobody sign in, its master
-  # included. Before the compile step, which turns them into modules, and after the settings, whose
-  # languages decide which built-in words are written.
+  # A SITE WITH NO SIGN-IN PAGE LETS NOBODY SIGN IN, its master included. Before the compile step,
+  # which turns them into modules, and after the settings, whose languages decide which built-in
+  # words are written.
   defp run_step(:auth_pages, acc, progress) do
     report = StarterContent.ensure_auth!(acc.site)
 

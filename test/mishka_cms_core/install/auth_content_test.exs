@@ -496,6 +496,10 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
   end
 
   describe "a site created in the admin" do
+    # THE JOB WRITES THE STARTER TOO, which no master here can keep a logo for: it says so in the log
+    # and goes on to the sign-in pages, which is what these assert.
+    @describetag :capture_log
+
     test "enqueues its sign-in pages" do
       jobs_off()
       site = created_site!()

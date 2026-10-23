@@ -28,7 +28,9 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
 
   `MishkaCmsWeb.RuntimeLive` assigns `@page.language` — the language THIS response is in, so the
   captured one on a pattern page — and `@page_languages`, which is `alternates/3` of `editions/2`,
-  each at its public address (`MishkaCmsCore.Runtime.Languages.url/3`):
+  each at its public address (`MishkaCmsCore.Runtime.Languages.url/3`), unless the extension that
+  owns the record a page shows answers with that record's own translations
+  (`MishkaCmsCore.Runtime.SiteLayout`):
 
       <a :for={edition <- @page_languages} href={edition.path} hreflang={edition.language}>
         {String.upcase(edition.language)}

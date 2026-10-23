@@ -22,13 +22,24 @@ defmodule MishkaCmsCore.Install.StarterContent do
   document; the header's toggle sets that attribute through the host's `phx:set-theme` event, the
   same one the sign-in layout uses.
 
+  ## Every site has it
+
+  The installer writes it whatever its first screen said (`MishkaCmsCore.Install.Bootstrap`), and
+  a site created later in the admin gets the same from its `"provision"` job
+  (`MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker`), so every site of an install has a home
+  page, the theme, the header, the footer and the `site-main` layout.
+
   ## What belongs to the layout and what to the page
 
-  The header and the footer are components, drawn by the `site-main` layout, so a page the site adds
-  later has them without asking. The page at `/:lang` is everything between them. The layout also
-  links, from the document's `<head>`, the two typefaces the theme does not ship, Geist and Geist
-  Mono, from Google Fonts, which the public Content-Security-Policy already allows; Newsreader comes
-  with the host's own `/fonts/fonts.css`.
+  ONE LAYOUT FOR EVERY PAGE. The header and the footer are components, drawn by the `site-main`
+  layout, so every page the site has, the blog's and the docs' among them, has the home page's
+  header and footer without asking. The page at `/:lang` is everything between them. What the
+  layout draws, the content column a page is drawn in and what a page hands the layout (its
+  languages and the bar under the header) are `MishkaCmsCore.Runtime.SiteLayout`'s.
+
+  The layout also links, from the document's `<head>`, the two typefaces the theme does not ship,
+  Geist and Geist Mono, from Google Fonts, which the public Content-Security-Policy already
+  allows; Newsreader comes with the host's own `/fonts/fonts.css`.
 
   ## What the header changes with
 
@@ -40,12 +51,33 @@ defmodule MishkaCmsCore.Install.StarterContent do
       open it, and Sign out, which is the DELETE the sign-out page's own form sends. Naming the
       visitor in the layout is also what makes the runtime load one for pages that use it
       (`MishkaCmsCore.Runtime.Compilers.UserClosure`).
-    * `@page_languages` — the languages the page answers in, each at the address
-      `MishkaCmsCore.Runtime.Languages.url/3` gave it. With two or more the header has a language
-      switcher: a flag (`Languages.flag/1`) and a name (`Languages.name/1`) for each, the current one
+    * `@page_languages` — the languages the page is written in, each at its own address, as
+      `MishkaCmsCore.Runtime.SiteLayout` resolves them: the page's own editions, or the record's
+      translations an extension answers with. With two or more the header has a language
+      switcher: a flag (`Languages.flag/1`) and the entry's `name` for each, the current one
       marked. A page in one language has none.
     * The version the home page's pill shows is `MishkaCmsCore.Helpers.host_version/0`, the
       application's own, read when the page is drawn.
+
+  ## The theme
+
+  Three blocks of design tokens and one utility:
+
+    * the admin palette the error pages and the dev seeds' pages are written in (`ground`, `ink`,
+      `accent`, …);
+    * the home page's colours, each that changes in the dark with a `-dark` twin (`page`, `fg`,
+      `dim`, `surface`, `edge`, …), and its three typefaces;
+    * the colours the extensions' pages share, so a blog and a documentation kit are written in
+      the site's tokens and not in hex values of their own:
+      * six tints, each a surface and its ink: `tint-1` to `tint-6`, with `tint-N-ink`, and
+        `tint-N-dark`, `tint-N-ink-dark` for the dark (teal, violet, amber, rose, blue, stone);
+      * `chip-wash` (`-dark`), the wash behind a chosen chip or link;
+      * `brand-dark`, the brand on a dark page;
+      * `body` (`-dark`), the text of a long read;
+      * `edge-hover`, the edge a hovered or focused card takes, the same in both;
+      * `warn-ink` (`-dark`), the ink of a warning or a featured mark;
+    * `site-bleed`, which lets a section run from one edge of the window to the other while its
+      content stays in the layout's column (`MishkaCmsCore.Runtime.SiteLayout`).
 
   ## The logo
 
@@ -68,7 +100,22 @@ defmodule MishkaCmsCore.Install.StarterContent do
   It writes ONLY WHAT IS MISSING, the rule the whole seeding surface follows: a row found by its
   name — the key the database keeps — is left exactly as it is, edits and all, and a page is asked
   about through `MishkaCmsCore.Runtime.PageProvision`, which knows that a held NAME and a held
-  ADDRESS are two different answers. Nothing here updates.
+  ADDRESS are two different answers.
+
+  ## Bringing an older site up to date
+
+  The one exception is `upgrade/1`, which `seed!/2` runs on the rows it finds, and which
+  `MishkaCmsCore.Runtime.ExtensionProvision` runs before an extension writes its pages. It adds
+  what a release needs and touches nothing an admin wrote:
+
+    * the theme gains each token and the `site-bleed` utility it does not declare yet, in a block
+      of their own after the row's content; a value already there is kept, edited or not;
+    * the `site-main` layout takes the content column and the section bar, when its frame, its
+      messages and its `<main>` are still what an earlier release wrote;
+    * the home page drops the containers of its own, when its three sections are still what an
+      earlier release wrote and the layout draws the column.
+
+  A layout or a home page that was edited where the upgrade would write keeps everything it has.
 
   ## The addresses
 
@@ -150,7 +197,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
   #
   # The first block is what the error pages and the dev seeds' pages are written in; the second is
   # the home page's, where every colour that changes in the dark has a `-dark` twin and the markup
-  # pairs them with `dark:`. A colour that is the same in both (`brand`) has none.
+  # pairs them with `dark:`. A colour that is the same in both (`edge-hover`) has none. The third is
+  # what the extensions' pages share, which the blog's and the docs' kits wrote as hex values of
+  # their own before it was here; `brand-dark` is the brand of the second block, on a dark page.
+  #
+  # `site-bleed` is the one utility: a section that runs edge to edge inside the layout's column.
+  # The negative margin reaches the window's edges and the padding brings the content back to the
+  # column's, both measured against the column the section sits in. The layout clips what the
+  # scrollbar would add, so no page scrolls sideways.
   @theme_css ~S"""
   /* The MishkaCMS admin palette, as this site's own design tokens. */
   @theme {
@@ -197,6 +251,50 @@ defmodule MishkaCmsCore.Install.StarterContent do
     --font-geist: "Geist", system-ui, sans-serif;
     --font-geist-mono: "Geist Mono", monospace;
     --font-newsreader: "Newsreader", Georgia, serif;
+  }
+
+  /* What the extensions' pages share: six tints, each a surface and its ink, the wash behind a
+     chosen chip, the brand on a dark page, the text of a long read, the edge a hovered card takes
+     and the ink of a warning. */
+  @theme {
+    --color-tint-1: #e7f1ee;
+    --color-tint-1-ink: #2f6b5e;
+    --color-tint-1-dark: #1d2b28;
+    --color-tint-1-ink-dark: #8fd1bf;
+    --color-tint-2: #eceafb;
+    --color-tint-2-ink: #5b4fe0;
+    --color-tint-2-dark: #24223a;
+    --color-tint-2-ink-dark: #a9a2f7;
+    --color-tint-3: #faefdc;
+    --color-tint-3-ink: #9a6412;
+    --color-tint-3-dark: #2e2618;
+    --color-tint-3-ink-dark: #e6b86a;
+    --color-tint-4: #f6e7eb;
+    --color-tint-4-ink: #a13d5a;
+    --color-tint-4-dark: #2e1f24;
+    --color-tint-4-ink-dark: #e89ab0;
+    --color-tint-5: #e7edf7;
+    --color-tint-5-ink: #3b5e99;
+    --color-tint-5-dark: #1d2433;
+    --color-tint-5-ink-dark: #93b2e8;
+    --color-tint-6: #efede6;
+    --color-tint-6-ink: #6b6650;
+    --color-tint-6-dark: #26251f;
+    --color-tint-6-ink-dark: #c9c3a6;
+    --color-chip-wash: #eceafb;
+    --color-chip-wash-dark: #25223f;
+    --color-brand-dark: #a9a2f7;
+    --color-body: #3a3940;
+    --color-body-dark: #c9c7d2;
+    --color-edge-hover: #b9b2f3;
+    --color-warn-ink: #a26a10;
+    --color-warn-ink-dark: #e6b86a;
+  }
+
+  /* A section that runs from one edge of the window to the other, its content in the column. */
+  @utility site-bleed {
+    margin-inline: calc(50% - 50vw);
+    padding-inline: calc(50vw - 50%);
   }
   """
 
@@ -255,8 +353,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
           pages: [String.t()],
           error_pages: [String.t()],
           renamed_pages: [PageProvision.renamed()],
-          skipped_pages: [PageProvision.held()]
+          skipped_pages: [PageProvision.held()],
+          upgraded: [String.t()]
         }
+
+  @typedoc """
+  What `upgrade/1` changed, by name: `"site-theme"`, `"site-main"`, and the home page's path.
+  """
+  @type upgraded :: [String.t()]
 
   @type auth_report :: %{
           layout_id: String.t(),
@@ -281,15 +385,18 @@ defmodule MishkaCmsCore.Install.StarterContent do
     * `:pages` — page definitions (`%{name:, title:, path:, description:, template:}`), written in
       place of the installer's home page. The dev seeds give every site its own home, and the about,
       contact and privacy pages a first install no longer has.
-    * `:main_class` — the classes of the layout's `<main>`, which every page is drawn in. The default
-      leaves a page the whole width, because the home page draws its own sections; the dev seeds
-      give theirs a centred column.
     * `:root_layout_template` — the error page's root layout, for a caller that ships its own.
+
+  Every page is drawn in the same column, the layout's (`MishkaCmsCore.Runtime.SiteLayout`), so
+  there is no option for its width: the dev sites are drawn as a stranger's install is.
+
+  The rows it finds are brought up to date by `upgrade/1`, whose answer is `upgraded`.
 
   The logo goes in the master site's media library, `site` or not — see "The logo" above — and
   `media` in the report names it when this call stored it. Raises when the site is not there, when
   `site` is not the master and there is none, or when a write is refused for any reason but a page
-  being taken — the installer shows the failure on its own progress list.
+  being taken — the installer shows the failure on its own progress list. `seed/2` answers the
+  first two instead.
   """
   @spec seed!(map() | String.t(), keyword()) :: report()
   def seed!(site, opts \\ [])
@@ -327,8 +434,36 @@ defmodule MishkaCmsCore.Install.StarterContent do
       pages: Enum.map(created, & &1.path),
       error_pages: ensure_error_page(site, Keyword.get(opts, :root_layout_template)),
       renamed_pages: renamed,
-      skipped_pages: skipped
+      skipped_pages: skipped,
+      # AFTER THE WRITES, so a row this call wrote is current already and only one it found is
+      # looked at.
+      upgraded: upgrade(site)
     }
+  end
+
+  @doc """
+  `seed!/2`, answering `{:error, :site_not_found}` for a site that is not there and
+  `{:error, :no_master_site}` for a site that is not the master on an install that has none,
+  where the logo would be kept, instead of raising. Any other refusal still raises.
+
+  For the `"provision"` job of a site created in the admin
+  (`MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker`).
+  """
+  @spec seed(map() | String.t(), keyword()) ::
+          {:ok, report()} | {:error, :site_not_found | :no_master_site}
+  def seed(site, opts \\ [])
+
+  def seed(site_id, opts) when is_binary(site_id) do
+    case find_site(site_id) do
+      nil -> {:error, :site_not_found}
+      site -> seed(site, opts)
+    end
+  end
+
+  def seed(%{id: _site_id} = site, opts) do
+    if Map.get(site, :master) == true or master_site() != nil,
+      do: {:ok, seed!(site, opts)},
+      else: {:error, :no_master_site}
   end
 
   defp page_attrs(%{id: site_id}, layout_id, pages) do
@@ -504,14 +639,17 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp master_site_id(_site), do: master_site!().id
 
   defp master_site! do
+    case master_site() do
+      nil -> raise ArgumentError, "no master site to keep the logo in"
+      site -> site
+    end
+  end
+
+  defp master_site do
     Site
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(master == true)
     |> Ash.read_one!(authorize?: false)
-    |> case do
-      nil -> raise ArgumentError, "no master site to keep the logo in"
-      site -> site
-    end
   end
 
   # THE RESOURCE'S OWN UPLOAD PATH, as the media manager takes a file: `validate_and_process_file/1`
@@ -623,23 +761,23 @@ defmodule MishkaCmsCore.Install.StarterContent do
         description: "The bar across the top of every page on #{brand}.",
         template: ~S"""
         <header class={[
-          "mx-auto flex w-full max-w-[1160px] items-center justify-between gap-6 px-8 py-6",
+          "mx-auto flex w-full max-w-[1160px] items-center justify-between gap-4 px-8 py-6 sm:gap-6",
           @class
         ]}>
           <.link
             navigate={site_path("/:lang", @lang)}
-            class="flex items-center gap-3 text-fg dark:text-fg-dark"
+            class="flex min-w-0 items-center gap-3 text-fg dark:text-fg-dark"
           >
             <img src={@logo} alt="" class="size-10 max-w-none object-contain dark:invert-[0.92]" />
-            <span class="text-[18px] font-semibold tracking-[-0.01em]">{@brand}</span>
+            <span class="truncate text-[18px] font-semibold tracking-[-0.01em]">{@brand}</span>
           </.link>
-          <div class="flex items-center gap-[22px] text-[14px]">
+          <div class="flex shrink-0 items-center gap-2.5 text-[14px] sm:gap-[22px]">
             {render_slot(@inner_block)}
             <.link
               href="https://mishka.tools/docs"
               target="_blank"
               rel="noopener noreferrer"
-              class="text-dim dark:text-dim-dark"
+              class="text-dim max-sm:hidden dark:text-dim-dark"
             >
               Docs
             </.link>
@@ -647,11 +785,12 @@ defmodule MishkaCmsCore.Install.StarterContent do
               href="https://github.com/mishka-group/mishka_cms"
               target="_blank"
               rel="noopener noreferrer"
-              class="text-dim dark:text-dim-dark"
+              class="text-dim max-sm:hidden dark:text-dim-dark"
             >
               GitHub
             </.link>
-            <div :if={@editions != []} class="relative">
+            <%!-- Two languages or more: a page in one has nothing to switch to. --%>
+            <div :if={match?([_, _ | _], @editions)} class="relative">
               <button
                 type="button"
                 id="site-language-button"
@@ -698,6 +837,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   role="menuitem"
                   href={edition.path}
                   hreflang={edition.language}
+                  title={Map.get(edition, :title)}
                   aria-current={edition.language == @lang && "true"}
                   class={[
                     "flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] hover:bg-wash dark:hover:bg-wash-dark",
@@ -708,7 +848,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   <span aria-hidden="true" class="text-[16px] leading-none">
                     {MishkaCmsCore.Runtime.Languages.flag(edition.language)}
                   </span>
-                  <span class="flex-1">{MishkaCmsCore.Runtime.Languages.name(edition.language)}</span>
+                  <span class="flex-1">
+                    {Map.get(edition, :name) || MishkaCmsCore.Runtime.Languages.name(edition.language)}
+                  </span>
                   <svg
                     :if={edition.language == @lang}
                     width="15"
@@ -1030,7 +1172,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "opts" => %{
         "default" => [],
         "doc" =>
-          "`@page_languages`: the page in each language it answers in, the current one among them. The switcher shows when there are two."
+          "`@page_languages`: the page in each language it is written in, each with its `path` and `name` (`MishkaCmsCore.Runtime.SiteLayout`), the current one among them. The switcher shows when there are two."
       }
     }
   end
@@ -1047,7 +1189,25 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @layout_name "site-main"
 
-  @main_class "flex w-full flex-1 flex-col"
+  # THE CONTENT COLUMN EVERY PAGE IS DRAWN IN, the home design's: 1160 px, 32 px at the sides and
+  # 96 px under the last section — the same on every site, dev ones included. A page draws its
+  # sections straight into it; see `MishkaCmsCore.Runtime.SiteLayout`.
+  @column ~s(<main id="site-main" class="mx-auto w-full max-w-[1160px] flex-1 px-8 pb-24">{@inner_content}</main>)
+
+  # WHAT AN EARLIER RELEASE WROTE where the column is now: the whole width, for a home page that drew
+  # its own, and the centred column with room above and below that the dev seeds asked for.
+  @earlier_mains [
+    ~s(<main class="flex w-full flex-1 flex-col">{@inner_content}</main>),
+    ~s(<main class="mx-auto w-full max-w-[1160px] flex-1 px-8 py-10">{@inner_content}</main>)
+  ]
+
+  # THE FRAME CLIPS WHAT A `site-bleed` SECTION'S `100vw` ADDS where the window has a scrollbar, so no
+  # page scrolls sideways. `clip`, not `hidden`: it makes no scroll container, so a sticky element
+  # inside a page still sticks.
+  @frame_open ~s(<div class="flex min-h-screen flex-col overflow-x-clip bg-page font-geist)
+  @earlier_frame_open ~s(<div class="flex min-h-screen flex-col bg-page font-geist)
+  @flash_open ~s(<div :if={@flash != %{}} id="site-flash")
+  @section_bar "MishkaCmsCore.Runtime.SiteLayout.section_bar"
 
   # EVERY PAGE TITLED ONE WAY, `Pricing · Acme`: the page's own title — on a page that shows a record
   # per address, the record's — then the site's. Stored on the layouts, so a page's own title tag
@@ -1099,12 +1259,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               name: @layout_name,
               path: "/layouts/site-main",
               description: "Header, messages, page, footer — every page on #{brand} sits in it.",
-              template:
-                layout_template(
-                  site_name,
-                  Keyword.get(opts, :nav, []),
-                  Keyword.get(opts, :main_class, @main_class)
-                ),
+              template: layout_template(site_name, Keyword.get(opts, :nav, [])),
               seo_tags: @titled ++ @fonts,
               format: :heex,
               helpers: [
@@ -1134,11 +1289,12 @@ defmodule MishkaCmsCore.Install.StarterContent do
   end
 
   # THE LAYOUT IS THE DESIGN'S FRAME, the header and the footer around whatever the page draws: a
-  # column at least as tall as the window, so the footer sits at the bottom of a short page, with
-  # the page's own sections in a `<main>` that gives them the whole width.
-  defp layout_template(site_name, nav, main_class) do
+  # column at least as tall as the window, so the footer sits at the bottom of a short page; under
+  # the header, the bar a page hands the layout, when it has one; and the page itself in the content
+  # column. `@page_languages` and `@page_section_bar` are `MishkaCmsCore.Runtime.SiteLayout`'s.
+  defp layout_template(site_name, nav) do
     ~s"""
-    <div class="flex min-h-screen flex-col bg-page font-geist leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
+    #{@frame_open} leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
       <.component
         component_name="site-header"
         site="#{site_name}"
@@ -1147,7 +1303,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
         editions={assigns[:page_languages] || []}
       >#{nav_links(nav)}
       </.component>
-      <div :if={@flash != %{}} id="site-flash" class="mx-auto mt-5 w-full max-w-[1160px] px-8">
+      #{section_bar_call(site_name)}
+      #{@flash_open} class="mx-auto mt-5 w-full max-w-[1160px] px-8">
         <p
           :for={{kind, message} <- @flash}
           id={"site-flash-\#{kind}"}
@@ -1164,11 +1321,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
           {message}
         </p>
       </div>
-      <main class="#{main_class}">{@inner_content}</main>
+      #{@column}
       <.component component_name="site-footer" site="#{site_name}" />
     </div>
     """
   end
+
+  defp section_bar_call(site_name),
+    do: ~s(<#{@section_bar} bar={assigns[:page_section_bar]} site="#{site_name}" />)
 
   defp nav_links(nav) do
     Enum.map_join(nav, "", fn {label, path} ->
@@ -1182,6 +1342,34 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # ---------------------------------------------------------------------------
   # The pages
   # ---------------------------------------------------------------------------
+
+  # THE OPENING TAG OF EACH OF THE HOME PAGE'S THREE SECTIONS, now and as an earlier release wrote
+  # them, when the page drew its own column: `upgrade/1` swaps the one for the other on a home page
+  # nobody has edited there.
+  @hero_open ~S|<section class="site-bleed relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">|
+  @flow_open ~S|<section class="flex flex-col gap-8 pb-24">|
+  @steps_open ~S|<section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5">|
+
+  @earlier_home [
+    {~S|<section class="relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] px-8 pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">|,
+     @hero_open},
+    {~S|<section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">|,
+     @flow_open},
+    {~S|<section class="mx-auto grid w-full max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5 px-8 pb-24">|,
+     @steps_open}
+  ]
+
+  @chip_tag ~S|tag_class: "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark",|
+  @warn_tag ~S|tag_class: "bg-[#FBF0DC] text-warn-ink dark:bg-[#2E2618] dark:text-warn-ink-dark",|
+
+  # AND THE TAGS OF HOW A PAGE IS SERVED, which an earlier release wrote in hex values the theme now
+  # holds as tokens: swapped wherever they are, with the sections, so an untouched page becomes
+  # exactly the one a new site gets.
+  @earlier_home_tags [
+    {~S|tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",|, @chip_tag},
+    {~S|tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",|,
+     @warn_tag}
+  ]
 
   defp home(logo) do
     %{
@@ -1201,9 +1389,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
   #
   # THE HOST IS THE ONE THING THE PAGE ASKS THE SITE, read off `assigns[:current_site]` with
   # `Map.get/2` because the page builder's canvas hands it a map without one.
+  #
+  # IN THE LAYOUT'S COLUMN, with no container of its own: the dotted welcome is a `site-bleed` band,
+  # from one edge of the window to the other, and the two sections after it fill the column. The
+  # layout puts the room under the last one.
   defp home_template(logo) do
     ~s"""
-    <section class="relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] px-8 pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">
+    #{@hero_open}
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_70%_at_50%_40%,rgba(250,249,246,0.96)_30%,rgba(250,249,246,0)_100%)] dark:bg-[radial-gradient(ellipse_60%_70%_at_50%_40%,rgba(19,18,23,0.96)_30%,rgba(19,18,23,0)_100%)]">
       </div>
       <div class="relative mx-auto flex max-w-[820px] flex-col items-center gap-7 text-center">
@@ -1258,7 +1450,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       </div>
     </section>
 
-    <section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">
+    #{@flow_open}
       <div class="flex flex-col items-center gap-2.5 text-center">
         <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle dark:text-subtle-dark">
           HOW A PAGE IS SERVED
@@ -1282,7 +1474,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               %{
                 n: "02",
                 tag: "shell",
-                tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",
+                #{@chip_tag}
                 title: "Layout",
                 desc: "A shared frame wraps the page: header, footer, slots.",
                 code: "layout: default"
@@ -1298,7 +1490,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               %{
                 n: "04",
                 tag: "blocks",
-                tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",
+                #{@warn_tag}
                 title: "Components",
                 desc: "Reusable pieces with their own dependencies.",
                 code: "<doc-section />"
@@ -1306,7 +1498,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               %{
                 n: "05",
                 tag: "compiled",
-                tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",
+                #{@chip_tag}
                 title: "Runtime",
                 desc: "Compiled live on the server and delivered fast.",
                 code: "200 OK · 12ms"
@@ -1328,7 +1520,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       </div>
     </section>
 
-    <section class="mx-auto grid w-full max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5 px-8 pb-24">
+    #{@steps_open}
       <div class="flex flex-col gap-3.5 py-2 pe-2">
         <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle dark:text-subtle-dark">
           START HERE
@@ -1368,6 +1560,147 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Page
     |> Ash.Changeset.for_create(:master_create, attrs, authorize?: false)
     |> Ash.create!()
+  end
+
+  # ---------------------------------------------------------------------------
+  # Bringing an older site up to date
+  # ---------------------------------------------------------------------------
+
+  @doc """
+  Brings `site`'s starter rows up to this release where that writes over nothing an admin wrote,
+  and returns the names of the ones it changed — `"site-theme"`, `"site-main"`, `"/:lang"` — `[]`
+  when there was nothing to do. See "Bringing an older site up to date" above.
+
+  Takes the site record or its id. A row the site does not have is not written: that is
+  `seed!/2`'s. Run it again and it changes nothing.
+  """
+  @spec upgrade(map() | String.t()) :: upgraded()
+  def upgrade(site_id) when is_binary(site_id), do: site_id |> site!() |> upgrade()
+
+  def upgrade(%{id: _site_id, name: _site_name} = site) do
+    theme = upgrade_theme(site)
+    layout = upgrade_layout(site)
+
+    # THE HOME PAGE ONLY BESIDE A LAYOUT THAT DRAWS THE COLUMN: without it the page's sections would
+    # lose the only column they have.
+    home = if framed?(site), do: upgrade_home(site), else: []
+
+    theme ++ layout ++ home
+  end
+
+  # EACH DECLARATION AND THE UTILITY THE ROW DOES NOT HAVE, after everything it has, so a value an
+  # admin changed is the one that stands and nothing they wrote moves.
+  defp upgrade_theme(%{id: site_id}) do
+    case held_row(Stylesheet, site_id, @theme_name) do
+      %{content: content} = row when is_binary(content) ->
+        case missing_theme(content) do
+          "" ->
+            []
+
+          missing ->
+            update!(row, %{content: String.trim_trailing(content) <> "\n\n" <> missing}, site_id)
+            [@theme_name]
+        end
+
+      _none ->
+        []
+    end
+  end
+
+  @doc false
+  # What `content` lacks of this release's theme, as CSS to append: one `@theme` block of every
+  # missing declaration, and the `site-bleed` utility. `""` when it has them all.
+  @spec missing_theme(String.t()) :: String.t()
+  def missing_theme(content) do
+    tokens =
+      for [line, name] <- Regex.scan(~r/^\s*(--[a-z0-9-]+)\s*:[^;]*;/m, @theme_css),
+          not Regex.match?(~r/(?<![\w-])#{Regex.escape(name)}\s*:/, content),
+          do: "  " <> String.trim(line)
+
+    [
+      if(tokens != [],
+        do: """
+        /* Added when this site was brought up to date: the tokens its theme did not have yet. */
+        @theme {
+        #{Enum.join(tokens, "\n")}
+        }
+        """
+      ),
+      if(not Regex.match?(~r/@utility\s+site-bleed\b/, content),
+        do:
+          Regex.run(~r/\/\* A section that runs.*?\n@utility site-bleed \{.*?\n\}\n/s, @theme_css)
+      )
+    ]
+    |> List.flatten()
+    |> Enum.reject(&is_nil/1)
+    |> Enum.join("\n")
+  end
+
+  # THE FRAME, THE MESSAGES AND `<main>` AS AN EARLIER RELEASE WROTE THEM, each once: then the column
+  # and the bar go in, and every other line — the header's call, its links, the footer's — is
+  # left as it is.
+  defp upgrade_layout(%{id: site_id, name: site_name}) do
+    with %{template: template} = layout when is_binary(template) <-
+           held_row(Layout, site_id, @layout_name),
+         false <- String.contains?(template, @section_bar),
+         [main] <- Enum.filter(@earlier_mains, &once?(template, &1)),
+         true <- once?(template, @earlier_frame_open) and once?(template, @flash_open) do
+      upgraded =
+        template
+        |> String.replace(@earlier_frame_open, @frame_open)
+        |> String.replace(@flash_open, section_bar_call(site_name) <> "\n  " <> @flash_open)
+        |> String.replace(main, @column)
+
+      update!(layout, %{template: upgraded}, site_id)
+      [@layout_name]
+    else
+      _current_edited_or_none -> []
+    end
+  end
+
+  defp framed?(%{id: site_id}) do
+    case held_row(Layout, site_id, @layout_name) do
+      %{template: template} when is_binary(template) -> String.contains?(template, @column)
+      _none -> false
+    end
+  end
+
+  # THE STARTER'S OWN HOME PAGE, its three sections as an earlier release opened them, each once.
+  defp upgrade_home(%{id: site_id}) do
+    with %{template: template} = home when is_binary(template) <- starter_home(site_id),
+         true <- Enum.all?(@earlier_home, fn {earlier, _now} -> once?(template, earlier) end) do
+      upgraded =
+        Enum.reduce(@earlier_home ++ @earlier_home_tags, template, fn {earlier, now}, acc ->
+          String.replace(acc, earlier, now)
+        end)
+
+      update!(home, %{template: upgraded}, site_id)
+      [home.path]
+    else
+      _current_edited_or_none -> []
+    end
+  end
+
+  defp starter_home(site_id) do
+    Page
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(site_id == ^site_id and path == "/:lang" and section == ^@section)
+    |> rows()
+    |> Enum.find(&PageProvision.ours?(&1, :mishka_cms_core))
+  end
+
+  defp once?(template, fragment), do: length(String.split(template, fragment)) == 2
+
+  # AS A PACKAGE WRITES, under the site's tenant: what changes is what this module wrote, and a
+  # template it writes is not one an author typed (`Validations.CodeChange`).
+  defp update!(row, attrs, site_id) do
+    row
+    |> Ash.Changeset.for_update(:update, attrs,
+      tenant: site_id,
+      authorize?: false,
+      context: %{page_code: :package}
+    )
+    |> Ash.update!()
   end
 
   # ---------------------------------------------------------------------------

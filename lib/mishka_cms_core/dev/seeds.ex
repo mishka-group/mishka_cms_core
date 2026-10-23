@@ -259,22 +259,19 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # too, with a section hidden from visitors to open in the builder (`LocalhostPages.about/0`); the
   # other pages of `MishkaCmsCore.Dev.StarterPages` are the same on every site.
   #
-  # A CENTRED COLUMN FOR THE PAGES, which every template here is written for. The production layout
-  # leaves a page the whole width, because the installer's home draws its own sections.
-  @main_class "mx-auto w-full max-w-[1160px] flex-1 px-8 py-10"
-
+  # THE LAYOUT IS PRODUCTION'S, column and all. Every template here draws its sections into the
+  # column `MishkaCmsCore.Runtime.SiteLayout` describes, as a blog's or a docs' page does, so what a
+  # developer sees on a dev site is what a stranger's install draws.
   defp starter_opts(%{host: "localhost", name: name}, config),
     do: [
       root_layout_template: @localhost_error_root_layout,
       nav: StarterPages.nav() ++ config.pages.nav(),
-      main_class: @main_class,
       pages: StarterPages.pages(name, config.pages.home(), config.pages.about())
     ]
 
   defp starter_opts(%{name: name}, config),
     do: [
       nav: StarterPages.nav() ++ config.pages.nav(),
-      main_class: @main_class,
       pages: StarterPages.pages(name, config.pages.home())
     ]
 

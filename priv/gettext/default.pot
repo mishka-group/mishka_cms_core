@@ -2239,6 +2239,11 @@ msgstr ""
 msgid "Box"
 msgstr ""
 
+#: lib/mishka_cms_core/runtime/site_layout.ex:546
+#, elixir-autogen, elixir-format
+msgid "Breadcrumb"
+msgstr ""
+
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:12730
 #: lib/mishka_cms_core_web/live/admin/builder/panels.ex:12730
 #, elixir-autogen, elixir-format
@@ -8261,6 +8266,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/elements.ex:82
 #: lib/mishka_cms_core/runtime/runtime_preview.ex:688
+#: lib/mishka_cms_core/runtime/site_layout.ex:531
 #, elixir-autogen, elixir-format
 msgid "Section"
 msgstr ""
@@ -8845,11 +8851,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/page_builder/inspector.ex:917
 #, elixir-autogen, elixir-format
 msgid "Skip the browser's checks"
-msgstr ""
-
-#: lib/mishka_cms_core/install/bootstrap.ex:321
-#, elixir-autogen, elixir-format
-msgid "Skipped — this site starts empty"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/live_view_helpers.ex:588

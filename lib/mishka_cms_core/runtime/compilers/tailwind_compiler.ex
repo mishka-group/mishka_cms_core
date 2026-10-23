@@ -725,6 +725,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     /* The sign-in pages' provider buttons, drawn by the core rather than written in a page. */
     @source inline("#{MishkaCmsCore.Accounts.SignInProvider.Widget.classes()}");
 
+    /* The bar under the `site-main` header, drawn by the core from what a page hands it. */
+    @source inline("#{MishkaCmsCore.Runtime.SiteLayout.classes()}");
+
     #{tailwind_preamble()}
     #{icon_css(closure, site_name, content.icons)}
 
@@ -2007,6 +2010,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
     /* The sign-in pages' provider buttons, drawn by the core rather than written in a page. */
     @source inline("#{MishkaCmsCore.Accounts.SignInProvider.Widget.classes()}");
+
+    /* The bar under the `site-main` header, drawn by the core from what a page hands it. */
+    @source inline("#{MishkaCmsCore.Runtime.SiteLayout.classes()}");
 
     /* THE CLASSES THE SITE'S STORED CONTENT WRITES, which no template holds. */
     #{class_sources(content.classes)}
