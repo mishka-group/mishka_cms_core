@@ -101,7 +101,7 @@ msgstr ""
 msgid "+ Add Event"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:968
+#: lib/mishka_cms_core/runtime/resources/component.ex:971
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:815
 #: lib/mishka_cms_core/runtime/resources/layout.ex:754
 #: lib/mishka_cms_core/runtime/resources/page.ex:1146
@@ -126,7 +126,7 @@ msgstr ""
 msgid "+ Add SEO Tag"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:904
+#: lib/mishka_cms_core/runtime/resources/component.ex:907
 #, elixir-autogen, elixir-format
 msgid "+ Add Slot"
 msgstr ""
@@ -163,7 +163,7 @@ msgstr ""
 msgid "Accepted Types"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:588
+#: lib/mishka_cms_core/accounts/user.ex:600
 #, elixir-autogen, elixir-format
 msgid "Access Control"
 msgstr ""
@@ -191,7 +191,7 @@ msgstr ""
 msgid "Add Origin"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:997
+#: lib/mishka_cms_core/runtime/resources/component.ex:1000
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:591
 #: lib/mishka_cms_core/runtime/resources/layout.ex:783
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:624
@@ -274,7 +274,7 @@ msgstr ""
 msgid "Are you sure? This will permanently delete the file!"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:981
+#: lib/mishka_cms_core/runtime/resources/component.ex:984
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:828
 #: lib/mishka_cms_core/runtime/resources/layout.ex:767
 #: lib/mishka_cms_core/runtime/resources/page.ex:1159
@@ -311,7 +311,7 @@ msgstr ""
 msgid "Base"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:570
+#: lib/mishka_cms_core/accounts/user.ex:582
 #, elixir-autogen, elixir-format
 msgid "Basic Information"
 msgstr ""
@@ -332,7 +332,7 @@ msgstr ""
 msgid "CSS content"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts.ex:215
+#: lib/mishka_cms_core/accounts.ex:232
 #: lib/mishka_cms_core/runtime.ex:411
 #, elixir-autogen, elixir-format
 msgid "Cancel"
@@ -353,13 +353,13 @@ msgstr ""
 msgid "Component"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:530
+#: lib/mishka_cms_core/accounts/user.ex:542
 #, elixir-autogen, elixir-format
 msgid "Confirm Password"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:260
-#: lib/mishka_cms_core/accounts/user.ex:274
+#: lib/mishka_cms_core/accounts/user.ex:272
+#: lib/mishka_cms_core/accounts/user.ex:286
 #, elixir-autogen, elixir-format
 msgid "Confirmed"
 msgstr ""
@@ -387,7 +387,7 @@ msgstr ""
 msgid "Content (JavaScript/TypeScript)"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts.ex:213
+#: lib/mishka_cms_core/accounts.ex:230
 #: lib/mishka_cms_core/runtime.ex:409
 #, elixir-autogen, elixir-format
 msgid "Create"
@@ -486,7 +486,7 @@ msgid "Each one becomes an allow_upload/3 the page calls when a visitor opens it
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/permission.ex:209
-#: lib/mishka_cms_core/accounts/user.ex:390
+#: lib/mishka_cms_core/accounts/user.ex:402
 #: lib/mishka_cms_core/runtime/resources/component.ex:585
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:542
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:358
@@ -500,7 +500,7 @@ msgstr ""
 msgid "Edit"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:510
+#: lib/mishka_cms_core/accounts/user.ex:522
 #, elixir-autogen, elixir-format
 msgid "Email"
 msgstr ""
@@ -525,7 +525,7 @@ msgstr ""
 msgid "Events (handle_event)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:960
+#: lib/mishka_cms_core/runtime/resources/component.ex:963
 #, elixir-autogen, elixir-format
 msgid "Examples (JSON)"
 msgstr ""
@@ -571,7 +571,7 @@ msgstr ""
 msgid "Frontend Domain"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:988
+#: lib/mishka_cms_core/runtime/resources/component.ex:991
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:835
 #: lib/mishka_cms_core/runtime/resources/layout.ex:774
 #: lib/mishka_cms_core/runtime/resources/page.ex:1166
@@ -579,7 +579,7 @@ msgstr ""
 msgid "Function Body"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:974
+#: lib/mishka_cms_core/runtime/resources/component.ex:977
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:821
 #: lib/mishka_cms_core/runtime/resources/layout.ex:760
 #: lib/mishka_cms_core/runtime/resources/page.ex:1152
@@ -614,7 +614,7 @@ msgstr ""
 msgid "HEEx"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:967
+#: lib/mishka_cms_core/runtime/resources/component.ex:970
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:814
 #: lib/mishka_cms_core/runtime/resources/layout.ex:753
 #: lib/mishka_cms_core/runtime/resources/page.ex:1145
@@ -778,7 +778,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/accounts/permission.ex:278
 #: lib/mishka_cms_core/runtime/resources/component.ex:758
-#: lib/mishka_cms_core/runtime/resources/component.ex:937
+#: lib/mishka_cms_core/runtime/resources/component.ex:940
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:686
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:216
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:510
@@ -848,7 +848,7 @@ msgstr ""
 msgid "Only a master or an admin of this word's site can change it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:896
+#: lib/mishka_cms_core/runtime/resources/component.ex:899
 #, elixir-autogen, elixir-format
 msgid "Options"
 msgstr ""
@@ -864,7 +864,7 @@ msgstr ""
 msgid "Page"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:520
+#: lib/mishka_cms_core/accounts/user.ex:532
 #, elixir-autogen, elixir-format
 msgid "Password"
 msgstr ""
@@ -901,8 +901,8 @@ msgstr ""
 msgid "Permission Name"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:338
-#: lib/mishka_cms_core/runtime/resources/component.ex:1000
+#: lib/mishka_cms_core/accounts/user.ex:350
+#: lib/mishka_cms_core/runtime/resources/component.ex:1003
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:594
 #: lib/mishka_cms_core/runtime/resources/layout.ex:786
 #: lib/mishka_cms_core/runtime/resources/page.ex:1187
@@ -989,7 +989,7 @@ msgstr ""
 msgid "SEO Tags"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts.ex:214
+#: lib/mishka_cms_core/accounts.ex:231
 #: lib/mishka_cms_core/runtime.ex:410
 #, elixir-autogen, elixir-format
 msgid "Save Changes"
@@ -1015,7 +1015,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:369
+#: lib/mishka_cms_core/accounts/user.ex:381
 #: lib/mishka_cms_core/runtime/resources/component.ex:486
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:493
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:292
@@ -1034,7 +1034,7 @@ msgstr ""
 msgid "Section"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:579
+#: lib/mishka_cms_core/accounts/user.ex:591
 #, elixir-autogen, elixir-format
 msgid "Security"
 msgstr ""
@@ -1055,7 +1055,7 @@ msgstr ""
 msgid "Severity"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:311
+#: lib/mishka_cms_core/accounts/user.ex:323
 #: lib/mishka_cms_core/activity/activity_entry.ex:146
 #: lib/mishka_cms_core/mail/delivery.ex:124
 #: lib/mishka_cms_core/runtime/resources/component.ex:456
@@ -1086,12 +1086,12 @@ msgstr ""
 msgid "Size (bytes)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:951
+#: lib/mishka_cms_core/runtime/resources/component.ex:954
 #, elixir-autogen, elixir-format
 msgid "Slot Attributes"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:903
+#: lib/mishka_cms_core/runtime/resources/component.ex:906
 #, elixir-autogen, elixir-format
 msgid "Slots"
 msgstr ""
@@ -1227,7 +1227,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/page_builder/design_token.ex:102
 #: lib/mishka_cms_core/runtime/resources/component.ex:277
-#: lib/mishka_cms_core/runtime/resources/component.ex:943
+#: lib/mishka_cms_core/runtime/resources/component.ex:946
 #: lib/mishka_cms_core/runtime/resources/media.ex:400
 #: lib/mishka_cms_core/runtime/resources/page_comment.ex:170
 #, elixir-autogen, elixir-format
@@ -1241,7 +1241,7 @@ msgid "TypeScript"
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/_helper.ex:93
-#: lib/mishka_cms_core/accounts/user.ex:327
+#: lib/mishka_cms_core/accounts/user.ex:339
 #, elixir-autogen, elixir-format
 msgid "Unknown"
 msgstr ""
@@ -1276,7 +1276,7 @@ msgstr ""
 msgid "Used"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:229
+#: lib/mishka_cms_core/accounts/user.ex:241
 #, elixir-autogen, elixir-format
 msgid "User"
 msgstr ""
@@ -1302,7 +1302,7 @@ msgid "Videos"
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/permission.ex:198
-#: lib/mishka_cms_core/accounts/user.ex:380
+#: lib/mishka_cms_core/accounts/user.ex:392
 #: lib/mishka_cms_core/runtime/resources/component.ex:569
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:526
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:342
@@ -1559,7 +1559,7 @@ msgstr ""
 msgid "Archived %{succeeded} component(s); %{failed} failed."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:433
+#: lib/mishka_cms_core/accounts/user.ex:445
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to delete this user? This action cannot be undone."
 msgstr ""
@@ -1589,7 +1589,7 @@ msgstr ""
 msgid "Color"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:531
+#: lib/mishka_cms_core/accounts/user.ex:543
 #, elixir-autogen, elixir-format
 msgid "Confirm password"
 msgstr ""
@@ -1631,7 +1631,7 @@ msgstr ""
 msgid "Copy site ID"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:250
+#: lib/mishka_cms_core/accounts/user.ex:262
 #, elixir-autogen, elixir-format
 msgid "Copy user ID"
 msgstr ""
@@ -1649,7 +1649,7 @@ msgstr ""
 msgid "Deactivate selected sites?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:889
+#: lib/mishka_cms_core/runtime/resources/component.ex:892
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:471
 #, elixir-autogen, elixir-format
 msgid "Default"
@@ -1691,7 +1691,7 @@ msgstr ""
 msgid "Delete the selected permissions? This action cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:445
+#: lib/mishka_cms_core/accounts/user.ex:457
 #, elixir-autogen, elixir-format
 msgid "Delete the selected users? This action cannot be undone."
 msgstr ""
@@ -1760,7 +1760,7 @@ msgstr ""
 msgid "General"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:326
+#: lib/mishka_cms_core/accounts/user.ex:338
 #: lib/mishka_cms_core/activity/activity_entry.ex:561
 #: lib/mishka_cms_core/activity/activity_entry.ex:564
 #, elixir-autogen, elixir-format
@@ -1795,7 +1795,7 @@ msgstr ""
 msgid "History timeline"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:245
+#: lib/mishka_cms_core/accounts/user.ex:257
 #, elixir-autogen, elixir-format
 msgid "ID: %{id}"
 msgstr ""
@@ -1835,7 +1835,7 @@ msgstr ""
 msgid "Leave empty for every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:501
+#: lib/mishka_cms_core/accounts/user.ex:513
 #, elixir-autogen, elixir-format
 msgid "Leave empty for global (master) user"
 msgstr ""
@@ -1881,7 +1881,7 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:521
+#: lib/mishka_cms_core/accounts/user.ex:533
 #, elixir-autogen, elixir-format
 msgid "Minimum 8 characters"
 msgstr ""
@@ -1968,7 +1968,7 @@ msgstr ""
 msgid "No translations yet — write t(\"…\") in a template and save it."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:470
+#: lib/mishka_cms_core/accounts/user.ex:482
 #, elixir-autogen, elixir-format
 msgid "No users found"
 msgstr ""
@@ -2017,7 +2017,7 @@ msgstr ""
 msgid "Overlays"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:275
+#: lib/mishka_cms_core/accounts/user.ex:287
 #, elixir-autogen, elixir-format
 msgid "Pending"
 msgstr ""
@@ -2143,8 +2143,8 @@ msgid "Remove this notification?"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/component.ex:885
-#: lib/mishka_cms_core/runtime/resources/component.ex:919
-#: lib/mishka_cms_core/runtime/resources/component.ex:946
+#: lib/mishka_cms_core/runtime/resources/component.ex:922
+#: lib/mishka_cms_core/runtime/resources/component.ex:949
 #, elixir-autogen, elixir-format
 msgid "Required"
 msgstr ""
@@ -2344,7 +2344,7 @@ msgstr ""
 msgid "Select mode..."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:557
+#: lib/mishka_cms_core/accounts/user.ex:569
 #, elixir-autogen, elixir-format
 msgid "Select permissions to assign to this user"
 msgstr ""
@@ -2456,13 +2456,13 @@ msgstr ""
 msgid "Warning"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:920
+#: lib/mishka_cms_core/runtime/resources/component.ex:923
 #, elixir-autogen, elixir-format
 msgid "What goes in it"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:892
-#: lib/mishka_cms_core/runtime/resources/component.ex:947
+#: lib/mishka_cms_core/runtime/resources/component.ex:895
+#: lib/mishka_cms_core/runtime/resources/component.ex:950
 #, elixir-autogen, elixir-format
 msgid "What it is for"
 msgstr ""
@@ -2502,17 +2502,17 @@ msgstr ""
 msgid "e.g. id, class, type"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:911
+#: lib/mishka_cms_core/runtime/resources/component.ex:914
 #, elixir-autogen, elixir-format
 msgid "e.g. inner_block"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:938
+#: lib/mishka_cms_core/runtime/resources/component.ex:941
 #, elixir-autogen, elixir-format
 msgid "e.g. label"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/component.ex:890
+#: lib/mishka_cms_core/runtime/resources/component.ex:893
 #, elixir-autogen, elixir-format
 msgid "e.g. medium"
 msgstr ""
@@ -2567,7 +2567,7 @@ msgstr ""
 msgid "undo"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:511
+#: lib/mishka_cms_core/accounts/user.ex:523
 #, elixir-autogen, elixir-format
 msgid "user@example.com"
 msgstr ""
@@ -2664,32 +2664,32 @@ msgstr ""
 msgid "From"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:300
+#: lib/mishka_cms_core/accounts/user.ex:312
 #, elixir-autogen, elixir-format
 msgid "Off"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:299
+#: lib/mishka_cms_core/accounts/user.ex:311
 #, elixir-autogen, elixir-format
 msgid "On"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:406
+#: lib/mishka_cms_core/accounts/user.ex:418
 #, elixir-autogen, elixir-format
 msgid "Turn off two-step"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:285
+#: lib/mishka_cms_core/accounts/user.ex:297
 #, elixir-autogen, elixir-format
 msgid "Two-step"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:424
+#: lib/mishka_cms_core/accounts/user.ex:436
 #, elixir-autogen, elixir-format
 msgid "Confirm account"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:417
+#: lib/mishka_cms_core/accounts/user.ex:429
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:79
 #, elixir-autogen, elixir-format
 msgid "Confirm this account's email address without the confirmation email?"
@@ -2816,9 +2816,9 @@ msgstr ""
 msgid "Top level"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:854
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:559
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:562
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:866
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:564
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:567
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/media_gallery.ex:695
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/media_gallery.ex:762
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:1215
@@ -2858,7 +2858,7 @@ msgid "Select..."
 msgstr ""
 
 ## States
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:173
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:177
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:1746
 #: ../mishka_gervaz/lib/mishka_gervaz/ui_adapters/tailwind.ex:439
 #: ../mishka_gervaz/lib/mishka_gervaz/ui_adapters/tailwind.ex:573
@@ -2898,13 +2898,13 @@ msgid "Clear selection"
 msgstr ""
 
 ## Table
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:833
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:617
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:609
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:538
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:464
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:545
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:405
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:841
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:629
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:617
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:541
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:471
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:557
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:410
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/table.ex:586
 #, elixir-autogen
 msgid "Actions"
@@ -3010,7 +3010,7 @@ msgstr ""
 msgid "An error occurred: %{error}"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:987
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:999
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:337
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:469
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:511
@@ -3076,7 +3076,7 @@ msgstr ""
 msgid "Scroll for more"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:999
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1011
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:360
 #, elixir-autogen, elixir-format
 msgid "Search…"
@@ -3087,7 +3087,7 @@ msgstr ""
 msgid "Show"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1040
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1052
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:403
 #, elixir-autogen, elixir-format
 msgid "Showing %{count}"
@@ -3156,19 +3156,19 @@ msgstr ""
 msgid "Add item"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:530
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:318
-#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:50
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:57
-#: ../mishka_document/lib/mishka_document/resources/note.ex:210
-#: ../mishka_document/lib/mishka_document/resources/section.ex:577
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1128
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:294
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:216
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:292
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1167
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:761
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:486
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:538
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:326
+#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:54
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:61
+#: ../mishka_document/lib/mishka_document/resources/note.ex:220
+#: ../mishka_document/lib/mishka_document/resources/section.ex:589
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1152
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:300
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:229
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:305
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1192
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:773
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:509
 #: ../mishka_gervaz/lib/mishka_gervaz/ui_adapters/tailwind.ex:1854
 #, elixir-autogen, elixir-format
 msgid "Archived"
@@ -3232,7 +3232,7 @@ msgstr ""
 msgid "Load more..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1089
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1101
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:1228
 #: ../mishka_gervaz/lib/mishka_gervaz/ui_adapters/tailwind.ex:2485
 #, elixir-autogen, elixir-format
@@ -3250,7 +3250,7 @@ msgstr ""
 msgid "Page {page} of {total}"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1056
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1068
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/shared.ex:1224
 #, elixir-autogen, elixir-format
 msgid "Previous"
@@ -3350,7 +3350,7 @@ msgstr ""
 msgid "December"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:318
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:322
 #: ../mishka_gervaz/lib/mishka_gervaz/ui_adapters/tailwind.ex:3163
 #, elixir-autogen, elixir-format
 msgid "Done"
@@ -3522,1986 +3522,1981 @@ msgstr ""
 msgid "We"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:260
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:256
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:264
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:260
 #, elixir-autogen, elixir-format
 msgid "%{count} followers"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:209
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:246
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:213
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:250
 #, elixir-autogen, elixir-format
 msgid "%{count} members"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:250
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:254
 #, elixir-autogen, elixir-format
 msgid "%{count} posts"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:728
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:740
 #, elixir-autogen, elixir-format
 msgid "%{email} (master)"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:227
+#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:231
 #, elixir-autogen, elixir-format
 msgid "%{posts} posts · %{versions} versions"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:879
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:898
 #, elixir-autogen, elixir-format
 msgid "+ Add Link"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:95
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:99
 #, elixir-autogen, elixir-format
 msgid "0 bloggers"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:95
+#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:99
 #, elixir-autogen, elixir-format
 msgid "0 collections"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:112
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:116
 #, elixir-autogen, elixir-format
 msgid "0 comments"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:120
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:124
 #, elixir-autogen, elixir-format
 msgid "0 posts"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/tag_card.ex:87
+#: ../mishka_blog/lib/mishka_blog_web/templates/tag_card.ex:91
 #, elixir-autogen, elixir-format
 msgid "0 tags"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:94
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:98
 #, elixir-autogen, elixir-format
 msgid "0 teams"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:388
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:415
 #, elixir-autogen, elixir-format
 msgid "Activate"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1015
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1018
 #, elixir-autogen, elixir-format
 msgid "Advanced"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:617
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:526
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:397
-#: ../mishka_document/lib/mishka_document/resources/section.ex:619
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:485
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:296
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:625
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:534
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:404
+#: ../mishka_document/lib/mishka_document/resources/section.ex:631
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:505
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:302
 #, elixir-autogen, elixir-format
 msgid "All Languages"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:594
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:509
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:414
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:467
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:242
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:468
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:297
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:602
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:517
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:417
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:479
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:246
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:474
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:310
 #, elixir-autogen, elixir-format
 msgid "All Statuses"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:494
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:497
 #, elixir-autogen, elixir-format
 msgid "Approve"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:331
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:407
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:41
-#: ../mishka_document/lib/mishka_document/resources/note.ex:207
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:424
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:754
-#: ../mishka_document/lib/mishka_document/resources/section.ex:574
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1125
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:425
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:815
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:482
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:335
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:410
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:45
+#: ../mishka_document/lib/mishka_document/resources/note.ex:217
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:434
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:763
+#: ../mishka_document/lib/mishka_document/resources/section.ex:586
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1149
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:445
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:834
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:505
 #, elixir-autogen, elixir-format
 msgid "Approved"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:758
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:766
 #, elixir-autogen, elixir-format
 msgid "Archive selected collections?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:814
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:817
 #, elixir-autogen, elixir-format
 msgid "Archive selected comments?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:481
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:516
 #, elixir-autogen, elixir-format
 msgid "Archive selected configurations?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:927
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:935
 #, elixir-autogen, elixir-format
 msgid "Archive selected posts?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:574
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:361
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:581
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:367
 #, elixir-autogen, elixir-format
 msgid "Archive selected tags?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:710
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:722
 #, elixir-autogen, elixir-format
 msgid "Archive selected teams?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:547
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:641
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:559
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:653
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this blogger? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:633
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:722
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:641
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:730
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this collection? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:626
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:790
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:629
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:793
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this comment? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:459
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:494
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this configuration? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:815
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:902
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:823
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:910
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this post? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:551
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:558
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this tag? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:584
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:686
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:596
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:698
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this team? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:410
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:437
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this auto-posting configuration?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:512
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:524
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this blogger?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:575
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:583
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this collection?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:504
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:507
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this comment?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:668
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:676
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this post?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:430
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:437
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this tag?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:511
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:523
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this team?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:429
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:456
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this auto-posting configuration?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:530
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:542
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this blogger?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:593
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:601
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this collection?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:522
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:525
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this comment?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:686
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:694
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this post?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:448
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:455
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this tag?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:529
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:541
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this team?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:230
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:234
 #, elixir-autogen, elixir-format
 msgid "Author"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:241
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:243
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:253
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:255
 #, elixir-autogen, elixir-format
 msgid "Avatar"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:817
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:836
 #, elixir-autogen, elixir-format
 msgid "Bio"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:753
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:765
 #, elixir-autogen, elixir-format
 msgid "Blogger display name"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1188
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1200
 #, elixir-autogen, elixir-format
 msgid "Bloggers / Authors"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:453
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:465
 #, elixir-autogen, elixir-format
 msgid "Can Publish Directly"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:70
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:74
 #, elixir-autogen, elixir-format
 msgid "Card grid for bloggers"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:70
+#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:74
 #, elixir-autogen, elixir-format
 msgid "Card grid for collections"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:69
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:73
 #, elixir-autogen, elixir-format
 msgid "Card grid for teams"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:63
-#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:59
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:80
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:80
-#: ../mishka_blog/lib/mishka_blog_web/templates/tag_card.ex:55
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:62
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:67
+#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:63
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:84
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:84
+#: ../mishka_blog/lib/mishka_blog_web/templates/tag_card.ex:59
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:66
 #, elixir-autogen, elixir-format
 msgid "Cards"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/tag_card.ex:62
+#: ../mishka_blog/lib/mishka_blog_web/templates/tag_card.ex:66
 #, elixir-autogen, elixir-format
 msgid "Chip grid for tags"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:579
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:587
 #, elixir-autogen, elixir-format
 msgid "Collection"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:846
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:854
 #, elixir-autogen, elixir-format
 msgid "Collection name"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:474
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1143
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:482
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1155
 #, elixir-autogen, elixir-format
 msgid "Collections"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:468
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:476
 #, elixir-autogen, elixir-format
 msgid "Comments"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:768
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:780
 #, elixir-autogen, elixir-format
 msgid "Contact Email"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:426
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:215
-#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:162
-#: ../mishka_document/lib/mishka_document/resources/section.ex:727
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:438
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:219
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:166
+#: ../mishka_document/lib/mishka_document/resources/section.ex:739
 #, elixir-autogen, elixir-format
 msgid "Contributor"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:213
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:224
 #, elixir-autogen, elixir-format
 msgid "Copy plugin"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:297
-#: ../mishka_document/lib/mishka_document/resources/section.ex:292
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:309
+#: ../mishka_document/lib/mishka_document/resources/section.ex:310
 #, elixir-autogen, elixir-format
 msgid "Copy slug"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:832
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:807
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:851
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:819
 #, elixir-autogen, elixir-format
 msgid "Cover Image"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:496
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:503
 #, elixir-autogen, elixir-format
 msgid "Danger Zone"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:400
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:427
 #, elixir-autogen, elixir-format
 msgid "Deactivate"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:825
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:557
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:643
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:636
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:559
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:594
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:833
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:569
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:651
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:639
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:566
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:606
 #, elixir-autogen, elixir-format
 msgid "Delete forever"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:864
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:864
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:194
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:221
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:983
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:445
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:871
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:876
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:198
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:241
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:989
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:542
 #, elixir-autogen, elixir-format
 msgid "Details"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:752
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:764
 #, elixir-autogen, elixir-format
 msgid "Display Name"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:962
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:880
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:970
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:886
 #, elixir-autogen, elixir-format
 msgid "Display Order"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:528
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:588
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1037
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:317
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:504
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:426
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:462
-#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:48
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:51
-#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:44
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:191
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:183
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:293
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:463
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:211
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:287
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1162
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:760
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:536
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:596
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1045
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:325
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:512
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:438
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:474
+#: ../mishka_blog/lib/mishka_blog_web/templates/collection_card.ex:52
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:55
+#: ../mishka_blog/lib/mishka_blog_web/templates/team_card.ex:48
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:199
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:203
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:299
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:469
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:224
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:300
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1187
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:772
 #, elixir-autogen, elixir-format
 msgid "Draft"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1251
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1263
 #, elixir-autogen, elixir-format
 msgid "Excerpt"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:358
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:370
 #, elixir-autogen, elixir-format
 msgid "Expertise"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:852
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:871
 #, elixir-autogen, elixir-format
 msgid "Expertise Areas"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1260
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1272
 #, elixir-autogen, elixir-format
 msgid "Featured Image"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:533
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:541
 #, elixir-autogen, elixir-format
 msgid "Featured only"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:600
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:603
 #, elixir-autogen, elixir-format
 msgid "Flag"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:333
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:408
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:53
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:337
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:411
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:57
 #, elixir-autogen, elixir-format
 msgid "Flagged"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:397
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:409
 #, elixir-autogen, elixir-format
 msgid "Followers"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:356
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:368
 #, elixir-autogen, elixir-format
 msgid "Members"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:589
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:592
 #, elixir-autogen, elixir-format
 msgid "Moderation"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:930
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:938
 #, elixir-autogen, elixir-format
 msgid "No Parent (Top Level)"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:513
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:548
 #, elixir-autogen, elixir-format
 msgid "No auto-posting configurations found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:989
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:997
 #, elixir-autogen, elixir-format
 msgid "No blog posts found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:678
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:690
 #, elixir-autogen, elixir-format
 msgid "No bloggers found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:821
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:829
 #, elixir-autogen, elixir-format
 msgid "No collections found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:846
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:849
 #, elixir-autogen, elixir-format
 msgid "No comments found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:636
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:389
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:643
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:395
 #, elixir-autogen, elixir-format
 msgid "No tags found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:742
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:754
 #, elixir-autogen, elixir-format
 msgid "No teams found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:233
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:237
 #, elixir-autogen, elixir-format
 msgid "On:"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1244
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1256
 #, elixir-autogen, elixir-format
 msgid "One line under the title"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:855
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:862
 #, elixir-autogen, elixir-format
 msgid "Organization"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:450
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:458
 #, elixir-autogen, elixir-format
 msgid "Parent"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:944
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:952
 #, elixir-autogen, elixir-format
 msgid "Parent Collection"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:987
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:990
 #, elixir-autogen, elixir-format
 msgid "Parent Comment"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:755
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:762
 #, elixir-autogen, elixir-format
 msgid "Parent Tag"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:897
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:636
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:628
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:621
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:546
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:579
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:905
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:648
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:636
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:624
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:553
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:591
 #, elixir-autogen, elixir-format
 msgid "Permanent"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:768
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:776
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected collections? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:824
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:827
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected comments? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:491
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:526
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected configurations? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:937
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:945
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected posts? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:584
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:591
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected tags? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:720
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:732
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected teams? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:567
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:570
 #, elixir-autogen, elixir-format
 msgid "Pin"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:441
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:223
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:444
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:227
 #, elixir-autogen, elixir-format
 msgid "Pinned"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:866
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:885
 #, elixir-autogen, elixir-format
 msgid "Platform"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:294
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:298
 #, elixir-autogen, elixir-format
 msgid "Post"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1021
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1029
 #, elixir-autogen, elixir-format
 msgid "Post title"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:393
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:405
 #, elixir-autogen, elixir-format
 msgid "Posts"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:527
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:587
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1038
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:48
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:535
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:595
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1046
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:52
 #, elixir-autogen, elixir-format
 msgid "Published"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:425
-#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:214
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:437
+#: ../mishka_blog/lib/mishka_blog_web/templates/blogger_card.ex:218
 #, elixir-autogen, elixir-format
 msgid "Publisher"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:551
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:554
 #, elixir-autogen, elixir-format
 msgid "Reply"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:762
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:770
 #, elixir-autogen, elixir-format
 msgid "Restore selected collections?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:818
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:821
 #, elixir-autogen, elixir-format
 msgid "Restore selected comments?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:485
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:520
 #, elixir-autogen, elixir-format
 msgid "Restore selected configurations?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:931
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:939
 #, elixir-autogen, elixir-format
 msgid "Restore selected posts?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:578
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:585
 #, elixir-autogen, elixir-format
 msgid "Restore selected tags?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:714
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:726
 #, elixir-autogen, elixir-format
 msgid "Restore selected teams?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:265
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:269
 #, elixir-autogen, elixir-format
 msgid "Review this post's comments"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:413
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:425
 #, elixir-autogen, elixir-format
 msgid "Role"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:95
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:99
 #, elixir-autogen, elixir-format
 msgid "Row list for blog posts"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:87
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:91
 #, elixir-autogen, elixir-format
 msgid "Row list for comments"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:529
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:589
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1039
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:53
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:537
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:597
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1047
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:57
 #, elixir-autogen, elixir-format
 msgid "Scheduled"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:580
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:588
 #, elixir-autogen, elixir-format
 msgid "Search collections..."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:484
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:492
 #, elixir-autogen, elixir-format
 msgid "Search collections…"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:435
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:438
 #, elixir-autogen, elixir-format
 msgid "Search posts..."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1273
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:845
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:986
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:773
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:819
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1258
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:873
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1285
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:864
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:994
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:780
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:831
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1282
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:879
 #, elixir-autogen, elixir-format
 msgid "Share image"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/edition_chips.ex:92
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:354
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:587
+#: ../mishka_blog/lib/mishka_blog_web/templates/edition_chips.ex:96
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:358
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:599
 #, elixir-autogen, elixir-format
 msgid "Show every language"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/edition_chips.ex:103
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:365
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:598
+#: ../mishka_blog/lib/mishka_blog_web/templates/edition_chips.ex:107
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:369
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:610
 #, elixir-autogen, elixir-format
 msgid "Show fewer languages"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:277
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:373
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:308
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:331
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:253
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:305
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:352
-#: ../mishka_document/lib/mishka_document/resources/section.ex:473
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:353
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:210
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:400
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:288
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:381
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:320
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:339
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:260
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:317
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:362
+#: ../mishka_document/lib/mishka_document/resources/section.ex:485
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:373
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:216
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:406
 #, elixir-autogen, elixir-format
 msgid "Site / Date"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1029
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:761
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:854
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:680
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:787
-#: ../mishka_document/lib/mishka_document/resources/section.ex:977
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:662
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:422
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:776
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1037
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:773
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:862
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:687
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:799
+#: ../mishka_document/lib/mishka_document/resources/section.ex:988
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:681
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:428
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:782
 #, elixir-autogen, elixir-format
 msgid "Slug"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:878
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:897
 #, elixir-autogen, elixir-format
 msgid "Social Links"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:334
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:409
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:615
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:59
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:338
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:412
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:618
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:63
 #, elixir-autogen, elixir-format
 msgid "Spam"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:446
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:377
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:396
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:346
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:316
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:373
-#: ../mishka_document/lib/mishka_document/resources/section.ex:398
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:242
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:308
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:454
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:389
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:404
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:350
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:323
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:385
+#: ../mishka_document/lib/mishka_document/resources/section.ex:410
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:248
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:314
 #, elixir-autogen, elixir-format
 msgid "Stats"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1243
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1255
 #, elixir-autogen, elixir-format
 msgid "Subtitle"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:479
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1224
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1185
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:487
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1236
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1209
 #, elixir-autogen, elixir-format
 msgid "Tags"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:811
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:830
 #, elixir-autogen, elixir-format
 msgid "Teams"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:872
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:891
 #, elixir-autogen, elixir-format
 msgid "URL"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:583
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:586
 #, elixir-autogen, elixir-format
 msgid "Unpin"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:791
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:799
 #, elixir-autogen, elixir-format
 msgid "Unpublish"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:309
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:321
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:483
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:761
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:401
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:502
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:622
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:490
-#: ../mishka_blog/lib/mishka_blog/resources/team.ex:558
-#: ../mishka_document/lib/mishka_document/resources/section.ex:443
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:326
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:560
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:288
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:320
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:332
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:491
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:769
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:413
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:514
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:630
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:497
+#: ../mishka_blog/lib/mishka_blog/resources/team.ex:570
+#: ../mishka_document/lib/mishka_document/resources/section.ex:455
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:332
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:566
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:292
 #, elixir-autogen, elixir-format
 msgid "Versions"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:450
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:485
 #, elixir-autogen, elixir-format
 msgid "Versions Archived"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:246
+#: ../mishka_blog/lib/mishka_blog_web/templates/post_card.ex:250
 #, elixir-autogen, elixir-format
 msgid "Views"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1052
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1060
 #, elixir-autogen, elixir-format
 msgid "Who may open this category: anyone holding one of these. None: everyone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1345
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1357
 #, elixir-autogen, elixir-format
 msgid "Who may open this post: anyone holding one of these. None: everyone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:832
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:839
 #, elixir-autogen, elixir-format
 msgid "Who may open this tag: anyone holding one of these. None: everyone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:762
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:774
 #, elixir-autogen, elixir-format
 msgid "blogger-slug"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:769
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:781
 #, elixir-autogen, elixir-format
 msgid "blogger@example.com"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:855
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:863
 #, elixir-autogen, elixir-format
 msgid "collection-slug"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:853
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:872
 #, elixir-autogen, elixir-format
 msgid "e.g. Elixir, Phoenix, LiveView"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:867
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:886
 #, elixir-autogen, elixir-format
 msgid "e.g. github"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1061
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:885
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:699
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:741
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:441
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:824
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1073
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:893
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:706
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:760
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:447
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:830
 #, elixir-autogen, elixir-format
 msgid "en, fa, ar, ..."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:825
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:844
 #, elixir-autogen, elixir-format
 msgid "https://example.com/avatar.jpg"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:833
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:852
 #, elixir-autogen, elixir-format
 msgid "https://example.com/cover.jpg"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1261
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1273
 #, elixir-autogen, elixir-format
 msgid "https://example.com/image.jpg"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:873
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:892
 #, elixir-autogen, elixir-format
 msgid "https://github.com/user"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1030
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1038
 #, elixir-autogen, elixir-format
 msgid "post-slug"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:332
-#, elixir-autogen, elixir-format
-msgid "%{count} contributors"
-msgstr ""
-
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:339
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:367
 #, elixir-autogen, elixir-format
 msgid "%{count} pending"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:286
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:296
 #, elixir-autogen, elixir-format
 msgid "%{count} versions"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:328
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:356
 #, elixir-autogen, elixir-format
 msgid "%{count} words"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:156
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:161
 #, elixir-autogen, elixir-format
 msgid "0 issues"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:141
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:146
 #, elixir-autogen, elixir-format
 msgid "0 sections"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:241
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:257
 #, elixir-autogen, elixir-format
 msgid "Action Type"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.html.heex:221
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:112
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.html.heex:259
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:117
 #, elixir-autogen, elixir-format
 msgid "Add Section"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:782
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:788
 #, elixir-autogen, elixir-format
 msgid "Address"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:381
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:409
 #, elixir-autogen, elixir-format
 msgid "Advanced Details"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:404
-#: ../mishka_document/lib/mishka_document/resources/section.ex:545
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:405
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:414
+#: ../mishka_document/lib/mishka_document/resources/section.ex:557
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:425
 #, elixir-autogen, elixir-format
 msgid "Advanced Search"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:240
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:256
 #, elixir-autogen, elixir-format
 msgid "All Actions"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:431
-#: ../mishka_document/lib/mishka_document/resources/section.ex:582
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:432
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:441
+#: ../mishka_document/lib/mishka_document/resources/section.ex:594
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:452
 #, elixir-autogen, elixir-format
 msgid "All Content Statuses"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:464
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:465
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:474
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:485
 #, elixir-autogen, elixir-format
 msgid "All Increment Types"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:264
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:280
 #, elixir-autogen, elixir-format
 msgid "All Resources"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:447
-#: ../mishka_document/lib/mishka_document/resources/section.ex:599
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:448
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:457
+#: ../mishka_document/lib/mishka_document/resources/section.ex:611
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:468
 #, elixir-autogen, elixir-format
 msgid "All Technical Statuses"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:260
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:264
 #, elixir-autogen, elixir-format
 msgid "All Types"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:566
+#: ../mishka_document/lib/mishka_document/resources/section.ex:578
 #, elixir-autogen, elixir-format
 msgid "All Versions"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:212
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:288
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1163
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:225
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:301
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1188
 #, elixir-autogen, elixir-format
 msgid "Alpha"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:279
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:287
 #, elixir-autogen, elixir-format
 msgid "Applied"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:458
+#: ../mishka_document/lib/mishka_document/resources/section.ex:470
 #, elixir-autogen, elixir-format
 msgid "Approved drafts"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:349
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:353
 #, elixir-autogen, elixir-format
 msgid "Archive selected issues?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:585
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:595
 #, elixir-autogen, elixir-format
 msgid "Archive selected note drafts?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:588
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:608
 #, elixir-autogen, elixir-format
 msgid "Archive selected section drafts?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:831
+#: ../mishka_document/lib/mishka_document/resources/section.ex:843
 #, elixir-autogen, elixir-format
 msgid "Archive selected sections?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:661
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:667
 #, elixir-autogen, elixir-format
 msgid "Archive selected workspaces?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:303
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:307
 #, elixir-autogen, elixir-format
 msgid "Archive this issue?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:557
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:567
 #, elixir-autogen, elixir-format
 msgid "Archive this note draft?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:554
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:574
 #, elixir-autogen, elixir-format
 msgid "Archive this section draft?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:782
+#: ../mishka_document/lib/mishka_document/resources/section.ex:794
 #, elixir-autogen, elixir-format
 msgid "Archive this section?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:325
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:331
 #, elixir-autogen, elixir-format
 msgid "Archive this tag?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:590
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:596
 #, elixir-autogen, elixir-format
 msgid "Archive this workspace?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:213
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:289
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1164
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:226
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:302
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1189
 #, elixir-autogen, elixir-format
 msgid "Beta"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:251
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:255
 #, elixir-autogen, elixir-format
 msgid "Broken Link"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:426
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:61
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:430
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:66
 #, elixir-autogen, elixir-format
 msgid "Broken link"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:718
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:779
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:727
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:798
 #, elixir-autogen, elixir-format
 msgid "Change Version"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:234
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:242
 #, elixir-autogen, elixir-format
 msgid "Change version"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:226
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:239
 #, elixir-autogen, elixir-format
 msgid "Cloned From"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:237
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:447
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:93
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:241
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:451
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:98
 #, elixir-autogen, elixir-format
 msgid "Closed"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:300
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:305
 #, elixir-autogen, elixir-format
 msgid "Comment"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:383
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:388
 #, elixir-autogen, elixir-format
 msgid "Comments & Actions"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:336
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:507
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:342
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:511
 #, elixir-autogen, elixir-format
 msgid "Completion"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:245
-#: ../mishka_document/lib/mishka_document/resources/section.ex:315
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:272
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:253
+#: ../mishka_document/lib/mishka_document/resources/section.ex:333
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:292
 #, elixir-autogen, elixir-format
 msgid "Content / Technical Review"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:215
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:432
-#: ../mishka_document/lib/mishka_document/resources/section.ex:583
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:433
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:346
+#: ../mishka_document/lib/mishka_document/resources/note.ex:225
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:442
+#: ../mishka_document/lib/mishka_document/resources/section.ex:595
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:453
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:374
 #, elixir-autogen, elixir-format
 msgid "Content Review"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:261
-#: ../mishka_document/lib/mishka_document/resources/section.ex:333
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:269
+#: ../mishka_document/lib/mishka_document/resources/section.ex:351
 #, elixir-autogen, elixir-format
 msgid "Content review"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:438
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:292
+#: ../mishka_document/lib/mishka_document/resources/section.ex:450
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:296
 #, elixir-autogen, elixir-format
 msgid "Contributors"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:403
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:431
 #, elixir-autogen, elixir-format
 msgid "Could not load details"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:872
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:976
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:881
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:995
 #, elixir-autogen, elixir-format
 msgid "Created By"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:320
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:317
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:328
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:337
 #, elixir-autogen, elixir-format
 msgid "Creator"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:273
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:289
 #, elixir-autogen, elixir-format
 msgid "Date Range"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:235
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1156
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:251
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1181
 #, elixir-autogen, elixir-format
 msgid "Destroy"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:45
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:49
 #, elixir-autogen, elixir-format
 msgid "Document Cards"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:61
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:66
 #, elixir-autogen, elixir-format
 msgid "Document Sections"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:265
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:270
 #, elixir-autogen, elixir-format
 msgid "Documentation"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:450
+#: ../mishka_document/lib/mishka_document/resources/section.ex:462
 #, elixir-autogen, elixir-format
 msgid "Drafts pending review"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:296
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:312
+#: ../mishka_document/lib/mishka_document/resources/section.ex:314
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:335
 #, elixir-autogen, elixir-format
 msgid "Drawn at the document's own address"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1005
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1016
 #, elixir-autogen, elixir-format
 msgid "Drawn at the document's own address instead of under it. One page per version, and only a page with no parent."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:128
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:144
 #, elixir-autogen, elixir-format
 msgid "Event"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:262
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:441
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:266
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:445
 #, elixir-autogen, elixir-format
 msgid "FEATURED"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:443
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:949
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:449
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:961
 #, elixir-autogen, elixir-format
 msgid "Filter"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:299
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1002
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:315
+#: ../mishka_document/lib/mishka_document/resources/section.ex:317
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1013
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:338
 #, elixir-autogen, elixir-format
 msgid "Front page"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:109
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:114
 #, elixir-autogen, elixir-format
 msgid "Full-width list with an expandable comments panel"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:67
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:72
 #, elixir-autogen, elixir-format
 msgid "Full-width list with expandable details"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:280
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1015
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:307
+#: ../mishka_document/lib/mishka_document/resources/section.ex:286
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1026
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:317
 #, elixir-autogen, elixir-format
 msgid "Group"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:380
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:408
 #, elixir-autogen, elixir-format
 msgid "Hide Details"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:235
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:239
 #, elixir-autogen, elixir-format
 msgid "In Progress"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:445
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:85
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:449
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:90
 #, elixir-autogen, elixir-format
 msgid "In progress"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:252
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:256
 #, elixir-autogen, elixir-format
 msgid "Incorrect Content"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:427
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:66
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:431
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:71
 #, elixir-autogen, elixir-format
 msgid "Incorrect content"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:465
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:466
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:475
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:486
 #, elixir-autogen, elixir-format
 msgid "Increment Type"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:236
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:244
 #, elixir-autogen, elixir-format
 msgid "Increment type"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:266
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:279
 #, elixir-autogen, elixir-format
 msgid "Inserted at"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:258
-#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:133
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1143
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:274
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:137
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1168
 #, elixir-autogen, elixir-format
 msgid "Issue"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:102
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:107
 #, elixir-autogen, elixir-format
 msgid "Issue Cards"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:259
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1144
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:275
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1169
 #, elixir-autogen, elixir-format
 msgid "Issue Comment"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:261
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:265
 #, elixir-autogen, elixir-format
 msgid "Issue Type"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:327
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:556
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:331
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:568
 #, elixir-autogen, elixir-format
 msgid "Language editions"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:744
+#: ../mishka_document/lib/mishka_document/resources/section.ex:756
 #, elixir-autogen, elixir-format
 msgid "Last Updated"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:435
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:440
 #, elixir-autogen, elixir-format
 msgid "Loading comments…"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:409
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:437
 #, elixir-autogen, elixir-format
 msgid "Loading details…"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1294
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1013
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:491
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:974
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1319
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1032
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:497
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:980
 #, elixir-autogen, elixir-format
 msgid "Localization"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:331
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:337
 #, elixir-autogen, elixir-format
 msgid "Maintainers"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:455
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:456
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:465
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:476
 #, elixir-autogen, elixir-format
 msgid "Major"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:458
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:463
 #, elixir-autogen, elixir-format
 msgid "Mark In Progress"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:463
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:468
 #, elixir-autogen, elixir-format
 msgid "Mark Resolved"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:404
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:501
 #, elixir-autogen, elixir-format
 msgid "Mark as Latest Version"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:181
+#: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:185
 #, elixir-autogen, elixir-format
 msgid "Meta"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:924
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1049
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:933
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1068
 #, elixir-autogen, elixir-format
 msgid "Metadata"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:456
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:457
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:466
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:477
 #, elixir-autogen, elixir-format
 msgid "Minor"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:426
-#: ../mishka_document/lib/mishka_document/resources/section.ex:576
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:427
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:436
+#: ../mishka_document/lib/mishka_document/resources/section.ex:588
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:447
 #, elixir-autogen, elixir-format
 msgid "Needs Revision"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:209
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:756
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1127
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:817
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:485
+#: ../mishka_document/lib/mishka_document/resources/note.ex:219
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:765
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1151
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:836
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:508
 #, elixir-autogen, elixir-format
 msgid "Needs revision"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:757
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:776
 #, elixir-autogen, elixir-format
 msgid "No Language Group"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:337
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:353
 #, elixir-autogen, elixir-format
 msgid "No event logs found"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:389
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:393
 #, elixir-autogen, elixir-format
 msgid "No issues found"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:617
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:626
 #, elixir-autogen, elixir-format
 msgid "No note drafts found"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:987
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:866
+#: ../mishka_document/lib/mishka_document/resources/section.ex:998
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:885
 #, elixir-autogen, elixir-format
 msgid "No parent section"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:787
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:796
 #, elixir-autogen, elixir-format
 msgid "No section"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:805
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:814
 #, elixir-autogen, elixir-format
 msgid "No section draft"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:620
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:639
 #, elixir-autogen, elixir-format
 msgid "No section drafts found"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:872
+#: ../mishka_document/lib/mishka_document/resources/section.ex:883
 #, elixir-autogen, elixir-format
 msgid "No sections found"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:823
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:832
 #, elixir-autogen, elixir-format
 msgid "No source note"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1031
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:848
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1055
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:867
 #, elixir-autogen, elixir-format
 msgid "No source section"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:357
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:403
 #, elixir-autogen, elixir-format
 msgid "No versions found for this workspace"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:739
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:745
 #, elixir-autogen, elixir-format
 msgid "No workspaces found"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:459
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:460
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:469
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:480
 #, elixir-autogen, elixir-format
 msgid "None"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:256
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1141
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:272
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1166
 #, elixir-autogen, elixir-format
 msgid "Note Draft"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:187
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:840
+#: ../mishka_document/lib/mishka_document/resources/note.ex:197
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:849
 #, elixir-autogen, elixir-format
 msgid "Note content..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:178
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:651
+#: ../mishka_document/lib/mishka_document/resources/note.ex:188
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:660
 #, elixir-autogen, elixir-format
 msgid "Note title"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:774
+#: ../mishka_document/lib/mishka_document/resources/section.ex:786
 #, elixir-autogen, elixir-format
 msgid "Notes"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:277
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:304
+#: ../mishka_document/lib/mishka_document/resources/section.ex:283
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:314
 #, elixir-autogen, elixir-format
 msgid "Only a heading in the contents, with no address"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1018
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1029
 #, elixir-autogen, elixir-format
 msgid "Only a heading in the contents: it has no page of its own, and the pages under it keep their address as if it were not there."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:234
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:444
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:83
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:238
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:448
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:88
 #, elixir-autogen, elixir-format
 msgid "Open"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:520
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:526
 #, elixir-autogen, elixir-format
 msgid "Open workspace"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:379
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:425
 #, elixir-autogen, elixir-format
 msgid "Optional friendly name"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:205
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:213
 #, elixir-autogen, elixir-format
 msgid "Order %{order}"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:197
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:743
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1114
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:804
+#: ../mishka_document/lib/mishka_document/resources/note.ex:207
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:752
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1138
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:823
 #, elixir-autogen, elixir-format
 msgid "Order Position"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:427
+#: ../mishka_document/lib/mishka_document/resources/section.ex:439
 #, elixir-autogen, elixir-format
 msgid "Order position"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1040
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:1052
 #, elixir-autogen, elixir-format
 msgid "Page %{page} of %{total}"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:996
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:875
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1007
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:894
 #, elixir-autogen, elixir-format
 msgid "Parent Section"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:457
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:458
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:467
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:478
 #, elixir-autogen, elixir-format
 msgid "Patch"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:336
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:382
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected versions? This cannot be undone."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:370
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:376
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:321
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:1385
 #, elixir-autogen, elixir-format
 msgid "Permanently delete this version? This cannot be undone."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:358
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:594
-#: ../mishka_document/lib/mishka_document/resources/section.ex:840
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:597
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:681
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:362
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:604
+#: ../mishka_document/lib/mishka_document/resources/section.ex:852
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:617
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:687
 #, elixir-autogen, elixir-format
 msgid "Permanently delete?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:329
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:571
-#: ../mishka_document/lib/mishka_document/resources/section.ex:810
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:574
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:349
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:634
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:333
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:581
+#: ../mishka_document/lib/mishka_document/resources/section.ex:822
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:594
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:355
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:640
 #, elixir-autogen, elixir-format
 msgid "Permanently delete? This cannot be undone."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:458
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:459
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:468
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:479
 #, elixir-autogen, elixir-format
 msgid "Prerelease"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:410
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:507
 #, elixir-autogen, elixir-format
 msgid "Published At"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:261
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:274
 #, elixir-autogen, elixir-format
 msgid "Published at"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:214
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:290
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1165
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:227
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:303
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1190
 #, elixir-autogen, elixir-format
 msgid "Rc"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:550
-#: ../mishka_document/lib/mishka_document/resources/note.ex:272
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:897
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1285
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:995
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:554
+#: ../mishka_document/lib/mishka_document/resources/note.ex:282
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:906
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1310
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1014
 #, elixir-autogen, elixir-format
 msgid "References"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:208
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:425
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:755
-#: ../mishka_document/lib/mishka_document/resources/section.ex:575
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1126
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:426
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:816
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:484
+#: ../mishka_document/lib/mishka_document/resources/note.ex:218
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:435
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:764
+#: ../mishka_document/lib/mishka_document/resources/section.ex:587
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1150
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:446
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:835
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:507
 #, elixir-autogen, elixir-format
 msgid "Rejected"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:473
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:478
 #, elixir-autogen, elixir-format
 msgid "Reopen"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:522
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:526
 #, elixir-autogen, elixir-format
 msgid "Reporter"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:236
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:446
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:89
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:240
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:450
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:94
 #, elixir-autogen, elixir-format
 msgid "Resolved"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:51
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:55
 #, elixir-autogen, elixir-format
 msgid "Responsive card grid layout"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:353
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:589
-#: ../mishka_document/lib/mishka_document/resources/section.ex:835
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:592
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:365
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:671
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:357
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:599
+#: ../mishka_document/lib/mishka_document/resources/section.ex:847
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:612
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:371
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:677
 #, elixir-autogen, elixir-format
 msgid "Restore selected?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:315
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:319
 #, elixir-autogen, elixir-format
 msgid "Restore this issue?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:563
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:573
 #, elixir-autogen, elixir-format
 msgid "Restore this note draft?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:564
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:584
 #, elixir-autogen, elixir-format
 msgid "Restore this section draft?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:796
+#: ../mishka_document/lib/mishka_document/resources/section.ex:808
 #, elixir-autogen, elixir-format
 msgid "Restore this section?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/tag.ex:335
+#: ../mishka_document/lib/mishka_document/resources/tag.ex:341
 #, elixir-autogen, elixir-format
 msgid "Restore this tag?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:612
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:618
 #, elixir-autogen, elixir-format
 msgid "Restore this workspace?"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1303
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1328
 #, elixir-autogen, elixir-format
 msgid "Review & Ordering"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:906
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:915
 #, elixir-autogen, elixir-format
 msgid "Review & Settings"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:254
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:258
 #, elixir-autogen, elixir-format
 msgid "Review Feedback"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:429
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:71
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:433
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:76
 #, elixir-autogen, elixir-format
 msgid "Review feedback"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:728
+#: ../mishka_document/lib/mishka_document/resources/section.ex:740
 #, elixir-autogen, elixir-format
 msgid "Search contributors..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:227
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:148
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:231
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:153
 #, elixir-autogen, elixir-format
 msgid "Search issues…"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:531
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:541
 #, elixir-autogen, elixir-format
 msgid "Search notes..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:504
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:514
 #, elixir-autogen, elixir-format
 msgid "Search section drafts..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:491
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:512
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:501
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:532
 #, elixir-autogen, elixir-format
 msgid "Search sections..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:97
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:102
 #, elixir-autogen, elixir-format
 msgid "Search sections…"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:478
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:499
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:488
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:519
 #, elixir-autogen, elixir-format
 msgid "Search versions..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:255
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:503
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1140
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:271
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:513
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1165
 #, elixir-autogen, elixir-format
 msgid "Section Draft"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1103
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:882
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1127
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:901
 #, elixir-autogen, elixir-format
 msgid "Section content..."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:969
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:654
+#: ../mishka_document/lib/mishka_document/resources/section.ex:980
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:673
 #, elixir-autogen, elixir-format
 msgid "Section title"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:321
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:540
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:286
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:327
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:546
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:290
 #, elixir-autogen, elixir-format
 msgid "Sections"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:992
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:436
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:998
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:533
 #, elixir-autogen, elixir-format
 msgid "Settings"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:530
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:540
 #, elixir-autogen, elixir-format
 msgid "Source Note"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1044
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:511
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1068
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:531
 #, elixir-autogen, elixir-format
 msgid "Source Section"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:215
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:291
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1166
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:228
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:304
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1191
 #, elixir-autogen, elixir-format
 msgid "Stable"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:261
+#: ../mishka_document/lib/mishka_document/resources/note.ex:271
 #, elixir-autogen, elixir-format
 msgid "Tag content text"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note.ex:233
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:448
-#: ../mishka_document/lib/mishka_document/resources/section.ex:600
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:449
-#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:355
+#: ../mishka_document/lib/mishka_document/resources/note.ex:243
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:458
+#: ../mishka_document/lib/mishka_document/resources/section.ex:612
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:469
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:383
 #, elixir-autogen, elixir-format
 msgid "Technical Review"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:267
-#: ../mishka_document/lib/mishka_document/resources/section.ex:339
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:275
+#: ../mishka_document/lib/mishka_document/resources/section.ex:357
 #, elixir-autogen, elixir-format
 msgid "Technical review"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:250
-#: ../mishka_document/lib/mishka_document/resources/issue.ex:425
-#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:56
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:254
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:429
+#: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:61
 #, elixir-autogen, elixir-format
 msgid "Typo"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:234
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1153
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:250
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1178
 #, elixir-autogen, elixir-format
 msgid "Update"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:331
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:339
 #, elixir-autogen, elixir-format
 msgid "Updated %{date}"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:271
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:284
 #, elixir-autogen, elixir-format
 msgid "Updated at"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:217
-#: ../mishka_document/lib/mishka_document/resources/section.ex:421
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:167
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:225
+#: ../mishka_document/lib/mishka_document/resources/section.ex:433
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:180
 #, elixir-autogen, elixir-format
 msgid "Version"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:427
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:524
 #, elixir-autogen, elixir-format
 msgid "Version Information"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:378
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:424
 #, elixir-autogen, elixir-format
 msgid "Version Name"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:371
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:417
 #, elixir-autogen, elixir-format
 msgid "Version Number"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1004
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1023
 #, elixir-autogen, elixir-format
 msgid "Versioning"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:786
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:792
 #, elixir-autogen, elixir-format
 msgid "Where this document is read, such as /product/docs. Leave it empty to read it at /docs/<slug>."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:945
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:964
 #, elixir-autogen, elixir-format
 msgid "Who may open the page once this draft is applied: anyone holding one of these. None: as the page above it, else its document."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:951
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:957
 #, elixir-autogen, elixir-format
 msgid "Who may open this document: anyone holding one of these. None: everyone."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:1243
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1267
 #, elixir-autogen, elixir-format
 msgid "Who may open this page: anyone holding one of these. None: as the page above it, else its document."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section.ex:432
+#: ../mishka_document/lib/mishka_document/resources/section.ex:444
 #, elixir-autogen, elixir-format
 msgid "Words"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:250
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:688
-#: ../mishka_document/lib/mishka_document/resources/section.ex:934
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:700
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:250
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1136
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:266
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:697
+#: ../mishka_document/lib/mishka_document/resources/section.ex:945
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:719
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:256
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1161
 #, elixir-autogen, elixir-format
 msgid "Workspace"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/event_log.ex:251
-#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:477
-#: ../mishka_document/lib/mishka_document/resources/section.ex:565
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:498
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1137
+#: ../mishka_document/lib/mishka_document/resources/event_log.ex:267
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:487
+#: ../mishka_document/lib/mishka_document/resources/section.ex:577
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:518
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/section/index.ex:1162
 #, elixir-autogen, elixir-format
 msgid "Workspace Version"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:372
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:418
 #, elixir-autogen, elixir-format
 msgid "e.g., 1.0.0"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:663
+#: ../mishka_document/lib/mishka_document/resources/section_draft.ex:682
 #, elixir-autogen, elixir-format
 msgid "section-slug"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:524
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:536
 #, elixir-autogen, elixir-format
 msgid "sections"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:532
+#: ../mishka_document/lib/mishka_document_web/templates/document_card.ex:544
 #, elixir-autogen, elixir-format
 msgid "versions"
 msgstr ""
@@ -5519,4 +5514,80 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/_helper.ex:94
 #, elixir-autogen, elixir-format
 msgid "Deleted user"
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:378
+#, elixir-autogen, elixir-format
+msgid "Editing is on our roadmap."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:790
+#, elixir-autogen, elixir-format
+msgid "Enforcing this when a post is published is on our roadmap."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1055
+#, elixir-autogen, elixir-format
+msgid "Publishing at the scheduled time is on our roadmap."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:398
+#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:480
+#, elixir-autogen, elixir-format
+msgid "Version history is on our roadmap."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:360
+#, elixir-autogen, elixir-format
+msgid "1 contributor"
+msgid_plural "%{count} contributors"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:291
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:323
+#, elixir-autogen, elixir-format
+msgid "A heading in the contents with a page of its own at its slug"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:342
+#, elixir-autogen, elixir-format
+msgid "Clone"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:468
+#, elixir-autogen, elixir-format
+msgid "Clone from"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:472
+#, elixir-autogen, elixir-format
+msgid "Every page, note and tag of that version is copied into the new one."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1042
+#, elixir-autogen, elixir-format
+msgid "For a group: it also has a page of its own at its slug, with its text and notes, while the pages under it keep their address. Nothing for a page that is not a group."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/section.ex:298
+#: ../mishka_document/lib/mishka_document/resources/section.ex:1039
+#: ../mishka_document/lib/mishka_document_web/templates/document_section.ex:330
+#, elixir-autogen, elixir-format
+msgid "Group page"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:360
+#, elixir-autogen, elixir-format
+msgid "Make independent"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:450
+#, elixir-autogen, elixir-format
+msgid "None — an empty version"
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:469
+#, elixir-autogen, elixir-format
+msgid "Search a version of this document"
 msgstr ""
