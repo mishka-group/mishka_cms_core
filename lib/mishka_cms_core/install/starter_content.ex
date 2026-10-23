@@ -76,6 +76,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       * `body` (`-dark`), the text of a long read;
       * `edge-hover`, the edge a hovered or focused card takes, the same in both;
       * `warn-ink` (`-dark`), the ink of a warning or a featured mark;
+      * `warn-wash` (`-dark`), the wash behind a warning or a featured mark;
     * `site-bleed`, which lets a section run from one edge of the window to the other while its
       content stays in the layout's column (`MishkaCmsCore.Runtime.SiteLayout`).
 
@@ -289,6 +290,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     --color-edge-hover: #b9b2f3;
     --color-warn-ink: #a26a10;
     --color-warn-ink-dark: #e6b86a;
+    --color-warn-wash: #fbf0dc;
+    --color-warn-wash-dark: #2e2618;
   }
 
   /* A section that runs from one edge of the window to the other, its content in the column. */
@@ -1360,7 +1363,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   ]
 
   @chip_tag ~S|tag_class: "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark",|
-  @warn_tag ~S|tag_class: "bg-[#FBF0DC] text-warn-ink dark:bg-[#2E2618] dark:text-warn-ink-dark",|
+  @warn_tag ~S|tag_class: "bg-warn-wash text-warn-ink dark:bg-warn-wash-dark dark:text-warn-ink-dark",|
 
   # AND THE TAGS OF HOW A PAGE IS SERVED, which an earlier release wrote in hex values the theme now
   # holds as tokens: swapped wherever they are, with the sections, so an untouched page becomes

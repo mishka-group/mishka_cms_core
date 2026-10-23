@@ -719,7 +719,8 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     "tint-6-ink" => {"#6b6650", "#c9c3a6"},
     "chip-wash" => {"#eceafb", "#25223f"},
     "body" => {"#3a3940", "#c9c7d2"},
-    "warn-ink" => {"#a26a10", "#e6b86a"}
+    "warn-ink" => {"#a26a10", "#e6b86a"},
+    "warn-wash" => {"#fbf0dc", "#2e2618"}
   }
 
   test "the theme holds the colours the extensions' pages share, each with its dark twin", %{
@@ -881,7 +882,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
           ~s(tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",)
         )
         |> String.replace(
-          ~s(tag_class: "bg-[#FBF0DC] text-warn-ink dark:bg-[#2E2618] dark:text-warn-ink-dark",),
+          ~s(tag_class: "bg-warn-wash text-warn-ink dark:bg-warn-wash-dark dark:text-warn-ink-dark",),
           ~s(tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",)
         )
 

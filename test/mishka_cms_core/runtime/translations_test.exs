@@ -635,6 +635,14 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
     end
   end
 
+  defmodule BarWords do
+    @moduledoc false
+    use MishkaInstaller.Event.Hook, event: "runtime:translations:used_keys"
+
+    @impl true
+    def call(%{keys: keys} = data), do: {:reply, %{data | keys: keys ++ ["Probe bar word"]}}
+  end
+
   describe "used_keys/1" do
     setup do
       [site, other_site] = [create_site!(), create_site!()]
@@ -674,6 +682,39 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
 
     test "never includes another site's keys", %{site: site, keys: keys} do
       refute keys.other in Translations.used_keys(site.id)
+    end
+
+    # A word a plugin looks up, the section bar's for one, is in no template.
+    test "includes the keys a plugin names on its event", %{site: site} do
+      refute "Probe bar word" in Translations.used_keys(site.id)
+
+      {:ok, _} =
+        MishkaInstaller.Event.Event.write(%{
+          name: BarWords,
+          event: Translations.used_keys_event(),
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok =
+        MishkaInstaller.Event.EventHandler.do_compile(
+          Translations.used_keys_event(),
+          :start,
+          false
+        )
+
+      on_exit(fn ->
+        MishkaInstaller.Event.Event.unregister(:name, BarWords, false)
+
+        MishkaInstaller.Event.EventHandler.do_compile(
+          Translations.used_keys_event(),
+          :start,
+          false
+        )
+      end)
+
+      assert "Probe bar word" in Translations.used_keys(site.id)
+      assert "Probe bar word" in Translations.used_keys(nil)
     end
 
     # A global row serves every site, so it is used when ANY template asks for it.
