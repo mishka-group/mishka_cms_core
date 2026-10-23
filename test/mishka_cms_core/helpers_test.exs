@@ -29,6 +29,17 @@ defmodule MishkaCmsCore.HelpersTest do
     end
   end
 
+  describe "host_version/0" do
+    # THE APPLICATION THE CMS IS CONFIGURED TO RUN IN, so the host's own version and not this
+    # library's, wherever that is: in this suite the host is the library itself.
+    test "is the version of the configured host application" do
+      host_app = Application.fetch_env!(:mishka_cms_core, :host_app)
+
+      assert Helpers.host_version() == to_string(Application.spec(host_app, :vsn))
+      assert Helpers.host_version() =~ ~r/\A\d+\.\d+\.\d+/
+    end
+  end
+
   describe "address_path/1" do
     test "drops the slash at the end, and the repeated ones" do
       assert Helpers.address_path("/blog") == "/blog"

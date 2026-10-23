@@ -30,6 +30,23 @@ defmodule MishkaCmsCore.Install.StarterContent do
   Mono, from Google Fonts, which the public Content-Security-Policy already allows; Newsreader comes
   with the host's own `/fonts/fonts.css`.
 
+  ## What the header changes with
+
+  Three things, each handed to the `site-header` by the layout and each read from what the runtime
+  already assigns, so no page and no helper of ours looks anything up:
+
+    * `@current_user` — a signed-in visitor sees their email and a menu in place of Sign in: the
+      console and their account settings when `MishkaCmsCore.Sidebar.landing_path/1` says they may
+      open it, and Sign out, which is the DELETE the sign-out page's own form sends. Naming the
+      visitor in the layout is also what makes the runtime load one for pages that use it
+      (`MishkaCmsCore.Runtime.Compilers.UserClosure`).
+    * `@page_languages` — the languages the page answers in, each at the address
+      `MishkaCmsCore.Runtime.Languages.url/3` gave it. With two or more the header has a language
+      switcher: a flag (`Languages.flag/1`) and a name (`Languages.name/1`) for each, the current one
+      marked. A page in one language has none.
+    * The version the home page's pill shows is `MishkaCmsCore.Helpers.host_version/0`, the
+      application's own, read when the page is drawn.
+
   ## The logo
 
   The mark in the header, the footer and the home page is a picture in the MASTER site's media
@@ -173,6 +190,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     --color-chip-dark: #3a3560;
     --color-dot: #e4e1d9;
     --color-dot-dark: #26252c;
+    --color-wash: #f7f6fd;
+    --color-wash-dark: #211f2b;
     --color-brand: #5b4fe0;
     --color-brand-deep: #4338ca;
     --font-geist: "Geist", system-ui, sans-serif;
@@ -632,6 +651,80 @@ defmodule MishkaCmsCore.Install.StarterContent do
             >
               GitHub
             </.link>
+            <div :if={@editions != []} class="relative">
+              <button
+                type="button"
+                id="site-language-button"
+                aria-label="Language"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                phx-click={
+                  JS.toggle(to: "#site-language-menu")
+                  |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+                }
+                class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+              >
+                <span aria-hidden="true" class="text-[16px] leading-none">
+                  {MishkaCmsCore.Runtime.Languages.flag(@lang)}
+                </span>
+                <span class="uppercase">{@lang}</span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="text-faint dark:text-faint-dark"
+                >
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </button>
+              <div
+                id="site-language-menu"
+                role="menu"
+                phx-click-away={JS.hide(to: "#site-language-menu")}
+                phx-window-keydown={JS.hide(to: "#site-language-menu")}
+                phx-key="Escape"
+                class="absolute end-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+              >
+                <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
+                      response, so a live navigation into another language would keep the first
+                      one's. --%>
+                <a
+                  :for={edition <- @editions}
+                  role="menuitem"
+                  href={edition.path}
+                  hreflang={edition.language}
+                  aria-current={edition.language == @lang && "true"}
+                  class={[
+                    "flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] hover:bg-wash dark:hover:bg-wash-dark",
+                    (edition.language == @lang && "font-semibold text-brand") ||
+                      "font-medium text-fg dark:text-fg-dark"
+                  ]}
+                >
+                  <span aria-hidden="true" class="text-[16px] leading-none">
+                    {MishkaCmsCore.Runtime.Languages.flag(edition.language)}
+                  </span>
+                  <span class="flex-1">{MishkaCmsCore.Runtime.Languages.name(edition.language)}</span>
+                  <svg
+                    :if={edition.language == @lang}
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M20 6L9 17l-5-5"></path>
+                  </svg>
+                </a>
+              </div>
+            </div>
             <button
               type="button"
               id="site-theme-dark"
@@ -676,11 +769,140 @@ defmodule MishkaCmsCore.Install.StarterContent do
               </svg>
             </button>
             <.link
+              :if={!@current_user}
               navigate={site_path("/:lang/auth", @lang)}
               class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
             >
               Sign in
             </.link>
+            <div :if={@current_user} class="relative">
+              <button
+                type="button"
+                id="site-user-button"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                phx-click={
+                  JS.toggle(to: "#site-user-menu")
+                  |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+                }
+                class="flex h-[38px] cursor-pointer items-center gap-2 rounded-[11px] border border-edge bg-surface ps-1.5 pe-3 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+              >
+                <span class="grid size-[26px] place-items-center rounded-full bg-[linear-gradient(180deg,#6A60EC,#5246D6)] text-[12px] font-semibold text-white">
+                  {String.upcase(String.first(to_string(@current_user.email)) || "?")}
+                </span>
+                <span id="site-user-email" class="max-w-[180px] truncate max-[560px]:hidden">
+                  {to_string(@current_user.email)}
+                </span>
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  class="text-faint dark:text-faint-dark"
+                >
+                  <path d="M6 9l6 6 6-6"></path>
+                </svg>
+              </button>
+              <div
+                id="site-user-menu"
+                role="menu"
+                phx-click-away={JS.hide(to: "#site-user-menu")}
+                phx-window-keydown={JS.hide(to: "#site-user-menu")}
+                phx-key="Escape"
+                class="absolute end-0 top-[46px] z-50 hidden w-[250px] overflow-hidden rounded-[14px] border border-edge bg-surface shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+              >
+                <div class="border-b border-edge px-4 py-3 dark:border-edge-dark">
+                  <div class="text-[11.5px] text-subtle dark:text-subtle-dark">Signed in as</div>
+                  <div class="mt-0.5 truncate text-[13px] font-semibold text-fg dark:text-fg-dark">
+                    {to_string(@current_user.email)}
+                  </div>
+                </div>
+                <div class="p-1.5">
+                  <.link
+                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                    id="site-admin-console"
+                    role="menuitem"
+                    href={MishkaCmsCore.Sidebar.landing_path(@current_user)}
+                    class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="text-dim dark:text-dim-dark"
+                    >
+                      <rect x="3" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="3" width="7" height="7"></rect>
+                      <rect x="14" y="14" width="7" height="7"></rect>
+                      <rect x="3" y="14" width="7" height="7"></rect>
+                    </svg>
+                    Admin console
+                  </.link>
+                  <.link
+                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                    id="site-account-settings"
+                    role="menuitem"
+                    href="/admin/dashboard/settings?tab=preferences"
+                    class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="1.8"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      class="text-dim dark:text-dim-dark"
+                    >
+                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                      <circle cx="12" cy="7" r="4"></circle>
+                    </svg>
+                    Account settings
+                  </.link>
+                  <div
+                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                    class="mx-1 my-1.5 h-px bg-edge dark:bg-edge-dark"
+                  >
+                  </div>
+                  <%!-- The sign-out route answers a DELETE, which is what the sign-out page's own form sends; `<.form>` adds the method override and the CSRF token. --%>
+                  <.form for={%{}} id="site-sign-out-form" action="/auth/sign-out" method="delete">
+                    <button
+                      type="submit"
+                      id="site-sign-out"
+                      role="menuitem"
+                      class="flex w-full cursor-pointer items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-start text-[13px] font-semibold text-bad hover:bg-bad/10"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                        <path d="M16 17l5-5-5-5"></path>
+                        <path d="M21 12H9"></path>
+                      </svg>
+                      Sign out
+                    </button>
+                  </.form>
+                </div>
+              </div>
+            </div>
           </div>
         </header>
         """,
@@ -688,6 +910,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
           brand_attr(brand, "The name shown on the left."),
           logo_attr(logo),
           lang_attr(),
+          user_attr(),
+          editions_attr(),
           class_attr("Extra classes for the header itself")
         ],
         slots: [slot("Extra links, placed before this site's own")]
@@ -740,17 +964,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
               >
                 Sponsor
               </.link>
-              <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
-                    response, so a live navigation into another language would keep the first
-                    one's. --%>
-              <a
-                :for={edition <- @editions}
-                href={edition.path}
-                hreflang={edition.language}
-                class="rounded-[6px] border border-edge px-2 py-1 uppercase dark:border-edge-dark"
-              >
-                {edition.language}
-              </a>
               {render_slot(@inner_block)}
             </div>
           </div>
@@ -758,18 +971,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
         """,
         attrs: [
           logo_attr(logo),
-          lang_attr(),
-          %{
-            "name" => "editions",
-            "type" => "any",
-            "opts" => %{
-              "default" => [],
-              "doc" => "`@page_languages` — the same page in the site's other languages."
-            }
-          },
           class_attr("Extra classes for the footer itself")
         ],
-        slots: [slot("Anything to put beside the language links")]
+        slots: [slot("Anything to put beside the links")]
       }
     ]
   end
@@ -804,6 +1008,29 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "opts" => %{
         "default" => nil,
         "doc" => "The language the links stay in. The site's first language when not given."
+      }
+    }
+  end
+
+  defp user_attr do
+    %{
+      "name" => "current_user",
+      "type" => "any",
+      "opts" => %{
+        "default" => nil,
+        "doc" => "`@current_user`, the signed-in visitor. Their menu takes the place of Sign in."
+      }
+    }
+  end
+
+  defp editions_attr do
+    %{
+      "name" => "editions",
+      "type" => "any",
+      "opts" => %{
+        "default" => [],
+        "doc" =>
+          "`@page_languages`: the page in each language it answers in, the current one among them. The switcher shows when there are two."
       }
     }
   end
@@ -912,7 +1139,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp layout_template(site_name, nav, main_class) do
     ~s"""
     <div class="flex min-h-screen flex-col bg-page font-geist leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
-      <.component component_name="site-header" site="#{site_name}" lang={lang(assigns)}>#{nav_links(nav)}
+      <.component
+        component_name="site-header"
+        site="#{site_name}"
+        lang={lang(assigns)}
+        current_user={assigns[:current_user]}
+        editions={assigns[:page_languages] || []}
+      >#{nav_links(nav)}
       </.component>
       <div :if={@flash != %{}} id="site-flash" class="mx-auto mt-5 w-full max-w-[1160px] px-8">
         <p
@@ -932,12 +1165,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         </p>
       </div>
       <main class="#{main_class}">{@inner_content}</main>
-      <.component
-        component_name="site-footer"
-        site="#{site_name}"
-        lang={lang(assigns)}
-        editions={assigns[:page_languages] || []}
-      />
+      <.component component_name="site-footer" site="#{site_name}" />
     </div>
     """
   end
@@ -989,7 +1217,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
             {Map.get(assigns[:current_site] || %{}, :host) || "localhost"}
           </span>
           <span class="text-faint dark:text-faint-dark">/</span>
-          <span>v1.0.0</span>
+          <span>v{MishkaCmsCore.Helpers.host_version()}</span>
           <span class="text-faint dark:text-faint-dark">/</span>
           <span>runtime ready</span>
         </div>

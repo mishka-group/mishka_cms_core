@@ -338,25 +338,41 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       })
     end
 
+    defp header_html(site, assigns) do
+      LiveViewCompiler.render_template(
+        component(site, "site-header").template,
+        Map.merge(
+          %{
+            brand: "Acme",
+            logo: "/logo.png",
+            lang: "en",
+            current_user: nil,
+            editions: [],
+            class: nil,
+            inner_block: []
+          },
+          assigns
+        )
+      )
+    end
+
     defp header_links(site, language) do
-      hrefs(component(site, "site-header").template, %{
-        brand: "Acme",
+      site |> header_html(%{lang: language}) |> links()
+    end
+
+    defp links(html) do
+      ~r/href="([^"]*)"/ |> Regex.scan(html, capture: :all_but_first) |> List.flatten()
+    end
+
+    defp footer_html(site) do
+      LiveViewCompiler.render_template(component(site, "site-footer").template, %{
         logo: "/logo.png",
-        lang: language,
         class: nil,
         inner_block: []
       })
     end
 
-    defp footer_links(site) do
-      hrefs(component(site, "site-footer").template, %{
-        logo: "/logo.png",
-        lang: nil,
-        class: nil,
-        editions: [],
-        inner_block: []
-      })
-    end
+    defp footer_links(site), do: site |> footer_html() |> links()
 
     # THE TWO BUTTONS AND NOTHING ELSE ARE LINKS, and the three numbered steps are plain cards: a
     # link on one of them would be a fifth `href` here.
@@ -505,7 +521,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     assert one(ErrorPage, site).root_layout_template == "<html><body>mine</body></html>"
   end
 
-  @paired ~w(page fg dim subtle faint surface edge sunk chip dot)
+  @paired ~w(page fg dim subtle faint surface edge sunk chip dot wash)
 
   # THE ERROR PAGES AND THE DEV SEEDS ARE WRITTEN IN THE FIRST BLOCK, the home page in the second.
   test "the theme declares the tokens the starter markup is written in", %{site: site} do
@@ -579,6 +595,210 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     assert template =~ ~s(data-phx-theme="light")
     assert template =~ "dark:hidden"
     assert template =~ "dark:grid"
+  end
+
+  # WHAT THE HEADER SHOWS A SIGNED-IN VISITOR is the admin topbar's menu in the public design: the
+  # email, the console when they may open it, and Sign out. The sign-out route answers a DELETE, so
+  # the entry is the form the sign-out page itself posts.
+  describe "the header's visitor" do
+    setup %{site: site} do
+      forget_settings(~w(site.languages site.language_urls), [site.id])
+      :ok = Translations.put_site(site.id)
+      StarterContent.seed!(site)
+      :ok
+    end
+
+    defp signed_in(site, user), do: header_html(site, %{current_user: user})
+
+    test "a visitor who is not signed in is offered Sign in, and no menu", %{site: site} do
+      html = header_html(site, %{})
+
+      assert html =~ ~r/<a href="\/auth"[^>]*>\s*Sign in\s*<\/a>/
+      refute html =~ "site-user-menu"
+      refute html =~ "site-sign-out"
+    end
+
+    test "a signed-in visitor sees their email, and Sign in is gone", %{site: site} do
+      user = create_user!()
+      html = signed_in(site, user)
+
+      assert html =~ "site-user-button"
+      assert html =~ ~s(id="site-user-email")
+      assert html =~ to_string(user.email)
+      refute html =~ ~r/>\s*Sign in\s*</
+      refute "/auth" in links(html)
+    end
+
+    test "Sign out is a DELETE of the sign-out route, with the token a form carries", %{
+      site: site
+    } do
+      html = signed_in(site, create_user!())
+
+      assert [form] = Regex.run(~r/<form[^>]*id="site-sign-out-form"[^>]*>.*?<\/form>/s, html)
+      assert form =~ ~s(action="/auth/sign-out")
+      assert form =~ ~s(method="post")
+      assert form =~ ~r/name="_method"[^>]*value="delete"/
+      assert form =~ ~s(name="_csrf_token")
+      assert form =~ ~s(id="site-sign-out")
+      assert form =~ "Sign out"
+    end
+
+    test "the menu is the host's own toggle: closed, opened by its button, closed away from it",
+         %{
+           site: site
+         } do
+      html = signed_in(site, create_user!())
+
+      assert html =~ ~r/id="site-user-menu"[^>]*class="[^"]*\bhidden\b/
+      assert html =~ ~s(aria-expanded="false")
+      assert html =~ "toggle"
+      assert html =~ "phx-click-away"
+    end
+
+    test "an admin is offered the console and their account settings", %{site: site} do
+      admin = create_user_with_permissions!(["admin:dashboard:*"])
+      html = signed_in(site, admin)
+
+      assert html =~ ~s(id="site-admin-console")
+      assert "/admin/dashboard" in links(html)
+      assert html =~ ~s(id="site-account-settings")
+      assert "/admin/dashboard/settings?tab=preferences" in links(html)
+    end
+
+    test "a visitor who may not open the console is offered neither", %{site: site} do
+      html = signed_in(site, create_user!())
+
+      refute html =~ "site-admin-console"
+      refute html =~ "site-account-settings"
+      refute Enum.any?(links(html), &String.starts_with?(&1, "/admin"))
+    end
+
+    # A PAGE IS SERVED WITHOUT A VISITOR UNLESS ITS SOURCE NAMES ONE, which is how a brochure page
+    # costs no lookup. The layout names `current_user` where it hands it to the header, so every
+    # page on it loads whoever is signed in, and the header can say who.
+    test "the layout asks the runtime for the visitor", %{site: site} do
+      assert MishkaCmsCore.Runtime.Compilers.UserClosure.reads_user?(one(Layout, site))
+    end
+
+    test "the layout hands the header the visitor and the page's languages", %{site: site} do
+      template = one(Layout, site).template
+
+      assert template =~
+               ~r/component_name="site-header".*?current_user=\{assigns\[:current_user\]\}/s
+
+      assert template =~ ~r/component_name="site-header".*?editions=\{assigns\[:page_languages\]/s
+    end
+  end
+
+  # THE SWITCHER REPLACED THE FOOTER'S PILLS. It lists the languages the page answers in, as the
+  # page's own `@page_languages` says (a page that is in one language has none), each at the address
+  # `Languages.url/3` gave it, with its flag and its name, and marks the one the visitor is reading.
+  describe "the header's language switcher" do
+    setup %{site: site} do
+      StarterContent.seed!(site)
+
+      %{
+        both: [
+          %{language: "en", path: "/"},
+          %{language: "fa", path: "/fa"}
+        ]
+      }
+    end
+
+    test "lists each language with its flag and its name, at its address", %{
+      site: site,
+      both: both
+    } do
+      html = header_html(site, %{editions: both, lang: "en"})
+
+      assert html =~ "site-language-menu"
+      assert html =~ ~s(href="/fa")
+      assert html =~ ~s(hreflang="fa")
+      assert html =~ ~s(hreflang="en")
+      assert html =~ MishkaCmsCore.Runtime.Languages.flag("fa")
+      assert html =~ MishkaCmsCore.Runtime.Languages.flag("en")
+      assert html =~ MishkaCmsCore.Runtime.Languages.name("fa")
+      assert html =~ MishkaCmsCore.Runtime.Languages.name("en")
+    end
+
+    test "marks the language the visitor is reading, and only that one", %{site: site, both: both} do
+      html = header_html(site, %{editions: both, lang: "fa"})
+
+      assert [current] = Regex.scan(~r/<a [^>]*aria-current="true"[^>]*>/, html)
+      assert hd(current) =~ ~s(hreflang="fa")
+      assert length(Regex.scan(~r/aria-current/, html)) == 1
+    end
+
+    test "shows the current language on its button, and opens the menu from it", %{
+      site: site,
+      both: both
+    } do
+      html = header_html(site, %{editions: both, lang: "fa"})
+
+      assert [button] =
+               Regex.run(~r/<button[^>]*id="site-language-button"[^>]*>.*?<\/button>/s, html)
+
+      assert button =~ MishkaCmsCore.Runtime.Languages.flag("fa")
+      assert button =~ ">fa<"
+      assert html =~ ~r/id="site-language-menu"[^>]*class="[^"]*\bhidden\b/
+    end
+
+    test "is not drawn for a page that answers in one language", %{site: site} do
+      html = header_html(site, %{editions: [], lang: "en"})
+
+      refute html =~ "site-language"
+      refute html =~ "hreflang"
+    end
+
+    test "is not in the footer, which has no language links any more", %{site: site} do
+      html = footer_html(site)
+
+      refute html =~ "hreflang"
+      refute html =~ "uppercase"
+      assert footer_links(site) |> length() == 4
+
+      refute Enum.any?(component(site, "site-footer").attrs, &(&1.name in ["editions", "lang"]))
+    end
+
+    test "the layout hands the footer no languages", %{site: site} do
+      assert one(Layout, site).template =~ ~s(<.component component_name="site-footer" site=)
+      refute one(Layout, site).template =~ ~r/site-footer.*?page_languages/s
+    end
+  end
+
+  # THE VERSION IS THE APPLICATION'S, read when the page is drawn. A literal in the template is a
+  # version nobody bumps: it said `v1.0.0` on a build that is `0.0.1`.
+  describe "the version the home page shows" do
+    test "is the host application's, as the header of a page reads it", %{site: site} do
+      StarterContent.seed!(site)
+
+      template = page(site, "/:lang").template
+
+      assert template =~ "v{MishkaCmsCore.Helpers.host_version()}"
+      refute template =~ ~r/\bv\d+\.\d+/
+
+      html =
+        LiveViewCompiler.render_template(template, %{
+          page: %{language: "en"},
+          current_site: %{host: "acme.test"}
+        })
+
+      host_app = Application.fetch_env!(:mishka_cms_core, :host_app)
+      version = to_string(Application.spec(host_app, :vsn))
+
+      assert version =~ ~r/\A\d+\.\d+\.\d+/
+      assert html =~ "<span>v#{version}</span>"
+    end
+
+    test "is written nowhere else in the starter", %{site: site} do
+      StarterContent.seed!(site)
+
+      templates =
+        Enum.map(rows(Page, site), & &1.template) ++
+          Enum.map(rows(Component, site), & &1.template) ++ [one(Layout, site).template]
+
+      for template <- templates, do: refute(template =~ ~r/(?<![#\w])v\d+\.\d+/)
+    end
   end
 
   # THE DESIGN'S TYPEFACES, two of which are not the host's: the layout links them from Google, the

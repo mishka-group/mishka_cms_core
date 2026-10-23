@@ -507,4 +507,46 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
       assert Languages.direction(ltr) == "ltr"
     end
   end
+
+  # A FLAG IS TWO REGIONAL INDICATOR SYMBOLS, which every system draws as the country's flag.
+  describe "flag/1" do
+    test "is the flag of the country a language is most spoken in" do
+      assert Languages.flag("fa") == "\u{1F1EE}\u{1F1F7}"
+      assert Languages.flag("en") == "\u{1F1EC}\u{1F1E7}"
+      assert Languages.flag("fr") == "\u{1F1EB}\u{1F1F7}"
+      assert Languages.flag("de") == "\u{1F1E9}\u{1F1EA}"
+    end
+
+    test "is the country a code names when it names one, in any case" do
+      assert Languages.flag("pt-BR") == "\u{1F1E7}\u{1F1F7}"
+      assert Languages.flag("en-us") == "\u{1F1FA}\u{1F1F8}"
+      assert Languages.flag("fa-IR") == "\u{1F1EE}\u{1F1F7}"
+      assert Languages.flag(:fa) == Languages.flag("fa")
+    end
+
+    test "is the language's own when the subtag is a script or a region number, not a country" do
+      assert Languages.flag("zh-Hant") == Languages.flag("zh")
+      assert Languages.flag("es-419") == Languages.flag("es")
+    end
+
+    test "is a globe for a language with no country, and for nothing" do
+      globe = "\u{1F310}"
+
+      assert Languages.flag("eo") == globe
+      assert Languages.flag("xx") == globe
+      assert Languages.flag(nil) == globe
+    end
+
+    # THE LIST A SITE CHOOSES ITS LANGUAGES FROM: every one has a flag but the three that have no
+    # country, so a new code added to it without one is seen here and not on somebody's site.
+    test "every language the CMS offers has a flag but Esperanto, Kurdish and Yiddish" do
+      globe = Languages.flag(nil)
+
+      assert Enum.filter(Languages.known(), &(Languages.flag(&1) == globe)) == ~w(eo ku yi)
+
+      for code <- Languages.known() -- ~w(eo ku yi) do
+        assert length(String.to_charlist(Languages.flag(code))) == 2, code
+      end
+    end
+  end
 end

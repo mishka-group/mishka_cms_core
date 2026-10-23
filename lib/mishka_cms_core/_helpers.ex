@@ -12,6 +12,10 @@ defmodule MishkaCmsCore.Helpers do
   # dispatch: the host's endpoint is not compile-visible from here.
   @host_endpoint Application.compile_env!(:mishka_cms_core, :endpoint)
 
+  # The host's OTP application, named by configuration for the same reason: the version a page shows
+  # is the one of the application the CMS is installed into, which this library cannot know.
+  @host_app Application.compile_env!(:mishka_cms_core, :host_app)
+
   @doc """
   Generates a path with the correct script_name prefix for deployment.
 
@@ -152,6 +156,21 @@ defmodule MishkaCmsCore.Helpers do
     port = if uri.port in [80, 443, nil], do: "", else: ":#{uri.port}"
     "#{uri.scheme}://#{host}#{port}#{address_path(path)}"
   end
+
+  @doc """
+  The version of the application this CMS runs in — the host's own, as its `mix.exs` declares it and
+  `config :mishka_cms_core, :host_app` names it — as a string, read when it is asked for.
+
+  What a page that wants to say which version it is drawn by calls, so no template writes one:
+
+      MishkaCmsCore.Helpers.host_version()   #=> "0.0.1"
+
+  A template writes `v{MishkaCmsCore.Helpers.host_version()}`; the installer's own header reads the
+  same function. Empty when the application is not loaded, which only a test that never started it
+  can see.
+  """
+  @spec host_version() :: String.t()
+  def host_version, do: @host_app |> Application.spec(:vsn) |> to_string()
 
   @doc """
   A path as every address of a site writes it: no slash at its end and never two in a row, so the

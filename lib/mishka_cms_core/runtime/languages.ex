@@ -274,6 +274,51 @@ defmodule MishkaCmsCore.Runtime.Languages do
     end
   end
 
+  # The country whose flag stands for a language where its code names no country — a language is
+  # not a country, so this is the one it is most spoken in, by the code's primary subtag. A language
+  # with no country of its own (Esperanto, Kurdish, Yiddish) is not here and reads as a globe.
+  @flag_country ~w(af:ZA am:ET ar:SA az:AZ be:BY bg:BG bn:BD bs:BA ca:ES ckb:IQ cs:CZ cy:GB da:DK
+                   de:DE el:GR en:GB es:ES et:EE eu:ES fa:IR fi:FI fil:PH fr:FR ga:IE gl:ES gu:IN
+                   ha:NG he:IL hi:IN hr:HR hu:HU hy:AM id:ID is:IS it:IT ja:JP ka:GE kk:KZ km:KH
+                   kn:IN ko:KR ky:KG lo:LA lt:LT lv:LV mk:MK ml:IN mn:MN mr:IN ms:MY mt:MT my:MM
+                   nb:NO ne:NP nl:NL no:NO pa:IN pl:PL ps:AF pt:PT ro:RO ru:RU sd:PK si:LK sk:SK
+                   sl:SI so:SO sq:AL sr:RS sv:SE sw:TZ ta:IN te:IN tg:TJ th:TH tk:TM tr:TR ug:CN
+                   uk:UA ur:PK uz:UZ vi:VN yo:NG zh:CN zu:ZA)
+                |> Map.new(&(&1 |> String.split(":") |> List.to_tuple()))
+
+  @globe "\u{1F310}"
+
+  @doc """
+  The emoji flag a language is written beside in a switcher: the country its code names when it
+  names one, else the country the language is most spoken in, else a globe.
+
+      Languages.flag("fa")     #=> "🇮🇷"
+      Languages.flag("pt-BR")  #=> "🇧🇷"
+      Languages.flag("en-us")  #=> "🇺🇸"
+      Languages.flag("en")     #=> "🇬🇧"
+      Languages.flag("eo")     #=> "🌐"
+      Languages.flag(nil)      #=> "🌐"
+
+  A flag is a country's and a language is not, so this is a convention and nothing more: `en` is the
+  United Kingdom's, `ar` Saudi Arabia's. A site that wants another writes its own switcher.
+  """
+  @spec flag(String.t() | atom() | nil) :: String.t()
+  def flag(nil), do: @globe
+  def flag(language) when is_atom(language), do: language |> Atom.to_string() |> flag()
+
+  def flag(language) when is_binary(language) do
+    [primary | subtags] = language |> clean() |> String.split("-")
+
+    case Enum.find(subtags, &Regex.match?(~r/\A[a-z]{2}\z/, &1)) || @flag_country[primary] do
+      nil -> @globe
+      country -> country |> String.upcase() |> regional_indicators()
+    end
+  end
+
+  # Each letter of a country's two-letter code as the regional indicator symbol that spells its flag.
+  defp regional_indicators(country),
+    do: for(<<letter <- country>>, into: "", do: <<0x1F1E6 + letter - ?A::utf8>>)
+
   @doc """
   Every language code `name/1` has a name for, in the order of the codes: the languages a list of
   choices offers.
