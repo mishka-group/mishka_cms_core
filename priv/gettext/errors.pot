@@ -2382,7 +2382,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/accounts/_second_factor_pending.ex:92
 #, elixir-autogen, elixir-format
-msgid "The second step's token is invalid or expired"
+msgid "The second step's token is invalid or expired."
 msgstr ""
 
 #: lib/mishka_cms_core/accounts/user.ex:1005
@@ -2402,5 +2402,5 @@ msgstr ""
 
 #: lib/mishka_cms_core/accounts/provider_strategy/plug.ex:122
 #, elixir-autogen, elixir-format
-msgid "This site does not offer that sign-in provider"
+msgid "This site does not offer that sign-in provider."
 msgstr ""

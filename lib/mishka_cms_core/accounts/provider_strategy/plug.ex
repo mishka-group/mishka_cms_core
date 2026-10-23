@@ -119,7 +119,7 @@ defmodule MishkaCmsCore.Accounts.ProviderStrategy.Plug do
       caused_by: %{
         module: __MODULE__,
         strategy: strategy,
-        message: dgettext_noop("errors", "This site does not offer that sign-in provider")
+        message: dgettext_noop("errors", "This site does not offer that sign-in provider.")
       }
     )
   end

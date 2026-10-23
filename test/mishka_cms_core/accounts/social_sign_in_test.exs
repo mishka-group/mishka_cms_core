@@ -453,7 +453,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
 
   defp offered_refusal?(conn) do
     match?(
-      {:error, %{caused_by: %{message: "This site does not offer that sign-in provider"}}},
+      {:error, %{caused_by: %{message: "This site does not offer that sign-in provider."}}},
       conn.private[:authentication_result]
     )
   end
