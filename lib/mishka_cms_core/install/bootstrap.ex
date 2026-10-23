@@ -132,7 +132,7 @@ defmodule MishkaCmsCore.Install.Bootstrap do
     {:languages, gettext_noop("Saving the site's languages")},
     {:settings, gettext_noop("Applying essential settings")},
     {:components, gettext_noop("Installing UI components")},
-    {:starter_content, gettext_noop("Adding starter pages")},
+    {:starter_content, gettext_noop("Adding starter content")},
     {:auth_pages, gettext_noop("Adding sign-in pages")},
     {:extensions, gettext_noop("Installing the extensions you chose")},
     {:compile, gettext_noop("Compiling the site runtime")},
@@ -312,7 +312,10 @@ defmodule MishkaCmsCore.Install.Bootstrap do
 
       progress.(
         {:starter_content, :log,
-         gettext("%{pages} pages, %{components} components",
+         ngettext(
+           "%{pages} page, %{components} components",
+           "%{pages} pages, %{components} components",
+           length(report.pages),
            pages: length(report.pages),
            components: length(report.components)
          )}

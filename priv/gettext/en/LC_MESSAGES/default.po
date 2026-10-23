@@ -822,8 +822,10 @@ msgstr ""
 
 #: lib/mishka_cms_core/install/bootstrap.ex:315
 #, elixir-autogen, elixir-format
-msgid "%{pages} pages, %{components} components"
-msgstr ""
+msgid "%{pages} page, %{components} components"
+msgid_plural "%{pages} pages, %{components} components"
+msgstr[0] ""
+msgstr[1] ""
 
 #: lib/mishka_cms_core/install/bootstrap.ex:335
 #, elixir-autogen, elixir-format
@@ -1682,7 +1684,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/install/bootstrap.ex:135
 #, elixir-autogen, elixir-format
-msgid "Adding starter pages"
+msgid "Adding starter content"
 msgstr ""
 
 #: lib/mishka_cms_core/settings.ex:1087

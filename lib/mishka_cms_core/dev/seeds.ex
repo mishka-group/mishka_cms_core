@@ -24,10 +24,11 @@ defmodule MishkaCmsCore.Dev.Seeds do
 
   ## What a seeded site is made of
 
-  `MishkaCmsCore.Install.StarterContent` first — the theme, the header, the footer, the layout, the
-  home, about, contact and privacy pages a stranger's first install gets, and the sign-in pages
-  every site gets — and then the pages that
-  site exists to demonstrate, out of its own module: `MishkaCmsCore.Dev.LocalhostPages`,
+  `MishkaCmsCore.Install.StarterContent` first — the theme, the logo, the header, the footer, the
+  layout and the error page a stranger's first install gets, with the site's own home and the
+  about, contact and privacy pages of `MishkaCmsCore.Dev.StarterPages` where the install's home
+  would go, and the sign-in pages every site gets — and then the pages that site exists to
+  demonstrate, out of its own module: `MishkaCmsCore.Dev.LocalhostPages`,
   `MishkaCmsCore.Dev.SiteAPages`, `MishkaCmsCore.Dev.SiteBPages`. Running the production starter
   here is what keeps it exercised; a path nobody opens is a path nobody has seen.
 
@@ -54,7 +55,7 @@ defmodule MishkaCmsCore.Dev.Seeds do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.User
-  alias MishkaCmsCore.Dev.SeedMedia
+  alias MishkaCmsCore.Dev.{SeedMedia, StarterPages}
   alias MishkaCmsCore.Install.{Bootstrap, StarterContent}
 
   alias MishkaCmsCore.Runtime.{
@@ -221,9 +222,10 @@ defmodule MishkaCmsCore.Dev.Seeds do
       seed_media(site.id)
       seed_languages(site, config)
 
-      # THE PRODUCTION STARTER, RUN IN DEV. Every dev site gets the theme, the two site components,
-      # the `site-main` layout, the four plain pages and the error page a stranger's first install
-      # gets — so that path is exercised on every reseed instead of only on somebody else's machine.
+      # THE PRODUCTION STARTER, RUN IN DEV. Every dev site gets the theme, the logo, the two site
+      # components, the `site-main` layout and the error page a stranger's first install gets, and
+      # the pages that stand where the install's home does — so that path is exercised on every
+      # reseed instead of only on somebody else's machine.
       starter = StarterContent.seed!(site, starter_opts(site, config))
       announce_pages(starter)
 
@@ -254,16 +256,27 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # THE HOME COMES FROM THE SITE, not from the installer. A developer's first click lands on `/:lang`,
   # and the plain page a stranger's first install opens on is the one thing a dev site must not
   # answer with — see `MishkaCmsCore.Dev.LocalhostPages.home/0`. `localhost` brings its about page
-  # too, with a section hidden from visitors to open in the builder (`LocalhostPages.about/0`).
-  defp starter_opts(%{host: "localhost"}, config),
+  # too, with a section hidden from visitors to open in the builder (`LocalhostPages.about/0`); the
+  # other pages of `MishkaCmsCore.Dev.StarterPages` are the same on every site.
+  #
+  # A CENTRED COLUMN FOR THE PAGES, which every template here is written for. The production layout
+  # leaves a page the whole width, because the installer's home draws its own sections.
+  @main_class "mx-auto w-full max-w-[1160px] flex-1 px-8 py-10"
+
+  defp starter_opts(%{host: "localhost", name: name}, config),
     do: [
       root_layout_template: @localhost_error_root_layout,
-      nav: config.pages.nav(),
-      templates: %{"Home" => config.pages.home(), "About" => config.pages.about()}
+      nav: StarterPages.nav() ++ config.pages.nav(),
+      main_class: @main_class,
+      pages: StarterPages.pages(name, config.pages.home(), config.pages.about())
     ]
 
-  defp starter_opts(_site, config),
-    do: [nav: config.pages.nav(), templates: %{"Home" => config.pages.home()}]
+  defp starter_opts(%{name: name}, config),
+    do: [
+      nav: StarterPages.nav() ++ config.pages.nav(),
+      main_class: @main_class,
+      pages: StarterPages.pages(name, config.pages.home())
+    ]
 
   # THE LANGUAGES ARE A SETTING, and every `/:lang` page answers only in the ones it names — see
   # `MishkaCmsCore.Runtime.Languages`. So is how an address names them: `localhost` and `site-b`

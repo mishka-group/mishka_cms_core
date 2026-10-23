@@ -80,10 +80,10 @@ defmodule MishkaCmsCore.Runtime.PageLanguageBackfill do
   language its site publishes. `MishkaCmsCore.Runtime.ExtensionProvision` marks them as it writes
   them; every site provisioned before it learned to would otherwise lose `/fa/blog` on upgrade.
 
-  THE EXTENSION'S OWN PAGES AND NO OTHERS. Core stamps its starter content the same way — `about`,
-  `contact`, `privacy` — and those are prose, in one language, and precisely the pages the rule
-  exists for: marking them would put the bug back. A page nobody stamped was written by hand, in a
-  language, and keeps answering that one.
+  THE EXTENSION'S OWN PAGES AND NO OTHERS. Core stamps its starter content the same way — `home`,
+  and in a dev database `about`, `contact` and `privacy` — and those are prose, in one language, and
+  precisely the pages the rule exists for: marking them would put the bug back. A page nobody
+  stamped was written by hand, in a language, and keeps answering that one.
 
   Safe at every boot: a row already carrying the mark is skipped, so the second run changes nothing.
   """

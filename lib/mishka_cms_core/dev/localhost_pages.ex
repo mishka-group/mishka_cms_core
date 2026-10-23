@@ -8,8 +8,8 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   One module per site, because a page here names THIS site's components and THIS site's hooks by
   name and a list shared between sites cannot. `MishkaCmsCore.Dev.Seeds` picks the module out of
-  `@site_configs`; `MishkaCmsCore.Install.StarterContent` has already written the home, about,
-  contact and privacy pages these link back to.
+  `@site_configs`; `MishkaCmsCore.Install.StarterContent` has already written, from
+  `MishkaCmsCore.Dev.StarterPages`, the home, about, contact and privacy pages these link back to.
 
   Between them the pages below use every part of a runtime page a developer has to be able to see
   working: the UI kit's interactive components, a page form with uploads, page events and infos,
@@ -47,8 +47,8 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
   end
 
   @doc """
-  The about page this site answers `/:lang/about` with, in place of the installer's: the same page,
-  plus a container hidden from visitors (`MishkaCmsCore.Runtime.PageBuilder.Visibility`) holding
+  The about page this site answers `/:lang/about` with, in place of the plain one
+  `MishkaCmsCore.Dev.StarterPages` writes: the same page, plus a container hidden from visitors (`MishkaCmsCore.Runtime.PageBuilder.Visibility`) holding
   components and containers of its own — what the builder's Hide from visitors looks like when it
   opens, and what the live page leaves out.
   """
@@ -131,9 +131,9 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
   @doc """
   The home page this site answers `/:lang` with, in place of the installer's starter home.
 
-  `MishkaCmsCore.Install.StarterContent` writes the plain page a stranger's first install opens on;
-  in dev the first page a developer opens is the one that has to show what a runtime page can do,
-  so each site hands its own template to the same seeding run.
+  `MishkaCmsCore.Install.StarterContent` writes the welcome page a stranger's first install opens
+  on; in dev the first page a developer opens is the one that has to show what a runtime page can
+  do, so each site hands its own template to the same seeding run.
   """
   @spec home() :: String.t()
   def home do

@@ -4,20 +4,41 @@
 
 defmodule MishkaCmsCore.Install.StarterContent do
   @moduledoc """
-  The site a first install answers with: a theme, a header, a footer, a layout, four pages and an
-  error page, written through the ordinary create actions.
+  The site a first install answers with: a theme, the logo, a header, a footer, a layout, a home
+  page and an error page, written through the ordinary create actions.
 
   ## Why it is plain HTML
 
   The installer lets the user deselect every UI component (`MishkaCmsCore.Install.Bootstrap`), so a
   starter page that drew `chelekom-card` would render the red "Component failed to render!" box on
-  exactly the install that chose least. Everything below is HTML plus `<.link>` and `<.form>`, which
-  a compiled page has whatever is installed — and NOT the host's `<.input>`, whose class names come
-  from a CSS framework no bundle here ships.
+  exactly the install that chose least. Everything below is HTML plus `<.link>`, which a compiled
+  page has whatever is installed — and NOT the host's `<.input>`, whose class names come from a CSS
+  framework no bundle here ships.
 
-  What the pages DO have is the site's own `:theme` stylesheet, so `bg-ground`, `text-ink`,
-  `border-line` and the rest are real utilities in the site's bundle. That is the one dependency,
-  and it is seeded here beside them.
+  What the pages DO have is the site's own `:theme` stylesheet, so `bg-page`, `text-fg`,
+  `border-edge` and the rest are real utilities in the site's bundle. That is the one dependency,
+  and it is seeded here beside them. Each colour of the home page has a `-dark` twin, and the
+  markup pairs them with `dark:`, which the site's stylesheet answers to `data-theme="dark"` on the
+  document; the header's toggle sets that attribute through the host's `phx:set-theme` event, the
+  same one the sign-in layout uses.
+
+  ## What belongs to the layout and what to the page
+
+  The header and the footer are components, drawn by the `site-main` layout, so a page the site adds
+  later has them without asking. The page at `/:lang` is everything between them. The layout also
+  links, from the document's `<head>`, the two typefaces the theme does not ship, Geist and Geist
+  Mono, from Google Fonts, which the public Content-Security-Policy already allows; Newsreader comes
+  with the host's own `/fonts/fonts.css`.
+
+  ## The logo
+
+  The mark in the header, the footer and the home page is a picture in the MASTER site's media
+  library, named `mishka-logo`, and every address of it is that row's `relative_path`. It is
+  stored the way an upload is (`MishkaCmsCore.Runtime.Media.validate_and_process_file/1`, then
+  `save_file_to_storage/3`), so it can be replaced, archived or deleted from the media manager like
+  any other file. A site that is not the master draws the master's picture, which is what a
+  dev site does. It ships as a PNG under `priv/install`: the library refuses SVG, because a vector
+  served from the site's own origin can carry a script.
 
   ## Why the dev seeds run it too
 
@@ -34,15 +55,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   ## The addresses
 
-  `/:lang`, `/:lang/about`, `/:lang/contact`, `/:lang/privacy` — the path mode
-  `MishkaCmsCore.Runtime.Languages` validates, so `/fa/about` answers and `/xyz/about` does not.
-  None of them collides with a route this application answers itself. Each page answers every
+  `/:lang` — the path mode `MishkaCmsCore.Runtime.Languages` validates, so `/fa` answers and `/xyz`
+  does not. It collides with no route this application answers itself, and it answers every
   language the site publishes in (`PageProvision.serving_all_languages/1`).
 
-  Every link between them is written with `site_path/2`
+  Every link to another page of the site is written with `site_path/2`
   (`MishkaCmsCore.Runtime.LiveViewHelpers.site_path/2`), in the language of the page it is on, so
-  it follows the site's URL mode: `/about` and `/fa/about`, or `/en/about` and `/fa/about`. A page
-  that knows no language links in the site's first.
+  it follows the site's URL mode: `/auth` and `/fa/auth`, or `/en/auth` and `/fa/auth`. A page that
+  knows no language links in the site's first.
 
   ## The sign-in pages
 
@@ -90,6 +110,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     ErrorStatus,
     Languages,
     Layout,
+    Media,
     Page,
     PageProvision,
     Site,
@@ -105,9 +126,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @row_limit 50
 
-  # THE ADMIN PALETTE, as this site's own design tokens. Written as `@theme` rather than as a
-  # hundred arbitrary hex values in the markup, because a site's CSS bundle only contains the
-  # classes its own templates can be scanned for — and a token is one name the whole site shares.
+  # THE ADMIN PALETTE AND THE HOME PAGE'S, as this site's own design tokens. Written as `@theme`
+  # rather than as a hundred arbitrary hex values in the markup, because a site's CSS bundle only
+  # contains the classes its own templates can be scanned for — and a token is one name the whole
+  # site shares.
+  #
+  # The first block is what the error pages and the dev seeds' pages are written in; the second is
+  # the home page's, where every colour that changes in the dark has a `-dark` twin and the markup
+  # pairs them with `dark:`. A colour that is the same in both (`brand`) has none.
   @theme_css ~S"""
   /* The MishkaCMS admin palette, as this site's own design tokens. */
   @theme {
@@ -124,7 +150,42 @@ defmodule MishkaCmsCore.Install.StarterContent do
     --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
     --radius-card: 18px;
   }
+
+  /* The home page: its light and dark colours, and the three typefaces it is set in. */
+  @theme {
+    --color-page: #faf9f6;
+    --color-page-dark: #131217;
+    --color-fg: #1a1a1f;
+    --color-fg-dark: #eceaf2;
+    --color-dim: #6b6a72;
+    --color-dim-dark: #a09eab;
+    --color-subtle: #8a8892;
+    --color-subtle-dark: #8c8a96;
+    --color-faint: #a3a0a9;
+    --color-faint-dark: #6e6c78;
+    --color-surface: #ffffff;
+    --color-surface-dark: #1b1a20;
+    --color-edge: #ece9e2;
+    --color-edge-dark: #2a2930;
+    --color-sunk: #fbfaf8;
+    --color-sunk-dark: #17161b;
+    --color-chip: #dcd8f7;
+    --color-chip-dark: #3a3560;
+    --color-dot: #e4e1d9;
+    --color-dot-dark: #26252c;
+    --color-brand: #5b4fe0;
+    --color-brand-deep: #4338ca;
+    --font-geist: "Geist", system-ui, sans-serif;
+    --font-geist-mono: "Geist Mono", monospace;
+    --font-newsreader: "Newsreader", Georgia, serif;
+  }
   """
+
+  # THE LOGO'S NAME IN THE MEDIA LIBRARY, which is what `Media.upload_name/1` makes of the file's
+  # name and what the row's own `slugify` leaves alone — so the name asked for before the file is
+  # stored is the name the row carries after.
+  @logo_file "mishka-logo.png"
+  @logo_name "mishka-logo"
 
   # THE ERROR PAGE LINKS THE STYLESHEET RATHER THAN INLINING IT. A 404 is the response a site serves
   # most often and thinks about least — every dead link, every stale bookmark, every crawler — and
@@ -169,6 +230,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   @type report :: %{
           layout_id: String.t(),
           stylesheets: [String.t()],
+          media: [String.t()],
           components: [String.t()],
           layouts: [String.t()],
           pages: [String.t()],
@@ -195,15 +257,20 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
     * `:nav` — extra links for the header, as `[{label, path}]` where the path is what follows the
       language (`{"Pricing", "/pricing"}`). The dev seeds use it to reach the pages they add.
-    * `:brand` — the name to print in the header and the footer. Defaults to the site's name, which
-      the create action has slugified.
-    * `:templates` — templates by starter page name (`%{"Home" => …, "About" => …}`), written in
-      place of the installer's. The dev seeds give every site its own home, and `localhost` its own
-      about.
+    * `:brand` — the name to print in the header. Defaults to the site's name, which the create
+      action has slugified.
+    * `:pages` — page definitions (`%{name:, title:, path:, description:, template:}`), written in
+      place of the installer's home page. The dev seeds give every site its own home, and the about,
+      contact and privacy pages a first install no longer has.
+    * `:main_class` — the classes of the layout's `<main>`, which every page is drawn in. The default
+      leaves a page the whole width, because the home page draws its own sections; the dev seeds
+      give theirs a centred column.
     * `:root_layout_template` — the error page's root layout, for a caller that ships its own.
 
-  Raises when the site is not there, or when a write is refused for any reason but a page being
-  taken — the installer shows the failure on its own progress list.
+  The logo goes in the master site's media library, `site` or not — see "The logo" above — and
+  `media` in the report names it when this call stored it. Raises when the site is not there, when
+  `site` is not the master and there is none, or when a write is refused for any reason but a page
+  being taken — the installer shows the failure on its own progress list.
   """
   @spec seed!(map() | String.t(), keyword()) :: report()
   def seed!(site, opts \\ [])
@@ -217,21 +284,25 @@ defmodule MishkaCmsCore.Install.StarterContent do
     # below is scoped by, and the last thing a visitor should read in the header.
     brand = Keyword.get(opts, :brand) || site_name
 
-    # THE THEME BEFORE THE MARKUP THAT READS IT, and the components before the layout that draws
-    # them: a layout compiled against a `site-header` that is not there renders the red
+    # THE THEME BEFORE THE MARKUP THAT READS IT, the logo and the components before the layout that
+    # draws them: a layout compiled against a `site-header` that is not there renders the red
     # "Component failed to render!" box where the header should be and reports success.
     stylesheets = ensure_theme(site)
-    components = ensure_components(site, brand)
-    {layout, layouts} = ensure_layout(site, brand, Keyword.get(opts, :nav, []))
+    {logo, media} = ensure_logo(site)
+    components = ensure_components(site, brand, logo)
+    {layout, layouts} = ensure_layout(site, brand, opts)
+
+    pages = Keyword.get_lazy(opts, :pages, fn -> [home(logo)] end)
 
     %{created: created, renamed: renamed, skipped: skipped} =
       site_id
-      |> PageProvision.missing(page_attrs(site, layout.id, brand, opts), stamp: :mishka_cms_core)
+      |> PageProvision.missing(page_attrs(site, layout.id, pages), stamp: :mishka_cms_core)
       |> PageProvision.create(&write_page!/1)
 
     %{
       layout_id: layout.id,
       stylesheets: stylesheets,
+      media: media,
       components: components,
       layouts: layouts,
       pages: Enum.map(created, & &1.path),
@@ -241,10 +312,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     }
   end
 
-  defp page_attrs(%{id: site_id}, layout_id, brand, opts) do
-    brand
-    |> pages(Keyword.get(opts, :templates, %{}))
-    |> Enum.map(fn definition ->
+  defp page_attrs(%{id: site_id}, layout_id, pages) do
+    Enum.map(pages, fn definition ->
       %{
         name: definition.name,
         title: definition.title,
@@ -395,18 +464,104 @@ defmodule MishkaCmsCore.Install.StarterContent do
   end
 
   # ---------------------------------------------------------------------------
+  # The logo
+  # ---------------------------------------------------------------------------
+
+  # A FILE OF THE MASTER SITE'S MEDIA LIBRARY, and the address every template below draws. Found by
+  # its name: the row there is the one the header, the footer and the home page already name, so a
+  # second run stores nothing. A row that is archived is not one a page can show — its file is in
+  # `uploads_archived/`, which nothing serves — so it is written again, which the name allows
+  # because it is unique among the live rows only.
+  defp ensure_logo(site) do
+    master_id = master_site_id(site)
+
+    case held_row(Media, master_id, @logo_name) do
+      %{relative_path: path} -> {path, []}
+      nil -> {store_logo!(master_id), [@logo_name]}
+    end
+  end
+
+  defp master_site_id(%{master: true, id: site_id}), do: site_id
+  defp master_site_id(_site), do: master_site!().id
+
+  defp master_site! do
+    Site
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.Query.filter(master == true)
+    |> Ash.read_one!(authorize?: false)
+    |> case do
+      nil -> raise ArgumentError, "no master site to keep the logo in"
+      site -> site
+    end
+  end
+
+  # THE RESOURCE'S OWN UPLOAD PATH, as the media manager takes a file: `validate_and_process_file/1`
+  # checks it, `save_file_to_storage/3` puts it in `uploads/<site>/media/`, and the row is made with
+  # the path the server stored it at — `stored_path` is private, so no caller can name one.
+  #
+  # STORED FROM A COPY, because storing removes the file it is handed and this one ships with the
+  # package. A refused row takes its file with it, as an upload's does.
+  defp store_logo!(site_id) do
+    staged = Path.join(System.tmp_dir!(), "mishka-install-#{Ash.UUID.generate()}-#{@logo_file}")
+    File.cp!(logo_path(), staged)
+
+    with {:ok, upload} <-
+           Media.validate_and_process_file(%{
+             file: Ash.Type.File.from_path(staged),
+             original_filename: @logo_file
+           }),
+         {:ok, path} <- Media.save_file_to_storage(upload, site_id, nil) do
+      Media
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          name: @logo_name,
+          type: upload.type,
+          size: upload.size,
+          format: upload.format,
+          description: "The Mishka CMS logo."
+        },
+        tenant: site_id,
+        authorize?: false,
+        private_arguments: %{stored_path: path}
+      )
+      |> Ash.create()
+      |> case do
+        {:ok, _media} ->
+          path
+
+        {:error, error} ->
+          Media.delete_file_from_storage(path, site_id)
+          raise error
+      end
+    else
+      {:error, error} ->
+        File.rm(staged)
+        raise error
+    end
+  end
+
+  defp logo_path do
+    case :code.priv_dir(:mishka_cms_core) do
+      {:error, _unnamed} -> Path.join(["priv", "install", @logo_file])
+      priv -> Path.join([to_string(priv), "install", @logo_file])
+    end
+  end
+
+  # ---------------------------------------------------------------------------
   # The two components every page is framed by
   # ---------------------------------------------------------------------------
 
   # `brand` DEFAULTS TO THE SITE'S OWN NAME, written into the row as the attribute's default. That is
   # what makes the scoping visible without reading a database — the same `site-header` renders one
-  # name on one site and another on the next.
+  # name on one site and another on the next. `logo` is the same kind of default: the address of
+  # the picture in the master site's media library.
   #
   # `lang` is passed IN rather than read here: a component is handed only the assigns its call site
   # writes, and the language of a response lives on the page. The layout reads it once and hands it
   # to both.
-  defp ensure_components(%{id: site_id}, brand) do
-    specs = components(brand)
+  defp ensure_components(%{id: site_id}, brand, logo) do
+    specs = components(brand, logo)
     held = held_names(Component, site_id, Enum.map(specs, & &1.name))
 
     specs
@@ -436,49 +591,154 @@ defmodule MishkaCmsCore.Install.StarterContent do
     end)
   end
 
-  defp components(brand) do
+  # BOTH ARE THE DESIGN'S, LINE FOR LINE, in Tailwind's utilities: a colour that changes in the dark
+  # is written twice, `text-fg dark:text-fg-dark`, with both values in the theme. The logo is black
+  # line art, so the dark page inverts it, as the design's own filter does.
+  #
+  # EVERY LINK OUT OPENS A NEW TAB WITH `noopener noreferrer`, as the sign-in layout's do; every link
+  # in goes through `site_path/2`.
+  defp components(brand, logo) do
     [
       %{
         name: "site-header",
         description: "The bar across the top of every page on #{brand}.",
         template: ~S"""
-        <header class={["border-b border-line bg-white", @class]}>
-          <div class="mx-auto flex w-full max-w-[1100px] flex-wrap items-center justify-between gap-4 px-6 py-4">
+        <header class={[
+          "mx-auto flex w-full max-w-[1160px] items-center justify-between gap-6 px-8 py-6",
+          @class
+        ]}>
+          <.link
+            navigate={site_path("/:lang", @lang)}
+            class="flex items-center gap-3 text-fg dark:text-fg-dark"
+          >
+            <img src={@logo} alt="" class="size-10 max-w-none object-contain dark:invert-[0.92]" />
+            <span class="text-[18px] font-semibold tracking-[-0.01em]">{@brand}</span>
+          </.link>
+          <div class="flex items-center gap-[22px] text-[14px]">
+            {render_slot(@inner_block)}
             <.link
-              navigate={site_path("/:lang", @lang)}
-              class="font-display text-[17px] font-bold tracking-[-0.03em] text-ink"
+              href="https://mishka.tools/docs"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-dim dark:text-dim-dark"
             >
-              {@brand}
+              Docs
             </.link>
-            <nav class="flex flex-wrap items-center gap-5 text-[13px] font-medium text-ink-soft">
-              <.link navigate={site_path("/:lang/about", @lang)} class="hover:text-accent">
-                About
-              </.link>
-              <.link navigate={site_path("/:lang/contact", @lang)} class="hover:text-accent">
-                Contact
-              </.link>
-              {render_slot(@inner_block)}
-            </nav>
+            <.link
+              href="https://github.com/mishka-group/mishka_cms"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="text-dim dark:text-dim-dark"
+            >
+              GitHub
+            </.link>
+            <button
+              type="button"
+              id="site-theme-dark"
+              aria-label="Toggle dark mode"
+              phx-click={JS.dispatch("phx:set-theme")}
+              data-phx-theme="dark"
+              class="grid size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
+              </svg>
+            </button>
+            <button
+              type="button"
+              id="site-theme-light"
+              aria-label="Toggle dark mode"
+              phx-click={JS.dispatch("phx:set-theme")}
+              data-phx-theme="light"
+              class="hidden size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:grid dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#E0B84A"
+                stroke-width="1.8"
+                stroke-linecap="round"
+              >
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4">
+                </path>
+              </svg>
+            </button>
+            <.link
+              navigate={site_path("/:lang/auth", @lang)}
+              class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+            >
+              Sign in
+            </.link>
           </div>
         </header>
         """,
         attrs: [
           brand_attr(brand, "The name shown on the left."),
+          logo_attr(logo),
           lang_attr(),
           class_attr("Extra classes for the header itself")
         ],
-        slots: [slot("Extra links, placed after this site's own")]
+        slots: [slot("Extra links, placed before this site's own")]
       },
       %{
         name: "site-footer",
         description: "The strip along the bottom of every page on #{brand}.",
         template: ~S"""
-        <footer class={["border-t border-line bg-white", @class]}>
-          <div class="mx-auto flex w-full max-w-[1100px] flex-wrap items-center justify-between gap-4 px-6 py-8 text-[12.5px] text-muted">
-            <p>© {@brand} — built with MishkaCMS</p>
-            <div class="flex flex-wrap items-center gap-3">
-              <.link navigate={site_path("/:lang/privacy", @lang)} class="hover:text-accent">
-                Privacy
+        <footer class={["border-t border-edge dark:border-edge-dark", @class]}>
+          <div class="mx-auto flex max-w-[1160px] flex-wrap items-center justify-between gap-4 px-8 py-[22px] text-[13px] text-subtle dark:text-subtle-dark">
+            <span class="flex items-center gap-2.5">
+              <img
+                src={@logo}
+                alt=""
+                class="size-5 max-w-none object-contain opacity-70 dark:invert-[0.92]"
+              />
+              <span>
+                © {Date.utc_today().year} · Powered by
+                <.link
+                  href="https://mishka.tools/cms"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="text-brand hover:text-brand-deep"
+                >Mishka CMS</.link>
+                · open source
+              </span>
+            </span>
+            <div class="flex gap-5">
+              <.link
+                href="https://mishka.tools/docs"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-subtle dark:text-subtle-dark"
+              >
+                Docs
+              </.link>
+              <.link
+                href="https://github.com/mishka-group/mishka_cms"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-subtle dark:text-subtle-dark"
+              >
+                GitHub
+              </.link>
+              <.link
+                href="https://mishka.tools/sponsor"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-subtle dark:text-subtle-dark"
+              >
+                Sponsor
               </.link>
               <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
                     response, so a live navigation into another language would keep the first
@@ -487,7 +747,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
                 :for={edition <- @editions}
                 href={edition.path}
                 hreflang={edition.language}
-                class="rounded-[6px] border border-line px-2 py-1 uppercase hover:text-accent"
+                class="rounded-[6px] border border-edge px-2 py-1 uppercase dark:border-edge-dark"
               >
                 {edition.language}
               </a>
@@ -497,7 +757,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         </footer>
         """,
         attrs: [
-          brand_attr(brand, "The name in the credit line."),
+          logo_attr(logo),
           lang_attr(),
           %{
             "name" => "editions",
@@ -525,6 +785,18 @@ defmodule MishkaCmsCore.Install.StarterContent do
     }
   end
 
+  defp logo_attr(logo) do
+    %{
+      "name" => "logo",
+      "type" => "string",
+      "opts" => %{
+        "default" => logo,
+        "doc" =>
+          "The address of the logo. Defaults to the one in the master site's media library."
+      }
+    }
+  end
+
   defp lang_attr do
     %{
       "name" => "lang",
@@ -548,11 +820,39 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @layout_name "site-main"
 
-  # EVERY PAGE TITLED ONE WAY, `About · Acme`: the page's own title — on a page that shows a record
+  @main_class "flex w-full flex-1 flex-col"
+
+  # EVERY PAGE TITLED ONE WAY, `Pricing · Acme`: the page's own title — on a page that shows a record
   # per address, the record's — then the site's. Stored on the layouts, so a page's own title tag
   # still wins; a site with no title keeps the bare title, since an unfilled variable leaves the tag
   # out. See `MishkaCmsCore.Runtime.Seo`.
   @titled [%{tag: "title", attrs: %{}, content: "{{page.title}} · {{site.name}}"}]
+
+  # THE TWO TYPEFACES THE THEME CANNOT SHIP, linked from the head. Tailwind drops an `@import url()`
+  # that follows any rule, and a UI kit's global theme is one; and a stylesheet `<link>` in the
+  # layout's body is not where a document expects one. A layout's `seo_tags` are where a layout
+  # reaches `<head>`, and `MishkaCmsWeb.RuntimeLive.page_head/1` draws every `link` among them.
+  # Newsreader is the host's own (`/fonts/fonts.css`), and the public Content-Security-Policy names
+  # Google's two font origins.
+  @fonts [
+    %{tag: "link", attrs: %{"rel" => "preconnect", "href" => "https://fonts.googleapis.com"}},
+    %{
+      tag: "link",
+      attrs: %{
+        "rel" => "preconnect",
+        "href" => "https://fonts.gstatic.com",
+        "crossorigin" => "anonymous"
+      }
+    },
+    %{
+      tag: "link",
+      attrs: %{
+        "rel" => "stylesheet",
+        "href" =>
+          "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"
+      }
+    }
+  ]
 
   # THE LAYOUT SHOWS THE MESSAGES, so a page does not have to. A compiled page prepends a flash
   # region of its own only when its layout has none — see
@@ -561,7 +861,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   #
   # NO `<body>`: this is rendered INSIDE the application's root layout, and a second one nests a
   # document in a document.
-  defp ensure_layout(%{id: site_id, name: site_name}, brand, nav) do
+  defp ensure_layout(%{id: site_id, name: site_name}, brand, opts) do
     case held_row(Layout, site_id, @layout_name) do
       nil ->
         layout =
@@ -572,8 +872,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
               name: @layout_name,
               path: "/layouts/site-main",
               description: "Header, messages, page, footer — every page on #{brand} sits in it.",
-              template: layout_template(site_name, nav),
-              seo_tags: @titled,
+              template:
+                layout_template(
+                  site_name,
+                  Keyword.get(opts, :nav, []),
+                  Keyword.get(opts, :main_class, @main_class)
+                ),
+              seo_tags: @titled ++ @fonts,
               format: :heex,
               helpers: [
                 %{
@@ -601,12 +906,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
     end
   end
 
-  defp layout_template(site_name, nav) do
+  # THE LAYOUT IS THE DESIGN'S FRAME, the header and the footer around whatever the page draws: a
+  # column at least as tall as the window, so the footer sits at the bottom of a short page, with
+  # the page's own sections in a `<main>` that gives them the whole width.
+  defp layout_template(site_name, nav, main_class) do
     ~s"""
-    <div class="flex min-h-dvh flex-col bg-ground font-sans text-ink antialiased">
+    <div class="flex min-h-screen flex-col bg-page font-geist leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
       <.component component_name="site-header" site="#{site_name}" lang={lang(assigns)}>#{nav_links(nav)}
       </.component>
-      <div :if={@flash != %{}} id="site-flash" class="mx-auto mt-5 w-full max-w-[1100px] px-6">
+      <div :if={@flash != %{}} id="site-flash" class="mx-auto mt-5 w-full max-w-[1160px] px-8">
         <p
           :for={{kind, message} <- @flash}
           id={"site-flash-\#{kind}"}
@@ -615,15 +923,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
           phx-value-key={kind}
           title="Dismiss"
           class={[
-            "cursor-pointer rounded-[10px] border px-4 py-3 text-[13px] font-medium",
-            kind == "error" && "border-bad bg-white text-bad",
-            kind != "error" && "border-ok bg-white text-ok"
+            "cursor-pointer rounded-[10px] border bg-surface px-4 py-3 text-[13px] font-medium dark:bg-surface-dark",
+            kind == "error" && "border-bad text-bad",
+            kind != "error" && "border-ok text-ok"
           ]}
         >
           {message}
         </p>
       </div>
-      <main class="mx-auto w-full max-w-[1100px] flex-1 px-6 py-10">{@inner_content}</main>
+      <main class="#{main_class}">{@inner_content}</main>
       <.component
         component_name="site-footer"
         site="#{site_name}"
@@ -638,7 +946,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Enum.map_join(nav, "", fn {label, path} ->
       ~s"""
 
-          <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="hover:text-accent">#{label}</.link>\
+          <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="text-dim dark:text-dim-dark">#{label}</.link>\
       """
     end)
   end
@@ -647,256 +955,185 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # The pages
   # ---------------------------------------------------------------------------
 
-  defp pages(brand, templates) do
-    [
-      %{
-        name: "Home",
-        title: "Home",
-        path: "/:lang",
-        description: "The first page a visitor sees.",
-        template: home_template(brand)
-      }
-      | rest(brand)
-    ]
-    |> Enum.map(&%{&1 | template: Map.get(templates, &1.name, &1.template)})
+  defp home(logo) do
+    %{
+      name: "Home",
+      title: "Home",
+      path: "/:lang",
+      description: "The first page a visitor sees.",
+      template: home_template(logo)
+    }
   end
 
-  defp home_template(brand) do
+  # THE DESIGN'S THREE SECTIONS, and nothing the layout already draws: the dotted welcome, how a page
+  # is served, and the three steps. The steps are plain cards — nothing in them is a link, so
+  # nothing in them can be a dead one. Every colour that changes in the dark is written twice, as in
+  # the components, and the hero's two gradients, whose stops are not colours of the theme, are
+  # written out in both.
+  #
+  # THE HOST IS THE ONE THING THE PAGE ASKS THE SITE, read off `assigns[:current_site]` with
+  # `Map.get/2` because the page builder's canvas hands it a map without one.
+  defp home_template(logo) do
     ~s"""
-    <section class="rounded-card border border-line bg-white px-8 py-14 text-center">
-      <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">#{brand}</p>
-      <h1 class="mt-3 font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
-        Your site starts here
-      </h1>
-      <p class="mx-auto mt-4 max-w-[560px] text-[15px] leading-relaxed text-ink-soft">
-        These four pages were written by the installer. Open the dashboard, edit them in the
-        builder, and publish when they say what you want them to say.
-      </p>
-      <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
-        <.link
-          navigate={site_path("/:lang/about", @page.language)}
-          class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
-        >
-          About this site
-        </.link>
-        <.link
-          navigate={site_path("/:lang/contact", @page.language)}
-          class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
-        >
-          Get in touch
-        </.link>
+    <section class="relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] px-8 pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">
+      <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_70%_at_50%_40%,rgba(250,249,246,0.96)_30%,rgba(250,249,246,0)_100%)] dark:bg-[radial-gradient(ellipse_60%_70%_at_50%_40%,rgba(19,18,23,0.96)_30%,rgba(19,18,23,0)_100%)]">
+      </div>
+      <div class="relative mx-auto flex max-w-[820px] flex-col items-center gap-7 text-center">
+        <div class="grid size-[132px] place-items-center rounded-[36px] border border-edge bg-surface shadow-[0_30px_60px_-30px_rgba(60,50,120,0.25)] dark:border-edge-dark dark:bg-surface-dark">
+          <img src="#{logo}" alt="Mishka" class="size-[88px] object-contain dark:invert-[0.92]" />
+        </div>
+        <div class="inline-flex items-center gap-2.5 rounded-full border border-edge bg-surface py-[7px] pr-3.5 pl-3 font-geist-mono text-[12px] text-dim dark:border-edge-dark dark:bg-surface-dark dark:text-dim-dark">
+          <span class="size-[7px] rounded-full bg-[#22A06B] shadow-[0_0_0_4px_#E3F4EB] dark:shadow-[0_0_0_4px_#173528]">
+          </span>
+          <span class="max-w-[180px] overflow-hidden text-ellipsis whitespace-nowrap">
+            {Map.get(assigns[:current_site] || %{}, :host) || "localhost"}
+          </span>
+          <span class="text-faint dark:text-faint-dark">/</span>
+          <span>v1.0.0</span>
+          <span class="text-faint dark:text-faint-dark">/</span>
+          <span>runtime ready</span>
+        </div>
+        <h1 class="font-newsreader text-[clamp(48px,7vw,84px)] leading-none font-normal tracking-[-0.03em] text-balance">
+          Mishka is <em class="text-brand italic">up and running</em>.
+        </h1>
+        <p class="max-w-[560px] text-[18px] leading-[1.6] text-pretty text-dim dark:text-dim-dark">
+          You're looking at the default page of a fresh install. Nothing is published yet — sign in to the admin console and start shaping your first site.
+        </p>
+        <div class="mt-1 flex flex-wrap justify-center gap-3">
+          <.link
+            navigate={site_path("/:lang/auth", @page.language)}
+            class="flex h-[52px] items-center gap-2.5 rounded-[14px] bg-[linear-gradient(180deg,#6A60EC,#5246D6)] px-6 text-[15px] font-medium text-white shadow-[0_10px_24px_-10px_rgba(91,79,224,0.6)]"
+          >
+            Open admin console
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M5 12h14M13 6l6 6-6 6"></path>
+            </svg>
+          </.link>
+          <.link
+            href="https://mishka.tools/cms/docs"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="flex h-[52px] items-center rounded-[14px] border border-edge bg-surface px-[22px] text-[15px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+          >
+            Read the docs
+          </.link>
+        </div>
       </div>
     </section>
 
-    <section class="mt-6 grid gap-5 md:grid-cols-3">
-      <article
-        :for={
-          {title, body} <- [
-            {"Pages, not templates",
-             "Every address this site answers is a row you can edit, with its own history."},
-            {"Components you own",
-             "The header and footer above are this site's own components — change them once."},
-            {"Compiled at runtime",
-             "A published page compiles to a Phoenix module, so it is as fast as hand-written."}
-          ]
-        }
-        class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
-      >
-        <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
-        <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
-      </article>
+    <section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">
+      <div class="flex flex-col items-center gap-2.5 text-center">
+        <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle dark:text-subtle-dark">
+          HOW A PAGE IS SERVED
+        </span>
+        <h2 class="font-newsreader text-[clamp(30px,4vw,42px)] font-normal tracking-[-0.02em] text-balance">
+          Every request, composed from parts you own.
+        </h2>
+      </div>
+      <div class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,150px),1fr))] gap-3 rounded-3xl border border-edge bg-surface p-7 dark:border-edge-dark dark:bg-surface-dark">
+        <div
+          :for={
+            flow <- [
+              %{
+                n: "01",
+                tag: "request",
+                tag_class: "bg-[#F1EFEA] text-dim dark:bg-[#24232A] dark:text-dim-dark",
+                title: "Site",
+                desc: "Domain resolves to one of your sites — run many from one install.",
+                code: "https://" <> (Map.get(assigns[:current_site] || %{}, :host) || "localhost")
+              },
+              %{
+                n: "02",
+                tag: "shell",
+                tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",
+                title: "Layout",
+                desc: "A shared frame wraps the page: header, footer, slots.",
+                code: "layout: default"
+              },
+              %{
+                n: "03",
+                tag: "content",
+                tag_class: "bg-[#E3F4EB] text-[#1E8A5A] dark:bg-[#173528] dark:text-[#6FD3A2]",
+                title: "Page",
+                desc: "Your content, versioned and translatable.",
+                code: "path: /"
+              },
+              %{
+                n: "04",
+                tag: "blocks",
+                tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",
+                title: "Components",
+                desc: "Reusable pieces with their own dependencies.",
+                code: "<doc-section />"
+              },
+              %{
+                n: "05",
+                tag: "compiled",
+                tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",
+                title: "Runtime",
+                desc: "Compiled live on the server and delivered fast.",
+                code: "200 OK · 12ms"
+              }
+            ]
+          }
+          class="relative flex min-h-[170px] flex-col gap-3.5 rounded-2xl border border-dashed border-edge bg-sunk p-5 dark:border-edge-dark dark:bg-sunk-dark"
+        >
+          <div class="flex items-center justify-between">
+            <span class="font-geist-mono text-[11px] text-faint dark:text-faint-dark">{flow.n}</span>
+            <span class={["rounded-md px-2 py-[3px] font-geist-mono text-[11px]", flow.tag_class]}>
+              {flow.tag}
+            </span>
+          </div>
+          <span class="text-[17px] font-medium">{flow.title}</span>
+          <span class="text-[13.5px] leading-[1.55] text-dim dark:text-dim-dark">{flow.desc}</span>
+          <span class="mt-auto font-geist-mono text-[12px] break-words text-brand">{flow.code}</span>
+        </div>
+      </div>
     </section>
 
-    <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
-      <div>
-        <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
-          Ready to make it yours?
+    <section class="mx-auto grid w-full max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5 px-8 pb-24">
+      <div class="flex flex-col gap-3.5 py-2 pe-2">
+        <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle dark:text-subtle-dark">
+          START HERE
+        </span>
+        <h2 class="font-newsreader text-[36px] leading-[1.1] font-normal tracking-[-0.02em]">
+          Three steps to replace this page.
         </h2>
-        <p class="mt-1 text-[13.5px] text-ink-soft">
-          Sign in and open the page builder from the dashboard.
+        <p class="text-[15px] leading-[1.6] text-pretty text-dim dark:text-dim-dark">
+          Need more later? Plugins add features like blogs or documentation — install them only when you need them.
         </p>
       </div>
-      <.link
-        navigate={site_path("/:lang/contact", @page.language)}
-        class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
-      >
-        Contact us
-      </.link>
+      <div class="flex flex-col overflow-hidden rounded-[20px] border border-edge bg-surface dark:border-edge-dark dark:bg-surface-dark">
+        <div
+          :for={
+            {number, title, detail} <- [
+              {"1", "Sign in to the admin console", "Use the master account from installation."},
+              {"2", "Pick a layout for your site", "Every page shares it — change it any time."},
+              {"3", "Publish a page at “/”", "It replaces this welcome screen automatically."}
+            ]
+          }
+          class="flex items-center gap-[18px] border-t border-edge px-[22px] py-5 text-fg dark:border-edge-dark dark:text-fg-dark"
+        >
+          <span class="grid size-[34px] flex-none place-items-center rounded-full border border-chip font-geist-mono text-[12px] text-brand dark:border-chip-dark">
+            {number}
+          </span>
+          <span class="flex min-w-0 flex-1 flex-col gap-[3px]">
+            <span class="text-[15px] font-medium">{title}</span>
+            <span class="text-[13.5px] text-dim dark:text-dim-dark">{detail}</span>
+          </span>
+        </div>
+      </div>
     </section>
     """
-  end
-
-  defp rest(brand) do
-    [
-      %{
-        name: "About",
-        title: "About",
-        path: "/:lang/about",
-        description: "What this site is.",
-        template: ~s"""
-        <article class="rounded-card border border-line bg-white p-8">
-          <h1 class="font-display text-[26px] font-bold tracking-[-0.03em] text-ink">
-            About #{brand}
-          </h1>
-          <p class="mt-4 text-[15px] leading-relaxed text-ink-soft">
-            This page is here so you have something to edit. Replace it with who you are, what you
-            make and why somebody should read on.
-          </p>
-          <dl class="mt-8 grid gap-5 sm:grid-cols-3">
-            <div :for={
-              {term, detail} <- [
-                {"Runs on", "Elixir, Phoenix and the Ash Framework"},
-                {"Edited in", "The page builder, on this same site"},
-                {"Published", "When you say so, and not before"}
-              ]
-            }>
-              <dt class="text-[11.5px] font-bold uppercase tracking-[0.14em] text-muted">{term}</dt>
-              <dd class="mt-1 text-[13.5px] text-ink">{detail}</dd>
-            </div>
-          </dl>
-          <p class="mt-8">
-            <.link navigate={site_path("/:lang", @page.language)} class="text-[13px] font-bold text-accent">
-              ← Back home
-            </.link>
-          </p>
-        </article>
-        """
-      },
-      %{
-        name: "Contact",
-        title: "Contact",
-        path: "/:lang/contact",
-        description: "A form that really submits, with errors and a confirmation.",
-        # THE FIELDS ARE HAND-WRITTEN `<input>`s, not `<.input>`: the host's field component styles
-        # itself with class names from a CSS framework this project ships no bundle for, so its
-        # boxes would render as bare unstyled text. The form machinery reads a plain control's
-        # `name` (and the `f[:key]` in its value) exactly as it reads a kit field's `field=`.
-        template: ~S"""
-        <div class="grid gap-6 md:grid-cols-[1.2fr_1fr]">
-          <.form
-            :let={f}
-            id="contact-form"
-            as={:contact}
-            for={assigns[:contact_form]}
-            phx-change="contact-k7m2q-validate"
-            phx-submit="contact-k7m2q-submit"
-            data-success="Thank you — we have your message."
-            class="rounded-card border border-line bg-white p-7"
-          >
-            <h1 class="font-display text-[26px] font-bold tracking-[-0.03em] text-ink">
-              Get in touch
-            </h1>
-            <p class="mt-2 text-[13.5px] text-ink-soft">
-              Tell us what you need. Everything marked required has to be filled in.
-            </p>
-
-            <label for="contact-name" class="mt-6 block text-[12.5px] font-bold text-ink">Name</label>
-            <input
-              type="text"
-              id="contact-name"
-              name="contact[name]"
-              value={f[:name].value}
-              required
-              minlength="2"
-              maxlength="80"
-              class="mt-1.5 w-full rounded-[9px] border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none focus:border-accent"
-            />
-            <p :for={{message, _opts} <- form_errors(f[:name])} class="mt-1 text-[12px] text-bad">
-              {message}
-            </p>
-
-            <label for="contact-email" class="mt-5 block text-[12.5px] font-bold text-ink">
-              Email
-            </label>
-            <input
-              type="email"
-              id="contact-email"
-              name="contact[email]"
-              value={f[:email].value}
-              required
-              data-format="email"
-              class="mt-1.5 w-full rounded-[9px] border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none focus:border-accent"
-            />
-            <p :for={{message, _opts} <- form_errors(f[:email])} class="mt-1 text-[12px] text-bad">
-              {message}
-            </p>
-
-            <label for="contact-message" class="mt-5 block text-[12.5px] font-bold text-ink">
-              Message
-            </label>
-            <textarea
-              id="contact-message"
-              name="contact[message]"
-              required
-              minlength="10"
-              maxlength="2000"
-              rows="5"
-              class="mt-1.5 w-full rounded-[9px] border border-line bg-white px-3 py-2 text-[13.5px] text-ink outline-none focus:border-accent"
-            >{f[:message].value}</textarea>
-            <p :for={{message, _opts} <- form_errors(f[:message])} class="mt-1 text-[12px] text-bad">
-              {message}
-            </p>
-
-            <button
-              type="submit"
-              id="contact-submit"
-              class="mt-6 rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
-            >
-              Send message
-            </button>
-          </.form>
-
-          <aside class="rounded-card border border-line bg-white p-7">
-            <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">
-              Other ways
-            </h2>
-            <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">
-              Edit this panel in the builder and put your real address, your hours and anything else
-              a visitor needs here.
-            </p>
-            <p class="mt-6 text-[13px]">
-              <.link navigate={site_path("/:lang/privacy", @page.language)} class="font-bold text-accent">
-                How we handle what you send →
-              </.link>
-            </p>
-          </aside>
-        </div>
-        """
-      },
-      %{
-        name: "Privacy",
-        title: "Privacy",
-        path: "/:lang/privacy",
-        description: "What the site does with what a visitor sends it.",
-        template: ~S"""
-        <article class="rounded-card border border-line bg-white p-8">
-          <h1 class="font-display text-[26px] font-bold tracking-[-0.03em] text-ink">Privacy</h1>
-          <p class="mt-4 text-[15px] leading-relaxed text-ink-soft">
-            This is a placeholder, not legal advice. Say what you collect, why you collect it, how
-            long you keep it and who you share it with — then delete this sentence.
-          </p>
-          <section :for={
-            {heading, body} <- [
-              {"What we collect",
-               "Whatever the contact form asks for, and nothing the site has not asked you for."},
-              {"Why we keep it", "To answer you. Say here how long that is."},
-              {"Who else sees it", "Name every service the message passes through."}
-            ]
-          }>
-            <h2 class="mt-7 font-display text-[17px] font-bold tracking-[-0.02em] text-ink">
-              {heading}
-            </h2>
-            <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
-          </section>
-          <p class="mt-8">
-            <.link navigate={site_path("/:lang", @page.language)} class="text-[13px] font-bold text-accent">
-              ← Back home
-            </.link>
-          </p>
-        </article>
-        """
-      }
-    ]
   end
 
   defp write_page!(attrs) do

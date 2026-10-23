@@ -21,6 +21,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     Component,
     ErrorPage,
     Layout,
+    Media,
     Page,
     PageProvision,
     Stylesheet,
@@ -28,25 +29,33 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   }
 
   alias MishkaCmsCore.Settings
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
 
   require Ash.Query
 
+  # THE SITE IS THE MASTER, because the logo lives in the master's media library and a first install
+  # has no other kind. The files go to a folder of this test's own, never to `priv/static`.
   setup do
+    dir = Path.join(System.tmp_dir!(), "starter_media_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+    Application.put_env(:mishka_cms_core, :media_static_dir, dir)
+
+    on_exit(fn ->
+      Application.delete_env(:mishka_cms_core, :media_static_dir)
+      File.rm_rf(dir)
+    end)
+
     name = "starter#{System.unique_integer([:positive])}"
-    %{site: create_site!(name: name, host: "#{name}.test", active: true)}
+    %{site: create_site!(name: name, host: "#{name}.test", active: true, master: true)}
   end
 
   test "writes the whole starter site and says what it wrote", %{site: site} do
     report = StarterContent.seed!(site)
 
     assert report.stylesheets == ["site-theme"]
+    assert report.media == ["mishka-logo"]
     assert Enum.sort(report.components) == ["site-footer", "site-header"]
     assert report.layouts == ["site-main"]
-    assert report.pages == ["/:lang", "/:lang/about", "/:lang/contact", "/:lang/privacy"]
+    assert report.pages == ["/:lang"]
     assert [_error_page] = report.error_pages
     assert report.renamed_pages == []
     assert report.skipped_pages == []
@@ -54,6 +63,123 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     # THE LAYOUT IS IN THE REPORT WHETHER OR NOT THIS CALL WROTE IT, because a caller adding pages of
     # its own — `MishkaCmsCore.Dev.Seeds` does — has to hang them on the same row on every run.
     assert report.layout_id == one(Layout, site).id
+  end
+
+  # A FIRST INSTALL ANSWERS ONE PAGE. About, Contact and Privacy were the installer's and are the dev
+  # seeds' now (`MishkaCmsCore.Dev.StarterPages`), so a site nobody seeded further holds only `/`.
+  test "writes no about, contact or privacy page", %{site: site} do
+    StarterContent.seed!(site)
+
+    assert [%{name: "home", path: "/:lang"}] = rows(Page, site)
+  end
+
+  # THE FRAME IS THE LAYOUT'S: a page the site adds later has the header and the footer without
+  # asking, and the page at `/` is what is between them.
+  test "the layout draws the header and the footer, and the home page draws neither", %{
+    site: site
+  } do
+    StarterContent.seed!(site)
+
+    layout = one(Layout, site).template
+    assert layout =~ ~s(component_name="site-header")
+    assert layout =~ ~s(component_name="site-footer")
+    assert layout =~ "{@inner_content}"
+
+    home = page(site, "/:lang").template
+    refute home =~ "site-header"
+    refute home =~ "site-footer"
+    refute home =~ "<header"
+    refute home =~ "<footer"
+  end
+
+  # THE DESIGN'S OWN WORDS, dashes included: the page is the designer's copy, not ours to reword.
+  test "the home page says what the design says", %{site: site} do
+    StarterContent.seed!(site)
+
+    template = page(site, "/:lang").template
+
+    for text <- [
+          "Mishka is <em",
+          "up and running",
+          "Nothing is published yet — sign in to the admin console and start shaping your first site.",
+          "HOW A PAGE IS SERVED",
+          "Every request, composed from parts you own.",
+          "Domain resolves to one of your sites — run many from one install.",
+          "START HERE",
+          "Three steps to replace this page.",
+          "Plugins add features like blogs or documentation — install them only when you need them.",
+          "Sign in to the admin console",
+          "Pick a layout for your site",
+          "Every page shares it — change it any time.",
+          "Publish a page at “/”"
+        ],
+        do: assert(template =~ text, text)
+  end
+
+  # THE LOGO IS A FILE IN THE MEDIA MANAGER, put there the way an upload is, and the three places that
+  # draw it name the row's own address rather than a path somebody typed.
+  test "the logo is a file of the master site's media library, and every template draws it", %{
+    site: site
+  } do
+    StarterContent.seed!(site)
+
+    assert [logo] = rows(Media, site)
+    assert logo.name == "mishka-logo"
+    assert logo.type == :images
+    assert logo.format == "png"
+    assert logo.size > 0
+    assert logo.site_id == site.id
+    assert String.starts_with?(logo.relative_path, "/uploads/#{site.id}/media/")
+
+    assert {:ok, %{active: file}} = Media.storage_paths(logo.relative_path, site.id)
+    assert File.exists?(file)
+
+    assert File.read!(file) ==
+             File.read!(
+               Path.join([:code.priv_dir(:mishka_cms_core), "install", "mishka-logo.png"])
+             )
+
+    for name <- ["site-header", "site-footer"] do
+      attr = Enum.find(component(site, name).attrs, &(&1.name == "logo"))
+      assert attr.opts["default"] == logo.relative_path, name
+    end
+
+    assert page(site, "/:lang").template =~ ~s(src="#{logo.relative_path}")
+  end
+
+  # THE MASTER'S PICTURE, whichever site draws it: a dev site is not the master, and a second logo in
+  # its own library would be a file nobody asked for.
+  test "a site that is not the master draws the master's logo and stores none of its own", %{
+    site: master
+  } do
+    StarterContent.seed!(master)
+    [logo] = rows(Media, master)
+
+    name = "other#{System.unique_integer([:positive])}"
+    other = create_site!(name: name, host: "#{name}.test", active: true)
+
+    report = StarterContent.seed!(other)
+
+    assert report.media == []
+    assert rows(Media, other) == []
+    assert [^logo] = rows(Media, master)
+
+    attr = Enum.find(component(other, "site-header").attrs, &(&1.name == "logo"))
+    assert attr.opts["default"] == logo.relative_path
+    assert page(other, "/:lang").template =~ ~s(src="#{logo.relative_path}")
+  end
+
+  test "raises for a site that is not the master when there is no master", %{site: site} do
+    Ecto.Adapters.SQL.query!(
+      MishkaCmsCore.Repo,
+      "UPDATE sites SET master = false WHERE id = $1",
+      [
+        Ecto.UUID.dump!(site.id)
+      ]
+    )
+
+    assert_raise ArgumentError, ~r/no master site/, fn -> StarterContent.seed!(site.id) end
+    assert rows(Media, site) == []
   end
 
   # A site switched offline shows this page; its admin rewords it like the 404 and the 500, and
@@ -88,30 +214,30 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     assert Enum.map(one(ErrorPage, site).error_pages, & &1.status) == [404, 500, :offline]
   end
 
-  test "every starter page hangs on the site's own layout", %{site: site} do
+  test "the home page hangs on the site's own layout", %{site: site} do
     report = StarterContent.seed!(site)
 
     for page <- rows(Page, site), do: assert(page.layout_id == report.layout_id)
   end
 
-  # `/fa/about` answers with the starter's About page on a site publishing in Persian, rather than a
-  # 404 until somebody writes a Persian edition.
   test "the layout titles every page the same way, after the page and then the site", %{
     site: site
   } do
     StarterContent.seed!(site)
 
     assert [%{tag: "title", content: "{{page.title}} · {{site.name}}"}] =
-             MishkaCmsCore.Runtime.Seo.stored_tags(one(Layout, site).seo_tags)
+             one(Layout, site).seo_tags
+             |> MishkaCmsCore.Runtime.Seo.stored_tags()
+             |> Enum.filter(&(&1.tag == "title"))
   end
 
-  test "every starter page answers every language the site publishes in", %{site: site} do
+  # `/fa` answers with the starter's home page on a site publishing in Persian, rather than a 404
+  # until somebody writes a Persian edition.
+  test "the home page answers every language the site publishes in", %{site: site} do
     StarterContent.seed!(site)
 
-    pages = rows(Page, site)
-
-    assert length(pages) == 4
-    for page <- pages, do: assert(PageProvision.serves_all_languages?(page), page.path)
+    assert [home] = rows(Page, site)
+    assert PageProvision.serves_all_languages?(home)
   end
 
   # RUN AGAIN, IT WRITES NOTHING. The dev seeds run this on every reseed and the installer may be
@@ -119,7 +245,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   test "a second run adds nothing and keeps an edited row", %{site: site} do
     StarterContent.seed!(site)
 
-    header = Enum.find(rows(Component, site), &(&1.name == "site-header"))
+    header = component(site, "site-header")
 
     header
     |> Ash.Changeset.for_update(:update, %{description: "Rewritten by the admin"},
@@ -131,33 +257,34 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     report = StarterContent.seed!(site)
 
     assert report.pages == []
+    assert report.media == []
     assert report.components == []
     assert report.layouts == []
     assert report.stylesheets == []
     assert report.error_pages == []
 
-    assert length(rows(Page, site)) == 4
+    assert length(rows(Page, site)) == 1
+    assert length(rows(Media, site)) == 1
     assert length(rows(Component, site)) == 2
 
-    assert Enum.find(rows(Component, site), &(&1.name == "site-header")).description ==
-             "Rewritten by the admin"
+    assert component(site, "site-header").description == "Rewritten by the admin"
   end
 
-  # A HELD ADDRESS IS NOT AN ERROR. A site already answering at `/:lang/about` keeps whatever it
-  # answers with, and the rest of the starter content is still written — left to `Ash.create!` that
-  # was a raise in the middle of the run and a half-provisioned site for good.
-  test "a page the site already has at one of these addresses is left alone", %{site: site} do
-    create_page!(site_id: site.id, name: "Ours", path: "/:lang/about")
+  # A HELD ADDRESS IS NOT AN ERROR. A site already answering at `/:lang` keeps whatever it answers
+  # with, and the rest of the starter content is still written — left to `Ash.create!` that was a
+  # raise in the middle of the run and a half-provisioned site for good.
+  test "a page the site already has at the home address is left alone", %{site: site} do
+    create_page!(site_id: site.id, name: "Ours", path: "/:lang")
 
     report = StarterContent.seed!(site)
 
-    assert "/:lang/about" not in report.pages
-    assert "/:lang" in report.pages
-    assert [%{path: "/:lang/about"}] = report.skipped_pages
-    assert Enum.find(rows(Page, site), &(&1.path == "/:lang/about")).name == "ours"
+    assert report.pages == []
+    assert [%{path: "/:lang"}] = report.skipped_pages
+    assert Enum.sort(report.components) == ["site-footer", "site-header"]
+    assert [%{name: "ours"}] = rows(Page, site)
   end
 
-  # THE NAV IS THE ONE THING A CALLER CHANGES, because the pages it points at are the caller's own.
+  # THE NAV IS A THING A CALLER CHANGES, because the pages it points at are the caller's own.
   test "extra nav links are written into the layout, in the page's language", %{site: site} do
     StarterContent.seed!(site, nav: [{"Pricing", "/pricing"}])
 
@@ -167,9 +294,25 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     assert template =~ ">Pricing<"
   end
 
-  # ONE LINK, BOTH MODES: every link is written as the stored path and the page's language, so it
-  # follows the site's `site.language_urls`.
-  describe "the links between the starter pages" do
+  # THE PAGE IS DRAWN IN WHAT THE CALLER SAYS: the home draws its own sections edge to edge, and the
+  # dev seeds' pages are written for a centred column.
+  test "the layout's main takes the classes a caller hands it, and leaves the page the width else",
+       %{site: site} do
+    StarterContent.seed!(site, main_class: "mx-auto max-w-[900px]")
+
+    assert one(Layout, site).template =~ ~s(<main class="mx-auto max-w-[900px]">)
+  end
+
+  test "the layout's main leaves a page the whole width by default", %{site: site} do
+    StarterContent.seed!(site)
+
+    assert one(Layout, site).template =~ ~s(<main class="flex w-full flex-1 flex-col">)
+  end
+
+  # ONE LINK, BOTH MODES: every link to a page of the site is written as the stored path and the
+  # page's language, so it follows the site's `site.language_urls`. The links that leave the site
+  # are the same in every mode and in every language.
+  describe "the links of the starter" do
     setup %{site: site} do
       forget_settings(~w(site.languages site.language_urls), [site.id])
       {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
@@ -178,6 +321,9 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       :ok
     end
 
+    @docs "https://mishka.tools/docs"
+    @github "https://github.com/mishka-group/mishka_cms"
+
     defp hrefs(template, assigns) do
       template
       |> LiveViewCompiler.render_template(assigns)
@@ -185,23 +331,82 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       |> List.flatten()
     end
 
-    defp page_links(site, path, language) do
-      page = Enum.find(rows(Page, site), &(&1.path == path))
-      hrefs(page.template, %{page: %{language: language}, query_params: %{"lang" => language}})
+    defp home_links(site, language) do
+      hrefs(page(site, "/:lang").template, %{
+        page: %{language: language},
+        current_site: %{host: "acme.test"}
+      })
     end
 
-    test "leave the primary language unprefixed by default", %{site: site} do
-      assert page_links(site, "/:lang/about", "en") == ["/"]
-      assert page_links(site, "/:lang/about", "fa") == ["/fa"]
-      assert "/about" in page_links(site, "/:lang", "en")
-      assert "/fa/contact" in page_links(site, "/:lang", "fa")
+    defp header_links(site, language) do
+      hrefs(component(site, "site-header").template, %{
+        brand: "Acme",
+        logo: "/logo.png",
+        lang: language,
+        class: nil,
+        inner_block: []
+      })
+    end
+
+    defp footer_links(site) do
+      hrefs(component(site, "site-footer").template, %{
+        logo: "/logo.png",
+        lang: nil,
+        class: nil,
+        editions: [],
+        inner_block: []
+      })
+    end
+
+    # THE TWO BUTTONS AND NOTHING ELSE ARE LINKS, and the three numbered steps are plain cards: a
+    # link on one of them would be a fifth `href` here.
+    test "the home page has two links, the sign-in page and the docs", %{site: site} do
+      assert home_links(site, "en") == ["/auth", "https://mishka.tools/cms/docs"]
+      assert home_links(site, "fa") == ["/fa/auth", "https://mishka.tools/cms/docs"]
+    end
+
+    test "the header links home, to the docs, to GitHub and to the sign-in page", %{site: site} do
+      assert header_links(site, "en") == ["/", @docs, @github, "/auth"]
+      assert header_links(site, "fa") == ["/fa", @docs, @github, "/fa/auth"]
+    end
+
+    test "the footer links to Mishka CMS, the docs, GitHub and the sponsor page", %{site: site} do
+      assert footer_links(site) == [
+               "https://mishka.tools/cms",
+               @docs,
+               @github,
+               "https://mishka.tools/sponsor"
+             ]
     end
 
     test "prefix every language in prefix_all", %{site: site} do
       {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
 
-      assert page_links(site, "/:lang/about", "en") == ["/en"]
-      assert "/en/about" in page_links(site, "/:lang", "en")
+      assert hd(home_links(site, "en")) == "/en/auth"
+      assert [home, _docs, _github, sign_in] = header_links(site, "en")
+      assert {home, sign_in} == {"/en", "/en/auth"}
+    end
+
+    test "no link of the starter goes nowhere", %{site: site} do
+      links =
+        home_links(site, "en") ++ header_links(site, "en") ++ footer_links(site)
+
+      refute "#" in links
+      refute "" in links
+    end
+
+    test "every link that leaves the site opens a new tab without handing it the opener", %{
+      site: site
+    } do
+      for template <- [
+            page(site, "/:lang").template,
+            component(site, "site-header").template,
+            component(site, "site-footer").template
+          ],
+          [tag] <- Regex.scan(~r/<\.link\b[^>]*href="https?:\/\/[^>]*>/s, template) do
+        assert tag =~ ~s(target="_blank"), tag
+        assert tag =~ ~s(rel="noopener noreferrer"), tag
+      end
     end
 
     test "the error page's Back home is the visitor's language's home, else the first one's", %{
@@ -246,33 +451,52 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   # THE NAME THE USER TYPED, not the one the database kept: `Site :create` slugifies `:name`, so a
   # site installed as "Acme Docs" is stored as `acme-docs` — a tenant key, not a masthead.
-  test "the brand a caller names is what the site prints", %{site: site} do
+  test "the brand a caller names is what the header prints", %{site: site} do
     StarterContent.seed!(site, brand: "Acme Docs")
 
-    for component <- rows(Component, site) do
-      assert Enum.find(component.attrs, &(&1.name == "brand")).opts["default"] == "Acme Docs"
+    header = component(site, "site-header")
+
+    assert Enum.find(header.attrs, &(&1.name == "brand")).opts["default"] == "Acme Docs"
+    assert header.template =~ "{@brand}"
+
+    for component <- rows(Component, site), template <- [component.template] do
+      refute template =~ site.name
     end
-
-    home = Enum.find(rows(Page, site), &(&1.path == "/:lang"))
-
-    assert home.template =~ "Acme Docs"
-    refute home.template =~ site.name
   end
 
-  # THE DEV SEEDS GIVE EVERY SITE ONE. The plain page below is what a stranger's first install opens
-  # on; a site with a home of its own must not be given the installer's as well.
-  test "a template a caller hands it is written in place of the starter page of that name",
-       %{site: site} do
+  # THE DEV SEEDS GIVE EVERY SITE ONE. The welcome page below is what a stranger's first install
+  # opens on; a site with a home of its own must not be given the installer's as well.
+  test "pages a caller hands it are written in place of the installer's home", %{site: site} do
     StarterContent.seed!(site,
-      templates: %{"Home" => ~S|<p id="ours">Ours</p>|, "About" => ~S|<p id="about">Us</p>|}
+      pages: [
+        %{
+          name: "Home",
+          title: "Home",
+          path: "/:lang",
+          description: "Ours.",
+          template: ~S|<p id="ours">Ours</p>|
+        },
+        %{
+          name: "About",
+          title: "About",
+          path: "/:lang/about",
+          description: "Us.",
+          template: ~S|<p id="about">Us</p>|
+        }
+      ]
     )
 
     pages = rows(Page, site)
 
+    assert Enum.map(pages, & &1.path) |> Enum.sort() == ["/:lang", "/:lang/about"]
     assert Enum.find(pages, &(&1.path == "/:lang")).template == ~S|<p id="ours">Ours</p>|
     assert Enum.find(pages, &(&1.path == "/:lang/about")).template == ~S|<p id="about">Us</p>|
-    assert Enum.find(pages, &(&1.path == "/:lang/contact")).template =~ "contact-form"
-    assert length(pages) == 4
+
+    for page <- pages do
+      assert page.section == "starter"
+      assert PageProvision.provisioned_by(page) == "mishka_cms_core"
+      assert PageProvision.serves_all_languages?(page)
+    end
   end
 
   test "the error page takes the root layout a caller hands it", %{site: site} do
@@ -281,6 +505,9 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     assert one(ErrorPage, site).root_layout_template == "<html><body>mine</body></html>"
   end
 
+  @paired ~w(page fg dim subtle faint surface edge sunk chip dot)
+
+  # THE ERROR PAGES AND THE DEV SEEDS ARE WRITTEN IN THE FIRST BLOCK, the home page in the second.
   test "the theme declares the tokens the starter markup is written in", %{site: site} do
     StarterContent.seed!(site)
 
@@ -288,14 +515,92 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
     assert sheet.kind == :theme
 
-    for token <- [
-          "--color-ground",
-          "--color-ink",
-          "--color-line",
-          "--color-accent",
-          "--font-sans"
-        ],
-        do: assert(sheet.content =~ token)
+    for token <-
+          ~w(--color-ground --color-ink --color-line --color-accent --font-sans --font-display),
+        do: assert(sheet.content =~ token <> ":", token)
+
+    for token <-
+          ~w(--color-brand --color-brand-deep --font-geist --font-geist-mono --font-newsreader),
+        do: assert(sheet.content =~ token <> ":", token)
+  end
+
+  test "the theme gives every colour of the home page a light and a dark value", %{site: site} do
+    StarterContent.seed!(site)
+
+    sheet = one(Stylesheet, site)
+
+    for name <- @paired,
+        token <- ["--color-#{name}", "--color-#{name}-dark"],
+        do: assert(sheet.content =~ token <> ":", token)
+  end
+
+  # A COLOUR WRITTEN FOR THE LIGHT PAGE ALONE is a header that stays white on the dark one. Every
+  # `bg-`, `text-` and `border-` utility of a themed colour has to travel with its `dark:` twin in
+  # the same list of classes, which is how the design's `var(--ink)` changes with the theme.
+  test "every themed colour in the starter's markup is paired with its dark twin", %{site: site} do
+    StarterContent.seed!(site)
+
+    templates = [
+      page(site, "/:lang").template,
+      component(site, "site-header").template,
+      component(site, "site-footer").template,
+      one(Layout, site).template
+    ]
+
+    for template <- templates, [_whole, classes] <- Regex.scan(~r/"([^"]*)"/, template) do
+      list = String.split(classes)
+
+      for name <- @paired,
+          prefix <- ~w(bg text border),
+          utility = "#{prefix}-#{name}",
+          utility in list do
+        assert "dark:#{utility}-dark" in list, "#{utility} has no dark twin in: #{classes}"
+      end
+
+      # THE DOT GRID NAMES ITS COLOUR IN A GRADIENT, not in a utility of its own.
+      if classes =~ "var(--color-dot)",
+        do:
+          assert(classes =~ "var(--color-dot-dark)", "the dots have no dark twin in: #{classes}")
+    end
+  end
+
+  # THE TOGGLE IS THE HOST'S OWN MECHANISM, not a script of ours: the root layout listens for
+  # `phx:set-theme` and sets `data-theme` on the document, and the site's `dark:` variant answers it.
+  # Two buttons, because the design shows the moon in the light and the sun in the dark.
+  test "the header's toggle sets the theme through the host's event, one button for each", %{
+    site: site
+  } do
+    StarterContent.seed!(site)
+
+    template = component(site, "site-header").template
+
+    assert length(Regex.scan(~r/JS\.dispatch\("phx:set-theme"\)/, template)) == 2
+    assert template =~ ~s(data-phx-theme="dark")
+    assert template =~ ~s(data-phx-theme="light")
+    assert template =~ "dark:hidden"
+    assert template =~ "dark:grid"
+  end
+
+  # THE DESIGN'S TYPEFACES, two of which are not the host's: the layout links them from Google, the
+  # one origin besides its own that the public Content-Security-Policy names for fonts, from the
+  # head, which is where a layout's `seo_tags` are drawn.
+  test "the layout's head links the two typefaces the theme does not ship", %{site: site} do
+    StarterContent.seed!(site)
+
+    links =
+      for %{tag: "link", attrs: attrs} <-
+            MishkaCmsCore.Runtime.Seo.stored_tags(one(Layout, site).seo_tags),
+          do: attrs
+
+    assert Enum.map(links, &{&1["rel"], &1["href"]}) == [
+             {"preconnect", "https://fonts.googleapis.com"},
+             {"preconnect", "https://fonts.gstatic.com"},
+             {"stylesheet",
+              "https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap"}
+           ]
+
+    assert Enum.at(links, 1)["crossorigin"] == "anonymous"
+    refute one(Layout, site).template =~ "<link"
   end
 
   # NOTHING A PRODUCTION INSTALL MAY NOT HAVE. The user can deselect every UI component, and the
@@ -312,29 +617,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       refute template =~ "<.input"
       refute template =~ "style="
       refute template =~ "<script"
-    end
-  end
-
-  # Pages saved before tokens keep `contact_submit`; a page written today is tagged (spec 0.8).
-  test "every starter form carries a token in both event names", %{site: site} do
-    StarterContent.seed!(site)
-
-    forms =
-      for page <- rows(Page, site),
-          tree = Tree.parse!(page.template),
-          node <- Tree.walk(tree),
-          PageForms.form?(node),
-          do: {page.path, node}
-
-    assert forms != [], "the starter has a Contact form"
-
-    for {path, form} <- forms do
-      assert Naming.form_token(form), "the form on #{path} carries a token"
-
-      for attr <- ~w(phx-change phx-submit) do
-        assert Naming.event_key(Node.attr_text(form, attr)),
-               "#{attr} on #{path} is a tagged event name"
-      end
     end
   end
 
@@ -355,4 +637,9 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   end
 
   defp one(resource, site), do: resource |> rows(site) |> hd()
+
+  defp page(site, path), do: site |> then(&rows(Page, &1)) |> Enum.find(&(&1.path == path))
+
+  defp component(site, name),
+    do: site |> then(&rows(Component, &1)) |> Enum.find(&(&1.name == name))
 end
