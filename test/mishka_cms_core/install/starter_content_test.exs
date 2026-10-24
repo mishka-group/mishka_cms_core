@@ -1587,6 +1587,351 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     end
   end
 
+  # THE TEXT OF THE HEADER AND OF THE LAYOUT AT THE COMMIT BEFORE GROUPS, as SHA-256 of the trimmed
+  # text: the header as `components/2` writes it, and the layout `layout_template/2` writes for no
+  # link and for About and Pricing, the site's name a placeholder. Read from that commit's code, so
+  # they are what a production install was written, and a change to either is a change to every
+  # install that has not edited its own.
+  @header_digest "8b5f6bfa6dbfc633a7cf76e46292e66ea234a876d834cbd8aa4b21bb0ea5402f"
+  @layout_digests %{
+    empty: "c589afb4d75f6ccadbe93c4cafca5ffdd8644d19501c0cb24263b8b75fb2c05d",
+    plain: "50b14bd228ea335e28aca157d6fe034823262d795fefe0e0eb8cfa84ef7f64f3"
+  }
+
+  defp header_digest(template), do: digest(template)
+
+  defp layout_digest(layout, site),
+    do: layout.template |> String.replace(site.name, "SITE") |> digest()
+
+  defp digest(text), do: :sha256 |> :crypto.hash(String.trim(text)) |> Base.encode16(case: :lower)
+
+  # A SITE WITH MANY LINKS PUTS THEM IN ONE GROUP. The dev sites carry up to eight links of their own
+  # and, beside the language switcher and Sign in, that is a header that does not fit; a group is
+  # one button on the bar and a labelled list in the phone's panel. It is written into the layout,
+  # beside the plain links, so the `site-header` component is the one it always was.
+  describe "a group of links in the header" do
+    @dev [{"About", "/about"}, {"Pricing", "/pricing"}, %{label: "Blog", path: "/blog"}]
+
+    setup %{site: site} do
+      forget_settings(~w(site.languages site.language_urls), [site.id])
+      {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
+      :ok = Translations.put_site(site.id)
+
+      # A PLAIN LINK AS A TUPLE AND AS A MAP, a group's link the same two ways: whatever the
+      # caller writes, the links come out alike.
+      StarterContent.seed!(site,
+        nav: [{"Home", "/home"}, %{label: "Dev", children: @dev}, %{label: "Last", path: "/last"}]
+      )
+
+      :ok
+    end
+
+    # WHAT THE LAYOUT WRITES BETWEEN THE HEADER'S TAGS, drawn: `lang(assigns)` is a helper of the
+    # layout's own, which a template rendered on its own does not have, so it is the language the
+    # test gives.
+    defp layout_nav_html(site, language) do
+      [slot] =
+        Regex.run(
+          ~r/<\.component\s+component_name="site-header".*?\n\s*>(.*?)<\/\.component>/s,
+          one(Layout, site).template,
+          capture: :all_but_first
+        )
+
+      slot
+      |> String.replace("lang(assigns)", "@lang")
+      |> LiveViewCompiler.render_template(%{lang: language})
+    end
+
+    # AND THAT IN THE HEADER, where the layout puts it: in the slot, before Docs and GitHub.
+    defp header_with_nav(site, language) do
+      nav = layout_nav_html(site, language)
+
+      slot = [
+        %{
+          __slot__: :inner_block,
+          inner_block: fn _changed, _argument -> Phoenix.HTML.raw(nav) end
+        }
+      ]
+
+      header_html(site, %{
+        lang: language,
+        inner_block: slot,
+        editions: [%{language: "en", path: "/"}, %{language: "fa", path: "/fa"}]
+      })
+    end
+
+    # THE `div` THAT LISTENS FOR A DROPDOWN, found by the button it holds: the header has two now.
+    defp wrapper_attribute(html, button_id, name) do
+      html
+      |> query("div[phx-key]")
+      |> Enum.find(&(&1 |> LazyHTML.query("#" <> button_id) |> Enum.count() == 1))
+      |> LazyHTML.attribute(name)
+      |> hd()
+    end
+
+    # A COLOUR THAT CHANGES IN THE DARK IS WRITTEN TWICE, so a group is never drawn light on a dark
+    # page. Every element the selector finds that has one of these has its twin.
+    defp assert_dark_twins(html, selector) do
+      light = ~w(text-fg text-dim text-faint text-subtle bg-surface border-edge hover:bg-wash)
+      found = for classes <- attribute(html, selector, "class"), do: String.split(classes)
+
+      assert found != [], selector
+
+      for list <- found, token <- light, token in list do
+        assert "dark:#{token}-dark" in list, "#{selector}: #{token} has no dark twin"
+      end
+    end
+
+    test "is a button on the bar from lg up, and is not drawn below it", %{site: site} do
+      html = header_with_nav(site, "en")
+      wrapper = html |> wrapper_attribute("site-nav-dev-button", "class") |> String.split()
+
+      assert "max-lg:hidden" in wrapper
+      assert "relative" in wrapper
+
+      assert attribute(html, "#site-nav-dev-button", "type") == ["button"]
+      assert attribute(html, "#site-nav-dev-button", "aria-haspopup") == ["menu"]
+      assert attribute(html, "#site-nav-dev-button", "aria-expanded") == ["false"]
+      assert html |> query("#site-nav-dev-button > span") |> LazyHTML.text() == "Dev"
+      assert html |> query("#site-nav-dev-button > svg") |> Enum.count() == 1
+    end
+
+    test "looks like the language switcher's button, and its menu like the language menu", %{
+      site: site
+    } do
+      html = header_with_nav(site, "en")
+
+      # THE BUTTON'S SHAPE IS THE SWITCHER'S: the same height, border, fill and radius.
+      group = class_list(html, "#site-nav-dev-button")
+      language = class_list(html, "#site-language-button")
+
+      for token <- ~w(h-[38px] cursor-pointer rounded-[11px] border border-edge bg-surface) do
+        assert token in group, token
+        assert token in language, token
+      end
+
+      menu = class_list(html, "#site-nav-dev-menu")
+
+      for token <-
+            ~w(absolute z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5) do
+        assert token in menu, token
+        assert token in class_list(html, "#site-language-menu"), token
+      end
+
+      assert attribute(html, "#site-nav-dev-menu", "role") == ["menu"]
+
+      for selector <- [
+            "#site-nav-dev-button",
+            "#site-nav-dev-button > svg",
+            "#site-nav-dev-menu",
+            "#site-nav-dev-menu > a"
+          ],
+          do: assert_dark_twins(html, selector)
+    end
+
+    test "opens, closes and keeps aria-expanded as the language switcher does, by its own ids", %{
+      site: site
+    } do
+      html = header_with_nav(site, "en")
+
+      # THE SAME COMMANDS, NOT A NEW MECHANISM: what the switcher holds, with the group's ids.
+      as_group = fn commands ->
+        commands
+        |> Jason.encode!()
+        |> String.replace("site-language", "site-nav-dev")
+        |> Jason.decode!()
+      end
+
+      assert commands(html, "#site-nav-dev-button", "phx-click") ==
+               as_group.(commands(html, "#site-language-button", "phx-click"))
+
+      for name <- ["phx-click-away", "phx-window-keydown"] do
+        group = html |> wrapper_attribute("site-nav-dev-button", name) |> Jason.decode!()
+        language = html |> wrapper_attribute("site-language-button", name) |> Jason.decode!()
+
+        assert group == as_group.(language), name
+
+        assert group == [
+                 ["hide", %{"to" => "#site-nav-dev-menu"}],
+                 [
+                   "set_attr",
+                   %{"to" => "#site-nav-dev-button", "attr" => ["aria-expanded", "false"]}
+                 ]
+               ]
+      end
+
+      assert wrapper_attribute(html, "site-nav-dev-button", "phx-key") == "Escape"
+
+      # THE WRAPPER LISTENS, AND THE MENU DOES NOT: a click on the button of an open menu is "away"
+      # from the menu alone, which hid it for the button's own toggle to show it again.
+      assert attribute(html, "#site-nav-dev-menu", "phx-click-away") == []
+      assert attribute(html, "#site-nav-dev-menu", "phx-window-keydown") == []
+
+      assert [["toggle", %{"to" => "#site-nav-dev-menu"}], ["toggle_attr", toggle]] =
+               commands(html, "#site-nav-dev-button", "phx-click")
+
+      assert toggle == %{"attr" => ["aria-expanded", "true", "false"]}
+    end
+
+    test "holds the group's links in its menu, in order, each a menu item", %{site: site} do
+      html = header_with_nav(site, "en")
+
+      assert attribute(html, "#site-nav-dev-menu > a", "href") == ["/about", "/pricing", "/blog"]
+      assert attribute(html, "#site-nav-dev-menu > a", "role") == List.duplicate("menuitem", 3)
+
+      assert html |> query("#site-nav-dev-menu > a") |> Enum.map(&LazyHTML.text/1) ==
+               ["About", "Pricing", "Blog"]
+
+      # A TUPLE OR A MAP: the three are drawn alike.
+      assert html |> attribute("#site-nav-dev-menu > a", "class") |> Enum.uniq() |> length() == 1
+
+      # SHUT UNTIL ITS BUTTON OPENS IT.
+      assert "hidden" in class_list(html, "#site-nav-dev-menu")
+    end
+
+    test "is a labelled group with its links in the phone's panel, and not drawn from lg up", %{
+      site: site
+    } do
+      html = header_with_nav(site, "en")
+      group = "#site-menu [role=group]"
+
+      assert attribute(html, group, "aria-labelledby") == ["site-nav-dev-label"]
+      assert "lg:hidden" in class_list(html, group)
+      assert html |> query("#site-nav-dev-label") |> LazyHTML.text() |> String.trim() == "Dev"
+
+      assert attribute(html, "#{group} > a", "href") == ["/about", "/pricing", "/blog"]
+      assert html |> attribute("#{group} > a", "class") |> Enum.uniq() |> length() == 1
+
+      # NO BUTTON TO OPEN: the panel is already something the visitor opened.
+      assert html |> query("#{group} button") |> Enum.count() == 0
+
+      for selector <- ["#{group} > a", "#site-nav-dev-label"],
+          do: assert_dark_twins(html, selector)
+    end
+
+    test "leaves the plain links as they were, in the panel's own list, in the order given", %{
+      site: site
+    } do
+      html = header_with_nav(site, "en")
+
+      assert attribute(html, "#site-menu > div:first-child > a", "href") ==
+               ["/home", "/last", @docs, @github]
+
+      for class <- attribute(html, "#site-menu > div:first-child > a[href^='/']", "class"),
+          do: assert(class == "text-dim dark:text-dim-dark")
+
+      # HOME, THE GROUP, LAST: where the caller put it.
+      assert [home, group, last] =
+               for(
+                 needle <- [~s(href="/home"), ~s(id="site-nav-dev-button"), ~s(href="/last")],
+                 do: html |> :binary.match(needle) |> elem(0)
+               )
+
+      assert home < group and group < last
+    end
+
+    test "puts every id on the page once, the group's two sets of elements included", %{
+      site: site
+    } do
+      html = header_with_nav(site, "en")
+      ids = for [id] <- Regex.scan(~r/ id="([^"]+)"/, html, capture: :all_but_first), do: id
+
+      assert ~w(site-nav-dev-button site-nav-dev-menu site-nav-dev-label) -- ids == []
+      assert ids == Enum.uniq(ids)
+    end
+
+    test "follows the site's URL mode and the page's language, as the plain links do", %{
+      site: site
+    } do
+      assert site |> layout_nav_html("en") |> links() |> Enum.uniq() ==
+               ["/home", "/about", "/pricing", "/blog", "/last"]
+
+      assert site |> layout_nav_html("fa") |> links() |> Enum.uniq() ==
+               ["/fa/home", "/fa/about", "/fa/pricing", "/fa/blog", "/fa/last"]
+
+      {:ok, _} = Settings.put("site.language_urls", "prefix_all", site_id: site.id)
+
+      assert site |> layout_nav_html("en") |> links() |> Enum.uniq() ==
+               ["/en/home", "/en/about", "/en/pricing", "/en/blog", "/en/last"]
+    end
+
+    test "is stored as links through site_path, not as addresses", %{site: site} do
+      template = one(Layout, site).template
+
+      for path <- ~w(about pricing blog) do
+        assert template =~ ~s|navigate={site_path("/:lang/#{path}", lang(assigns))}|
+      end
+
+      refute template =~ "href="
+    end
+
+    test "is not touched by the header component, which is the one every site has", %{site: site} do
+      assert site |> component("site-header") |> Map.fetch!(:template) |> header_digest() ==
+               @header_digest
+
+      refute component(site, "site-header").template =~ "site-nav-"
+    end
+  end
+
+  describe "a group that is not worth a button" do
+    test "with no link draws nothing, and the rest of the nav is as given", %{site: site} do
+      StarterContent.seed!(site, nav: [{"Home", "/home"}, %{label: "Dev", children: []}])
+      template = one(Layout, site).template
+
+      refute template =~ "site-nav-"
+      assert template =~ ~s|navigate={site_path("/:lang/home", lang(assigns))}|
+    end
+
+    test "labelled in a script with no letter or digit in it is named by its place", %{site: site} do
+      StarterContent.seed!(site,
+        nav: [
+          %{label: "ابزار", children: [{"A", "/a"}]},
+          %{label: "Docs & guides", children: [{"B", "/b"}]}
+        ]
+      )
+
+      template = one(Layout, site).template
+
+      assert template =~ ~s(id="site-nav-group-0-button")
+      assert template =~ ~s(id="site-nav-docs-guides-menu")
+    end
+  end
+
+  # PRODUCTION IS NOT TOUCHED BY ANY OF THIS. An install that passes no group (the installer's
+  # passes no link at all) is written the header it was and the layout it was, byte for byte: the
+  # digests are those of the text at the commit before groups, taken from the code and not from a
+  # database, with the site's name made a placeholder because a layout names its site.
+  describe "a site that passes no group" do
+    test "is written the header, as the commit before groups wrote it", %{site: site} do
+      StarterContent.seed!(site)
+
+      assert site |> component("site-header") |> Map.fetch!(:template) |> header_digest() ==
+               @header_digest
+    end
+
+    test "is written the layout it was, with no link", %{site: site} do
+      StarterContent.seed!(site)
+
+      assert Layout |> one(site) |> layout_digest(site) == @layout_digests.empty
+      refute one(Layout, site).template =~ "site-nav-"
+    end
+
+    test "is written the layout it was when it passes plain links", %{site: site} do
+      StarterContent.seed!(site, nav: [{"About", "/about"}, {"Pricing", "/pricing"}])
+
+      assert Layout |> one(site) |> layout_digest(site) == @layout_digests.plain
+      refute one(Layout, site).template =~ "site-nav-"
+    end
+
+    test "has a header an earlier release wrote upgraded to that same text", %{site: site} do
+      StarterContent.seed!(site)
+      write!(component(site, "site-header"), %{template: earlier_header("6ea2fbc")}, site)
+
+      assert StarterContent.upgrade(site) == ["site-header"]
+      assert component(site, "site-header").template |> header_digest() == @header_digest
+    end
+  end
+
   # THE VERSION IS THE APPLICATION'S, read when the page is drawn. A literal in the template is a
   # version nobody bumps: it said `v1.0.0` on a build that is `0.0.1`.
   describe "the version the home page shows" do

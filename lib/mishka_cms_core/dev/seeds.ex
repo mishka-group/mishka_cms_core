@@ -262,7 +262,8 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # install opens on, on every dev site as in production: no option here replaces it, so it can
   # never be a copy that drifts from the real one. What a dev site wants to show on top of it is a
   # page of its own — the showcase at `/:lang/showcase`, in the site's module, linked from the
-  # header (`LocalhostPages.nav/0`) — and the pages beside the home go in as `:extra_pages`.
+  # header (`LocalhostPages.nav/0`, in the one `Dev` dropdown `nav/2` builds) — and the pages beside
+  # the home go in as `:extra_pages`.
   #
   # `localhost` brings its about page too, with a section hidden from visitors to open in the
   # builder (`LocalhostPages.about/0`); the other pages of `MishkaCmsCore.Dev.StarterPages` are the
@@ -274,15 +275,40 @@ defmodule MishkaCmsCore.Dev.Seeds do
   defp starter_opts(%{host: "localhost", name: name}, config),
     do: [
       root_layout_template: @localhost_error_root_layout,
-      nav: StarterPages.nav() ++ config.pages.nav(),
+      nav: nav(config),
       extra_pages: StarterPages.pages(name, config.pages.about())
     ]
 
   defp starter_opts(%{name: name}, config),
     do: [
-      nav: StarterPages.nav() ++ config.pages.nav(),
+      nav: nav(config),
       extra_pages: StarterPages.pages(name)
     ]
+
+  # EVERY LINK A DEV SITE ADDS TO THE HEADER IS IN ONE `Dev` DROPDOWN (`StarterContent`'s grouped
+  # links), so what the header carries beside it is a production install's: Docs and GitHub. In the
+  # order a developer reads them — the pages every dev site has, then the ones the site is for, then
+  # the extensions' — and each path is stored as `/:lang/<path>`, so it follows the site's URL mode.
+  @doc false
+  @spec nav(map() | String.t(), [StarterContent.nav_link()]) :: [StarterContent.nav_entry()]
+  def nav(config, extensions \\ extension_links())
+
+  def nav(site_name, extensions) when is_binary(site_name),
+    do: @site_configs |> Enum.find(&(&1.name == site_name)) |> nav(extensions)
+
+  def nav(%{pages: pages}, extensions),
+    do: [%{label: "Dev", children: StarterPages.nav() ++ pages.nav() ++ extensions}]
+
+  # THE EXTENSIONS' FRONT PAGES, for the extensions this build has (`categories/0`): `/:lang/blog`
+  # and `/:lang/docs` are the pages their dev seeds write on every site, `site-a` included — it
+  # prefixes every language, so its `/blog` is a redirect to `/en/blog` and not a missing page. A
+  # build without an extension has no link to a page it cannot have. An extension that is there but
+  # was not picked in the installer's dev step is a link to the site's 404 until it is.
+  @extension_links [blog: {"Blog", "/blog"}, document: {"Docs", "/docs"}]
+
+  defp extension_links do
+    for %{key: key} <- categories(), link = Keyword.get(@extension_links, key), do: link
+  end
 
   # THE LANGUAGES ARE A SETTING, and every `/:lang` page answers only in the ones it names — see
   # `MishkaCmsCore.Runtime.Languages`. So is how an address names them: `localhost` and `site-b`

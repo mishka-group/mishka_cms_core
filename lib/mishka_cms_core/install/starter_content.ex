@@ -65,7 +65,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
   dark toggle and the Sign in button or the visitor's menu are the same elements, in a panel under
   the header that a menu button opens: the logo and the button are all the bar holds, so nothing
   can run over the logo or off the screen. `lg` and not `md`, because a site that adds links of its
-  own (the dev sites have up to six) and two languages is wider than 768 px.
+  own (the dev sites had up to six, before their links went into one dropdown) and two languages is
+  wider than 768 px.
 
   The button works as the header's two dropdowns do, with the host's own `Phoenix.LiveView.JS`: it
   toggles the panel's `max-lg:hidden` class and its own `aria-expanded`, a click away from the
@@ -75,6 +76,24 @@ defmodule MishkaCmsCore.Install.StarterContent do
   Each dropdown listens for the click away from the `div` that holds its button, not from its menu:
   the click that is meant to close an open menu is on its button, which is "away" from the menu
   alone, so the menu hid and the button's own toggle showed it again.
+
+  ## Grouped links
+
+  A site with many links of its own (the dev sites have up to eight) can put them in a group, one
+  entry of the `:nav` option (`t:nav_entry/0`) that holds the links instead of being one. The
+  group is written into the layout, beside the plain links, and the `site-header` component is
+  not told about it, so a site that passes no group has the header, and the layout, it had.
+
+    * From `lg` up it is a dropdown: a button with the group's label and a chevron, drawn as the
+      language switcher's is and opened, closed (by its button, a click away or Escape) and
+      marked (`aria-expanded`) with the same `Phoenix.LiveView.JS` commands. Its menu opens
+      under the button.
+    * Below `lg` it is a labelled group in the menu panel, its links in the list and no button
+      to open: the panel is already something a visitor opened.
+
+  They are two sets of elements, one hidden at each width, so each has the semantics its width
+  needs (a menu button; a group with a label) and neither is restyled into the other. The links
+  are on the page twice, and only one set is ever shown.
 
   ## The theme
 
@@ -384,6 +403,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
         }
 
   @typedoc """
+  A link the header carries, as the `:nav` option takes it: `{label, path}` (or the same as
+  `%{label:, path:}`), the path being what follows the language, or a group of them,
+  `%{label:, children:}`, which the header draws as a dropdown (see "Grouped links" above). A
+  group's children are links; a group does not hold another group.
+  """
+  @type nav_link :: {String.t(), String.t()} | %{label: String.t(), path: String.t()}
+  @type nav_entry :: nav_link() | %{label: String.t(), children: [nav_link()]}
+
+  @typedoc """
   What `upgrade/1` changed, by name: `"site-theme"`, `"site-header"`, `"site-main"`, and the home
   page's path.
   """
@@ -405,8 +433,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   Takes the site record or its id. Options:
 
-    * `:nav` — extra links for the header, as `[{label, path}]` where the path is what follows the
-      language (`{"Pricing", "/pricing"}`). The dev seeds use it to reach the pages they add.
+    * `:nav` — extra links for the header, as `[t:nav_entry/0]`: `{label, path}` where the path is
+      what follows the language (`{"Pricing", "/pricing"}`), or a group of them,
+      `%{label: "Dev", children: [{"Pricing", "/pricing"}, …]}` — see "Grouped links" above. The dev
+      seeds use it to reach the pages they add.
     * `:brand` — the name to print in the header. Defaults to the site's name, which the create
       action has slugified.
     * `:extra_pages` — page definitions (`%{name:, title:, path:, description:, template:}`) written
@@ -1445,13 +1475,127 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp section_bar_call(site_name),
     do: ~s(<#{@section_bar} bar={assigns[:page_section_bar]} site="#{site_name}" />)
 
+  # A PLAIN LINK IS WRITTEN EXACTLY AS IT ALWAYS WAS: the text below is what a site that passes no
+  # group has in its layout, and the tests pin it. A group (`nav_group/3`) is written beside it.
   defp nav_links(nav) do
-    Enum.map_join(nav, "", fn {label, path} ->
-      ~s"""
+    nav
+    |> Enum.with_index()
+    |> Enum.map_join("", fn
+      {%{label: label, children: children}, index} ->
+        nav_group(label, Enum.map(children, &nav_target/1), index)
 
-          <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="text-dim dark:text-dim-dark">#{label}</.link>\
-      """
+      {entry, _index} ->
+        entry |> nav_target() |> nav_link()
     end)
+  end
+
+  defp nav_target({label, path}), do: {label, path}
+  defp nav_target(%{label: label, path: path}), do: {label, path}
+
+  defp nav_link({label, path}) do
+    ~s"""
+
+        <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="text-dim dark:text-dim-dark">#{label}</.link>\
+    """
+  end
+
+  # A GROUP OF LINKS, TWICE: the header's language dropdown from `lg` up, and a labelled list in
+  # the phone's panel. See "Grouped links" above for why two sets of elements and not one restyled.
+  #
+  # THE DROPDOWN IS THE LANGUAGE SWITCHER'S, element for element: the wrapper listens for the click
+  # away and for Escape (not the menu, so the click on the button that is meant to close an open
+  # menu is not "away" from it), the button toggles the menu and `aria-expanded` with the same
+  # `JS` commands, and every colour that changes in the dark has its `-dark` twin. The layout does
+  # not alias `JS`, hence `Phoenix.LiveView.JS`. Its menu opens from the button's start edge, the
+  # bar's end being where the language switcher is.
+  #
+  # THE IDS ARE THE LABEL'S, `site-nav-dev-button` for "Dev", or the group's position when the label
+  # has no letter or digit in it; two groups with one label are one id twice, which is the
+  # caller's to avoid. A group with no link is not drawn: a button that opens nothing.
+  defp nav_group(_label, [], _index), do: ""
+
+  defp nav_group(label, links, index) do
+    base = "site-nav-" <> group_slug(label, index)
+    button = base <> "-button"
+    menu = base <> "-menu"
+    caption = base <> "-label"
+
+    menu_items =
+      Enum.map_join(links, "\n", fn {text, path} ->
+        ~s|        <.link role="menuitem" navigate={site_path("/:lang#{path}", lang(assigns))} class="flex items-center rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark">#{text}</.link>|
+      end)
+
+    panel_items =
+      Enum.map_join(links, "\n", fn {text, path} ->
+        ~s|      <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="rounded-[9px] px-[11px] py-[9px] text-dim hover:bg-wash dark:text-dim-dark dark:hover:bg-wash-dark">#{text}</.link>|
+      end)
+
+    ~s"""
+
+        <div
+          phx-click-away={
+            Phoenix.LiveView.JS.hide(to: "##{menu}")
+            |> Phoenix.LiveView.JS.set_attribute({"aria-expanded", "false"}, to: "##{button}")
+          }
+          phx-window-keydown={
+            Phoenix.LiveView.JS.hide(to: "##{menu}")
+            |> Phoenix.LiveView.JS.set_attribute({"aria-expanded", "false"}, to: "##{button}")
+          }
+          phx-key="Escape"
+          class="relative max-lg:hidden"
+        >
+          <button
+            type="button"
+            id="#{button}"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            phx-click={
+              Phoenix.LiveView.JS.toggle(to: "##{menu}")
+              |> Phoenix.LiveView.JS.toggle_attribute({"aria-expanded", "true", "false"})
+            }
+            class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+          >
+            <span>#{label}</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-faint dark:text-faint-dark"
+            >
+              <path d="M6 9l6 6 6-6"></path>
+            </svg>
+          </button>
+          <div
+            id="#{menu}"
+            role="menu"
+            class="absolute start-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+          >
+    #{menu_items}
+          </div>
+        </div>
+        <div role="group" aria-labelledby="#{caption}" class="flex flex-col gap-0.5 lg:hidden">
+          <span
+            id="#{caption}"
+            class="px-[11px] pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-subtle uppercase dark:text-subtle-dark"
+          >
+            #{label}
+          </span>
+    #{panel_items}
+        </div>\
+    """
+  end
+
+  defp group_slug(label, index) do
+    case label |> to_string() |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") do
+      "-" -> "group-#{index}"
+      "" -> "group-#{index}"
+      slug -> String.trim(slug, "-")
+    end
   end
 
   # ---------------------------------------------------------------------------
