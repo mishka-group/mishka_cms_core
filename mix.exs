@@ -82,7 +82,7 @@ defmodule MishkaCmsCore.MixProject do
     [
       {:decimal, "~> 3.2", override: true},
       {:bcrypt_elixir, "~> 3.3"},
-      {:sourceror, "~> 1.12", only: [:dev, :test]},
+      {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:open_api_spex, "~> 3.22"},
       {:ash_paper_trail, "~> 0.8"},
       {:ash_archival, "~> 2.0"},
@@ -90,13 +90,13 @@ defmodule MishkaCmsCore.MixProject do
       {:ash_authentication,
        github: "team-alembic/ash_authentication", branch: "main", override: true},
       {:eqrcode, "~> 0.2"},
-      {:ash_postgres, "~> 2.14"},
+      {:ash_postgres, "~> 2.15"},
       {:ash_json_api, "~> 1.7"},
       {:ash_phoenix, "~> 2.3"},
       {:ash_rate_limiter, "~> 2.0"},
       {:hammer, "~> 7.5"},
       {:remote_ip, "~> 1.2"},
-      {:ash, "~> 3.36"},
+      {:ash, "~> 3.37"},
       # {:ash, github: "ash-project/ash", branch: "main", override: true},
       {:igniter, "~> 0.8", only: [:dev, :test]},
       {:oban, "~> 2.24"},
@@ -140,7 +140,7 @@ defmodule MishkaCmsCore.MixProject do
       # Dates, times, numbers, lists and language names in the reader's language, from Unicode CLDR
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
-      {:localize, "~> 1.3"},
+      {:localize, "~> 1.4"},
       {:mishka_gervaz, path: "../mishka_gervaz"},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
