@@ -207,6 +207,22 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
   `{:reply, frame}` lets them. A plugin that raises, or an event whose plugins cannot run, leaves
   the page with what `given/2` holds.
 
+  ## Changing language without a reload
+
+  The header's switcher links an edition whose `path` is a path on the site with `navigate`, so
+  a language change is a live navigation: the page, the header and the title swap in the open
+  socket. An `http(s)://` address stays a plain `href`, a full load.
+
+  The root layout draws `<html lang dir>` once, with the HTTP response, so the layout itself
+  keeps both right after any live navigation (the switcher, Back and Forward, another
+  `navigate` link, a patch): a hidden element whose `phx-mounted` runs
+  `Phoenix.LiveView.JS.set_attribute/2` on `html`. Its id carries the language, so a patch from
+  one language to another mounts it again. No hook and no script. A layout of a site's own that
+  draws a switcher this way needs the same element; the starter's is the one to copy
+  (`MishkaCmsCore.Install.StarterContent`). The page's `<title>` follows through `live_title`,
+  and its `hreflang`, canonical and share tags through the `mishka:head` event that
+  `MishkaCmsWeb.RuntimeLive` pushes.
+
   ## Putting an extension's pages on the layout
 
   `layout_id/1` is the row to write into a page an extension creates itself, so the page is drawn

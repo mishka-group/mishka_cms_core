@@ -14,9 +14,11 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   import MishkaCmsCore.Test.Factory
   import Phoenix.Component, only: [sigil_H: 2]
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
   alias MishkaCmsCore.Install.StarterContent
-  alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
+  alias MishkaCmsCore.Runtime.Compilers.{Helpers, LiveViewCompiler}
+  alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
 
   alias MishkaCmsCore.Runtime.{
     Component,
@@ -1000,6 +1002,35 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       refute html =~ "hreflang"
     end
 
+    # A LANGUAGE CHANGE IS A LIVE NAVIGATION, not a page load: a path on the site is a `<.link
+    # navigate>`, which the client turns into a navigation in the open socket. An address on the web
+    # is another site, and only a plain `href` gets a visitor there.
+    test "links a path on the site with `navigate`, and an address on the web with a plain `href`",
+         %{site: site} do
+      html =
+        header_html(site, %{
+          lang: "en",
+          editions: [
+            %{language: "en", path: "/about"},
+            %{language: "fa", path: "/fa/about"},
+            %{language: "ar", path: "https://ar.example.com/about"}
+          ]
+        })
+
+      for {language, path} <- [{"en", "/about"}, {"fa", "/fa/about"}] do
+        assert [link] = Regex.run(~r/<a [^>]*hreflang="#{language}"[^>]*>/, html)
+        assert link =~ ~s(href="#{path}")
+        assert link =~ ~s(data-phx-link="redirect")
+        assert link =~ ~s(data-phx-link-state="push")
+        assert link =~ ~s(role="menuitem")
+      end
+
+      assert [away] = Regex.run(~r/<a [^>]*hreflang="ar"[^>]*>/, html)
+      assert away =~ ~s(href="https://ar.example.com/about")
+      assert away =~ ~s(role="menuitem")
+      refute away =~ "data-phx-link"
+    end
+
     test "is not in the footer, which has no language links any more", %{site: site} do
       html = footer_html(site)
 
@@ -1013,6 +1044,96 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     test "the layout hands the footer no languages", %{site: site} do
       assert one(Layout, site).template =~ ~s(<.component component_name="site-footer" site=)
       refute one(Layout, site).template =~ ~r/site-footer.*?page_languages/s
+    end
+  end
+
+  # `<html lang dir>` IS DRAWN ONCE PER HTTP RESPONSE, and a live navigation (the switcher, Back and
+  # Forward, any `navigate` link, a patch) never draws it again. The layout carries the fix as an
+  # element that `phx-mounted` runs commands for: `JS.set_attribute` with `to: "html"` (`set_attr`
+  # on the wire), no hook and no script. The real layout is compiled and drawn here, as a request
+  # draws it.
+  describe "the layout's <html lang dir>" do
+    setup %{site: site} do
+      forget_settings(~w(site.languages site.language_urls), [site.id])
+      {:ok, _} = Settings.put("site.languages", ["en", "fa", "ar"], site_id: site.id)
+      :ok = Translations.put_site(site.id)
+      StarterContent.seed!(site)
+
+      %{layout: compiled!(one(Layout, site), site, "Layout")}
+    end
+
+    test "sets the page's language and its direction on the document when it mounts", %{
+      layout: layout
+    } do
+      # A REGION SUBTAG KEEPS THE DIRECTION OF ITS LANGUAGE, as `Languages.direction/1` reads it.
+      for {language, dir} <- [{"en", "ltr"}, {"fa", "rtl"}, {"ar", "rtl"}, {"fa-IR", "rtl"}] do
+        html = layout_html(layout, language)
+
+        assert [marker] = Regex.run(~r/<span [^>]*id="site-lang-#{language}"[^>]*>/, html)
+        assert marker =~ ~r/\shidden[\s>=]/
+
+        assert mounted(marker) == [
+                 ["set_attr", %{"attr" => ["lang", language], "to" => "html"}],
+                 ["set_attr", %{"attr" => ["dir", dir], "to" => "html"}]
+               ]
+      end
+    end
+
+    # A PATCH FROM ONE LANGUAGE TO ANOTHER KEEPS THE LAYOUT'S ELEMENTS and `phx-mounted` runs once
+    # per element, so the id is what makes the element a new one when the language changes.
+    test "has an id of its own for each language, and one element on the page", %{layout: layout} do
+      ids =
+        for language <- ["en", "fa", "ar"] do
+          html = layout_html(layout, language)
+
+          assert [_one] = Regex.scan(~r/phx-mounted="[^"]*lang[^"]*"/, html)
+          assert [[id]] = Regex.scan(~r/id="(site-lang-[^"]+)"/, html, capture: :all_but_first)
+          id
+        end
+
+      assert ids == ["site-lang-en", "site-lang-fa", "site-lang-ar"]
+    end
+
+    test "is drawn beside the switcher, which moves between the editions with `navigate`", %{
+      layout: layout
+    } do
+      html = layout_html(layout, "fa")
+
+      assert html =~ ~s(id="site-lang-fa")
+      assert [link] = Regex.run(~r/<a [^>]*hreflang="en"[^>]*>/, html)
+      assert link =~ ~s(href="/")
+      assert link =~ ~s(data-phx-link="redirect")
+    end
+
+    test "is not a hook, and carries no script", %{site: site} do
+      template = one(Layout, site).template
+
+      assert template =~ "phx-mounted="
+      refute template =~ "phx-hook"
+      refute template =~ "<script"
+    end
+
+    defp layout_html(layout, language) do
+      %{
+        flash: %{},
+        page: %{language: language},
+        page_languages: [
+          %{language: "en", path: "/", name: "English", title: nil},
+          %{language: "fa", path: "/fa", name: "Persian", title: nil}
+        ]
+      }
+      |> layout.render({:safe, ~s(<p id="inner">page</p>)})
+      |> rendered_to_string()
+    end
+
+    # THE ATTRIBUTE THE CLIENT READS, a JSON list of commands.
+    defp mounted(tag) do
+      [_, json] = Regex.run(~r/phx-mounted="([^"]*)"/, tag)
+
+      json
+      |> String.replace("&quot;", ~s("))
+      |> String.replace("&amp;", "&")
+      |> Jason.decode!()
     end
   end
 
@@ -1630,4 +1751,23 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   defp component(site, name),
     do: site |> then(&rows(Component, &1)) |> Enum.find(&(&1.name == name))
+
+  defp compiled!(record, site, kind) do
+    module = Helpers.module_name(record.id, site.name, kind)
+
+    on_exit(fn ->
+      :code.purge(module)
+      :code.delete(module)
+    end)
+
+    assert {:ok, ^module} =
+             ModuleCompilerHandler.compile_or_return_module(
+               module,
+               record.path,
+               site.name,
+               site.id
+             )
+
+    module
+  end
 end

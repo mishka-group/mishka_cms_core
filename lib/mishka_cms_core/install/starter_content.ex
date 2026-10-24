@@ -55,7 +55,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
       `MishkaCmsCore.Runtime.SiteLayout` resolves them: the page's own editions, or the record's
       translations an extension answers with. With two or more the header has a language
       switcher: a flag (`Languages.flag/1`) and the entry's `name` for each, the current one
-      marked. A page in one language has none.
+      marked. A page in one language has none. An entry whose `path` is a path on the site is a
+      live `navigate` link, so changing language does not reload the page, and the layout sets
+      `<html lang dir>` when the new page mounts; an `http(s)://` one is a plain `href`.
     * The version the home page's pill shows is `MishkaCmsCore.Helpers.host_version/0`, the
       application's own, read when the page is drawn.
 
@@ -934,13 +936,17 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   role="menu"
                   class="absolute end-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] max-lg:static max-lg:mt-1.5 max-lg:min-w-0 max-lg:shadow-none dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)] dark:max-lg:shadow-none"
                 >
-                  <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
-                        response, so a live navigation into another language would keep the first
-                        one's. --%>
-                  <a
+                  <%!-- A PATH ON THIS SITE IS A `navigate` LINK, so a language change is a live navigation:
+                        no reload, and the page, the header and the title swap in the open socket.
+                        Every page is `MishkaCmsWeb.RuntimeLive` in one `live_session`, which is what
+                        keeps `navigate` live. `<html lang dir>` is drawn once per HTTP response, so
+                        the `site-main` layout carries an element that sets both when the new page
+                        mounts, for this click as for Back, Forward and any other link. An
+                        `http(s)://` address is another site: a plain `href`, and a full load. --%>
+                  <.link
                     :for={edition <- @editions}
+                    {if(String.starts_with?(edition.path, "/"), do: [navigate: edition.path], else: [href: edition.path])}
                     role="menuitem"
-                    href={edition.path}
                     hreflang={edition.language}
                     title={Map.get(edition, :title)}
                     aria-current={edition.language == @lang && "true"}
@@ -969,7 +975,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
                     >
                       <path d="M20 6L9 17l-5-5"></path>
                     </svg>
-                  </a>
+                  </.link>
                 </div>
               </div>
               <button
@@ -1380,6 +1386,12 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   (assigns[:page] || %{})[:language] ||
                     MishkaCmsCore.Runtime.Languages.primary(MishkaCmsCore.Runtime.Translations.site())
                   """
+                },
+                # THE DIRECTION OF `lang`, from the helper the root layout's `<html dir>` reads.
+                %{
+                  name: "dir",
+                  args: "assigns",
+                  code: "MishkaCmsCore.Runtime.Languages.direction(lang(assigns))"
                 }
               ],
               priority: 0,
@@ -1402,9 +1414,29 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # column at least as tall as the window, so the footer sits at the bottom of a short page; under
   # the header, the bar a page hands the layout, when it has one; and the page itself in the content
   # column. `@page_languages` and `@page_section_bar` are `MishkaCmsCore.Runtime.SiteLayout`'s.
+  #
+  # `<html lang dir>` FOLLOWS THE PAGE ON A LIVE NAVIGATION, with no hook and no script of ours. The
+  # root layout draws both once per HTTP response, and a live navigation (the language switcher,
+  # Back and Forward, any `navigate` link, a patch) never draws it again, so a visit that moved from
+  # English to Persian would keep `lang="en" dir="ltr"` on an RTL page. The first element below is
+  # the fix: `phx-mounted` runs its commands when the element is added to the page, and
+  # `JS.set_attribute` with `to: "html"` writes the two attributes on the document element, which
+  # LiveView's `to` takes as any CSS selector. Its id carries the language, so a patch from one
+  # language to another replaces the element, which mounts it again; a navigation mounts a whole new
+  # view, which draws it anyway. On the first load it writes what the response already says.
+  # `hidden`: it draws nothing.
   defp layout_template(site_name, nav) do
     ~s"""
     #{@frame_open} leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
+      <span
+        id={"site-lang-" <> lang(assigns)}
+        hidden
+        phx-mounted={
+          Phoenix.LiveView.JS.set_attribute({"lang", lang(assigns)}, to: "html")
+          |> Phoenix.LiveView.JS.set_attribute({"dir", dir(assigns)}, to: "html")
+        }
+      >
+      </span>
       <.component
         component_name="site-header"
         site="#{site_name}"
