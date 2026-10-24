@@ -671,6 +671,12 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   @paired ~w(page fg dim subtle faint surface edge sunk chip dot wash)
 
   # THE ERROR PAGES AND THE DEV SEEDS ARE WRITTEN IN THE FIRST BLOCK, the home page in the second.
+  test "theme_css/0 is the stylesheet a new site's theme holds", %{site: site} do
+    StarterContent.seed!(site)
+
+    assert one(Stylesheet, site).content == StarterContent.theme_css()
+  end
+
   test "the theme declares the tokens the starter markup is written in", %{site: site} do
     StarterContent.seed!(site)
 

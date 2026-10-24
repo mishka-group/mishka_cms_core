@@ -620,6 +620,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @theme_name "site-theme"
 
+  @doc """
+  The stylesheet a new site's `site-theme` holds: the design tokens and the `site-bleed` utility.
+
+  For whatever checks the colours an extension's markup names against the theme's.
+  """
+  @spec theme_css() :: String.t()
+  def theme_css, do: @theme_css
+
   defp ensure_theme(%{id: site_id}) do
     if held?(Stylesheet, site_id, @theme_name) do
       []
