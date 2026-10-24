@@ -8,8 +8,13 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   One module per site, because a page here names THIS site's components and THIS site's hooks by
   name and a list shared between sites cannot. `MishkaCmsCore.Dev.Seeds` picks the module out of
-  `@site_configs`; `MishkaCmsCore.Install.StarterContent` has already written, from
-  `MishkaCmsCore.Dev.StarterPages`, the home, about, contact and privacy pages these link back to.
+  `@site_configs`; `MishkaCmsCore.Install.StarterContent` has already written the home page a
+  production install writes, which `/` is on this site too, and from
+  `MishkaCmsCore.Dev.StarterPages` the about, contact and privacy pages these link back to.
+
+  The first of the pages below is the showcase, at `/:lang/showcase`: the page that used to stand at
+  `/` in dev, now that `/` is the home a first install writes. The header links to it beside the
+  demos.
 
   Between them the pages below use every part of a runtime page a developer has to be able to see
   working: the UI kit's interactive components, a page form with uploads, page events and infos,
@@ -17,7 +22,12 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
   switched off, and the `/:lang` path mode every address here is written in.
   """
 
-  @nav [{"Pricing", "/pricing"}, {"Gallery", "/gallery"}, {"Messages", "/messages"}]
+  @nav [
+    {"Showcase", "/showcase"},
+    {"Pricing", "/pricing"},
+    {"Gallery", "/gallery"},
+    {"Messages", "/messages"}
+  ]
 
   @doc "The header links the layout is built with — see `MishkaCmsCore.Install.StarterContent`."
   @spec nav() :: [{String.t(), String.t()}]
@@ -33,6 +43,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
   @spec pages(%{atom() => [String.t()]}) :: [map()]
   def pages(_pictures) do
     [
+      showcase(),
       pricing(),
       gallery(),
       messages(),
@@ -128,114 +139,226 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
     """
   end
 
-  @doc """
-  The home page this site answers `/:lang` with, in place of the installer's starter home.
-
-  `MishkaCmsCore.Install.StarterContent` writes the welcome page a stranger's first install opens
-  on; in dev the first page a developer opens is the one that has to show what a runtime page can
-  do, so each site hands its own template to the same seeding run.
-  """
-  @spec home() :: String.t()
-  def home do
-    ~S"""
-    <section
-      id="localhost-home"
-      phx-hook="LocalhostConsoleLogger"
-      class="rounded-card border border-line bg-white px-8 py-14 text-center"
-    >
-      <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Dev seed</p>
-      <h1 class="mt-3 font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
-        Everything a runtime page can do
-      </h1>
-      <p class="mx-auto mt-4 max-w-[620px] text-[15px] leading-relaxed text-ink-soft">
-        Every address on this site is a row in the database compiled to a Phoenix module — no route
-        answers any of them. This page is hooked, so the console says so the moment it mounts.
-      </p>
-      <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
-        <.link
-          navigate={site_path("/:lang/gallery", @page.language)}
-          class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
-        >
-          Open the gallery
-        </.link>
-        <.link
-          navigate={site_path("/:lang/pricing", @page.language)}
-          class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
-        >
-          Pricing
-        </.link>
-      </div>
-    </section>
-
-    <.component component_name="chelekom-stat-group" site="Global" id="home-stats" class="mt-6">
-      <.component
-        component_name="chelekom-stat"
-        site="Global"
-        id="home-stat-sites"
-        title="Seeded sites"
-        value="3"
-        description="localhost, site-a and site-b, each its own tenant"
-      />
-      <.component
-        component_name="chelekom-stat"
-        site="Global"
-        id="home-stat-languages"
-        title="Languages here"
-        value="2"
-        description="English and Persian, both on /:lang"
-      />
-      <.component
-        component_name="chelekom-stat"
-        site="Global"
-        id="home-stat-hooks"
-        title="JS hooks"
-        value="3"
-        description="Two this site owns, one the whole node shares"
-      />
-    </.component>
-
-    <section class="mt-6 grid gap-5 md:grid-cols-3">
-      <.link
-        :for={
-          {title, body, path} <- [
-            {"The kit, composed", "Tabs, tables, modals, drawers, steppers and a pager.", "/gallery"},
-            {"Events and infos", "Page events, a timer, pb:say and the flash region.", "/messages"},
-            {"Forms and uploads", "Two forms on one page, and a live file field.", "/forms"}
-          ]
-        }
-        navigate={site_path("/:lang#{path}", @page.language)}
-        class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
+  # THE PAGE THAT USED TO BE THE HOME. `/:lang` is the home a first install writes now, the same on
+  # every dev site, and the one page that shows what a runtime page can do and links to the rest
+  # lives here, one click away in the header. Hooked, so the console says so the moment it mounts.
+  defp showcase do
+    %{
+      name: "Showcase",
+      title: "Showcase",
+      path: "/:lang/showcase",
+      section: "main",
+      description: "Everything a runtime page can do, and a way into each demo page.",
+      format: :heex,
+      template: ~S"""
+      <section
+        id="localhost-showcase"
+        phx-hook="LocalhostConsoleLogger"
+        class="rounded-card border border-line bg-white px-8 py-14 text-center"
       >
-        <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
-        <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
-      </.link>
-    </section>
-
-    <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
-      <div>
-        <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
-          The captures, too
-        </h2>
-        <p class="mt-1 text-[13.5px] text-ink-soft">
-          One page answers every feature, and one answers a path of any depth.
+        <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Dev seed</p>
+        <h1 class="mt-3 font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
+          Everything a runtime page can do
+        </h1>
+        <p class="mx-auto mt-4 max-w-[620px] text-[15px] leading-relaxed text-ink-soft">
+          Every address on this site is a row in the database compiled to a Phoenix module — no route
+          answers any of them. This page is hooked, so the console says so the moment it mounts.
         </p>
-      </div>
-      <div class="flex flex-wrap gap-3">
+        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <.link
+            navigate={site_path("/:lang/gallery", @page.language)}
+            class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
+          >
+            Open the gallery
+          </.link>
+          <.link
+            navigate={site_path("/:lang/pricing", @page.language)}
+            class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          >
+            Pricing
+          </.link>
+        </div>
+      </section>
+
+      <.component component_name="chelekom-stat-group" site="Global" id="showcase-stats" class="mt-6">
+        <.component
+          component_name="chelekom-stat"
+          site="Global"
+          id="showcase-stat-sites"
+          title="Seeded sites"
+          value="3"
+          description="localhost, site-a and site-b, each its own tenant"
+        />
+        <.component
+          component_name="chelekom-stat"
+          site="Global"
+          id="showcase-stat-languages"
+          title="Languages here"
+          value="2"
+          description="English and Persian, both on /:lang"
+        />
+        <.component
+          component_name="chelekom-stat"
+          site="Global"
+          id="showcase-stat-hooks"
+          title="JS hooks"
+          value="3"
+          description="Two this site owns, one the whole node shares"
+        />
+      </.component>
+
+      <section class="mt-6 grid gap-5 md:grid-cols-3">
         <.link
-          navigate={site_path("/:lang/features/multi-tenant", @page.language)}
-          class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          :for={
+            {title, body, path} <- [
+              {"The kit, composed", "Tabs, tables, modals, drawers, steppers and a pager.", "/gallery"},
+              {"Events and infos", "Page events, a timer, pb:say and the flash region.", "/messages"},
+              {"Forms and uploads", "Two forms on one page, and a live file field.", "/forms"}
+            ]
+          }
+          navigate={site_path("/:lang#{path}", @page.language)}
+          class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
         >
-          A :param page
+          <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
+          <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
         </.link>
+      </section>
+
+      <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
+        <div>
+          <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
+            The captures, too
+          </h2>
+          <p class="mt-1 text-[13.5px] text-ink-soft">
+            One page answers every feature, and one answers a path of any depth.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <.link
+            navigate={site_path("/:lang/features/multi-tenant", @page.language)}
+            class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          >
+            A :param page
+          </.link>
+          <.link
+            navigate={site_path("/:lang/handbook/getting-started/install", @page.language)}
+            class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
+          >
+            A *rest page
+          </.link>
+        </div>
+      </section>
+      """,
+      translations: %{"fa" => showcase_fa()}
+    }
+  end
+
+  defp showcase_fa do
+    %{
+      name: "ویترین",
+      title: "ویترین",
+      description: "هر آنچه یک صفحهٔ زمان‌اجرا می‌تواند، و راهی به هر صفحهٔ نمونه.",
+      template: ~S"""
+      <section
+        id="localhost-showcase"
+        phx-hook="LocalhostConsoleLogger"
+        class="rounded-card border border-line bg-white px-8 py-14 text-center"
+      >
+        <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">داده‌های آزمایشی</p>
+        <h1 class="mt-3 font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
+          هر آنچه یک صفحهٔ زمان‌اجرا می‌تواند
+        </h1>
+        <p class="mx-auto mt-4 max-w-[620px] text-[15px] leading-relaxed text-ink-soft">
+          هر آدرس در این سایت یک ردیف در پایگاه داده است که به یک ماژول Phoenix کامپایل می‌شود — هیچ
+          مسیری به هیچ‌کدام پاسخ نمی‌دهد. این صفحه هوک دارد، بنابراین کنسول لحظهٔ بارگذاری آن را اعلام
+          می‌کند.
+        </p>
+        <div class="mt-7 flex flex-wrap items-center justify-center gap-3">
+          <.link
+            navigate={site_path("/:lang/gallery", @page.language)}
+            class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
+          >
+            گالری را باز کنید
+          </.link>
+          <.link
+            navigate={site_path("/:lang/pricing", @page.language)}
+            class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          >
+            قیمت‌گذاری
+          </.link>
+        </div>
+      </section>
+
+      <.component component_name="chelekom-stat-group" site="Global" id="showcase-stats" class="mt-6">
+        <.component
+          component_name="chelekom-stat"
+          site="Global"
+          id="showcase-stat-sites"
+          title="سایت‌های نمونه"
+          value="3"
+          description="localhost، site-a و site-b، هرکدام یک مستأجر مستقل"
+        />
+        <.component
+          component_name="chelekom-stat"
+          site="Global"
+          id="showcase-stat-languages"
+          title="زبان‌های این سایت"
+          value="2"
+          description="انگلیسی و فارسی، هر دو روی /:lang"
+        />
+        <.component
+          component_name="chelekom-stat"
+          site="Global"
+          id="showcase-stat-hooks"
+          title="هوک‌های جاوااسکریپت"
+          value="3"
+          description="دو هوک مخصوص این سایت و یکی مشترک میان کل نود"
+        />
+      </.component>
+
+      <section class="mt-6 grid gap-5 md:grid-cols-3">
         <.link
-          navigate={site_path("/:lang/handbook/getting-started/install", @page.language)}
-          class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
+          :for={
+            {title, body, path} <- [
+              {"کیت، ترکیب‌شده", "زبانه، جدول، مُدال، کشو، استپر و صفحه‌بندی.", "/gallery"},
+              {"رویدادها و اطلاعیه‌ها", "رویدادهای صفحه، یک زمان‌سنج، pb:say و ناحیهٔ پیام.", "/messages"},
+              {"فرم‌ها و بارگذاری", "دو فرم روی یک صفحه و یک فیلد فایل زنده.", "/forms"}
+            ]
+          }
+          navigate={site_path("/:lang#{path}", @page.language)}
+          class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
         >
-          A *rest page
+          <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
+          <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
         </.link>
-      </div>
-    </section>
-    """
+      </section>
+
+      <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
+        <div>
+          <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
+            بخش‌های متغیر هم
+          </h2>
+          <p class="mt-1 text-[13.5px] text-ink-soft">
+            یک صفحه به همهٔ ویژگی‌ها پاسخ می‌دهد و یک صفحه به مسیری با هر عمقی.
+          </p>
+        </div>
+        <div class="flex flex-wrap gap-3">
+          <.link
+            navigate={site_path("/:lang/features/multi-tenant", @page.language)}
+            class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          >
+            یک صفحهٔ :param
+          </.link>
+          <.link
+            navigate={site_path("/:lang/handbook/getting-started/install", @page.language)}
+            class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
+          >
+            یک صفحهٔ *rest
+          </.link>
+        </div>
+      </section>
+      """
+    }
   end
 
   defp pricing do

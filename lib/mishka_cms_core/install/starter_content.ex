@@ -65,7 +65,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   dark toggle and the Sign in button or the visitor's menu are the same elements, in a panel under
   the header that a menu button opens: the logo and the button are all the bar holds, so nothing
   can run over the logo or off the screen. `lg` and not `md`, because a site that adds links of its
-  own (the dev sites have five) and two languages is wider than 768 px.
+  own (the dev sites have up to six) and two languages is wider than 768 px.
 
   The button works as the header's two dropdowns do, with the host's own `Phoenix.LiveView.JS`: it
   toggles the panel's `max-lg:hidden` class and its own `aria-expanded`, a click away from the
@@ -112,6 +112,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
   `MishkaCmsCore.Dev.Seeds` gives every dev site this same base before it adds what that site exists
   to demonstrate, so the code a stranger's first install runs is the code this project's developers
   look at every day. A production path nobody opens is a production path nobody has seen.
+
+  That includes the home page: a dev site's `/` is the one written here, template and stamps, and
+  the dev seeds add their pages beside it (`:extra_pages`), never in its place.
 
   ## Running it again
 
@@ -406,9 +409,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
       language (`{"Pricing", "/pricing"}`). The dev seeds use it to reach the pages they add.
     * `:brand` — the name to print in the header. Defaults to the site's name, which the create
       action has slugified.
-    * `:pages` — page definitions (`%{name:, title:, path:, description:, template:}`), written in
-      place of the installer's home page. The dev seeds give every site its own home, and the about,
-      contact and privacy pages a first install no longer has.
+    * `:extra_pages` — page definitions (`%{name:, title:, path:, description:, template:}`) written
+      after the home page, stamped and held the way the home is. The dev seeds hand it the about,
+      contact and privacy pages a first install no longer has, and so every dev site's `/` is the
+      home a first install writes, not a copy of it.
+    * `:pages` — page definitions written IN PLACE of the installer's home page, for a caller that
+      ships a home of its own. The dev seeds do not: a home they wrote would be a home no
+      production install draws.
     * `:root_layout_template` — the error page's root layout, for a caller that ships its own.
 
   Every page is drawn in the same column, the layout's (`MishkaCmsCore.Runtime.SiteLayout`), so
@@ -442,7 +449,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
     components = ensure_components(site, brand, logo)
     {layout, layouts} = ensure_layout(site, brand, opts)
 
-    pages = Keyword.get_lazy(opts, :pages, fn -> [home(logo)] end)
+    pages =
+      Keyword.get_lazy(opts, :pages, fn -> [home(logo)] end) ++
+        Keyword.get(opts, :extra_pages, [])
 
     %{created: created, renamed: renamed, skipped: skipped} =
       site_id

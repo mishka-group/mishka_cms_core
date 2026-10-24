@@ -5,7 +5,8 @@
 defmodule MishkaCmsCore.Dev.StarterPagesTest do
   @moduledoc """
   The about, contact and privacy pages a first install no longer writes and the dev seeds still do,
-  written the way `MishkaCmsCore.Dev.Seeds` writes them: through `StarterContent.seed!/2`'s `:pages`.
+  written the way `MishkaCmsCore.Dev.Seeds` writes them: through `StarterContent.seed!/2`'s
+  `:extra_pages`, beside the home the installer writes and never in its place.
 
   What the installer itself writes is `MishkaCmsCore.Install.StarterContentTest`'s; the whole dev
   seed is `MishkaCmsCore.Dev.SeedsInstallTest`'s, in the host application.
@@ -26,8 +27,6 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
 
   require Ash.Query
 
-  @home ~S|<p id="home">Home</p>|
-
   setup do
     dir = Path.join(System.tmp_dir!(), "starter_pages_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)
@@ -41,11 +40,14 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
     name = "devpages#{System.unique_integer([:positive])}"
     site = create_site!(name: name, host: "#{name}.test", active: true, master: true)
 
-    %{site: site, pages: StarterPages.pages(name, @home)}
+    %{site: site, pages: StarterPages.pages(name)}
   end
 
-  test "writes the four pages, in the order a first install used to", %{site: site, pages: pages} do
-    report = StarterContent.seed!(site, pages: pages)
+  test "writes the installer's home, then the three, in the order a first install used to", %{
+    site: site,
+    pages: pages
+  } do
+    report = StarterContent.seed!(site, extra_pages: pages)
 
     assert report.pages == ["/:lang", "/:lang/about", "/:lang/contact", "/:lang/privacy"]
     assert report.renamed_pages == []
@@ -53,9 +55,10 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
   end
 
   # THE SAME ROWS THE INSTALLER'S OWN PAGE IS: a section of their own, the package's stamp, and an
-  # answer in every language the site publishes in.
+  # answer in every language the site publishes in. The home is one of the four, so a dev site's `/`
+  # is stamped as the installer's is.
   test "writes them as starter pages that answer every language", %{site: site, pages: pages} do
-    StarterContent.seed!(site, pages: pages)
+    StarterContent.seed!(site, extra_pages: pages)
 
     stored = rows(Page, site)
     assert length(stored) == 4
@@ -67,23 +70,51 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
     end
   end
 
-  test "the home is the one a site hands in, and the about is the plain one unless it hands one in",
-       %{site: site, pages: pages} do
-    StarterContent.seed!(site, pages: pages)
+  # DEV IS PRODUCTION AT `/`: the page a dev site opens on is not a copy of the installer's home, it
+  # is the installer's home — the template, the name and the stamps a site seeded with nothing else
+  # gets, written by the same run.
+  test "the home is exactly the one a site seeded with nothing else gets", %{
+    site: site,
+    pages: pages
+  } do
+    StarterContent.seed!(site, extra_pages: pages)
 
-    assert page(site, "/:lang").template == @home
+    plain = create_site!(name: "plain#{System.unique_integer([:positive])}", active: true)
+    StarterContent.seed!(plain)
+
+    dev_home = page(site, "/:lang")
+    production_home = page(plain, "/:lang")
+
+    assert dev_home.template == production_home.template
+    assert dev_home.name == production_home.name
+    assert dev_home.title == production_home.title
+    assert dev_home.description == production_home.description
+    assert dev_home.section == production_home.section
+    assert dev_home.format == production_home.format
+    assert dev_home.extra == production_home.extra
+    assert PageProvision.provisioned_by(dev_home) == PageProvision.provisioned_by(production_home)
+  end
+
+  test "the about is the plain one unless it hands one in", %{site: site, pages: pages} do
+    StarterContent.seed!(site, extra_pages: pages)
+
     assert page(site, "/:lang/about").template =~ "About #{site.name}"
 
     other = create_site!(name: "other#{System.unique_integer([:positive])}", active: true)
     about = ~S|<article id="its-own-about">Ours</article>|
-    StarterContent.seed!(other, pages: StarterPages.pages(other.name, @home, about))
+    StarterContent.seed!(other, extra_pages: StarterPages.pages(other.name, about))
 
     assert page(other, "/:lang/about").template == about
+    assert page(other, "/:lang").template == page(site, "/:lang").template
+  end
+
+  test "the pages are the three, and the home is none of them", %{pages: pages} do
+    assert Enum.map(pages, & &1.path) == ["/:lang/about", "/:lang/contact", "/:lang/privacy"]
   end
 
   # Pages saved before tokens keep `contact_submit`; a page written today is tagged (spec 0.8).
   test "the contact form carries a token in both event names", %{site: site, pages: pages} do
-    StarterContent.seed!(site, pages: pages)
+    StarterContent.seed!(site, extra_pages: pages)
 
     forms =
       for page <- rows(Page, site),
@@ -104,9 +135,9 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
     site: site,
     pages: pages
   } do
-    StarterContent.seed!(site, pages: pages)
+    StarterContent.seed!(site, extra_pages: pages)
 
-    for page <- rows(Page, site) do
+    for page <- rows(Page, site), page.path != "/:lang" do
       refute page.template =~ "chelekom-"
       refute page.template =~ "<.input"
       refute page.template =~ "style="
@@ -118,7 +149,7 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
     site: site,
     pages: pages
   } do
-    StarterContent.seed!(site, pages: pages, nav: StarterPages.nav())
+    StarterContent.seed!(site, extra_pages: pages, nav: StarterPages.nav())
 
     template = layout(site).template
 
@@ -135,7 +166,7 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
       forget_settings(~w(site.languages site.language_urls), [site.id])
       {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
       :ok = Translations.put_site(site.id)
-      StarterContent.seed!(site, pages: pages)
+      StarterContent.seed!(site, extra_pages: pages)
       :ok
     end
 

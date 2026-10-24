@@ -4,15 +4,16 @@
 
 defmodule MishkaCmsCore.Dev.SiteAPages do
   @moduledoc """
-  What `site-a` answers on top of the starter site: a small company, with a services list, one page
-  per service and a team page built out of the site's own media library.
+  What `site-a` answers on top of the starter site: a small company, with a showcase page
+  (`/:lang/showcase`, linked from the header; `/` is the starter's own home, as on every dev site), a
+  services list, one page per service and a team page built out of the site's own media library.
 
   A second site exists in the dev seeds to make the tenant boundary visible — the same component
   names, the same layout name and the same addresses, all resolving to this site's own rows. See
   `MishkaCmsCore.Dev.LocalhostPages` for why one module per site.
   """
 
-  @nav [{"Services", "/services"}, {"Team", "/team"}]
+  @nav [{"Showcase", "/showcase"}, {"Services", "/services"}, {"Team", "/team"}]
 
   @doc "The header links the layout is built with — see `MishkaCmsCore.Install.StarterContent`."
   @spec nav() :: [{String.t(), String.t()}]
@@ -26,73 +27,153 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
   that may hold nothing.
   """
   @spec pages(%{atom() => [String.t()]}) :: [map()]
-  def pages(pictures), do: [services(), service(), team(pictures)]
+  def pages(pictures), do: [showcase(), services(), service(), team(pictures)]
 
-  @doc "The home page this site answers `/:lang` with — see `MishkaCmsCore.Dev.LocalhostPages.home/0`."
-  @spec home() :: String.t()
-  def home do
-    ~S"""
-    <section
-      id="site-a-home"
-      phx-hook="SiteAConsoleLogger"
-      class="rounded-card border border-line bg-white px-8 py-14"
-    >
-      <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Studio</p>
-      <h1 class="mt-3 max-w-[680px] font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
-        We build the thing, then we keep it running
-      </h1>
-      <p class="mt-4 max-w-[600px] text-[15px] leading-relaxed text-ink-soft">
-        A second site on the same node, with its own components, its own hooks and its own
-        languages. Everything below belongs to this tenant and to no other.
-      </p>
-      <div class="mt-7 flex flex-wrap items-center gap-3">
-        <.link
-          navigate={site_path("/:lang/services", @page.language)}
-          class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
-        >
-          What we do
-        </.link>
-        <.link
-          navigate={site_path("/:lang/team", @page.language)}
-          class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
-        >
-          Meet the team
-        </.link>
-      </div>
-    </section>
-
-    <section class="mt-6 grid gap-5 md:grid-cols-3">
-      <.link
-        :for={
-          {title, body, slug} <- [
-            {"Design", "Interfaces that say what they do.", "design"},
-            {"Engineering", "Elixir, Phoenix and the Ash Framework.", "engineering"},
-            {"Support", "We answer on the day you write.", "support"}
-          ]
-        }
-        navigate={site_path("/:lang/services/:slug", %{"lang" => @page.language, "slug" => slug})}
-        class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
+  # THE PAGE THAT USED TO BE THE HOME. `/:lang` is the home a first install writes now, the same on
+  # every dev site (`MishkaCmsCore.Dev.LocalhostPages` says why), and this site's own introduction,
+  # with its links into the demos, lives here, one click away in the header.
+  defp showcase do
+    %{
+      name: "Showcase",
+      title: "Showcase",
+      path: "/:lang/showcase",
+      section: "main",
+      description: "This site in one page, and a way into each of its demos.",
+      format: :heex,
+      template: ~S"""
+      <section
+        id="site-a-showcase"
+        phx-hook="SiteAConsoleLogger"
+        class="rounded-card border border-line bg-white px-8 py-14"
       >
-        <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
-        <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
-      </.link>
-    </section>
+        <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Studio</p>
+        <h1 class="mt-3 max-w-[680px] font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
+          We build the thing, then we keep it running
+        </h1>
+        <p class="mt-4 max-w-[600px] text-[15px] leading-relaxed text-ink-soft">
+          A second site on the same node, with its own components, its own hooks and its own
+          languages. Everything below belongs to this tenant and to no other.
+        </p>
+        <div class="mt-7 flex flex-wrap items-center gap-3">
+          <.link
+            navigate={site_path("/:lang/services", @page.language)}
+            class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
+          >
+            What we do
+          </.link>
+          <.link
+            navigate={site_path("/:lang/team", @page.language)}
+            class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          >
+            Meet the team
+          </.link>
+        </div>
+      </section>
 
-    <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
-      <div>
-        <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
-          Start with a conversation
-        </h2>
-        <p class="mt-1 text-[13.5px] text-ink-soft">Tell us what you are making and who it is for.</p>
-      </div>
-      <.link
-        navigate={site_path("/:lang/contact", @page.language)}
-        class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
+      <section class="mt-6 grid gap-5 md:grid-cols-3">
+        <.link
+          :for={
+            {title, body, slug} <- [
+              {"Design", "Interfaces that say what they do.", "design"},
+              {"Engineering", "Elixir, Phoenix and the Ash Framework.", "engineering"},
+              {"Support", "We answer on the day you write.", "support"}
+            ]
+          }
+          navigate={site_path("/:lang/services/:slug", %{"lang" => @page.language, "slug" => slug})}
+          class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
+        >
+          <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
+          <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
+        </.link>
+      </section>
+
+      <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
+        <div>
+          <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
+            Start with a conversation
+          </h2>
+          <p class="mt-1 text-[13.5px] text-ink-soft">Tell us what you are making and who it is for.</p>
+        </div>
+        <.link
+          navigate={site_path("/:lang/contact", @page.language)}
+          class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
+        >
+          Get in touch
+        </.link>
+      </section>
+      """,
+      translations: %{"fr" => showcase_fr()}
+    }
+  end
+
+  defp showcase_fr do
+    %{
+      name: "Vitrine",
+      title: "Vitrine",
+      description: "Ce site en une page, et un accès à chacune de ses démos.",
+      template: ~S"""
+      <section
+        id="site-a-showcase"
+        phx-hook="SiteAConsoleLogger"
+        class="rounded-card border border-line bg-white px-8 py-14"
       >
-        Get in touch
-      </.link>
-    </section>
-    """
+        <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Studio</p>
+        <h1 class="mt-3 max-w-[680px] font-display text-[38px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
+          Nous construisons le projet, puis nous le faisons tourner
+        </h1>
+        <p class="mt-4 max-w-[600px] text-[15px] leading-relaxed text-ink-soft">
+          Un second site sur le même nœud, avec ses propres composants, ses propres hooks et ses
+          propres langues. Tout ce qui suit appartient à ce locataire et à aucun autre.
+        </p>
+        <div class="mt-7 flex flex-wrap items-center gap-3">
+          <.link
+            navigate={site_path("/:lang/services", @page.language)}
+            class="rounded-[9px] bg-[#17161a] px-4 py-2 text-[12px] font-bold text-white"
+          >
+            Ce que nous faisons
+          </.link>
+          <.link
+            navigate={site_path("/:lang/team", @page.language)}
+            class="rounded-[9px] border border-line px-4 py-2 text-[12px] font-bold text-ink"
+          >
+            Rencontrer l'équipe
+          </.link>
+        </div>
+      </section>
+
+      <section class="mt-6 grid gap-5 md:grid-cols-3">
+        <.link
+          :for={
+            {title, body, slug} <- [
+              {"Design", "Des interfaces qui disent ce qu'elles font.", "design"},
+              {"Ingénierie", "Elixir, Phoenix et le framework Ash.", "engineering"},
+              {"Support", "Nous répondons le jour même.", "support"}
+            ]
+          }
+          navigate={site_path("/:lang/services/:slug", %{"lang" => @page.language, "slug" => slug})}
+          class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
+        >
+          <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
+          <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
+        </.link>
+      </section>
+
+      <section class="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-card border border-line bg-white p-6">
+        <div>
+          <h2 class="font-display text-[20px] font-bold tracking-[-0.02em] text-ink">
+            Commençons par une conversation
+          </h2>
+          <p class="mt-1 text-[13.5px] text-ink-soft">Dites-nous ce que vous faites et pour qui.</p>
+        </div>
+        <.link
+          navigate={site_path("/:lang/contact", @page.language)}
+          class="rounded-[9px] bg-accent px-4 py-2 text-[12px] font-bold text-white"
+        >
+          Nous contacter
+        </.link>
+      </section>
+      """
+    }
   end
 
   defp services do

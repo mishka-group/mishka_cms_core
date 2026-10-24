@@ -4,15 +4,16 @@
 
 defmodule MishkaCmsCore.Dev.StarterPages do
   @moduledoc """
-  The pages every dev site has beside its own: its home page, and the about, contact and privacy
-  pages a first install used to be given and no longer is.
+  The pages every dev site has beside its home: the about, contact and privacy pages a first install
+  used to be given and no longer is.
 
-  A production install writes ONE page, the home (`MishkaCmsCore.Install.StarterContent`). The dev
-  seeds still want the other three — the contact page is the form machinery's plainest test, and the
-  pages the showcase links to land on them — so they live here, and `MishkaCmsCore.Dev.Seeds` hands
-  `pages/3` to `StarterContent.seed!/2` as its `:pages` option. They are written the way the
-  installer writes its home: stamped, answering every language the site publishes in, held by name
-  and by address, so the seeding path stays the one a real install runs.
+  A production install writes ONE page, the home (`MishkaCmsCore.Install.StarterContent`), and a dev
+  site's `/` is that same page, written by the same run. The dev seeds still want these three — the
+  contact page is the form machinery's plainest test, and the pages the showcase links to land on
+  them — so they live here, and `MishkaCmsCore.Dev.Seeds` hands `pages/2` to
+  `StarterContent.seed!/2` as its `:extra_pages` option. They are written the way the installer
+  writes its home: stamped, answering every language the site publishes in, held by name and by
+  address, so the seeding path stays the one a real install runs.
 
   They are written in the admin palette (`bg-ground`, `text-ink`, `rounded-card`), which the
   starter's theme still declares for exactly this and for the error pages.
@@ -28,21 +29,15 @@ defmodule MishkaCmsCore.Dev.StarterPages do
   def nav, do: @nav
 
   @doc """
-  The four definitions, in the order they are written: the site's own `home` template, `about` when
-  the site has one of its own (`localhost` does) and else the plain one, then contact and privacy.
+  The three definitions, in the order they are written: `about` when the site has one of its own
+  (`localhost` does) and else the plain one, then contact and privacy. The home is not among them:
+  `StarterContent` writes its own, first.
 
   `brand` is what the plain about page prints, as the site's name.
   """
-  @spec pages(String.t(), String.t(), String.t() | nil) :: [map()]
-  def pages(brand, home, about \\ nil) do
+  @spec pages(String.t(), String.t() | nil) :: [map()]
+  def pages(brand, about \\ nil) do
     [
-      %{
-        name: "Home",
-        title: "Home",
-        path: "/:lang",
-        description: "The first page a visitor sees.",
-        template: home
-      },
       %{
         name: "About",
         title: "About",

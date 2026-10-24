@@ -4,14 +4,20 @@
 
 defmodule MishkaCmsCore.Dev.SiteBPages do
   @moduledoc """
-  What `site-b` answers on top of the starter site: a knowledge base, and the three layout cases the
-  other two sites do not show — a page on a GLOBAL layout, a page with NO layout at all, and a
-  `lang` capture that is not the first segment.
+  What `site-b` answers on top of the starter site: a knowledge base introduced by a showcase page
+  (`/:lang/showcase`, linked from the header; `/` is the starter's own home, as on every dev site),
+  and the three layout cases the other two sites do not show — a page on a GLOBAL layout, a page
+  with NO layout at all, and a `lang` capture that is not the first segment.
 
   See `MishkaCmsCore.Dev.LocalhostPages` for why there is one module per site.
   """
 
-  @nav [{"FAQ", "/faq"}, {"Status", "/status"}, {"Changelog", "/changelog"}]
+  @nav [
+    {"Showcase", "/showcase"},
+    {"FAQ", "/faq"},
+    {"Status", "/status"},
+    {"Changelog", "/changelog"}
+  ]
 
   @doc "The header links the layout is built with — see `MishkaCmsCore.Install.StarterContent`."
   @spec nav() :: [{String.t(), String.t()}]
@@ -19,46 +25,56 @@ defmodule MishkaCmsCore.Dev.SiteBPages do
 
   @doc "The pages, as `MishkaCmsCore.Runtime.PageProvision` definitions."
   @spec pages(%{atom() => [String.t()]}) :: [map()]
-  def pages(_pictures), do: [faq(), guides(), status(), changelog(), embed()]
+  def pages(_pictures), do: [showcase(), faq(), guides(), status(), changelog(), embed()]
 
-  @doc "The home page this site answers `/:lang` with — see `MishkaCmsCore.Dev.LocalhostPages.home/0`."
-  @spec home() :: String.t()
-  def home do
-    ~S"""
-    <section
-      id="site-b-home"
-      phx-hook="SiteBConsoleLogger"
-      class="rounded-card border border-line bg-white px-8 py-12"
-    >
-      <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Knowledge base</p>
-      <h1 class="mt-3 font-display text-[34px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
-        How this thing works
-      </h1>
-      <p class="mt-4 max-w-[620px] text-[15px] leading-relaxed text-ink-soft">
-        Guides, answers and a status board. This site publishes in English only, and it keeps its
-        guides at <code>/guides/:lang/*rest</code> — the language in the middle of the address.
-      </p>
-    </section>
-
-    <section class="mt-6 grid gap-5 sm:grid-cols-2">
-      <.link
-        :for={
-          {title, body, path} <- [
-            {"Guides", "Every page under one address, however deep.",
-             site_path("/guides/:lang/*rest", %{"lang" => @page.language, "rest" => "getting-started/install"})},
-            {"FAQ", "The questions that arrive first.", site_path("/:lang/faq", @page.language)},
-            {"Status", "What is up, what is not, in a table.", site_path("/:lang/status", @page.language)},
-            {"Changelog", "What changed, and when.", site_path("/:lang/changelog", @page.language)}
-          ]
-        }
-        navigate={path}
-        class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
+  # THE PAGE THAT USED TO BE THE HOME. `/:lang` is the home a first install writes now, the same on
+  # every dev site (`MishkaCmsCore.Dev.LocalhostPages` says why), and this site's own introduction,
+  # with its links into the demos, lives here, one click away in the header. English only, like the
+  # rest of this site.
+  defp showcase do
+    %{
+      name: "Showcase",
+      title: "Showcase",
+      path: "/:lang/showcase",
+      section: "main",
+      description: "This site in one page, and a way into each of its demos.",
+      format: :heex,
+      template: ~S"""
+      <section
+        id="site-b-showcase"
+        phx-hook="SiteBConsoleLogger"
+        class="rounded-card border border-line bg-white px-8 py-12"
       >
-        <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
-        <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
-      </.link>
-    </section>
-    """
+        <p class="text-[12px] font-bold uppercase tracking-[0.18em] text-accent">Knowledge base</p>
+        <h1 class="mt-3 font-display text-[34px] font-bold leading-[1.15] tracking-[-0.03em] text-ink">
+          How this thing works
+        </h1>
+        <p class="mt-4 max-w-[620px] text-[15px] leading-relaxed text-ink-soft">
+          Guides, answers and a status board. This site publishes in English only, and it keeps its
+          guides at <code>/guides/:lang/*rest</code> — the language in the middle of the address.
+        </p>
+      </section>
+
+      <section class="mt-6 grid gap-5 sm:grid-cols-2">
+        <.link
+          :for={
+            {title, body, path} <- [
+              {"Guides", "Every page under one address, however deep.",
+               site_path("/guides/:lang/*rest", %{"lang" => @page.language, "rest" => "getting-started/install"})},
+              {"FAQ", "The questions that arrive first.", site_path("/:lang/faq", @page.language)},
+              {"Status", "What is up, what is not, in a table.", site_path("/:lang/status", @page.language)},
+              {"Changelog", "What changed, and when.", site_path("/:lang/changelog", @page.language)}
+            ]
+          }
+          navigate={path}
+          class="rounded-card border border-line bg-white p-5 shadow-[0_1px_2px_rgba(30,28,24,0.04)] hover:border-accent"
+        >
+          <h2 class="font-display text-[17px] font-bold tracking-[-0.02em] text-ink">{title}</h2>
+          <p class="mt-2 text-[13.5px] leading-relaxed text-ink-soft">{body}</p>
+        </.link>
+      </section>
+      """
+    }
   end
 
   defp faq do

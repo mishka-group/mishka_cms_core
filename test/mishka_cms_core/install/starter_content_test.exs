@@ -668,6 +668,40 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     end
   end
 
+  # THE DEV SEEDS' WAY, and the reason a dev site's `/` is production's: the pages come AFTER the
+  # installer's home, so nothing a caller brings can stand in its place.
+  test "extra pages a caller hands it are written after the installer's home, not instead", %{
+    site: site
+  } do
+    plain = create_site!(name: "plain#{System.unique_integer([:positive])}", active: true)
+    StarterContent.seed!(plain)
+
+    report =
+      StarterContent.seed!(site,
+        extra_pages: [
+          %{
+            name: "About",
+            title: "About",
+            path: "/:lang/about",
+            description: "Us.",
+            template: ~S|<p id="about">Us</p>|
+          }
+        ]
+      )
+
+    assert report.pages == ["/:lang", "/:lang/about"]
+
+    pages = rows(Page, site)
+    assert Enum.find(pages, &(&1.path == "/:lang")).template == page(plain, "/:lang").template
+    assert Enum.find(pages, &(&1.path == "/:lang/about")).template == ~S|<p id="about">Us</p>|
+
+    for page <- pages do
+      assert page.section == "starter"
+      assert PageProvision.provisioned_by(page) == "mishka_cms_core"
+      assert PageProvision.serves_all_languages?(page)
+    end
+  end
+
   test "the error page takes the root layout a caller hands it", %{site: site} do
     StarterContent.seed!(site, root_layout_template: "<html><body>mine</body></html>")
 
@@ -1329,7 +1363,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   # THE BAR DID NOT FIT A PHONE. At 375 px the links ran under the logo, and Sign in sat from 372 to
   # 451, off the screen, with no control to reach it by. Below `lg` the same elements, not copies of
   # them, sit in a panel a button opens; from `lg` up the header is the bar it was. `lg`, not `md`,
-  # because a site that adds five links of its own and has two languages is wider than 768 px.
+  # because a site that adds six links of its own and has two languages is wider than 768 px.
   describe "the header's phone menu" do
     setup %{site: site} do
       forget_settings(~w(site.languages site.language_urls), [site.id])
