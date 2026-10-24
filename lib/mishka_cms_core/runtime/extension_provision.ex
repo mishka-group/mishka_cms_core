@@ -292,8 +292,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   # ---------------------------------------------------------------------------
   @doc """
   Creates the names `manifest` lists under `permissions:` that are not stored yet, as the system, and
-  returns the ones it created. `ensure!/4` runs it first; an extension also runs it for a site it
-  finds already set up without a run.
+  returns the ones it created. `ensure!/4` runs it first.
   """
   @spec ensure_permissions(manifest()) :: [String.t()]
   def ensure_permissions(%{permissions: [_ | _] = permissions}) do
