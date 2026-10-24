@@ -4,17 +4,23 @@
 
 defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
   @moduledoc """
-  Gives a site created in the admin its sign-in content, and recompiles or purges a site's
-  dependent parts when the site is activated / deactivated / renamed / rehosted / archived /
+  Gives a site created in the admin the content a first install gets, and recompiles or purges a
+  site's dependent parts when the site is activated / deactivated / renamed / rehosted / archived /
   unarchived.
   Enqueued by `MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime` on the dedicated
   `:maintenance` queue, deduped per `site_id`.
 
     * `"provision"` (create) → `MishkaCmsCore.Install.StarterContent.ensure_auth/1`: the `auth`
-      layout, the sign-in pages and the built-in words of its languages. A site that is gone by the time the job
-      runs cancels it. Then the site's `"js"` asset job (`BootHandler.asset_job/4`), under its name
-      now: compiling those pages queues its CSS and sitemap, but nothing else builds a new site's
-      JS until a JS hook is saved, and without it no page of the site connects.
+      layout, the sign-in pages and the built-in words of its languages; then
+      `MishkaCmsCore.Install.StarterContent.seed/2`: the theme, the header, the footer, the
+      `site-main` layout and the home page, the installer's own, so every site of an install is
+      drawn in the same frame. Both write only what the site is missing, so a job that runs again
+      writes nothing twice. The sign-in pages come first: a starter that cannot be written — an
+      install with no master site to keep the logo in — is logged, and the site can still be
+      signed into. A site that is gone by the time the job runs cancels it. Then the site's `"js"`
+      asset job (`BootHandler.asset_job/4`), under its name now: compiling those pages queues its
+      CSS and sitemap, but nothing else builds a new site's JS until a JS hook is saved, and
+      without it no page of the site connects.
     * `"recompile"` (activate / unarchive) → `BootHandler.compile_site/2`
     * `"rehost"` (a new host) → unload the site's modules, which are compiled for its host
       (`SiteRuntime.unload_modules/2`) → `BootHandler.compile_site/2`
@@ -41,8 +47,10 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
 
   @impl Oban.Worker
   def perform(%Oban.Job{args: %{"transition" => "provision", "site_id" => site_id}}) do
-    case StarterContent.ensure_auth(site_id) do
-      {:ok, _report} -> build_js(site_id)
+    with {:ok, _auth} <- StarterContent.ensure_auth(site_id),
+         :ok <- starter(site_id) do
+      build_js(site_id)
+    else
       {:error, :site_not_found} -> {:cancel, :site_not_found}
     end
   end
@@ -80,6 +88,23 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker do
         {:ok, %{site: site_name, transition: transition}}
       end
     )
+  end
+
+  defp starter(site_id) do
+    case StarterContent.seed(site_id) do
+      {:ok, _report} ->
+        :ok
+
+      {:error, :site_not_found} = gone ->
+        gone
+
+      {:error, reason} ->
+        Logger.warning(
+          "[SiteRuntimeWorker] no starter content for #{site_id}: #{inspect(reason)}"
+        )
+
+        :ok
+    end
   end
 
   defp build_js(site_id) do

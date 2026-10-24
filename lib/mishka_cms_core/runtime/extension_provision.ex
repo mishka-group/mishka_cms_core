@@ -36,6 +36,12 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   to lose an edit; `MishkaCmsCore.Runtime.Handlers.UiKitUpgrade` is where losing one is offered, by
   name, one row at a time.
 
+  EVERY PAGE HANGS ON THE SITE'S FRAME. An extension's pages are drawn in the site's `site-main`
+  layout, between the header and the footer every page of the site shares
+  (`MishkaCmsCore.Runtime.SiteLayout`), which every site has from its first install
+  (`MishkaCmsCore.Install.StarterContent`). An extension writes that layout's id into each page it
+  ships (`MishkaCmsCore.Runtime.SiteLayout.layout_id/1`).
+
   NO PAGE MAY RAISE THE RUN. A site is unique by more than a page's address, so a site already
   holding a page called "Blog" refuses a sample page at a path nothing has taken — and left to
   `Ash.create!` that is a raise in the MIDDLE of the run: the pages after it are never written, the
@@ -286,8 +292,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   # ---------------------------------------------------------------------------
   @doc """
   Creates the names `manifest` lists under `permissions:` that are not stored yet, as the system, and
-  returns the ones it created. `ensure!/4` runs it first; an extension also runs it for a site it
-  finds already set up without a run.
+  returns the ones it created. `ensure!/4` runs it first.
   """
   @spec ensure_permissions(manifest()) :: [String.t()]
   def ensure_permissions(%{permissions: [_ | _] = permissions}) do

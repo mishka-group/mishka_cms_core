@@ -347,6 +347,13 @@ defmodule MishkaCmsCore.Runtime.Translations do
 
   Read on demand rather than stored, so it cannot disagree with what the templates say now. It is
   what the admin's Used column asks; nothing on a visitor's path calls it.
+
+  A key no template holds, such as a word an extension's `runtime:page:frame` plugin looks up for
+  the bar under the header (`MishkaCmsCore.Runtime.SiteLayout`), is asked for on
+  `used_keys_event/0` instead, with `%{site_id: site_id, keys: []}`: a plugin adds the keys it
+  looks up to `keys`, or "Remove unused" deletes them and what was written for them.
+
+      def call(%{keys: keys} = data), do: {:reply, %{data | keys: keys ++ ["Blog", "Posts"]}}
   """
   @spec used_keys(String.t() | nil) :: MapSet.t(String.t())
   def used_keys(site_id) do
@@ -354,7 +361,21 @@ defmodule MishkaCmsCore.Runtime.Translations do
     |> Enum.flat_map(&asked(&1, usage(site_id)))
     |> Enum.flat_map(fn {_site_id, keys} -> keys end)
     |> Enum.concat(site_title(site_id))
+    |> Enum.concat(plugin_keys(site_id))
     |> MapSet.new()
+  end
+
+  @used_keys_event "runtime:translations:used_keys"
+
+  @doc "The event a plugin names the keys it looks up on, beside its templates' (`used_keys/1`)."
+  @spec used_keys_event() :: String.t()
+  def used_keys_event, do: @used_keys_event
+
+  defp plugin_keys(site_id) do
+    case MishkaInstaller.Event.Hook.call(@used_keys_event, %{site_id: site_id, keys: []}) do
+      %{keys: keys} when is_list(keys) -> Enum.filter(keys, &is_binary/1)
+      _no_answer -> []
+    end
   end
 
   @doc """

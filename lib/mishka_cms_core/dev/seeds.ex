@@ -25,12 +25,17 @@ defmodule MishkaCmsCore.Dev.Seeds do
   ## What a seeded site is made of
 
   `MishkaCmsCore.Install.StarterContent` first — the theme, the logo, the header, the footer, the
-  layout and the error page a stranger's first install gets, with the site's own home and the
-  about, contact and privacy pages of `MishkaCmsCore.Dev.StarterPages` where the install's home
-  would go, and the sign-in pages every site gets — and then the pages that site exists to
-  demonstrate, out of its own module: `MishkaCmsCore.Dev.LocalhostPages`,
-  `MishkaCmsCore.Dev.SiteAPages`, `MishkaCmsCore.Dev.SiteBPages`. Running the production starter
-  here is what keeps it exercised; a path nobody opens is a path nobody has seen.
+  layout, the home page and the error page a stranger's first install gets, and the sign-in pages
+  every site gets, with the about, contact and privacy pages of `MishkaCmsCore.Dev.StarterPages`
+  beside the home — and then the pages that site exists to demonstrate, out of its own module:
+  `MishkaCmsCore.Dev.LocalhostPages`, `MishkaCmsCore.Dev.SiteAPages`,
+  `MishkaCmsCore.Dev.SiteBPages`. Running the production starter here is what keeps it exercised; a
+  path nobody opens is a path nobody has seen.
+
+  THE HOME IS PRODUCTION'S, NOT THE SITE'S OWN. `/` on every dev site is exactly the page a first
+  install writes, template and stamps, so dev and production draw the same one. What each site's
+  own home used to be is its showcase, at `/:lang/showcase`, linked from the header beside the
+  demos.
 
   Every address written is in the `/:lang` path mode (`MishkaCmsCore.Runtime.Languages`) and none of
   them is one this application's own router answers — `/blog` reaches the database, `/mish-blog` is
@@ -223,8 +228,8 @@ defmodule MishkaCmsCore.Dev.Seeds do
       seed_languages(site, config)
 
       # THE PRODUCTION STARTER, RUN IN DEV. Every dev site gets the theme, the logo, the two site
-      # components, the `site-main` layout and the error page a stranger's first install gets, and
-      # the pages that stand where the install's home does — so that path is exercised on every
+      # components, the `site-main` layout, the home page and the error page a stranger's first
+      # install gets, and the pages that stand beside the home — so that path is exercised on every
       # reseed instead of only on somebody else's machine.
       starter = StarterContent.seed!(site, starter_opts(site, config))
       announce_pages(starter)
@@ -253,30 +258,57 @@ defmodule MishkaCmsCore.Dev.Seeds do
 
   defp config_for(%{host: host}), do: Enum.find(@site_configs, &(&1.host == host))
 
-  # THE HOME COMES FROM THE SITE, not from the installer. A developer's first click lands on `/:lang`,
-  # and the plain page a stranger's first install opens on is the one thing a dev site must not
-  # answer with — see `MishkaCmsCore.Dev.LocalhostPages.home/0`. `localhost` brings its about page
-  # too, with a section hidden from visitors to open in the builder (`LocalhostPages.about/0`); the
-  # other pages of `MishkaCmsCore.Dev.StarterPages` are the same on every site.
+  # THE HOME COMES FROM THE INSTALLER, NOT FROM THE SITE. `/:lang` is the page a stranger's first
+  # install opens on, on every dev site as in production: no option here replaces it, so it can
+  # never be a copy that drifts from the real one. What a dev site wants to show on top of it is a
+  # page of its own — the showcase at `/:lang/showcase`, in the site's module, linked from the
+  # header (`LocalhostPages.nav/0`, in the one `Dev` dropdown `nav/2` builds) — and the pages beside
+  # the home go in as `:extra_pages`.
   #
-  # A CENTRED COLUMN FOR THE PAGES, which every template here is written for. The production layout
-  # leaves a page the whole width, because the installer's home draws its own sections.
-  @main_class "mx-auto w-full max-w-[1160px] flex-1 px-8 py-10"
-
+  # `localhost` brings its about page too, with a section hidden from visitors to open in the
+  # builder (`LocalhostPages.about/0`); the other pages of `MishkaCmsCore.Dev.StarterPages` are the
+  # same on every site.
+  #
+  # THE LAYOUT IS PRODUCTION'S, column and all. Every template here draws its sections into the
+  # column `MishkaCmsCore.Runtime.SiteLayout` describes, as a blog's or a docs' page does, so what a
+  # developer sees on a dev site is what a stranger's install draws.
   defp starter_opts(%{host: "localhost", name: name}, config),
     do: [
       root_layout_template: @localhost_error_root_layout,
-      nav: StarterPages.nav() ++ config.pages.nav(),
-      main_class: @main_class,
-      pages: StarterPages.pages(name, config.pages.home(), config.pages.about())
+      nav: nav(config),
+      extra_pages: StarterPages.pages(name, config.pages.about())
     ]
 
   defp starter_opts(%{name: name}, config),
     do: [
-      nav: StarterPages.nav() ++ config.pages.nav(),
-      main_class: @main_class,
-      pages: StarterPages.pages(name, config.pages.home())
+      nav: nav(config),
+      extra_pages: StarterPages.pages(name)
     ]
+
+  # EVERY LINK A DEV SITE ADDS TO THE HEADER IS IN ONE `Dev` DROPDOWN (`StarterContent`'s grouped
+  # links), so what the header carries beside it is a production install's: Docs and GitHub. In the
+  # order a developer reads them — the pages every dev site has, then the ones the site is for, then
+  # the extensions' — and each path is stored as `/:lang/<path>`, so it follows the site's URL mode.
+  @doc false
+  @spec nav(map() | String.t(), [StarterContent.nav_link()]) :: [StarterContent.nav_entry()]
+  def nav(config, extensions \\ extension_links())
+
+  def nav(site_name, extensions) when is_binary(site_name),
+    do: @site_configs |> Enum.find(&(&1.name == site_name)) |> nav(extensions)
+
+  def nav(%{pages: pages}, extensions),
+    do: [%{label: "Dev", children: StarterPages.nav() ++ pages.nav() ++ extensions}]
+
+  # THE EXTENSIONS' FRONT PAGES, for the extensions this build has (`categories/0`): `/:lang/blog`
+  # and `/:lang/docs` are the pages their dev seeds write on every site, `site-a` included — it
+  # prefixes every language, so its `/blog` is a redirect to `/en/blog` and not a missing page. A
+  # build without an extension has no link to a page it cannot have. An extension that is there but
+  # was not picked in the installer's dev step is a link to the site's 404 until it is.
+  @extension_links [blog: {"Blog", "/blog"}, document: {"Docs", "/docs"}]
+
+  defp extension_links do
+    for %{key: key} <- categories(), link = Keyword.get(@extension_links, key), do: link
+  end
 
   # THE LANGUAGES ARE A SETTING, and every `/:lang` page answers only in the ones it names — see
   # `MishkaCmsCore.Runtime.Languages`. So is how an address names them: `localhost` and `site-b`

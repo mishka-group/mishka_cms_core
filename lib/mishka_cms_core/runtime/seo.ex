@@ -273,6 +273,11 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `:redraw` is `true` when a forced look at the page's share card asks for the map
   (`MishkaCmsCore.Runtime.ShareCard.specs/3`): a plugin that draws a card of its own draws it again
   over its old file. `false` by default.
+
+  `:source` is what the page's plugin on `MishkaCmsCore.Runtime.PageSource.event/0` read for this
+  request, as the visitor (`@page_source`): a plugin that finds the record there takes it from there
+  rather than reading it again. `nil` by default, as for an editor's preview and a share card, where
+  a plugin reads for itself.
   """
   @spec given(map(), keyword()) :: map()
   def given(page, opts) do
@@ -295,7 +300,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
       site_id: Keyword.get(opts, :site_id),
       params: Keyword.get(opts, :params, %{}),
       record: Keyword.get(opts, :record),
-      redraw: Keyword.get(opts, :redraw, false) == true
+      redraw: Keyword.get(opts, :redraw, false) == true,
+      source: Keyword.get(opts, :source)
     }
   end
 
@@ -953,14 +959,15 @@ defmodule MishkaCmsCore.Runtime.Seo do
   `head/2`. `MishkaCmsWeb.RuntimeLive` calls it for every address it serves; an editor's preview
   calls it with no `:params`, and reads the plugin's variables from `var_docs`.
 
-  Options: `:site_id`, `:url`, `:params` and `:redraw` as `given/2` takes them; `:base`, `:languages`,
-  `:restricted?` and `:layers` as `head/2` takes them; and `:stand_ins` — `true` for an editor's
-  preview, where a page that serves records has none to read: each variable a plugin describes in
-  `var_docs` but did not fill reads as `{key}`, `{post.title}`, so the preview shows where it goes.
+  Options: `:site_id`, `:url`, `:params`, `:redraw` and `:source` as `given/2` takes them; `:base`,
+  `:languages`, `:restricted?` and `:layers` as `head/2` takes them; and `:stand_ins` — `true` for an
+  editor's preview, where a page that serves records has none to read: each variable a plugin
+  describes in `var_docs` but did not fill reads as `{key}`, `{post.title}`, so the preview shows
+  where it goes.
   """
   @spec resolve(map(), keyword()) :: head()
   def resolve(page, opts) do
-    given = given(page, Keyword.take(opts, [:site_id, :url, :params, :record, :redraw]))
+    given = given(page, Keyword.take(opts, [:site_id, :url, :params, :record, :redraw, :source]))
 
     event()
     |> Hook.call(given)
@@ -1007,7 +1014,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   @doc """
   The map a plugin on `event/0` returned, read against the one it was given. Each key keeps the
   plugin's value when it has the right type and the given one otherwise; `page`, `site_id`,
-  `params`, `record` and `redraw` are always the given ones. Anything but a map is the given map.
+  `params`, `record`, `redraw` and `source` are always the given ones. Anything but a map is the
+  given map.
 
   The page's own `description` and `schema` win: the plugin's fill them only when the page's are
   empty.

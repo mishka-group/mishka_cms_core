@@ -22,13 +22,24 @@ defmodule MishkaCmsCore.Install.StarterContent do
   document; the header's toggle sets that attribute through the host's `phx:set-theme` event, the
   same one the sign-in layout uses.
 
+  ## Every site has it
+
+  The installer writes it whatever its first screen said (`MishkaCmsCore.Install.Bootstrap`), and
+  a site created later in the admin gets the same from its `"provision"` job
+  (`MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker`), so every site of an install has a home
+  page, the theme, the header, the footer and the `site-main` layout.
+
   ## What belongs to the layout and what to the page
 
-  The header and the footer are components, drawn by the `site-main` layout, so a page the site adds
-  later has them without asking. The page at `/:lang` is everything between them. The layout also
-  links, from the document's `<head>`, the two typefaces the theme does not ship, Geist and Geist
-  Mono, from Google Fonts, which the public Content-Security-Policy already allows; Newsreader comes
-  with the host's own `/fonts/fonts.css`.
+  ONE LAYOUT FOR EVERY PAGE. The header and the footer are components, drawn by the `site-main`
+  layout, so every page the site has, the blog's and the docs' among them, has the home page's
+  header and footer without asking. The page at `/:lang` is everything between them. What the
+  layout draws, the content column a page is drawn in and what a page hands the layout (its
+  languages and the bar under the header) are `MishkaCmsCore.Runtime.SiteLayout`'s.
+
+  The layout also links, from the document's `<head>`, the two typefaces the theme does not ship,
+  Geist and Geist Mono, from Google Fonts, which the public Content-Security-Policy already
+  allows; Newsreader comes with the host's own `/fonts/fonts.css`.
 
   ## What the header changes with
 
@@ -40,12 +51,72 @@ defmodule MishkaCmsCore.Install.StarterContent do
       open it, and Sign out, which is the DELETE the sign-out page's own form sends. Naming the
       visitor in the layout is also what makes the runtime load one for pages that use it
       (`MishkaCmsCore.Runtime.Compilers.UserClosure`).
-    * `@page_languages` — the languages the page answers in, each at the address
-      `MishkaCmsCore.Runtime.Languages.url/3` gave it. With two or more the header has a language
-      switcher: a flag (`Languages.flag/1`) and a name (`Languages.name/1`) for each, the current one
-      marked. A page in one language has none.
+    * `@page_languages` — the languages the page is written in, each at its own address, as
+      `MishkaCmsCore.Runtime.SiteLayout` resolves them: the page's own editions, or the record's
+      translations an extension answers with. With two or more the header has a language
+      switcher: a flag (`Languages.flag/1`) and the entry's `name` for each, the current one
+      marked. A page in one language has none. An entry whose `path` is a path on the site is a
+      live `navigate` link, so changing language does not reload the page, and the layout sets
+      `<html lang dir>` when the new page mounts; an `http(s)://` one is a plain `href`.
     * The version the home page's pill shows is `MishkaCmsCore.Helpers.host_version/0`, the
       application's own, read when the page is drawn.
+
+  ## The header on a phone
+
+  The bar is the design's from `lg` (1024 px) up. Below it the links, the language switcher, the
+  dark toggle and the Sign in button or the visitor's menu are the same elements, in a panel under
+  the header that a menu button opens: the logo and the button are all the bar holds, so nothing
+  can run over the logo or off the screen. `lg` and not `md`, because a site that adds links of its
+  own (the dev sites had up to six, before their links went into one dropdown) and two languages is
+  wider than 768 px.
+
+  The button works as the header's two dropdowns do, with the host's own `Phoenix.LiveView.JS`: it
+  toggles the panel's `max-lg:hidden` class and its own `aria-expanded`, a click away from the
+  header or Escape closes the panel and Escape gives the focus back to the button. The switcher and
+  the visitor's menu open in the panel, in the list, rather than over it.
+
+  Each dropdown listens for the click away from the `div` that holds its button, not from its menu:
+  the click that is meant to close an open menu is on its button, which is "away" from the menu
+  alone, so the menu hid and the button's own toggle showed it again.
+
+  ## Grouped links
+
+  A site with many links of its own (the dev sites have up to eight) can put them in a group, one
+  entry of the `:nav` option (`t:nav_entry/0`) that holds the links instead of being one. The
+  group is written into the layout, beside the plain links, and the `site-header` component is
+  not told about it.
+
+    * From `lg` up it is a dropdown: a button with the group's label and a chevron, drawn as the
+      language switcher's is and opened, closed (by its button, a click away or Escape) and
+      marked (`aria-expanded`) with the same `Phoenix.LiveView.JS` commands. Its menu opens
+      under the button.
+    * Below `lg` it is a labelled group in the menu panel, its links in the list and no button
+      to open: the panel is already something a visitor opened.
+
+  They are two sets of elements, one hidden at each width, so each has the semantics its width
+  needs (a menu button; a group with a label) and neither is restyled into the other. The links
+  are on the page twice, and only one set is ever shown.
+
+  ## The theme
+
+  Three blocks of design tokens and one utility:
+
+    * the admin palette the error pages and the dev seeds' pages are written in (`ground`, `ink`,
+      `accent`, …);
+    * the home page's colours, each that changes in the dark with a `-dark` twin (`page`, `fg`,
+      `dim`, `surface`, `edge`, …), and its three typefaces;
+    * the colours the extensions' pages share, so a blog and a documentation kit are written in
+      the site's tokens and not in hex values of their own:
+      * six tints, each a surface and its ink: `tint-1` to `tint-6`, with `tint-N-ink`, and
+        `tint-N-dark`, `tint-N-ink-dark` for the dark (teal, violet, amber, rose, blue, stone);
+      * `chip-wash` (`-dark`), the wash behind a chosen chip or link;
+      * `brand-dark`, the brand on a dark page;
+      * `body` (`-dark`), the text of a long read;
+      * `edge-hover`, the edge a hovered or focused card takes, the same in both;
+      * `warn-ink` (`-dark`), the ink of a warning or a featured mark;
+      * `warn-wash` (`-dark`), the wash behind a warning or a featured mark;
+    * `site-bleed`, which lets a section run from one edge of the window to the other while its
+      content stays in the layout's column (`MishkaCmsCore.Runtime.SiteLayout`).
 
   ## The logo
 
@@ -63,12 +134,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
   to demonstrate, so the code a stranger's first install runs is the code this project's developers
   look at every day. A production path nobody opens is a production path nobody has seen.
 
+  That includes the home page: a dev site's `/` is the one written here, template and stamps, and
+  the dev seeds add their pages beside it (`:extra_pages`), never in its place.
+
   ## Running it again
 
   It writes ONLY WHAT IS MISSING, the rule the whole seeding surface follows: a row found by its
   name — the key the database keeps — is left exactly as it is, edits and all, and a page is asked
   about through `MishkaCmsCore.Runtime.PageProvision`, which knows that a held NAME and a held
-  ADDRESS are two different answers. Nothing here updates.
+  ADDRESS are two different answers.
 
   ## The addresses
 
@@ -150,7 +224,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
   #
   # The first block is what the error pages and the dev seeds' pages are written in; the second is
   # the home page's, where every colour that changes in the dark has a `-dark` twin and the markup
-  # pairs them with `dark:`. A colour that is the same in both (`brand`) has none.
+  # pairs them with `dark:`. A colour that is the same in both (`edge-hover`) has none. The third is
+  # what the extensions' pages share, which the blog's and the docs' kits wrote as hex values of
+  # their own before it was here; `brand-dark` is the brand of the second block, on a dark page.
+  #
+  # `site-bleed` is the one utility: a section that runs edge to edge inside the layout's column.
+  # The negative margin reaches the window's edges and the padding brings the content back to the
+  # column's, both measured against the column the section sits in. The layout clips what the
+  # scrollbar would add, so no page scrolls sideways.
   @theme_css ~S"""
   /* The MishkaCMS admin palette, as this site's own design tokens. */
   @theme {
@@ -197,6 +278,52 @@ defmodule MishkaCmsCore.Install.StarterContent do
     --font-geist: "Geist", system-ui, sans-serif;
     --font-geist-mono: "Geist Mono", monospace;
     --font-newsreader: "Newsreader", Georgia, serif;
+  }
+
+  /* What the extensions' pages share: six tints, each a surface and its ink, the wash behind a
+     chosen chip, the brand on a dark page, the text of a long read, the edge a hovered card takes
+     and the ink of a warning. */
+  @theme {
+    --color-tint-1: #e7f1ee;
+    --color-tint-1-ink: #2f6b5e;
+    --color-tint-1-dark: #1d2b28;
+    --color-tint-1-ink-dark: #8fd1bf;
+    --color-tint-2: #eceafb;
+    --color-tint-2-ink: #5b4fe0;
+    --color-tint-2-dark: #24223a;
+    --color-tint-2-ink-dark: #a9a2f7;
+    --color-tint-3: #faefdc;
+    --color-tint-3-ink: #9a6412;
+    --color-tint-3-dark: #2e2618;
+    --color-tint-3-ink-dark: #e6b86a;
+    --color-tint-4: #f6e7eb;
+    --color-tint-4-ink: #a13d5a;
+    --color-tint-4-dark: #2e1f24;
+    --color-tint-4-ink-dark: #e89ab0;
+    --color-tint-5: #e7edf7;
+    --color-tint-5-ink: #3b5e99;
+    --color-tint-5-dark: #1d2433;
+    --color-tint-5-ink-dark: #93b2e8;
+    --color-tint-6: #efede6;
+    --color-tint-6-ink: #6b6650;
+    --color-tint-6-dark: #26251f;
+    --color-tint-6-ink-dark: #c9c3a6;
+    --color-chip-wash: #eceafb;
+    --color-chip-wash-dark: #25223f;
+    --color-brand-dark: #a9a2f7;
+    --color-body: #3a3940;
+    --color-body-dark: #c9c7d2;
+    --color-edge-hover: #b9b2f3;
+    --color-warn-ink: #a26a10;
+    --color-warn-ink-dark: #e6b86a;
+    --color-warn-wash: #fbf0dc;
+    --color-warn-wash-dark: #2e2618;
+  }
+
+  /* A section that runs from one edge of the window to the other, its content in the column. */
+  @utility site-bleed {
+    margin-inline: calc(50% - 50vw);
+    padding-inline: calc(50vw - 50%);
   }
   """
 
@@ -258,6 +385,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
           skipped_pages: [PageProvision.held()]
         }
 
+  @typedoc """
+  A link the header carries, as the `:nav` option takes it: `{label, path}` (or the same as
+  `%{label:, path:}`), the path being what follows the language, or a group of them,
+  `%{label:, children:}`, which the header draws as a dropdown (see "Grouped links" above). A
+  group's children are links; a group does not hold another group.
+  """
+  @type nav_link :: {String.t(), String.t()} | %{label: String.t(), path: String.t()}
+  @type nav_entry :: nav_link() | %{label: String.t(), children: [nav_link()]}
+
   @type auth_report :: %{
           layout_id: String.t(),
           layouts: [String.t()],
@@ -274,22 +410,26 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   Takes the site record or its id. Options:
 
-    * `:nav` — extra links for the header, as `[{label, path}]` where the path is what follows the
-      language (`{"Pricing", "/pricing"}`). The dev seeds use it to reach the pages they add.
+    * `:nav` — extra links for the header, as `[t:nav_entry/0]`: `{label, path}` where the path is
+      what follows the language (`{"Pricing", "/pricing"}`), or a group of them,
+      `%{label: "Dev", children: [{"Pricing", "/pricing"}, …]}` — see "Grouped links" above. The dev
+      seeds use it to reach the pages they add.
     * `:brand` — the name to print in the header. Defaults to the site's name, which the create
       action has slugified.
-    * `:pages` — page definitions (`%{name:, title:, path:, description:, template:}`), written in
-      place of the installer's home page. The dev seeds give every site its own home, and the about,
-      contact and privacy pages a first install no longer has.
-    * `:main_class` — the classes of the layout's `<main>`, which every page is drawn in. The default
-      leaves a page the whole width, because the home page draws its own sections; the dev seeds
-      give theirs a centred column.
+    * `:extra_pages` — page definitions (`%{name:, title:, path:, description:, template:}`) written
+      after the home page, stamped and held the way the home is. The dev seeds hand it the about,
+      contact and privacy pages a first install no longer has, and so every dev site's `/` is the
+      home a first install writes, not a copy of it.
     * `:root_layout_template` — the error page's root layout, for a caller that ships its own.
+
+  Every page is drawn in the same column, the layout's (`MishkaCmsCore.Runtime.SiteLayout`), so
+  there is no option for its width: the dev sites are drawn as a stranger's install is.
 
   The logo goes in the master site's media library, `site` or not — see "The logo" above — and
   `media` in the report names it when this call stored it. Raises when the site is not there, when
   `site` is not the master and there is none, or when a write is refused for any reason but a page
-  being taken — the installer shows the failure on its own progress list.
+  being taken — the installer shows the failure on its own progress list. `seed/2` answers the
+  first two instead.
   """
   @spec seed!(map() | String.t(), keyword()) :: report()
   def seed!(site, opts \\ [])
@@ -311,7 +451,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     components = ensure_components(site, brand, logo)
     {layout, layouts} = ensure_layout(site, brand, opts)
 
-    pages = Keyword.get_lazy(opts, :pages, fn -> [home(logo)] end)
+    pages = [home(logo) | Keyword.get(opts, :extra_pages, [])]
 
     %{created: created, renamed: renamed, skipped: skipped} =
       site_id
@@ -329,6 +469,31 @@ defmodule MishkaCmsCore.Install.StarterContent do
       renamed_pages: renamed,
       skipped_pages: skipped
     }
+  end
+
+  @doc """
+  `seed!/2`, answering `{:error, :site_not_found}` for a site that is not there and
+  `{:error, :no_master_site}` for a site that is not the master on an install that has none,
+  where the logo would be kept, instead of raising. Any other refusal still raises.
+
+  For the `"provision"` job of a site created in the admin
+  (`MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker`).
+  """
+  @spec seed(map() | String.t(), keyword()) ::
+          {:ok, report()} | {:error, :site_not_found | :no_master_site}
+  def seed(site, opts \\ [])
+
+  def seed(site_id, opts) when is_binary(site_id) do
+    case find_site(site_id) do
+      nil -> {:error, :site_not_found}
+      site -> seed(site, opts)
+    end
+  end
+
+  def seed(%{id: _site_id} = site, opts) do
+    if Map.get(site, :master) == true or master_site() != nil,
+      do: {:ok, seed!(site, opts)},
+      else: {:error, :no_master_site}
   end
 
   defp page_attrs(%{id: site_id}, layout_id, pages) do
@@ -457,6 +622,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @theme_name "site-theme"
 
+  @doc """
+  The stylesheet a new site's `site-theme` holds: the design tokens and the `site-bleed` utility.
+
+  For whatever checks the colours an extension's markup names against the theme's.
+  """
+  @spec theme_css() :: String.t()
+  def theme_css, do: @theme_css
+
   defp ensure_theme(%{id: site_id}) do
     if held?(Stylesheet, site_id, @theme_name) do
       []
@@ -504,14 +677,17 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp master_site_id(_site), do: master_site!().id
 
   defp master_site! do
+    case master_site() do
+      nil -> raise ArgumentError, "no master site to keep the logo in"
+      site -> site
+    end
+  end
+
+  defp master_site do
     Site
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(master == true)
     |> Ash.read_one!(authorize?: false)
-    |> case do
-      nil -> raise ArgumentError, "no master site to keep the logo in"
-      site -> site
-    end
   end
 
   # THE RESOURCE'S OWN UPLOAD PATH, as the media manager takes a file: `validate_and_process_file/1`
@@ -622,266 +798,301 @@ defmodule MishkaCmsCore.Install.StarterContent do
         name: "site-header",
         description: "The bar across the top of every page on #{brand}.",
         template: ~S"""
-        <header class={[
-          "mx-auto flex w-full max-w-[1160px] items-center justify-between gap-6 px-8 py-6",
-          @class
-        ]}>
+        <header
+          phx-click-away={
+            JS.add_class("max-lg:hidden", to: "#site-menu")
+            |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-menu-button")
+          }
+          phx-window-keydown={
+            JS.focus(to: "#site-menu-button[aria-expanded=true]")
+            |> JS.add_class("max-lg:hidden", to: "#site-menu")
+            |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-menu-button")
+          }
+          phx-key="Escape"
+          class={[
+            "relative mx-auto flex w-full max-w-[1160px] items-center justify-between gap-4 px-8 py-6 lg:gap-6",
+            @class
+          ]}
+        >
           <.link
             navigate={site_path("/:lang", @lang)}
-            class="flex items-center gap-3 text-fg dark:text-fg-dark"
+            class="flex min-w-0 items-center gap-3 text-fg dark:text-fg-dark"
           >
-            <img src={@logo} alt="" class="size-10 max-w-none object-contain dark:invert-[0.92]" />
-            <span class="text-[18px] font-semibold tracking-[-0.01em]">{@brand}</span>
+            <img
+              src={@logo}
+              alt=""
+              class="size-10 shrink-0 max-w-none object-contain dark:invert-[0.92]"
+            />
+            <span class="truncate text-[18px] font-semibold tracking-[-0.01em]">{@brand}</span>
           </.link>
-          <div class="flex items-center gap-[22px] text-[14px]">
-            {render_slot(@inner_block)}
-            <.link
-              href="https://mishka.tools/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-dim dark:text-dim-dark"
+          <%!-- Below `lg` the bar does not fit: what is on its right sits in the panel after this button. --%>
+          <button
+            type="button"
+            id="site-menu-button"
+            aria-label="Menu"
+            aria-controls="site-menu"
+            aria-expanded="false"
+            phx-click={
+              JS.toggle_class("max-lg:hidden", to: "#site-menu")
+              |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+            }
+            class="group grid size-[38px] shrink-0 cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg lg:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              class="group-aria-expanded:hidden"
             >
-              Docs
-            </.link>
-            <.link
-              href="https://github.com/mishka-group/mishka_cms"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-dim dark:text-dim-dark"
+              <path d="M4 7h16M4 12h16M4 17h16"></path>
+            </svg>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              class="hidden group-aria-expanded:block"
             >
-              GitHub
-            </.link>
-            <div :if={@editions != []} class="relative">
-              <button
-                type="button"
-                id="site-language-button"
-                aria-label="Language"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                phx-click={
-                  JS.toggle(to: "#site-language-menu")
-                  |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-                }
-                class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+              <path d="M6 6l12 12M18 6L6 18"></path>
+            </svg>
+          </button>
+          <div
+            id="site-menu"
+            class="flex shrink-0 items-center gap-[22px] text-[14px] max-lg:absolute max-lg:end-8 max-lg:top-[calc(100%-0.75rem)] max-lg:z-50 max-lg:hidden max-lg:w-[min(22rem,calc(100%-4rem))] max-lg:flex-col max-lg:items-stretch max-lg:gap-1 max-lg:rounded-[14px] max-lg:border max-lg:border-edge max-lg:bg-surface max-lg:p-2 max-lg:shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:max-lg:border-edge-dark dark:max-lg:bg-surface-dark dark:max-lg:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+          >
+            <div class="contents max-lg:flex max-lg:flex-col max-lg:gap-0.5 max-lg:[&>a]:rounded-[9px] max-lg:[&>a]:px-[11px] max-lg:[&>a]:py-[9px] max-lg:[&>a]:hover:bg-wash dark:max-lg:[&>a]:hover:bg-wash-dark">
+              {render_slot(@inner_block)}
+              <.link
+                href="https://mishka.tools/docs"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-dim dark:text-dim-dark"
               >
-                <span aria-hidden="true" class="text-[16px] leading-none">
-                  {MishkaCmsCore.Runtime.Languages.flag(@lang)}
-                </span>
-                <span class="uppercase">{@lang}</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-faint dark:text-faint-dark"
-                >
-                  <path d="M6 9l6 6 6-6"></path>
-                </svg>
-              </button>
+                Docs
+              </.link>
+              <.link
+                href="https://github.com/mishka-group/mishka_cms"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-dim dark:text-dim-dark"
+              >
+                GitHub
+              </.link>
+            </div>
+            <div class="contents max-lg:mt-1 max-lg:flex max-lg:flex-wrap max-lg:items-start max-lg:gap-2 max-lg:border-t max-lg:border-edge max-lg:pt-3 dark:max-lg:border-edge-dark">
+              <%!-- Two languages or more: a page in one has nothing to switch to. --%>
               <div
-                id="site-language-menu"
-                role="menu"
-                phx-click-away={JS.hide(to: "#site-language-menu")}
-                phx-window-keydown={JS.hide(to: "#site-language-menu")}
+                :if={match?([_, _ | _], @editions)}
+                phx-click-away={
+                  JS.hide(to: "#site-language-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-language-button")
+                }
+                phx-window-keydown={
+                  JS.hide(to: "#site-language-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-language-button")
+                }
                 phx-key="Escape"
-                class="absolute end-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+                class="relative max-lg:basis-full"
               >
-                <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
-                      response, so a live navigation into another language would keep the first
-                      one's. --%>
-                <a
-                  :for={edition <- @editions}
-                  role="menuitem"
-                  href={edition.path}
-                  hreflang={edition.language}
-                  aria-current={edition.language == @lang && "true"}
-                  class={[
-                    "flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] hover:bg-wash dark:hover:bg-wash-dark",
-                    (edition.language == @lang && "font-semibold text-brand") ||
-                      "font-medium text-fg dark:text-fg-dark"
-                  ]}
+                <button
+                  type="button"
+                  id="site-language-button"
+                  aria-label="Language"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  phx-click={
+                    JS.toggle(to: "#site-language-menu")
+                    |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+                  }
+                  class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg max-lg:w-full dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
                 >
                   <span aria-hidden="true" class="text-[16px] leading-none">
-                    {MishkaCmsCore.Runtime.Languages.flag(edition.language)}
+                    {MishkaCmsCore.Runtime.Languages.flag(@lang)}
                   </span>
-                  <span class="flex-1">{MishkaCmsCore.Runtime.Languages.name(edition.language)}</span>
+                  <span class="uppercase">{@lang}</span>
                   <svg
-                    :if={edition.language == @lang}
-                    width="15"
-                    height="15"
+                    width="14"
+                    height="14"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    class="text-faint max-lg:ms-auto dark:text-faint-dark"
                   >
-                    <path d="M20 6L9 17l-5-5"></path>
+                    <path d="M6 9l6 6 6-6"></path>
                   </svg>
-                </a>
+                </button>
+                <div
+                  id="site-language-menu"
+                  role="menu"
+                  class="absolute end-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] max-lg:static max-lg:mt-1.5 max-lg:min-w-0 max-lg:shadow-none dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)] dark:max-lg:shadow-none"
+                >
+                  <%!-- A PATH ON THIS SITE IS A `navigate` LINK, so a language change is a live navigation:
+                        no reload, and the page, the header and the title swap in the open socket.
+                        Every page is `MishkaCmsWeb.RuntimeLive` in one `live_session`, which is what
+                        keeps `navigate` live. `<html lang dir>` is drawn once per HTTP response, so
+                        the `site-main` layout carries an element that sets both when the new page
+                        mounts, for this click as for Back, Forward and any other link. An
+                        `http(s)://` address is another site: a plain `href`, and a full load. --%>
+                  <.link
+                    :for={edition <- @editions}
+                    {if(String.starts_with?(edition.path, "/"), do: [navigate: edition.path], else: [href: edition.path])}
+                    role="menuitem"
+                    hreflang={edition.language}
+                    title={Map.get(edition, :title)}
+                    aria-current={edition.language == @lang && "true"}
+                    class={[
+                      "flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] hover:bg-wash dark:hover:bg-wash-dark",
+                      (edition.language == @lang && "font-semibold text-brand") ||
+                        "font-medium text-fg dark:text-fg-dark"
+                    ]}
+                  >
+                    <span aria-hidden="true" class="text-[16px] leading-none">
+                      {MishkaCmsCore.Runtime.Languages.flag(edition.language)}
+                    </span>
+                    <span class="flex-1">
+                      {Map.get(edition, :name) || MishkaCmsCore.Runtime.Languages.name(edition.language)}
+                    </span>
+                    <svg
+                      :if={edition.language == @lang}
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6L9 17l-5-5"></path>
+                    </svg>
+                  </.link>
+                </div>
               </div>
-            </div>
-            <button
-              type="button"
-              id="site-theme-dark"
-              aria-label="Toggle dark mode"
-              phx-click={JS.dispatch("phx:set-theme")}
-              data-phx-theme="dark"
-              class="grid size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
-              </svg>
-            </button>
-            <button
-              type="button"
-              id="site-theme-light"
-              aria-label="Toggle dark mode"
-              phx-click={JS.dispatch("phx:set-theme")}
-              data-phx-theme="light"
-              class="hidden size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:grid dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#E0B84A"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              >
-                <circle cx="12" cy="12" r="4"></circle>
-                <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4">
-                </path>
-              </svg>
-            </button>
-            <.link
-              :if={!@current_user}
-              navigate={site_path("/:lang/auth", @lang)}
-              class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
-            >
-              Sign in
-            </.link>
-            <div :if={@current_user} class="relative">
               <button
                 type="button"
-                id="site-user-button"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                phx-click={
-                  JS.toggle(to: "#site-user-menu")
-                  |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-                }
-                class="flex h-[38px] cursor-pointer items-center gap-2 rounded-[11px] border border-edge bg-surface ps-1.5 pe-3 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+                id="site-theme-dark"
+                aria-label="Toggle dark mode"
+                phx-click={JS.dispatch("phx:set-theme")}
+                data-phx-theme="dark"
+                class="grid size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
               >
-                <span class="grid size-[26px] place-items-center rounded-full bg-[linear-gradient(180deg,#6A60EC,#5246D6)] text-[12px] font-semibold text-white">
-                  {String.upcase(String.first(to_string(@current_user.email)) || "?")}
-                </span>
-                <span id="site-user-email" class="max-w-[180px] truncate max-[560px]:hidden">
-                  {to_string(@current_user.email)}
-                </span>
                 <svg
-                  width="14"
-                  height="14"
+                  width="17"
+                  height="17"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="1.8"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="text-faint dark:text-faint-dark"
                 >
-                  <path d="M6 9l6 6 6-6"></path>
+                  <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
                 </svg>
               </button>
-              <div
-                id="site-user-menu"
-                role="menu"
-                phx-click-away={JS.hide(to: "#site-user-menu")}
-                phx-window-keydown={JS.hide(to: "#site-user-menu")}
-                phx-key="Escape"
-                class="absolute end-0 top-[46px] z-50 hidden w-[250px] overflow-hidden rounded-[14px] border border-edge bg-surface shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+              <button
+                type="button"
+                id="site-theme-light"
+                aria-label="Toggle dark mode"
+                phx-click={JS.dispatch("phx:set-theme")}
+                data-phx-theme="light"
+                class="hidden size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:grid dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
               >
-                <div class="border-b border-edge px-4 py-3 dark:border-edge-dark">
-                  <div class="text-[11.5px] text-subtle dark:text-subtle-dark">Signed in as</div>
-                  <div class="mt-0.5 truncate text-[13px] font-semibold text-fg dark:text-fg-dark">
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E0B84A"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <circle cx="12" cy="12" r="4"></circle>
+                  <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4">
+                  </path>
+                </svg>
+              </button>
+              <.link
+                :if={!@current_user}
+                navigate={site_path("/:lang/auth", @lang)}
+                class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg max-lg:flex-1 max-lg:justify-center dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+              >
+                Sign in
+              </.link>
+              <div
+                :if={@current_user}
+                phx-click-away={
+                  JS.hide(to: "#site-user-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-user-button")
+                }
+                phx-window-keydown={
+                  JS.hide(to: "#site-user-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-user-button")
+                }
+                phx-key="Escape"
+                class="relative max-lg:min-w-0 max-lg:flex-1"
+              >
+                <button
+                  type="button"
+                  id="site-user-button"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  phx-click={
+                    JS.toggle(to: "#site-user-menu")
+                    |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+                  }
+                  class="flex h-[38px] cursor-pointer items-center gap-2 rounded-[11px] border border-edge bg-surface ps-1.5 pe-3 font-medium text-fg max-lg:w-full dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+                >
+                  <span class="grid size-[26px] place-items-center rounded-full bg-[linear-gradient(180deg,#6A60EC,#5246D6)] text-[12px] font-semibold text-white">
+                    {String.upcase(String.first(to_string(@current_user.email)) || "?")}
+                  </span>
+                  <span
+                    id="site-user-email"
+                    class="max-w-[180px] truncate max-lg:min-w-0 max-lg:max-w-none max-lg:flex-1 max-lg:text-start"
+                  >
                     {to_string(@current_user.email)}
+                  </span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="text-faint dark:text-faint-dark"
+                  >
+                    <path d="M6 9l6 6 6-6"></path>
+                  </svg>
+                </button>
+                <div
+                  id="site-user-menu"
+                  role="menu"
+                  class="absolute end-0 top-[46px] z-50 hidden w-[250px] overflow-hidden rounded-[14px] border border-edge bg-surface shadow-[0_18px_44px_rgba(30,28,24,0.16)] max-lg:static max-lg:mt-1.5 max-lg:w-full max-lg:shadow-none dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)] dark:max-lg:shadow-none"
+                >
+                  <div class="border-b border-edge px-4 py-3 dark:border-edge-dark">
+                    <div class="text-[11.5px] text-subtle dark:text-subtle-dark">Signed in as</div>
+                    <div class="mt-0.5 truncate text-[13px] font-semibold text-fg dark:text-fg-dark">
+                      {to_string(@current_user.email)}
+                    </div>
                   </div>
-                </div>
-                <div class="p-1.5">
-                  <.link
-                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
-                    id="site-admin-console"
-                    role="menuitem"
-                    href={MishkaCmsCore.Sidebar.landing_path(@current_user)}
-                    class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="text-dim dark:text-dim-dark"
-                    >
-                      <rect x="3" y="3" width="7" height="7"></rect>
-                      <rect x="14" y="3" width="7" height="7"></rect>
-                      <rect x="14" y="14" width="7" height="7"></rect>
-                      <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg>
-                    Admin console
-                  </.link>
-                  <.link
-                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
-                    id="site-account-settings"
-                    role="menuitem"
-                    href="/admin/dashboard/settings?tab=preferences"
-                    class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="text-dim dark:text-dim-dark"
-                    >
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    Account settings
-                  </.link>
-                  <div
-                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
-                    class="mx-1 my-1.5 h-px bg-edge dark:bg-edge-dark"
-                  >
-                  </div>
-                  <%!-- The sign-out route answers a DELETE, which is what the sign-out page's own form sends; `<.form>` adds the method override and the CSRF token. --%>
-                  <.form for={%{}} id="site-sign-out-form" action="/auth/sign-out" method="delete">
-                    <button
-                      type="submit"
-                      id="site-sign-out"
+                  <div class="p-1.5">
+                    <.link
+                      :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                      id="site-admin-console"
                       role="menuitem"
-                      class="flex w-full cursor-pointer items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-start text-[13px] font-semibold text-bad hover:bg-bad/10"
+                      href={MishkaCmsCore.Sidebar.landing_path(@current_user)}
+                      class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
                     >
                       <svg
                         width="16"
@@ -892,14 +1103,69 @@ defmodule MishkaCmsCore.Install.StarterContent do
                         stroke-width="1.8"
                         stroke-linecap="round"
                         stroke-linejoin="round"
+                        class="text-dim dark:text-dim-dark"
                       >
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <path d="M16 17l5-5-5-5"></path>
-                        <path d="M21 12H9"></path>
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
                       </svg>
-                      Sign out
-                    </button>
-                  </.form>
+                      Admin console
+                    </.link>
+                    <.link
+                      :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                      id="site-account-settings"
+                      role="menuitem"
+                      href="/admin/dashboard/settings?tab=preferences"
+                      class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-dim dark:text-dim-dark"
+                      >
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      Account settings
+                    </.link>
+                    <div
+                      :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                      class="mx-1 my-1.5 h-px bg-edge dark:bg-edge-dark"
+                    >
+                    </div>
+                    <%!-- The sign-out route answers a DELETE, which is what the sign-out page's own form sends; `<.form>` adds the method override and the CSRF token. --%>
+                    <.form for={%{}} id="site-sign-out-form" action="/auth/sign-out" method="delete">
+                      <button
+                        type="submit"
+                        id="site-sign-out"
+                        role="menuitem"
+                        class="flex w-full cursor-pointer items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-start text-[13px] font-semibold text-bad hover:bg-bad/10"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                          <path d="M16 17l5-5-5-5"></path>
+                          <path d="M21 12H9"></path>
+                        </svg>
+                        Sign out
+                      </button>
+                    </.form>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1030,7 +1296,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       "opts" => %{
         "default" => [],
         "doc" =>
-          "`@page_languages`: the page in each language it answers in, the current one among them. The switcher shows when there are two."
+          "`@page_languages`: the page in each language it is written in, each with its `path` and `name` (`MishkaCmsCore.Runtime.SiteLayout`), the current one among them. The switcher shows when there are two."
       }
     }
   end
@@ -1047,7 +1313,17 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @layout_name "site-main"
 
-  @main_class "flex w-full flex-1 flex-col"
+  # THE CONTENT COLUMN EVERY PAGE IS DRAWN IN, the home design's: 1160 px, 32 px at the sides and
+  # 96 px under the last section — the same on every site, dev ones included. A page draws its
+  # sections straight into it; see `MishkaCmsCore.Runtime.SiteLayout`.
+  @column ~s(<main id="site-main" class="mx-auto w-full max-w-[1160px] flex-1 px-8 pb-24">{@inner_content}</main>)
+
+  # THE FRAME CLIPS WHAT A `site-bleed` SECTION'S `100vw` ADDS where the window has a scrollbar, so no
+  # page scrolls sideways. `clip`, not `hidden`: it makes no scroll container, so a sticky element
+  # inside a page still sticks.
+  @frame_open ~s(<div class="flex min-h-screen flex-col overflow-x-clip bg-page font-geist)
+  @flash_open ~s(<div :if={@flash != %{}} id="site-flash")
+  @section_bar "MishkaCmsCore.Runtime.SiteLayout.section_bar"
 
   # EVERY PAGE TITLED ONE WAY, `Pricing · Acme`: the page's own title — on a page that shows a record
   # per address, the record's — then the site's. Stored on the layouts, so a page's own title tag
@@ -1099,12 +1375,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               name: @layout_name,
               path: "/layouts/site-main",
               description: "Header, messages, page, footer — every page on #{brand} sits in it.",
-              template:
-                layout_template(
-                  site_name,
-                  Keyword.get(opts, :nav, []),
-                  Keyword.get(opts, :main_class, @main_class)
-                ),
+              template: layout_template(site_name, Keyword.get(opts, :nav, [])),
               seo_tags: @titled ++ @fonts,
               format: :heex,
               helpers: [
@@ -1115,6 +1386,12 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   (assigns[:page] || %{})[:language] ||
                     MishkaCmsCore.Runtime.Languages.primary(MishkaCmsCore.Runtime.Translations.site())
                   """
+                },
+                # THE DIRECTION OF `lang`, from the helper the root layout's `<html dir>` reads.
+                %{
+                  name: "dir",
+                  args: "assigns",
+                  code: "MishkaCmsCore.Runtime.Languages.direction(lang(assigns))"
                 }
               ],
               priority: 0,
@@ -1134,11 +1411,32 @@ defmodule MishkaCmsCore.Install.StarterContent do
   end
 
   # THE LAYOUT IS THE DESIGN'S FRAME, the header and the footer around whatever the page draws: a
-  # column at least as tall as the window, so the footer sits at the bottom of a short page, with
-  # the page's own sections in a `<main>` that gives them the whole width.
-  defp layout_template(site_name, nav, main_class) do
+  # column at least as tall as the window, so the footer sits at the bottom of a short page; under
+  # the header, the bar a page hands the layout, when it has one; and the page itself in the content
+  # column. `@page_languages` and `@page_section_bar` are `MishkaCmsCore.Runtime.SiteLayout`'s.
+  #
+  # `<html lang dir>` FOLLOWS THE PAGE ON A LIVE NAVIGATION, with no hook and no script of ours. The
+  # root layout draws both once per HTTP response, and a live navigation (the language switcher,
+  # Back and Forward, any `navigate` link, a patch) never draws it again, so a visit that moved from
+  # English to Persian would keep `lang="en" dir="ltr"` on an RTL page. The first element below is
+  # the fix: `phx-mounted` runs its commands when the element is added to the page, and
+  # `JS.set_attribute` with `to: "html"` writes the two attributes on the document element, which
+  # LiveView's `to` takes as any CSS selector. Its id carries the language, so a patch from one
+  # language to another replaces the element, which mounts it again; a navigation mounts a whole new
+  # view, which draws it anyway. On the first load it writes what the response already says.
+  # `hidden`: it draws nothing.
+  defp layout_template(site_name, nav) do
     ~s"""
-    <div class="flex min-h-screen flex-col bg-page font-geist leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
+    #{@frame_open} leading-[normal] text-fg [transition:background_.2s,color_.2s] dark:bg-page-dark dark:text-fg-dark">
+      <span
+        id={"site-lang-" <> lang(assigns)}
+        hidden
+        phx-mounted={
+          Phoenix.LiveView.JS.set_attribute({"lang", lang(assigns)}, to: "html")
+          |> Phoenix.LiveView.JS.set_attribute({"dir", dir(assigns)}, to: "html")
+        }
+      >
+      </span>
       <.component
         component_name="site-header"
         site="#{site_name}"
@@ -1147,7 +1445,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
         editions={assigns[:page_languages] || []}
       >#{nav_links(nav)}
       </.component>
-      <div :if={@flash != %{}} id="site-flash" class="mx-auto mt-5 w-full max-w-[1160px] px-8">
+      #{section_bar_call(site_name)}
+      #{@flash_open} class="mx-auto mt-5 w-full max-w-[1160px] px-8">
         <p
           :for={{kind, message} <- @flash}
           id={"site-flash-\#{kind}"}
@@ -1164,24 +1463,150 @@ defmodule MishkaCmsCore.Install.StarterContent do
           {message}
         </p>
       </div>
-      <main class="#{main_class}">{@inner_content}</main>
+      #{@column}
       <.component component_name="site-footer" site="#{site_name}" />
     </div>
     """
   end
 
-  defp nav_links(nav) do
-    Enum.map_join(nav, "", fn {label, path} ->
-      ~s"""
+  defp section_bar_call(site_name),
+    do: ~s(<#{@section_bar} bar={assigns[:page_section_bar]} site="#{site_name}" />)
 
-          <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="text-dim dark:text-dim-dark">#{label}</.link>\
-      """
+  # A PLAIN LINK IS ONE `navigate` LINK THROUGH `site_path/2`; a group (`nav_group/3`) is written
+  # beside it.
+  defp nav_links(nav) do
+    nav
+    |> Enum.with_index()
+    |> Enum.map_join("", fn
+      {%{label: label, children: children}, index} ->
+        nav_group(label, Enum.map(children, &nav_target/1), index)
+
+      {entry, _index} ->
+        entry |> nav_target() |> nav_link()
     end)
+  end
+
+  defp nav_target({label, path}), do: {label, path}
+  defp nav_target(%{label: label, path: path}), do: {label, path}
+
+  defp nav_link({label, path}) do
+    ~s"""
+
+        <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="text-dim dark:text-dim-dark">#{label}</.link>\
+    """
+  end
+
+  # A GROUP OF LINKS, TWICE: the header's language dropdown from `lg` up, and a labelled list in
+  # the phone's panel. See "Grouped links" above for why two sets of elements and not one restyled.
+  #
+  # THE DROPDOWN IS THE LANGUAGE SWITCHER'S, element for element: the wrapper listens for the click
+  # away and for Escape (not the menu, so the click on the button that is meant to close an open
+  # menu is not "away" from it), the button toggles the menu and `aria-expanded` with the same
+  # `JS` commands, and every colour that changes in the dark has its `-dark` twin. The layout does
+  # not alias `JS`, hence `Phoenix.LiveView.JS`. Its menu opens from the button's start edge, the
+  # bar's end being where the language switcher is.
+  #
+  # THE IDS ARE THE LABEL'S, `site-nav-dev-button` for "Dev", or the group's position when the label
+  # has no letter or digit in it; two groups with one label are one id twice, which is the
+  # caller's to avoid. A group with no link is not drawn: a button that opens nothing.
+  defp nav_group(_label, [], _index), do: ""
+
+  defp nav_group(label, links, index) do
+    base = "site-nav-" <> group_slug(label, index)
+    button = base <> "-button"
+    menu = base <> "-menu"
+    caption = base <> "-label"
+
+    menu_items =
+      Enum.map_join(links, "\n", fn {text, path} ->
+        ~s|        <.link role="menuitem" navigate={site_path("/:lang#{path}", lang(assigns))} class="flex items-center rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark">#{text}</.link>|
+      end)
+
+    panel_items =
+      Enum.map_join(links, "\n", fn {text, path} ->
+        ~s|      <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="rounded-[9px] px-[11px] py-[9px] text-dim hover:bg-wash dark:text-dim-dark dark:hover:bg-wash-dark">#{text}</.link>|
+      end)
+
+    ~s"""
+
+        <div
+          phx-click-away={
+            Phoenix.LiveView.JS.hide(to: "##{menu}")
+            |> Phoenix.LiveView.JS.set_attribute({"aria-expanded", "false"}, to: "##{button}")
+          }
+          phx-window-keydown={
+            Phoenix.LiveView.JS.hide(to: "##{menu}")
+            |> Phoenix.LiveView.JS.set_attribute({"aria-expanded", "false"}, to: "##{button}")
+          }
+          phx-key="Escape"
+          class="relative max-lg:hidden"
+        >
+          <button
+            type="button"
+            id="#{button}"
+            aria-haspopup="menu"
+            aria-expanded="false"
+            phx-click={
+              Phoenix.LiveView.JS.toggle(to: "##{menu}")
+              |> Phoenix.LiveView.JS.toggle_attribute({"aria-expanded", "true", "false"})
+            }
+            class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+          >
+            <span>#{label}</span>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              class="text-faint dark:text-faint-dark"
+            >
+              <path d="M6 9l6 6 6-6"></path>
+            </svg>
+          </button>
+          <div
+            id="#{menu}"
+            role="menu"
+            class="absolute start-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+          >
+    #{menu_items}
+          </div>
+        </div>
+        <div role="group" aria-labelledby="#{caption}" class="flex flex-col gap-0.5 lg:hidden">
+          <span
+            id="#{caption}"
+            class="px-[11px] pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-subtle uppercase dark:text-subtle-dark"
+          >
+            #{label}
+          </span>
+    #{panel_items}
+        </div>\
+    """
+  end
+
+  defp group_slug(label, index) do
+    case label |> to_string() |> String.downcase() |> String.replace(~r/[^a-z0-9]+/, "-") do
+      "-" -> "group-#{index}"
+      "" -> "group-#{index}"
+      slug -> String.trim(slug, "-")
+    end
   end
 
   # ---------------------------------------------------------------------------
   # The pages
   # ---------------------------------------------------------------------------
+
+  # THE OPENING TAG OF EACH OF THE HOME PAGE'S THREE SECTIONS, and the two tags of how a page is
+  # served, set in the theme's tokens.
+  @hero_open ~S|<section class="site-bleed relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">|
+  @flow_open ~S|<section class="flex flex-col gap-8 pb-24">|
+  @steps_open ~S|<section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5">|
+
+  @chip_tag ~S|tag_class: "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark",|
+  @warn_tag ~S|tag_class: "bg-warn-wash text-warn-ink dark:bg-warn-wash-dark dark:text-warn-ink-dark",|
 
   defp home(logo) do
     %{
@@ -1201,9 +1626,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
   #
   # THE HOST IS THE ONE THING THE PAGE ASKS THE SITE, read off `assigns[:current_site]` with
   # `Map.get/2` because the page builder's canvas hands it a map without one.
+  #
+  # IN THE LAYOUT'S COLUMN, with no container of its own: the dotted welcome is a `site-bleed` band,
+  # from one edge of the window to the other, and the two sections after it fill the column. The
+  # layout puts the room under the last one.
   defp home_template(logo) do
     ~s"""
-    <section class="relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] px-8 pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">
+    #{@hero_open}
       <div class="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_60%_70%_at_50%_40%,rgba(250,249,246,0.96)_30%,rgba(250,249,246,0)_100%)] dark:bg-[radial-gradient(ellipse_60%_70%_at_50%_40%,rgba(19,18,23,0.96)_30%,rgba(19,18,23,0)_100%)]">
       </div>
       <div class="relative mx-auto flex max-w-[820px] flex-col items-center gap-7 text-center">
@@ -1258,7 +1687,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       </div>
     </section>
 
-    <section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">
+    #{@flow_open}
       <div class="flex flex-col items-center gap-2.5 text-center">
         <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle dark:text-subtle-dark">
           HOW A PAGE IS SERVED
@@ -1282,7 +1711,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               %{
                 n: "02",
                 tag: "shell",
-                tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",
+                #{@chip_tag}
                 title: "Layout",
                 desc: "A shared frame wraps the page: header, footer, slots.",
                 code: "layout: default"
@@ -1298,7 +1727,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               %{
                 n: "04",
                 tag: "blocks",
-                tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",
+                #{@warn_tag}
                 title: "Components",
                 desc: "Reusable pieces with their own dependencies.",
                 code: "<doc-section />"
@@ -1306,7 +1735,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
               %{
                 n: "05",
                 tag: "compiled",
-                tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",
+                #{@chip_tag}
                 title: "Runtime",
                 desc: "Compiled live on the server and delivered fast.",
                 code: "200 OK · 12ms"
@@ -1328,7 +1757,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       </div>
     </section>
 
-    <section class="mx-auto grid w-full max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5 px-8 pb-24">
+    #{@steps_open}
       <div class="flex flex-col gap-3.5 py-2 pe-2">
         <span class="text-[12px] font-semibold tracking-[0.16em] text-subtle dark:text-subtle-dark">
           START HERE

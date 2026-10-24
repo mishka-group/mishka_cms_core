@@ -57,8 +57,7 @@ defmodule MishkaCmsCore.Install.Extensions do
         key: "…",       # whose install this is; a plugin ignores any other
         answers: %{},   # what the operator typed for this extension's own `fields`
         reports: [],    # where the plugin whose key it is appends its report
-        ask: :install,  # or `:status`: "is it already here?", writing only the extension's
-                        # permission names when it is
+        ask: :install,  # what is asked: an install, the only question there is
         actor: user     # OR `nil`
       }
 
@@ -257,8 +256,8 @@ defmodule MishkaCmsCore.Install.Extensions do
   # AN ADMIN'S CLICK DOES NOT. `Settings.put_as/4` goes through policies and can genuinely answer
   # `{:error, _}`, and this runs AFTER the extension has already written its components and its
   # pages — raising would take an install that worked down with it, outside every rescue on the way.
-  # The site goes on looking un-set-up until `found_already?/2` finds the pages and records it,
-  # which is the case that function exists for.
+  # The site goes on looking un-set-up, and pressing Install again writes only what is missing and
+  # records it.
   defp recorded(_actor, {:ok, _setting}, _app, _site_id), do: :ok
 
   defp recorded(_actor, {:error, reason}, app, site_id) do
@@ -292,40 +291,11 @@ defmodule MishkaCmsCore.Install.Extensions do
   Whether `site_id` already has `app` — which is what sends an admin to the dashboard rather than
   the installer.
 
-  ## The record is not the only evidence
-
-  A site set up by this installer carries the setting. EVERY SITE THAT EXISTED BEFORE IT DOES NOT —
-  it has the extension's components and pages and no record of how they got there, because nothing
-  wrote one. Asking the setting alone would show the installer to every site already running the
-  blog, which is the opposite of what it is for.
-
-  So a site with no record is ASKED, on the same event the install runs on: the plugin knows its own
-  pages and answers whether they are there. An answer of yes is then written down, so the question
-  is asked once per site rather than on every render.
+  The record `mark_installed!/4` writes after an install is the whole answer: a site carrying no
+  record has never been set up with `app`, whatever pages it holds.
   """
   @spec installed?(String.t(), atom() | String.t()) :: boolean()
-  def installed?(site_id, app) do
-    case installed_version(site_id, app) do
-      version when is_binary(version) -> true
-      nil -> found_already?(site_id, app)
-    end
-  end
-
-  # WHAT THE EXTENSION SAYS ABOUT THE SITE, asked through the event rather than guessed here: only
-  # the extension knows what "already there" means for it, and core naming its pages would be core
-  # naming the extension.
-  defp found_already?(site_id, key) do
-    payload = %{site_id: site_id, key: to_string(key), answers: %{}, reports: [], ask: :status}
-
-    case @event |> Hook.call(payload) |> reports(payload) do
-      [%{installed?: true} | _rest] ->
-        mark_installed!(site_id, key, "unknown")
-        true
-
-      _not_there ->
-        false
-    end
-  end
+  def installed?(site_id, app), do: is_binary(installed_version(site_id, app))
 
   @doc """
   Whether `app` is switched on for `site_id` — `true` unless somebody turned it off.

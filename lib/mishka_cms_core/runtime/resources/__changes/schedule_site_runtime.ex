@@ -19,8 +19,10 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime do
       page answers on and writes into its head — and the sitemap, every address of which is on
       that host
     * mode/priority/etc. change, or create → just update `SiteState`
-    * create → also **provision**, which gives the new site its sign-in pages, unless the
-      changeset context carries `auth_pages: :inline` (the caller writes them itself)
+    * create → also **provision**, which gives the new site its sign-in pages and the starter
+      content a first install gets (the theme, the header, the footer, the `site-main` layout and
+      the home page), unless the changeset context carries `auth_pages: :inline` (the caller
+      writes them itself)
 
   Under `config :mishka_cms_core, env_test?: true` nothing is enqueued.
 
@@ -71,8 +73,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime do
     provision(changeset, record)
   end
 
-  # A NEW SITE GETS ITS SIGN-IN PAGES FROM A JOB, so the create answers at once. A caller that
-  # writes them itself says so with `auth_pages: :inline`.
+  # A NEW SITE GETS ITS SIGN-IN PAGES AND ITS STARTER CONTENT FROM A JOB, so the create answers at
+  # once. A caller that writes them itself says so with `auth_pages: :inline`.
   defp provision(%{context: %{auth_pages: :inline}}, _record), do: :ok
 
   defp provision(_changeset, record),
