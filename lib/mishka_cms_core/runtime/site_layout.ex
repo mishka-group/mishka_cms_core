@@ -192,12 +192,15 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
         end
       end
 
-  And the docs' bar, a breadcrumb with an interactive version picker beside it:
+  And the docs' bar, a breadcrumb with an interactive version picker beside it: the site's own
+  `doc-switcher` component, named, handed the page's rows and its URL keys:
 
       %{
-        crumbs: [%{label: "Docs", path: "/docs"}, %{label: workspace.name}],
-        component: {MishkaDocument.Components, :version_select},
-        assigns: %{id: "doc-version", versions: versions, current: version}
+        title: "Docs",
+        title_path: "/docs",
+        crumbs: [%{label: workspace.name, path: "/docs/guide"}, %{label: page.title}],
+        component: "doc-switcher",
+        assigns: %{id: "doc-version", page_source: source, params: params, lang: language}
       }
 
   `{:reply, :halt, frame}` keeps later plugins from answering for a page this one owns;
@@ -267,10 +270,6 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
   @doc "The event a page's frame is resolved through, once per `handle_params/3`."
   @spec event() :: String.t()
   def event, do: @event
-
-  @doc "The name of the layout every page of a site hangs on."
-  @spec layout_name() :: String.t()
-  def layout_name, do: @layout_name
 
   @doc """
   The id of `site_id`'s `site-main` layout, or `nil` for a site that has none. An archived one is
