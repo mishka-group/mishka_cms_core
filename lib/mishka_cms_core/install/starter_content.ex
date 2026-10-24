@@ -59,6 +59,23 @@ defmodule MishkaCmsCore.Install.StarterContent do
     * The version the home page's pill shows is `MishkaCmsCore.Helpers.host_version/0`, the
       application's own, read when the page is drawn.
 
+  ## The header on a phone
+
+  The bar is the design's from `lg` (1024 px) up. Below it the links, the language switcher, the
+  dark toggle and the Sign in button or the visitor's menu are the same elements, in a panel under
+  the header that a menu button opens: the logo and the button are all the bar holds, so nothing
+  can run over the logo or off the screen. `lg` and not `md`, because a site that adds links of its
+  own (the dev sites have five) and two languages is wider than 768 px.
+
+  The button works as the header's two dropdowns do, with the host's own `Phoenix.LiveView.JS`: it
+  toggles the panel's `max-lg:hidden` class and its own `aria-expanded`, a click away from the
+  header or Escape closes the panel and Escape gives the focus back to the button. The switcher and
+  the visitor's menu open in the panel, in the list, rather than over it.
+
+  Each dropdown listens for the click away from the `div` that holds its button, not from its menu:
+  the click that is meant to close an open menu is on its button, which is "away" from the menu
+  alone, so the menu hid and the button's own toggle showed it again.
+
   ## The theme
 
   Three blocks of design tokens and one utility:
@@ -111,12 +128,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
     * the theme gains each token and the `site-bleed` utility it does not declare yet, in a block
       of their own after the row's content; a value already there is kept, edited or not;
+    * the `site-header` component takes the phone menu, when its template is still, whole, one an
+      earlier release wrote;
     * the `site-main` layout takes the content column and the section bar, when its frame, its
       messages and its `<main>` are still what an earlier release wrote;
     * the home page drops the containers of its own, when its three sections are still what an
       earlier release wrote and the layout draws the column.
 
-  A layout or a home page that was edited where the upgrade would write keeps everything it has.
+  A header, a layout or a home page that was edited where the upgrade would write keeps everything
+  it has.
 
   ## The addresses
 
@@ -361,7 +381,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
         }
 
   @typedoc """
-  What `upgrade/1` changed, by name: `"site-theme"`, `"site-main"`, and the home page's path.
+  What `upgrade/1` changed, by name: `"site-theme"`, `"site-header"`, `"site-main"`, and the home
+  page's path.
   """
   @type upgraded :: [String.t()]
 
@@ -763,270 +784,297 @@ defmodule MishkaCmsCore.Install.StarterContent do
         name: "site-header",
         description: "The bar across the top of every page on #{brand}.",
         template: ~S"""
-        <header class={[
-          "mx-auto flex w-full max-w-[1160px] items-center justify-between gap-4 px-8 py-6 sm:gap-6",
-          @class
-        ]}>
+        <header
+          phx-click-away={
+            JS.add_class("max-lg:hidden", to: "#site-menu")
+            |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-menu-button")
+          }
+          phx-window-keydown={
+            JS.focus(to: "#site-menu-button[aria-expanded=true]")
+            |> JS.add_class("max-lg:hidden", to: "#site-menu")
+            |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-menu-button")
+          }
+          phx-key="Escape"
+          class={[
+            "relative mx-auto flex w-full max-w-[1160px] items-center justify-between gap-4 px-8 py-6 lg:gap-6",
+            @class
+          ]}
+        >
           <.link
             navigate={site_path("/:lang", @lang)}
             class="flex min-w-0 items-center gap-3 text-fg dark:text-fg-dark"
           >
-            <img src={@logo} alt="" class="size-10 max-w-none object-contain dark:invert-[0.92]" />
+            <img
+              src={@logo}
+              alt=""
+              class="size-10 shrink-0 max-w-none object-contain dark:invert-[0.92]"
+            />
             <span class="truncate text-[18px] font-semibold tracking-[-0.01em]">{@brand}</span>
           </.link>
-          <div class="flex shrink-0 items-center gap-2.5 text-[14px] sm:gap-[22px]">
-            {render_slot(@inner_block)}
-            <.link
-              href="https://mishka.tools/docs"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-dim max-sm:hidden dark:text-dim-dark"
+          <%!-- Below `lg` the bar does not fit: what is on its right sits in the panel after this button. --%>
+          <button
+            type="button"
+            id="site-menu-button"
+            aria-label="Menu"
+            aria-controls="site-menu"
+            aria-expanded="false"
+            phx-click={
+              JS.toggle_class("max-lg:hidden", to: "#site-menu")
+              |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+            }
+            class="group grid size-[38px] shrink-0 cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg lg:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+          >
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              class="group-aria-expanded:hidden"
             >
-              Docs
-            </.link>
-            <.link
-              href="https://github.com/mishka-group/mishka_cms"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="text-dim max-sm:hidden dark:text-dim-dark"
+              <path d="M4 7h16M4 12h16M4 17h16"></path>
+            </svg>
+            <svg
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.8"
+              stroke-linecap="round"
+              class="hidden group-aria-expanded:block"
             >
-              GitHub
-            </.link>
-            <%!-- Two languages or more: a page in one has nothing to switch to. --%>
-            <div :if={match?([_, _ | _], @editions)} class="relative">
-              <button
-                type="button"
-                id="site-language-button"
-                aria-label="Language"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                phx-click={
-                  JS.toggle(to: "#site-language-menu")
-                  |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-                }
-                class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+              <path d="M6 6l12 12M18 6L6 18"></path>
+            </svg>
+          </button>
+          <div
+            id="site-menu"
+            class="flex shrink-0 items-center gap-[22px] text-[14px] max-lg:absolute max-lg:end-8 max-lg:top-[calc(100%-0.75rem)] max-lg:z-50 max-lg:hidden max-lg:w-[min(22rem,calc(100%-4rem))] max-lg:flex-col max-lg:items-stretch max-lg:gap-1 max-lg:rounded-[14px] max-lg:border max-lg:border-edge max-lg:bg-surface max-lg:p-2 max-lg:shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:max-lg:border-edge-dark dark:max-lg:bg-surface-dark dark:max-lg:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+          >
+            <div class="contents max-lg:flex max-lg:flex-col max-lg:gap-0.5 max-lg:[&>a]:rounded-[9px] max-lg:[&>a]:px-[11px] max-lg:[&>a]:py-[9px] max-lg:[&>a]:hover:bg-wash dark:max-lg:[&>a]:hover:bg-wash-dark">
+              {render_slot(@inner_block)}
+              <.link
+                href="https://mishka.tools/docs"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-dim dark:text-dim-dark"
               >
-                <span aria-hidden="true" class="text-[16px] leading-none">
-                  {MishkaCmsCore.Runtime.Languages.flag(@lang)}
-                </span>
-                <span class="uppercase">{@lang}</span>
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  class="text-faint dark:text-faint-dark"
-                >
-                  <path d="M6 9l6 6 6-6"></path>
-                </svg>
-              </button>
+                Docs
+              </.link>
+              <.link
+                href="https://github.com/mishka-group/mishka_cms"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="text-dim dark:text-dim-dark"
+              >
+                GitHub
+              </.link>
+            </div>
+            <div class="contents max-lg:mt-1 max-lg:flex max-lg:flex-wrap max-lg:items-start max-lg:gap-2 max-lg:border-t max-lg:border-edge max-lg:pt-3 dark:max-lg:border-edge-dark">
+              <%!-- Two languages or more: a page in one has nothing to switch to. --%>
               <div
-                id="site-language-menu"
-                role="menu"
-                phx-click-away={JS.hide(to: "#site-language-menu")}
-                phx-window-keydown={JS.hide(to: "#site-language-menu")}
+                :if={match?([_, _ | _], @editions)}
+                phx-click-away={
+                  JS.hide(to: "#site-language-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-language-button")
+                }
+                phx-window-keydown={
+                  JS.hide(to: "#site-language-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-language-button")
+                }
                 phx-key="Escape"
-                class="absolute end-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+                class="relative max-lg:basis-full"
               >
-                <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
-                      response, so a live navigation into another language would keep the first
-                      one's. --%>
-                <a
-                  :for={edition <- @editions}
-                  role="menuitem"
-                  href={edition.path}
-                  hreflang={edition.language}
-                  title={Map.get(edition, :title)}
-                  aria-current={edition.language == @lang && "true"}
-                  class={[
-                    "flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] hover:bg-wash dark:hover:bg-wash-dark",
-                    (edition.language == @lang && "font-semibold text-brand") ||
-                      "font-medium text-fg dark:text-fg-dark"
-                  ]}
+                <button
+                  type="button"
+                  id="site-language-button"
+                  aria-label="Language"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  phx-click={
+                    JS.toggle(to: "#site-language-menu")
+                    |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+                  }
+                  class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg max-lg:w-full dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
                 >
                   <span aria-hidden="true" class="text-[16px] leading-none">
-                    {MishkaCmsCore.Runtime.Languages.flag(edition.language)}
+                    {MishkaCmsCore.Runtime.Languages.flag(@lang)}
                   </span>
-                  <span class="flex-1">
-                    {Map.get(edition, :name) || MishkaCmsCore.Runtime.Languages.name(edition.language)}
-                  </span>
+                  <span class="uppercase">{@lang}</span>
                   <svg
-                    :if={edition.language == @lang}
-                    width="15"
-                    height="15"
+                    width="14"
+                    height="14"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
                     stroke-width="2"
                     stroke-linecap="round"
                     stroke-linejoin="round"
+                    class="text-faint max-lg:ms-auto dark:text-faint-dark"
                   >
-                    <path d="M20 6L9 17l-5-5"></path>
+                    <path d="M6 9l6 6 6-6"></path>
                   </svg>
-                </a>
+                </button>
+                <div
+                  id="site-language-menu"
+                  role="menu"
+                  class="absolute end-0 top-[46px] z-50 hidden min-w-[190px] overflow-hidden rounded-[14px] border border-edge bg-surface p-1.5 shadow-[0_18px_44px_rgba(30,28,24,0.16)] max-lg:static max-lg:mt-1.5 max-lg:min-w-0 max-lg:shadow-none dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)] dark:max-lg:shadow-none"
+                >
+                  <%!-- An `href`, not a `<.link navigate>`: `<html lang dir>` is drawn once per HTTP
+                        response, so a live navigation into another language would keep the first
+                        one's. --%>
+                  <a
+                    :for={edition <- @editions}
+                    role="menuitem"
+                    href={edition.path}
+                    hreflang={edition.language}
+                    title={Map.get(edition, :title)}
+                    aria-current={edition.language == @lang && "true"}
+                    class={[
+                      "flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] hover:bg-wash dark:hover:bg-wash-dark",
+                      (edition.language == @lang && "font-semibold text-brand") ||
+                        "font-medium text-fg dark:text-fg-dark"
+                    ]}
+                  >
+                    <span aria-hidden="true" class="text-[16px] leading-none">
+                      {MishkaCmsCore.Runtime.Languages.flag(edition.language)}
+                    </span>
+                    <span class="flex-1">
+                      {Map.get(edition, :name) || MishkaCmsCore.Runtime.Languages.name(edition.language)}
+                    </span>
+                    <svg
+                      :if={edition.language == @lang}
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M20 6L9 17l-5-5"></path>
+                    </svg>
+                  </a>
+                </div>
               </div>
-            </div>
-            <button
-              type="button"
-              id="site-theme-dark"
-              aria-label="Toggle dark mode"
-              phx-click={JS.dispatch("phx:set-theme")}
-              data-phx-theme="dark"
-              class="grid size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.8"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              >
-                <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
-              </svg>
-            </button>
-            <button
-              type="button"
-              id="site-theme-light"
-              aria-label="Toggle dark mode"
-              phx-click={JS.dispatch("phx:set-theme")}
-              data-phx-theme="light"
-              class="hidden size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:grid dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
-            >
-              <svg
-                width="17"
-                height="17"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="#E0B84A"
-                stroke-width="1.8"
-                stroke-linecap="round"
-              >
-                <circle cx="12" cy="12" r="4"></circle>
-                <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4">
-                </path>
-              </svg>
-            </button>
-            <.link
-              :if={!@current_user}
-              navigate={site_path("/:lang/auth", @lang)}
-              class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
-            >
-              Sign in
-            </.link>
-            <div :if={@current_user} class="relative">
               <button
                 type="button"
-                id="site-user-button"
-                aria-haspopup="menu"
-                aria-expanded="false"
-                phx-click={
-                  JS.toggle(to: "#site-user-menu")
-                  |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-                }
-                class="flex h-[38px] cursor-pointer items-center gap-2 rounded-[11px] border border-edge bg-surface ps-1.5 pe-3 font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+                id="site-theme-dark"
+                aria-label="Toggle dark mode"
+                phx-click={JS.dispatch("phx:set-theme")}
+                data-phx-theme="dark"
+                class="grid size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:hidden dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
               >
-                <span class="grid size-[26px] place-items-center rounded-full bg-[linear-gradient(180deg,#6A60EC,#5246D6)] text-[12px] font-semibold text-white">
-                  {String.upcase(String.first(to_string(@current_user.email)) || "?")}
-                </span>
-                <span id="site-user-email" class="max-w-[180px] truncate max-[560px]:hidden">
-                  {to_string(@current_user.email)}
-                </span>
                 <svg
-                  width="14"
-                  height="14"
+                  width="17"
+                  height="17"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
-                  stroke-width="2"
+                  stroke-width="1.8"
                   stroke-linecap="round"
                   stroke-linejoin="round"
-                  class="text-faint dark:text-faint-dark"
                 >
-                  <path d="M6 9l6 6 6-6"></path>
+                  <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"></path>
                 </svg>
               </button>
-              <div
-                id="site-user-menu"
-                role="menu"
-                phx-click-away={JS.hide(to: "#site-user-menu")}
-                phx-window-keydown={JS.hide(to: "#site-user-menu")}
-                phx-key="Escape"
-                class="absolute end-0 top-[46px] z-50 hidden w-[250px] overflow-hidden rounded-[14px] border border-edge bg-surface shadow-[0_18px_44px_rgba(30,28,24,0.16)] dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)]"
+              <button
+                type="button"
+                id="site-theme-light"
+                aria-label="Toggle dark mode"
+                phx-click={JS.dispatch("phx:set-theme")}
+                data-phx-theme="light"
+                class="hidden size-[38px] cursor-pointer place-items-center rounded-[11px] border border-edge bg-surface p-0 text-fg dark:grid dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
               >
-                <div class="border-b border-edge px-4 py-3 dark:border-edge-dark">
-                  <div class="text-[11.5px] text-subtle dark:text-subtle-dark">Signed in as</div>
-                  <div class="mt-0.5 truncate text-[13px] font-semibold text-fg dark:text-fg-dark">
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#E0B84A"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                >
+                  <circle cx="12" cy="12" r="4"></circle>
+                  <path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4">
+                  </path>
+                </svg>
+              </button>
+              <.link
+                :if={!@current_user}
+                navigate={site_path("/:lang/auth", @lang)}
+                class="flex h-[38px] items-center rounded-[11px] border border-edge bg-surface px-4 font-medium text-fg max-lg:flex-1 max-lg:justify-center dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+              >
+                Sign in
+              </.link>
+              <div
+                :if={@current_user}
+                phx-click-away={
+                  JS.hide(to: "#site-user-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-user-button")
+                }
+                phx-window-keydown={
+                  JS.hide(to: "#site-user-menu")
+                  |> JS.set_attribute({"aria-expanded", "false"}, to: "#site-user-button")
+                }
+                phx-key="Escape"
+                class="relative max-lg:min-w-0 max-lg:flex-1"
+              >
+                <button
+                  type="button"
+                  id="site-user-button"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                  phx-click={
+                    JS.toggle(to: "#site-user-menu")
+                    |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+                  }
+                  class="flex h-[38px] cursor-pointer items-center gap-2 rounded-[11px] border border-edge bg-surface ps-1.5 pe-3 font-medium text-fg max-lg:w-full dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
+                >
+                  <span class="grid size-[26px] place-items-center rounded-full bg-[linear-gradient(180deg,#6A60EC,#5246D6)] text-[12px] font-semibold text-white">
+                    {String.upcase(String.first(to_string(@current_user.email)) || "?")}
+                  </span>
+                  <span
+                    id="site-user-email"
+                    class="max-w-[180px] truncate max-lg:min-w-0 max-lg:max-w-none max-lg:flex-1 max-lg:text-start"
+                  >
                     {to_string(@current_user.email)}
+                  </span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    class="text-faint dark:text-faint-dark"
+                  >
+                    <path d="M6 9l6 6 6-6"></path>
+                  </svg>
+                </button>
+                <div
+                  id="site-user-menu"
+                  role="menu"
+                  class="absolute end-0 top-[46px] z-50 hidden w-[250px] overflow-hidden rounded-[14px] border border-edge bg-surface shadow-[0_18px_44px_rgba(30,28,24,0.16)] max-lg:static max-lg:mt-1.5 max-lg:w-full max-lg:shadow-none dark:border-edge-dark dark:bg-surface-dark dark:shadow-[0_18px_44px_rgba(0,0,0,0.5)] dark:max-lg:shadow-none"
+                >
+                  <div class="border-b border-edge px-4 py-3 dark:border-edge-dark">
+                    <div class="text-[11.5px] text-subtle dark:text-subtle-dark">Signed in as</div>
+                    <div class="mt-0.5 truncate text-[13px] font-semibold text-fg dark:text-fg-dark">
+                      {to_string(@current_user.email)}
+                    </div>
                   </div>
-                </div>
-                <div class="p-1.5">
-                  <.link
-                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
-                    id="site-admin-console"
-                    role="menuitem"
-                    href={MishkaCmsCore.Sidebar.landing_path(@current_user)}
-                    class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="text-dim dark:text-dim-dark"
-                    >
-                      <rect x="3" y="3" width="7" height="7"></rect>
-                      <rect x="14" y="3" width="7" height="7"></rect>
-                      <rect x="14" y="14" width="7" height="7"></rect>
-                      <rect x="3" y="14" width="7" height="7"></rect>
-                    </svg>
-                    Admin console
-                  </.link>
-                  <.link
-                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
-                    id="site-account-settings"
-                    role="menuitem"
-                    href="/admin/dashboard/settings?tab=preferences"
-                    class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
-                  >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.8"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                      class="text-dim dark:text-dim-dark"
-                    >
-                      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
-                      <circle cx="12" cy="7" r="4"></circle>
-                    </svg>
-                    Account settings
-                  </.link>
-                  <div
-                    :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
-                    class="mx-1 my-1.5 h-px bg-edge dark:bg-edge-dark"
-                  >
-                  </div>
-                  <%!-- The sign-out route answers a DELETE, which is what the sign-out page's own form sends; `<.form>` adds the method override and the CSRF token. --%>
-                  <.form for={%{}} id="site-sign-out-form" action="/auth/sign-out" method="delete">
-                    <button
-                      type="submit"
-                      id="site-sign-out"
+                  <div class="p-1.5">
+                    <.link
+                      :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                      id="site-admin-console"
                       role="menuitem"
-                      class="flex w-full cursor-pointer items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-start text-[13px] font-semibold text-bad hover:bg-bad/10"
+                      href={MishkaCmsCore.Sidebar.landing_path(@current_user)}
+                      class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
                     >
                       <svg
                         width="16"
@@ -1037,14 +1085,69 @@ defmodule MishkaCmsCore.Install.StarterContent do
                         stroke-width="1.8"
                         stroke-linecap="round"
                         stroke-linejoin="round"
+                        class="text-dim dark:text-dim-dark"
                       >
-                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                        <path d="M16 17l5-5-5-5"></path>
-                        <path d="M21 12H9"></path>
+                        <rect x="3" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="3" width="7" height="7"></rect>
+                        <rect x="14" y="14" width="7" height="7"></rect>
+                        <rect x="3" y="14" width="7" height="7"></rect>
                       </svg>
-                      Sign out
-                    </button>
-                  </.form>
+                      Admin console
+                    </.link>
+                    <.link
+                      :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                      id="site-account-settings"
+                      role="menuitem"
+                      href="/admin/dashboard/settings?tab=preferences"
+                      class="flex items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark"
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.8"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                        class="text-dim dark:text-dim-dark"
+                      >
+                        <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                        <circle cx="12" cy="7" r="4"></circle>
+                      </svg>
+                      Account settings
+                    </.link>
+                    <div
+                      :if={MishkaCmsCore.Sidebar.landing_path(@current_user) != "/"}
+                      class="mx-1 my-1.5 h-px bg-edge dark:bg-edge-dark"
+                    >
+                    </div>
+                    <%!-- The sign-out route answers a DELETE, which is what the sign-out page's own form sends; `<.form>` adds the method override and the CSRF token. --%>
+                    <.form for={%{}} id="site-sign-out-form" action="/auth/sign-out" method="delete">
+                      <button
+                        type="submit"
+                        id="site-sign-out"
+                        role="menuitem"
+                        class="flex w-full cursor-pointer items-center gap-[11px] rounded-[9px] px-[11px] py-[9px] text-start text-[13px] font-semibold text-bad hover:bg-bad/10"
+                      >
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          stroke-width="1.8"
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                        >
+                          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
+                          <path d="M16 17l5-5-5-5"></path>
+                          <path d="M21 12H9"></path>
+                        </svg>
+                        Sign out
+                      </button>
+                    </.form>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1571,8 +1674,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   @doc """
   Brings `site`'s starter rows up to this release where that writes over nothing an admin wrote,
-  and returns the names of the ones it changed — `"site-theme"`, `"site-main"`, `"/:lang"` — `[]`
-  when there was nothing to do. See "Bringing an older site up to date" above.
+  and returns the names of the ones it changed — `"site-theme"`, `"site-header"`, `"site-main"`,
+  `"/:lang"` — `[]` when there was nothing to do. See "Bringing an older site up to date" above.
 
   Takes the site record or its id. A row the site does not have is not written: that is
   `seed!/2`'s. Run it again and it changes nothing.
@@ -1582,13 +1685,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
 
   def upgrade(%{id: _site_id, name: _site_name} = site) do
     theme = upgrade_theme(site)
+    header = upgrade_header(site)
     layout = upgrade_layout(site)
 
     # THE HOME PAGE ONLY BESIDE A LAYOUT THAT DRAWS THE COLUMN: without it the page's sections would
     # lose the only column they have.
     home = if framed?(site), do: upgrade_home(site), else: []
 
-    theme ++ layout ++ home
+    theme ++ header ++ layout ++ home
   end
 
   # EACH DECLARATION AND THE UTILITY THE ROW DOES NOT HAVE, after everything it has, so a value an
@@ -1638,6 +1742,46 @@ defmodule MishkaCmsCore.Install.StarterContent do
     |> Enum.reject(&is_nil/1)
     |> Enum.join("\n")
   end
+
+  # THE HEADER AS AN EARLIER RELEASE WROTE IT, WHOLE. Those had a bar that does not fit a phone: the
+  # links ran under the logo and Sign in was off the screen. The template is long and every line of
+  # it is the design's, so the earlier ones are held as the SHA-256 of the text a row keeps (the
+  # template, trimmed), not as a second copy of the markup; the fixtures the tests upgrade from are
+  # in `test/fixtures/starter_content`, and `git show <commit>:<this file>` has the source.
+  #
+  #   * `6ea2fbc`, the one on master: a row of links, the language dropdown, the toggle, Sign in;
+  #   * `3dc740b`, this branch's first: the same, with Docs and GitHub hidden below `sm`, the
+  #     dropdown only for two languages or more, and each entry titled and named as it was given.
+  #
+  # A header that differs by a single character is one somebody edited, and is left as it is.
+  @header_name "site-header"
+  @earlier_headers %{
+    "4c46e3ef80533429faca62bc536f8f9a50f919a1f78a34c45f8471d540cbc60c" => "6ea2fbc",
+    "439c346b034c354c07e8dcf76a42066893e664db50c35ff2db5bfc49273ae219" => "3dc740b"
+  }
+
+  # THE TEMPLATE IS THE ONE A NEW SITE GETS: it reads neither the brand nor the logo, which are the
+  # attributes' defaults, so what the row holds does not depend on the arguments.
+  defp upgrade_header(%{id: site_id}) do
+    with %{template: template} = header when is_binary(template) <-
+           held_row(Component, site_id, @header_name),
+         true <- Map.has_key?(@earlier_headers, template_digest(template)) do
+      update!(header, %{template: header_template()}, site_id)
+      [@header_name]
+    else
+      _current_edited_or_none -> []
+    end
+  end
+
+  defp header_template do
+    ""
+    |> components("")
+    |> Enum.find(&(&1.name == @header_name))
+    |> Map.fetch!(:template)
+  end
+
+  defp template_digest(template),
+    do: :sha256 |> :crypto.hash(String.trim(template)) |> Base.encode16(case: :lower)
 
   # THE FRAME, THE MESSAGES AND `<main>` AS AN EARLIER RELEASE WROTE THEM, each once: then the column
   # and the bar go in, and every other line — the header's call, its links, the footer's — is

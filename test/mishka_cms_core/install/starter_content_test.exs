@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   use MishkaCmsCore.DataCase, async: false
 
   import MishkaCmsCore.Test.Factory
+  import Phoenix.Component, only: [sigil_H: 2]
 
   alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
@@ -967,6 +968,98 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     end
   end
 
+  # A SITE SEEDED BEFORE THE PHONE MENU: its header is a bar that runs the links under the logo and
+  # Sign in off a phone's screen. The two texts are what each release wrote, as `git show <commit>`
+  # has them — the fixtures — and the upgrade knows them by their digests, so a header is replaced
+  # only if it is still, whole, one of them.
+  describe "a header an earlier release wrote" do
+    # AS THE ROW HELD IT: the text a release wrote, trimmed the way the row keeps a template.
+    defp earlier_header(commit) do
+      "../../fixtures/starter_content/site-header-#{commit}.heex"
+      |> Path.expand(__DIR__)
+      |> File.read!()
+      |> String.trim()
+    end
+
+    for commit <- ~w(6ea2fbc 3dc740b) do
+      test "from #{commit} becomes exactly what a new site gets, and only once", %{site: site} do
+        StarterContent.seed!(site)
+        now = component(site, "site-header").template
+        earlier = earlier_header(unquote(commit))
+
+        refute earlier == now
+        refute earlier =~ "site-menu"
+        write!(component(site, "site-header"), %{template: earlier}, site)
+        assert component(site, "site-header").template == earlier
+
+        assert StarterContent.upgrade(site) == ["site-header"]
+        assert component(site, "site-header").template == now
+        assert now =~ "site-menu-button"
+
+        assert StarterContent.upgrade(site.id) == []
+        assert component(site, "site-header").template == now
+      end
+
+      test "from #{commit} is brought up to date by a second run of the starter", %{site: site} do
+        StarterContent.seed!(site)
+        now = component(site, "site-header").template
+        write!(component(site, "site-header"), %{template: earlier_header(unquote(commit))}, site)
+
+        report = StarterContent.seed!(site)
+
+        assert report.components == []
+        assert report.upgraded == ["site-header"]
+        assert component(site, "site-header").template == now
+        assert StarterContent.seed!(site).upgraded == []
+      end
+
+      test "from #{commit} that an admin edited is left as it is", %{site: site} do
+        StarterContent.seed!(site)
+
+        earlier = earlier_header(unquote(commit))
+        edited = String.replace(earlier, "Sign in", "Log in")
+        refute edited == earlier
+        write!(component(site, "site-header"), %{template: edited}, site)
+
+        assert StarterContent.upgrade(site) == []
+        assert StarterContent.seed!(site).upgraded == []
+        assert component(site, "site-header").template == edited
+      end
+    end
+
+    # THE HEADER IS ITS OWN ROW: what a layout needs is not what it needs, and neither waits for the
+    # other. The order is the one the starter is written in, the components before the layout.
+    test "is upgraded beside a layout an earlier release wrote, before it", %{site: site} do
+      StarterContent.seed!(site)
+      layout = one(Layout, site)
+
+      earlier_layout =
+        layout.template
+        |> String.replace(
+          ~s(<div class="flex min-h-screen flex-col overflow-x-clip bg-page font-geist),
+          ~s(<div class="flex min-h-screen flex-col bg-page font-geist)
+        )
+        |> String.replace(
+          ~s(<MishkaCmsCore.Runtime.SiteLayout.section_bar bar={assigns[:page_section_bar]} site="#{site.name}" />\n  ),
+          ""
+        )
+        |> String.replace(
+          @column,
+          ~s(<main class="flex w-full flex-1 flex-col">{@inner_content}</main>)
+        )
+
+      write!(layout, %{template: earlier_layout}, site)
+      write!(component(site, "site-header"), %{template: earlier_header("6ea2fbc")}, site)
+
+      assert StarterContent.upgrade(site) == ["site-header", "site-main"]
+    end
+
+    test "is not written for a site that has none, which is the seed's to do", %{site: site} do
+      assert StarterContent.upgrade(site) == []
+      assert rows(Component, site) == []
+    end
+  end
+
   describe "the header's languages, as the layout hands them" do
     setup %{site: site} do
       forget_settings(~w(site.languages site.language_urls), [site.id])
@@ -1029,11 +1122,15 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     for template <- templates, [_whole, classes] <- Regex.scan(~r/"([^"]*)"/, template) do
       list = String.split(classes)
 
-      for name <- @paired,
-          prefix <- ~w(bg text border),
-          utility = "#{prefix}-#{name}",
-          utility in list do
-        assert "dark:#{utility}-dark" in list, "#{utility} has no dark twin in: #{classes}"
+      # UNDER A VARIANT TOO — `hover:`, `max-lg:`, `max-lg:[&>a]:hover:` — the twin is under the
+      # same ones, after `dark:`: the phone menu's colours are written for the phone alone.
+      themed = ~r/\A((?:.*:)?)((?:bg|text|border)-(?:#{Enum.join(@paired, "|")}))\z/
+
+      for token <- list,
+          [_whole, variants, utility] <- Regex.scan(themed, token),
+          not String.starts_with?(variants, "dark:") do
+        assert "dark:#{variants}#{utility}-dark" in list,
+               "#{token} has no dark twin in: #{classes}"
       end
 
       # THE DOT GRID NAMES ITS COLOUR IN A GRADIENT, not in a utility of its own.
@@ -1226,6 +1323,233 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     test "the layout hands the footer no languages", %{site: site} do
       assert one(Layout, site).template =~ ~s(<.component component_name="site-footer" site=)
       refute one(Layout, site).template =~ ~r/site-footer.*?page_languages/s
+    end
+  end
+
+  # THE BAR DID NOT FIT A PHONE. At 375 px the links ran under the logo, and Sign in sat from 372 to
+  # 451, off the screen, with no control to reach it by. Below `lg` the same elements, not copies of
+  # them, sit in a panel a button opens; from `lg` up the header is the bar it was. `lg`, not `md`,
+  # because a site that adds five links of its own and has two languages is wider than 768 px.
+  describe "the header's phone menu" do
+    setup %{site: site} do
+      forget_settings(~w(site.languages site.language_urls), [site.id])
+      :ok = Translations.put_site(site.id)
+      StarterContent.seed!(site)
+
+      %{both: [%{language: "en", path: "/"}, %{language: "fa", path: "/fa"}]}
+    end
+
+    defp query(html, selector), do: html |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
+
+    defp attribute(html, selector, name),
+      do: html |> query(selector) |> LazyHTML.attribute(name)
+
+    defp class_list(html, selector),
+      do: html |> attribute(selector, "class") |> hd() |> String.split()
+
+    # THE COMMANDS A `phx-*` ATTRIBUTE HOLDS, as the client reads them.
+    defp commands(html, selector, name),
+      do: html |> attribute(selector, name) |> hd() |> Jason.decode!()
+
+    # A LAYOUT'S LINKS, handed in the slot the way the layout hands them.
+    defp nav_slot(links) do
+      [
+        %{
+          __slot__: :inner_block,
+          inner_block: fn _changed, _argument ->
+            assigns = %{links: links}
+
+            ~H"""
+            <a :for={{label, path} <- @links} href={path} class="text-dim dark:text-dim-dark">{label}</a>
+            """
+          end
+        }
+      ]
+    end
+
+    test "is a button that names itself, controls the panel and starts closed", %{
+      site: site,
+      both: both
+    } do
+      html = header_html(site, %{editions: both})
+
+      assert attribute(html, "button#site-menu-button", "type") == ["button"]
+      assert attribute(html, "#site-menu-button", "aria-label") == ["Menu"]
+      assert attribute(html, "#site-menu-button", "aria-controls") == ["site-menu"]
+      assert attribute(html, "#site-menu-button", "aria-expanded") == ["false"]
+
+      # NOT DRAWN FROM `lg` UP, where the bar has room: there is nothing for it to open.
+      assert "lg:hidden" in class_list(html, "#site-menu-button")
+    end
+
+    test "opens and closes the panel with the host's own commands, and says which it did", %{
+      site: site
+    } do
+      html = header_html(site, %{})
+
+      assert commands(html, "#site-menu-button", "phx-click") == [
+               ["toggle_class", %{"names" => ["max-lg:hidden"], "to" => "#site-menu"}],
+               ["toggle_attr", %{"attr" => ["aria-expanded", "true", "false"]}]
+             ]
+    end
+
+    # A CLICK ANYWHERE ELSE ON THE PAGE, OR ESCAPE: the same two ways the header's dropdowns close.
+    # The listener is the header's, which holds the button, so the button's own click is not "away"
+    # from it — on the panel alone, the click that closes the panel would open it again.
+    test "closes on a click away from the header and on Escape, and Escape returns the focus", %{
+      site: site
+    } do
+      html = header_html(site, %{})
+      close = ["add_class", %{"names" => ["max-lg:hidden"], "to" => "#site-menu"}]
+
+      collapsed = [
+        "set_attr",
+        %{"to" => "#site-menu-button", "attr" => ["aria-expanded", "false"]}
+      ]
+
+      assert commands(html, "header", "phx-click-away") == [close, collapsed]
+
+      # THE FOCUS ONLY WHEN THE MENU IS OPEN: Escape pressed somewhere else on the page must not
+      # take the focus to a button that is not showing anything.
+      assert commands(html, "header", "phx-window-keydown") == [
+               ["focus", %{"to" => "#site-menu-button[aria-expanded=true]"}],
+               close,
+               collapsed
+             ]
+
+      assert attribute(html, "header", "phx-key") == ["Escape"]
+    end
+
+    # THE CLICK-AWAY IS THE WRAPPER'S, which holds the button as well as the menu. On the menu alone,
+    # the click on the button that is meant to close it is "away" from it: the menu hides, and then the
+    # button's own toggle shows it again. Tapping the button of an open menu on a phone did nothing.
+    test "a dropdown closes away from its button and its menu both, and says so", %{
+      site: site,
+      both: both
+    } do
+      for {html, menu, button} <- [
+            {header_html(site, %{editions: both}), "#site-language-menu",
+             "#site-language-button"},
+            {signed_in(site, create_user!()), "#site-user-menu", "#site-user-button"}
+          ] do
+        close = [
+          ["hide", %{"to" => menu}],
+          ["set_attr", %{"to" => button, "attr" => ["aria-expanded", "false"]}]
+        ]
+
+        # THE WRAPPER IS THE ONE `div` THAT LISTENS, and the button is its child.
+        assert attribute(html, "div[phx-key] > #{button}", "type") == ["button"]
+        assert commands(html, "div[phx-key]", "phx-click-away") == close
+        assert commands(html, "div[phx-key]", "phx-window-keydown") == close
+        assert attribute(html, "div[phx-key]", "phx-key") == ["Escape"]
+
+        assert attribute(html, menu, "phx-click-away") == []
+        assert attribute(html, menu, "phx-window-keydown") == []
+      end
+    end
+
+    test "holds the links, the switcher, the toggle and Sign in, and not the logo", %{
+      site: site,
+      both: both
+    } do
+      html = header_html(site, %{editions: both, inner_block: nav_slot([{"About", "/about"}])})
+
+      assert attribute(html, "#site-menu a", "href") ==
+               ["/about", @docs, @github, "/", "/fa", "/auth"]
+
+      inside = attribute(html, "#site-menu [id]", "id")
+
+      for id <- ~w(site-language-button site-language-menu site-theme-dark site-theme-light),
+          do: assert(id in inside, id)
+
+      assert attribute(html, "#site-menu img", "src") == []
+      assert attribute(html, "header > a > img", "src") == ["/logo.png"]
+    end
+
+    test "holds the visitor's menu for a signed-in visitor", %{site: site} do
+      html = signed_in(site, create_user!())
+      inside = attribute(html, "#site-menu [id]", "id")
+
+      for id <-
+            ~w(site-user-button site-user-menu site-user-email site-sign-out-form site-sign-out),
+          do: assert(id in inside, id)
+
+      refute "/auth" in attribute(html, "#site-menu a", "href")
+    end
+
+    # TAB GOES FROM THE BUTTON INTO THE PANEL, and the logo comes first, the way it reads.
+    test "is after the logo and before the panel, in the order Tab walks", %{site: site} do
+      html = header_html(site, %{})
+
+      assert [logo, button, panel] =
+               for(
+                 needle <- [~s(<img), ~s(id="site-menu-button"), ~s(id="site-menu")],
+                 do: html |> :binary.match(needle) |> elem(0)
+               )
+
+      assert logo < button and button < panel
+    end
+
+    test "is shut below lg and a row from lg up, so the desktop links are still there", %{
+      site: site,
+      both: both
+    } do
+      html = header_html(site, %{editions: both})
+      panel = class_list(html, "#site-menu")
+
+      # THE PANEL'S OWN CLASSES ARE THE BAR'S, hidden only where `max-lg` says so...
+      assert "max-lg:hidden" in panel
+      assert "flex" in panel
+      assert "items-center" in panel
+      assert "gap-[22px]" in panel
+      refute "hidden" in panel
+
+      # ...and what it holds has no class of its own that hides it at `lg` or above: Docs and GitHub
+      # were hidden below `sm` and are in the panel there now, the switcher and Sign in never were.
+      hides = ["hidden" | for(size <- ~w(sm md lg xl 2xl), do: "#{size}:hidden")]
+
+      for selector <- [
+            "#site-menu a[href^=http]",
+            "#site-language-button",
+            ~s(#site-menu a[href="/auth"])
+          ],
+          classes <- attribute(html, selector, "class"),
+          token <- String.split(classes),
+          do: refute(token in hides, "#{selector}: #{token}")
+
+      assert header_links(site, "en") == ["/", @docs, @github, "/auth"]
+    end
+
+    # ONE SET OF ELEMENTS, restyled: a second copy of the bar for the phone would put every id on the
+    # page twice, and the logo in the page three times where a page carries it in the header, the hero
+    # and the footer.
+    test "does not double what the bar holds, so an id is on the page once", %{
+      site: site,
+      both: both
+    } do
+      html = header_html(site, %{editions: both})
+      ids = for [id] <- Regex.scan(~r/ id="([^"]+)"/, html, capture: :all_but_first), do: id
+
+      assert ids != []
+      assert ids == Enum.uniq(ids)
+
+      signed = signed_in(site, create_user!())
+
+      signed_ids =
+        for [id] <- Regex.scan(~r/ id="([^"]+)"/, signed, capture: :all_but_first), do: id
+
+      assert signed_ids == Enum.uniq(signed_ids)
+    end
+
+    # THE LOGO NEVER GIVES WAY: the link around it shrinks (`min-w-0`) and the name inside truncates,
+    # but the picture keeps its 40 px, so nothing the link is squeezed against can land on it.
+    test "keeps the logo its size and the header the panel hangs from", %{site: site} do
+      html = header_html(site, %{})
+
+      assert "relative" in class_list(html, "header")
+      assert "shrink-0" in class_list(html, "header > a > img")
+      assert "min-w-0" in class_list(html, "header > a")
+      assert "truncate" in class_list(html, "header > a > span")
     end
   end
 
