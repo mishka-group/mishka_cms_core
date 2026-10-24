@@ -49,6 +49,7 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   alias MishkaCmsCore.Runtime.PageLanguageBackfill
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Seo
+  alias MishkaCmsCore.Runtime.States.SiteState
 
   # What makes a translation a page of its own rather than a copy of its original: `translate/4`
   # sets each of these and takes everything else the create action accepts from the original.
@@ -157,9 +158,12 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   `extra` — where `served_languages/2` reads whether it answers every language.
 
   `page` is the `:page` section of a compiled page's `__page_information__/0`, with the module's
-  `extra` put beside it. One indexed read of the page's group, on the page's own site, and only the
-  active editions: an inactive one is not served. Nothing in it depends on the request, so a page
-  reads it once however often its captures change — see `alternates/3`.
+  `extra` put beside it. Its group, on the page's own site, and only the active, unarchived
+  editions: an inactive one is not served. They are read from
+  `MishkaCmsCore.Runtime.States.SiteState.page_editions/2`, not the database — the index the boot
+  fills and every write of a page keeps, on each node — so a page reads its group as it is now on
+  every render, a translation added or removed since it was compiled included, without a query and
+  without being compiled again. Nothing in it depends on the request — see `alternates/3`.
   """
   @spec editions(map(), String.t() | nil) :: [
           %{language: String.t(), path: String.t(), extra: map() | nil}
@@ -254,18 +258,10 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
     end
   end
 
-  defp siblings(%{language_group_id: group}, site_id)
-       when is_binary(group) and is_binary(site_id) do
-    Page
-    |> Ash.Query.filter(language_group_id == ^group and active == true)
-    |> Ash.Query.select([:path, :language, :extra])
-    |> Ash.read(tenant: site_id, authorize?: false)
-    |> case do
-      {:ok, pages} -> Enum.map(pages, &Map.take(&1, [:path, :language, :extra]))
-      {:error, _reason} -> []
-    end
-  end
-
+  # A GROUP THE INDEX DOES NOT HOLD HAS NO OTHER EDITION, and nothing is asked of the database: the
+  # index is filled before a page is served and kept by every write of one, so a miss is a page that
+  # has none, and a read here would be a query on every render of every page there is.
+  defp siblings(%{language_group_id: group}, site_id), do: SiteState.page_editions(site_id, group)
   defp siblings(_page, _site_id), do: []
 
   @doc """

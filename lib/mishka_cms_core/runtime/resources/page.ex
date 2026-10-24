@@ -37,7 +37,11 @@ defmodule MishkaCmsCore.Runtime.Page do
       MishkaGervaz.Resource,
       GuardedStruct.AshResource
     ],
-    notifiers: [Ash.Notifier.PubSub, MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook],
+    notifiers: [
+      Ash.Notifier.PubSub,
+      MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook,
+      MishkaCmsCore.Runtime.Resources.Notifiers.PageEditions
+    ],
     authorizers: [Ash.Policy.Authorizer]
 
   import Phoenix.Component, only: [sigil_H: 2]

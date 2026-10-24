@@ -456,7 +456,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   end
 
   @doc """
-  Streams every site from the DB in tuned batches and upserts them into `SiteState`'s ETS cache.
+  Streams every site from the DB in tuned batches and upserts them into `SiteState`'s ETS cache,
+  then the editions of their pages (`load_page_editions/0`).
 
   This is the single site-cache loader: `perform_boot/0` runs it at startup, and
   `SiteState.handle_continue/2` reuses it to self-heal after an owner crash. Streaming (rather than
@@ -502,13 +503,53 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
         |> Stream.each(process_site_chunk)
         |> Stream.run()
 
-        :ok
+        load_page_editions()
       end
     rescue
       error ->
         Logger.error("[BootHandler] Error loading sites: #{inspect(error)}")
         {:error, error}
     end
+  end
+
+  @doc """
+  Streams the language editions of every site's active pages into `SiteState`'s editions index —
+  what `MishkaCmsCore.Runtime.PageEditions.editions/2` reads on every render instead of a query.
+
+  Part of `load_sites/0`, so it runs at boot and whenever `SiteState` restarts, and from there on
+  every write of a page keeps the index itself — on the node that wrote it through
+  `MishkaCmsCore.Runtime.Resources.Notifiers.PageEditions`, and in `SiteState` on the others.
+  `MishkaCmsCore.Runtime.PageLanguageBackfill` runs before it at boot, so a page given a group
+  there is read with it. Only the fields an edition carries are read, never a template. A load
+  error is logged and returned as `{:error, reason}`, as in `load_sites/0`.
+  """
+  @spec load_page_editions() :: :ok | {:error, term()}
+  def load_page_editions do
+    query =
+      MishkaCmsCore.Runtime.Page
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> Ash.Query.select([:id, :site_id, :language_group_id, :path, :language, :extra])
+
+    count = Ash.count!(query, authorize?: false)
+
+    if count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(count)
+
+      query
+      |> Ash.stream!(batch_size: batch_size, authorize?: false)
+      |> Stream.chunk_every(chunk_size)
+      |> Stream.each(&SiteState.save_page_editions/1)
+      |> Stream.run()
+
+      :ok
+    end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading page editions: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc """
