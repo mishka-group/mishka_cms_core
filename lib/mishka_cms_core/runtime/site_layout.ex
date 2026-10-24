@@ -75,14 +75,17 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
     * `site_id`: the site's id.
     * `current_user`: the signed-in visitor, or `nil` for a guest. A plugin reads the other
       editions as this visitor, so an edition only some readers may open is offered to them.
+    * `source`: the rows the page's plugin on `MishkaCmsCore.Runtime.PageSource.event/0` read for
+      this request, as the visitor, or `nil`. A plugin that finds the record there reads it from
+      there rather than asking again; one that finds `nil` reads for itself.
     * `translations`: what the layout shows when no plugin says otherwise, already normalised
       (`translations/3`).
     * `section_bar`: `nil`.
 
   A plugin answers for the pages it owns: matched by `record`, by `section`, or by `page.path`.
-  Every other page goes back untouched, and before anything is read. Nothing is cached: the
-  event runs on every address, so a plugin reads what it needs with one query, and only for
-  its own pages.
+  Every other page goes back untouched, and before anything is read. Nothing is cached across
+  addresses: the event runs on every one, so a plugin reads what `source` does not hold with one
+  query, and only for its own pages.
 
   ### `translations`
 
@@ -306,8 +309,8 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
 
   `page` is the `:page` section of a page module's `__page_information__/0`, with the language
   of this response. Options: `:site_id`, `:current_user`, `:extra` (the page's `extra`),
-  `:params` (`@query_params`) and `:translations`, the page's own editions
-  (`MishkaCmsCore.Runtime.PageEditions.alternates/3`), which `translations/3` normalises.
+  `:params` (`@query_params`), `:source` (`@page_source`) and `:translations`, the page's own
+  editions (`MishkaCmsCore.Runtime.PageEditions.alternates/3`), which `translations/3` normalises.
   """
   @spec given(map(), keyword()) :: map()
   def given(page, opts) do
@@ -323,6 +326,7 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
       language: Map.get(page, :language),
       site_id: site_id,
       current_user: Keyword.get(opts, :current_user),
+      source: Keyword.get(opts, :source),
       translations: translations(Keyword.get(opts, :translations, []), site_id),
       section_bar: nil
     }
@@ -372,9 +376,9 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
   The page's frame, assigned to `socket` as `@page_languages` and `@page_section_bar`.
 
   For `MishkaCmsWeb.RuntimeLive`, which calls it in `handle_params/3` once the page, its
-  language and `@query_params` are assigned and before the head is resolved: the head's
-  `hreflang` links read `@page_languages` too. `@page_languages` holds the page's own editions
-  until this replaces it with the frame's.
+  language, `@query_params` and `@page_source` are assigned and before the head is resolved: the
+  head's `hreflang` links read `@page_languages` too. `@page_languages` holds the page's own
+  editions until this replaces it with the frame's.
   """
   @spec assign_frame(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
   def assign_frame(%Phoenix.LiveView.Socket{assigns: assigns} = socket) do
@@ -384,6 +388,7 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
         current_user: Map.get(assigns, :current_user),
         extra: Map.get(assigns, :extra),
         params: Map.get(assigns, :query_params),
+        source: Map.get(assigns, :page_source),
         translations: Map.get(assigns, :page_languages) || []
       )
 

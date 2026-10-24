@@ -543,7 +543,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
       }
     }
 
-    given = assigns |> Map.drop(@dispatch_keys) |> Map.put_new(:id, nil)
+    given = assigns |> Map.drop(@dispatch_keys) |> with_source(module) |> Map.put_new(:id, nil)
 
     socket = mounted(module, socket)
     [socket] = module.update_many([{given, socket}])
@@ -578,7 +578,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   defp render_component(true, module, name, assigns) do
     case runtime_slot_assigns(module, assigns[:runtime_slot]) do
       {:ok, slot_assigns} ->
-        applied(module, name, assigns |> Map.drop([:runtime_slot]) |> Map.merge(slot_assigns))
+        assigns = assigns |> Map.drop([:runtime_slot]) |> Map.merge(slot_assigns)
+        applied(module, name, with_source(assigns, module))
 
       {:error, message} ->
         assigns = Map.put(assigns, :slot_error, message)
@@ -590,6 +591,33 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
         """
     end
   end
+
+  # THE PAGE'S ROWS GO ONLY TO A BLOCK THAT ASKS FOR THEM. A template hands every block of an
+  # extension `page_source={assigns[:page_source]}` (`MishkaCmsCore.Runtime.PageSource`), and a
+  # component that does not declare the attribute — one an admin keeps on an older kit — sweeps
+  # every undeclared key into its global attribute, which draws it onto its root element: the rows
+  # of the page as an HTML attribute, or a render that raises on a map it cannot write. Asked of the
+  # module's own declaration, so a kit that adds the attribute is handed the rows the moment it is
+  # compiled.
+  defp with_source(%{page_source: _source} = assigns, module) do
+    case declares?(module, "page_source") do
+      true -> assigns
+      false -> Map.delete(assigns, :page_source)
+    end
+  end
+
+  defp with_source(assigns, _module), do: assigns
+
+  defp declares?(module, name) do
+    function_exported?(module, :__component_information__, 1) and
+      module.__component_information__([:component, :attrs])
+      |> List.wrap()
+      |> Enum.any?(&(to_string(attr_name(&1)) == name))
+  end
+
+  defp attr_name(%{name: name}), do: name
+  defp attr_name(%{"name" => name}), do: name
+  defp attr_name(_not_an_attr), do: nil
 
   defp runtime_slot_assigns(_module, nil), do: {:ok, %{}}
 
