@@ -308,20 +308,15 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert one(Layout, site).template =~ @column
     end
 
-    # THE DEV SEEDS USED TO HAND THE LAYOUT A COLUMN OF THEIR OWN, so a page drawing the design's
-    # column was drawn in two in dev and in one in production. The option is gone: whoever calls,
-    # whatever links and pages they bring, the layout's `<main>` is the same.
+    # WHOEVER CALLS, whatever links they bring, the layout's `<main>` is the same, so a page drawn in
+    # the design's column is drawn in one in dev and in one in production.
     test "is the same for every caller, the dev seeds' included", %{site: site} do
-      StarterContent.seed!(site,
-        main_class: "mx-auto w-full max-w-[1160px] flex-1 px-8 py-10",
-        nav: [{"Pricing", "/pricing"}]
-      )
+      StarterContent.seed!(site, nav: [{"Pricing", "/pricing"}])
 
       template = one(Layout, site).template
 
       assert template =~ @column
       assert [_one] = Regex.scan(~r/<main\b/, template)
-      refute template =~ "py-10"
     end
 
     test "is the only container: the home page draws its sections straight into it", %{
@@ -633,41 +628,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     end
   end
 
-  # THE DEV SEEDS GIVE EVERY SITE ONE. The welcome page below is what a stranger's first install
-  # opens on; a site with a home of its own must not be given the installer's as well.
-  test "pages a caller hands it are written in place of the installer's home", %{site: site} do
-    StarterContent.seed!(site,
-      pages: [
-        %{
-          name: "Home",
-          title: "Home",
-          path: "/:lang",
-          description: "Ours.",
-          template: ~S|<p id="ours">Ours</p>|
-        },
-        %{
-          name: "About",
-          title: "About",
-          path: "/:lang/about",
-          description: "Us.",
-          template: ~S|<p id="about">Us</p>|
-        }
-      ]
-    )
-
-    pages = rows(Page, site)
-
-    assert Enum.map(pages, & &1.path) |> Enum.sort() == ["/:lang", "/:lang/about"]
-    assert Enum.find(pages, &(&1.path == "/:lang")).template == ~S|<p id="ours">Ours</p>|
-    assert Enum.find(pages, &(&1.path == "/:lang/about")).template == ~S|<p id="about">Us</p>|
-
-    for page <- pages do
-      assert page.section == "starter"
-      assert PageProvision.provisioned_by(page) == "mishka_cms_core"
-      assert PageProvision.serves_all_languages?(page)
-    end
-  end
-
   # THE DEV SEEDS' WAY, and the reason a dev site's `/` is production's: the pages come AFTER the
   # installer's home, so nothing a caller brings can stand in its place.
   test "extra pages a caller hands it are written after the installer's home, not instead", %{
@@ -784,316 +744,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
              ~r/@utility site-bleed \{\s*margin-inline: calc\(50% - 50vw\);\s*padding-inline: calc\(50vw - 50%\);\s*\}/
   end
 
-  # A SITE SEEDED BEFORE THE HOME PAGE HAD ITS TOKENS — the first block alone — or before the
-  # extensions' were here, has a theme row that `seed!/2` finds and leaves; the pages written in the
-  # tokens it lacks would draw in no colour at all.
-  describe "a theme an earlier release wrote" do
-    @admin_palette_only """
-    /* The MishkaCMS admin palette, as this site's own design tokens. */
-    @theme {
-      --color-ground: #f6f5f2;
-      --color-ink: #1b1a18;
-      --color-ink-soft: #57544d;
-      --color-muted: #8a877f;
-      --color-line: #ecebe6;
-      --color-accent: #5b57d6;
-      --color-ok: #1f9d6b;
-      --color-warn: #cf8a24;
-      --color-bad: #d5544b;
-      --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
-      --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
-      --radius-card: 18px;
-    }
-    """
-
-    setup %{site: site} do
-      Stylesheet
-      |> Ash.Changeset.for_create(
-        :master_create,
-        %{
-          name: "site-theme",
-          content: String.replace(@admin_palette_only, "#1b1a18", "#000000"),
-          kind: :theme,
-          format: :css,
-          priority: 10,
-          active: true,
-          site_id: site.id
-        },
-        authorize?: false
-      )
-      |> Ash.create!()
-
-      :ok
-    end
-
-    test "gains every token it does not declare, after what it holds", %{site: site} do
-      report = StarterContent.seed!(site)
-
-      assert report.stylesheets == []
-      assert "site-theme" in report.upgraded
-
-      sheet = one(Stylesheet, site).content
-
-      assert String.starts_with?(sheet, "/* The MishkaCMS admin palette")
-
-      for token <-
-            ~w(--color-page --color-fg-dark --color-brand --font-geist --color-tint-1 --color-tint-6-ink-dark --color-chip-wash-dark --color-brand-dark --color-body --color-edge-hover --color-warn-ink),
-          do: assert(sheet =~ ~r/#{token}\s*:/, token)
-
-      assert sheet =~ "@utility site-bleed"
-    end
-
-    test "keeps a value the admin changed, and declares nothing twice", %{site: site} do
-      StarterContent.seed!(site)
-
-      sheet = one(Stylesheet, site).content
-
-      assert sheet =~ "--color-ink: #000000;"
-      refute sheet =~ "--color-ink: #1b1a18;"
-
-      for [name] <- Regex.scan(~r/(--[a-z0-9-]+)\s*:/, sheet, capture: :all_but_first),
-          do: assert(length(Regex.scan(~r/(?<![\w-])#{name}\s*:/, sheet)) == 1, name)
-    end
-
-    test "changes nothing once it is up to date", %{site: site} do
-      StarterContent.seed!(site)
-      once = one(Stylesheet, site).content
-
-      assert StarterContent.upgrade(site) == []
-      assert StarterContent.seed!(site).upgraded == []
-      assert one(Stylesheet, site).content == once
-    end
-
-    test "a theme written today needs nothing", %{} do
-      fresh = "fresh#{System.unique_integer([:positive])}"
-      other = create_site!(name: fresh, host: "#{fresh}.test", active: true)
-
-      assert StarterContent.seed!(other).upgraded == []
-      assert StarterContent.missing_theme(one(Stylesheet, other).content) == ""
-    end
-  end
-
-  # A SITE SEEDED BEFORE THE LAYOUT OWNED THE COLUMN: its `<main>` gave a page the whole width, and
-  # its home page drew a column of its own in each section. Left like that, a page that draws its
-  # sections into the layout's column — the blog's, the docs' — would run edge to edge.
-  describe "a layout and a home page an earlier release wrote" do
-    setup %{site: site} do
-      StarterContent.seed!(site)
-
-      layout = one(Layout, site)
-      home = page(site, "/:lang")
-
-      earlier_layout =
-        layout.template
-        |> String.replace(
-          ~s(<div class="flex min-h-screen flex-col overflow-x-clip bg-page font-geist),
-          ~s(<div class="flex min-h-screen flex-col bg-page font-geist)
-        )
-        |> String.replace(
-          ~s(<MishkaCmsCore.Runtime.SiteLayout.section_bar bar={assigns[:page_section_bar]} site="#{site.name}" />\n  ),
-          ""
-        )
-        |> String.replace(
-          @column,
-          ~s(<main class="flex w-full flex-1 flex-col">{@inner_content}</main>)
-        )
-
-      earlier_home =
-        home.template
-        |> String.replace(
-          "site-bleed relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] pt-[72px]",
-          "relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] px-8 pt-[72px]"
-        )
-        |> String.replace(
-          ~s(<section class="flex flex-col gap-8 pb-24">),
-          ~s(<section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">)
-        )
-        |> String.replace(
-          ~S|<section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5">|,
-          ~S|<section class="mx-auto grid w-full max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5 px-8 pb-24">|
-        )
-        |> String.replace(
-          ~s(tag_class: "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark",),
-          ~s(tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",)
-        )
-        |> String.replace(
-          ~s(tag_class: "bg-warn-wash text-warn-ink dark:bg-warn-wash-dark dark:text-warn-ink-dark",),
-          ~s(tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",)
-        )
-
-      refute earlier_layout =~ "section_bar"
-      refute earlier_home =~ "site-bleed"
-
-      write!(layout, %{template: earlier_layout}, site)
-      write!(home, %{template: earlier_home}, site)
-
-      %{now: %{layout: layout.template, home: home.template}, earlier_layout: earlier_layout}
-    end
-
-    test "become exactly what a new site gets, and only once", %{site: site, now: now} do
-      assert StarterContent.upgrade(site) == ["site-main", "/:lang"]
-
-      assert one(Layout, site).template == now.layout
-      assert page(site, "/:lang").template == now.home
-
-      assert StarterContent.upgrade(site.id) == []
-    end
-
-    test "take the dev seeds' column the same way", %{
-      site: site,
-      now: now,
-      earlier_layout: earlier
-    } do
-      dev =
-        String.replace(
-          earlier,
-          ~s(<main class="flex w-full flex-1 flex-col">),
-          ~s(<main class="mx-auto w-full max-w-[1160px] flex-1 px-8 py-10">)
-        )
-
-      write!(one(Layout, site), %{template: dev}, site)
-
-      assert "site-main" in StarterContent.upgrade(site)
-      assert one(Layout, site).template == now.layout
-    end
-
-    test "leave a layout an admin edited where the upgrade would write, and the home with it", %{
-      site: site,
-      earlier_layout: earlier
-    } do
-      edited =
-        String.replace(
-          earlier,
-          ~s(<main class="flex w-full flex-1 flex-col">),
-          ~s(<main class="flex w-full flex-1 flex-col bg-white">)
-        )
-
-      write!(one(Layout, site), %{template: edited}, site)
-      home = page(site, "/:lang").template
-
-      assert StarterContent.upgrade(site) == []
-
-      assert one(Layout, site).template == edited
-      # THE HOME PAGE KEEPS ITS OWN COLUMN, the only one it has under a layout that draws none.
-      assert page(site, "/:lang").template == home
-    end
-
-    test "leave a home page an admin edited, and still give the layout its column", %{site: site} do
-      edited =
-        String.replace(
-          page(site, "/:lang").template,
-          ~s(<section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">),
-          ~s(<section class="mx-auto flex w-full max-w-[960px] flex-col gap-8 px-8 pb-24">)
-        )
-
-      write!(page(site, "/:lang"), %{template: edited}, site)
-
-      assert StarterContent.upgrade(site) == ["site-main"]
-      assert page(site, "/:lang").template == edited
-    end
-
-    test "are brought up to date by a second run of the starter", %{site: site, now: now} do
-      report = StarterContent.seed!(site)
-
-      assert report.layouts == []
-      assert report.pages == []
-      assert report.upgraded == ["site-main", "/:lang"]
-      assert one(Layout, site).template == now.layout
-    end
-  end
-
-  # A SITE SEEDED BEFORE THE PHONE MENU: its header is a bar that runs the links under the logo and
-  # Sign in off a phone's screen. The two texts are what each release wrote, as `git show <commit>`
-  # has them — the fixtures — and the upgrade knows them by their digests, so a header is replaced
-  # only if it is still, whole, one of them.
-  describe "a header an earlier release wrote" do
-    # AS THE ROW HELD IT: the text a release wrote, trimmed the way the row keeps a template.
-    defp earlier_header(commit) do
-      "../../fixtures/starter_content/site-header-#{commit}.heex"
-      |> Path.expand(__DIR__)
-      |> File.read!()
-      |> String.trim()
-    end
-
-    for commit <- ~w(6ea2fbc 3dc740b) do
-      test "from #{commit} becomes exactly what a new site gets, and only once", %{site: site} do
-        StarterContent.seed!(site)
-        now = component(site, "site-header").template
-        earlier = earlier_header(unquote(commit))
-
-        refute earlier == now
-        refute earlier =~ "site-menu"
-        write!(component(site, "site-header"), %{template: earlier}, site)
-        assert component(site, "site-header").template == earlier
-
-        assert StarterContent.upgrade(site) == ["site-header"]
-        assert component(site, "site-header").template == now
-        assert now =~ "site-menu-button"
-
-        assert StarterContent.upgrade(site.id) == []
-        assert component(site, "site-header").template == now
-      end
-
-      test "from #{commit} is brought up to date by a second run of the starter", %{site: site} do
-        StarterContent.seed!(site)
-        now = component(site, "site-header").template
-        write!(component(site, "site-header"), %{template: earlier_header(unquote(commit))}, site)
-
-        report = StarterContent.seed!(site)
-
-        assert report.components == []
-        assert report.upgraded == ["site-header"]
-        assert component(site, "site-header").template == now
-        assert StarterContent.seed!(site).upgraded == []
-      end
-
-      test "from #{commit} that an admin edited is left as it is", %{site: site} do
-        StarterContent.seed!(site)
-
-        earlier = earlier_header(unquote(commit))
-        edited = String.replace(earlier, "Sign in", "Log in")
-        refute edited == earlier
-        write!(component(site, "site-header"), %{template: edited}, site)
-
-        assert StarterContent.upgrade(site) == []
-        assert StarterContent.seed!(site).upgraded == []
-        assert component(site, "site-header").template == edited
-      end
-    end
-
-    # THE HEADER IS ITS OWN ROW: what a layout needs is not what it needs, and neither waits for the
-    # other. The order is the one the starter is written in, the components before the layout.
-    test "is upgraded beside a layout an earlier release wrote, before it", %{site: site} do
-      StarterContent.seed!(site)
-      layout = one(Layout, site)
-
-      earlier_layout =
-        layout.template
-        |> String.replace(
-          ~s(<div class="flex min-h-screen flex-col overflow-x-clip bg-page font-geist),
-          ~s(<div class="flex min-h-screen flex-col bg-page font-geist)
-        )
-        |> String.replace(
-          ~s(<MishkaCmsCore.Runtime.SiteLayout.section_bar bar={assigns[:page_section_bar]} site="#{site.name}" />\n  ),
-          ""
-        )
-        |> String.replace(
-          @column,
-          ~s(<main class="flex w-full flex-1 flex-col">{@inner_content}</main>)
-        )
-
-      write!(layout, %{template: earlier_layout}, site)
-      write!(component(site, "site-header"), %{template: earlier_header("6ea2fbc")}, site)
-
-      assert StarterContent.upgrade(site) == ["site-header", "site-main"]
-    end
-
-    test "is not written for a site that has none, which is the seed's to do", %{site: site} do
-      assert StarterContent.upgrade(site) == []
-      assert rows(Component, site) == []
-    end
-  end
-
   describe "the header's languages, as the layout hands them" do
     setup %{site: site} do
       forget_settings(~w(site.languages site.language_urls), [site.id])
@@ -1128,7 +778,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       refute html =~ "hreflang"
     end
 
-    # AN ENTRY THAT NAMES NO LANGUAGE NAME — the shape a header row an earlier release wrote reads.
+    # AN ENTRY THAT NAMES NO LANGUAGE: a layout that hands the header only a code and an address.
     test "names a language the entry leaves unnamed", %{site: site} do
       html =
         header_html(site, %{
@@ -1587,24 +1237,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     end
   end
 
-  # THE TEXT OF THE HEADER AND OF THE LAYOUT AT THE COMMIT BEFORE GROUPS, as SHA-256 of the trimmed
-  # text: the header as `components/2` writes it, and the layout `layout_template/2` writes for no
-  # link and for About and Pricing, the site's name a placeholder. Read from that commit's code, so
-  # they are what a production install was written, and a change to either is a change to every
-  # install that has not edited its own.
-  @header_digest "8b5f6bfa6dbfc633a7cf76e46292e66ea234a876d834cbd8aa4b21bb0ea5402f"
-  @layout_digests %{
-    empty: "c589afb4d75f6ccadbe93c4cafca5ffdd8644d19501c0cb24263b8b75fb2c05d",
-    plain: "50b14bd228ea335e28aca157d6fe034823262d795fefe0e0eb8cfa84ef7f64f3"
-  }
-
-  defp header_digest(template), do: digest(template)
-
-  defp layout_digest(layout, site),
-    do: layout.template |> String.replace(site.name, "SITE") |> digest()
-
-  defp digest(text), do: :sha256 |> :crypto.hash(String.trim(text)) |> Base.encode16(case: :lower)
-
   # A SITE WITH MANY LINKS PUTS THEM IN ONE GROUP. The dev sites carry up to eight links of their own
   # and, beside the language switcher and Sign in, that is a header that does not fit; a group is
   # one button on the bar and a labelled list in the phone's panel. It is written into the layout,
@@ -1866,9 +1498,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     end
 
     test "is not touched by the header component, which is the one every site has", %{site: site} do
-      assert site |> component("site-header") |> Map.fetch!(:template) |> header_digest() ==
-               @header_digest
-
       refute component(site, "site-header").template =~ "site-nav-"
     end
   end
@@ -1894,41 +1523,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
       assert template =~ ~s(id="site-nav-group-0-button")
       assert template =~ ~s(id="site-nav-docs-guides-menu")
-    end
-  end
-
-  # PRODUCTION IS NOT TOUCHED BY ANY OF THIS. An install that passes no group (the installer's
-  # passes no link at all) is written the header it was and the layout it was, byte for byte: the
-  # digests are those of the text at the commit before groups, taken from the code and not from a
-  # database, with the site's name made a placeholder because a layout names its site.
-  describe "a site that passes no group" do
-    test "is written the header, as the commit before groups wrote it", %{site: site} do
-      StarterContent.seed!(site)
-
-      assert site |> component("site-header") |> Map.fetch!(:template) |> header_digest() ==
-               @header_digest
-    end
-
-    test "is written the layout it was, with no link", %{site: site} do
-      StarterContent.seed!(site)
-
-      assert Layout |> one(site) |> layout_digest(site) == @layout_digests.empty
-      refute one(Layout, site).template =~ "site-nav-"
-    end
-
-    test "is written the layout it was when it passes plain links", %{site: site} do
-      StarterContent.seed!(site, nav: [{"About", "/about"}, {"Pricing", "/pricing"}])
-
-      assert Layout |> one(site) |> layout_digest(site) == @layout_digests.plain
-      refute one(Layout, site).template =~ "site-nav-"
-    end
-
-    test "has a header an earlier release wrote upgraded to that same text", %{site: site} do
-      StarterContent.seed!(site)
-      write!(component(site, "site-header"), %{template: earlier_header("6ea2fbc")}, site)
-
-      assert StarterContent.upgrade(site) == ["site-header"]
-      assert component(site, "site-header").template |> header_digest() == @header_digest
     end
   end
 
@@ -2012,17 +1606,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   test "raises for a site that is not there" do
     assert_raise ArgumentError, fn -> StarterContent.seed!(Ash.UUID.generate()) end
-  end
-
-  # AS AN EARLIER RELEASE LEFT IT: written straight to the row, as a package writes.
-  defp write!(row, attrs, site) do
-    row
-    |> Ash.Changeset.for_update(:update, attrs,
-      tenant: site.id,
-      authorize?: false,
-      context: %{page_code: :package}
-    )
-    |> Ash.update!()
   end
 
   defp rows(resource, site) do

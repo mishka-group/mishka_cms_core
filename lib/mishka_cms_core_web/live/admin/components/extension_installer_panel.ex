@@ -229,14 +229,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
           gettext("Added %{counted}.", counted: counted)
       end
 
-    upgraded = Map.get(report, :upgraded_pages, [])
-
     Enum.join(
       [added] ++
         renamed(Map.get(report, :renamed_pages, [])) ++
-        brought_up(upgraded, Map.get(report, :upgraded_components, [])) ++
-        left_alone(Enum.reject(Map.get(report, :skipped_pages, []), &(&1.path in upgraded))) ++
-        waiting(Map.get(report, :components_waiting, [])),
+        left_alone(Map.get(report, :skipped_pages, [])),
       " "
     )
   end
@@ -260,41 +256,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
         "%{count} page created under another name.",
         "%{count} pages created under another name.",
         length(pages)
-      )
-    ]
-  end
-
-  # AN OLDER INSTALL'S PAGES AND COMPONENTS that nobody edited are written in the new design over
-  # what an earlier release wrote. Those pages were already there, so they are not "left alone".
-  defp brought_up(pages, components) do
-    Enum.reject(
-      [
-        length(pages) > 0 &&
-          ngettext(
-            "%{count} page nobody edited now has the new design.",
-            "%{count} pages nobody edited now have the new design.",
-            length(pages)
-          ),
-        length(components) > 0 &&
-          ngettext(
-            "%{count} component nobody edited is up to date.",
-            "%{count} components nobody edited are up to date.",
-            length(components)
-          )
-      ],
-      &(&1 == false)
-    )
-  end
-
-  # An edited component keeps its edit, so a page drawn with it may miss what the new one adds.
-  defp waiting([]), do: []
-
-  defp waiting(components) do
-    [
-      ngettext(
-        "%{count} component keeps its earlier version; update it from its components card.",
-        "%{count} components keep their earlier version; update them from their components card.",
-        length(components)
       )
     ]
   end

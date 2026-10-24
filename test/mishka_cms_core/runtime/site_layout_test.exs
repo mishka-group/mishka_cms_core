@@ -5,8 +5,8 @@
 defmodule MishkaCmsCore.Runtime.SiteLayoutTest do
   @moduledoc """
   `MishkaCmsCore.Runtime.SiteLayout`: what a page hands the `site-main` layout — the languages it is
-  written in and the bar under the header — through the `runtime:page:frame` event, how the bar is
-  drawn, and how an extension's pages are hung on the layout.
+  written in and the bar under the header — through the `runtime:page:frame` event, and how the bar
+  is drawn.
 
   What the header draws from `@page_languages` is `MishkaCmsCore.Install.StarterContentTest`'s; a
   visitor's page, through `MishkaCmsWeb.RuntimeLive`, is the host's `StarterHomePageTest`.
@@ -20,7 +20,7 @@ defmodule MishkaCmsCore.Runtime.SiteLayoutTest do
 
   alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
-  alias MishkaCmsCore.Runtime.{Languages, Layout, Page, PageProvision, SiteLayout, Translations}
+  alias MishkaCmsCore.Runtime.{Languages, Layout, SiteLayout, Translations}
   alias MishkaCmsCore.Runtime.States.{CompileFailureState, SettingsState, SiteState}
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Test.EventCannotRun
@@ -550,96 +550,6 @@ defmodule MishkaCmsCore.Runtime.SiteLayoutTest do
       socket = put_in(socket.assigns.extra, %{})
 
       assert %{title: "Probe"} = SiteLayout.assign_frame(socket).assigns.page_section_bar
-    end
-  end
-
-  describe "adopt_pages/3" do
-    setup %{site: site} do
-      layout = create_layout!(name: SiteLayout.layout_name(), site_id: site.id)
-      other = create_layout!(name: "admin-picked", site_id: site.id)
-
-      %{layout: layout, other: other}
-    end
-
-    defp page!(site, path, attrs \\ %{}) do
-      Page
-      |> Ash.Changeset.for_create(
-        :master_create,
-        Map.merge(
-          %{
-            name: "probe#{System.unique_integer([:positive])}",
-            title: "Probe",
-            path: path,
-            section: "probe",
-            template: "<p>probe</p>",
-            format: :heex,
-            active: true,
-            site_id: site.id
-          },
-          attrs
-        ),
-        authorize?: false
-      )
-      |> Ash.create!()
-    end
-
-    defp layout_of(page),
-      do: Ash.get!(Page, page.id, action: :read_any, authorize?: false).layout_id
-
-    test "hangs the section's pages that have no layout on site-main, and says which", %{
-      site: site,
-      layout: layout
-    } do
-      list = page!(site, "/:lang/probe")
-
-      item =
-        page!(site, "/:lang/probe/:slug", %{extra: PageProvision.stamp(%{}, :probe, "1.0").extra})
-
-      assert SiteLayout.layout_id(site.id) == layout.id
-
-      assert SiteLayout.adopt_pages(site, "probe", source: :probe) == [
-               "/:lang/probe",
-               "/:lang/probe/:slug"
-             ]
-
-      assert layout_of(list) == layout.id
-      assert layout_of(item) == layout.id
-    end
-
-    test "leaves a page an admin moved to another layout, and another section's", %{
-      site: site,
-      other: other
-    } do
-      moved = page!(site, "/:lang/probe/moved", %{layout_id: other.id})
-      elsewhere = page!(site, "/:lang/elsewhere", %{section: "elsewhere"})
-
-      assert SiteLayout.adopt_pages(site.id, "probe") == []
-      assert layout_of(moved) == other.id
-      assert layout_of(elsewhere) == nil
-    end
-
-    test "leaves a page another extension stamped", %{site: site} do
-      theirs =
-        page!(site, "/:lang/probe/theirs", %{extra: PageProvision.stamp(%{}, :theirs, nil).extra})
-
-      assert SiteLayout.adopt_pages(site.id, "probe", source: :probe) == []
-      assert layout_of(theirs) == nil
-    end
-
-    test "changes nothing the second time", %{site: site} do
-      page!(site, "/:lang/probe")
-
-      assert SiteLayout.adopt_pages(site.id, "probe") == ["/:lang/probe"]
-      assert SiteLayout.adopt_pages(site.id, "probe") == []
-    end
-
-    test "does nothing on a site with no site-main" do
-      name = "unframed-#{System.unique_integer([:positive])}"
-      bare = create_site!(name: name, host: "#{name}.test")
-      page!(bare, "/:lang/probe")
-
-      assert SiteLayout.layout_id(bare.id) == nil
-      assert SiteLayout.adopt_pages(bare.id, "probe") == []
     end
   end
 

@@ -18067,27 +18067,6 @@ msgstr ""
 msgid "This site does not take passwords for now. Sign in another way."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex:294
-#, elixir-autogen, elixir-format
-msgid "%{count} component keeps its earlier version; update it from its components card."
-msgid_plural "%{count} components keep their earlier version; update them from their components card."
-msgstr[0] ""
-msgstr[1] ""
-
-#: lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex:279
-#, elixir-autogen, elixir-format
-msgid "%{count} component nobody edited is up to date."
-msgid_plural "%{count} components nobody edited are up to date."
-msgstr[0] ""
-msgstr[1] ""
-
-#: lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex:273
-#, elixir-autogen, elixir-format
-msgid "%{count} page nobody edited now has the new design."
-msgid_plural "%{count} pages nobody edited now have the new design."
-msgstr[0] ""
-msgstr[1] ""
-
 #: ../mishka_blog/lib/mishka_blog_web/live/admin/dashboard/analytics/index.html.heex:48
 #, elixir-autogen, elixir-format
 msgid "Analytics is not available yet"

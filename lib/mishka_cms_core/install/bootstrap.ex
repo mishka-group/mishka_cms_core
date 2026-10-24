@@ -16,7 +16,7 @@ defmodule MishkaCmsCore.Install.Bootstrap do
   THE STARTER IS NOT A CHOICE. Every page of a site, an extension's included, is drawn in the
   `site-main` layout (`MishkaCmsCore.Runtime.SiteLayout`), so a site without it has no frame for
   any of them; and a first install whose `/` answers nothing is a broken one. The installer's box
-  says so and cannot be unticked; a `:starter_content` given here is not read.
+  says so and cannot be unticked.
 
   Everything runs `authorize?: false` because no privileged actor exists yet — which is why
   this is reachable only while the CMS is uninstalled (`MishkaCms.Plugs.InstallGate`).

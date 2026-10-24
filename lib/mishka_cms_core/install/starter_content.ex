@@ -82,7 +82,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   A site with many links of its own (the dev sites have up to eight) can put them in a group, one
   entry of the `:nav` option (`t:nav_entry/0`) that holds the links instead of being one. The
   group is written into the layout, beside the plain links, and the `site-header` component is
-  not told about it, so a site that passes no group has the header, and the layout, it had.
+  not told about it.
 
     * From `lg` up it is a dropdown: a button with the group's label and a chevron, drawn as the
       language switcher's is and opened, closed (by its button, a click away or Escape) and
@@ -141,24 +141,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
   name — the key the database keeps — is left exactly as it is, edits and all, and a page is asked
   about through `MishkaCmsCore.Runtime.PageProvision`, which knows that a held NAME and a held
   ADDRESS are two different answers.
-
-  ## Bringing an older site up to date
-
-  The one exception is `upgrade/1`, which `seed!/2` runs on the rows it finds, and which
-  `MishkaCmsCore.Runtime.ExtensionProvision` runs before an extension writes its pages. It adds
-  what a release needs and touches nothing an admin wrote:
-
-    * the theme gains each token and the `site-bleed` utility it does not declare yet, in a block
-      of their own after the row's content; a value already there is kept, edited or not;
-    * the `site-header` component takes the phone menu, when its template is still, whole, one an
-      earlier release wrote;
-    * the `site-main` layout takes the content column and the section bar, when its frame, its
-      messages and its `<main>` are still what an earlier release wrote;
-    * the home page drops the containers of its own, when its three sections are still what an
-      earlier release wrote and the layout draws the column.
-
-  A header, a layout or a home page that was edited where the upgrade would write keeps everything
-  it has.
 
   ## The addresses
 
@@ -398,8 +380,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
           pages: [String.t()],
           error_pages: [String.t()],
           renamed_pages: [PageProvision.renamed()],
-          skipped_pages: [PageProvision.held()],
-          upgraded: [String.t()]
+          skipped_pages: [PageProvision.held()]
         }
 
   @typedoc """
@@ -410,12 +391,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
   """
   @type nav_link :: {String.t(), String.t()} | %{label: String.t(), path: String.t()}
   @type nav_entry :: nav_link() | %{label: String.t(), children: [nav_link()]}
-
-  @typedoc """
-  What `upgrade/1` changed, by name: `"site-theme"`, `"site-header"`, `"site-main"`, and the home
-  page's path.
-  """
-  @type upgraded :: [String.t()]
 
   @type auth_report :: %{
           layout_id: String.t(),
@@ -443,15 +418,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
       after the home page, stamped and held the way the home is. The dev seeds hand it the about,
       contact and privacy pages a first install no longer has, and so every dev site's `/` is the
       home a first install writes, not a copy of it.
-    * `:pages` — page definitions written IN PLACE of the installer's home page, for a caller that
-      ships a home of its own. The dev seeds do not: a home they wrote would be a home no
-      production install draws.
     * `:root_layout_template` — the error page's root layout, for a caller that ships its own.
 
   Every page is drawn in the same column, the layout's (`MishkaCmsCore.Runtime.SiteLayout`), so
   there is no option for its width: the dev sites are drawn as a stranger's install is.
-
-  The rows it finds are brought up to date by `upgrade/1`, whose answer is `upgraded`.
 
   The logo goes in the master site's media library, `site` or not — see "The logo" above — and
   `media` in the report names it when this call stored it. Raises when the site is not there, when
@@ -479,9 +449,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     components = ensure_components(site, brand, logo)
     {layout, layouts} = ensure_layout(site, brand, opts)
 
-    pages =
-      Keyword.get_lazy(opts, :pages, fn -> [home(logo)] end) ++
-        Keyword.get(opts, :extra_pages, [])
+    pages = [home(logo) | Keyword.get(opts, :extra_pages, [])]
 
     %{created: created, renamed: renamed, skipped: skipped} =
       site_id
@@ -497,10 +465,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
       pages: Enum.map(created, & &1.path),
       error_pages: ensure_error_page(site, Keyword.get(opts, :root_layout_template)),
       renamed_pages: renamed,
-      skipped_pages: skipped,
-      # AFTER THE WRITES, so a row this call wrote is current already and only one it found is
-      # looked at.
-      upgraded: upgrade(site)
+      skipped_pages: skipped
     }
   end
 
@@ -1339,18 +1304,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # sections straight into it; see `MishkaCmsCore.Runtime.SiteLayout`.
   @column ~s(<main id="site-main" class="mx-auto w-full max-w-[1160px] flex-1 px-8 pb-24">{@inner_content}</main>)
 
-  # WHAT AN EARLIER RELEASE WROTE where the column is now: the whole width, for a home page that drew
-  # its own, and the centred column with room above and below that the dev seeds asked for.
-  @earlier_mains [
-    ~s(<main class="flex w-full flex-1 flex-col">{@inner_content}</main>),
-    ~s(<main class="mx-auto w-full max-w-[1160px] flex-1 px-8 py-10">{@inner_content}</main>)
-  ]
-
   # THE FRAME CLIPS WHAT A `site-bleed` SECTION'S `100vw` ADDS where the window has a scrollbar, so no
   # page scrolls sideways. `clip`, not `hidden`: it makes no scroll container, so a sticky element
   # inside a page still sticks.
   @frame_open ~s(<div class="flex min-h-screen flex-col overflow-x-clip bg-page font-geist)
-  @earlier_frame_open ~s(<div class="flex min-h-screen flex-col bg-page font-geist)
   @flash_open ~s(<div :if={@flash != %{}} id="site-flash")
   @section_bar "MishkaCmsCore.Runtime.SiteLayout.section_bar"
 
@@ -1475,8 +1432,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp section_bar_call(site_name),
     do: ~s(<#{@section_bar} bar={assigns[:page_section_bar]} site="#{site_name}" />)
 
-  # A PLAIN LINK IS WRITTEN EXACTLY AS IT ALWAYS WAS: the text below is what a site that passes no
-  # group has in its layout, and the tests pin it. A group (`nav_group/3`) is written beside it.
+  # A PLAIN LINK IS ONE `navigate` LINK THROUGH `site_path/2`; a group (`nav_group/3`) is written
+  # beside it.
   defp nav_links(nav) do
     nav
     |> Enum.with_index()
@@ -1602,33 +1559,14 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # The pages
   # ---------------------------------------------------------------------------
 
-  # THE OPENING TAG OF EACH OF THE HOME PAGE'S THREE SECTIONS, now and as an earlier release wrote
-  # them, when the page drew its own column: `upgrade/1` swaps the one for the other on a home page
-  # nobody has edited there.
+  # THE OPENING TAG OF EACH OF THE HOME PAGE'S THREE SECTIONS, and the two tags of how a page is
+  # served, set in the theme's tokens.
   @hero_open ~S|<section class="site-bleed relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">|
   @flow_open ~S|<section class="flex flex-col gap-8 pb-24">|
   @steps_open ~S|<section class="grid grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5">|
 
-  @earlier_home [
-    {~S|<section class="relative bg-[radial-gradient(var(--color-dot)_1px,transparent_1px)] bg-size-[24px_24px] bg-position-[center_top] px-8 pt-[72px] pb-24 dark:bg-[radial-gradient(var(--color-dot-dark)_1px,transparent_1px)]">|,
-     @hero_open},
-    {~S|<section class="mx-auto flex w-full max-w-[1160px] flex-col gap-8 px-8 pb-24">|,
-     @flow_open},
-    {~S|<section class="mx-auto grid w-full max-w-[1160px] grid-cols-[repeat(auto-fit,minmax(min(100%,340px),1fr))] gap-5 px-8 pb-24">|,
-     @steps_open}
-  ]
-
   @chip_tag ~S|tag_class: "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark",|
   @warn_tag ~S|tag_class: "bg-warn-wash text-warn-ink dark:bg-warn-wash-dark dark:text-warn-ink-dark",|
-
-  # AND THE TAGS OF HOW A PAGE IS SERVED, which an earlier release wrote in hex values the theme now
-  # holds as tokens: swapped wherever they are, with the sections, so an untouched page becomes
-  # exactly the one a new site gets.
-  @earlier_home_tags [
-    {~S|tag_class: "bg-[#ECEAFB] text-brand dark:bg-[#25223F] dark:text-[#A9A2F7]",|, @chip_tag},
-    {~S|tag_class: "bg-[#FBF0DC] text-[#A26A10] dark:bg-[#2E2618] dark:text-[#E6B86A]",|,
-     @warn_tag}
-  ]
 
   defp home(logo) do
     %{
@@ -1819,188 +1757,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Page
     |> Ash.Changeset.for_create(:master_create, attrs, authorize?: false)
     |> Ash.create!()
-  end
-
-  # ---------------------------------------------------------------------------
-  # Bringing an older site up to date
-  # ---------------------------------------------------------------------------
-
-  @doc """
-  Brings `site`'s starter rows up to this release where that writes over nothing an admin wrote,
-  and returns the names of the ones it changed — `"site-theme"`, `"site-header"`, `"site-main"`,
-  `"/:lang"` — `[]` when there was nothing to do. See "Bringing an older site up to date" above.
-
-  Takes the site record or its id. A row the site does not have is not written: that is
-  `seed!/2`'s. Run it again and it changes nothing.
-  """
-  @spec upgrade(map() | String.t()) :: upgraded()
-  def upgrade(site_id) when is_binary(site_id), do: site_id |> site!() |> upgrade()
-
-  def upgrade(%{id: _site_id, name: _site_name} = site) do
-    theme = upgrade_theme(site)
-    header = upgrade_header(site)
-    layout = upgrade_layout(site)
-
-    # THE HOME PAGE ONLY BESIDE A LAYOUT THAT DRAWS THE COLUMN: without it the page's sections would
-    # lose the only column they have.
-    home = if framed?(site), do: upgrade_home(site), else: []
-
-    theme ++ header ++ layout ++ home
-  end
-
-  # EACH DECLARATION AND THE UTILITY THE ROW DOES NOT HAVE, after everything it has, so a value an
-  # admin changed is the one that stands and nothing they wrote moves.
-  defp upgrade_theme(%{id: site_id}) do
-    case held_row(Stylesheet, site_id, @theme_name) do
-      %{content: content} = row when is_binary(content) ->
-        case missing_theme(content) do
-          "" ->
-            []
-
-          missing ->
-            update!(row, %{content: String.trim_trailing(content) <> "\n\n" <> missing}, site_id)
-            [@theme_name]
-        end
-
-      _none ->
-        []
-    end
-  end
-
-  @doc false
-  # What `content` lacks of this release's theme, as CSS to append: one `@theme` block of every
-  # missing declaration, and the `site-bleed` utility. `""` when it has them all.
-  @spec missing_theme(String.t()) :: String.t()
-  def missing_theme(content) do
-    tokens =
-      for [line, name] <- Regex.scan(~r/^\s*(--[a-z0-9-]+)\s*:[^;]*;/m, @theme_css),
-          not Regex.match?(~r/(?<![\w-])#{Regex.escape(name)}\s*:/, content),
-          do: "  " <> String.trim(line)
-
-    [
-      if(tokens != [],
-        do: """
-        /* Added when this site was brought up to date: the tokens its theme did not have yet. */
-        @theme {
-        #{Enum.join(tokens, "\n")}
-        }
-        """
-      ),
-      if(not Regex.match?(~r/@utility\s+site-bleed\b/, content),
-        do:
-          Regex.run(~r/\/\* A section that runs.*?\n@utility site-bleed \{.*?\n\}\n/s, @theme_css)
-      )
-    ]
-    |> List.flatten()
-    |> Enum.reject(&is_nil/1)
-    |> Enum.join("\n")
-  end
-
-  # THE HEADER AS AN EARLIER RELEASE WROTE IT, WHOLE. Those had a bar that does not fit a phone: the
-  # links ran under the logo and Sign in was off the screen. The template is long and every line of
-  # it is the design's, so the earlier ones are held as the SHA-256 of the text a row keeps (the
-  # template, trimmed), not as a second copy of the markup; the fixtures the tests upgrade from are
-  # in `test/fixtures/starter_content`, and `git show <commit>:<this file>` has the source.
-  #
-  #   * `6ea2fbc`, the one on master: a row of links, the language dropdown, the toggle, Sign in;
-  #   * `3dc740b`, this branch's first: the same, with Docs and GitHub hidden below `sm`, the
-  #     dropdown only for two languages or more, and each entry titled and named as it was given.
-  #
-  # A header that differs by a single character is one somebody edited, and is left as it is.
-  @header_name "site-header"
-  @earlier_headers %{
-    "4c46e3ef80533429faca62bc536f8f9a50f919a1f78a34c45f8471d540cbc60c" => "6ea2fbc",
-    "439c346b034c354c07e8dcf76a42066893e664db50c35ff2db5bfc49273ae219" => "3dc740b"
-  }
-
-  # THE TEMPLATE IS THE ONE A NEW SITE GETS: it reads neither the brand nor the logo, which are the
-  # attributes' defaults, so what the row holds does not depend on the arguments.
-  defp upgrade_header(%{id: site_id}) do
-    with %{template: template} = header when is_binary(template) <-
-           held_row(Component, site_id, @header_name),
-         true <- Map.has_key?(@earlier_headers, template_digest(template)) do
-      update!(header, %{template: header_template()}, site_id)
-      [@header_name]
-    else
-      _current_edited_or_none -> []
-    end
-  end
-
-  defp header_template do
-    ""
-    |> components("")
-    |> Enum.find(&(&1.name == @header_name))
-    |> Map.fetch!(:template)
-  end
-
-  defp template_digest(template),
-    do: :sha256 |> :crypto.hash(String.trim(template)) |> Base.encode16(case: :lower)
-
-  # THE FRAME, THE MESSAGES AND `<main>` AS AN EARLIER RELEASE WROTE THEM, each once: then the column
-  # and the bar go in, and every other line — the header's call, its links, the footer's — is
-  # left as it is.
-  defp upgrade_layout(%{id: site_id, name: site_name}) do
-    with %{template: template} = layout when is_binary(template) <-
-           held_row(Layout, site_id, @layout_name),
-         false <- String.contains?(template, @section_bar),
-         [main] <- Enum.filter(@earlier_mains, &once?(template, &1)),
-         true <- once?(template, @earlier_frame_open) and once?(template, @flash_open) do
-      upgraded =
-        template
-        |> String.replace(@earlier_frame_open, @frame_open)
-        |> String.replace(@flash_open, section_bar_call(site_name) <> "\n  " <> @flash_open)
-        |> String.replace(main, @column)
-
-      update!(layout, %{template: upgraded}, site_id)
-      [@layout_name]
-    else
-      _current_edited_or_none -> []
-    end
-  end
-
-  defp framed?(%{id: site_id}) do
-    case held_row(Layout, site_id, @layout_name) do
-      %{template: template} when is_binary(template) -> String.contains?(template, @column)
-      _none -> false
-    end
-  end
-
-  # THE STARTER'S OWN HOME PAGE, its three sections as an earlier release opened them, each once.
-  defp upgrade_home(%{id: site_id}) do
-    with %{template: template} = home when is_binary(template) <- starter_home(site_id),
-         true <- Enum.all?(@earlier_home, fn {earlier, _now} -> once?(template, earlier) end) do
-      upgraded =
-        Enum.reduce(@earlier_home ++ @earlier_home_tags, template, fn {earlier, now}, acc ->
-          String.replace(acc, earlier, now)
-        end)
-
-      update!(home, %{template: upgraded}, site_id)
-      [home.path]
-    else
-      _current_edited_or_none -> []
-    end
-  end
-
-  defp starter_home(site_id) do
-    Page
-    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.Query.filter(site_id == ^site_id and path == "/:lang" and section == ^@section)
-    |> rows()
-    |> Enum.find(&PageProvision.ours?(&1, :mishka_cms_core))
-  end
-
-  defp once?(template, fragment), do: length(String.split(template, fragment)) == 2
-
-  # AS A PACKAGE WRITES, under the site's tenant: what changes is what this module wrote, and a
-  # template it writes is not one an author typed (`Validations.CodeChange`).
-  defp update!(row, attrs, site_id) do
-    row
-    |> Ash.Changeset.for_update(:update, attrs,
-      tenant: site_id,
-      authorize?: false,
-      context: %{page_code: :package}
-    )
-    |> Ash.update!()
   end
 
   # ---------------------------------------------------------------------------

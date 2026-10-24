@@ -38,12 +38,9 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
 
   EVERY PAGE HANGS ON THE SITE'S FRAME. An extension's pages are drawn in the site's `site-main`
   layout, between the header and the footer every page of the site shares
-  (`MishkaCmsCore.Runtime.SiteLayout`). So before the pages are written, the site's starter rows
-  are brought up to date (`MishkaCmsCore.Install.StarterContent.upgrade/1`): the theme gains the
-  tokens the pages are written in, and the layout the column and the bar. After them, every page of
-  the extension's section that has no layout is hung on `site-main`
-  (`MishkaCmsCore.Runtime.SiteLayout.adopt_pages/3`) — a page an earlier release wrote without one,
-  on a site set up before. A page an admin moved to another layout keeps it.
+  (`MishkaCmsCore.Runtime.SiteLayout`), which every site has from its first install
+  (`MishkaCmsCore.Install.StarterContent`). An extension writes that layout's id into each page it
+  ships (`MishkaCmsCore.Runtime.SiteLayout.layout_id/1`).
 
   NO PAGE MAY RAISE THE RUN. A site is unique by more than a page's address, so a site already
   holding a page called "Blog" refuses a sample page at a path nothing has taken — and left to
@@ -62,13 +59,11 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Install.Bootstrap
-  alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Site
-  alias MishkaCmsCore.Runtime.SiteLayout
   alias MishkaCmsCore.Runtime.Snippet
 
   # Every read here is narrowed to at most the handful of rows one extension writes, so a single
@@ -103,9 +98,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
           pages: [String.t()],
           snippets: [String.t()],
           renamed_pages: [PageProvision.renamed()],
-          skipped_pages: [PageProvision.held()],
-          upgraded: StarterContent.upgraded(),
-          adopted_pages: [String.t()]
+          skipped_pages: [PageProvision.held()]
         }
 
   @doc """
@@ -154,11 +147,6 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   `required/1`, or when a write is refused for any reason but a page being taken: every caller
   wants to know, and the screen says so. With no actor — the seeds, the install wizard's own run —
   the system writes.
-
-  Besides what it wrote, the report names in `upgraded` the starter rows brought up to date
-  (`MishkaCmsCore.Install.StarterContent.upgrade/1`), and in `adopted_pages` the paths of the
-  section's pages that had no layout and now hang on `site-main`
-  (`MishkaCmsCore.Runtime.SiteLayout.adopt_pages/3`).
   """
   @spec ensure!(manifest(), map() | String.t(), map(), keyword()) :: report()
   def ensure!(manifest, site, answers \\ %{}, opts \\ [])
@@ -180,10 +168,6 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
     permissions = ensure_permissions(manifest)
     components = install_missing_components(manifest, site_id, actor)
 
-    # THE FRAME BEFORE THE PAGES DRAWN IN IT, as the system: these are the starter's own rows, which
-    # no extension's names may be needed to bring up to date.
-    upgraded = StarterContent.upgrade(site)
-
     %{created: created, renamed: renamed, skipped: skipped} =
       site_id
       |> PageProvision.missing(moved(pages(manifest, site, actor), answers),
@@ -198,9 +182,6 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
 
     snippets = install_missing_snippet(manifest, site_id, site_name, actor)
 
-    adopted =
-      SiteLayout.adopt_pages(site_id, manifest.section, source: manifest.app, actor: actor)
-
     %{
       # WHAT THIS RUN WAS, not what it added. A second run that finds everything already there adds
       # nothing and is still an install at this version — which is what the site is then recorded as
@@ -211,9 +192,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
       pages: Enum.map(created, & &1.path),
       snippets: snippets,
       renamed_pages: renamed,
-      skipped_pages: skipped,
-      upgraded: upgraded,
-      adopted_pages: adopted
+      skipped_pages: skipped
     }
   end
 

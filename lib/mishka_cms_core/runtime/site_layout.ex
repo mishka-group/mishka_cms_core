@@ -206,12 +206,8 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
 
   ## Putting an extension's pages on the layout
 
-  `adopt_pages/3` hangs the pages of an extension's section that have no layout on the site's
-  `site-main`. `MishkaCmsCore.Runtime.ExtensionProvision.ensure!/4` calls it after every run,
-  so a site set up before an extension's pages carried a layout gets them on the frame on its
-  next set-up or update. A page an admin moved to another layout is not touched, and neither is
-  one another extension stamped (`MishkaCmsCore.Runtime.PageProvision.provisioned_by/1`).
-  `layout_id/1` is the row to write into a page an extension creates itself.
+  `layout_id/1` is the row to write into a page an extension creates itself, so the page is drawn
+  between the header and the footer every page of the site shares.
   """
 
   use Phoenix.Component
@@ -220,16 +216,11 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
   require Ash.Query
   require Logger
 
-  alias MishkaCmsCore.Runtime.{Languages, Layout, LiveViewHelpers, Page, PageProvision, Seo}
+  alias MishkaCmsCore.Runtime.{Languages, Layout, LiveViewHelpers, Seo}
   alias MishkaInstaller.Event.Hook
 
   @event "runtime:page:frame"
   @layout_name "site-main"
-
-  # A section holds a handful of pages; one page of results is every one an extension wrote.
-  @row_limit 200
-
-  @package %{page_code: :package}
 
   # EVERY CLASS THE BAR DRAWS WITH, in one place: a site's stylesheet is built from its own
   # templates, which name none of these, so `classes/0` hands them to it. Each colour that changes
@@ -661,88 +652,6 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
       ],
       " "
     )
-  end
-
-  @doc """
-  Hangs the pages of `section` on `site` that have no layout on the site's `site-main`, and
-  returns their paths. `[]` when the site has no `site-main`, or no such page.
-
-  Takes the site record or its id. A page with a layout of its own is left as it is, whichever it
-  is: an admin who moved one chose it. Options:
-
-    * `:source`: the extension the pages are the provision of (`:mishka_blog`); a page another
-      extension stamped (`MishkaCmsCore.Runtime.PageProvision.provisioned_by/1`) is left alone.
-      A page nothing stamped, written before pages were stamped, is taken.
-    * `:actor`: who to write as, through the action their own role uses, as
-      `MishkaCmsCore.Runtime.ExtensionProvision` writes; the system when left out.
-
-  Run it again and it changes nothing: every page it took has a layout now.
-
-      SiteLayout.adopt_pages(site.id, "blog", source: :mishka_blog)
-      #=> ["/:lang/blog", "/:lang/blog/:slug"]
-  """
-  @spec adopt_pages(map() | String.t(), String.t(), keyword()) :: [String.t()]
-  def adopt_pages(site, section, opts \\ [])
-
-  def adopt_pages(%{id: site_id}, section, opts), do: adopt_pages(site_id, section, opts)
-
-  def adopt_pages(site_id, section, opts) when is_binary(site_id) and is_binary(section) do
-    case layout_id(site_id) do
-      nil ->
-        []
-
-      layout_id ->
-        source = opts |> Keyword.get(:source) |> source()
-
-        for page <- unframed(site_id, section),
-            PageProvision.provisioned_by(page) in [nil, source] or is_nil(source) do
-          adopt!(page, layout_id, site_id, Keyword.get(opts, :actor))
-          page.path
-        end
-    end
-  end
-
-  defp source(nil), do: nil
-  defp source(source), do: to_string(source)
-
-  defp unframed(site_id, section) do
-    Page
-    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.Query.filter(site_id == ^site_id and section == ^section and is_nil(layout_id))
-    |> Ash.Query.sort(:path)
-    |> Ash.read!(authorize?: false, page: [limit: @row_limit])
-    |> Map.fetch!(:results)
-  end
-
-  # THE THREE ANSWERS `ExtensionProvision` WRITES BY: nobody is the system, a master writes the
-  # master action, a site's admin their own site's under its tenant. Only the layout changes, and
-  # the write says it is a package's, as the provision's page writes do.
-  defp adopt!(page, layout_id, _site_id, nil) do
-    page
-    |> Ash.Changeset.for_update(:master_update, %{layout_id: layout_id},
-      authorize?: false,
-      context: @package
-    )
-    |> Ash.update!()
-  end
-
-  defp adopt!(page, layout_id, _site_id, %{site_id: nil} = actor) do
-    page
-    |> Ash.Changeset.for_update(:master_update, %{layout_id: layout_id},
-      actor: actor,
-      context: @package
-    )
-    |> Ash.update!()
-  end
-
-  defp adopt!(page, layout_id, site_id, actor) do
-    page
-    |> Ash.Changeset.for_update(:update, %{layout_id: layout_id},
-      actor: actor,
-      tenant: site_id,
-      context: @package
-    )
-    |> Ash.update!()
   end
 
   defp address(value) when is_binary(value) do
