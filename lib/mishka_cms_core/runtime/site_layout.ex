@@ -234,7 +234,9 @@ defmodule MishkaCmsCore.Runtime.SiteLayout do
   @outer "border-y border-edge dark:border-edge-dark"
   @inner "mx-auto flex w-full max-w-[1160px] flex-wrap items-center gap-x-5 gap-y-3 px-8 py-3"
   @title "shrink-0 font-newsreader text-[22px] leading-none italic text-fg dark:text-fg-dark"
-  @nav "flex max-w-full items-center gap-1 overflow-x-auto rounded-[12px] border border-edge bg-surface p-1 dark:border-edge-dark dark:bg-surface-dark"
+  # The links scroll sideways on a narrow phone, with no scrollbar drawn under the pills: a strip a
+  # fraction of a pixel too wide otherwise shows a grey bar beneath them.
+  @nav "flex max-w-full items-center gap-1 overflow-x-auto [scrollbar-width:none] rounded-[12px] border border-edge bg-surface p-1 dark:border-edge-dark dark:bg-surface-dark"
   @link "flex h-8 shrink-0 items-center rounded-[9px] px-3.5 text-[13.5px] font-medium whitespace-nowrap"
   @current "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark"
   @other "text-dim hover:text-fg dark:text-dim-dark dark:hover:text-fg-dark"
