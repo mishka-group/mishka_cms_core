@@ -18,6 +18,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   - **Host Index**: O(1) lookups by hostname for request routing
   - **Name Index**: O(1) lookups by site name for administration
   - **Origins Index**: O(1) lookup of whether a site allows a CORS origin — see `allows_origin?/2`
+  - **Page Editions Index**: the live editions of each page group, so a page names its other
+    languages without a query — see `page_editions/2`
   - **Conflict Detection**: Automatic hostname and name uniqueness validation
 
   ## Data Structure
@@ -145,7 +147,23 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # and `RuntimeCompilerWorker.apply_component_lifecycle/3` writes or drops both.
   @components_index :mishka_sites_components_index
 
-  @tables [@main_table, @host_index, @name_index, @allowed_origins_index, @components_index]
+  # `{{site_id, language_group_id, page_id}, %{path:, language:, extra:}}` for every ACTIVE,
+  # unarchived page: the editions a page offers in its other languages, read by
+  # `MishkaCmsCore.Runtime.PageEditions.editions/2` on every render with no query. One row per page,
+  # so a write touches that page alone — its group's other rows, and the modules compiled from them,
+  # are left as they are. Ordered, so a group is the range of keys its site and group begin, and
+  # each read walks that range and nothing else. A page with no group yet is kept under its own id,
+  # the group `MishkaCmsCore.Runtime.PageLanguageBackfill` gives it, so the backfill moves no row.
+  @page_editions_index :mishka_sites_page_editions_index
+
+  @tables [
+    @main_table,
+    @host_index,
+    @name_index,
+    @allowed_origins_index,
+    @components_index,
+    @page_editions_index
+  ]
 
   @pubsub MishkaCmsCore.PubSub
 
@@ -153,6 +171,15 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # `:update`, `:activate`, `:deactivate` and `:unarchive` all land on "site:updated"; `:destroy` and
   # `:permanent_destroy` on "site:destroyed"; `:create` publishes "site:created" alone.
   @site_topics ["site:created", "site:updated", "site:destroyed"]
+
+  # The same three of `MishkaCmsCore.Runtime.Page`'s: every create, update, restore and unarchive
+  # of a page, its master twins included, lands on "page:created" or "page:updated", and an archive
+  # or a permanent delete on "page:destroyed".
+  @page_topics ["page:created", "page:updated", "page:destroyed"]
+
+  # What a page's edition carries: what `PageEditions.alternates/3` builds a URL from, and the
+  # `extra` that says whether a pattern page answers every language.
+  @edition_fields [:path, :language, :extra]
 
   # Record structure: {id, name, host, priority, active, master, mode, frontend_domain, allowed_origins}
 
@@ -661,6 +688,82 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   def component?(_site_id, _name), do: false
 
   @doc """
+  The active, unarchived editions of the language group `group` on the site `site_id`, each as its
+  stored path, its language and its `extra` — what `MishkaCmsCore.Runtime.PageEditions.editions/2`
+  offers beside a page. One ETS range read, and no query: a group nothing is known of has no
+  editions.
+
+      SiteState.page_editions(site.id, about.language_group_id)
+      #=> [%{path: "/about", language: "en", extra: %{}},
+      #    %{path: "/fa/about", language: "fa", extra: %{}}]
+  """
+  @spec page_editions(String.t(), String.t()) :: [
+          %{path: String.t(), language: String.t() | nil, extra: map() | nil}
+        ]
+  def page_editions(site_id, group) when is_binary(site_id) and is_binary(group),
+    do: :ets.select(@page_editions_index, [{{{site_id, group, :_}, :"$1"}, [], [:"$1"]}])
+
+  def page_editions(_site_id, _group), do: []
+
+  @doc """
+  Keeps the page row `page` in the editions index as it is now: under its site and language group
+  while it is active and unarchived, and out of it otherwise. A page moved to another group leaves
+  its old one in the same call, and no other row is touched.
+
+  `MishkaCmsCore.Runtime.Resources.Notifiers.PageEditions` calls it on the node that wrote the row,
+  and this process on every other one, from the row the write's broadcast carries.
+  """
+  @spec put_page_edition(map()) :: :ok
+  def put_page_edition(%{id: id, site_id: site_id, active: true} = page)
+      when is_binary(id) and is_binary(site_id) do
+    if is_nil(Map.get(page, :archived_at)) and indexed?() do
+      group = page.language_group_id || id
+      :ets.insert(@page_editions_index, {{site_id, group, id}, Map.take(page, @edition_fields)})
+
+      # After the insert, so a page whose group is unchanged is never missing from it.
+      :ets.select_delete(@page_editions_index, [
+        {{{site_id, :"$1", id}, :_}, [{:"=/=", :"$1", group}], [true]}
+      ])
+
+      :ok
+    else
+      delete_page_edition(page)
+    end
+  end
+
+  def put_page_edition(page), do: delete_page_edition(page)
+
+  @doc "Takes the page row `page` out of the editions index — archived, deleted or switched off."
+  @spec delete_page_edition(map()) :: :ok
+  def delete_page_edition(%{id: id, site_id: site_id})
+      when is_binary(id) and is_binary(site_id) do
+    if indexed?(),
+      do: :ets.select_delete(@page_editions_index, [{{{site_id, :_, id}, :_}, [], [true]}])
+
+    :ok
+  end
+
+  def delete_page_edition(_page), do: :ok
+
+  @doc """
+  Puts every page of `pages` in the editions index at once — the boot's batch, from a read of the
+  active pages alone (see `MishkaCmsCore.Runtime.Handlers.BootHandler.load_page_editions/0`).
+  """
+  @spec save_page_editions([map()]) :: :ok
+  def save_page_editions(pages) when is_list(pages) do
+    :ets.insert(
+      @page_editions_index,
+      for(
+        %{id: id, site_id: site_id} = page <- pages,
+        is_binary(site_id),
+        do: {{site_id, page.language_group_id || id, id}, Map.take(page, @edition_fields)}
+      )
+    )
+
+    :ok
+  end
+
+  @doc """
   Returns the number of sites.
   """
   def count, do: :ets.info(@main_table, :size)
@@ -748,13 +851,24 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
       write_concurrency: true
     ])
 
+    :ets.new(@page_editions_index, [
+      :ordered_set,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
     # THE WRITE IS OFTEN NOT THIS NODE'S. These tables are per node and `DNSCluster` means there are
     # usually several, so a site created, renamed, activated or destroyed on one node left every
     # other one resolving hosts against a stale table — a request answered by the wrong site, or by
     # a 404 for a site that exists. `MishkaCmsCore.Runtime.Site` already publishes through
     # `Ash.Notifier.PubSub`, and Phoenix.PubSub carries it across connected nodes; only the listening
     # was missing. Same fix, same reason, as `MishkaCmsCore.Runtime.States.SettingsState`.
-    for topic <- @site_topics, do: Phoenix.PubSub.subscribe(@pubsub, topic)
+    #
+    # A page's editions the same way: `MishkaCmsCore.Runtime.Page` publishes too, so a translation
+    # added, moved or removed on one node is offered, or no longer offered, on every other.
+    for topic <- @site_topics ++ @page_topics, do: Phoenix.PubSub.subscribe(@pubsub, topic)
 
     {:ok, %{}, {:continue, :load}}
   end
@@ -781,6 +895,10 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # the first. An invalidation would shrug; anything that counts, appends to a log, enqueues a job or
   # posts a webhook would do it twice for one site change. Ash stamps the sending process onto the
   # notification, so the node it came from is known for free.
+  #
+  # A page's edition is no different: `MishkaCmsCore.Runtime.Resources.Notifiers.PageEditions` puts
+  # it from the writing process once the row is committed, so the page that writer opens next
+  # already offers it.
   @impl true
   def handle_info(
         %Phoenix.Socket.Broadcast{payload: %Ash.Notifier.Notification{from: from}},
@@ -830,6 +948,32 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     {:noreply, state}
   end
 
+  # Another node's page write, from the row its broadcast carries and with no read, for the reason
+  # the site clauses above give. Only this page's row moves: its group's other editions, and every
+  # module compiled from them, stay as they are, and read the change on their next render.
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: "page:destroyed",
+          payload: %Ash.Notifier.Notification{data: %{id: _id} = page}
+        },
+        state
+      ) do
+    delete_page_edition(page)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: topic,
+          payload: %Ash.Notifier.Notification{data: %{id: _id} = page}
+        },
+        state
+      )
+      when topic in ["page:created", "page:updated"] do
+    put_page_edition(page)
+    {:noreply, state}
+  end
+
   def handle_info(_message, state), do: {:noreply, state}
 
   ####################################################################################
@@ -860,6 +1004,11 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
         :ok
     end
   end
+
+  # A PAGE WRITTEN BEFORE THIS PROCESS STARTED, or where it never does — a script run without the
+  # application — has no index to keep. The boot reads every page anyway, and a write must not fail
+  # after its row is committed for want of a cache.
+  defp indexed?, do: :ets.whereis(@page_editions_index) != :undefined
 
   defp origins_record(id, host, frontend_domain, allowed_origins) do
     site = %{host: host, frontend_domain: frontend_domain, allowed_origins: allowed_origins}
