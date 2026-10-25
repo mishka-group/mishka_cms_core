@@ -143,14 +143,14 @@ defmodule MishkaCmsCore.Accounts.User do
       # — see `MishkaCmsCore.Accounts.SecondFactor`. Set up in two steps, so nothing is stored until
       # a code from the app matches; a code on its own signs nobody in.
       #
-      # A code of the previous 30-second period is still accepted (`grace_period 1`, the one step
-      # RFC 6238 §5.2 allows for clock drift and transmission delay): a code typed or sent as its
-      # period ends is not refused on arrival. A code is still good once only (`last_totp_at`).
+      # A code is good for its own 30-second period only. The test environment alone also takes the
+      # previous period's (`config :mishka_cms_core, totp_grace_period: 1`), so a test whose code is
+      # made as its period ends does not fail on arrival; a host leaves it unset.
       totp do
         identity_field :email
         issuer "MishkaCMS"
         confirm_setup_enabled? true
-        grace_period 1
+        grace_period Application.compile_env(:mishka_cms_core, :totp_grace_period)
         brute_force_strategy :rate_limit
       end
 

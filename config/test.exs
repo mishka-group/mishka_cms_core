@@ -154,3 +154,7 @@ config :mishka_cms_core, :gettext_marks_untranslated, true
 # CLDR data for a language other than English (`MishkaCmsCore.Localized`) is downloaded into
 # priv/localize/locales the first time a test reads it; CI downloads it before the suite.
 config :localize, otp_app: :mishka_cms_core, allow_runtime_locale_download: true
+
+# A TOTP code of the previous 30-second period is also taken in tests only, so a test whose code is
+# made as its period ends does not fail on arrival. Production keeps the 30-second window.
+config :mishka_cms_core, :totp_grace_period, 1
