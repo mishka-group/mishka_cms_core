@@ -7,7 +7,7 @@
 
 **The engine of [Mishka CMS](https://mishka.tools/cms): a multi-tenant runtime, a visual page builder, accounts and an admin dashboard for Elixir and Phoenix LiveView.**
 
-[Website](https://mishka.tools/cms) · [Documentation](https://mishka.tools/cms/docs) · [Admin preview](https://mishka.tools/cms#demo) · [Hire us](https://mishka.tools/hire-us)
+[Website](https://mishka.tools/cms) · [Documentation](https://mishka.tools/cms/docs) · [Extensions](https://mishka.tools/cms#extensions) · [Hire us](https://mishka.tools/hire-us)
 
 </div>
 
@@ -104,7 +104,7 @@ git clone https://github.com/mishka-group/mishka_document.git __extensions/mishk
 ## 📚 Documentation
 
 - [Mishka CMS documentation](https://mishka.tools/cms/docs), which is still being written
-- [Features](https://mishka.tools/cms#platform), [multi-tenant sites](https://mishka.tools/cms#tenant) and the [interactive admin preview](https://mishka.tools/cms#demo)
+- [Features](https://mishka.tools/cms#platform), [multi-tenant sites](https://mishka.tools/cms#tenant)
 - The [extensions](https://mishka.tools/cms#extensions) built on the core
 - [Mishka Installer documentation](https://mishka.tools/installer/docs), for plugins and events
 - [Mishka Gervaz documentation](https://mishka.tools/gervaz/docs), for the Ash admin DSL the dashboard screens use
