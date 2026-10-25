@@ -58,11 +58,13 @@ An extension adds routes with the `MishkaCmsCore.ExtensionRouter` behaviour, add
 
 ## 🚀 Getting started
 
-The package is not on Hex. [Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_cms_core` when that folder exists, and otherwise from GitHub at the revision pinned in `mix.lock`:
+Add it from Hex:
 
 ```elixir
-{:mishka_cms_core, github: "mishka-group/mishka_cms_core", branch: "master", override: true}
+{:mishka_cms_core, "~> 0.0.1"}
 ```
+
+[Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_cms_core` instead when that folder exists.
 
 Mishka CMS also tells the package which repo, endpoint and web module to use, and which extensions are installed:
 
