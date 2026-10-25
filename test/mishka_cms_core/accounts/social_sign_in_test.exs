@@ -349,12 +349,12 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       assert SecondFactor.refusal(error) == :invalid
 
       assert {:ok, %User{} = signed_in} =
-               second_step(pending, MishkaCmsCore.Test.Totp.code(secret), site.id)
+               second_step(pending, NimbleTOTP.verification_code(secret), site.id)
 
       assert is_binary(signed_in.__metadata__.token)
 
       assert {:error, _spent} =
-               second_step(pending, MishkaCmsCore.Test.Totp.code(secret), site.id)
+               second_step(pending, NimbleTOTP.verification_code(secret), site.id)
     end
 
     test "a token from elsewhere signs nobody in", %{site: site} do
@@ -531,7 +531,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       :confirm_setup_with_totp,
       %{
         setup_token: started.__metadata__.setup_token,
-        code: MishkaCmsCore.Test.Totp.code(secret)
+        code: NimbleTOTP.verification_code(secret)
       },
       actor: user,
       tenant: user.site_id

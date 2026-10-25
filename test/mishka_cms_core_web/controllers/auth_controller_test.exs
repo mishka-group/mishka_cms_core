@@ -458,7 +458,7 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
         :confirm_setup_with_totp,
         %{
           setup_token: started.__metadata__.setup_token,
-          code: MishkaCmsCore.Test.Totp.code(secret)
+          code: NimbleTOTP.verification_code(secret)
         },
         actor: user,
         tenant: user.site_id

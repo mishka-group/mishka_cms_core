@@ -468,7 +468,7 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
     |> Base.decode32!(padding: false)
   end
 
-  defp code(secret), do: MishkaCmsCore.Test.Totp.code(secret)
+  defp code(secret), do: NimbleTOTP.verification_code(secret)
 
   # As if the next 30-second period had come: the current code confirmed the setup and is spent.
   defp later!(user) do

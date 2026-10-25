@@ -142,10 +142,15 @@ defmodule MishkaCmsCore.Accounts.User do
       # An authenticator app as a second step after the password, for an account that sets one up
       # — see `MishkaCmsCore.Accounts.SecondFactor`. Set up in two steps, so nothing is stored until
       # a code from the app matches; a code on its own signs nobody in.
+      #
+      # A code of the previous 30-second period is still accepted (`grace_period 1`, the one step
+      # RFC 6238 §5.2 allows for clock drift and transmission delay): a code typed or sent as its
+      # period ends is not refused on arrival. A code is still good once only (`last_totp_at`).
       totp do
         identity_field :email
         issuer "MishkaCMS"
         confirm_setup_enabled? true
+        grace_period 1
         brute_force_strategy :rate_limit
       end
 
