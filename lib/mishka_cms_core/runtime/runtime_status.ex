@@ -17,7 +17,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   Lazy parts (`precompile: false` — a Page, a Layout, an Error Page or a Component)
   are NOT compiled until the first request that needs them, so "module not loaded"
   is the normal `:lazy_ready` state, not a failure. See
-  `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` `compile?/3`.
+  MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker `compile?/3`.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext

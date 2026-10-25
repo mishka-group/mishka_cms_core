@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Runtime.SettingShareCards do
   (`cms_core:setting:after_save`, `MishkaCmsCore.Runtime.ShareCard.site_settings/0` — the site's
   name and logo), every share card of its site is looked at again in the background
   (`MishkaCmsCore.Runtime.ShareCard.redraw_all/2`), of every active site for a global value. Only a
-  card whose data changed is drawn. Registered in `MishkaCmsCore.Application`.
+  card whose data changed is drawn. Registered in MishkaCmsCore.Application.
   """
   alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
 

@@ -6,7 +6,7 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
   @moduledoc """
   A MishkaGervaz custom table template: the list of drafts inside the page builder's Versions sheet.
 
-  It is the third block of `MishkaCmsCoreWeb.Live.Admin.Builder.Panels.drafts_sheet/1` — the rows,
+  It is the third block of the `drafts_sheet` component in `MishkaCmsCoreWeb.Live.Admin.Builder.Panels` — the rows,
   their skeleton and their empty state. The "Save as" form and the name-collision banner above it are
   not a table and stay in `Panels`.
 

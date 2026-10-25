@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Runtime.MediaSiteIcons do
   A plain mishka_installer plugin: after a media file is saved (`cms_core:media:after_save` —
   replaced in place, archived), what is kept of its site's icons is dropped when the site's
   favicon or the picture of its icons is that file, and the next request for one reads it again
-  (`MishkaCmsCore.Runtime.SiteIcon.forget_file/2`). Registered in `MishkaCmsCore.Application`.
+  (`MishkaCmsCore.Runtime.SiteIcon.forget_file/2`). Registered in MishkaCmsCore.Application.
   """
   alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
 

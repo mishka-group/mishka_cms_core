@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Accounts.User.Notices.RecoveryCodeUsed do
   A mishka_installer plugin on `"auth:recovery_code:used"`: emails the account that one of its
   recovery codes signed someone in, and how many are left, so whoever did not do it hears of it.
   Sent as the sign-in emails are (`MishkaCmsCore.Accounts.Helper.send_auth_email/3`), from the
-  account's own site, the installation's for a master. Registered in `MishkaCmsCore.Application`.
+  account's own site, the installation's for a master. Registered in MishkaCmsCore.Application.
   """
   use MishkaInstaller.Event.Hook, event: "auth:recovery_code:used", initial: %{priority: 50}
   use Gettext, backend: MishkaCmsCore.Gettext

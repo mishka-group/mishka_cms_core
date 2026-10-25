@@ -195,7 +195,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   before then.
 
   Every bundle job a serving instance (`serving?/0`) queues carries it (`asset_job/4`), and
-  `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` builds the job on the instance it names: the
+  MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker builds the job on the instance it names: the
   CSS, JS and sitemap a bundle job builds go into that instance's own
   `MishkaCmsCore.Runtime.States.AssetsState`. A deploy that starts the next instance beside the old
   one gives both the same `node()` and the same Oban queue; this id is what tells them apart. A
@@ -205,7 +205,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   def boot_id, do: :persistent_term.get(@boot_id_key, nil)
 
   @doc """
-  Gives this instance a new `boot_id/0`. Called once, by `MishkaCmsCore.Application.start/2`.
+  Gives this instance a new `boot_id/0`. Called once, by MishkaCmsCore.Application.start/2.
   """
   @spec new_boot_id() :: :ok
   def new_boot_id, do: :persistent_term.put(@boot_id_key, Ecto.UUID.generate())

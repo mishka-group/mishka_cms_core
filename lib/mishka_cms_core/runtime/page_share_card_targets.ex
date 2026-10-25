@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Runtime.PageShareCardTargets do
   the core's own share cards on the site asked — each active page that shows no record, as
   `{:page, id}`, under `"mishka_cms_core"`. A page that shows records is left to the producer of
   those records. The pages are streamed by id, as the system reads them for a share card
-  (`MishkaCmsCore.Runtime.ShareCard.specs/3`). Registered in `MishkaCmsCore.Application`.
+  (`MishkaCmsCore.Runtime.ShareCard.specs/3`). Registered in MishkaCmsCore.Application.
   """
   use MishkaInstaller.Event.Hook,
     event: MishkaCmsCore.Runtime.ShareCard.targets_event(),

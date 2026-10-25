@@ -21,7 +21,7 @@ defmodule MishkaCmsCore.Sidebar.MenuSettings do
   and the missing entries appear — and the sidebar itself never depended on the definitions, since
   every read passes the declared value as its default.
 
-  Registered in `MishkaCmsCore.Application`.
+  Registered in MishkaCmsCore.Application.
   """
 
   use MishkaInstaller.Event.Hook, event: "settings:register", initial: %{priority: 60}

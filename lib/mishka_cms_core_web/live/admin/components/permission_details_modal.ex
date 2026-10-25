@@ -12,7 +12,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.PermissionDetailsModal do
   `MishkaCmsCoreWeb.Live.Admin.Components.DetailModal` (used here without a tab bar — `tabs={[]}`). Driven
   by the parent's `@permission_modal` map (`record`, `edit_mode?`, `loading?`, `form_record_id`); the
   form's `record_id` flows through the template so the view/edit toggle keeps it mounted. See the parent
-  `MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index`.
+  MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index.
   """
   use Phoenix.Component
   use Gettext, backend: MishkaCmsCore.Gettext

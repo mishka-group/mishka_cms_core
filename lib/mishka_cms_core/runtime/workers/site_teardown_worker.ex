@@ -17,7 +17,7 @@ defmodule MishkaCmsCore.Runtime.Workers.SiteTeardownWorker do
   `MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteTeardown`), because those
   rows no longer exist by the time this runs.
 
-  See `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` for the per-record
+  See MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker for the per-record
   lifecycle and `MishkaCmsCore.Runtime.States.SiteState` for the request gate.
   """
   use Oban.Worker, queue: :maintenance, max_attempts: 5

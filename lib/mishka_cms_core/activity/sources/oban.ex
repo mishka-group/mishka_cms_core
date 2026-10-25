@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.Activity.Sources.Oban do
   @moduledoc """
   Activity source backed by Oban job telemetry. Attaches once on app boot
-  via `attach/0` (called from `MishkaCmsCore.Application.start/2`).
+  via `attach/0` (called from MishkaCmsCore.Application.start/2).
 
   ## How it works
 
@@ -40,7 +40,7 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
 
     * top-level: `%{"site_id" => "<uuid>"}`
     * nested:    `%{"data" => %{"site_id" => "<uuid>"}}` — used by
-      `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker`.
+      MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker.
 
   `resource` is read from `args["resource"]` (the inspected module string set
   by `MishkaCmsCore.Runtime.Resources.Changes.SendToOban`). Jobs without one

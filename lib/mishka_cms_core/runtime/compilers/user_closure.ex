@@ -38,7 +38,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.UserClosure do
 
     * the tag hands it something naming `current_user`, which is text in this record; or
     * the tag hands it the caller's WHOLE bag — `assigns`, or `@socket`, whose own `assigns` is the
-      `Phoenix.LiveView.Socket.AssignsNotInSocket` struct holding that same map in `__assigns__`,
+      Phoenix.LiveView.Socket.AssignsNotInSocket struct holding that same map in `__assigns__`,
       and whose `private` holds the visitor's session besides.
 
   So the question never leaves the record being compiled, and the answer cannot be made wrong by

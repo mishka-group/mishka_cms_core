@@ -13,7 +13,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.UserDetailsModal do
   by the parent's `@user_modal` map (`record`, `edit_mode?`, `loading?`, `form_record_id`); the form's
   `record_id` flows through the template (NOT `send_update`) so a parent re-render can't reset it, and the
   form stays mounted across the view/edit toggle. See the parent
-  `MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index`.
+  MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index.
   """
   use Phoenix.Component
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext

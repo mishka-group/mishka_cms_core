@@ -10,7 +10,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Highlight do
   The drawer coloured a line grey when it started with `<!--` or `/*`, and left everything else one
   colour. Anything better with patterns runs into the cases that make highlighting worth having in
   the first place: a `#` inside a string is not a comment, `"` inside a heredoc does not end it,
-  `#{}` interpolation is code inside a string, and a `<` in a text node is not a tag. A tokenizer
+  `\#{}` interpolation is code inside a string, and a `<` in a text node is not a tag. A tokenizer
   already knows all four, and this project ships two of them.
 
   ## What it costs, measured

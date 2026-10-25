@@ -124,7 +124,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   `MishkaGervaz.Messages.start_async/4`, `assign_async/4` or `in_caller_locale/1` renders as its
   starter does. Gervaz carries the locale itself. See "In a task" above.
 
-  Called once, when `MishkaCmsCore.Application` starts.
+  Called once, when MishkaCmsCore.Application starts.
   """
   @spec carry_into_tasks() :: :ok
   def carry_into_tasks do
@@ -471,7 +471,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
 
   ## Why the canvas cannot call `component/1`
 
-  `MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive.contain/3` forces every node's render to iodata on
+  MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive.contain/3 forces every node's render to iodata on
   purpose, so that a component's raise, throw or exit lands inside a rescue the editor owns rather
   than taking an author's unsaved session with it. `Phoenix.LiveView.Engine` implements
   `Phoenix.HTML.Safe` for `%Phoenix.LiveView.Component{}` only to raise — the two facts are

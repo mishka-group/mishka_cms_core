@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Accounts.User.Notices.SecondFactorTurnedOff do
   sign-in was turned off — by an admin, or by the account itself — so whoever did not do it hears
   of it. Sent as the sign-in emails are (`MishkaCmsCore.Accounts.Helper.send_auth_email/3`), from
   the account's own site, the installation's for a master. Registered in
-  `MishkaCmsCore.Application`.
+  MishkaCmsCore.Application.
   """
   use MishkaInstaller.Event.Hook, event: "auth:second_factor:disabled", initial: %{priority: 50}
   use Gettext, backend: MishkaCmsCore.Gettext

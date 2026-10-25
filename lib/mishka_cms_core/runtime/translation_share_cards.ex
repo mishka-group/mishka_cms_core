@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.TranslationShareCards do
   `MishkaCmsCore.Runtime.Seo.site_name/2`), every share card of that site is looked at again in
   the background (`MishkaCmsCore.Runtime.ShareCard.redraw_all/2`); for a global row, of every
   active site named so. Only a card whose data changed is drawn. Registered in
-  `MishkaCmsCore.Application`.
+  MishkaCmsCore.Application.
   """
   alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
 

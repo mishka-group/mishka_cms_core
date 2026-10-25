@@ -1185,6 +1185,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   - Attribute `values:` constraints — values declared via
     `attr :variant, :string, values: [...]`.
 
+  For example:
+
       {:ok, info} =
         UiKitHandler.list_features(bundle_path: path, component: "button")
 

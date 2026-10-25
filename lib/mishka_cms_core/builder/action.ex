@@ -46,7 +46,7 @@ defmodule MishkaCmsCore.Builder.Action do
 
   ## Both directions are terms
 
-  `write/3` answers a `MishkaCmsCore.Builder.Command.t/0` — the command's name, its arguments and its
+  `write/3` answers a `t:MishkaCmsCore.Builder.Command.t/0` — the command's name, its arguments and its
   options — and `read/2` is handed one back. Neither side spells Elixir. What is written is escaped
   and printed by the code formatter, and what is read was parsed and unwrapped, so a class name
   containing a double quote is a class name containing a double quote in both directions and there is

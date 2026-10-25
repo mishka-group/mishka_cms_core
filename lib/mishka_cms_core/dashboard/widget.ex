@@ -36,7 +36,7 @@ defmodule MishkaCmsCore.Dashboard.Widget do
   (`settings_definitions/1` + a `settings:register` plugin such as
   `MishkaBlog.Dashboard.WidgetSettings`) — a blog widget's "Posts to show" is documented under
   **Blog**, not buried in the dashboard's blob. See
-  `MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index`.
+  MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index.
 
   A `config` entry is a plain map — the descriptor travels through the hook payload, which is
   plain-map only — declaring ONE setting, in one of exactly three types:

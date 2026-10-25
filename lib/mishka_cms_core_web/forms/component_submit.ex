@@ -19,7 +19,7 @@ defmodule MishkaCmsCoreWeb.Forms.ComponentSubmit do
   rename of `chelekom-button` declared `attr :type` with no default, and the first page that left
   `type` unset raised `key :type not found`.
 
-  So once `MishkaGervaz.Form.Web.Events.SubmitHandler.Default` has parsed the params, every row
+  So once MishkaGervaz.Form.Web.Events.SubmitHandler.Default has parsed the params, every row
   named like a row the record already declares gets back what the form did not change:
 
     * in an option map (a `:key_map` sub-field), each key with no control, and each key whose control

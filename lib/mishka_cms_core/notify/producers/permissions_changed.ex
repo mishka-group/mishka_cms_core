@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Notify.Producers.PermissionsChanged do
   A plain mishka_installer plugin: when a user's permissions are replaced
   (`cms_core:user:after_assign_permissions`), notify that site's holders of the permission area
   (`admin:dashboard:permission`) AND every master holding it — a security-relevant change they
-  should see. Registered in `MishkaCmsCore.Application`.
+  should see. Registered in MishkaCmsCore.Application.
 
   Excludes both the admin who made the change (the notifier's `meta.actor`) and the affected user, so
   neither is told about a change they already know about. The pattern any extension follows: `use

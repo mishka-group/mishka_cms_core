@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.PageShareCard do
   background and drawn when what it shows changed (`MishkaCmsCore.Runtime.ShareCard.refresh/3`), so
   it is ready before the first visitor. A save that leaves the card's title, description and picture
   alone draws nothing. A page that shows records is left to the plugins of those records' own
-  after-save events. Registered in `MishkaCmsCore.Application`.
+  after-save events. Registered in MishkaCmsCore.Application.
   """
 
   alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook

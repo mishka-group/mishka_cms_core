@@ -10,7 +10,7 @@ defmodule MishkaCmsCore.Mail.Workers.DeliverWorker do
   endpoint's key — a reset or sign-in email holds a token, and finished jobs stay in `oban_jobs`
   for a week. It carries no provider key: the provider reads its own when the job runs.
 
-  A failure the provider calls worth retrying (`MishkaCmsCore.Mail.Provider.retry?/1`) is retried
+  A failure the provider calls worth retrying (`c:MishkaCmsCore.Mail.Provider.retry?/1`) is retried
   with Oban's backoff, with the same idempotency key; anything else, and the last attempt, ends
   the delivery `:failed`. A site that lost its provider in the meantime ends it `:not_configured`.
   Once the provider has answered, the site's history older than `mailer.history_days` goes

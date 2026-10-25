@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Runtime.SiteShareCards do
   address or its name), every share card of it is looked at again in the background
   (`MishkaCmsCore.Runtime.ShareCard.redraw_all/2`), and a card that shows the old address is drawn
   with the new one before anybody visits the page. The saves of a burst are one look. Registered
-  in `MishkaCmsCore.Application`.
+  in MishkaCmsCore.Application.
   """
   alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
 

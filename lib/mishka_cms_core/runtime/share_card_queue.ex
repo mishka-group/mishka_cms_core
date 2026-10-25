@@ -29,7 +29,7 @@ defmodule MishkaCmsCore.Runtime.ShareCardQueue do
       (`MishkaCmsCore.Runtime.Handlers.BootHandler.serving?/0`) leaves the queue as the app started
       it, paused, or not there at all under `MishkaCmsCore.Runtime.Handlers.BootHandler.oban_config/1`.
 
-  Registered in `MishkaCmsCore.Application`.
+  Registered in MishkaCmsCore.Application.
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
