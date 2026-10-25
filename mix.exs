@@ -80,15 +80,14 @@ defmodule MishkaCmsCore.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:decimal, "~> 3.2", override: true},
+      {:decimal, "~> 3.2"},
       {:bcrypt_elixir, "~> 3.3"},
       {:sourceror, "~> 1.13", only: [:dev, :test]},
       {:open_api_spex, "~> 3.22"},
       {:ash_paper_trail, "~> 0.8"},
       {:ash_archival, "~> 2.0"},
       {:ash_authentication_phoenix, "~> 3.0.0-rc.11"},
-      {:ash_authentication,
-       github: "team-alembic/ash_authentication", branch: "main", override: true},
+      {:ash_authentication, "~> 5.0.0-rc.15"},
       {:eqrcode, "~> 0.2"},
       {:ash_postgres, "~> 2.15"},
       {:ash_json_api, "~> 1.7"},
@@ -130,7 +129,7 @@ defmodule MishkaCmsCore.MixProject do
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
-      {:mishka_installer, "~> 0.1.14"},
+      mishka_dep(:mishka_installer, "~> 0.1.14"),
       {:guarded_struct, "~> 0.1.4"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
@@ -141,7 +140,7 @@ defmodule MishkaCmsCore.MixProject do
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
       {:localize, "~> 1.4"},
-      {:mishka_gervaz, "~> 0.0.1"},
+      mishka_dep(:mishka_gervaz, "~> 0.0.1"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},
@@ -150,6 +149,20 @@ defmodule MishkaCmsCore.MixProject do
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false}
     ]
+  end
+
+  # A Mishka package is its sibling checkout `../<name>` when there is one, and its Hex release
+  # otherwise. Only a git checkout counts, so the copy Mix fetched into a host's `deps/` never does,
+  # and a `hex.*` task (`mix hex.build`, `mix hex.publish`) always takes Hex, as a package must.
+  defp mishka_dep(name, requirement) do
+    sibling? =
+      File.dir?(Path.expand("../#{name}/.git", __DIR__)) and
+        not Enum.any?(System.argv(), &String.starts_with?(&1, "hex."))
+
+    case sibling? do
+      true -> {name, path: "../#{name}", override: true}
+      false -> {name, requirement}
+    end
   end
 
   defp aliases() do
