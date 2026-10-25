@@ -20,6 +20,11 @@ env:
   # release or fixed libraries are out.
   OTP_VERSION: "29.0.5"
   ELIXIR_VERSION: "1.20.4-otp-29"
+  # setup-beam installs Hex from builds.hex.pm, and one slow response there failed a whole run
+  # ("Could not mix hex from any hex.pm mirror"). It tries these in order.
+  HEXPM_MIRRORS: |
+    https://builds.hex.pm
+    https://cdn.jsdelivr.net/hex
 
 jobs:
   # Compiled once; the jobs below start from this build.
@@ -31,36 +36,25 @@ jobs:
   build:
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: mishka_cms_core
-
     steps:
-      # mix.exs reaches its sibling packages by path (../mishka_gervaz),
-      # so each one is checked out next to this repository, as on a developer's machine.
+      # Only this repository. mishka_gervaz comes from Hex, and mix.exs would use a ../mishka_gervaz
+      # checkout over Hex if it found one, so no sibling is ever checked out here.
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_core
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_gervaz
-          ref: ${{ vars.GERVAZ_REF || 'master' }}
-          path: mishka_gervaz
 
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
           version-type: strict
+          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
 
       - uses: actions/cache@v6
         with:
           path: |
-            mishka_cms_core/deps
-            mishka_cms_core/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_core/mix.lock') }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_core/mix.lock') }}-
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-
 
       - run: mix deps.get
 
@@ -71,33 +65,22 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
 
-    defaults:
-      run:
-        working-directory: mishka_cms_core
-
     steps:
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_core
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_gervaz
-          ref: ${{ vars.GERVAZ_REF || 'master' }}
-          path: mishka_gervaz
 
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
           version-type: strict
+          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
 
       - uses: actions/cache/restore@v6
         with:
           path: |
-            mishka_cms_core/deps
-            mishka_cms_core/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_core/mix.lock') }}-${{ github.sha }}
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       # The formatter takes the DSL's paren-free calls (`table "pages"`, `reference :site, ...`)
@@ -132,33 +115,22 @@ jobs:
       POSTGRES_HOST: localhost
       MIX_TEST_PARTITION: ${{ matrix.partition }}
 
-    defaults:
-      run:
-        working-directory: mishka_cms_core
-
     steps:
       - uses: actions/checkout@v7
-        with:
-          path: mishka_cms_core
-
-      - uses: actions/checkout@v7
-        with:
-          repository: mishka-group/mishka_gervaz
-          ref: ${{ vars.GERVAZ_REF || 'master' }}
-          path: mishka_gervaz
 
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{ env.OTP_VERSION }}
           elixir-version: ${{ env.ELIXIR_VERSION }}
           version-type: strict
+          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
 
       - uses: actions/cache/restore@v6
         with:
           path: |
-            mishka_cms_core/deps
-            mishka_cms_core/_build
-          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mishka_cms_core/mix.lock') }}-${{ github.sha }}
+            deps
+            _build
+          key: ${{ runner.os }}-otp-${{ env.OTP_VERSION }}-elixir-${{ env.ELIXIR_VERSION }}-mix-${{ hashFiles('mix.lock') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
       # The migrations are generated, not in git: generate them before the test alias's `ash.setup`

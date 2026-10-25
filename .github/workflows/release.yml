@@ -1,0 +1,209 @@
+name: Release
+
+# A tag `v<version>` on master builds the Hex package and a compiled ebin and attaches both to a
+# GitHub release. Nothing here publishes to Hex or holds a Hex key: `mix hex.publish` stays a manual
+# step.
+#
+# Started by hand (workflow_dispatch), it is a dry run: everything is built and checked, nothing is
+# released.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  # TEMPORARY: OTP 29.0.5, the pin of ci.yml. See the comment on OTP_VERSION there; both files move
+  # back to the latest OTP together.
+  OTP_VERSION: "29.0.5"
+  ELIXIR_VERSION: "1.20.4-otp-29"
+  # setup-beam tries these in order, so one slow builds.hex.pm cannot fail the run.
+  HEXPM_MIRRORS: |
+    https://builds.hex.pm
+    https://cdn.jsdelivr.net/hex
+
+jobs:
+  version:
+    name: Resolve version from mix.exs
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      publish: ${{ steps.v.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Read @version and reconcile it with the ref
+        id: v
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          version="$(sed -n 's/^  @version "\(.*\)"$/\1/p' mix.exs | head -1)"
+          if [ -z "$version" ]; then
+            echo "::error file=mix.exs::could not parse @version from mix.exs"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+          if [ "$REF_TYPE" = "tag" ]; then
+            if [ "$REF_NAME" != "v$version" ]; then
+              echo "::error file=mix.exs::tag $REF_NAME does not match mix.exs @version $version (expected v$version)"
+              exit 1
+            fi
+
+            git fetch --no-tags --quiet origin master
+            if ! git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+              echo "::error::tag $REF_NAME points at a commit that is not on master"
+              exit 1
+            fi
+
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          echo "### Release $version" >> "$GITHUB_STEP_SUMMARY"
+          echo "publish: $([ "$REF_TYPE" = "tag" ] && echo yes || echo 'no (dry run)')" >> "$GITHUB_STEP_SUMMARY"
+
+  hex-package:
+    name: Hex package (.tar)
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      # Only this repository: a ../mishka_gervaz checkout would make mix.exs use it over Hex.
+      - uses: actions/checkout@v7
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          version-type: strict
+          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
+
+      - run: mix deps.get
+
+      - name: Build the package Hex would publish
+        run: mix hex.build
+
+      - name: Check the tarball is the release version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          tar="mishka_cms_core-$VERSION.tar"
+          test -f "$tar" || { echo "::error::expected $tar, got: $(ls -- *.tar 2>/dev/null || echo none)"; exit 1; }
+          mkdir -p dist && mv "$tar" dist/
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: hex-package
+          path: dist/*.tar
+          if-no-files-found: error
+
+  ebin-package:
+    name: Compiled ebin
+    needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: erlef/setup-beam@v1
+        with:
+          otp-version: ${{ env.OTP_VERSION }}
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          version-type: strict
+          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
+
+      - run: mix deps.get
+
+      - name: Compile for :prod
+        run: mix compile
+        env:
+          MIX_ENV: prod
+
+      # `_build/prod/lib/mishka_cms_core/priv` is a link to the whole `priv` of the checkout, and
+      # `tar -h` follows it. A consumer needs what the Hex package ships, the four directories
+      # `package/0` lists in mix.exs under `files`, not the rest of `priv` (the admin assets, the
+      # gettext templates, the generated migrations), so each is named here.
+      - name: Tar the ebin and its priv
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          src="_build/prod/lib/mishka_cms_core"
+          test -d "$src/ebin" || { echo "::error::$src/ebin not found"; exit 1; }
+          test -n "$(ls -A "$src/ebin"/*.beam 2>/dev/null)" || { echo "::error::no .beam files in $src/ebin"; exit 1; }
+          mkdir -p dist
+          extra=""
+          [ -d "$src/consolidated" ] && extra="consolidated"
+          tar -czhf "dist/mishka_cms_core-$VERSION-ebin.tar.gz" -C "$src" ebin \
+            priv/cms_ui_kits priv/dev_seed_media priv/install priv/share_card $extra
+          mods="$(tar -tzf "dist/mishka_cms_core-$VERSION-ebin.tar.gz" \
+                  | grep -c '^ebin/Elixir\.MishkaCmsCore' || true)"
+          [ "$mods" -gt 0 ] \
+            || { echo "::error::ebin tarball is missing the library's modules"; exit 1; }
+          echo "ebin tarball: $mods MishkaCmsCore modules"
+          echo "OTP $(erl -noshell -eval 'io:format("~s",[erlang:system_info(otp_release)]),halt().')," \
+               "$(elixir -v | tail -1)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ebin-package
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs:
+      - version
+      - hex-package
+      - ebin-package
+    if: ${{ needs.version.outputs.publish == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+
+      - name: Lay the assets out flat and confirm every one arrived
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          find artifacts -type f -exec cp {} release/ \;
+          expected=(
+            "mishka_cms_core-$VERSION.tar"
+            "mishka_cms_core-$VERSION-ebin.tar.gz"
+          )
+          missing=0
+          for f in "${expected[@]}"; do
+            if [ ! -f "release/$f" ]; then echo "::error::missing release asset: $f"; missing=1; fi
+          done
+          [ "$missing" -eq 0 ] || { ls -la release; exit 1; }
+          ( cd release && sha256sum -- * > SHA256SUMS.txt )
+          ls -la release
+
+      - name: Create the release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: v${{ needs.version.outputs.version }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          # 0.0.1-beta.1, -alpha.N, -rc.N: a pre-release, so it never becomes "Latest".
+          prerelease: ${{ contains(needs.version.outputs.version, '-') }}
+          files: release/*
