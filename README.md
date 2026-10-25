@@ -39,7 +39,7 @@ The package has no endpoint, router or repo of its own. The host application sup
 - Notifications for each user, delivered live, and an activity log that picks up the versioned resources of every configured Ash domain on its own.
 - A home board of dashboard widgets and an admin sidebar that extensions add to.
 - JSON:API routes for the runtime and account resources, for master and tenant users, including version listing and restore.
-- The Chelekom UI kit as a bundle in `priv/cms_ui_kits`, which the install wizard reads.
+- The Chelekom UI kit, which the install wizard downloads from Chelekom's newest release into `priv/cms_ui_kits`.
 
 ## 🔐 Permissions
 
