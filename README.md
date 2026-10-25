@@ -39,7 +39,7 @@ The package has no endpoint, router or repo of its own. The host application sup
 - Notifications for each user, delivered live, and an activity log that picks up the versioned resources of every configured Ash domain on its own.
 - A home board of dashboard widgets and an admin sidebar that extensions add to.
 - JSON:API routes for the runtime and account resources, for master and tenant users, including version listing and restore.
-- The Chelekom UI kit as a bundle in `priv/cms_ui_kits`, which the install wizard reads.
+- The Chelekom UI kit, which the install wizard downloads from Chelekom's newest release into `priv/cms_ui_kits`.
 
 ## 🔐 Permissions
 
@@ -58,11 +58,13 @@ An extension adds routes with the `MishkaCmsCore.ExtensionRouter` behaviour, add
 
 ## 🚀 Getting started
 
-The package is not on Hex. [Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_cms_core` when that folder exists, and otherwise from GitHub at the revision pinned in `mix.lock`:
+Add it from Hex:
 
 ```elixir
-{:mishka_cms_core, github: "mishka-group/mishka_cms_core", branch: "master", override: true}
+{:mishka_cms_core, "~> 0.0.1"}
 ```
+
+[Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_cms_core` instead when that folder exists.
 
 Mishka CMS also tells the package which repo, endpoint and web module to use, and which extensions are installed:
 

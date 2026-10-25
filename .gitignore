@@ -74,3 +74,7 @@ MnesiaCore.*
 
 # macOS Finder metadata
 .DS_Store
+
+# `mix hex.build` output: the package tarball and the folder `--unpack` writes.
+mishka_cms_core-*.tar
+/mishka_cms_core-*/

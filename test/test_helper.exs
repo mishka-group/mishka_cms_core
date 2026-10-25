@@ -105,6 +105,10 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     ExUnit.configure(exclude: [:node | ExUnit.configuration()[:exclude] || []])
   end
 
+  # The `:performance` tests time the ETS states against a wall-clock limit, which a shared CI
+  # machine misses now and then. They run on demand: `mix test --include performance`.
+  ExUnit.configure(exclude: [:performance | ExUnit.configuration()[:exclude] || []])
+
   ExUnit.start()
   Ecto.Adapters.SQL.Sandbox.mode(MishkaCmsCore.Repo, :manual)
 end

@@ -142,10 +142,15 @@ defmodule MishkaCmsCore.Accounts.User do
       # An authenticator app as a second step after the password, for an account that sets one up
       # — see `MishkaCmsCore.Accounts.SecondFactor`. Set up in two steps, so nothing is stored until
       # a code from the app matches; a code on its own signs nobody in.
+      #
+      # A code is good for its own 30-second period only. The test environment alone also takes the
+      # previous period's (`config :mishka_cms_core, totp_grace_period: 1`), so a test whose code is
+      # made as its period ends does not fail on arrival; a host leaves it unset.
       totp do
         identity_field :email
         issuer "MishkaCMS"
         confirm_setup_enabled? true
+        grace_period Application.compile_env(:mishka_cms_core, :totp_grace_period)
         brute_force_strategy :rate_limit
       end
 
