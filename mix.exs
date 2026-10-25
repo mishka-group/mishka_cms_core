@@ -160,7 +160,7 @@ defmodule MishkaCmsCore.MixProject do
         not Enum.any?(System.argv(), &String.starts_with?(&1, "hex."))
 
     case sibling? do
-      true -> {name, path: "../#{name}", override: true}
+      true -> {name, path: "../#{name}"}
       false -> {name, requirement}
     end
   end
