@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Accounts.User.Notices.TwoStepReminder do
   A mishka_installer plugin on `"AuthController.Success.SignIn"`: an admin of a site that recommends
   two-step sign-in (`MishkaCmsCore.Accounts.SecondFactor.reminded?/1`), and has no authenticator, is
   sent a notification at every sign-in, linking to where it is set up. The dashboard says the same
-  (`MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index`). Registered in `MishkaCmsCore.Application`.
+  (MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index). Registered in MishkaCmsCore.Application.
   """
   use MishkaInstaller.Event.Hook, event: "AuthController.Success.SignIn", initial: %{priority: 50}
   use Gettext, backend: MishkaCmsCore.Gettext

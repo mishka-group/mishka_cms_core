@@ -380,12 +380,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   All templates are compiled using Phoenix.HTML.Engine for proper HTML generation
   and security (XSS protection, HTML escaping, etc.).
   """
+  # sobelow_skip ["DOS.StringToAtom", "XSS.Raw"]
+  # Helper names of a stored error page, which only the error-page or code permission can write. The
+  # `raw` below inlines the site's compiled CSS and JS, built from templates, stylesheets and hooks.
   def build_helpers({params, functions_ast}) do
     helpers_ast =
       Enum.map(params[:helpers] || [], fn helper ->
         args = LiveViewCompiler.helper_args(helper.args)
 
         quote do
+          # sobelow_skip ["DOS.StringToAtom"]
+          # The stored helper's name becomes the function's, as in `build_helpers/1` above.
           def unquote(String.to_atom(helper.name))(unquote_splicing(args)) do
             unquote(Code.string_to_quoted!(helper.code))
           end
@@ -404,6 +409,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
         end
       else
         quote do
+          # sobelow_skip ["XSS.Raw"]
+          # Inlines the site's compiled CSS and JS, built from admin-written code; a content class cannot hold `<`.
           def root_layout(var!(assigns)) when is_map(var!(assigns)) do
             ~H"""
             <!DOCTYPE html>
@@ -525,8 +532,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   """
   @spec render_page(module(), Plug.Conn.t(), ErrorStatus.t()) :: iodata()
   def render_page(module, conn, status) do
+    # Assigns of the connection, not of a socket: the stored template reads both from `@conn`.
     conn
+    # credo:disable-for-next-line Jump.CredoChecks.UnusedLiveViewAssign
     |> Plug.Conn.assign(:page_module, module)
+    # credo:disable-for-next-line Jump.CredoChecks.UnusedLiveViewAssign
     |> Plug.Conn.assign(:page_data, module.__error_information__())
     |> module.render(status)
     |> Phoenix.HTML.Safe.to_iodata()
@@ -729,7 +739,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
         env
       else
         {:error, error} ->
-          require Logger
           Logger.warning("failed to import #{module}: #{error}")
           env
 

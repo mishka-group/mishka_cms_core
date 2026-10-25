@@ -12,10 +12,10 @@ defmodule MishkaCmsCoreWeb.Forms.SnippetSubmit do
   has always been a flash. Without this, an author clicking Save on a duplicate name would watch
   nothing happen.
 
-  Everything else is `MishkaGervaz.Form.Web.Events.SubmitHandler.Default`'s work; this only looks at
+  Everything else is MishkaGervaz.Form.Web.Events.SubmitHandler.Default's work; this only looks at
   what the state holds afterwards and forwards the first real message to the LiveView, which owns
   the flash. `self()` is the LiveView process — a LiveComponent runs inside its parent — so a plain
-  `send/2` reaches `MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive.handle_info/2`.
+  `send/2` reaches MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive.handle_info/2.
 
   The blank-name and unparseable-markup cases never reach here: `MishkaCmsCore.Runtime.Snippet`'s
   `before_save` hook halts on those first, so they keep the panel's own wording.

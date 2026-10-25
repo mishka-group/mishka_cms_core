@@ -14,7 +14,7 @@ defmodule MishkaCmsCore.Activity.Sources.RuntimeCompile do
   — and this source bridges it to PubSub, exactly like
   `MishkaCmsCore.Activity.Sources.Oban` bridges Oban job telemetry.
 
-  Attached once on boot via `attach/0` (from `MishkaCmsCore.Application.start/2`).
+  Attached once on boot via `attach/0` (from MishkaCmsCore.Application.start/2).
 
   ## Topics
     * `runtime_compiled:res:<resource>` — compiles of one resource (any site)

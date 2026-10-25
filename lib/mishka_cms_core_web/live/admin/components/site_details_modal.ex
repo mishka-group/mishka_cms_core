@@ -12,7 +12,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SiteDetailsModal do
   supplies Site's two tabs + content. Driven by the parent's `@site_modal` map (`record`, `active_tab`,
   `health`, `loading?`, `form_record_id`); the form's `record_id` flows through the template (NOT
   `send_update`) so a parent re-render can't reset it. See the parent
-  `MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index`.
+  MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index.
   """
   use Phoenix.Component
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext

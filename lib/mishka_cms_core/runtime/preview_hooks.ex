@@ -49,6 +49,8 @@ defmodule MishkaCmsCore.Runtime.PreviewHooks do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
 
+  require Ash.Query
+
   @attribute "phx-hook"
 
   @doc """
@@ -71,8 +73,6 @@ defmodule MishkaCmsCore.Runtime.PreviewHooks do
   # The names this site's browser bundle really registers, and the base of each — which is what an
   # unknown name has to be matched against.
   defp names_for(%{id: site_id, name: site_name}) do
-    require Ash.Query
-
     hooks =
       MishkaCmsCore.Runtime.JsHook
       |> Ash.Query.for_read(:read_any)

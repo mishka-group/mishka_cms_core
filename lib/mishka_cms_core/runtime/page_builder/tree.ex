@@ -185,11 +185,11 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree do
   @doc """
   The document-order ADDRESS of `id` — sibling indices from the root, joined with dots (`"0.2.1"`).
 
-  An id is minted by `Node.generate_id/0` and is therefore meaningful only inside the parse that
-  minted it: two people with the same document open have two id spaces over identical structure.
-  This is derived from the shape of the document alone, so both of them compute the same string for
-  the same element — which is what anything outliving a parse has to anchor on. A review note is
-  exactly that.
+  An id is minted by `MishkaCmsCore.Runtime.PageBuilder.Tree.Node.generate_id/0` and is therefore
+  meaningful only inside the parse that minted it: two people with the same document open have two id
+  spaces over identical structure. This is derived from the shape of the document alone, so both of
+  them compute the same string for the same element — which is what anything outliving a parse has to
+  anchor on. A review note is exactly that.
 
   Whitespace-only text nodes are counted, because the model keeps them and skipping them here would
   put this and `at_address/2` out of step with each other. That makes this address exact but not

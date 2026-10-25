@@ -696,6 +696,9 @@ defmodule MishkaCmsCore.Install.StarterContent do
   #
   # STORED FROM A COPY, because storing removes the file it is handed and this one ships with the
   # package. A refused row takes its file with it, as an upload's does.
+  # sobelow_skip ["Traversal.FileModule"]
+  # Both paths are fixed: the logo this package ships in its priv dir, and a temp file named by a
+  # fresh UUID.
   defp store_logo!(site_id) do
     staged = Path.join(System.tmp_dir!(), "mishka-install-#{Ash.UUID.generate()}-#{@logo_file}")
     File.cp!(logo_path(), staged)

@@ -4,7 +4,7 @@
 
 defmodule MishkaCmsCoreWeb.Forms.ComponentSubmit do
   @moduledoc """
-  The submit handler for a component's form — the inspector's Configuration tab and the builder's
+  Submit handler for a component's form — the inspector's Configuration tab and the builder's
   Interface tab are both this form.
 
   It keeps what the form cannot show. A component's `attrs` and `slots` are declarations, and the
@@ -19,7 +19,7 @@ defmodule MishkaCmsCoreWeb.Forms.ComponentSubmit do
   rename of `chelekom-button` declared `attr :type` with no default, and the first page that left
   `type` unset raised `key :type not found`.
 
-  So once `MishkaGervaz.Form.Web.Events.SubmitHandler.Default` has parsed the params, every row
+  So once MishkaGervaz.Form.Web.Events.SubmitHandler.Default has parsed the params, every row
   named like a row the record already declares gets back what the form did not change:
 
     * in an option map (a `:key_map` sub-field), each key with no control, and each key whose control

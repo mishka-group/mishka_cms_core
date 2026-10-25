@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh do
           MishkaCmsCore.Runtime.Resources.Notifiers.SitemapRefresh
         ]
 
-  Pages and layouts do not list it: `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` enqueues
+  Pages and layouts do not list it: MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker enqueues
   the job after their own. Nor does a site: `ScheduleSiteRuntime` and `BootHandler.compile_site/2`
   do.
   """

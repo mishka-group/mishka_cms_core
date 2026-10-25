@@ -32,6 +32,8 @@ defmodule MishkaCmsCore.Accounts.ProviderStrategy do
   alias __MODULE__.Dsl
   alias AshAuthentication.Strategy.OAuth2
 
+  # One field per option of the strategy, as AshAuthentication's own OAuth2 strategy has.
+  # credo:disable-for-next-line Credo.Check.Warning.StructFieldAmount
   defstruct assent_strategy: Assent.Strategy.OAuth2,
             auth_method: nil,
             authorization_params: [],

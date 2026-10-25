@@ -143,6 +143,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
   # `Phoenix.Component` imported, because a template may call `render_slot/1` or one of the function
   # components the runtime's own modules import — the engine resolves `<.foo>` against the caller.
   defp template_env do
+    # Inside the function on purpose: the `__ENV__` returned below has to carry the import.
+    # credo:disable-for-next-line Jump.CredoChecks.TopLevelAliasImportRequire
     import Phoenix.Component, warn: false
     __ENV__
   end
@@ -212,20 +214,18 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeCheck do
   # which LiveView answers with a crash on the first click, naming a return value the author never
   # wrote. Saying so here is the only place the sentence can be useful.
   defp body_fault(tab, {entry, index}) do
-    cond do
-      blank?(entry.code) ->
-        [
-          fault(
-            tab,
-            index,
-            entry.name,
-            nil,
-            gettext("This handler has no code. It must end in {:noreply, socket}.")
-          )
-        ]
-
-      true ->
-        parse_fault(tab, index, entry.name, entry.code)
+    if blank?(entry.code) do
+      [
+        fault(
+          tab,
+          index,
+          entry.name,
+          nil,
+          gettext("This handler has no code. It must end in {:noreply, socket}.")
+        )
+      ]
+    else
+      parse_fault(tab, index, entry.name, entry.code)
     end
   end
 

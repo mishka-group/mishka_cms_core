@@ -580,7 +580,7 @@ defmodule MishkaCmsCore.Activity.Query do
     |> String.trim()
   end
 
-  @doc "Humanise a `\"Elixir.A.B.Thing\"` resource string to `\"Thing\"` (spaced)."
+  @doc ~s|Humanise a `"Elixir.A.B.Thing"` resource string to `"Thing"` (spaced).|
   def resource_label_of(resource_string) do
     resource_string
     |> String.split(".")

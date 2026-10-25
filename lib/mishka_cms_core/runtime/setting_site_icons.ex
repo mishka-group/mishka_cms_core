@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Runtime.SettingSiteIcons do
   (`cms_core:setting:after_save`, `MishkaCmsCore.Runtime.SiteIcon.settings/0`), what is kept of its
   site's icons is dropped — of every site for a global value — and the next request for one draws
   them from the new picture (`MishkaCmsCore.Runtime.SiteIcon.forget/1`). Registered in
-  `MishkaCmsCore.Application`.
+  MishkaCmsCore.Application.
   """
   alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
 

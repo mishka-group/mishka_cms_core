@@ -417,7 +417,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   `Phoenix.Router` compiles its routes: the match is generated at BUILD time from macros, so it
   cannot know a path an admin typed into the editor this morning. That is exactly why this app
   routes `live "/*path"` and resolves the rest itself. There is no Phoenix or Plug function that
-  matches a runtime pattern STRING against runtime segments — `Plug.Router.Utils.build_path_match/1`
+  matches a runtime pattern STRING against runtime segments — Plug.Router.Utils.build_path_match/1
   returns AST for the compiler — so the matcher below is the part that genuinely has to be ours.
 
   `MishkaCmsCore.Runtime.Resources.Validations.PathFormat` has always allowed these paths, naming

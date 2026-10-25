@@ -195,7 +195,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   before then.
 
   Every bundle job a serving instance (`serving?/0`) queues carries it (`asset_job/4`), and
-  `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker` builds the job on the instance it names: the
+  MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker builds the job on the instance it names: the
   CSS, JS and sitemap a bundle job builds go into that instance's own
   `MishkaCmsCore.Runtime.States.AssetsState`. A deploy that starts the next instance beside the old
   one gives both the same `node()` and the same Oban queue; this id is what tells them apart. A
@@ -205,7 +205,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   def boot_id, do: :persistent_term.get(@boot_id_key, nil)
 
   @doc """
-  Gives this instance a new `boot_id/0`. Called once, by `MishkaCmsCore.Application.start/2`.
+  Gives this instance a new `boot_id/0`. Called once, by MishkaCmsCore.Application.start/2.
   """
   @spec new_boot_id() :: :ok
   def new_boot_id, do: :persistent_term.put(@boot_id_key, Ecto.UUID.generate())
@@ -467,49 +467,47 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   """
   @spec load_sites() :: :ok | {:error, term()}
   def load_sites do
-    try do
-      site_count = Ash.count!(MishkaCmsCore.Runtime.Site, authorize?: false)
+    site_count = Ash.count!(MishkaCmsCore.Runtime.Site, authorize?: false)
 
-      if site_count == 0 do
-        :ok
-      else
-        {batch_size, chunk_size} = get_optimal_batch_config(site_count)
+    if site_count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(site_count)
 
-        process_site_chunk =
-          fn sites ->
-            site_maps =
-              Enum.map(sites, fn site ->
-                %{
-                  id: site.id,
-                  name: site.name,
-                  host: site.host,
-                  priority: site.priority,
-                  active: site.active,
-                  master: site.master,
-                  mode: site.mode,
-                  frontend_domain: site.frontend_domain,
-                  allowed_origins: site.allowed_origins
-                }
-              end)
+      process_site_chunk =
+        fn sites ->
+          site_maps =
+            Enum.map(sites, fn site ->
+              %{
+                id: site.id,
+                name: site.name,
+                host: site.host,
+                priority: site.priority,
+                active: site.active,
+                master: site.master,
+                mode: site.mode,
+                frontend_domain: site.frontend_domain,
+                allowed_origins: site.allowed_origins
+              }
+            end)
 
-            SiteState.save_batch(site_maps)
-          end
+          SiteState.save_batch(site_maps)
+        end
 
-        MishkaCmsCore.Runtime.Site
-        |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
-        |> Ash.stream!(batch_size: batch_size, authorize?: false)
-        |> Stream.chunk_every(chunk_size)
-        |> Stream.each(process_site_chunk)
-        |> Stream.run()
+      MishkaCmsCore.Runtime.Site
+      |> Ash.Query.for_read(:master_read, %{}, authorize?: false)
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+      |> Ash.stream!(batch_size: batch_size, authorize?: false)
+      |> Stream.chunk_every(chunk_size)
+      |> Stream.each(process_site_chunk)
+      |> Stream.run()
 
-        load_page_editions()
-      end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading sites: #{inspect(error)}")
-        {:error, error}
+      load_page_editions()
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading sites: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc """
@@ -713,79 +711,77 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   defp maybe_filter_site(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
 
   defp compile_error_pages(site_id \\ nil) do
-    try do
-      query =
-        MishkaCmsCore.Runtime.ErrorPage
-        |> Ash.Query.for_read(:read_any)
-        |> Ash.Query.filter(active == true)
-        |> maybe_filter_site(site_id)
-        |> Ash.Query.load([:error_module, :site])
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+    query =
+      MishkaCmsCore.Runtime.ErrorPage
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> maybe_filter_site(site_id)
+      |> Ash.Query.load([:error_module, :site])
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
 
-      error_page_count = Ash.count!(query, authorize?: false)
+    error_page_count = Ash.count!(query, authorize?: false)
 
-      if error_page_count == 0 do
+    if error_page_count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(error_page_count)
+
+      failed_compilations =
+        query
+        |> Ash.stream!(batch_size: batch_size, authorize?: false)
+        |> Stream.chunk_every(chunk_size)
+        |> Stream.flat_map(fn chunk ->
+          chunk
+          |> Task.async_stream(
+            fn err ->
+              # Create .template file for error page
+              build_error_template_content(err)
+              |> then(&create_template_file(err.site && err.site.name, "error", err.name, &1))
+
+              WebRunTimeMetaDataState.save(web_metadata_row(err, "ErrorPage"))
+
+              if err.precompile do
+                result =
+                  ModuleCompilerHandler.boot_compile_or_return_module(
+                    {err.error_module, err},
+                    err.path,
+                    err.site && err.site.name,
+                    err.site && err.site.id
+                  )
+
+                case result do
+                  {:ok, _module} -> nil
+                  {:error, reason} -> {err.id, reason}
+                end
+              else
+                nil
+              end
+            end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false,
+            timeout: :timer.minutes(5),
+            on_timeout: :kill_task
+          )
+          |> Enum.map(&classify_compile_stream_result/1)
+          |> Enum.reject(&is_nil/1)
+        end)
+        |> Enum.to_list()
+
+      if failed_compilations == [] do
+        Logger.info("[BootHandler] All #{error_page_count} error pages compiled successfully")
         :ok
       else
-        {batch_size, chunk_size} = get_optimal_batch_config(error_page_count)
+        Logger.warning(
+          "[BootHandler] Skipped #{length(failed_compilations)} broken error page(s) — fix and re-save to recompile"
+        )
 
-        failed_compilations =
-          query
-          |> Ash.stream!(batch_size: batch_size, authorize?: false)
-          |> Stream.chunk_every(chunk_size)
-          |> Stream.flat_map(fn chunk ->
-            chunk
-            |> Task.async_stream(
-              fn err ->
-                # Create .template file for error page
-                build_error_template_content(err)
-                |> then(&create_template_file(err.site && err.site.name, "error", err.name, &1))
-
-                WebRunTimeMetaDataState.save(web_metadata_row(err, "ErrorPage"))
-
-                if err.precompile do
-                  result =
-                    ModuleCompilerHandler.boot_compile_or_return_module(
-                      {err.error_module, err},
-                      err.path,
-                      err.site && err.site.name,
-                      err.site && err.site.id
-                    )
-
-                  case result do
-                    {:ok, _module} -> nil
-                    {:error, reason} -> {err.id, reason}
-                  end
-                else
-                  nil
-                end
-              end,
-              max_concurrency: System.schedulers_online(),
-              ordered: false,
-              timeout: :timer.minutes(5),
-              on_timeout: :kill_task
-            )
-            |> Enum.map(&classify_compile_stream_result/1)
-            |> Enum.reject(&is_nil/1)
-          end)
-          |> Enum.to_list()
-
-        if failed_compilations == [] do
-          Logger.info("[BootHandler] All #{error_page_count} error pages compiled successfully")
-          :ok
-        else
-          Logger.warning(
-            "[BootHandler] Skipped #{length(failed_compilations)} broken error page(s) — fix and re-save to recompile"
-          )
-
-          :ok
-        end
+        :ok
       end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading error pages: #{inspect(error)}")
-        {:error, error}
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading error pages: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc false
@@ -802,71 +798,69 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   # (`MishkaCmsCore.Runtime.ComponentPrefetch`), and
   # `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` builds anything else.
   def compile_components(site_id \\ nil) do
-    try do
-      query =
-        MishkaCmsCore.Runtime.Component
-        |> Ash.Query.for_read(:read_any)
-        |> Ash.Query.filter(active == true)
-        |> maybe_filter_site(site_id)
-        |> Ash.Query.load([:component_module, :site])
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+    query =
+      MishkaCmsCore.Runtime.Component
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> maybe_filter_site(site_id)
+      |> Ash.Query.load([:component_module, :site])
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
 
-      components_count = Ash.count!(query, authorize?: false)
+    components_count = Ash.count!(query, authorize?: false)
 
-      if components_count == 0 do
+    if components_count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(components_count)
+
+      failed_compilations =
+        query
+        |> Ash.stream!(batch_size: batch_size, authorize?: false)
+        |> Stream.chunk_every(chunk_size)
+        |> Stream.flat_map(fn chunk ->
+          chunk
+          |> Task.async_stream(
+            fn component ->
+              # Aggregate every field that may contain Tailwind class
+              # strings — template, body, helpers' code, and clauses
+              # buried in `extra`. Tailwind regex-scans the file for
+              # class-shaped tokens, so syntax doesn't have to match.
+              create_template_file(
+                component.site && component.site.name,
+                "component",
+                component.name,
+                build_component_class_content(component)
+              )
+
+              SiteState.put_component(component.site_id, component.name)
+
+              boot_compile_component(component, component.precompile)
+            end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false,
+            timeout: :timer.minutes(5),
+            on_timeout: :kill_task
+          )
+          |> Enum.map(&classify_compile_stream_result/1)
+          |> Enum.reject(&is_nil/1)
+        end)
+        |> Enum.to_list()
+
+      if failed_compilations == [] do
+        Logger.info("[BootHandler] All #{components_count} active components prepared")
         :ok
       else
-        {batch_size, chunk_size} = get_optimal_batch_config(components_count)
+        Logger.warning(
+          "[BootHandler] Skipped #{length(failed_compilations)} broken component(s) — fix and re-save to recompile"
+        )
 
-        failed_compilations =
-          query
-          |> Ash.stream!(batch_size: batch_size, authorize?: false)
-          |> Stream.chunk_every(chunk_size)
-          |> Stream.flat_map(fn chunk ->
-            chunk
-            |> Task.async_stream(
-              fn component ->
-                # Aggregate every field that may contain Tailwind class
-                # strings — template, body, helpers' code, and clauses
-                # buried in `extra`. Tailwind regex-scans the file for
-                # class-shaped tokens, so syntax doesn't have to match.
-                create_template_file(
-                  component.site && component.site.name,
-                  "component",
-                  component.name,
-                  build_component_class_content(component)
-                )
-
-                SiteState.put_component(component.site_id, component.name)
-
-                boot_compile_component(component, component.precompile)
-              end,
-              max_concurrency: System.schedulers_online(),
-              ordered: false,
-              timeout: :timer.minutes(5),
-              on_timeout: :kill_task
-            )
-            |> Enum.map(&classify_compile_stream_result/1)
-            |> Enum.reject(&is_nil/1)
-          end)
-          |> Enum.to_list()
-
-        if failed_compilations == [] do
-          Logger.info("[BootHandler] All #{components_count} active components prepared")
-          :ok
-        else
-          Logger.warning(
-            "[BootHandler] Skipped #{length(failed_compilations)} broken component(s) — fix and re-save to recompile"
-          )
-
-          :ok
-        end
+        :ok
       end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading components: #{inspect(error)}")
-        {:error, error}
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading components: #{inspect(error)}")
+      {:error, error}
   end
 
   defp boot_compile_component(component, true) do
@@ -895,162 +889,158 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   defp boot_compile_component(_component, _lazy), do: nil
 
   defp compile_layouts(site_id \\ nil) do
-    try do
-      query =
-        MishkaCmsCore.Runtime.Layout
-        |> Ash.Query.for_read(:read_any)
-        |> Ash.Query.filter(active == true)
-        |> maybe_filter_site(site_id)
-        |> Ash.Query.load([:layout_module, :site])
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+    query =
+      MishkaCmsCore.Runtime.Layout
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> maybe_filter_site(site_id)
+      |> Ash.Query.load([:layout_module, :site])
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
 
-      layouts_count = Ash.count!(query, authorize?: false)
+    layouts_count = Ash.count!(query, authorize?: false)
 
-      if layouts_count == 0 do
+    if layouts_count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(layouts_count)
+
+      failed_compilations =
+        query
+        |> Ash.stream!(batch_size: batch_size, authorize?: false)
+        |> Stream.chunk_every(chunk_size)
+        |> Stream.flat_map(fn chunk ->
+          chunk
+          |> Task.async_stream(
+            fn layout ->
+              create_template_file(
+                layout.site && layout.site.name,
+                "layout",
+                layout.name,
+                build_resource_class_content(layout)
+              )
+
+              WebRunTimeMetaDataState.save(web_metadata_row(layout, "Layout"))
+
+              if layout.precompile do
+                result =
+                  ModuleCompilerHandler.boot_compile_or_return_module(
+                    {layout.layout_module, layout},
+                    layout.path,
+                    layout.site && layout.site.name,
+                    layout.site && layout.site.id
+                  )
+
+                case result do
+                  {:ok, _module} -> nil
+                  {:error, reason} -> {layout.id, reason}
+                end
+              else
+                nil
+              end
+            end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false,
+            timeout: :timer.minutes(5),
+            on_timeout: :kill_task
+          )
+          |> Enum.map(&classify_compile_stream_result/1)
+          |> Enum.reject(&is_nil/1)
+        end)
+        |> Enum.to_list()
+
+      if failed_compilations == [] do
+        Logger.info("[BootHandler] All #{layouts_count} layouts compiled successfully")
         :ok
       else
-        {batch_size, chunk_size} = get_optimal_batch_config(layouts_count)
+        Logger.warning(
+          "[BootHandler] Skipped #{length(failed_compilations)} broken layout(s) — fix and re-save to recompile"
+        )
 
-        failed_compilations =
-          query
-          |> Ash.stream!(batch_size: batch_size, authorize?: false)
-          |> Stream.chunk_every(chunk_size)
-          |> Stream.flat_map(fn chunk ->
-            chunk
-            |> Task.async_stream(
-              fn layout ->
-                create_template_file(
-                  layout.site && layout.site.name,
-                  "layout",
-                  layout.name,
-                  build_resource_class_content(layout)
-                )
-
-                WebRunTimeMetaDataState.save(web_metadata_row(layout, "Layout"))
-
-                if layout.precompile do
-                  result =
-                    ModuleCompilerHandler.boot_compile_or_return_module(
-                      {layout.layout_module, layout},
-                      layout.path,
-                      layout.site && layout.site.name,
-                      layout.site && layout.site.id
-                    )
-
-                  case result do
-                    {:ok, _module} -> nil
-                    {:error, reason} -> {layout.id, reason}
-                  end
-                else
-                  nil
-                end
-              end,
-              max_concurrency: System.schedulers_online(),
-              ordered: false,
-              timeout: :timer.minutes(5),
-              on_timeout: :kill_task
-            )
-            |> Enum.map(&classify_compile_stream_result/1)
-            |> Enum.reject(&is_nil/1)
-          end)
-          |> Enum.to_list()
-
-        if failed_compilations == [] do
-          Logger.info("[BootHandler] All #{layouts_count} layouts compiled successfully")
-          :ok
-        else
-          Logger.warning(
-            "[BootHandler] Skipped #{length(failed_compilations)} broken layout(s) — fix and re-save to recompile"
-          )
-
-          :ok
-        end
+        :ok
       end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading layouts: #{inspect(error)}")
-        {:error, error}
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading layouts: #{inspect(error)}")
+      {:error, error}
   end
 
   # Add these placeholder functions for now
   defp compile_pages(site_id \\ nil) do
-    try do
-      query =
-        MishkaCmsCore.Runtime.Page
-        |> Ash.Query.for_read(:read_any)
-        |> Ash.Query.filter(active == true)
-        |> maybe_filter_site(site_id)
-        |> Ash.Query.load([:page_module, :site, :loaded_layout])
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+    query =
+      MishkaCmsCore.Runtime.Page
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> maybe_filter_site(site_id)
+      |> Ash.Query.load([:page_module, :site, :loaded_layout])
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
 
-      pages_count = Ash.count!(query, authorize?: false)
+    pages_count = Ash.count!(query, authorize?: false)
 
-      if pages_count == 0 do
+    if pages_count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(pages_count)
+
+      failed_compilations =
+        query
+        |> Ash.stream!(batch_size: batch_size, authorize?: false)
+        |> Stream.chunk_every(chunk_size)
+        |> Stream.flat_map(fn chunk ->
+          chunk
+          |> Task.async_stream(
+            fn page ->
+              create_template_file(
+                page.site && page.site.name,
+                "page",
+                page.name,
+                build_resource_class_content(page)
+              )
+
+              WebRunTimeMetaDataState.save(web_metadata_row(page, "Page"))
+
+              if page.precompile do
+                result =
+                  ModuleCompilerHandler.boot_compile_or_return_module(
+                    {page.page_module, page},
+                    page.path,
+                    page.site && page.site.name,
+                    page.site && page.site.id
+                  )
+
+                case result do
+                  {:ok, _module} -> nil
+                  {:error, reason} -> {page.id, reason}
+                end
+              else
+                nil
+              end
+            end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false,
+            timeout: :timer.minutes(5),
+            on_timeout: :kill_task
+          )
+          |> Enum.map(&classify_compile_stream_result/1)
+          |> Enum.reject(&is_nil/1)
+        end)
+        |> Enum.to_list()
+
+      if failed_compilations == [] do
+        Logger.info("[BootHandler] All #{pages_count} pages compiled successfully")
         :ok
       else
-        {batch_size, chunk_size} = get_optimal_batch_config(pages_count)
+        Logger.warning(
+          "[BootHandler] Skipped #{length(failed_compilations)} broken page(s) — fix and re-save to recompile"
+        )
 
-        failed_compilations =
-          query
-          |> Ash.stream!(batch_size: batch_size, authorize?: false)
-          |> Stream.chunk_every(chunk_size)
-          |> Stream.flat_map(fn chunk ->
-            chunk
-            |> Task.async_stream(
-              fn page ->
-                create_template_file(
-                  page.site && page.site.name,
-                  "page",
-                  page.name,
-                  build_resource_class_content(page)
-                )
-
-                WebRunTimeMetaDataState.save(web_metadata_row(page, "Page"))
-
-                if page.precompile do
-                  result =
-                    ModuleCompilerHandler.boot_compile_or_return_module(
-                      {page.page_module, page},
-                      page.path,
-                      page.site && page.site.name,
-                      page.site && page.site.id
-                    )
-
-                  case result do
-                    {:ok, _module} -> nil
-                    {:error, reason} -> {page.id, reason}
-                  end
-                else
-                  nil
-                end
-              end,
-              max_concurrency: System.schedulers_online(),
-              ordered: false,
-              timeout: :timer.minutes(5),
-              on_timeout: :kill_task
-            )
-            |> Enum.map(&classify_compile_stream_result/1)
-            |> Enum.reject(&is_nil/1)
-          end)
-          |> Enum.to_list()
-
-        if failed_compilations == [] do
-          Logger.info("[BootHandler] All #{pages_count} pages compiled successfully")
-          :ok
-        else
-          Logger.warning(
-            "[BootHandler] Skipped #{length(failed_compilations)} broken page(s) — fix and re-save to recompile"
-          )
-
-          :ok
-        end
+        :ok
       end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading pages: #{inspect(error)}")
-        {:error, error}
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading pages: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc """
@@ -1074,65 +1064,63 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   unchanged.
   """
   def load_stylesheets(site_id \\ nil) do
-    try do
-      query =
-        MishkaCmsCore.Runtime.Stylesheet
-        |> Ash.Query.for_read(:read_any)
-        |> Ash.Query.filter(active == true)
-        |> maybe_filter_site(site_id)
-        |> Ash.Query.load([:site])
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+    query =
+      MishkaCmsCore.Runtime.Stylesheet
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> maybe_filter_site(site_id)
+      |> Ash.Query.load([:site])
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
 
-      count = Ash.count!(query, authorize?: false)
+    count = Ash.count!(query, authorize?: false)
 
-      if count == 0 do
+    if count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(count)
+
+      failed =
+        query
+        |> Ash.stream!(batch_size: batch_size, authorize?: false)
+        |> Stream.chunk_every(chunk_size)
+        |> Stream.flat_map(fn chunk ->
+          chunk
+          |> Task.async_stream(
+            fn sheet ->
+              create_template_file(
+                sheet.site && sheet.site.name,
+                "stylesheet",
+                sheet.name,
+                sheet.content
+              )
+
+              nil
+            end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false,
+            timeout: :timer.minutes(5),
+            on_timeout: :kill_task
+          )
+          |> Enum.map(fn
+            {:ok, nil} -> nil
+            {:exit, reason} -> {:stylesheet_template_exit, reason}
+          end)
+          |> Enum.reject(&is_nil/1)
+        end)
+        |> Enum.to_list()
+
+      if failed == [] do
+        Logger.info("[BootHandler] All #{count} stylesheets loaded successfully")
         :ok
       else
-        {batch_size, chunk_size} = get_optimal_batch_config(count)
-
-        failed =
-          query
-          |> Ash.stream!(batch_size: batch_size, authorize?: false)
-          |> Stream.chunk_every(chunk_size)
-          |> Stream.flat_map(fn chunk ->
-            chunk
-            |> Task.async_stream(
-              fn sheet ->
-                create_template_file(
-                  sheet.site && sheet.site.name,
-                  "stylesheet",
-                  sheet.name,
-                  sheet.content
-                )
-
-                nil
-              end,
-              max_concurrency: System.schedulers_online(),
-              ordered: false,
-              timeout: :timer.minutes(5),
-              on_timeout: :kill_task
-            )
-            |> Enum.map(fn
-              {:ok, nil} -> nil
-              {:exit, reason} -> {:stylesheet_template_exit, reason}
-            end)
-            |> Enum.reject(&is_nil/1)
-          end)
-          |> Enum.to_list()
-
-        if failed == [] do
-          Logger.info("[BootHandler] All #{count} stylesheets loaded successfully")
-          :ok
-        else
-          Logger.error("[BootHandler] Failed to load #{length(failed)} stylesheets")
-          {:error, {:stylesheet_load_failed, failed}}
-        end
+        Logger.error("[BootHandler] Failed to load #{length(failed)} stylesheets")
+        {:error, {:stylesheet_load_failed, failed}}
       end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading stylesheets: #{inspect(error)}")
-        {:error, error}
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading stylesheets: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc """
@@ -1148,66 +1136,64 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   * `{:error, reason}` - Processing failed with error details
   """
   def create_js_hooks_template(site_id \\ nil) do
-    try do
-      query =
-        MishkaCmsCore.Runtime.JsHook
-        |> Ash.Query.for_read(:read_any)
-        |> Ash.Query.filter(active == true)
-        |> maybe_filter_site(site_id)
-        |> Ash.Query.load([:site])
-        |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
+    query =
+      MishkaCmsCore.Runtime.JsHook
+      |> Ash.Query.for_read(:read_any)
+      |> Ash.Query.filter(active == true)
+      |> maybe_filter_site(site_id)
+      |> Ash.Query.load([:site])
+      |> Ash.Query.sort(priority: :desc, inserted_at: :asc)
 
-      js_hooks_count = Ash.count!(query, authorize?: false)
+    js_hooks_count = Ash.count!(query, authorize?: false)
 
-      if js_hooks_count == 0 do
+    if js_hooks_count == 0 do
+      :ok
+    else
+      {batch_size, chunk_size} = get_optimal_batch_config(js_hooks_count)
+
+      failed_compilations =
+        query
+        |> Ash.stream!(batch_size: batch_size, authorize?: false)
+        |> Stream.chunk_every(chunk_size)
+        |> Stream.flat_map(fn chunk ->
+          chunk
+          |> Task.async_stream(
+            fn js_hook ->
+              # Create .template file for JS hook
+              create_template_file(
+                js_hook.site && js_hook.site.name,
+                "js_hook",
+                js_hook.name,
+                js_hook.content
+              )
+
+              nil
+            end,
+            max_concurrency: System.schedulers_online(),
+            ordered: false,
+            timeout: :timer.minutes(5),
+            on_timeout: :kill_task
+          )
+          |> Enum.map(fn
+            {:ok, nil} -> nil
+            {:exit, reason} -> {:js_hook_creation_exit, reason}
+          end)
+          |> Enum.reject(&is_nil/1)
+        end)
+        |> Enum.to_list()
+
+      if failed_compilations == [] do
+        Logger.info("[BootHandler] All #{js_hooks_count} JS hooks processed successfully")
         :ok
       else
-        {batch_size, chunk_size} = get_optimal_batch_config(js_hooks_count)
-
-        failed_compilations =
-          query
-          |> Ash.stream!(batch_size: batch_size, authorize?: false)
-          |> Stream.chunk_every(chunk_size)
-          |> Stream.flat_map(fn chunk ->
-            chunk
-            |> Task.async_stream(
-              fn js_hook ->
-                # Create .template file for JS hook
-                create_template_file(
-                  js_hook.site && js_hook.site.name,
-                  "js_hook",
-                  js_hook.name,
-                  js_hook.content
-                )
-
-                nil
-              end,
-              max_concurrency: System.schedulers_online(),
-              ordered: false,
-              timeout: :timer.minutes(5),
-              on_timeout: :kill_task
-            )
-            |> Enum.map(fn
-              {:ok, nil} -> nil
-              {:exit, reason} -> {:js_hook_creation_exit, reason}
-            end)
-            |> Enum.reject(&is_nil/1)
-          end)
-          |> Enum.to_list()
-
-        if failed_compilations == [] do
-          Logger.info("[BootHandler] All #{js_hooks_count} JS hooks processed successfully")
-          :ok
-        else
-          Logger.error("[BootHandler] Failed to process #{length(failed_compilations)} JS hooks")
-          {:error, {:js_hook_processing_failed, failed_compilations}}
-        end
+        Logger.error("[BootHandler] Failed to process #{length(failed_compilations)} JS hooks")
+        {:error, {:js_hook_processing_failed, failed_compilations}}
       end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error loading JS hooks: #{inspect(error)}")
-        {:error, error}
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading JS hooks: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc """
@@ -1274,33 +1260,31 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       # - Asset optimization and compression
   """
   def create_assets_compilation_jobs(type \\ "asset") do
-    try do
-      sites_count = SiteState.count()
+    sites_count = SiteState.count()
 
-      if sites_count == 0 do
-        :ok
-      else
-        {_batch_size, chunk_size} = get_optimal_batch_config(sites_count)
+    if sites_count == 0 do
+      :ok
+    else
+      {_batch_size, chunk_size} = get_optimal_batch_config(sites_count)
 
-        SiteState.stream(%{active: true})
-        |> Stream.chunk_every(chunk_size)
-        |> Stream.each(fn site_chunk ->
-          Enum.each(site_chunk, fn site ->
-            site.name
-            |> asset_job(site.id, type, priority: site_priority_to_oban(site.priority))
-            |> Oban.insert()
-          end)
+      SiteState.stream(%{active: true})
+      |> Stream.chunk_every(chunk_size)
+      |> Stream.each(fn site_chunk ->
+        Enum.each(site_chunk, fn site ->
+          site.name
+          |> asset_job(site.id, type, priority: site_priority_to_oban(site.priority))
+          |> Oban.insert()
         end)
-        |> Stream.run()
+      end)
+      |> Stream.run()
 
-        Logger.info("[BootHandler] Compilation jobs created for active sites")
-        :ok
-      end
-    rescue
-      error ->
-        Logger.error("[BootHandler] Error creating compilation jobs: #{inspect(error)}")
-        {:error, error}
+      Logger.info("[BootHandler] Compilation jobs created for active sites")
+      :ok
     end
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error creating compilation jobs: #{inspect(error)}")
+      {:error, error}
   end
 
   @doc """
@@ -1518,6 +1502,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       └── ...
   ```
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # The file name is slugified; the folder is the priv temp dir, the site's name, which only a master
+  # admin can set, and a type label the boot code or compiler worker passes.
   def create_template_file(site_name, type, name, content) do
     site_name = if is_nil(site_name), do: "__global__", else: site_name
     dir_path = Helpers.static_temp_dir(["runtime", site_name, type])
@@ -1553,6 +1540,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   It will not raise exceptions for missing files, making it suitable for
   cleanup operations where the file state is uncertain.
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # The same path `create_template_file/4` builds: a slugified name in the site's folder of a type.
   def delete_template_file(site_name, type, name) do
     site_name = if is_nil(site_name), do: "__global__", else: site_name
     dir_path = Helpers.static_temp_dir(["runtime", site_name, type])

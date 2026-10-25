@@ -76,7 +76,7 @@ defmodule MishkaCmsCore.Activity.Helpers do
   Sources are pluggable and each writes its own map literal, so one that forgets a key hands a
   renderer a map that `entry.that_key` raises on — which in a LiveView is a dead process, and on the
   dashboard a reconnect loop. Both places an entry enters the system pass it through here first (the
-  DB merge in `MishkaCmsCore.Activity.Query.decode/2`, the live feed in
+  DB merge in `MishkaCmsCore.Activity.Query.page/1`, the live feed in
   `MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed`), so dot-access downstream of either seam is
   safe. A key the entry already carries is never overwritten, and extra keys ride along untouched.
 

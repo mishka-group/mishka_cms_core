@@ -354,6 +354,9 @@ defmodule MishkaCmsCoreWeb.AuthController do
   end
 
   # `auth:request:rate_limited` hears it first, and a plugin that halts the conn answers instead.
+  # sobelow_skip ["XSS.SendResp"]
+  # `rate_limited_page/2` escapes its title and text; the rest is the sign-in route and the
+  # server-minted CSP nonce.
   defp rate_limited(conn, limited) do
     conn =
       Hook.call("auth:request:rate_limited", conn,

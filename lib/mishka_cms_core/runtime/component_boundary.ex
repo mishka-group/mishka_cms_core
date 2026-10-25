@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundary do
   ## What it does not catch
 
     * An exception that names a response status of its own between 400 and 499 — a
-      `Plug.Exception`, such as `MishkaCmsCore.ErrorsExceptions.NotFoundError` or an Ash error that
+      `Plug.Exception`, such as MishkaCmsCore.ErrorsExceptions.NotFoundError or an Ash error that
       answers 403 or 404. That is the page's answer, and it is raised on.
     * A `throw` and an `exit`. LiveView sends redirects as throws, and an exit belongs to the
       process drawing the page.

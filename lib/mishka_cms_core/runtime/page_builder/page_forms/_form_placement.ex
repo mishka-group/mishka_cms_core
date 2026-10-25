@@ -25,7 +25,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormPlacement do
   beneath it answers to one name.
 
   Asking only the head left those two never bound. They kept their literal `name`, so the browser
-  posted `agree` at the event's TOP level while `MishkaCmsCore.Runtime.PageForm.scoped/2` reads only
+  posted `agree` at the event's TOP level while the form's params scoping in `MishkaCmsCore.Runtime.PageForm` reads only
   `params["contact"]` — the consent tick was dropped from every submission, the spec claimed a key no
   input carried, and nothing in the audit rail said so.
 

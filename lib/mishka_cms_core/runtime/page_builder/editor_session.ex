@@ -1898,7 +1898,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.EditorSession do
   @spec locked?(t(), String.t()) :: boolean()
   def locked?(%{locked: locked}, node_id), do: MapSet.member?(locked, node_id)
 
-  @doc "Whether a node is folded away on the canvas — `Node.hidden?/2` explains what the set holds."
+  @doc "Whether a node is folded away on the canvas, as `MishkaCmsCore.Runtime.PageBuilder.Tree.Node.hidden?/2` says."
   @spec hidden?(t(), Node.t()) :: boolean()
   def hidden?(%{hidden: hidden}, %Node{} = node), do: Node.hidden?(node, hidden)
 

@@ -16,7 +16,7 @@ defmodule MishkaCmsCore.PluginRegistrations do
   stored status is kept, so a plugin an operator stopped stays stopped. A registration whose module
   is not loaded, or declares no event, is left where it is: there is nothing to compare it with.
 
-  Attached once on boot via `attach/0` (from `MishkaCmsCore.Application.start/2`); it runs each time
+  Attached once on boot via `attach/0` (from MishkaCmsCore.Application.start/2); it runs each time
   mishka_installer finishes synchronizing its plugins, and at once if that has already happened.
   """
 

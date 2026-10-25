@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Accounts.LiveSockets do
   The name a signed-in visitor's live sockets answer to, and the broadcast that cuts them.
 
   `MishkaCmsCoreWeb.AuthController` writes this name into the session under `live_socket_id` when a
-  sign-in succeeds, which is where `Phoenix.LiveView.Socket.id/1` reads it: every socket that
+  sign-in succeeds, which is where Phoenix.LiveView.Socket.id/1 reads it: every socket that
   browser opens afterwards — an admin page, a database page — is subscribed to that topic by
   Phoenix, and a `"disconnect"` broadcast on it shuts all of them down.
 

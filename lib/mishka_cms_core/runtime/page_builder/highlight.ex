@@ -10,7 +10,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Highlight do
   The drawer coloured a line grey when it started with `<!--` or `/*`, and left everything else one
   colour. Anything better with patterns runs into the cases that make highlighting worth having in
   the first place: a `#` inside a string is not a comment, `"` inside a heredoc does not end it,
-  `#{}` interpolation is code inside a string, and a `<` in a text node is not a tag. A tokenizer
+  `\#{}` interpolation is code inside a string, and a `<` in a text node is not a tag. A tokenizer
   already knows all four, and this project ships two of them.
 
   ## What it costs, measured
@@ -225,16 +225,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Highlight do
     spans
     |> Enum.sort_by(fn {_line, col, _len, _colour} -> col end)
     |> Enum.reduce({[], 1}, fn {_line, col, len, colour}, {acc, at} ->
-      cond do
-        col < at ->
-          {acc, at}
-
+      if col < at do
+        {acc, at}
+      else
         # COLOURED FIRST, THEN THE PLAIN RUN BEFORE IT. The accumulator is reversed at the end, so
         # prepending them the other way round put every token before the text that preceded it and
         # the pane printed `defmoney do(cents)`.
-        true ->
-          {[{slice(text, col, len), colour}, {slice(text, at, col - at), @plain} | acc],
-           col + len}
+        {[{slice(text, col, len), colour}, {slice(text, at, col - at), @plain} | acc], col + len}
       end
     end)
     |> then(fn {acc, at} -> [{slice(text, at, String.length(text) - at + 1), @plain} | acc] end)

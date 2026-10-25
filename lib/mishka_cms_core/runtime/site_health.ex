@@ -226,20 +226,20 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
   end
 
   defp job_label(resource, action, name, type) when is_binary(resource) do
-    cond do
-      String.contains?(resource, "BootHandler") and is_binary(type) ->
-        gettext("%{type} bundle rebuild", type: String.upcase(type))
-
-      true ->
-        label = resource |> String.split(".") |> List.last()
-        base = if action, do: "#{label} #{action}", else: label
-        if name, do: "#{base} · #{name}", else: base
+    if String.contains?(resource, "BootHandler") and is_binary(type) do
+      gettext("%{type} bundle rebuild", type: String.upcase(type))
+    else
+      label = resource |> String.split(".") |> List.last()
+      base = if action, do: "#{label} #{action}", else: label
+      if name, do: "#{base} · #{name}", else: base
     end
   end
 
   defp job_label(_resource, _action, _name, _type), do: gettext("Site task")
 
   # One UNION query: per-resource active/inactive/archived counts, site-specific only.
+  # sobelow_skip ["SQL.Query"]
+  # Labels and table names are the literals in `@parts`; the only input, `site_id`, is bound as `$1`.
   defp part_counts(site_id) do
     sql =
       Enum.map_join(@parts, " UNION ALL ", fn {label, table} ->

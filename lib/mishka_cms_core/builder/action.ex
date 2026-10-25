@@ -46,7 +46,7 @@ defmodule MishkaCmsCore.Builder.Action do
 
   ## Both directions are terms
 
-  `write/3` answers a `MishkaCmsCore.Builder.Command.t/0` — the command's name, its arguments and its
+  `write/3` answers a `t:MishkaCmsCore.Builder.Command.t/0` — the command's name, its arguments and its
   options — and `read/2` is handed one back. Neither side spells Elixir. What is written is escaped
   and printed by the code formatter, and what is read was parsed and unwrapped, so a class name
   containing a double quote is a class name containing a double quote in both directions and there is
@@ -233,7 +233,7 @@ defmodule MishkaCmsCore.Builder.Action do
   @spec key(map()) :: String.t()
   def key(action), do: Descriptor.key(action)
 
-  @doc "The module implementing this action, or `nil` for a descriptor that names none."
+  @doc "Module implementing this action, or `nil` for a descriptor that names none."
   @spec module(map()) :: module() | nil
   def module(%{run: run}) when is_atom(run) and not is_nil(run), do: run
   def module(_action), do: nil

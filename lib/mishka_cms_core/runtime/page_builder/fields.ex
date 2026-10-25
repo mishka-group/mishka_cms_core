@@ -197,7 +197,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Fields do
   def local_modules, do: @local_component_modules
 
   @doc """
-  This component's part in a form: `:wrapper`, `:field`, `:error`, `:fieldset`, `:submit` or
+  A component's part in a form: `:wrapper`, `:field`, `:error`, `:fieldset`, `:submit` or
   `:none`.
 
   A declaration wins; otherwise it is inferred and passed through `builder:form:role`. `:error` is
@@ -943,7 +943,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Fields do
   defp matching(_other), do: nil
 
   @doc """
-  The preview source for a component, wrapped in a form when it is a field.
+  Preview source for a component, wrapped in a form when it is a field.
 
   `phx-submit` is not decoration: a `<form>` with no handler still submits implicitly, so pressing
   Enter in a previewed text field navigates the preview iframe and the LiveView is gone. With the

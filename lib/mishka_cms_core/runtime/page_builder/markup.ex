@@ -21,7 +21,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Markup do
 
   ## Tokens, not the tree
 
-  `EEx.tokenize/1` and `Phoenix.LiveView.TagEngine.Tokenizer` directly, rather than the tree
+  `EEx.tokenize/1` and Phoenix.LiveView.TagEngine.Tokenizer directly, rather than the tree
   `MishkaCmsCore.Runtime.PageBuilder.LiveView.HtmlTokenizer` builds on top of them. Nesting is a
   question this module does not ask, and asking it fails on templates this one can answer for: a
   fragment like `<div class={paint(@tone)}>` has no closing tag, so the tree is an error — while the

@@ -40,6 +40,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Examples do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
 
+  require Ash.Query
+
   # A SHORT list of complete ones, not a catalogue. The Wizard covers "what does this look like in
   # amber, bordered, large" far better than twenty near-identical cards ever did — so what is left
   # for the modal to answer is "what does a finished one look like in a page", and that needs a
@@ -87,8 +89,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Examples do
   """
   @spec for_name(String.t(), String.t() | nil) :: [example()]
   def for_name(name, site_id \\ nil) do
-    require Ash.Query
-
     args = if(is_binary(site_id), do: %{site_id: site_id}, else: %{})
 
     MishkaCmsCore.Runtime.Component

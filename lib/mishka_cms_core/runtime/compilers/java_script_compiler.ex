@@ -504,7 +504,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   end
 
   @doc """
-  The `AssetsState` type a lazy hook's module is stored under, beside its site's bundle, from the
+  `AssetsState` type a lazy hook's module is stored under, beside its site's bundle, from the
   hash its file is named by: `lazy_js:<hash>`, with `brotli_lazy_js:<hash>` and
   `gzip_lazy_js:<hash>` for its compressed copies.
   """

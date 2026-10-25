@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
 
   ## Why this is a rule and not a warning
 
-  `Phoenix.LiveView.Diff` raises on it:
+  Phoenix.LiveView.Diff raises on it:
 
       found duplicate ID "…" for component … when rendering template
 

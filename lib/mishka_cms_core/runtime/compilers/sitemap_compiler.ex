@@ -103,7 +103,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   `"sitemap"` job, on a `:sitemaps` queue of its own, that `schedule/1` enqueues when what it lists
   changes:
 
-    * a page or a layout — `MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker`, after its own;
+    * a page or a layout — MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker, after its own;
     * the site switched on, renamed or installed — `BootHandler.compile_site/2`; its host —
       `MishkaCmsCore.Runtime.Resources.Changes.ScheduleSiteRuntime`;
     * its languages, how its addresses name them, or its `seo.sitemap.paths`, and a row an

@@ -188,7 +188,7 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
   was written in and leaves the others to editions of their own.
 
   The mark is read under the string key a row stores and under the atom a compiled page's `extra`
-  carries once `MishkaCmsCore.Runtime.Helpers.atomize_keys/1` has converted it.
+  carries once MishkaCmsCore.Runtime.Helpers.atomize_keys/1 has converted it.
   """
   @spec serves_all_languages?(map()) :: boolean()
   def serves_all_languages?(%{extra: extra}) when is_map(extra),

@@ -733,7 +733,7 @@ defmodule MishkaCmsCore.Runtime.Translations do
 
   def languages(site_id), do: Languages.site(site_id)
 
-  @doc "`languages(nil)` as the admin's pickers want it: `{\"FA\", \"fa\"}`."
+  @doc ~s|`languages(nil)` as the admin's pickers want it: `{"FA", "fa"}`.|
   @spec language_options() :: [{String.t(), String.t()}]
   def language_options, do: options(languages(nil))
 

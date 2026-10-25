@@ -556,7 +556,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
       {:error, :not_a_v3_bundle} ->
         {:error,
          gettext(
-           "That response is not a mishka.ui_kit.bundle.v3 — it needs a \"$schema\", a \"name\" and a \"components\" list."
+           ~s|That response is not a mishka.ui_kit.bundle.v3 — it needs a "$schema", a "name" and a "components" list.|
          )}
 
       {:error, :invalid_kit_name} ->
@@ -1185,6 +1185,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   - Attribute `values:` constraints — values declared via
     `attr :variant, :string, values: [...]`.
 
+  For example:
+
       {:ok, info} =
         UiKitHandler.list_features(bundle_path: path, component: "button")
 
@@ -1673,6 +1675,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   @spec read_bundle(String.t()) :: {:ok, map()} | {:error, term()}
   def read_bundle(path) when is_binary(path), do: load_bundle(path)
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # A `*.json` file of the kits dir or a bundle path the host or an extension sets in code.
   defp load_bundle(path) do
     with {:ok, raw} <- File.read(path),
          {:ok, json} <- Jason.decode(raw),
@@ -1842,14 +1846,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
     selection_by_axis = build_selection_by_axis(sel, per_comp)
 
-    cond do
-      selection_by_axis == %{} ->
-        component
-
-      true ->
-        component
-        |> filter_helpers(selection_by_axis)
-        |> narrow_attr_values(selection_by_axis)
+    if selection_by_axis == %{} do
+      component
+    else
+      component
+      |> filter_helpers(selection_by_axis)
+      |> narrow_attr_values(selection_by_axis)
     end
   end
 
@@ -1886,12 +1888,12 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
     kept =
       Enum.filter(helpers, fn h ->
-        cond do
-          discriminators = h["discriminators"] ->
-            keep_by_discriminators?(discriminators, selection_by_axis)
-
-          true ->
+        case h["discriminators"] do
+          discriminators when discriminators in [nil, false] ->
             keep_by_bindings?(h, Map.get(bindings, h["name"], %{}), selection_by_axis)
+
+          discriminators ->
+            keep_by_discriminators?(discriminators, selection_by_axis)
         end
       end)
 

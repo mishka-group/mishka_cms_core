@@ -207,7 +207,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitUpgrade do
   def stamp(params, _kit_name, _kit_version), do: params
 
   @doc """
-  The fingerprint of what a component is made of, taken from a bundle entry or from a stored row.
+  Fingerprint of what a component is made of, taken from a bundle entry or from a stored row.
 
   Both shapes go through the same projection — the bundle's string keys and the row's atoms and
   embedded structs land on the same canonical term — so a digest taken at install still matches the

@@ -188,7 +188,7 @@ defmodule MishkaCmsCore.Runtime.Setting do
       allow_nil? false
       public? true
       constraints min_length: 1, max_length: 200, trim?: true
-      description "Setting key, e.g. \"site.title\", \"cms.offline\", \"blog.posts_per_page\"."
+      description ~s|Setting key, e.g. "site.title", "cms.offline", "blog.posts_per_page".|
     end
 
     attribute :value, :map do

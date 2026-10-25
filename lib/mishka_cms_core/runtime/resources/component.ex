@@ -1521,10 +1521,10 @@ defmodule MishkaCmsCore.Runtime.Component do
 
         # Filter by tenant: show site's components plus global ones
         filtered_query =
-          if !is_nil(context.tenant) do
-            Ash.Query.filter(query, site_id == ^context.tenant or is_nil(site_id))
-          else
+          if is_nil(context.tenant) do
             query
+          else
+            Ash.Query.filter(query, site_id == ^context.tenant or is_nil(site_id))
           end
 
         Ash.Query.load(filtered_query,

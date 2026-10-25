@@ -454,6 +454,8 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   # Reading
   # ---------------------------------------------------------------------------
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `bundle_path` comes from the extension's manifest, code the host ships, not from a request.
   defp bundle(manifest), do: manifest.bundle_path |> File.read!() |> Jason.decode!()
 
   defp names(components), do: Enum.map(components, & &1["name"])
