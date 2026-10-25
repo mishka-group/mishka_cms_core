@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.MixProject do
       docs: [
         main: "readme",
         source_ref: "v#{@version}",
-        extras: ["README.md"],
+        extras: ["README.md", LICENSE: [title: "License"]],
         source_url: @source_url
       ],
       # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
