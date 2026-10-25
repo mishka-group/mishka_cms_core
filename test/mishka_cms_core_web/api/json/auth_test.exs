@@ -573,7 +573,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert [%{"code" => "second_factor_invalid"}] = errors(response)
 
       later!(master_user)
-      code = NimbleTOTP.verification_code(secret)
+      code = MishkaCmsCore.Test.Totp.code(secret)
 
       assert %{status: 201} = response = two_step_sign_in(master_user, %{"totp_code" => code})
       assert %{"meta" => %{"token" => token}} = Jason.decode!(response.resp_body)
@@ -591,7 +591,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
         master_user
         |> Ash.Changeset.for_update(
           :generate_recovery_codes,
-          %{code: NimbleTOTP.verification_code(secret)},
+          %{code: MishkaCmsCore.Test.Totp.code(secret)},
           actor: master_user
         )
         |> Ash.update()
@@ -622,7 +622,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert [%{"code" => "second_factor_required"}] = errors(response)
 
       later!(tenant_user)
-      code = NimbleTOTP.verification_code(secret)
+      code = MishkaCmsCore.Test.Totp.code(secret)
 
       assert %{status: 201} = two_step_sign_in(tenant_user, %{"totp_code" => code}, opts)
     end
@@ -5273,7 +5273,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       :confirm_setup_with_totp,
       %{
         setup_token: started.__metadata__.setup_token,
-        code: NimbleTOTP.verification_code(secret)
+        code: MishkaCmsCore.Test.Totp.code(secret)
       },
       actor: user,
       tenant: user.site_id

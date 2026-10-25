@@ -58,7 +58,7 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
       refute SecondFactor.enabled?(reload(admin))
 
       view
-      |> form("#two-factor-confirm", %{"code" => NimbleTOTP.verification_code(secret)})
+      |> form("#two-factor-confirm", %{"code" => MishkaCmsCore.Test.Totp.code(secret)})
       |> render_submit()
 
       assert view |> element("#two-factor-status") |> render() =~ "On"
@@ -73,7 +73,7 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
       later!(admin)
 
       view
-      |> form("#two-factor-disable", %{"code" => NimbleTOTP.verification_code(secret)})
+      |> form("#two-factor-disable", %{"code" => MishkaCmsCore.Test.Totp.code(secret)})
       |> render_submit()
 
       assert view |> element("#two-factor-status") |> render() =~ "Off"
@@ -110,7 +110,7 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
       secret = view |> element("#two-factor-secret") |> render() |> secret()
 
       view
-      |> form("#two-factor-confirm", %{"code" => NimbleTOTP.verification_code(secret)})
+      |> form("#two-factor-confirm", %{"code" => MishkaCmsCore.Test.Totp.code(secret)})
       |> render_submit()
 
       render_async(view)
@@ -123,7 +123,7 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
       later!(admin)
 
       view
-      |> form("#recovery-codes-form", %{"code" => NimbleTOTP.verification_code(secret)})
+      |> form("#recovery-codes-form", %{"code" => MishkaCmsCore.Test.Totp.code(secret)})
       |> render_submit()
 
       assert has_element?(
@@ -214,7 +214,7 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
       render_async(view)
 
       view
-      |> form("#user-modal-turn-off-form", %{"code" => NimbleTOTP.verification_code(secret)})
+      |> form("#user-modal-turn-off-form", %{"code" => MishkaCmsCore.Test.Totp.code(secret)})
       |> render_submit()
 
       render_async(view)
@@ -272,7 +272,7 @@ defmodule MishkaCmsCoreWeb.Test.TwoFactorTest do
       :confirm_setup_with_totp,
       %{
         setup_token: started.__metadata__.setup_token,
-        code: NimbleTOTP.verification_code(secret)
+        code: MishkaCmsCore.Test.Totp.code(secret)
       },
       actor: user,
       tenant: user.site_id

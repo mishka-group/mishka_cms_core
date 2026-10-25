@@ -83,7 +83,7 @@ defmodule MishkaCmsCoreWeb.Test.UserModalActionsTest do
       later!(admin)
 
       view
-      |> form("#user-modal-turn-off-form", %{"code" => NimbleTOTP.verification_code(secret)})
+      |> form("#user-modal-turn-off-form", %{"code" => MishkaCmsCore.Test.Totp.code(secret)})
       |> render_submit()
 
       render_async(view)
@@ -215,7 +215,7 @@ defmodule MishkaCmsCoreWeb.Test.UserModalActionsTest do
       :confirm_setup_with_totp,
       %{
         setup_token: started.__metadata__.setup_token,
-        code: NimbleTOTP.verification_code(secret)
+        code: MishkaCmsCore.Test.Totp.code(secret)
       },
       actor: user,
       tenant: user.site_id
