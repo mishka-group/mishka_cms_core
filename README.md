@@ -61,7 +61,7 @@ An extension adds routes with the `MishkaCmsCore.ExtensionRouter` behaviour, add
 Add it from Hex:
 
 ```elixir
-{:mishka_cms_core, "~> 0.0.1"}
+{:mishka_cms_core, "~> 0.0.2"}
 ```
 
 [Mishka CMS](https://github.com/mishka-group/mishka_cms) loads it from `__extensions/mishka_cms_core` instead when that folder exists.

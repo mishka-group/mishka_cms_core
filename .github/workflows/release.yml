@@ -132,8 +132,8 @@ jobs:
 
       # `_build/prod/lib/mishka_cms_core/priv` is a link to the whole `priv` of the checkout, and
       # `tar -h` follows it. A consumer needs what the Hex package ships, the directories `package/0`
-      # lists in mix.exs under `files`, not the rest of `priv` (the gettext templates, the generated
-      # migrations), so each is named here. `priv/cms_ui_kits/authoring` is named, not the whole of
+      # lists in mix.exs under `files`, not the rest of `priv` (the generated migrations, the
+      # runtime cache), so each is named here. `priv/cms_ui_kits/authoring` is named, not the whole of
       # `priv/cms_ui_kits`, because Chelekom's bundles are downloaded there by a server and never ship.
       - name: Tar the ebin and its priv
         env:
@@ -147,7 +147,7 @@ jobs:
           extra=""
           [ -d "$src/consolidated" ] && extra="consolidated"
           tar -czhf "dist/mishka_cms_core-$VERSION-ebin.tar.gz" -C "$src" ebin \
-            priv/admin_assets priv/cms_ui_kits/authoring priv/dev_seed_media priv/install priv/share_card $extra
+            priv/admin_assets priv/cms_ui_kits/authoring priv/dev_seed_media priv/gettext priv/install priv/share_card $extra
           mods="$(tar -tzf "dist/mishka_cms_core-$VERSION-ebin.tar.gz" \
                   | grep -c '^ebin/Elixir\.MishkaCmsCore' || true)"
           [ "$mods" -gt 0 ] \
