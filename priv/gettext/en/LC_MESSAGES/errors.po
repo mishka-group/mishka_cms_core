@@ -11,7 +11,7 @@ msgstr ""
 "Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:45
+#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:44
 #, elixir-autogen, elixir-format
 msgid "A note cannot be a reply to itself."
 msgstr ""
@@ -111,7 +111,7 @@ msgstr ""
 msgid "That %{label} is not one this site can use."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:69
+#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:67
 #, elixir-autogen, elixir-format
 msgid "That note is about a different document, so this cannot be a reply to it."
 msgstr ""
@@ -121,7 +121,7 @@ msgstr ""
 msgid "That version was not found for this record."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:77
+#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:75
 #, elixir-autogen, elixir-format
 msgid "The note being replied to is no longer here."
 msgstr ""
@@ -161,8 +161,8 @@ msgstr ""
 msgid "JS hook"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1489
-#: lib/mishka_cms_core/accounts/user.ex:1518
+#: lib/mishka_cms_core/accounts/user.ex:1492
+#: lib/mishka_cms_core/accounts/user.ex:1521
 #, elixir-autogen
 msgid "account"
 msgstr ""
@@ -259,11 +259,11 @@ msgstr ""
 msgid "issue"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1445
-#: lib/mishka_cms_core/runtime/resources/page.ex:1513
-#: lib/mishka_cms_core/runtime/resources/page.ex:1562
-#: lib/mishka_cms_core/runtime/resources/page.ex:1620
-#: lib/mishka_cms_core/runtime/resources/page.ex:2010
+#: lib/mishka_cms_core/runtime/resources/page.ex:1449
+#: lib/mishka_cms_core/runtime/resources/page.ex:1517
+#: lib/mishka_cms_core/runtime/resources/page.ex:1566
+#: lib/mishka_cms_core/runtime/resources/page.ex:1624
+#: lib/mishka_cms_core/runtime/resources/page.ex:2014
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:497
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:543
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:581
@@ -278,11 +278,11 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:324
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:348
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:368
-#: lib/mishka_cms_core/runtime/resources/page.ex:1437
-#: lib/mishka_cms_core/runtime/resources/page.ex:1506
-#: lib/mishka_cms_core/runtime/resources/page.ex:1555
-#: lib/mishka_cms_core/runtime/resources/page.ex:1613
-#: lib/mishka_cms_core/runtime/resources/page.ex:2004
+#: lib/mishka_cms_core/runtime/resources/page.ex:1441
+#: lib/mishka_cms_core/runtime/resources/page.ex:1510
+#: lib/mishka_cms_core/runtime/resources/page.ex:1559
+#: lib/mishka_cms_core/runtime/resources/page.ex:1617
+#: lib/mishka_cms_core/runtime/resources/page.ex:2008
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:486
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:532
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:570
@@ -480,14 +480,14 @@ msgstr ""
 msgid "Cannot archive stylesheet from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1419
+#: lib/mishka_cms_core/accounts/user.ex:1422
 #, elixir-autogen, elixir-format
 msgid "Cannot delete users from other sites."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1422
-#: lib/mishka_cms_core/accounts/user.ex:1454
-#: lib/mishka_cms_core/accounts/user.ex:1581
+#: lib/mishka_cms_core/accounts/user.ex:1425
+#: lib/mishka_cms_core/accounts/user.ex:1457
+#: lib/mishka_cms_core/accounts/user.ex:1584
 #, elixir-autogen, elixir-format
 msgid "Cannot delete yourself."
 msgstr ""
@@ -522,8 +522,8 @@ msgstr ""
 msgid "Cannot edit archived media. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1565
-#: lib/mishka_cms_core/runtime/resources/page.ex:1623
+#: lib/mishka_cms_core/runtime/resources/page.ex:1569
+#: lib/mishka_cms_core/runtime/resources/page.ex:1627
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived page. Please unarchive it first."
 msgstr ""
@@ -654,9 +654,9 @@ msgstr ""
 msgid "Cannot restore version of archived media. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1988
-#: lib/mishka_cms_core/runtime/resources/page.ex:2028
-#: lib/mishka_cms_core/runtime/resources/page.ex:2049
+#: lib/mishka_cms_core/runtime/resources/page.ex:1992
+#: lib/mishka_cms_core/runtime/resources/page.ex:2032
+#: lib/mishka_cms_core/runtime/resources/page.ex:2053
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived page. Please unarchive it first."
 msgstr ""
@@ -681,7 +681,7 @@ msgstr ""
 msgid "Cannot set archived site as master."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1277
+#: lib/mishka_cms_core/accounts/user.ex:1282
 #, elixir-autogen, elixir-format
 msgid "Cannot update users from other sites."
 msgstr ""
@@ -802,7 +802,7 @@ msgid "Name must be between 3 and 100 characters."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:119
-#: lib/mishka_cms_core/runtime/resources/page.ex:132
+#: lib/mishka_cms_core/runtime/resources/page.ex:136
 #, elixir-autogen, elixir-format
 msgid "Name must be between 3 and 200 characters."
 msgstr ""
@@ -812,17 +812,17 @@ msgstr ""
 msgid "Name must be between 3 and 70 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:153
+#: lib/mishka_cms_core/runtime/resources/page.ex:157
 #, elixir-autogen, elixir-format
 msgid "Name, path, and template cannot be empty."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1777
+#: lib/mishka_cms_core/runtime/resources/page.ex:1781
 #, elixir-autogen, elixir-format
 msgid "Page is already archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1836
+#: lib/mishka_cms_core/runtime/resources/page.ex:1840
 #, elixir-autogen, elixir-format
 msgid "Page is not archived."
 msgstr ""
@@ -834,7 +834,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:123
 #: lib/mishka_cms_core/runtime/resources/layout.ex:115
-#: lib/mishka_cms_core/runtime/resources/page.ex:140
+#: lib/mishka_cms_core/runtime/resources/page.ex:144
 #, elixir-autogen, elixir-format
 msgid "Path must be between 1 and 255 characters."
 msgstr ""
@@ -843,7 +843,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:127
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:70
 #: lib/mishka_cms_core/runtime/resources/layout.ex:123
-#: lib/mishka_cms_core/runtime/resources/page.ex:148
+#: lib/mishka_cms_core/runtime/resources/page.ex:152
 #: lib/mishka_cms_core/runtime/resources/site.ex:103
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:91
 #, elixir-autogen, elixir-format
@@ -865,12 +865,12 @@ msgstr ""
 msgid "Stylesheet is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:1458
+#: lib/mishka_cms_core/runtime/resources/page.ex:1462
 #, elixir-autogen, elixir-format
 msgid "Template cannot be empty."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:144
+#: lib/mishka_cms_core/runtime/resources/page.ex:148
 #, elixir-autogen, elixir-format
 msgid "Template must be at least 3 characters."
 msgstr ""
@@ -896,7 +896,7 @@ msgstr ""
 msgid "This note is on something shared by every site. Only a master can change it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:136
+#: lib/mishka_cms_core/runtime/resources/page.ex:140
 #, elixir-autogen, elixir-format
 msgid "Title must be between 1 and 200 characters."
 msgstr ""
@@ -951,10 +951,10 @@ msgstr ""
 msgid "Version does not belong to this media."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2032
-#: lib/mishka_cms_core/runtime/resources/page.ex:2053
-#: lib/mishka_cms_core/runtime/resources/page.ex:2100
-#: lib/mishka_cms_core/runtime/resources/page.ex:2153
+#: lib/mishka_cms_core/runtime/resources/page.ex:2036
+#: lib/mishka_cms_core/runtime/resources/page.ex:2057
+#: lib/mishka_cms_core/runtime/resources/page.ex:2104
+#: lib/mishka_cms_core/runtime/resources/page.ex:2157
 #, elixir-autogen, elixir-format
 msgid "Version does not belong to this page."
 msgstr ""
@@ -989,13 +989,13 @@ msgstr ""
 msgid "cannot grant permissions you do not hold yourself: %{over}"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1261
-#: lib/mishka_cms_core/accounts/user.ex:1349
+#: lib/mishka_cms_core/accounts/user.ex:1266
+#: lib/mishka_cms_core/accounts/user.ex:1353
 #, elixir-autogen, elixir-format
 msgid "does not match password"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1658
+#: lib/mishka_cms_core/accounts/user.ex:1661
 #, elixir-autogen, elixir-format
 msgid "is invalid or expired"
 msgstr ""
@@ -1130,7 +1130,7 @@ msgstr ""
 msgid "A layout"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2724
+#: lib/mishka_cms_core/runtime/resources/page.ex:2728
 #, elixir-autogen, elixir-format
 msgid "A page with this language already exists in this language group."
 msgstr ""
@@ -1249,12 +1249,12 @@ msgstr ""
 msgid "Media path must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2697
+#: lib/mishka_cms_core/runtime/resources/page.ex:2701
 #, elixir-autogen, elixir-format
 msgid "Page name must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2711
+#: lib/mishka_cms_core/runtime/resources/page.ex:2715
 #, elixir-autogen, elixir-format
 msgid "Page path must be unique within a site."
 msgstr ""
@@ -1293,7 +1293,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:676
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1993
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:712
-#: lib/mishka_cms_core/runtime/resources/page.ex:2704
+#: lib/mishka_cms_core/runtime/resources/page.ex:2708
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:1003
 #, elixir-autogen, elixir-format
 msgid "Preview token collision."
@@ -1374,7 +1374,7 @@ msgstr ""
 msgid "This site already has an error page — open that one instead of making another."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1984
+#: lib/mishka_cms_core/accounts/user.ex:1987
 #, elixir-autogen, elixir-format
 msgid "This site is offline and is not taking new accounts. Sign in if you have one."
 msgstr ""
@@ -1434,7 +1434,7 @@ msgstr ""
 msgid "Tenant required"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1821
+#: lib/mishka_cms_core/accounts/user.ex:1824
 #, elixir-autogen, elixir-format
 msgid "is already confirmed"
 msgstr ""
@@ -2388,12 +2388,12 @@ msgstr ""
 msgid "The second step's token is invalid or expired."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1017
+#: lib/mishka_cms_core/accounts/user.ex:1022
 #, elixir-autogen, elixir-format, fuzzy
 msgid "is already set"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:704
+#: lib/mishka_cms_core/accounts/user.ex:709
 #, elixir-autogen, elixir-format
 msgid "is not set yet: set a first password instead"
 msgstr ""
