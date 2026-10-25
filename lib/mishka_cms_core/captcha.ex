@@ -105,7 +105,7 @@ defmodule MishkaCmsCore.Captcha do
   end
 
   @doc """
-  The provider `site_id` checks with, ready to check: `{:ok, module}`, or `{:error, reason}` —
+  Provider `site_id` checks with, ready to check: `{:ok, module}`, or `{:error, reason}` —
   `:off` (none chosen), `:unknown_provider` (chosen, but its plugin is gone), `:cannot_run` (chosen,
   while the providers' plugins cannot run) or `:not_ready` (chosen, but missing a key).
   """

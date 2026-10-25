@@ -114,6 +114,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
 
   @repo Application.compile_env!(:mishka_cms_core, :repo)
 
+  # sobelow_skip ["SQL.Query"]
+  # The table is that of a module picked from the fixed `@row_resources` map; the id is bound as `$1`.
   defp stale?(%{
          "action" => action,
          "resource" => resource,

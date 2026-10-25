@@ -89,6 +89,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   import Kernel, except: [def: 2, defp: 2]
   import Phoenix.Component.Declarative
 
+  require Logger
+
   @supported_attr_types ~w(any string atom boolean integer float list map global)
 
   ####################################################################################
@@ -286,6 +288,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   - `:include` - Global attributes to include
   - `:exclude` - Global attributes to exclude
   """
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Attr names come from a stored Component row, which only an admin holding the component or code
+  # permission can write; Phoenix's `attr/3` takes them as atoms. The two synthetic names are literals.
   def build_attributes({params, functions_ast}) do
     attr_setup_ast =
       quote do
@@ -376,6 +381,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
 
   Slot attributes support the same options as regular component attributes.
   """
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Slot names come from a stored Component row, which only an admin holding the component or code
+  # permission can write; Phoenix's `slot/3` takes them as atoms.
   def build_slots({params, functions_ast}) do
     slot_setup_ast =
       quote do
@@ -525,6 +533,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # before it — `Phoenix.LiveView.Diff` takes one branch or the other — so a kit that writes one
   # would have had it silently ignored. The emitted `update_many/1` calls it itself, last, once the
   # parent's assigns are already on the socket.
+  # sobelow_skip ["DOS.StringToAtom"]
+  # The function is named after the stored component's `name`, which only an admin holding the
+  # component or code permission can set.
   defp build_stateful_function({params, functions_ast}) do
     {template_ast, body_ast} = compile_template_and_body(params)
     defaults_map = extract_all_defaults(params[:attrs] || [])
@@ -533,6 +544,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     global = global_name(params)
 
     quote do
+      # sobelow_skip ["DOS.StringToAtom"]
+      # The stored component's own name, written only with the component or code permission.
       def unquote(String.to_atom(params[:title]))(var!(assigns)), do: render(var!(assigns))
 
       # `update_many/1` AND NOT `update/2`, so the name `update/2` stays the kit's to use.
@@ -586,6 +599,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
           end)
           |> Phoenix.Component.assign(Map.take(given, declared))
           |> Phoenix.Component.assign(Map.new(slots))
+          # `:id` is what a live component is identified by, and the stored template may read `@id`.
+          # credo:disable-for-next-line Jump.CredoChecks.UnusedLiveViewAssign
           |> Phoenix.Component.assign(:id, Map.get(var!(assigns), :id))
           # THE DISPATCH'S OWN KEYS, PUT BACK FROM WHAT THIS MODULE WAS COMPILED WITH. `live/3`
           # drops `site` and `component_name` before calling `live_component/1`, because a live
@@ -661,8 +676,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   defp to_existing_or_new_atom(name) when is_atom(name), do: name
+  # sobelow_skip ["DOS.StringToAtom"]
+  # A name the stored component's attrs or slots declare, which `attr/3` and `slot/3` intern anyway.
   defp to_existing_or_new_atom(name) when is_binary(name), do: String.to_atom(name)
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # The function is named after the stored component's `name`, which only an admin holding the
+  # component or code permission can set.
   defp build_single_clause_function({params, functions_ast}) do
     {template_ast, body_ast} = compile_template_and_body(params)
 
@@ -685,6 +705,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
 
     component_function_ast =
       quote do
+        # sobelow_skip ["DOS.StringToAtom"]
+        # The stored component's own name, written only with the component or code permission.
         def unquote(String.to_atom(params[:title]))(var!(assigns)) do
           var!(assigns) = Map.merge(unquote(Macro.escape(defaults_map)), var!(assigns))
           unquote(body_block)
@@ -695,6 +717,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     {params, functions_ast ++ [component_function_ast]}
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # The function is named after the stored component's `name`, which only an admin holding the
+  # component or code permission can set.
   defp build_multi_clause_function({params, functions_ast}, clauses) do
     defaults_map = extract_all_defaults(params[:attrs] || [])
     title_atom = String.to_atom(params[:title])
@@ -866,6 +891,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   When-gating is performed by the Importer before this point — the compiler
   always emits whatever is in the list.
   """
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Names from the stored component's `extra.module_attributes`, set by a kit install or an admin with
+  # the component or code permission; `Module.register_attribute/3` takes atoms.
   def build_module_attributes({params, functions_ast}) do
     attrs_ast =
       Enum.map(params[:module_attributes] || [], fn entry ->
@@ -960,6 +988,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # matches `{:noreply, socket}` — a `""` there takes down the page hosting the component on the
   # first event no clause matched. A stateful component's unmatched events are answered by
   # `build_event_fallback/1`, which is emitted last and returns the tuple.
+  # sobelow_skip ["DOS.StringToAtom"]
+  # A helper name of the stored component, which `build_helper_def/1` defines as a function anyway.
   defp maybe_total_catch_all({name, arity} = signature, clauses, true) do
     with false <- {String.to_atom(name), arity} in lifecycle_callbacks(),
          true <- is_integer(arity),
@@ -1011,10 +1041,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     end)
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # A helper name of the stored component, which `build_helper_def/1` defines as a function anyway.
   defp build_total_catch_all({name, arity}) do
     wildcards = List.duplicate(quote(do: _), arity)
 
     quote do
+      # sobelow_skip ["DOS.StringToAtom"]
+      # The stored helper's own name: this clause closes the function `build_helper_def/1` defines.
       def unquote(String.to_atom(name))(unquote_splicing(wildcards)), do: ""
     end
   end
@@ -1022,6 +1056,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # Emit attr/slot decls before the helper. Returns AST nodes in the
   # order they should appear (decls first, then the helper def follows
   # via `build_helper_def`).
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Attr and slot names a stored helper declares, written only with the component or code permission.
   defp build_helper_attr_decls(%{} = helper) do
     attrs = Map.get(helper, :attrs, []) || []
     slots = Map.get(helper, :slots, []) || []
@@ -1108,6 +1144,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     {:handle_async, 3} => "{:noreply, socket}"
   }
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # A helper name of the stored component, looked up in a fixed map; `build_helper_def/1` defines it
+  # as a function anyway.
   defp inert_for(name, head_args) do
     arity = head_args |> String.trim() |> arity_of()
 
@@ -1313,6 +1352,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     |> Map.merge(%{__changed__: nil, myself: nil, flash: %{}, id: "probe", rest: %{}})
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Names read back from the module just compiled, whose attr and slot declarations made them atoms.
   defp probe_key(declaration) do
     declaration
     |> Map.get(:name, Map.get(declaration, "name", "unknown"))
@@ -1513,6 +1554,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     |> Map.reject(fn {key, _value} -> to_string(key) in declared_names end)
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Keys are the stored component's own attr names, the ones `build_attributes/1` declares.
   defp extract_all_defaults(attrs) do
     for attr <- attrs,
         {:ok, default} <- [attr |> Map.get(:opts, []) |> declared_default(attr)],
@@ -1557,6 +1600,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # gets this from `Phoenix.Component.Declarative`, which reads the declaration; the stateful path
   # builds the map itself in `update_many/1` and so has to ask the same question. A component with
   # no global attribute keeps the conventional name, which nothing reads and nothing costs.
+  # sobelow_skip ["DOS.StringToAtom"]
+  # The name of the stored component's own global attr, which `build_attributes/1` declares.
   defp global_name(params) do
     case Enum.find(params[:attrs] || [], &(&1.type == "global")) do
       nil -> :rest
@@ -1646,7 +1691,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
         env
       else
         {:error, error} ->
-          require Logger
           Logger.warning("failed to import #{module}: #{error}")
           env
 
@@ -1782,6 +1826,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
 
   defp coerce_default_for_type(opts, _type), do: opts
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # The default, values and examples of a stored component's `:atom` attr; Phoenix's `attr/3` checks
+  # them against the type, so they have to be atoms.
   defp atom_option(opts, key) do
     case Keyword.fetch(opts, key) do
       {:ok, value} when is_binary(value) ->
@@ -1795,6 +1842,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     end
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # One entry of a stored `:atom` attr's `values` or `examples`, as in `atom_option/2` above.
   defp atom_entry(value) when is_binary(value), do: String.to_atom(value)
   defp atom_entry(value), do: value
 
@@ -1812,6 +1861,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     end)
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # An atom the kit exporter wrote as `":name"` in a stored attr's map default, decoded back.
   defp decode_atom_term(":" <> rest), do: String.to_atom(rest)
 
   defp decode_atom_term(list) when is_list(list), do: Enum.map(list, &decode_atom_term/1)

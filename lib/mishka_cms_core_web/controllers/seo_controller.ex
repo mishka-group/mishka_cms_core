@@ -170,6 +170,9 @@ defmodule MishkaCmsCoreWeb.SeoController do
 
   def manifest(conn, _params), do: refused(conn, :no_site)
 
+  # sobelow_skip ["XSS.ContentType", "Traversal.SendFile"]
+  # The type is "image/png" or one `ShareCard.picture_type/1` picked from a fixed list by the file's
+  # bytes; the path is a file `SiteIcon` confined to the site's own media or icons folder.
   defp send_picture(conn, site, type, path, cache) do
     conn
     |> put_resp_content_type(type, nil)
@@ -220,6 +223,8 @@ defmodule MishkaCmsCoreWeb.SeoController do
   defp serve(conn, site, type, body),
     do: conn |> put_resp_header("x-robots-tag", "noindex") |> answer(site, type, body)
 
+  # sobelow_skip ["XSS.ContentType", "XSS.SendResp"]
+  # Every caller passes a literal type that is not HTML (text, XML, JSON or gzip) and a body built for it.
   defp answer(conn, site, type, body) do
     conn
     |> put_resp_content_type(type, charset(type))

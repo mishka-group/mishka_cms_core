@@ -4,7 +4,7 @@
 
 defmodule MishkaCmsCoreWeb.Forms.ComponentSubmit do
   @moduledoc """
-  The submit handler for a component's form — the inspector's Configuration tab and the builder's
+  Submit handler for a component's form — the inspector's Configuration tab and the builder's
   Interface tab are both this form.
 
   It keeps what the form cannot show. A component's `attrs` and `slots` are declarations, and the

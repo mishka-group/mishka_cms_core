@@ -155,7 +155,7 @@ defmodule MishkaCmsCore.Runtime.SiteIcon do
   `"theme_color"` and `"background_color"` when the site set them, as a plugin on `manifest_event/0`
   leaves it, with string keys, ready to be encoded. `nil` for a site with no icons.
   """
-  @spec manifest(%{id: String.t()}) :: map() | nil
+  @spec manifest(%{required(:id) => String.t(), optional(atom()) => term()}) :: map() | nil
   def manifest(%{id: site_id} = site) when is_binary(site_id) do
     case source(site_id) do
       %{hash: _hash} -> site |> own_manifest() |> through_plugins(site)
@@ -296,6 +296,8 @@ defmodule MishkaCmsCore.Runtime.SiteIcon do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `dir/1`: the static dir, `uploads`, the site's UUID and `icons`; no part of it is input.
   defp draw(site_id, %{path: picture, hash: hash}) do
     folder = dir(site_id)
 
@@ -314,6 +316,8 @@ defmodule MishkaCmsCore.Runtime.SiteIcon do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # `disk_path/3`: the site's icons folder plus a hex hash and one of the fixed `@sizes`.
   defp write(site_id, hash, pngs) do
     Enum.reduce_while(pngs, {:ok, %{}}, fn {size, png}, {:ok, files} ->
       target = disk_path(site_id, hash, size)
@@ -328,6 +332,8 @@ defmodule MishkaCmsCore.Runtime.SiteIcon do
   end
 
   # A site's icons drawn from an older picture: no page names them any more.
+  # sobelow_skip ["Traversal.FileModule"]
+  # Removes files inside the site's own icons folder, by the names `File.ls/1` listed in it.
   defp sweep(folder, hash) do
     with {:ok, names} <- File.ls(folder) do
       for name <- names,
@@ -422,6 +428,8 @@ defmodule MishkaCmsCore.Runtime.SiteIcon do
 
   defp own_file(_elsewhere_or_none, _site_id), do: nil
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # A path `own_file/2` took from `ShareCard.site_file/2`, confined to the site's own files.
   defp drawable(%{path: path, type: type}) when type in @drawable do
     case File.read(path) do
       {:ok, bytes} -> %{path: path, type: type, hash: hash(bytes), failed?: false}

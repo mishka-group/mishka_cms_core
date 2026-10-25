@@ -16048,8 +16048,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   defp filter_palette(%{components: components, palette_query: query, palette_cat: cat}) do
     components
-    |> Enum.filter(&(cat == "all" or palette_group(&1) == cat))
-    |> Enum.filter(&matches?(&1, query))
+    |> Enum.filter(&((cat == "all" or palette_group(&1) == cat) and matches?(&1, query)))
     |> Enum.sort_by(& &1.label)
   end
 

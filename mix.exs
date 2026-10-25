@@ -32,9 +32,10 @@ defmodule MishkaCmsCore.MixProject do
       # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
       # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
       gettext: [excluded_refs_from_purging: ~r{^\.\./}],
-      # `lib/mix/` calls `Mix`, which is not in the default PLT. `.dialyzer_ignore.exs` lists what
-      # dialyzer reports that is not a defect, each with the reason.
-      dialyzer: [plt_add_apps: [:mix], ignore_warnings: ".dialyzer_ignore.exs"]
+      # `lib/mix/` calls `Mix`, and `test/support` (compiled in :test, where `mix ci` runs dialyzer)
+      # calls ExUnit; neither is in the default PLT. `.dialyzer_ignore.exs` lists what dialyzer
+      # reports that is not a defect, each with the reason.
+      dialyzer: [plt_add_apps: [:mix, :ex_unit], ignore_warnings: ".dialyzer_ignore.exs"]
     ]
   end
 

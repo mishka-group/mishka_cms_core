@@ -40,6 +40,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   require MishkaCmsCore.Runtime.PageBuilder.Strict
   alias MishkaCmsCore.Layouts
   require Logger
+  require Ash.Query
 
   alias MishkaCmsCore.Runtime.ErrorAddress
   alias MishkaCmsCore.Runtime.Media
@@ -1596,8 +1597,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # The folders this site has, with how much is in each. `media_count` is the resource's own
   # calculation, so the number beside a folder is the number the Media page shows for it.
   defp site_categories(actor, site_id) do
-    require Ash.Query
-
     {action, tenant} = media_scope(actor, site_id)
 
     MishkaCmsCore.Runtime.MediaCategory
@@ -1648,15 +1647,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # Media has no site-argument read, so a master's bypass read would offer every site's library at
   # once. Since the bypass leaves `site_id` filterable, the site being edited is applied by hand.
   defp narrow_media(query, :master_read, site_id) when is_binary(site_id) do
-    require Ash.Query
-
     Ash.Query.filter(query, site_id == ^site_id)
   end
 
   # A global document is rendered by every site, so its folders are only those of sites that are up.
   defp narrow_media(query, :master_read, nil) do
-    require Ash.Query
-
     open = MishkaCmsCore.Runtime.SiteAvailability.open_site_ids()
     Ash.Query.filter(query, site_id in ^open)
   end
@@ -1726,8 +1721,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     do: tree |> component_refs() |> Enum.map(&elem(&1, 0)) |> Enum.uniq()
 
   defp palette_components(actor, params, editor) do
-    require Ash.Query
-
     {args, tenant} = palette_scope(actor, params)
 
     MishkaCmsCore.Runtime.Component
@@ -7872,7 +7865,6 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   defp read_media(socket, id) do
-    require Ash.Query
     actor = socket.assigns[:current_user]
     {action, tenant} = media_scope(actor, socket.assigns.editor.site_id)
 

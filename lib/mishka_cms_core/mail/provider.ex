@@ -109,7 +109,7 @@ defmodule MishkaCmsCore.Mail.Provider do
     end
   end
 
-  @doc "The event a provider plugin listens on."
+  @doc "Event a provider plugin listens on."
   @spec event() :: String.t()
   def event, do: @event
 

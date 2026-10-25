@@ -312,7 +312,8 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   A plugin on `web:request:redirected` hears every one first — see the moduledoc.
   """
-  @spec redirect(Plug.Conn.t(), %{id: String.t()}) :: Plug.Conn.t()
+  @spec redirect(Plug.Conn.t(), %{required(:id) => String.t(), optional(atom()) => term()}) ::
+          Plug.Conn.t()
   def redirect(conn, %{id: site_id} = site) do
     case lookup(site_id, conn.request_path, conn.query_string) do
       {location, status} -> answer(conn, site, location, status)

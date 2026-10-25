@@ -225,16 +225,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Highlight do
     spans
     |> Enum.sort_by(fn {_line, col, _len, _colour} -> col end)
     |> Enum.reduce({[], 1}, fn {_line, col, len, colour}, {acc, at} ->
-      cond do
-        col < at ->
-          {acc, at}
-
+      if col < at do
+        {acc, at}
+      else
         # COLOURED FIRST, THEN THE PLAIN RUN BEFORE IT. The accumulator is reversed at the end, so
         # prepending them the other way round put every token before the text that preceded it and
         # the pane printed `defmoney do(cents)`.
-        true ->
-          {[{slice(text, col, len), colour}, {slice(text, at, col - at), @plain} | acc],
-           col + len}
+        {[{slice(text, col, len), colour}, {slice(text, at, col - at), @plain} | acc], col + len}
       end
     end)
     |> then(fn {acc, at} -> [{slice(text, at, String.length(text) - at + 1), @plain} | acc] end)

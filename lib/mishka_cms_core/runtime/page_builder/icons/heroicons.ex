@@ -80,6 +80,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Icons.Heroicons do
                 {suffix, names}
               end)
 
+  # The glyph files are read at compile time, here and in `@markup` below, so each is an external
+  # resource: a `mix deps.update heroicons` then recompiles this module.
+  for {suffix, dir} <- @variants, name <- Map.fetch!(@catalogue, suffix) do
+    @external_resource @root |> Path.join(dir) |> Path.join(name <> ".svg")
+  end
+
   @all for({suffix, names} <- @catalogue, name <- names, do: "hero-" <> name <> suffix)
        |> Enum.sort()
 

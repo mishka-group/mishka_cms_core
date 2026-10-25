@@ -167,10 +167,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   3. Validates site status and manages tenant context
   4. Stores site information in connection assigns and session
 
-  ## Parameters
-
-  - `conn` - The Plug.Conn struct representing the HTTP connection
-  - `opts` - Plug options (from init/1, currently unused)
+  The options `init/1` returns are not used.
 
   ## Returns
 
@@ -301,7 +298,11 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
       SiteLookupPlug.sign_in_path?(["xx", "auth"], site)             #=> false
       SiteLookupPlug.sign_in_path?(["authors"], site)                #=> false
   """
-  @spec sign_in_path?([String.t()], %{id: String.t()} | nil) :: boolean()
+  @spec sign_in_path?(
+          [String.t()],
+          %{required(:id) => String.t(), optional(atom()) => term()} | nil
+        ) ::
+          boolean()
   def sign_in_path?(segments, site) do
     Enum.any?(@sign_in_paths, &List.starts_with?(segments, &1)) or
       language_sign_in_path?(segments, site)
@@ -384,6 +385,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   @doc false
   @spec handle_site_found(Plug.Conn.t(), map()) :: Plug.Conn.t()
+  # sobelow_skip ["XSS.SendResp"]
+  # A fixed page: it interpolates only this library's compiled gettext messages and an escaped CSP
+  # nonce.
   defp handle_site_found(conn, site) do
     cond do
       not site.active ->
@@ -473,6 +477,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
 
   @doc false
   @spec handle_site_not_found(Plug.Conn.t()) :: Plug.Conn.t()
+  # sobelow_skip ["XSS.SendResp"]
+  # A fixed page: it interpolates only this library's compiled gettext messages and an escaped CSP
+  # nonce.
   defp handle_site_not_found(conn) do
     # No site found for the requested host - return service unavailable
     # This could indicate:
@@ -544,6 +551,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   # BUILT IN, NOT AN ERROR PAGE. A switched-off site's own pages are not served, and an address can
   # reach here whose site is gone from the database altogether, so this page needs nothing loaded.
   # It is not the offline page: that one is the site's own, under its admin's control.
+  # sobelow_skip ["XSS.SendResp"]
+  # A fixed page: it interpolates only this library's compiled gettext messages and an escaped CSP
+  # nonce.
   defp send_inactive_page(conn) do
     conn
     |> put_status(503)

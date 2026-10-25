@@ -38,14 +38,12 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.ParentBelongsToDocument do
   defp check(nil, _changeset, _context), do: :ok
 
   defp check(parent_id, changeset, context) do
-    cond do
-      parent_id == changeset.data.id ->
-        {:error,
-         field: :parent_comment_id,
-         message: dgettext_noop("errors", "A note cannot be a reply to itself.")}
-
-      true ->
-        same_document(parent_id, changeset, context)
+    if parent_id == changeset.data.id do
+      {:error,
+       field: :parent_comment_id,
+       message: dgettext_noop("errors", "A note cannot be a reply to itself.")}
+    else
+      same_document(parent_id, changeset, context)
     end
   end
 

@@ -1346,63 +1346,61 @@ defmodule MishkaCmsCore.Accounts.User do
         permission_ids = input.arguments[:permission_ids]
 
         # Validate password confirmation if password is provided
-        cond do
-          password && password != "" && password != password_confirmation ->
-            {:error,
-             Ash.Error.Changes.InvalidArgument.exception(
-               field: :password_confirmation,
-               message: dgettext_noop("errors", "does not match password")
-             )}
+        if password && password != "" && password != password_confirmation do
+          {:error,
+           Ash.Error.Changes.InvalidArgument.exception(
+             field: :password_confirmation,
+             message: dgettext_noop("errors", "does not match password")
+           )}
+        else
+          # Fetch user with multitenancy bypass
+          case Ash.get(__MODULE__, user_id,
+                 action: :master_get,
+                 actor: actor,
+                 authorize?: context.authorize?
+               ) do
+            {:ok, user} ->
+              attrs =
+                %{}
+                |> then(fn a -> if email, do: Map.put(a, :email, email), else: a end)
 
-          true ->
-            # Fetch user with multitenancy bypass
-            case Ash.get(__MODULE__, user_id,
-                   action: :master_get,
-                   actor: actor,
-                   authorize?: context.authorize?
-                 ) do
-              {:ok, user} ->
-                attrs =
-                  %{}
-                  |> then(fn a -> if email, do: Map.put(a, :email, email), else: a end)
+              user
+              |> Ash.Changeset.for_update(:update, attrs,
+                actor: actor,
+                authorize?: context.authorize?
+              )
+              |> then(fn cs ->
+                # Allow changing site_id (moving user between sites)
+                case Map.fetch(input.arguments, :site_id) do
+                  {:ok, site_id} -> Ash.Changeset.force_change_attribute(cs, :site_id, site_id)
+                  :error -> cs
+                end
+              end)
+              |> then(fn cs ->
+                # Hash and set password if provided
+                if password && password != "" do
+                  hashed = Bcrypt.hash_pwd_salt(password)
+                  Ash.Changeset.force_change_attribute(cs, :hashed_password, hashed)
+                else
+                  cs
+                end
+              end)
+              |> then(fn cs ->
+                # Manage permissions if provided
+                if permission_ids do
+                  Ash.Changeset.manage_relationship(cs, :permissions, permission_ids,
+                    type: :append_and_remove,
+                    on_no_match: :error
+                  )
+                else
+                  cs
+                end
+              end)
+              |> Ash.update()
 
-                user
-                |> Ash.Changeset.for_update(:update, attrs,
-                  actor: actor,
-                  authorize?: context.authorize?
-                )
-                |> then(fn cs ->
-                  # Allow changing site_id (moving user between sites)
-                  case Map.fetch(input.arguments, :site_id) do
-                    {:ok, site_id} -> Ash.Changeset.force_change_attribute(cs, :site_id, site_id)
-                    :error -> cs
-                  end
-                end)
-                |> then(fn cs ->
-                  # Hash and set password if provided
-                  if password && password != "" do
-                    hashed = Bcrypt.hash_pwd_salt(password)
-                    Ash.Changeset.force_change_attribute(cs, :hashed_password, hashed)
-                  else
-                    cs
-                  end
-                end)
-                |> then(fn cs ->
-                  # Manage permissions if provided
-                  if permission_ids do
-                    Ash.Changeset.manage_relationship(cs, :permissions, permission_ids,
-                      type: :append_and_remove,
-                      on_no_match: :error
-                    )
-                  else
-                    cs
-                  end
-                end)
-                |> Ash.update()
-
-              {:error, _} = error ->
-                error
-            end
+            {:error, _} = error ->
+              error
+          end
         end
       end
     end

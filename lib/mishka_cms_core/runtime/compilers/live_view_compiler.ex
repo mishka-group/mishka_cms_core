@@ -508,6 +508,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   # from the form, atom keys from a seed — refusing what cannot be registered at all, and keeping the
   # first of two that share a name, because `allow_upload/3` raises on a duplicate and would take the
   # whole page with it.
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Compile time only, from the stored page's `uploads`, which only the page or code permission can write.
   defp declared_uploads(uploads) when is_list(uploads) do
     for declaration <- uploads,
         is_map(declaration),
@@ -566,6 +568,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
     {params, functions_ast ++ [state_ast]}
   end
 
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Compile time only, and only a name `PageState.valid_name?/1` accepts from the stored page's `state`.
   defp declared_state(entries) when is_list(entries) do
     for entry <- entries,
         is_map(entry),
@@ -829,11 +833,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   Compiles event handler definitions into `handle_event/3` functions that respond
   to user interactions like clicks, form submissions, and keyboard events.
 
-  ## Parameters
-
-  - `{params, functions_ast}` - Tuple containing:
-    - `params` - Page configuration including `:events` list
-    - `functions_ast` - Existing function ASTs from previous pipeline stages
+  It takes the pipeline tuple `{params, functions_ast}` and reads the `:events` list of `params`.
 
   ## Returns
 
@@ -977,11 +977,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   Compiles info handler definitions into `handle_info/2` functions that respond
   to messages sent to the LiveView process from other parts of the system.
 
-  ## Parameters
-
-  - `{params, functions_ast}` - Tuple containing:
-    - `params` - Page configuration including `:infos` list
-    - `functions_ast` - Existing function ASTs from previous pipeline stages
+  It takes the pipeline tuple `{params, functions_ast}` and reads the `:infos` list of `params`.
 
   ## Returns
 
@@ -1782,10 +1778,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
 
   This function is called as the fifth stage in the compilation pipeline.
   """
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Helper names of a stored page, which only the page or code permission can write.
   def build_helpers({params, functions_ast}) do
     helpers_handlers_ast =
       Enum.map(params[:helpers] || [], fn helper ->
         quote do
+          # sobelow_skip ["DOS.StringToAtom"]
+          # The stored helper's name becomes the function's, as in `build_helpers/1` above.
           def unquote(String.to_atom(helper.name))(unquote_splicing(helper_args(helper.args))) do
             unquote(trusted_body(helper, :helper, nil))
           end
@@ -1974,6 +1974,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       #=> "<a href=\"/users\" data-phx-link=\"patch\" data-phx-link-state=\"push\">Users</a>"
   """
   @spec render_template(String.t(), map()) :: String.t() | {:error, term()}
+  # sobelow_skip ["RCE.CodeModule"]
+  # Renders a template an admin stored (a page, layout, error page, component or a draft of one) for a
+  # preview; templates are code by design, and only the runtime and code permissions can write them.
   def render_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns) do
     template = MishkaCmsCore.Runtime.PageBuilder.Visibility.strip(template)
 
@@ -2038,6 +2041,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   Returns the rendered HTML string, or `{:error, message}` on failure.
   """
   @spec render_html_template(String.t(), map()) :: String.t() | {:error, term()}
+  # sobelow_skip ["RCE.CodeModule"]
+  # Renders a stored error page's or layout's template for a preview, as `render_template/2` does;
+  # only the runtime and code permissions can write one.
   def render_html_template(template, assigns \\ %{})
       when is_binary(template) and is_map(assigns) do
     assigns = Map.new(assigns)

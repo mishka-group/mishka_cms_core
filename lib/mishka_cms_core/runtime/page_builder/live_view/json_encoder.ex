@@ -316,11 +316,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.LiveView.JsonEncoder do
   defp transform_attrs([]), do: %{}
 
   defp transform_attrs(attrs) do
-    attrs
-    |> Enum.map(&transform_attr/1)
-    |> Enum.reduce(%{}, fn {attr_name, value}, acc ->
-      Map.put(acc, attr_name, value)
-    end)
+    Map.new(attrs, &transform_attr/1)
   end
 
   defp transform_attrs(attrs, true) do

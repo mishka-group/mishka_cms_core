@@ -664,6 +664,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   defp text(_not_text), do: nil
 
   @impl Oban.Worker
+  # sobelow_skip ["Traversal.FileModule"]
+  # The site's share folder plus `key/1`, a hex SHA-256 digest; this module enqueued both.
   def perform(%Oban.Job{args: %{"site_id" => site_id, "key" => key, "card" => card}}) do
     target = disk_path(site_id, key)
     card = with_files(card, site_id)
@@ -1198,6 +1200,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   `"image/x-icon"`. `nil` for any other file, and for one that cannot be read.
   """
   @spec picture_type(term()) :: String.t() | nil
+  # sobelow_skip ["Traversal.FileModule"]
+  # Reads the first bytes of a path `site_file/2` already confined to the site's media or static folder.
   def picture_type(path) when is_binary(path) do
     case File.open(path, [:read, :binary], &IO.binread(&1, 256)) do
       {:ok, <<0xFF, 0xD8, 0xFF, _::binary>>} -> "image/jpeg"

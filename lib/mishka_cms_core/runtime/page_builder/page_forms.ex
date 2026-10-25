@@ -599,6 +599,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms do
   defp control_key(node), do: node |> control_name() |> to_key()
 
   defp to_key(nil), do: nil
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Compile time only, from a `name=` in the stored page template; the editor asks `names/2` instead.
   defp to_key(value), do: String.to_atom(value)
 
   defp type(node), do: node |> Node.attr_text("data-cast") |> cast()

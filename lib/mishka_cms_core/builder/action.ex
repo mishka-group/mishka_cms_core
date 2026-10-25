@@ -233,7 +233,7 @@ defmodule MishkaCmsCore.Builder.Action do
   @spec key(map()) :: String.t()
   def key(action), do: Descriptor.key(action)
 
-  @doc "The module implementing this action, or `nil` for a descriptor that names none."
+  @doc "Module implementing this action, or `nil` for a descriptor that names none."
   @spec module(map()) :: module() | nil
   def module(%{run: run}) when is_atom(run) and not is_nil(run), do: run
   def module(_action), do: nil

@@ -1434,7 +1434,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   end
 
   @doc """
-  The component names the stored content of the site `site_name` uses — what a template drawing
+  Component names the stored content of the site `site_name` uses — what a template drawing
   that content reaches (`MishkaCmsCore.Runtime.Compilers.CssClosure`).
 
   Asked of whoever stores content through `runtime:compile:content_components`, with
@@ -1596,6 +1596,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # The precompiled runtime shell, prepended verbatim to shared-base output in releases. Not used in
   # development even when the file is present: there the sources are on disk and scanned live, so an
   # edit to a layout produces CSS immediately instead of waiting for someone to re-run a mix task.
+  # sobelow_skip ["Traversal.FileModule"]
+  # Reads `static_base_path/0`, a constant file in the host app's priv dir.
   def static_base_prefix do
     case File.read(static_base_path()) do
       {:ok, css} -> "/* === precompiled static base (compile time) === */\n" <> css <> "\n"
@@ -1614,6 +1616,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   Run from `mix mishka.compile_static_css` (wired into the release build).
   See the moduledoc "Static base" and "Theme tokens" sections.
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # Writes `static_base_path/0`, a constant file in the host app's priv dir, from a build-time mix task.
   def compile_static_base do
     ensure_installed()
     css = run_tailwind(build_css_content_static_base(), "static_base")
@@ -1626,6 +1630,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   @doc false
   # Public for testing. Builds the input CSS handed to the Tailwind binary
   # at compile time — pure string assembly, no binary invocation.
+  # sobelow_skip ["Traversal.FileModule"]
+  # Reads the host app's own `priv/static/assets/css/app.css`, a constant path under its app dir.
   def build_css_content_static_base do
     temp_dir = get_temp_dir()
     app_root = Application.app_dir(@host_app)
@@ -1797,6 +1803,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # marker's `icon="hero-inbox"` reaches its component as `name={item[:icon]}`, and a
   # `<span class="hero-inbox">` in a post is never scanned — so neither had a rule, and both drew as
   # an empty box.
+  # sobelow_skip ["Traversal.FileModule"]
+  # Reads the template files this compiler wrote under `priv/static/temp/runtime`, as listed by
+  # walking that folder.
   defp icon_css(closure, site_name, content_icons) do
     closure
     |> icon_scan_paths(site_name)
@@ -1876,6 +1885,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # value of `verify_css/2` and of the raise above. Running the binary directly keeps it: the same
   # `stderr_to_stdout` + `uncoloured/1` pair `ran/1` uses, and for the same reason — the binary
   # paints its own output whatever `NO_COLOR` asks.
+  # sobelow_skip ["Traversal.FileModule", "CI.System"]
+  # Temp files in the system tmp dir named by a constant, a site name or a preview's UUID and a
+  # timestamp. The binary is Tailwind's own, run without a shell, so each path is one argument.
   defp ran_tailwind(input_content, identifier) do
     timestamp = :os.system_time(:nanosecond)
     input_css_path = Path.join(System.tmp_dir!(), "tw_in_#{identifier}_#{timestamp}.css")
@@ -1918,6 +1930,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     run_tailwind(build_css_content_site_only(site_name), site_name)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
+  # Reads the host app's own `priv/static/assets/css/app.css`, a constant path under its app dir.
   defp build_css_content_shared_base do
     temp_dir = get_temp_dir()
     app_root = Application.app_dir(@host_app)

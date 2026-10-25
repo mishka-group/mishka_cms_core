@@ -39,7 +39,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Marketplace.Token do
     end
   end
 
-  @doc "Whether a token matches a category filter — `\"all\"`, `\"custom\"`, or a category name."
+  @doc ~s|Whether a token matches a category filter — `"all"`, `"custom"`, or a category name.|
   @spec matches?(t(), String.t()) :: boolean()
   def matches?(_token, "all"), do: true
   def matches?(token, "custom"), do: token.custom?

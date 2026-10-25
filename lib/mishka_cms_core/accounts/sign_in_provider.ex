@@ -145,7 +145,7 @@ defmodule MishkaCmsCore.Accounts.SignInProvider do
 
       SignInProvider.callback_url(site) #=> "https://example.com/api/auth/user/provider/callback"
   """
-  @spec callback_url(%{host: String.t()}) :: String.t()
+  @spec callback_url(%{required(:host) => String.t(), optional(atom()) => term()}) :: String.t()
   def callback_url(%{host: host}),
     do: MishkaCmsCore.Helpers.site_url(host, "/api/auth/user/provider/callback")
 

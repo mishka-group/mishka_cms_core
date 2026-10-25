@@ -661,12 +661,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
 
   This function is called as the third stage in the compilation pipeline.
   """
+  # sobelow_skip ["DOS.StringToAtom"]
+  # Helper names of a stored layout, which only the layout or code permission can write.
   def build_helpers({params, functions_ast}) do
     helpers_ast =
       Enum.map(params[:helpers] || [], fn helper ->
         args = LiveViewCompiler.helper_args(helper.args)
 
         quote do
+          # sobelow_skip ["DOS.StringToAtom"]
+          # The stored helper's name becomes the function's, as in `build_helpers/1` above.
           def unquote(String.to_atom(helper.name))(unquote_splicing(args)) do
             unquote(Code.string_to_quoted!(helper.code))
           end
@@ -908,7 +912,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
         env
       else
         {:error, error} ->
-          require Logger
           Logger.warning("failed to import #{module}: #{error}")
           env
 

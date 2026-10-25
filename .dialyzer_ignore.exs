@@ -19,7 +19,7 @@
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/builder/panels.ex", :call_without_opaque, 4104},
   {"lib/mishka_cms_core_web/live/admin/builder/panels.ex", :call_without_opaque, 4149},
-  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1365},
+  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1384},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 478},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 504},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 515},
@@ -43,54 +43,50 @@
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 65},
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 82},
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 126},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 1014},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 5820},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 7196},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 1015},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 5813},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 7189},
 
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
-  {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1783},
-  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1770},
+  {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1827},
+  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1782},
   {"lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex", :pattern_match_cov, 758},
   {"lib/mishka_cms_core/runtime/page_builder/code_check.ex", :pattern_match_cov, 281},
   {"lib/mishka_cms_core/runtime/page_builder/editor_session/journal.ex", :pattern_match_cov, 415},
   {"lib/mishka_cms_core/runtime/page_builder/tree/styles.ex", :pattern_match_cov, 1252},
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov, 152},
   {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 368},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 5730},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6001},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6146},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6222},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6254},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6285},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6297},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6309},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6321},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 7029},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 5723},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 5994},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6139},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6215},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6247},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6278},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6290},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6302},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6314},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 7022},
 
   # `:elixir_tokenizer.tokenize/3` and the project's HEEx tokenizer are called through a clause for
   # each shape either has returned across Elixir releases; dialyzer sees the one of this release.
   {"lib/mishka_cms_core/runtime/page_builder/highlight.ex", :guard_fail, 93},
   {"lib/mishka_cms_core/runtime/page_builder/highlight.ex", :pattern_match, 76},
 
-  # `Redirects.redirect/2` is typed from the `Plug.Conn` struct's defaults, which dialyzer then takes
-  # for a conn nothing can answer; the plug is exercised by test/mishka_cms_core/runtime/plugs.
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :call, 431},
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :unused_fun, 438},
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :unused_fun, 579},
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :unused_fun, 593},
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :unused_fun, 604},
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :unused_fun, 610},
-  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :unused_fun, 618},
+  # `ProviderStrategy` stands in for AshAuthentication's `OAuth2` strategy struct (same fields, see its
+  # moduledoc), and `OAuth2.Plug` is specified for `OAuth2.t()` only.
+  {"lib/mishka_cms_core/accounts/provider_strategy/plug.ex", :call, 33},
+  {"lib/mishka_cms_core/accounts/provider_strategy/plug.ex", :call, 49},
 
   # A guard or a comparison dialyzer proves false from a type, where the value is checked on
   # purpose (a limit that is always a number, a list that is a compile-time constant, a refusal map
-  # whose keys the caller holds).
+  # whose keys the caller holds, a JWT claim that reads back as `nil` or `:null`).
   {"lib/mishka_cms_core/activity/activity_entry.ex", :guard_fail, 419},
-  {"lib/mishka_cms_core/runtime/page_builder/icons/heroicons.ex", :exact_compare, 111},
+  {"lib/mishka_cms_core/runtime/page_builder/icons/heroicons.ex", :exact_compare, 117},
   {"lib/mishka_cms_core/runtime/page_builder/page_forms/_form_placement.ex", :guard_fail, 1578},
+  {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :exact_compare, 648},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 178},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 210},
-  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :guard_fail, 1298}
+  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :guard_fail, 1317}
 
 ]

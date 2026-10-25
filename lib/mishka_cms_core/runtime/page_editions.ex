@@ -517,6 +517,8 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
       language_group_id: group(page),
       active: false
     })
+    # `copied` is a map of attributes taken from the page, not the page struct itself.
+    # credo:disable-for-next-line Jump.CredoChecks.AvoidModifyingStructBeforeChangeset
     |> changeset(page.site_id, actor)
     |> Ash.Changeset.before_action(&join_group(&1, page))
     |> ElementScopes.carry_css(@section, page, scopes, actor)

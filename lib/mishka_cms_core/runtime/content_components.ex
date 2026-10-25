@@ -972,7 +972,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     do: "inline-block rounded border border-red-300 px-2 py-1 text-sm text-red-600"
 
   @doc """
-  The palette entry for a component `row` — a stored component, or anything with its fields — as
+  Palette entry for a component `row` — a stored component, or anything with its fields — as
   `embeddable/2` lists it.
   """
   @spec entry(map()) :: entry()

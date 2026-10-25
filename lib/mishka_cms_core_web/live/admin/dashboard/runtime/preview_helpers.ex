@@ -290,7 +290,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   def modal_id, do: @modal_id
 
   @doc """
-  The `:preview` assign as a closed modal holds it — every key the modal reads, at its resting value.
+  `:preview` assign as a closed modal holds it — every key the modal reads, at its resting value.
 
   Public so a test can build a state by merging onto it rather than copying the shape. A copy goes
   stale the moment a key is added here, and the failure is a `KeyError` from the template rather

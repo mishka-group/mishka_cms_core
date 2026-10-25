@@ -148,7 +148,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SeoSettings do
   @spec mode(String.t()) :: :page | :tags | nil
   def mode(section), do: Map.get(@modes, section)
 
-  @doc "The id of a document's SEO: `\"page:<id>\"`, or `\"page:draft:<id>\"` for a draft."
+  @doc ~s|The id of a document's SEO: `"page:<id>"`, or `"page:draft:<id>"` for a draft.|
   @spec id(String.t(), map()) :: String.t()
   def id(section, %resource{id: id}) do
     if resource == Drafts.resource(section),
@@ -422,7 +422,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SeoSettings do
 
   def record_type(_none), do: nil
 
-  @doc "`seo` previewed in `view`: `\"google\"`, `\"x\"` or `\"facebook\"`."
+  @doc ~s|`seo` previewed in `view`: `"google"`, `"x"` or `"facebook"`.|
   @spec put_view(t(), String.t()) :: t()
   def put_view(seo, view) when view in ["google", "x", "facebook"], do: %{seo | view: view}
   def put_view(seo, _unknown), do: seo
@@ -660,7 +660,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SeoSettings do
   defp typed_schema({:ok, list}) when is_list(list) do
     if Enum.all?(list, &typed_object?/1),
       do: {:ok, list},
-      else: {:error, gettext("Each object needs an \"@type\", such as \"Article\".")}
+      else: {:error, gettext(~s|Each object needs an "@type", such as "Article".|)}
   end
 
   defp typed_schema({:ok, _not_a_list}),

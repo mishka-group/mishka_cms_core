@@ -36,7 +36,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Presets do
 
   @prefix "builder:preset:"
 
-  @doc "The setting key one component's preset is stored under."
+  @doc "Setting key one component's preset is stored under."
   @spec key(String.t()) :: String.t()
   def key(name), do: @prefix <> name
 
