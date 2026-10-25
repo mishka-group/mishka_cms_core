@@ -71,3 +71,6 @@ MnesiaCore.*
 # somebody's picture to reach a commit.
 /priv/static/uploads/
 /priv/static/uploads_archived/
+
+# macOS Finder metadata
+.DS_Store
