@@ -92,7 +92,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @metrics_every :timer.seconds(5)
 
   # The records built into a site's bundle rather than rendered: their card is about that bundle.
-  @bundled [MishkaCmsCore.Runtime.Stylesheet]
+  @bundled [MishkaCmsCore.Runtime.Stylesheet, MishkaCmsCore.Runtime.JsHook]
 
   # The records whose renders `MishkaCmsCore.Runtime.RenderMetrics` times.
   @timed [
@@ -527,7 +527,52 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   # starts with — so a site admin sees their own site's CSS, which is what their visitors download,
   # and a master the shared base.
   defp bundle_metrics(MishkaCmsCore.Runtime.Stylesheet, %{record: record} = source),
-    do: bundle(source, css_bundle(record, source.viewer), "css")
+    do: bundle(source, css_bundle(record, source), "css")
+
+  # A SITE'S OWN HOOK IS IN ITS SITE'S JS. A global one is built into every site's JS — not into a
+  # shared base, which exists only for a site with no hooks of its own — so a site admin sees their
+  # own site's bundle, and a master in how many site bundles it is. How many templates attach it is
+  # counted where the viewer may look (`PageBuilder.Hooks.named_in/3`).
+  defp bundle_metrics(MishkaCmsCore.Runtime.JsHook, %{record: record} = source) do
+    hook = Ash.load!(record, [:is_global], authorize?: false)
+    {site_name, scope} = hook_scope(hook, source)
+
+    source
+    |> bundle(js_bundle(hook, site_name), "js")
+    |> then(&Map.put(&1, :build, built(&1)))
+    |> Map.merge(%{
+      lazy?: hook.lazy == true,
+      left_out?: left_out?(source.status, site_name),
+      named_in: MishkaCmsCore.Runtime.PageBuilder.Hooks.named_in(hook, site_name, scope)
+    })
+  end
+
+  defp hook_scope(%{site_id: site_id}, %{status: %{site_name: name}}) when is_binary(site_id),
+    do: {name, site_id}
+
+  defp hook_scope(_global, %{viewer: %{site_id: site_id}}) when is_binary(site_id),
+    do: {site_name(site_id), {:with_globals, site_id}}
+
+  defp hook_scope(_global, _master), do: {nil, :all}
+
+  defp js_bundle(_hook, site_name) when is_binary(site_name), do: site_name
+  defp js_bundle(_global, nil), do: :every_site
+
+  # The card's Last Built row, which a JS hook's card shows under its boxes.
+  defp built(%{updated_at: %DateTime{} = at}), do: %{at: at}
+  defp built(_never), do: nil
+
+  # LEFT OUT OF THE BUNDLE SHOWN. `JavaScriptCompiler.left_out/1` is per bundle, so a global hook
+  # left out of another site's JS is not left out of a site admin's own; a master sees them all.
+  defp left_out?(%{left_out: left_out}, site_name) when is_list(left_out),
+    do: Enum.any?(left_out, fn {bundle, _reason} -> is_nil(site_name) or bundle == site_name end)
+
+  defp left_out?(_status, _site_name), do: false
+
+  defp bundle(source, :every_site, type) do
+    sites = Enum.count(SiteState.get_active_sites(), &AssetsState.exists?(&1.name, type))
+    %{bundle(source, nil, type) | bundle: :every_site, site_bundles: sites}
+  end
 
   defp bundle(%{status: status}, bundle, type) do
     %{
@@ -538,13 +583,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
       hash: AssetsState.hash(bundle, type),
       updated_at: AssetsState.updated_at(bundle, type),
       state: status && status.state,
-      took_ms: took_ms(status)
+      took_ms: took_ms(status),
+      site_bundles: nil
     }
   end
 
-  defp css_bundle(%{site: %{name: name}}, _viewer) when is_binary(name), do: name
+  defp css_bundle(%{site_id: site_id}, %{status: %{site_name: name}}) when is_binary(site_id),
+    do: RuntimeStatus.asset_bundle_id(name)
 
-  defp css_bundle(_global, %{site_id: site_id}) when is_binary(site_id),
+  defp css_bundle(_global, %{viewer: %{site_id: site_id}}) when is_binary(site_id),
     do: site_name(site_id) || RuntimeStatus.asset_bundle_id("Global")
 
   defp css_bundle(_global, _master), do: RuntimeStatus.asset_bundle_id("Global")
@@ -555,6 +602,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
       _unknown -> nil
     end
   end
+
+  defp sizes(nil, _type), do: nil
 
   defp sizes(bundle, type) do
     case size_of(bundle, type) do

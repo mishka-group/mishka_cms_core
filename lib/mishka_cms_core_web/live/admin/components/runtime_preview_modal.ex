@@ -50,7 +50,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.RuntimePreview
-  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Stylesheet}
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, JsHook, Layout, Stylesheet}
   alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimeStatusTimeline
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
@@ -604,13 +604,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         <h3 class="mb-4 flex items-center gap-2 text-[13.5px] font-bold text-[#1b1a18]">
           <.icon name="hero-presentation-chart-line" class="size-4 text-[#177a53]" />
           {gettext("Performance Metrics")}
-          <span
-            :if={is_nil(@metrics)}
-            class="ms-auto rounded-[5px] bg-[#fbf1df] px-[7px] py-[3px] text-[8.5px] font-bold uppercase tracking-[0.08em] text-[#c0752a]"
-          >
-            {gettext("sample")}
-          </span>
-          <span :if={@metrics} class="ms-auto text-[10px] font-medium text-[#a8a5a0]">
+          <span class="ms-auto text-[10px] font-medium text-[#a8a5a0]">
             {metrics_scope(@resource)}
           </span>
         </h3>
@@ -632,19 +626,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   # A bundle lives in this node's memory and is not rebuilt per render, so its numbers are this
   # server's now; a rendered record's restart with its module.
-  defp metrics_scope(Stylesheet), do: gettext("this server")
+  defp metrics_scope(resource) when resource in [Stylesheet, JsHook], do: gettext("this server")
   defp metrics_scope(_rendered), do: gettext("this server, since its last build")
 
-  # THE FOUR BOXES OF A RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: one grid for every
-  # record `MishkaCmsCore.Runtime.RenderMetrics` times. `nil` metrics is a record nothing times yet,
-  # whose boxes are samples.
+  # THE FOUR BOXES OF A RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: one grid for the
+  # records `MishkaCmsCore.Runtime.RenderMetrics` times, one for those built into a bundle.
   attr :resource, :atom, required: true
   attr :metrics, :any, required: true
   attr :file_size, :any, required: true
 
-  # A STYLESHEET IS BUILT INTO ITS SITE'S CSS, not rendered: its boxes are that bundle — its size as
-  # visitors download it, whether it is built, how long the last rebuild took, when it was built.
-  defp metric_grid(%{resource: Stylesheet} = assigns) do
+  # A STYLESHEET OR A JS HOOK IS BUILT INTO ITS SITE'S BUNDLE, not rendered: its boxes are that
+  # bundle — its size as visitors download it, whether it is built and how long the last rebuild
+  # took — and a fourth of its own: when the CSS was built, or how many templates attach the hook.
+  defp metric_grid(%{resource: resource} = assigns) when resource in [Stylesheet, JsHook] do
     ~H"""
     <div class="grid grid-cols-2 gap-3">
       <div id="runtime-preview-bundle">
@@ -666,7 +660,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
           real={is_map(@metrics)}
         />
       </div>
-      <div id="runtime-preview-last-built">
+      <div :if={@resource == Stylesheet} id="runtime-preview-last-built">
         <.metric
           icon="hero-calendar"
           label={gettext("Last Built")}
@@ -675,17 +669,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
           real={is_map(@metrics)}
         />
       </div>
-    </div>
-    """
-  end
-
-  defp metric_grid(%{metrics: nil} = assigns) do
-    ~H"""
-    <div class="grid grid-cols-2 gap-3">
-      <.metric icon="hero-clock" label={gettext("Load Time")} value="1.2s" />
-      <.metric icon="hero-document" label={file_label(@resource)} value={@file_size} real />
-      <.metric icon="hero-circle-stack" label={gettext("Cache Hit")} value="98%" />
-      <.metric icon="hero-arrow-trending-up" label={gettext("Usage")} value="847" />
+      <div :if={@resource == JsHook} id="runtime-preview-named-in">
+        <.metric
+          icon="hero-code-bracket"
+          label={gettext("Named In")}
+          value={named_in(@metrics)}
+          hint={named_in_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
     </div>
     """
   end
@@ -730,13 +722,27 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   # THE BUNDLE A STYLESHEET IS IN, as `PreviewHelpers` read it from `AssetsState`.
   defp bundle_label(Stylesheet, %{bundle: @shared_base}), do: gettext("Shared CSS")
   defp bundle_label(Stylesheet, _site_or_loading), do: gettext("Site CSS")
+  defp bundle_label(JsHook, _site_or_loading), do: gettext("Site JS")
 
   defp bundle_size(metrics) when not is_map(metrics), do: gettext("Loading…")
+
+  defp bundle_size(%{site_bundles: n}) when is_integer(n),
+    do: ngettext("In %{count} site bundle", "In %{count} site bundles", n)
+
   defp bundle_size(%{sizes: nil}), do: "—"
   defp bundle_size(%{sizes: %{brotli: n}}) when is_integer(n), do: RuntimePreview.format_bytes(n)
   defp bundle_size(%{sizes: %{raw: n}}), do: RuntimePreview.format_bytes(n)
 
   defp bundle_hint(metrics) when not is_map(metrics), do: nil
+
+  defp bundle_hint(%{lazy?: true, site_bundles: n}) when is_integer(n),
+    do: gettext("Built on its own beside each site's JS, loaded when a page first uses it")
+
+  defp bundle_hint(%{lazy?: true}), do: gettext("Not in it: loaded when a page first uses it")
+
+  defp bundle_hint(%{site_bundles: n}) when is_integer(n),
+    do: gettext("Built into each site's JS")
+
   defp bundle_hint(%{sizes: nil}), do: gettext("Not built on this server")
 
   defp bundle_hint(%{sizes: %{brotli: brotli} = sizes} = metrics) when is_integer(brotli),
@@ -759,10 +765,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp build(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp build(%{state: :compiling}), do: gettext("Building…")
+  defp build(%{left_out?: true}), do: gettext("Left out")
   defp build(%{state: :failed}), do: gettext("Failed")
   defp build(%{state: state}) when state in [:inactive, :archived], do: gettext("Not in a bundle")
+  defp build(%{site_bundles: n}) when is_integer(n) and n > 0, do: gettext("Built")
+  defp build(%{site_bundles: 0}), do: gettext("Not built")
   defp build(%{sizes: nil}), do: gettext("Not built")
   defp build(_built), do: gettext("Built")
+
+  defp build_hint(%{left_out?: true}),
+    do: gettext("It did not build, and the rest of the bundle does; see the Pipeline tab")
 
   defp build_hint(%{state: :failed}), do: gettext("See the Pipeline tab")
 
@@ -779,6 +791,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: gettext("Version %{hash}", hash: String.slice(hash, 0, 8))
 
   defp version(_none), do: nil
+
+  # HOW MANY TEMPLATES ATTACH THE HOOK (`PageBuilder.Hooks.named_in/3`): one component that does is
+  # one, however many pages draw it.
+  defp named_in(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp named_in(%{named_in: n}), do: ngettext("%{count} template", "%{count} templates", n)
+
+  defp named_in_hint(%{named_in: 0}), do: gettext("No page, layout or component attaches it")
+  defp named_in_hint(%{named_in: _n}), do: gettext("Pages, layouts and components that attach it")
+  defp named_in_hint(_loading), do: nil
 
   # A component's file is its template, which the kit calls its bundle.
   defp file_label(Component), do: gettext("Bundle Size")

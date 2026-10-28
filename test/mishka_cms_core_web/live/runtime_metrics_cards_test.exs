@@ -14,6 +14,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeMetricsCardsTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.Stylesheet
+  alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState}
 
   require Ash.Query
@@ -164,6 +165,28 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeMetricsCardsTest do
       assert bundle =~ "raw 2.9 KB · gzip 800 B"
       assert text(view, "#runtime-preview-build") =~ "Built"
       assert text(view, "#runtime-preview-last-built") =~ "Version f00dfeed"
+    end
+  end
+
+  describe "a JS hook's card" do
+    test "counts the templates that attach it", %{conn: conn, site: site} do
+      n = unique()
+      hook = create_js_hook!(site_id: site.id, name: "mc-h-#{n}")
+
+      name =
+        hook
+        |> Ash.load!([:is_global], authorize?: false)
+        |> JavaScriptCompiler.browser_name(site.name)
+
+      create_page!(
+        site_id: site.id,
+        path: "/mc-h-#{n}",
+        template: ~s|<div id="h-#{n}" phx-hook="#{name}"></div>|
+      )
+
+      {view, _html} = open(conn, "/admin/dashboard/runtime/js-hooks", hook)
+      assert text(view, "#runtime-preview-bundle") =~ "Site JS"
+      assert text(view, "#runtime-preview-named-in") =~ "1 template"
     end
   end
 

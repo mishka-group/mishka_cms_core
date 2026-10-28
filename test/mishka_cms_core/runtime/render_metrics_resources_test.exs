@@ -20,7 +20,8 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
   import Phoenix.LiveViewTest
 
   alias MishkaCmsCore.Runtime.{RenderMetrics, Translations}
-  alias MishkaCmsCore.Runtime.Compilers.ErrorCompiler
+  alias MishkaCmsCore.Runtime.Compilers.{ErrorCompiler, JavaScriptCompiler}
+  alias MishkaCmsCore.Runtime.PageBuilder.Hooks
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
@@ -438,6 +439,171 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
                "Building…"
 
       assert box(sheet_card(:loading), "runtime-preview-bundle") =~ "Loading…"
+    end
+  end
+
+  describe "js hooks" do
+    defp hook!(site_id, name),
+      do:
+        create_js_hook!(site_id: site_id, name: name)
+        |> Ash.load!([:is_global], authorize?: false)
+
+    defp page_with!(site_id, template),
+      do:
+        create_page!(
+          site_id: site_id,
+          path: "/rmr-h-#{System.unique_integer([:positive])}",
+          template: template
+        )
+
+    test "a hook is counted where a template attaches it, not where it is only written", %{
+      site: site,
+      n: n
+    } do
+      hook = hook!(site.id, "rmr-tip-#{n}")
+      name = JavaScriptCompiler.browser_name(hook, site.name)
+
+      page_with!(site.id, ~s|<div id="tip-a" phx-hook="#{name}">a</div>|)
+      page_with!(site.id, ~s|<div id="tip-b" phx-hook="#{name}">b</div><p>#{name}</p>|)
+      page_with!(site.id, ~s|<p>#{name} is only written here</p>|)
+      component!(site, "rmr-tipc-#{n}", ~s|<span id="tip-c" phx-hook="#{name}">c</span>|)
+
+      # another site's template is not this site's hook's
+      other = create_site!(name: "rmr-other-#{n}", host: "rmr-other-#{n}.test")
+      page_with!(other.id, ~s|<div id="tip-x" phx-hook="#{name}">x</div>|)
+
+      assert Hooks.named_in(hook, site.name, site.id) == 3
+    end
+
+    test "a global hook: a master counts every site's templates, a site admin their own", %{
+      site: site,
+      n: n
+    } do
+      hook = hook!(nil, "rmr-g-#{n}")
+      name = JavaScriptCompiler.browser_name(hook, nil)
+      assert name == JavaScriptCompiler.browser_name(hook, site.name), "one name on every site"
+
+      other = create_site!(name: "rmr-other-#{n}", host: "rmr-other-#{n}.test")
+      page_with!(site.id, ~s|<div id="g-a" phx-hook="#{name}">a</div>|)
+      page_with!(other.id, ~s|<div id="g-b" phx-hook="#{name}">b</div>|)
+
+      create_component!(
+        name: "rmr-gc-#{n}",
+        template: ~s|<span id="g-c" phx-hook="#{name}">c</span>|,
+        active: true,
+        site_id: nil
+      )
+
+      assert Hooks.named_in(hook, nil, :all) == 3
+      assert Hooks.named_in(hook, site.name, {:with_globals, site.id}) == 2
+    end
+
+    test "a hook attached in a helper's ~H, a clause template or an EEx block is counted too", %{
+      site: site,
+      n: n
+    } do
+      hook = hook!(site.id, "rmr-deep-#{n}")
+      name = JavaScriptCompiler.browser_name(hook, site.name)
+
+      # only in a helper, as the kit's progress components attach their tooltip
+      component!(site, "rmr-helper-#{n}", ~S|<div>{tip(assigns)}</div>|,
+        helpers: [
+          %{
+            name: "tip",
+            args: "assigns",
+            code: ~s(~H"""\n<span id="h-#{n}" phx-hook="#{name}">t</span>\n""")
+          }
+        ]
+      )
+
+      # inside an EEx block, which the tree keeps as one node
+      page_with!(
+        site.id,
+        ~s|<div><%= if true do %><b id="e-#{n}" phx-hook="#{name}">e</b><% end %></div>|
+      )
+
+      # a page that only mentions it
+      page_with!(site.id, ~s|<p>#{name}</p>|)
+
+      assert Hooks.named_in(hook, site.name, site.id) == 2
+    end
+
+    test "Markup.sigils/1 finds every ~H written in code" do
+      code = ~S|def a(assigns), do: ~H"<b>{@x}</b>"
+      def b(assigns) do
+        ~H"""
+        <i>y</i>
+        """
+      end|
+
+      assert MishkaCmsCore.Runtime.PageBuilder.Markup.sigils(code) == [
+               "<b>{@x}</b>",
+               "<i>y</i>\n"
+             ]
+
+      assert MishkaCmsCore.Runtime.PageBuilder.Markup.sigils("not elixir (") == []
+      assert MishkaCmsCore.Runtime.PageBuilder.Markup.sigils(nil) == []
+    end
+
+    @hook_metrics %{
+      kind: :asset,
+      type: "js",
+      bundle: "rmr-site",
+      sizes: %{raw: 51_200, brotli: 12_288, gzip: 14_336},
+      hash: "0badc0de",
+      updated_at: ~U[2026-10-28 12:00:00Z],
+      state: :live,
+      took_ms: 640,
+      site_bundles: nil,
+      build: %{at: ~U[2026-10-28 12:00:00Z]},
+      lazy?: false,
+      left_out?: false,
+      named_in: 4
+    }
+
+    defp hook_card(metrics),
+      do:
+        card(
+          MishkaCmsCore.Runtime.JsHook,
+          record(MishkaCmsCore.Runtime.JsHook, lazy: false),
+          metrics
+        )
+
+    test "the card is the site's JS bundle and the templates that attach it" do
+      html = hook_card(@hook_metrics)
+      assert box(html, "runtime-preview-bundle") =~ "Site JS"
+      assert box(html, "runtime-preview-bundle") =~ "12.0 KB"
+      assert box(html, "runtime-preview-build") =~ "Last rebuild took 640.0 ms"
+      assert box(html, "runtime-preview-named-in") =~ "4 templates"
+      assert html =~ "2026-10-28 12:00", "the bundle's Last Built row"
+      refute html =~ "runtime-preview-last-built"
+    end
+
+    test "a lazy hook, a hook left out, a global hook seen by a master" do
+      assert box(hook_card(%{@hook_metrics | lazy?: true}), "runtime-preview-bundle") =~
+               "Not in it: loaded when a page first uses it"
+
+      left = hook_card(%{@hook_metrics | left_out?: true, state: :failed})
+      assert box(left, "runtime-preview-build") =~ "Left out"
+
+      every = hook_card(%{@hook_metrics | bundle: :every_site, sizes: nil, site_bundles: 3})
+      assert box(every, "runtime-preview-bundle") =~ "In 3 site bundles"
+      assert box(every, "runtime-preview-build") =~ "Built"
+
+      lazy_every =
+        hook_card(%{
+          @hook_metrics
+          | lazy?: true,
+            bundle: :every_site,
+            sizes: nil,
+            site_bundles: 3
+        })
+
+      assert box(lazy_every, "runtime-preview-bundle") =~ "Built on its own beside each site's JS"
+      refute box(lazy_every, "runtime-preview-bundle") =~ "Not in it"
+
+      none = hook_card(%{@hook_metrics | named_in: 0})
+      assert box(none, "runtime-preview-named-in") =~ "No page, layout or component attaches it"
     end
   end
 end
