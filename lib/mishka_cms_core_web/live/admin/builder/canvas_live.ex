@@ -2719,8 +2719,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
 
   # `contain/3`, with the rendered markup handed back as a binary the caller can still decide about.
   # A refusal stays whole — it is the editor's own placeholder, not the component's markup.
+  # The author's canvas, not a visitor's render: kept out of `MishkaCmsCore.Runtime.RenderMetrics`.
   defp contained(name, preview?, render) do
-    case contain(name, preview?, render) do
+    case MishkaCmsCore.Runtime.RenderMetrics.unmeasured(fn -> contain(name, preview?, render) end) do
       {:safe, iodata} -> {:html, IO.iodata_to_binary(iodata)}
       placeholder -> {:refused, placeholder}
     end

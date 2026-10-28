@@ -624,10 +624,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
         end)
       end
 
+      # Timed for the component preview's Performance Metrics: a live component is rendered by
+      # LiveView itself, so this is the one place every render of it passes through.
       def render(var!(assigns)) do
-        var!(assigns) = Map.merge(unquote(Macro.escape(defaults_map)), var!(assigns))
-        unquote(body_block(params, body_ast))
-        unquote(template_ast)
+        MishkaCmsCore.Runtime.RenderMetrics.measure(__MODULE__, fn ->
+          var!(assigns) = Map.merge(unquote(Macro.escape(defaults_map)), var!(assigns))
+          unquote(body_block(params, body_ast))
+          unquote(template_ast)
+        end)
       end
     end
     |> then(&{params, functions_ast ++ [&1]})

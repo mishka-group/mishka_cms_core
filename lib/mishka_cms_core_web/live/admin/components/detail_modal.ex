@@ -233,6 +233,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DetailModal do
   attr :label, :string, required: true
   attr :value, :any, required: true
   attr :real, :boolean, default: false
+  attr :hint, :string, default: nil, doc: "a smaller line under the value, saying what it is"
 
   def metric(assigns) do
     ~H"""
@@ -250,6 +251,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DetailModal do
           {gettext("live")}
         </span>
       </div>
+      <p :if={@hint} class="mt-1 text-[10.5px] leading-snug text-[#8a877f]">{@hint}</p>
     </div>
     """
   end

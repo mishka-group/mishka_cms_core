@@ -128,6 +128,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
       |> assign(:duplicable?, p.duplicable?)
       |> assign(:duplicating?, p.duplicating?)
       |> assign(:writable?, p.writable?)
+      |> assign(:metrics, p.metrics)
       |> assign(:current_user, p.current_user)
       |> assign(:form_record_id, p.form_record_id)
       |> assign(:form_id, p.resource && MishkaGervaz.Resource.Info.Form.component_id(p.resource))
@@ -407,8 +408,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   end
 
   # Component-specific Overview (matches the mockup): a "Component Details" card with the kit metadata
-  # and a "Performance Metrics" card. Real data where we have it (Format, Bundle Size, dates, Modified
-  # By); sampled where the runtime doesn't track it yet (Usage Count, Render Time, Cache Hit, Re-renders).
+  # and a "Performance Metrics" card. Real data where we have it (Format, Bundle Size, Render Time,
+  # Cache, dates, Modified By — the runtime ones from `MishkaCmsCore.Runtime.RenderMetrics`, loaded
+  # after the modal opens); sampled where the runtime doesn't track it yet (Usage Count, Re-renders).
   defp component_overview_tab(assigns) do
     pct = assigns.record.priority || 0
 
@@ -480,7 +482,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
               {if(@record.active, do: gettext("Active"), else: gettext("Inactive"))}
             </.status_row>
             <.status_row label={gettext("Compilation")}>
-              <span class="size-2 rounded-full bg-blue-500"></span> {gettext("Dynamic")}
+              <span class={[
+                "size-2 rounded-full",
+                if(precompile(@record), do: "bg-blue-500", else: "bg-amber-500")
+              ]}></span>
+              {if(precompile(@record), do: gettext("Precompiled"), else: gettext("Dynamic"))}
             </.status_row>
             <.status_row label={gettext("Site")}>
               <.icon name="hero-globe-alt" class="size-4 text-zinc-400" /> {site_name(@record)}
@@ -507,17 +513,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         <h3 class="mb-4 flex items-center gap-2 text-sm font-semibold text-zinc-800">
           <.icon name="hero-presentation-chart-line" class="size-4 text-zinc-400" />
           {gettext("Performance Metrics")}
-          <span class="ms-auto rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600">
-            {gettext("sample")}
+          <span class="ms-auto text-[10px] font-medium text-zinc-400">
+            {gettext("this server, since it started")}
           </span>
         </h3>
         <div class="grid grid-cols-2 gap-3">
-          <.metric icon="hero-clock" label={gettext("Render Time")} value="2.1ms" />
+          <div id="runtime-preview-render-time">
+            <.metric
+              icon="hero-clock"
+              label={gettext("Render Time")}
+              value={render_time(@metrics)}
+              hint={render_time_hint(@metrics)}
+              real={is_map(@metrics)}
+            />
+          </div>
           <.metric icon="hero-document" label={gettext("Bundle Size")} value={@file_size} real />
-          <.metric icon="hero-circle-stack" label={gettext("Cache Hit")} value="97%" />
-          <.metric icon="hero-arrow-path" label={gettext("Re-renders")} value="12" />
+          <div id="runtime-preview-cache">
+            <.metric
+              icon="hero-circle-stack"
+              label={gettext("Cache")}
+              value={cache(@metrics)}
+              hint={cache_hint(@metrics)}
+              real={is_map(@metrics)}
+            />
+          </div>
+          <.metric
+            icon="hero-arrow-path"
+            label={gettext("Re-renders")}
+            value="12"
+            hint={gettext("sample")}
+          />
         </div>
         <dl class="mt-4 space-y-1 text-sm">
+          <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
+            {datetime(@metrics.build.at)}
+          </.status_row>
           <.status_row label={gettext("Last Updated")}>{datetime(@record.updated_at)}</.status_row>
           <.status_row label={gettext("Created")}>{datetime(@record.inserted_at)}</.status_row>
           <.status_row label={gettext("Modified By")}>
@@ -1222,6 +1252,53 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp subtitle(record), do: Map.get(record, :path) || ""
 
   defp precompile(record), do: Map.get(record, :precompile)
+
+  # THE COMPONENT'S RUNTIME NUMBERS, as `PreviewHelpers.metrics/1` read them: `:loading` until the
+  # read lands, then whether the module is in memory, its render times and its last build.
+  defp render_time(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp render_time(%{loaded?: false}), do: gettext("Not loaded")
+  defp render_time(%{stats: %{full: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
+  defp render_time(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
+  defp render_time(_no_renders), do: gettext("No renders")
+
+  defp render_time_hint(metrics) when not is_map(metrics), do: nil
+  defp render_time_hint(%{loaded?: false}), do: gettext("Builds on its first render")
+
+  defp render_time_hint(%{stats: %{full: %{count: n}, update: update}}) when n > 0 do
+    full = gettext("Average of %{count} full renders", count: n)
+
+    case update do
+      %{count: 0} ->
+        full
+
+      %{count: u, avg_us: us} ->
+        full <> " · " <> gettext("%{count} updates, %{time}", count: u, time: duration(us))
+    end
+  end
+
+  defp render_time_hint(%{stats: %{update: %{count: n}}}) when n > 0,
+    do: gettext("Average of %{count} updates", count: n)
+
+  defp render_time_hint(_no_renders), do: gettext("None since it was last built")
+
+  defp cache(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp cache(%{loaded?: true}), do: gettext("Loaded")
+  defp cache(%{loaded?: false}), do: gettext("Not loaded")
+
+  defp cache_hint(%{loaded?: true, build: %{cache: :hit, ms: ms}}),
+    do: gettext("From the disk cache in %{time}", time: duration(round(ms * 1000)))
+
+  defp cache_hint(%{loaded?: true, build: %{cache: :miss, ms: ms}}),
+    do: gettext("Compiled in %{time}, saved to the disk cache", time: duration(round(ms * 1000)))
+
+  defp cache_hint(%{loaded?: true, build: %{ms: ms}}),
+    do: gettext("Compiled in %{time}", time: duration(round(ms * 1000)))
+
+  defp cache_hint(%{loaded?: false}), do: gettext("Not in memory on this server")
+  defp cache_hint(_unknown), do: nil
+
+  defp duration(us) when us < 1000, do: "#{us} µs"
+  defp duration(us), do: "#{:erlang.float_to_binary(us / 1000, decimals: 1)} ms"
 
   defp site_name(%{site: %{name: name}}) when is_binary(name), do: name
   defp site_name(_record), do: gettext("Global")

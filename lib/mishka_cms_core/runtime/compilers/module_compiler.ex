@@ -197,13 +197,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   end
 
   # NO CACHE, THE PLAIN COMPILE — and the only path when the cache is not configured: nothing below
-  # reads a file or hashes the code.
-  defp build(quoted, file, module, nil), do: {compile(quoted, file, module), %{}}
+  # reads a file or hashes the code. The span still names the module and says the cache was off, for
+  # `MishkaCmsCore.Runtime.RenderMetrics`.
+  defp build(quoted, file, module, nil),
+    do: {compile(quoted, file, module), %{cache: :off, module: module}}
 
   defp build(quoted, file, module, dir) do
     case CompiledModuleCache.entry(dir, module, file, quoted) do
       {:ok, entry} -> load_or_compile(quoted, file, module, entry)
-      :off -> {compile(quoted, file, module), %{}}
+      :off -> {compile(quoted, file, module), %{cache: :off, module: module}}
     end
   end
 

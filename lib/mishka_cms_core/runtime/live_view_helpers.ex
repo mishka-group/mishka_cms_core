@@ -75,6 +75,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   alias MishkaCmsCore.Runtime.CspNonce
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.RenderMetrics
   alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
@@ -232,7 +233,9 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     site = assigns[:site]
     module = Helpers.module_name(name, site, "Component")
 
-    render_component(reachable(name, site, module), module, name, assigns)
+    fn -> reachable(name, site, module) end
+    |> RenderMetrics.lookup()
+    |> render_component(module, name, assigns)
   end
 
   @doc """
@@ -249,7 +252,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   def rendering_for(site, fun) when is_function(fun, 0) do
     previous = Translations.site()
     :ok = Translations.put_site(site_id(site))
-    result = fun.()
+    # An author's preview, not a visitor's render: kept out of `RenderMetrics`.
+    result = RenderMetrics.unmeasured(fun)
     :ok = Translations.put_site(previous)
     result
   end
@@ -364,8 +368,13 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   # goes on writing `<.component component_name="…" …/>` and the fork happens HERE.
   defp applied(module, name, assigns) do
     case stateful?(module) do
-      false -> apply(module, String.to_existing_atom(name), [assigns])
-      true -> live(module, name, assigns)
+      false ->
+        RenderMetrics.measure(module, fn ->
+          apply(module, String.to_existing_atom(name), [assigns])
+        end)
+
+      true ->
+        live(module, name, assigns)
     end
   end
 
