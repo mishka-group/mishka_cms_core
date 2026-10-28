@@ -484,9 +484,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp load_metrics(socket), do: socket
 
   @doc "What the component card shows for `module`, read from this node."
-  @spec metrics(module()) :: %{loaded?: boolean(), stats: map() | nil, build: map() | nil}
+  @spec metrics(module()) :: %{
+          on?: boolean(),
+          loaded?: boolean(),
+          stats: map() | nil,
+          build: map() | nil
+        }
   def metrics(module) do
     %{
+      on?: RenderMetrics.on?(),
       loaded?: CompilerHelpers.loaded?(module),
       stats: RenderMetrics.stats(module),
       build: RenderMetrics.build(module)

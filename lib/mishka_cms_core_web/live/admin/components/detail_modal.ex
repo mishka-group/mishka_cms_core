@@ -234,6 +234,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DetailModal do
   attr :value, :any, required: true
   attr :real, :boolean, default: false
   attr :hint, :string, default: nil, doc: "a smaller line under the value, saying what it is"
+  attr :hint_navigate, :string, default: nil, doc: "draws the hint as a link to this address"
 
   def metric(assigns) do
     ~H"""
@@ -251,7 +252,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DetailModal do
           {gettext("live")}
         </span>
       </div>
-      <p :if={@hint} class="mt-1 text-[10.5px] leading-snug text-[#8a877f]">{@hint}</p>
+      <p :if={@hint && !@hint_navigate} class="mt-1 text-[10.5px] leading-snug text-[#8a877f]">
+        {@hint}
+      </p>
+      <.link
+        :if={@hint && @hint_navigate}
+        navigate={@hint_navigate}
+        class="mt-1 block text-[10.5px] font-medium leading-snug text-indigo-600 hover:underline"
+      >
+        {@hint}
+      </.link>
     </div>
     """
   end

@@ -33,6 +33,14 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   the render path, and nothing on it raises: with no table it records nothing. The GenServer only
   owns the two tables and answers nothing.
 
+  ## Off unless it is asked for
+
+  The `runtime.render_metrics` setting (General → Performance, off by default) turns the clock on.
+  It is read on every component render, so `on?/0` keeps it in `:persistent_term` as an atom — a
+  read costs nanoseconds, and replacing an atom there needs no global garbage collection —
+  and `MishkaCmsCore.Runtime.States.SettingsState` replaces it whenever the setting is written, on
+  every node. Off, a render does nothing else.
+
   ## What is left out
 
   Admin previews and the builder canvas render components for an author, not for a visitor:
@@ -47,6 +55,8 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @builds :mishka_cms_build_metrics
   @off :mishka_cms_render_metrics_off
   @compiling :mishka_cms_render_metrics_compiling
+  @setting "runtime.render_metrics"
+  @switch {__MODULE__, :on}
   @build_handler "mishka-cms-core-render-metrics-builds"
   @compile_handler "mishka-cms-core-render-metrics-compiles"
 
@@ -111,6 +121,27 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
     end
   end
 
+  @doc "Whether components are timed: the `runtime.render_metrics` setting."
+  @spec on?() :: boolean()
+  def on? do
+    case :persistent_term.get(@switch, nil) do
+      nil -> switch_changed()
+      on -> on
+    end
+  end
+
+  @doc false
+  # Reads the setting from the settings cache again and keeps it for `on?/0`. With no cache yet (a
+  # boot that has not started it) the clock stays off and nothing raises.
+  @spec switch_changed() :: boolean()
+  def switch_changed do
+    on = MishkaCmsCore.Settings.get(@setting, false) == true
+    :persistent_term.put(@switch, on)
+    on
+  rescue
+    ArgumentError -> false
+  end
+
   @doc """
   Draws a component through `fun` (which returns what the component returned) and times it.
   `module` is the component's module, the key its numbers are kept under.
@@ -160,9 +191,9 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
 
   # The module's counters, made on its first render, or `nil` when nothing is to be recorded.
   defp counters(module) do
-    case Process.get(@off) do
-      true -> nil
-      _on -> registered(lookup(@counters, module), module)
+    case on?() and Process.get(@off) != true do
+      true -> registered(lookup(@counters, module), module)
+      false -> nil
     end
   end
 

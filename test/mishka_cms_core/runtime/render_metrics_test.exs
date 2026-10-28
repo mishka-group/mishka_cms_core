@@ -19,7 +19,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
 
   alias MishkaCmsCore.Runtime.{LiveViewHelpers, RenderMetrics, Translations}
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
 
   @moduletag :integration
   @endpoint MishkaCmsCore.TestEndpoint
@@ -55,7 +55,11 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     end
   end
 
+  @switch "runtime.render_metrics"
+
   setup do
+    :ok = SettingsState.put(nil, @switch, %{"value" => true})
+    on_exit(fn -> SettingsState.delete(nil, @switch) end)
     n = System.unique_integer([:positive])
     site = create_site!(name: "metrics-#{n}", host: "metrics-#{n}.test")
 
@@ -162,6 +166,20 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     assert %{update: %{count: 2}} = RenderMetrics.stats(work)
   end
 
+  test "with the setting off, nothing is timed", %{site: site, names: names} do
+    :ok = SettingsState.delete(nil, @switch)
+    refute RenderMetrics.on?()
+
+    %{component_name: names.work, site: site.name, title: "x", us: 10, __changed__: nil}
+    |> LiveViewHelpers.component()
+    |> Phoenix.HTML.Safe.to_iodata()
+
+    assert RenderMetrics.stats(module_of(names.work, site)) == nil
+
+    :ok = SettingsState.put(nil, @switch, %{"value" => true})
+    assert RenderMetrics.on?()
+  end
+
   test "an author's preview is not counted", %{site: site, names: names} do
     work = module_of(names.work, site)
 
@@ -241,6 +259,20 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     defp box(html, id),
       do: html |> LazyHTML.from_fragment() |> LazyHTML.query("##{id}") |> LazyHTML.text()
 
+    test "with the setting off, Render Time says so and links to it; Cache still answers" do
+      html = card([], %{on?: false, loaded?: true, stats: nil, build: nil})
+      time = box(html, "runtime-preview-render-time")
+      assert time =~ "Not active"
+      assert time =~ "Turn it on in Settings"
+
+      assert html
+             |> LazyHTML.from_fragment()
+             |> LazyHTML.query("#runtime-preview-render-time a")
+             |> LazyHTML.attribute("href") == ["/admin/dashboard/settings?tab=general"]
+
+      assert box(html, "runtime-preview-cache") =~ "Loaded"
+    end
+
     test "says Loading… in both runtime boxes until the read lands" do
       html = card([], :loading)
       assert box(html, "runtime-preview-render-time") =~ "Loading…"
@@ -248,13 +280,14 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     end
 
     test "a module not in memory yet says so" do
-      html = card([], %{loaded?: false, stats: nil, build: nil})
+      html = card([], %{on?: true, loaded?: false, stats: nil, build: nil})
       assert box(html, "runtime-preview-render-time") =~ "Not loaded"
       assert box(html, "runtime-preview-cache") =~ "Not loaded"
     end
 
     test "shows the averages and the build" do
       metrics = %{
+        on?: true,
         loaded?: true,
         stats: %{full: %{count: 2, avg_us: 3000}, update: %{count: 5, avg_us: 40}},
         build: %{ms: 11.0, cache: :miss, at: ~U[2026-10-28 12:00:00Z]}
@@ -271,7 +304,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     end
 
     test "a lazy component is Dynamic, and a loaded one with no renders says so" do
-      html = card([precompile: false], %{loaded?: true, stats: nil, build: nil})
+      html = card([precompile: false], %{on?: true, loaded?: true, stats: nil, build: nil})
       assert html =~ "Dynamic"
       assert box(html, "runtime-preview-render-time") =~ "No renders"
       assert box(html, "runtime-preview-cache") =~ "Loaded"

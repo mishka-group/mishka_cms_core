@@ -524,6 +524,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
               label={gettext("Render Time")}
               value={render_time(@metrics)}
               hint={render_time_hint(@metrics)}
+              hint_navigate={settings_link(@metrics)}
               real={is_map(@metrics)}
             />
           </div>
@@ -1256,12 +1257,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   # THE COMPONENT'S RUNTIME NUMBERS, as `PreviewHelpers.metrics/1` read them: `:loading` until the
   # read lands, then whether the module is in memory, its render times and its last build.
   defp render_time(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp render_time(%{on?: false}), do: gettext("Not active")
   defp render_time(%{loaded?: false}), do: gettext("Not loaded")
   defp render_time(%{stats: %{full: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
   defp render_time(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
   defp render_time(_no_renders), do: gettext("No renders")
 
   defp render_time_hint(metrics) when not is_map(metrics), do: nil
+  defp render_time_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
   defp render_time_hint(%{loaded?: false}), do: gettext("Builds on its first render")
 
   defp render_time_hint(%{stats: %{full: %{count: n}, update: update}}) when n > 0 do
@@ -1280,6 +1283,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: gettext("Average of %{count} updates", count: n)
 
   defp render_time_hint(_no_renders), do: gettext("None since it was last built")
+
+  # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).
+  defp settings_link(%{on?: false}), do: "/admin/dashboard/settings?tab=general"
+  defp settings_link(_on_or_loading), do: nil
 
   defp cache(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp cache(%{loaded?: true}), do: gettext("Loaded")
