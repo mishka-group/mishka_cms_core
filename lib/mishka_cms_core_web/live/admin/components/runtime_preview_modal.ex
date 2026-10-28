@@ -514,7 +514,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
           <.icon name="hero-presentation-chart-line" class="size-4 text-zinc-400" />
           {gettext("Performance Metrics")}
           <span class="ms-auto text-[10px] font-medium text-zinc-400">
-            {gettext("this server, since it started")}
+            {gettext("this server, since its last build")}
           </span>
         </h3>
         <div class="grid grid-cols-2 gap-3">
@@ -1263,15 +1263,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp render_time(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp render_time(%{on?: false}), do: gettext("Not active")
   defp render_time(%{loaded?: false}), do: gettext("Not loaded")
+  defp render_time(%{stats: :hidden}), do: "—"
   defp render_time(%{stats: %{full: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
   defp render_time(_no_renders), do: gettext("No renders")
 
   defp render_time_hint(metrics) when not is_map(metrics), do: nil
   defp render_time_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
-  defp render_time_hint(%{loaded?: false}), do: gettext("Builds on its first render")
+  defp render_time_hint(%{loaded?: false}), do: nil
+
+  defp render_time_hint(%{stats: :hidden}),
+    do: gettext("Counted on every site; shown to master admins")
 
   defp render_time_hint(%{stats: %{full: %{count: n}}}) when n > 0,
-    do: gettext("Average of %{count} full renders", count: n)
+    do: ngettext("Average of %{count} full render", "Average of %{count} full renders", n)
 
   defp render_time_hint(_no_renders), do: gettext("None since it was last built")
 
@@ -1280,12 +1284,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp rerenders(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp rerenders(%{on?: false}), do: gettext("Not active")
   defp rerenders(%{loaded?: false}), do: gettext("Not loaded")
+  defp rerenders(%{stats: :hidden}), do: "—"
   defp rerenders(%{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
   defp rerenders(_no_renders), do: "0"
 
   defp rerenders_hint(metrics) when not is_map(metrics), do: nil
   defp rerenders_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
   defp rerenders_hint(%{loaded?: false}), do: nil
+
+  defp rerenders_hint(%{stats: :hidden}),
+    do: gettext("Counted on every site; shown to master admins")
 
   defp rerenders_hint(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
     do: gettext("Average %{time} each", time: duration(us))
@@ -1300,14 +1308,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp cache(%{loaded?: true}), do: gettext("Loaded")
   defp cache(%{loaded?: false}), do: gettext("Not loaded")
 
-  defp cache_hint(%{loaded?: true, build: %{cache: :hit, ms: ms}}),
-    do: gettext("From the disk cache in %{time}", time: duration(round(ms * 1000)))
+  defp cache_hint(%{loaded?: true, build: %{cache: :hit, us: us}}),
+    do: gettext("From the disk cache in %{time}", time: duration(us))
 
-  defp cache_hint(%{loaded?: true, build: %{cache: :miss, ms: ms}}),
-    do: gettext("Compiled in %{time}, saved to the disk cache", time: duration(round(ms * 1000)))
+  defp cache_hint(%{loaded?: true, build: %{cache: :miss, us: us}}),
+    do: gettext("Compiled in %{time}, saved to the disk cache", time: duration(us))
 
-  defp cache_hint(%{loaded?: true, build: %{ms: ms}}),
-    do: gettext("Compiled in %{time}", time: duration(round(ms * 1000)))
+  defp cache_hint(%{loaded?: true, build: %{us: us}}),
+    do: gettext("Compiled in %{time}", time: duration(us))
 
   defp cache_hint(%{loaded?: false}), do: gettext("Not in memory on this server")
   defp cache_hint(_unknown), do: nil

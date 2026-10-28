@@ -141,8 +141,8 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     assert about?(stats.full.avg_us, 500 + 2000 + 500)
 
     # The build of each module is recorded, with the disk cache off (not configured in tests).
-    assert %{cache: :off, ms: ms, at: %DateTime{}} = RenderMetrics.build(work)
-    assert ms > 0
+    assert %{cache: :off, us: built_us, at: %DateTime{}} = RenderMetrics.build(work)
+    assert built_us > 0
 
     # A live component is timed through its compiled `render/1`.
     assert %{full: %{count: 2, avg_us: live_us}} = RenderMetrics.stats(live)
@@ -218,7 +218,75 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
     )
 
     assert RenderMetrics.stats(work) == nil
-    assert %{cache: :hit, ms: 5.0} = RenderMetrics.build(work)
+    assert %{cache: :hit, us: 5000} = RenderMetrics.build(work)
+  end
+
+  test "a rebuild that fails records no build and keeps the numbers", %{
+    site: site,
+    names: names
+  } do
+    work = module_of(names.work, site)
+
+    %{component_name: names.work, site: site.name, title: "x", us: 10, __changed__: nil}
+    |> LiveViewHelpers.component()
+    |> Phoenix.HTML.Safe.to_iodata()
+
+    before = {RenderMetrics.stats(work), RenderMetrics.build(work)}
+    assert {%{full: %{count: 1}}, %{}} = before
+
+    broken =
+      quote(do: defmodule(unquote(work), do: def(broken, do: unquote(Macro.var(:nope, nil)))))
+
+    assert {:error, ^work, _} =
+             MishkaCmsCore.Runtime.Compilers.ModuleCompiler.compile_module(broken)
+
+    assert {RenderMetrics.stats(work), RenderMetrics.build(work)} == before
+  end
+
+  test "a component built lazily inside another's render is not in the other's time", %{
+    site: site
+  } do
+    n = System.unique_integer([:positive])
+    child = component!(site, "child-#{n}", ~S|<i>child</i>|, [], [])
+
+    parent =
+      component!(
+        site,
+        "parent-#{n}",
+        ~s|<div>{#{@spin}(500)}<.component component_name="#{child}" site={@site} /></div>|,
+        [],
+        []
+      )
+
+    refute CompilerHelpers.loaded?(module_of(child, site))
+    me = self()
+
+    :telemetry.attach(
+      "lazy-child-#{n}",
+      [:mishka_cms, :runtime, :handlers, :module_compiler, :stop],
+      fn _, m, meta, _ -> send(me, {:built, meta, m.duration}) end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach("lazy-child-#{n}") end)
+
+    # the parent is built first, outside any clock, so only the child builds inside the parent's
+    LiveViewHelpers.ensure_component_loaded(parent, site.name)
+
+    %{component_name: parent, site: site.name, __changed__: nil}
+    |> LiveViewHelpers.component()
+    |> Phoenix.HTML.Safe.to_iodata()
+
+    assert CompilerHelpers.loaded?(module_of(child, site)),
+           "the child was built inside the render"
+
+    assert_received {:built, _meta, native}
+    built_us = System.convert_time_unit(native, :native, :microsecond)
+    assert %{full: %{count: 1, avg_us: parent_us}} = RenderMetrics.stats(module_of(parent, site))
+    assert about?(parent_us, 500)
+
+    assert built_us > parent_us,
+           "the child's build (#{built_us} µs) is not in the parent's #{parent_us} µs"
   end
 
   describe "the component card" do
@@ -275,6 +343,15 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
       assert box(html, "runtime-preview-cache") =~ "Loaded"
     end
 
+    test "a global component's counts are every site's, so a site admin is not shown them" do
+      html = card([], %{on?: true, loaded?: true, stats: :hidden, build: nil})
+
+      for id <- ["runtime-preview-render-time", "runtime-preview-rerenders"] do
+        assert box(html, id) =~ "—"
+        assert box(html, id) =~ "shown to master admins"
+      end
+    end
+
     test "says Loading… in both runtime boxes until the read lands" do
       html = card([], :loading)
       assert box(html, "runtime-preview-render-time") =~ "Loading…"
@@ -293,7 +370,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
         on?: true,
         loaded?: true,
         stats: %{full: %{count: 2, avg_us: 3000}, update: %{count: 5, avg_us: 40}},
-        build: %{ms: 11.0, cache: :miss, at: ~U[2026-10-28 12:00:00Z]}
+        build: %{us: 11_000, cache: :miss, at: ~U[2026-10-28 12:00:00Z]}
       }
 
       html = card([precompile: true], metrics)

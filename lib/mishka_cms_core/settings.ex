@@ -861,7 +861,7 @@ defmodule MishkaCmsCore.Settings do
         label: gettext_noop("Measure component render times"),
         description:
           gettext_noop(
-            "Times every component a visitor's page draws, for the Performance Metrics card of each component. It adds under a microsecond to each component render, so leave it off unless you are looking for a slow component."
+            "Times every component a visitor's page draws, for the Performance Metrics card of each component. It adds about a microsecond to each component render, more for long lists inside nested components, so leave it off unless you are looking for a slow component."
           )
       ),
       define("notify.cms_core.user.permissions_changed", :boolean,

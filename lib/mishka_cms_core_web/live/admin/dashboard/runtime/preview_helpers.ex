@@ -466,6 +466,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   # memory now — read off the LiveView process, so the card shows "Loading…" rather than the modal
   # waiting, and read again every few seconds while the modal stays on it. One timer at a time: a new
   # read replaces the one pending, so opening the same component twice does not start a second loop.
+  #
+  # A GLOBAL COMPONENT'S COUNTS ARE EVERY SITE'S: renders on all of them land on its one module. A
+  # site admin may open it, so its counts are shown to a master admin alone.
   defp load_metrics(
          %{
            assigns: %{
@@ -476,25 +479,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
            socket
        )
        when not is_nil(module) do
+    counts? = preview.record.site_id != nil or master?(preview.current_user)
+
     socket
     |> assign(:preview, %{preview | metrics: preview.metrics || :loading})
-    |> MishkaGervaz.Messages.start_async(:preview_metrics, fn -> {module, metrics(module)} end)
+    |> MishkaGervaz.Messages.start_async(:preview_metrics, fn ->
+      {module, metrics(module, counts?)}
+    end)
   end
 
   defp load_metrics(socket), do: socket
 
-  @doc "What the component card shows for `module`, read from this node."
-  @spec metrics(module()) :: %{
-          on?: boolean(),
-          loaded?: boolean(),
-          stats: map() | nil,
-          build: map() | nil
-        }
-  def metrics(module) do
+  defp metrics(module, counts?) do
     %{
       on?: RenderMetrics.on?(),
       loaded?: CompilerHelpers.loaded?(module),
-      stats: RenderMetrics.stats(module),
+      stats: if(counts?, do: RenderMetrics.stats(module), else: :hidden),
       build: RenderMetrics.build(module)
     }
   end

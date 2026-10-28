@@ -95,7 +95,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
       configured; otherwise, and by default (`false`), the module is compiled. A module loaded from
       the cache is answered `{:ok, module, []}`, and the span's stop metadata says
       `%{cache: :hit, module: module}` — `%{cache: :miss, module: module}` when it was compiled
-      through the cache, `%{}` when the cache was not used.
+      through the cache, `%{cache: :off, module: module}` when the cache was not used, and `%{}`
+      when the compile failed.
 
   ## Return Values
 
@@ -179,11 +180,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
               return: false
             )
 
-          _ ->
-            :ok
-        end
+            {result, metadata}
 
-        {result, metadata}
+          # A failed compile names no module: the one loaded before it is still the one running.
+          _failed ->
+            {result, %{}}
+        end
       end
     )
   end

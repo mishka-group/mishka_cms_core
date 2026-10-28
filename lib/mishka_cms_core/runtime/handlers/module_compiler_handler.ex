@@ -383,7 +383,11 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
   # The compile-time boundary a drawn page may raise at, as `handle_call(:compile, ...)` is for
   # building it.
   defp draw_offline_page(module) do
-    _page = ErrorCompiler.render_page(module, visitor_conn(module), :offline)
+    _page =
+      MishkaCmsCore.Runtime.RenderMetrics.unmeasured(fn ->
+        ErrorCompiler.render_page(module, visitor_conn(module), :offline)
+      end)
+
     :ok
   rescue
     error -> {:error, Exception.message(error)}

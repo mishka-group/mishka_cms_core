@@ -21,9 +21,13 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   A render with `track = false` is a FULL render (the page's first, a new fingerprint); `true` is an
   UPDATE, where LiveView evaluates only what changed. They are counted apart.
 
-  The time is inclusive: a component's number holds the components and slots drawn inside it. A
-  module built lazily inside a render is not: `handle_compile/4` hears the build in the rendering
-  process and every clock running around it takes that time out.
+  The time is inclusive: a component's number holds the function components and slots drawn inside
+  it. A module built lazily inside a render is not: `handle_compile/4` hears the build in the
+  rendering process and every clock running around it takes that time out. Neither are live
+  components drawn inside it, which LiveView renders on their own, nor a live component's own
+  `mount/1` and `update/2`, which run before its `render/1`. A component drawn through
+  `MishkaCmsCore.Runtime.ComponentBoundary` is evaluated whole every time, so it counts full renders
+  and no updates.
 
   ## Nothing a render does waits
 
@@ -36,10 +40,10 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   ## Off unless it is asked for
 
   The `runtime.render_metrics` setting (General → Performance, off by default) turns the clock on.
-  It is read on every component render, so `on?/0` keeps it in `:persistent_term` as an atom — a
-  read costs nanoseconds, and replacing an atom there needs no global garbage collection —
-  and `MishkaCmsCore.Runtime.States.SettingsState` replaces it whenever the setting is written, on
-  every node. Off, a render does nothing else.
+  It is read on every component render, so it is kept in `:persistent_term` as an atom — a read
+  costs nanoseconds, and replacing an atom there needs no global garbage collection.
+  `MishkaCmsCore.Runtime.States.SettingsState` writes it when it loads and whenever the setting is
+  written, on every node (`switch_changed/0`). Off, a render does nothing else.
 
   ## What is left out
 
@@ -71,7 +75,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
           update: %{count: non_neg_integer(), avg_us: non_neg_integer()}
         }
 
-  @type build :: %{ms: float(), cache: :hit | :miss | :off, at: DateTime.t()}
+  @type build :: %{us: non_neg_integer(), cache: :hit | :miss | :off, at: DateTime.t()}
 
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
@@ -113,8 +117,8 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @spec build(module()) :: build() | nil
   def build(module) do
     case lookup(@builds, module) do
-      [{^module, native, cache, at}] ->
-        %{ms: ms(native), cache: cache, at: DateTime.from_unix!(at)}
+      [{^module, us, cache, at}] ->
+        %{us: us, cache: cache, at: DateTime.from_unix!(at)}
 
       _none ->
         nil
@@ -123,16 +127,10 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
 
   @doc "Whether components are timed: the `runtime.render_metrics` setting."
   @spec on?() :: boolean()
-  def on? do
-    case :persistent_term.get(@switch, nil) do
-      nil -> switch_changed()
-      on -> on
-    end
-  end
+  def on?, do: :persistent_term.get(@switch, false)
 
   @doc false
-  # Reads the setting from the settings cache again and keeps it for `on?/0`. With no cache yet (a
-  # boot that has not started it) the clock stays off and nothing raises.
+  # Reads the setting from the settings cache again and keeps it for `on?/0`.
   @spec switch_changed() :: boolean()
   def switch_changed do
     on = MishkaCmsCore.Settings.get(@setting, false) == true
@@ -162,10 +160,12 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   end
 
   @doc false
-  # A module built: record how, and start its counts again.
+  # A component module built: record how, and start its counts again. Pages, layouts and the
+  # modules a draft preview builds are not read here, so they are not kept.
   def handle_build(_event, %{duration: native}, %{module: module, cache: cache}, _config) do
-    if :erlang.module_loaded(module) do
-      :ets.insert(@builds, {module, native, cache, System.system_time(:second)})
+    if component?(module) do
+      us = System.convert_time_unit(native, :native, :microsecond)
+      :ets.insert(@builds, {module, us, cache, System.system_time(:second)})
       :ets.delete(@counters, module)
     end
 
@@ -177,9 +177,11 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @doc false
   # A lazy build in the rendering process: kept out of every clock running around it.
   def handle_compile(_event, %{duration: native}, _metadata, _config) do
-    Process.put(@compiling, Process.get(@compiling, 0) + native)
+    if on?(), do: Process.put(@compiling, Process.get(@compiling, 0) + native)
     :ok
   end
+
+  defp component?(module), do: module |> Module.split() |> List.last() == "Component"
 
   defp timed_call(nil, fun), do: fun.()
 
@@ -209,6 +211,8 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
       true -> ref
       false -> registered(lookup(@counters, module), module)
     end
+  rescue
+    ArgumentError -> nil
   end
 
   defp timed_rendered(%Rendered{dynamic: dynamic} = rendered, ref, call) do
@@ -284,8 +288,6 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
       n -> System.convert_time_unit(div(:counters.get(ref, time), n), :native, :microsecond)
     end
   end
-
-  defp ms(native), do: System.convert_time_unit(native, :native, :microsecond) / 1000
 
   # With no table (its owner restarting) there is nothing to read or record, and nothing raises.
   defp lookup(table, key) do
