@@ -233,9 +233,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     site = assigns[:site]
     module = Helpers.module_name(name, site, "Component")
 
-    fn -> reachable(name, site, module) end
-    |> RenderMetrics.lookup()
-    |> render_component(module, name, assigns)
+    render_component(reachable(name, site, module), module, name, assigns)
   end
 
   @doc """
