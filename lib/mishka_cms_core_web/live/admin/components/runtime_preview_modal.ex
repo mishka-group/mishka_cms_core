@@ -7,7 +7,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   Tabbed inspector modal for a single module-backed runtime record (Page / Component /
   Layout / ErrorPage), opened from a table's "Preview" row action.
 
-  Six tabs — **Overview** (stored details + a sample metrics card), **Preview** (the
+  Six tabs — **Overview** (stored details + a metrics card), **Preview** (the
   rendered output in a sandboxed `<iframe srcdoc>` with Desktop/Tablet/Mobile widths),
   **Code** (raw source, copy button), **Versions** (recent AshPaperTrail versions),
   **Pipeline** (the live `RuntimeStatusTimeline`), and **Configuration** (the resource's
@@ -410,7 +410,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   # Component-specific Overview (matches the mockup): a "Component Details" card with the kit metadata
   # and a "Performance Metrics" card. Real data where we have it (Format, Bundle Size, Render Time,
   # Cache, dates, Modified By — the runtime ones from `MishkaCmsCore.Runtime.RenderMetrics`, loaded
-  # after the modal opens); sampled where the runtime doesn't track it yet (Usage Count, Re-renders).
+  # after the modal opens); sampled where the runtime doesn't track it yet (Usage Count).
   defp component_overview_tab(assigns) do
     pct = assigns.record.priority || 0
 
@@ -538,12 +538,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
               real={is_map(@metrics)}
             />
           </div>
-          <.metric
-            icon="hero-arrow-path"
-            label={gettext("Re-renders")}
-            value="12"
-            hint={gettext("sample")}
-          />
+          <div id="runtime-preview-rerenders">
+            <.metric
+              icon="hero-arrow-path"
+              label={gettext("Re-renders")}
+              value={rerenders(@metrics)}
+              hint={rerenders_hint(@metrics)}
+              hint_navigate={settings_link(@metrics)}
+              real={is_map(@metrics) and @metrics.on?}
+            />
+          </div>
         </div>
         <dl class="mt-4 space-y-1 text-sm">
           <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
@@ -1260,29 +1264,33 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp render_time(%{on?: false}), do: gettext("Not active")
   defp render_time(%{loaded?: false}), do: gettext("Not loaded")
   defp render_time(%{stats: %{full: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
-  defp render_time(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0, do: duration(us)
   defp render_time(_no_renders), do: gettext("No renders")
 
   defp render_time_hint(metrics) when not is_map(metrics), do: nil
   defp render_time_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
   defp render_time_hint(%{loaded?: false}), do: gettext("Builds on its first render")
 
-  defp render_time_hint(%{stats: %{full: %{count: n}, update: update}}) when n > 0 do
-    full = gettext("Average of %{count} full renders", count: n)
-
-    case update do
-      %{count: 0} ->
-        full
-
-      %{count: u, avg_us: us} ->
-        full <> " · " <> gettext("%{count} updates, %{time}", count: u, time: duration(us))
-    end
-  end
-
-  defp render_time_hint(%{stats: %{update: %{count: n}}}) when n > 0,
-    do: gettext("Average of %{count} updates", count: n)
+  defp render_time_hint(%{stats: %{full: %{count: n}}}) when n > 0,
+    do: gettext("Average of %{count} full renders", count: n)
 
   defp render_time_hint(_no_renders), do: gettext("None since it was last built")
+
+  # RE-RENDERS ARE LIVEVIEW'S UPDATES: a component drawn again after the page was, because something
+  # it reads changed. The same counters as Render Time; nothing more is measured for them.
+  defp rerenders(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp rerenders(%{on?: false}), do: gettext("Not active")
+  defp rerenders(%{loaded?: false}), do: gettext("Not loaded")
+  defp rerenders(%{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
+  defp rerenders(_no_renders), do: "0"
+
+  defp rerenders_hint(metrics) when not is_map(metrics), do: nil
+  defp rerenders_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
+  defp rerenders_hint(%{loaded?: false}), do: nil
+
+  defp rerenders_hint(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
+    do: gettext("Average %{time} each", time: duration(us))
+
+  defp rerenders_hint(_no_updates), do: gettext("Redrawn when something it reads changes")
 
   # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).
   defp settings_link(%{on?: false}), do: "/admin/dashboard/settings?tab=general"

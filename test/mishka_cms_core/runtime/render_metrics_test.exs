@@ -265,6 +265,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
       assert time =~ "Not active"
       assert time =~ "Turn it on in Settings"
       refute time =~ "live"
+      assert box(html, "runtime-preview-rerenders") =~ "Not active"
 
       assert html
              |> LazyHTML.from_fragment()
@@ -284,6 +285,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
       html = card([], %{on?: true, loaded?: false, stats: nil, build: nil})
       assert box(html, "runtime-preview-render-time") =~ "Not loaded"
       assert box(html, "runtime-preview-cache") =~ "Not loaded"
+      assert box(html, "runtime-preview-rerenders") =~ "Not loaded"
     end
 
     test "shows the averages and the build" do
@@ -298,7 +300,10 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
       time = box(html, "runtime-preview-render-time")
       assert time =~ "3.0 ms"
       assert time =~ "Average of 2 full renders"
-      assert time =~ "5 updates, 40 µs"
+      refute time =~ "updates"
+      rerenders = box(html, "runtime-preview-rerenders")
+      assert rerenders =~ "5"
+      assert rerenders =~ "Average 40 µs each"
       assert box(html, "runtime-preview-cache") =~ "Compiled in 11.0 ms, saved to the disk cache"
       assert html =~ "2026-10-28 12:00"
       assert html =~ "Precompiled"
@@ -308,6 +313,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
       html = card([precompile: false], %{on?: true, loaded?: true, stats: nil, build: nil})
       assert html =~ "Dynamic"
       assert box(html, "runtime-preview-render-time") =~ "No renders"
+      assert box(html, "runtime-preview-rerenders") =~ "0"
       assert box(html, "runtime-preview-cache") =~ "Loaded"
     end
   end
