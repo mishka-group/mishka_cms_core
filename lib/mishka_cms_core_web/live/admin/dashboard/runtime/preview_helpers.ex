@@ -92,7 +92,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @metrics_every :timer.seconds(5)
 
   # The records whose renders `MishkaCmsCore.Runtime.RenderMetrics` times.
-  @timed [MishkaCmsCore.Runtime.Component, MishkaCmsCore.Runtime.Page]
+  @timed [
+    MishkaCmsCore.Runtime.Component,
+    MishkaCmsCore.Runtime.Page,
+    MishkaCmsCore.Runtime.Layout
+  ]
 
   # Every runtime resource this modal opens carries a "Configuration" tab hosting its MishkaGervaz
   # form, so the record is read, inspected and edited in ONE place. Editing used to mean a second,

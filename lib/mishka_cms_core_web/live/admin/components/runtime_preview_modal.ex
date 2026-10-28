@@ -50,7 +50,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.RuntimePreview
-  alias MishkaCmsCore.Runtime.{Component, ErrorPage}
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout}
   alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimeStatusTimeline
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
@@ -674,7 +674,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
           icon="hero-arrow-path"
           label={gettext("Re-renders")}
           value={rerenders(@metrics)}
-          hint={rerenders_hint(@metrics)}
+          hint={rerenders_hint(@resource, @metrics)}
           hint_navigate={settings_link(@metrics)}
           real={is_map(@metrics) and @metrics.on?}
         />
@@ -1320,17 +1320,26 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp rerenders(%{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
   defp rerenders(_no_renders), do: "0"
 
-  defp rerenders_hint(metrics) when not is_map(metrics), do: nil
-  defp rerenders_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
-  defp rerenders_hint(%{loaded?: false}), do: nil
+  defp rerenders_hint(_resource, metrics) when not is_map(metrics), do: nil
 
-  defp rerenders_hint(%{stats: :hidden}),
+  defp rerenders_hint(_resource, %{on?: false}),
+    do: gettext("Turn it on in Settings → Performance")
+
+  defp rerenders_hint(_resource, %{loaded?: false}), do: nil
+
+  defp rerenders_hint(_resource, %{stats: :hidden}),
     do: gettext("Counted on every site; shown to master admins")
 
-  defp rerenders_hint(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
+  # A LAYOUT IS DRAWN AGAIN WITH EVERY UPDATE OF THE PAGE INSIDE IT: LiveView marks `@inner_content`
+  # changed on every render, so its updates are the page's.
+  defp rerenders_hint(Layout, %{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
+    do: gettext("With every update of the page inside it, %{time} each", time: duration(us))
+
+  defp rerenders_hint(_resource, %{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
     do: gettext("Average %{time} each", time: duration(us))
 
-  defp rerenders_hint(_no_updates), do: gettext("Redrawn when something it reads changes")
+  defp rerenders_hint(_resource, _no_updates),
+    do: gettext("Redrawn when something it reads changes")
 
   # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).
   defp settings_link(%{on?: false}), do: "/admin/dashboard/settings?tab=general"

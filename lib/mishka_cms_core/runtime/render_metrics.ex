@@ -69,7 +69,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @excluded :mishka_cms_render_metrics_excluded
   @setting "runtime.render_metrics"
   @switch {__MODULE__, :on}
-  @measured ~w(Component Page)
+  @measured ~w(Component Page Layout)
   @build_handler "mishka-cms-core-render-metrics-builds"
   @compile_handler "mishka-cms-core-render-metrics-compiles"
 

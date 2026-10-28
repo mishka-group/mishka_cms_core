@@ -135,7 +135,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
   end
 
   def handle_async(name, result, socket)
-      when name in [:load_preview, :preview_versions, :preview_compile],
+      when name in [:load_preview, :preview_versions, :preview_compile, :preview_metrics],
       do: {:noreply, PreviewHelpers.async_result(socket, name, result)}
 
   @impl true

@@ -32,6 +32,17 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
   @spin "MishkaCmsCore.Runtime.RenderMetricsResourcesTest.Busy.spin"
   @switch "runtime.render_metrics"
 
+  # A TEST NODE LOADS EACH MODULE FROM DISK ON ITS FIRST CALL, which adds about a millisecond to the
+  # first render that reaches it; a release preloads every module at boot. Loaded here once, so a
+  # single render measures the template and not the code loader.
+  setup_all do
+    for app <- [:phoenix_live_view, :phoenix_html, :mishka_cms_core],
+        module <- Application.spec(app, :modules) || [],
+        do: Code.ensure_loaded(module)
+
+    :ok
+  end
+
   setup do
     :ok = SettingsState.put(nil, @switch, %{"value" => true})
     on_exit(fn -> SettingsState.delete(nil, @switch) end)
@@ -52,14 +63,16 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
   defp about?(measured, expected),
     do: measured >= expected - 10 and measured <= expected * 1.5 + 500
 
-  defp component!(site, name, template) do
+  defp component!(site, name, template, extra \\ []) do
     c =
       create_component!(
-        name: name,
-        template: template,
-        active: true,
-        precompile: false,
-        site_id: site.id
+        [
+          name: name,
+          template: template,
+          active: true,
+          precompile: false,
+          site_id: site.id
+        ] ++ extra
       )
 
     :ok = SiteState.put_component(site.id, c.name)
@@ -83,6 +96,35 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
       ModuleCompilerHandler.compile_or_return_module(module, page.path, site.name, site.id)
 
     {page, module}
+  end
+
+  defp layout!(site, template) do
+    layout =
+      create_layout!(
+        site_id: site.id,
+        name: "rmr-layout-#{System.unique_integer([:positive])}",
+        path: "/rmr-layout-#{System.unique_integer([:positive])}",
+        template: template
+      )
+
+    module = CompilerHelpers.module_name(layout.id, site.name, "Layout")
+
+    {:ok, ^module} =
+      ModuleCompilerHandler.compile_or_return_module(module, layout.path, site.name, site.id)
+
+    module
+  end
+
+  # What LiveView does: the page is rendered, then handed to the layout as `@inner_content`.
+  defp draw_in_layout(layout_module, page_module) do
+    assigns = %{__changed__: nil, flash: %{}}
+    page = page_module.render(assigns)
+
+    assigns
+    |> Map.put(:inner_content, page)
+    |> layout_module.render()
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
   end
 
   defp mount_page(module, site) do
@@ -174,6 +216,76 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
       assert html =~ "File Size"
       assert html =~ "this server, since its last build"
       refute html =~ "1.2s"
+    end
+  end
+
+  describe "layouts" do
+    test "a layout's time is its own: the page it draws as @inner_content is not counted", %{
+      site: site
+    } do
+      {_page, page_module} = page!(site, ~s|<p class="the-page">{#{@spin}(600)}</p>|)
+
+      layout_module =
+        layout!(site, ~s|<div>{#{@spin}(300)}<main :if={true}>{@inner_content}</main></div>|)
+
+      assert draw_in_layout(layout_module, page_module) =~ "the-page"
+
+      assert %{full: %{count: 1, avg_us: layout_us}} = RenderMetrics.stats(layout_module)
+      assert about?(layout_us, 300)
+      assert %{full: %{count: 1, avg_us: page_us}} = RenderMetrics.stats(page_module)
+      assert about?(page_us, 600)
+    end
+
+    test "a component that draws @inner_content in its slot does not count the page either", %{
+      site: site,
+      n: n
+    } do
+      wrap =
+        component!(
+          site,
+          "rmr-wrap-#{n}",
+          ~s|<section>{#{@spin}(200)}{render_slot(@inner_block)}</section>|,
+          slots: [%{"name" => "inner_block", "opts" => %{}}]
+        )
+
+      {_page, page_module} = page!(site, ~s|<p class="the-page">{#{@spin}(600)}</p>|)
+
+      layout_module =
+        layout!(
+          site,
+          ~s|<div>{#{@spin}(300)}<.component component_name="#{wrap.name}" site="#{site.name}">{@inner_content}</.component></div>|
+        )
+
+      assert draw_in_layout(layout_module, page_module) =~ "the-page"
+
+      wrap_module = CompilerHelpers.module_name(wrap.name, site.name, "Component")
+      assert %{full: %{avg_us: wrap_us}} = RenderMetrics.stats(wrap_module)
+      assert about?(wrap_us, 200)
+      assert %{full: %{avg_us: layout_us}} = RenderMetrics.stats(layout_module)
+      assert about?(layout_us, 500), "the layout holds its component, not the page"
+      assert %{full: %{avg_us: page_us}} = RenderMetrics.stats(page_module)
+      assert about?(page_us, 600)
+    end
+
+    test "the card says a layout's re-renders are its page's updates" do
+      metrics = %{
+        on?: true,
+        loaded?: true,
+        stats: %{full: %{count: 2, avg_us: 800}, update: %{count: 6, avg_us: 90}},
+        build: nil
+      }
+
+      html =
+        card(
+          MishkaCmsCore.Runtime.Layout,
+          record(MishkaCmsCore.Runtime.Layout, path: "/l"),
+          metrics
+        )
+
+      assert box(html, "runtime-preview-render-time") =~ "800 µs"
+      rerenders = box(html, "runtime-preview-rerenders")
+      assert rerenders =~ "6"
+      assert rerenders =~ "With every update of the page inside it, 90 µs each"
     end
   end
 end
