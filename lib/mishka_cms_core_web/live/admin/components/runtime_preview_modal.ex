@@ -517,38 +517,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             {gettext("this server, since its last build")}
           </span>
         </h3>
-        <div class="grid grid-cols-2 gap-3">
-          <div id="runtime-preview-render-time">
-            <.metric
-              icon="hero-clock"
-              label={gettext("Render Time")}
-              value={render_time(@metrics)}
-              hint={render_time_hint(@metrics)}
-              hint_navigate={settings_link(@metrics)}
-              real={is_map(@metrics) and @metrics.on?}
-            />
-          </div>
-          <.metric icon="hero-document" label={gettext("Bundle Size")} value={@file_size} real />
-          <div id="runtime-preview-cache">
-            <.metric
-              icon="hero-circle-stack"
-              label={gettext("Cache")}
-              value={cache(@metrics)}
-              hint={cache_hint(@metrics)}
-              real={is_map(@metrics)}
-            />
-          </div>
-          <div id="runtime-preview-rerenders">
-            <.metric
-              icon="hero-arrow-path"
-              label={gettext("Re-renders")}
-              value={rerenders(@metrics)}
-              hint={rerenders_hint(@metrics)}
-              hint_navigate={settings_link(@metrics)}
-              real={is_map(@metrics) and @metrics.on?}
-            />
-          </div>
-        </div>
+        <.metric_grid resource={@resource} metrics={@metrics} file_size={@file_size} />
         <dl class="mt-4 space-y-1 text-sm">
           <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
             {datetime(@metrics.build.at)}
@@ -633,17 +602,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         <h3 class="mb-4 flex items-center gap-2 text-[13.5px] font-bold text-[#1b1a18]">
           <.icon name="hero-presentation-chart-line" class="size-4 text-[#177a53]" />
           {gettext("Performance Metrics")}
-          <span class="ms-auto rounded-[5px] bg-[#fbf1df] px-[7px] py-[3px] text-[8.5px] font-bold uppercase tracking-[0.08em] text-[#c0752a]">
+          <span
+            :if={is_nil(@metrics)}
+            class="ms-auto rounded-[5px] bg-[#fbf1df] px-[7px] py-[3px] text-[8.5px] font-bold uppercase tracking-[0.08em] text-[#c0752a]"
+          >
             {gettext("sample")}
           </span>
+          <span :if={@metrics} class="ms-auto text-[10px] font-medium text-[#a8a5a0]">
+            {gettext("this server, since its last build")}
+          </span>
         </h3>
-        <div class="grid grid-cols-2 gap-3">
-          <.metric icon="hero-clock" label={gettext("Load Time")} value="1.2s" />
-          <.metric icon="hero-document" label={gettext("File Size")} value={@file_size} real />
-          <.metric icon="hero-circle-stack" label={gettext("Cache Hit")} value="98%" />
-          <.metric icon="hero-arrow-trending-up" label={gettext("Usage")} value="847" />
-        </div>
+        <.metric_grid resource={@resource} metrics={@metrics} file_size={@file_size} />
         <dl class="mt-4 space-y-1 text-sm">
+          <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
+            {datetime(@metrics.build.at)}
+          </.status_row>
           <.status_row label={gettext("Last Updated")}>{datetime(@record.updated_at)}</.status_row>
           <.status_row label={gettext("Created")}>{datetime(@record.inserted_at)}</.status_row>
           <.status_row label={gettext("Modified By")}>
@@ -654,6 +627,65 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     </div>
     """
   end
+
+  # THE FOUR BOXES OF A RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: one grid for every
+  # record `MishkaCmsCore.Runtime.RenderMetrics` times. `nil` metrics is a record nothing times yet,
+  # whose boxes are samples.
+  attr :resource, :atom, required: true
+  attr :metrics, :any, required: true
+  attr :file_size, :any, required: true
+
+  defp metric_grid(%{metrics: nil} = assigns) do
+    ~H"""
+    <div class="grid grid-cols-2 gap-3">
+      <.metric icon="hero-clock" label={gettext("Load Time")} value="1.2s" />
+      <.metric icon="hero-document" label={file_label(@resource)} value={@file_size} real />
+      <.metric icon="hero-circle-stack" label={gettext("Cache Hit")} value="98%" />
+      <.metric icon="hero-arrow-trending-up" label={gettext("Usage")} value="847" />
+    </div>
+    """
+  end
+
+  defp metric_grid(assigns) do
+    ~H"""
+    <div class="grid grid-cols-2 gap-3">
+      <div id="runtime-preview-render-time">
+        <.metric
+          icon="hero-clock"
+          label={gettext("Render Time")}
+          value={render_time(@metrics)}
+          hint={render_time_hint(@metrics)}
+          hint_navigate={settings_link(@metrics)}
+          real={is_map(@metrics) and @metrics.on?}
+        />
+      </div>
+      <.metric icon="hero-document" label={file_label(@resource)} value={@file_size} real />
+      <div id="runtime-preview-cache">
+        <.metric
+          icon="hero-circle-stack"
+          label={gettext("Cache")}
+          value={cache(@metrics)}
+          hint={cache_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <div id="runtime-preview-rerenders">
+        <.metric
+          icon="hero-arrow-path"
+          label={gettext("Re-renders")}
+          value={rerenders(@metrics)}
+          hint={rerenders_hint(@metrics)}
+          hint_navigate={settings_link(@metrics)}
+          real={is_map(@metrics) and @metrics.on?}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  # A component's file is its template, which the kit calls its bundle.
+  defp file_label(Component), do: gettext("Bundle Size")
+  defp file_label(_resource), do: gettext("File Size")
 
   defp preview_tab(assigns) do
     draft_view? = assigns.preview_source == "draft"
@@ -1258,8 +1290,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp precompile(record), do: Map.get(record, :precompile)
 
-  # THE COMPONENT'S RUNTIME NUMBERS, as `PreviewHelpers.metrics/1` read them: `:loading` until the
-  # read lands, then whether the module is in memory, its render times and its last build.
+  # A TIMED RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: `:loading` until the read lands,
+  # then whether the module is in memory, its render times and its last build.
   defp render_time(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp render_time(%{on?: false}), do: gettext("Not active")
   defp render_time(%{loaded?: false}), do: gettext("Not loaded")

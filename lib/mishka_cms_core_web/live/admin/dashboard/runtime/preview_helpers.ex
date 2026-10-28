@@ -91,6 +91,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @drafts_per_page 5
   @metrics_every :timer.seconds(5)
 
+  # The records whose renders `MishkaCmsCore.Runtime.RenderMetrics` times.
+  @timed [MishkaCmsCore.Runtime.Component, MishkaCmsCore.Runtime.Page]
+
   # Every runtime resource this modal opens carries a "Configuration" tab hosting its MishkaGervaz
   # form, so the record is read, inspected and edited in ONE place. Editing used to mean a second,
   # separate `<resource>-form-modal` on the page, which meant two mounts of the same form component
@@ -462,29 +465,30 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     |> put_flash(:error, gettext("Failed to load preview"))
   end
 
-  # A COMPONENT'S RUNTIME NUMBERS — its render times, its last build and whether its module is in
-  # memory now — read off the LiveView process, so the card shows "Loading…" rather than the modal
-  # waiting, and read again every few seconds while the modal stays on it. One timer at a time: a new
-  # read replaces the one pending, so opening the same component twice does not start a second loop.
+  # A RECORD'S RUNTIME NUMBERS — its render times, its last build and whether its module is in memory
+  # now — read off the LiveView process, so the card shows "Loading…" rather than the modal waiting,
+  # and read again every few seconds while the modal stays on it. One timer at a time: a new read
+  # replaces the one pending, so opening the same record twice does not start a second loop. The
+  # answer carries the record's id, so one that lands after the modal moved on is dropped.
   #
-  # A GLOBAL COMPONENT'S COUNTS ARE EVERY SITE'S: renders on all of them land on its one module. A
-  # site admin may open it, so its counts are shown to a master admin alone.
+  # A GLOBAL RECORD'S COUNTS ARE EVERY SITE'S: renders on all of them land on its one module. A site
+  # admin may open it, so its counts are shown to a master admin alone.
   defp load_metrics(
          %{
            assigns: %{
              preview:
-               %{resource: MishkaCmsCore.Runtime.Component, status: %{module: module}} = preview
+               %{resource: resource, record: %{id: id} = record, status: %{module: module}} =
+                 preview
            }
-         } =
-           socket
+         } = socket
        )
-       when not is_nil(module) do
-    counts? = preview.record.site_id != nil or master?(preview.current_user)
+       when resource in @timed and not is_nil(module) do
+    counts? = record.site_id != nil or master?(preview.current_user)
 
     socket
     |> assign(:preview, %{preview | metrics: preview.metrics || :loading})
     |> MishkaGervaz.Messages.start_async(:preview_metrics, fn ->
-      {module, metrics(module, counts?)}
+      {id, metrics(module, counts?)}
     end)
   end
 
@@ -499,9 +503,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     }
   end
 
-  defp metrics_loaded(socket, {:ok, {module, metrics}}) do
+  defp metrics_loaded(socket, {:ok, {id, metrics}}) do
     case socket.assigns.preview do
-      %{record: %{id: id}, status: %{module: ^module}} = preview ->
+      %{record: %{id: ^id}} = preview ->
         if timer = socket.assigns[:preview_metrics_timer], do: Process.cancel_timer(timer)
         timer = Process.send_after(self(), {:preview_metrics_tick, id}, @metrics_every)
 

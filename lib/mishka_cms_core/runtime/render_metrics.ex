@@ -4,14 +4,15 @@
 
 defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @moduledoc """
-  How long each runtime component takes to render, and how its module was last built, on this node
-  since it started. Read by the component preview modal's Performance Metrics card.
+  How long each runtime component, page, layout and error page takes to render, and how its module
+  was last built, on this node since that build. Read by the runtime preview modal's Performance
+  Metrics card.
 
-  ## Where a component's time is spent
+  ## Where a template's time is spent
 
   LiveView has no telemetry per function component, and timing the call alone measures almost
   nothing: a HEEx render returns a `%Phoenix.LiveView.Rendered{}` whose expressions run LATER, when
-  `Phoenix.LiveView.Diff` walks the tree. So `measure/2` times three things and adds them up:
+  `Phoenix.LiveView.Diff` walks the tree. So `measure/3` times three things and adds them up:
 
     * the call itself, where the attr defaults are merged and the stored `body` runs;
     * the `dynamic` closure of the returned struct, the template's own expressions;
@@ -21,9 +22,15 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   A render with `track = false` is a FULL render (the page's first, a new fingerprint); `true` is an
   UPDATE, where LiveView evaluates only what changed. They are counted apart.
 
-  The time is inclusive: a component's number holds the function components and slots drawn inside
-  it. A module built lazily inside a render is not: `handle_compile/4` hears the build in the
-  rendering process and every clock running around it takes that time out. Neither are live
+  The time is inclusive: a component's or a page's number holds the function components and slots
+  drawn inside it. A page is handed to its layout as `@inner_content`, so a page's clocks put their
+  time in the pot every clock around them leaves out (`measure/3`, `:handed_in`): the layout's number
+  — and a component's that draws `@inner_content` — does not hold the page, which has its own. What
+  a layout still pays for the page is the clocks' own cost around each of its parts, tens of
+  nanoseconds a part while measuring is on.
+
+  A module built lazily inside a render is not in the time either: `handle_compile/4` hears the
+  build in the rendering process and every clock running around it takes that time out. Neither are live
   components drawn inside it, which LiveView renders on their own, nor a live component's own
   `mount/1` and `update/2`, which run before its `render/1`. A component drawn through
   `MishkaCmsCore.Runtime.ComponentBoundary` is evaluated whole every time, so it counts full renders
@@ -40,7 +47,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   ## Off unless it is asked for
 
   The `runtime.render_metrics` setting (General → Performance, off by default) turns the clock on.
-  It is read on every component render, so it is kept in `:persistent_term` as an atom — a read
+  It is read on every measured render, so it is kept in `:persistent_term` as an atom — a read
   costs nanoseconds, and replacing an atom there needs no global garbage collection.
   `MishkaCmsCore.Runtime.States.SettingsState` writes it when it loads and whenever the setting is
   written, on every node (`switch_changed/0`). Off, a render does nothing else.
@@ -48,8 +55,9 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   ## What is left out
 
   Admin previews and the builder canvas render components for an author, not for a visitor:
-  `unmeasured/1` runs them with the clock off. The counts start again whenever the module is built
-  again, because the new numbers belong to a new version.
+  `unmeasured/1` runs them with the clock off, and a draft preview's own module is built with no
+  clock (`measured?/1`). The counts start again whenever the module is built again, because the new
+  numbers belong to a new version.
   """
   use GenServer
 
@@ -58,9 +66,10 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @counters :mishka_cms_render_counters
   @builds :mishka_cms_build_metrics
   @off :mishka_cms_render_metrics_off
-  @compiling :mishka_cms_render_metrics_compiling
+  @excluded :mishka_cms_render_metrics_excluded
   @setting "runtime.render_metrics"
   @switch {__MODULE__, :on}
+  @measured ~w(Component Page)
   @build_handler "mishka-cms-core-render-metrics-builds"
   @compile_handler "mishka-cms-core-render-metrics-compiles"
 
@@ -125,7 +134,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
     end
   end
 
-  @doc "Whether components are timed: the `runtime.render_metrics` setting."
+  @doc "Whether renders are timed: the `runtime.render_metrics` setting."
   @spec on?() :: boolean()
   def on?, do: :persistent_term.get(@switch, false)
 
@@ -141,11 +150,37 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   end
 
   @doc """
-  Draws a component through `fun` (which returns what the component returned) and times it.
-  `module` is the component's module, the key its numbers are kept under.
+  Draws through `fun` (which returns what the template returned) and times it under `key`: the
+  module drawn.
+
+  `role` is `:inline` for what is drawn where it is called — a component — and `:handed_in` for a
+  page, whose output is handed to its layout (see the moduledoc).
   """
-  @spec measure(module(), (-> term())) :: term()
-  def measure(module, fun), do: timed_call(counters(module), fun)
+  @spec measure(term(), (-> term()), :inline | :handed_in) :: term()
+  def measure(key, fun, role \\ :inline), do: timed_call(counters(key), role == :handed_in, fun)
+
+  @doc """
+  Whether `module` is one whose renders and builds are kept: a component, page, layout or error page
+  of a site, as `MishkaCmsCore.Runtime.Compilers.Helpers.module_name/3` names them. The modules a
+  draft preview builds (`MishkaCmsCore.Runtime.Preview.*`) are not: no card reads them.
+
+  The compilers ask it at compile time, so a module that is not kept is built with no clock at all.
+  """
+  @spec measured?(module()) :: boolean()
+  def measured?(module) when is_atom(module) do
+    case Atom.to_string(module) do
+      "Elixir." <> name ->
+        match?(
+          ["MishkaCmsCore", "Runtime", _hash, type] when type in @measured,
+          String.split(name, ".")
+        )
+
+      _not_an_elixir_module ->
+        false
+    end
+  end
+
+  def measured?(_no_module), do: false
 
   @doc "Runs `fun` with the clock off in this process — for what an author sees, not a visitor."
   @spec unmeasured((-> result)) :: result when result: term()
@@ -160,10 +195,9 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   end
 
   @doc false
-  # A component module built: record how, and start its counts again. Pages, layouts and the
-  # modules a draft preview builds are not read here, so they are not kept.
+  # A measured module built: record how, and start its counts again.
   def handle_build(_event, %{duration: native}, %{module: module, cache: cache}, _config) do
-    if component?(module) do
+    if measured?(module) do
       us = System.convert_time_unit(native, :native, :microsecond)
       :ets.insert(@builds, {module, us, cache, System.system_time(:second)})
       :ets.delete(@counters, module)
@@ -177,18 +211,16 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @doc false
   # A lazy build in the rendering process: kept out of every clock running around it.
   def handle_compile(_event, %{duration: native}, _metadata, _config) do
-    if on?(), do: Process.put(@compiling, Process.get(@compiling, 0) + native)
+    if on?(), do: Process.put(@excluded, Process.get(@excluded, 0) + native)
     :ok
   end
 
-  defp component?(module), do: module |> Module.split() |> List.last() == "Component"
+  defp timed_call(nil, _handed?, fun), do: fun.()
 
-  defp timed_call(nil, fun), do: fun.()
-
-  defp timed_call(ref, fun) do
-    {t0, compiling} = start()
+  defp timed_call(ref, handed?, fun) do
+    {t0, excluded} = start()
     result = fun.()
-    timed_rendered(result, ref, elapsed(t0, compiling))
+    timed_rendered(result, {ref, handed?}, elapsed(t0, excluded))
   end
 
   # The module's counters, made on its first render, or `nil` when nothing is to be recorded.
@@ -215,51 +247,62 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
     ArgumentError -> nil
   end
 
-  defp timed_rendered(%Rendered{dynamic: dynamic} = rendered, ref, call) do
-    %{rendered | dynamic: &top(dynamic, ref, call, &1)}
+  # A clock is `{ref, handed?}`: the counters it adds to, and whether its time is handed over.
+  defp timed_rendered(%Rendered{dynamic: dynamic} = rendered, clock, call) do
+    %{rendered | dynamic: &top(dynamic, clock, call, &1)}
   end
 
-  defp timed_rendered(other, _ref, _call), do: other
+  defp timed_rendered(other, _clock, _call), do: other
 
-  defp top(dynamic, ref, call, track) do
-    {t0, compiling} = start()
+  defp top(dynamic, {ref, handed?} = clock, call, track) do
+    {t0, excluded} = start()
     values = dynamic.(track)
-    add(ref, track, call + elapsed(t0, compiling), 1)
-    Enum.map(values, &nested(&1, ref, track))
+    add(ref, track, call + elapsed(t0, excluded), 1)
+    values |> Enum.map(&nested(&1, clock, track)) |> hand_over(handed?, t0, excluded)
   end
 
-  defp nested(%Rendered{dynamic: dynamic} = rendered, ref, kind) do
-    %{rendered | dynamic: &piece(dynamic, ref, kind, &1)}
+  defp nested(%Rendered{dynamic: dynamic} = rendered, clock, kind) do
+    %{rendered | dynamic: &piece(dynamic, clock, kind, &1)}
   end
 
-  defp nested(%Comprehension{entries: entries} = comprehension, ref, kind) do
-    %{comprehension | entries: Enum.map(entries, &entry(&1, ref, kind))}
+  defp nested(%Comprehension{entries: entries} = comprehension, clock, kind) do
+    %{comprehension | entries: Enum.map(entries, &entry(&1, clock, kind))}
   end
 
-  defp nested(value, _ref, _kind), do: value
+  defp nested(value, _clock, _kind), do: value
 
-  defp piece(dynamic, ref, kind, track) do
-    {t0, compiling} = start()
+  defp piece(dynamic, {ref, handed?} = clock, kind, track) do
+    {t0, excluded} = start()
     values = dynamic.(track)
-    add(ref, kind, elapsed(t0, compiling), 0)
-    Enum.map(values, &nested(&1, ref, kind))
+    add(ref, kind, elapsed(t0, excluded), 0)
+    values |> Enum.map(&nested(&1, clock, kind)) |> hand_over(handed?, t0, excluded)
   end
 
-  defp entry({key, vars, render}, ref, kind),
-    do: {key, vars, &entry_piece(render, ref, kind, &1, &2)}
+  defp entry({key, vars, render}, clock, kind),
+    do: {key, vars, &entry_piece(render, clock, kind, &1, &2)}
 
-  defp entry_piece(render, ref, kind, vars_changed, track) do
-    {t0, compiling} = start()
+  defp entry_piece(render, {ref, handed?} = clock, kind, vars_changed, track) do
+    {t0, excluded} = start()
     values = render.(vars_changed, track)
-    add(ref, kind, elapsed(t0, compiling), 0)
-    Enum.map(values, &nested(&1, ref, kind))
+    add(ref, kind, elapsed(t0, excluded), 0)
+    values |> Enum.map(&nested(&1, clock, kind)) |> hand_over(handed?, t0, excluded)
   end
 
-  # A clock: wall time since `start/0`, less any lazy module build that happened in between.
-  defp start, do: {:erlang.monotonic_time(), Process.get(@compiling, 0)}
+  # A clock: wall time since `start/0`, less what the clocks inside it left out — a lazy build, a
+  # page handed in. Never below zero.
+  defp start, do: {:erlang.monotonic_time(), Process.get(@excluded, 0)}
 
-  defp elapsed(t0, compiling),
-    do: :erlang.monotonic_time() - t0 - (Process.get(@compiling, 0) - compiling)
+  defp elapsed(t0, excluded),
+    do: max(:erlang.monotonic_time() - t0 - (Process.get(@excluded, 0) - excluded), 0)
+
+  # A page's time goes in the pot, so the clocks of the layout around it leave it out: all of it,
+  # its clock's own bookkeeping included, which is why it is handed over last.
+  defp hand_over(result, false, _t0, _excluded), do: result
+
+  defp hand_over(result, true, t0, excluded) do
+    Process.put(@excluded, Process.get(@excluded, 0) + elapsed(t0, excluded))
+    result
+  end
 
   # `false` is a full render, `true` an update — LiveView's own `track` flag.
   defp add(ref, false, time, count) do
