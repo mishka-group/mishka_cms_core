@@ -812,12 +812,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
   # Drawn as the record's site draws it — the task answers for that site — and scrubbed after,
   # because it is shown inside the admin: no script, no event attribute and no `phx-` binding
   # reaches the editor.
+  # An author's preview, drawn to a string here, so kept out of `MishkaCmsCore.Runtime.RenderMetrics`.
   defp preview(marker, site, user, editor) do
-    %{html: marked(marker), site: site, current_user: user, id: editor <> "-preview"}
-    |> ContentComponents.draw(:static)
-    |> Phoenix.HTML.Safe.to_iodata()
-    |> IO.iodata_to_binary()
-    |> ContentPreviewScrubber.sanitize()
+    MishkaCmsCore.Runtime.RenderMetrics.unmeasured(fn ->
+      %{html: marked(marker), site: site, current_user: user, id: editor <> "-preview"}
+      |> ContentComponents.draw(:static)
+      |> Phoenix.HTML.Safe.to_iodata()
+      |> IO.iodata_to_binary()
+      |> ContentPreviewScrubber.sanitize()
+    end)
   end
 
   # THE PARTS A PREVIEW DRAWS ARE MARKED, for the editor to find each one on the block — to move it

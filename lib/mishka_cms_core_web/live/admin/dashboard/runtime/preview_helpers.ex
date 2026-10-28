@@ -79,6 +79,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   alias MishkaCmsCoreWeb.Templates.VersionHistory
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
+  alias MishkaCmsCore.Runtime.RenderMetrics
 
   # The host's endpoint, named by configuration rather than hardcoded — this library does not know
   # which application it is installed into. Applied rather than called so it stays a runtime
@@ -88,6 +89,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @modal_id "runtime-preview-modal"
   @versions_per_page 5
   @drafts_per_page 5
+  @metrics_every :timer.seconds(5)
 
   # Every runtime resource this modal opens carries a "Configuration" tab hosting its MishkaGervaz
   # form, so the record is read, inspected and edited in ONE place. Editing used to mean a second,
@@ -283,7 +285,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     restorable?: false,
     duplicable?: false,
     duplicating?: false,
-    writable?: false
+    writable?: false,
+    metrics: nil
   }
 
   @doc "The shared modal DOM id (used by the gervaz show/hide JS)."
@@ -323,8 +326,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp status_hook(
          %Phoenix.Socket.Broadcast{payload: %{__runtime_compiled__: true, module: module}},
          socket
-       ),
-       do: {:cont, refresh_status(socket, &(&1.status != nil and &1.status.module == module))}
+       ) do
+    match? = &(&1.status != nil and &1.status.module == module)
+    socket = refresh_status(socket, match?)
+
+    {:cont, if(match?.(socket.assigns.preview), do: load_metrics(socket), else: socket)}
+  end
+
+  # The modal's own clock, so a page never sees it.
+  defp status_hook({:preview_metrics_tick, record_id}, socket) do
+    case record_matches?(socket.assigns.preview, record_id) do
+      true -> {:halt, load_metrics(socket)}
+      false -> {:halt, socket}
+    end
+  end
 
   defp status_hook(_message, socket), do: {:cont, socket}
 
@@ -413,6 +428,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   def async_result(socket, :preview_versions, result), do: versions_loaded(socket, result)
   def async_result(socket, :preview_compile, result), do: compiled(socket, result)
   def async_result(socket, :preview_duplicate, result), do: duplicated(socket, result)
+  def async_result(socket, :preview_metrics, result), do: metrics_loaded(socket, result)
 
   @doc "Place the loaded preview (or fail closed) into the `:preview` assign."
   # Preserve the tab the user opened on (e.g. edit opens straight on "configuration") — `build/3`
@@ -430,11 +446,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   def loaded(socket, {:ok, preview}) do
     open = socket.assigns.preview
 
-    assign(socket, :preview, %{
+    socket
+    |> assign(:preview, %{
       preview
       | active_tab: open.active_tab,
         config_mounted?: open.config_mounted?
     })
+    |> load_metrics()
   end
 
   def loaded(socket, {:exit, _reason}) do
@@ -443,6 +461,60 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     |> assign(:preview, @empty)
     |> put_flash(:error, gettext("Failed to load preview"))
   end
+
+  # A COMPONENT'S RUNTIME NUMBERS — its render times, its last build and whether its module is in
+  # memory now — read off the LiveView process, so the card shows "Loading…" rather than the modal
+  # waiting, and read again every few seconds while the modal stays on it. One timer at a time: a new
+  # read replaces the one pending, so opening the same component twice does not start a second loop.
+  #
+  # A GLOBAL COMPONENT'S COUNTS ARE EVERY SITE'S: renders on all of them land on its one module. A
+  # site admin may open it, so its counts are shown to a master admin alone.
+  defp load_metrics(
+         %{
+           assigns: %{
+             preview:
+               %{resource: MishkaCmsCore.Runtime.Component, status: %{module: module}} = preview
+           }
+         } =
+           socket
+       )
+       when not is_nil(module) do
+    counts? = preview.record.site_id != nil or master?(preview.current_user)
+
+    socket
+    |> assign(:preview, %{preview | metrics: preview.metrics || :loading})
+    |> MishkaGervaz.Messages.start_async(:preview_metrics, fn ->
+      {module, metrics(module, counts?)}
+    end)
+  end
+
+  defp load_metrics(socket), do: socket
+
+  defp metrics(module, counts?) do
+    %{
+      on?: RenderMetrics.on?(),
+      loaded?: CompilerHelpers.loaded?(module),
+      stats: if(counts?, do: RenderMetrics.stats(module), else: :hidden),
+      build: RenderMetrics.build(module)
+    }
+  end
+
+  defp metrics_loaded(socket, {:ok, {module, metrics}}) do
+    case socket.assigns.preview do
+      %{record: %{id: id}, status: %{module: ^module}} = preview ->
+        if timer = socket.assigns[:preview_metrics_timer], do: Process.cancel_timer(timer)
+        timer = Process.send_after(self(), {:preview_metrics_tick, id}, @metrics_every)
+
+        socket
+        |> assign(:preview_metrics_timer, timer)
+        |> assign(:preview, %{preview | metrics: metrics})
+
+      _closed_or_another ->
+        socket
+    end
+  end
+
+  defp metrics_loaded(socket, {:exit, _reason}), do: socket
 
   def set_tab(socket, tab) do
     # EVERYTHING THAT COMPILES HAPPENS HERE, on the Preview tab, and nowhere else — mirroring a

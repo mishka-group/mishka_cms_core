@@ -80,7 +80,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
       assert module.value() == 1
       assert Enum.uniq(calls) == [{CompiledModuleCache, :dir, 0}]
       assert [stop] = stops()
-      assert Map.delete(stop, :telemetry_span_context) == %{}
+      assert Map.delete(stop, :telemetry_span_context) == %{cache: :off, module: module}
     end
 
     test "with `dir: nil`, and when unloading, nothing is hashed, read or written" do
@@ -453,7 +453,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
 
       assert log =~ "compiled-module cache is off"
       assert [stop] = stops()
-      assert Map.delete(stop, :telemetry_span_context) == %{}
+      assert Map.delete(stop, :telemetry_span_context) == %{cache: :off, module: module}
     end
 
     test "a compile that makes more than one module is not saved", %{dir: dir} do

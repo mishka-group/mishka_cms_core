@@ -149,6 +149,7 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
     :ets.delete_all_objects(@table)
     :ets.insert(@table, entries)
     MishkaCmsCore.Runtime.SiteAvailability.changed(nil)
+    MishkaCmsCore.Runtime.RenderMetrics.switch_changed()
     {:reply, :ok, state}
   end
 
@@ -210,6 +211,11 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   defp written(site_id, "sidebar." <> _entry),
     do: MishkaCmsCore.Sidebar.changed(site_id)
 
+  # THE RENDER CLOCK'S SWITCH is read on every component render from `:persistent_term`, so the copy
+  # there is replaced once the cache holds the new value.
+  defp written(_site_id, "runtime.render_metrics"),
+    do: MishkaCmsCore.Runtime.RenderMetrics.switch_changed()
+
   # AN EXTENSION'S SWITCH DRAWS OR DROPS ITS ENTRIES, so the sidebars open on that site are told too.
   defp written(site_id, key) do
     if MishkaCmsCore.Install.Extensions.active_key?(key),
@@ -220,6 +226,7 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   defp load_all do
     load_rows()
     MishkaCmsCore.Runtime.SiteAvailability.changed(nil)
+    MishkaCmsCore.Runtime.RenderMetrics.switch_changed()
   end
 
   defp load_rows do

@@ -95,7 +95,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
       configured; otherwise, and by default (`false`), the module is compiled. A module loaded from
       the cache is answered `{:ok, module, []}`, and the span's stop metadata says
       `%{cache: :hit, module: module}` — `%{cache: :miss, module: module}` when it was compiled
-      through the cache, `%{}` when the cache was not used.
+      through the cache, `%{cache: :off, module: module}` when the cache was not used, and `%{}`
+      when the compile failed.
 
   ## Return Values
 
@@ -179,11 +180,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
               return: false
             )
 
-          _ ->
-            :ok
-        end
+            {result, metadata}
 
-        {result, metadata}
+          # A failed compile names no module: the one loaded before it is still the one running.
+          _failed ->
+            {result, %{}}
+        end
       end
     )
   end
@@ -197,13 +199,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   end
 
   # NO CACHE, THE PLAIN COMPILE — and the only path when the cache is not configured: nothing below
-  # reads a file or hashes the code.
-  defp build(quoted, file, module, nil), do: {compile(quoted, file, module), %{}}
+  # reads a file or hashes the code. The span still names the module and says the cache was off, for
+  # `MishkaCmsCore.Runtime.RenderMetrics`.
+  defp build(quoted, file, module, nil),
+    do: {compile(quoted, file, module), %{cache: :off, module: module}}
 
   defp build(quoted, file, module, dir) do
     case CompiledModuleCache.entry(dir, module, file, quoted) do
       {:ok, entry} -> load_or_compile(quoted, file, module, entry)
-      :off -> {compile(quoted, file, module), %{}}
+      :off -> {compile(quoted, file, module), %{cache: :off, module: module}}
     end
   end
 

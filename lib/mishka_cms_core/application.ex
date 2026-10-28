@@ -143,9 +143,15 @@ defmodule MishkaCmsCore.Application do
   def start(_type, _args) do
     :ok = MishkaCmsCore.Runtime.Handlers.BootHandler.new_boot_id()
 
+    # `RenderMetrics` is started here rather than by the host, like the other runtime states, because
+    # nothing outside the core reads or writes it: a host that never lists it still gets the
+    # component preview's render times.
     children =
       installer_children() ++
-        [{AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]}] ++ plugins()
+        [
+          {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
+          MishkaCmsCore.Runtime.RenderMetrics
+        ] ++ plugins()
 
     MishkaCmsCore.Activity.Sources.Oban.attach()
     MishkaCmsCore.Activity.Sources.RuntimeCompile.attach()

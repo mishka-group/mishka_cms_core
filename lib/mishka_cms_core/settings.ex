@@ -852,6 +852,18 @@ defmodule MishkaCmsCore.Settings do
             "The text visitors read on the built-in holding page while the site is offline. A site whose Error Page has an Offline entry shows that page instead."
           )
       ),
+      # Read on every component render, through `MishkaCmsCore.Runtime.RenderMetrics.on?/0`.
+      define("runtime.render_metrics", :boolean,
+        default: false,
+        category: "general",
+        group: gettext_noop("Performance"),
+        scope: :master,
+        label: gettext_noop("Measure component render times"),
+        description:
+          gettext_noop(
+            "Times every component a visitor's page draws, for the Performance Metrics card of each component. It adds about a microsecond to each component render, more for long lists inside nested components, so leave it off unless you are looking for a slow component."
+          )
+      ),
       define("notify.cms_core.user.permissions_changed", :boolean,
         default: true,
         category: "notifications",

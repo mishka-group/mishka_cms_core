@@ -390,17 +390,22 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   `base={@page.path}` with `params={@query_params}` — pages inside the preview instead of leaving
   it. Without them the template sees the record's own path and an empty query.
   """
-  def inner_html(record, resource, status \\ nil, nonce \\ nil, site \\ nil, request \\ [])
+  def inner_html(record, resource, status \\ nil, nonce \\ nil, site \\ nil, request \\ []) do
+    # An author's preview, drawn to a string, so kept out of `MishkaCmsCore.Runtime.RenderMetrics`.
+    MishkaCmsCore.Runtime.RenderMetrics.unmeasured(fn ->
+      drawn_inner(record, resource, status, nonce, site, request)
+    end)
+  end
 
-  def inner_html(record, resource, _status, nonce, site, request)
-      when resource in [Page, PageDraft],
-      do: render_inner(previewable(record.template, site), page_assigns(record, request), nonce)
+  defp drawn_inner(record, resource, _status, nonce, site, request)
+       when resource in [Page, PageDraft],
+       do: render_inner(previewable(record.template, site), page_assigns(record, request), nonce)
 
-  def inner_html(record, resource, _status, nonce, site, _request)
-      when resource in [Layout, LayoutDraft],
-      do: render_inner(previewable(record.template, site), layout_assigns(record), nonce)
+  defp drawn_inner(record, resource, _status, nonce, site, _request)
+       when resource in [Layout, LayoutDraft],
+       do: render_inner(previewable(record.template, site), layout_assigns(record), nonce)
 
-  def inner_html(record, Component, _status, nonce, _site, _request) do
+  defp drawn_inner(record, Component, _status, nonce, _site, _request) do
     case component_examples_list(record) do
       [] ->
         ~s|<div class="mishka-preview-hint">#{escape(gettext("This component needs attributes — add an example to preview it."))}</div>|
@@ -410,11 +415,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     end
   end
 
-  def inner_html(record, resource, status, nonce, _site, request)
-      when resource in [ErrorPage, ErrorPageDraft],
-      do: error_page_inner(record, status || requested_status(request), nonce)
+  defp drawn_inner(record, resource, status, nonce, _site, request)
+       when resource in [ErrorPage, ErrorPageDraft],
+       do: error_page_inner(record, status || requested_status(request), nonce)
 
-  def inner_html(_record, _resource, _status, _nonce, _site, _request),
+  defp drawn_inner(_record, _resource, _status, _nonce, _site, _request),
     do:
       ~s|<div class="mishka-preview-hint">#{escape(gettext("Live preview isn't available for this type yet."))}</div>|
 
