@@ -525,7 +525,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
               value={render_time(@metrics)}
               hint={render_time_hint(@metrics)}
               hint_navigate={settings_link(@metrics)}
-              real={is_map(@metrics)}
+              real={is_map(@metrics) and @metrics.on?}
             />
           </div>
           <.metric icon="hero-document" label={gettext("Bundle Size")} value={@file_size} real />

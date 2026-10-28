@@ -264,6 +264,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
       time = box(html, "runtime-preview-render-time")
       assert time =~ "Not active"
       assert time =~ "Turn it on in Settings"
+      refute time =~ "live"
 
       assert html
              |> LazyHTML.from_fragment()
