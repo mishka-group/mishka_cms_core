@@ -384,4 +384,60 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
       assert box(html, "runtime-preview-render-time") =~ "1.0 ms"
     end
   end
+
+  describe "stylesheets" do
+    @built %{
+      kind: :asset,
+      type: "css",
+      bundle: "rmr-site",
+      sizes: %{raw: 184_320, brotli: 31_744, gzip: 39_936},
+      hash: "a1b2c3d4e5f6a7b8",
+      updated_at: ~U[2026-10-28 12:00:00Z],
+      state: :live,
+      took_ms: 1_240
+    }
+
+    defp sheet_card(metrics),
+      do:
+        card(
+          MishkaCmsCore.Runtime.Stylesheet,
+          record(MishkaCmsCore.Runtime.Stylesheet, kind: :custom),
+          metrics
+        )
+
+    test "the card is about the bundle it is built into, as visitors download it" do
+      html = sheet_card(@built)
+      bundle = box(html, "runtime-preview-bundle")
+      assert bundle =~ "Site CSS"
+      assert bundle =~ "31.0 KB"
+      assert bundle =~ "raw 180.0 KB · gzip 39.0 KB"
+      build = box(html, "runtime-preview-build")
+      assert build =~ "Built"
+      assert build =~ "Last rebuild took 1.2 s"
+      last = box(html, "runtime-preview-last-built")
+      assert last =~ "2026-10-28 12:00"
+      assert last =~ "Version a1b2c3d4"
+      assert html =~ "this server"
+      refute html =~ "since its last build"
+      refute html =~ "1.2s"
+    end
+
+    test "a global stylesheet seen by a master is the shared base" do
+      bundle = box(sheet_card(%{@built | bundle: "__shared_base__"}), "runtime-preview-bundle")
+      assert bundle =~ "Shared CSS"
+      assert bundle =~ "the start of every site's CSS"
+    end
+
+    test "says when it is not built, or building" do
+      html = sheet_card(%{@built | sizes: nil, hash: nil, updated_at: nil, took_ms: nil})
+      assert box(html, "runtime-preview-bundle") =~ "Not built on this server"
+      assert box(html, "runtime-preview-build") =~ "Not built"
+      assert box(html, "runtime-preview-last-built") =~ "—"
+
+      assert box(sheet_card(%{@built | state: :compiling}), "runtime-preview-build") =~
+               "Building…"
+
+      assert box(sheet_card(:loading), "runtime-preview-bundle") =~ "Loading…"
+    end
+  end
 end

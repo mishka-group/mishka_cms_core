@@ -13,7 +13,8 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeMetricsCardsTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
-  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
+  alias MishkaCmsCore.Runtime.Stylesheet
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SettingsState, SiteState}
 
   require Ash.Query
 
@@ -110,6 +111,59 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeMetricsCardsTest do
 
         refute render_time =~ "Loading…", "#{url}: the numbers never arrived"
       end
+    end
+  end
+
+  describe "a stylesheet's card" do
+    test "is its site's CSS bundle as this node holds it", %{conn: conn, site: site} do
+      n = unique()
+
+      {:ok, sheet} =
+        Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{name: "mc-s-#{n}", kind: :custom, content: ".x{}", site_id: site.id, active: true},
+          authorize?: false
+        )
+        |> Ash.create()
+
+      now = DateTime.utc_now()
+
+      AssetsState.save_batch([
+        %{
+          id: site.name,
+          type: "css",
+          value: String.duplicate("a", 3000),
+          hash: "f00dfeed",
+          updated_at: now
+        },
+        %{
+          id: site.name,
+          type: "brotli_css",
+          value: String.duplicate("b", 600),
+          hash: "f00dfeed",
+          updated_at: now
+        },
+        %{
+          id: site.name,
+          type: "gzip_css",
+          value: String.duplicate("g", 800),
+          hash: "f00dfeed",
+          updated_at: now
+        }
+      ])
+
+      on_exit(fn ->
+        for type <- ~w(css brotli_css gzip_css), do: AssetsState.delete(site.name, type)
+      end)
+
+      {view, _html} = open(conn, "/admin/dashboard/runtime/stylesheets", sheet)
+      bundle = text(view, "#runtime-preview-bundle")
+      assert bundle =~ "Site CSS"
+      assert bundle =~ "600 B"
+      assert bundle =~ "raw 2.9 KB · gzip 800 B"
+      assert text(view, "#runtime-preview-build") =~ "Built"
+      assert text(view, "#runtime-preview-last-built") =~ "Version f00dfeed"
     end
   end
 

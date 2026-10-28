@@ -131,8 +131,13 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       else: {false, gettext("module not loaded")}
   end
 
-  defp asset_bundle_id("Global"), do: "__shared_base__"
-  defp asset_bundle_id(site_name), do: site_name
+  @doc """
+  The `MishkaCmsCore.Runtime.States.AssetsState` id of the bundle a site's assets are built into:
+  the site's name, and for `"Global"` the shared base every site's CSS starts with.
+  """
+  @spec asset_bundle_id(String.t()) :: String.t()
+  def asset_bundle_id("Global"), do: "__shared_base__"
+  def asset_bundle_id(site_name), do: site_name
 
   defp bundle_name("__shared_base__"), do: "Global"
   defp bundle_name(site_name), do: site_name

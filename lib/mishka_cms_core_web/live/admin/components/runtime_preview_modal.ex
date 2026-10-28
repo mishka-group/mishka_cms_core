@@ -50,7 +50,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.RuntimePreview
-  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout}
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Stylesheet}
   alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimeStatusTimeline
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
@@ -60,6 +60,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   import DetailModal, only: [detail: 1, status_row: 1, metric: 1, datetime: 1]
 
   @modal_id "runtime-preview-modal"
+  # The bundle every site's CSS starts with, which a global stylesheet is built into.
+  @shared_base MishkaCmsCore.Runtime.RuntimeStatus.asset_bundle_id("Global")
   @tabs [
     {"overview", gettext_noop("Overview"), "M4 5h16v14H4z M4 10h16"},
     {"preview", gettext_noop("Preview"), "M2 4h20v13H2z M8 21h8"},
@@ -519,7 +521,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         </h3>
         <.metric_grid resource={@resource} metrics={@metrics} file_size={@file_size} />
         <dl class="mt-4 space-y-1 text-sm">
-          <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
+          <.status_row :if={is_map(@metrics) and @metrics[:build]} label={gettext("Last Built")}>
             {datetime(@metrics.build.at)}
           </.status_row>
           <.status_row label={gettext("Last Updated")}>{datetime(@record.updated_at)}</.status_row>
@@ -609,12 +611,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             {gettext("sample")}
           </span>
           <span :if={@metrics} class="ms-auto text-[10px] font-medium text-[#a8a5a0]">
-            {gettext("this server, since its last build")}
+            {metrics_scope(@resource)}
           </span>
         </h3>
         <.metric_grid resource={@resource} metrics={@metrics} file_size={@file_size} />
         <dl class="mt-4 space-y-1 text-sm">
-          <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
+          <.status_row :if={is_map(@metrics) and @metrics[:build]} label={gettext("Last Built")}>
             {datetime(@metrics.build.at)}
           </.status_row>
           <.status_row label={gettext("Last Updated")}>{datetime(@record.updated_at)}</.status_row>
@@ -628,12 +630,54 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     """
   end
 
+  # A bundle lives in this node's memory and is not rebuilt per render, so its numbers are this
+  # server's now; a rendered record's restart with its module.
+  defp metrics_scope(Stylesheet), do: gettext("this server")
+  defp metrics_scope(_rendered), do: gettext("this server, since its last build")
+
   # THE FOUR BOXES OF A RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: one grid for every
   # record `MishkaCmsCore.Runtime.RenderMetrics` times. `nil` metrics is a record nothing times yet,
   # whose boxes are samples.
   attr :resource, :atom, required: true
   attr :metrics, :any, required: true
   attr :file_size, :any, required: true
+
+  # A STYLESHEET IS BUILT INTO ITS SITE'S CSS, not rendered: its boxes are that bundle — its size as
+  # visitors download it, whether it is built, how long the last rebuild took, when it was built.
+  defp metric_grid(%{resource: Stylesheet} = assigns) do
+    ~H"""
+    <div class="grid grid-cols-2 gap-3">
+      <div id="runtime-preview-bundle">
+        <.metric
+          icon="hero-archive-box"
+          label={bundle_label(@resource, @metrics)}
+          value={bundle_size(@metrics)}
+          hint={bundle_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <.metric icon="hero-document" label={file_label(@resource)} value={@file_size} real />
+      <div id="runtime-preview-build">
+        <.metric
+          icon="hero-wrench-screwdriver"
+          label={gettext("Build")}
+          value={build(@metrics)}
+          hint={build_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <div id="runtime-preview-last-built">
+        <.metric
+          icon="hero-calendar"
+          label={gettext("Last Built")}
+          value={built_at(@metrics)}
+          hint={version(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+    </div>
+    """
+  end
 
   defp metric_grid(%{metrics: nil} = assigns) do
     ~H"""
@@ -682,6 +726,59 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     </div>
     """
   end
+
+  # THE BUNDLE A STYLESHEET IS IN, as `PreviewHelpers` read it from `AssetsState`.
+  defp bundle_label(Stylesheet, %{bundle: @shared_base}), do: gettext("Shared CSS")
+  defp bundle_label(Stylesheet, _site_or_loading), do: gettext("Site CSS")
+
+  defp bundle_size(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp bundle_size(%{sizes: nil}), do: "—"
+  defp bundle_size(%{sizes: %{brotli: n}}) when is_integer(n), do: RuntimePreview.format_bytes(n)
+  defp bundle_size(%{sizes: %{raw: n}}), do: RuntimePreview.format_bytes(n)
+
+  defp bundle_hint(metrics) when not is_map(metrics), do: nil
+  defp bundle_hint(%{sizes: nil}), do: gettext("Not built on this server")
+
+  defp bundle_hint(%{sizes: %{brotli: brotli} = sizes} = metrics) when is_integer(brotli),
+    do:
+      with_shared(
+        metrics,
+        gettext("Brotli; raw %{raw} · gzip %{gzip}",
+          raw: RuntimePreview.format_bytes(sizes.raw),
+          gzip: RuntimePreview.format_bytes(sizes.gzip || sizes.raw)
+        )
+      )
+
+  defp bundle_hint(%{sizes: _uncompressed} = metrics),
+    do: with_shared(metrics, gettext("Not compressed"))
+
+  defp with_shared(%{bundle: @shared_base}, hint),
+    do: hint <> " · " <> gettext("the start of every site's CSS")
+
+  defp with_shared(_site, hint), do: hint
+
+  defp build(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp build(%{state: :compiling}), do: gettext("Building…")
+  defp build(%{state: :failed}), do: gettext("Failed")
+  defp build(%{state: state}) when state in [:inactive, :archived], do: gettext("Not in a bundle")
+  defp build(%{sizes: nil}), do: gettext("Not built")
+  defp build(_built), do: gettext("Built")
+
+  defp build_hint(%{state: :failed}), do: gettext("See the Pipeline tab")
+
+  defp build_hint(%{took_ms: ms}) when is_integer(ms),
+    do: gettext("Last rebuild took %{time}", time: duration(ms * 1000))
+
+  defp build_hint(_no_rebuild_since_boot), do: nil
+
+  defp built_at(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp built_at(%{updated_at: %DateTime{} = at}), do: datetime(at)
+  defp built_at(_never), do: "—"
+
+  defp version(%{hash: hash}) when is_binary(hash),
+    do: gettext("Version %{hash}", hash: String.slice(hash, 0, 8))
+
+  defp version(_none), do: nil
 
   # A component's file is its template, which the kit calls its bundle.
   defp file_label(Component), do: gettext("Bundle Size")
@@ -1381,6 +1478,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp cache_hint(_unknown), do: nil
 
   defp duration(us) when us < 1000, do: "#{us} µs"
+
+  defp duration(us) when us >= 1_000_000,
+    do: "#{:erlang.float_to_binary(us / 1_000_000, decimals: 1)} s"
+
   defp duration(us), do: "#{:erlang.float_to_binary(us / 1000, decimals: 1)} ms"
 
   defp site_name(%{site: %{name: name}}) when is_binary(name), do: name
