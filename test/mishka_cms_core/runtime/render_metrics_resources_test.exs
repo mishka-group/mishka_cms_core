@@ -20,6 +20,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
   import Phoenix.LiveViewTest
 
   alias MishkaCmsCore.Runtime.{RenderMetrics, Translations}
+  alias MishkaCmsCore.Runtime.Compilers.ErrorCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
@@ -286,6 +287,101 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
       rerenders = box(html, "runtime-preview-rerenders")
       assert rerenders =~ "6"
       assert rerenders =~ "With every update of the page inside it, 90 µs each"
+    end
+  end
+
+  describe "error pages" do
+    defp error_page!(site, n, attrs) do
+      error =
+        create_error_page!([site_id: site.id, name: "rmr-e-#{n}", path: "/rmr-e-#{n}"] ++ attrs)
+
+      module = CompilerHelpers.module_name(error.id, site.name, "ErrorPage")
+
+      {:ok, ^module} =
+        ModuleCompilerHandler.compile_or_return_module(module, error.path, site.name, site.id)
+
+      module
+    end
+
+    defp show(module, status),
+      do:
+        module
+        |> ErrorCompiler.render_page(Phoenix.ConnTest.build_conn(), status)
+        |> IO.iodata_to_binary()
+
+    test "an error page is counted per status, drawn whole by its EEx root layout", %{
+      site: site,
+      n: n
+    } do
+      # the factory's root layout is EEx, so the page answers `{:safe, iodata}`: all of it in the call
+      module =
+        error_page!(site, n,
+          error_pages: [
+            %{status: 404, template: ~s|<h1>{#{@spin}(300)}</h1>|},
+            %{status: 500, template: ~s|<h1>{#{@spin}(100)}</h1>|}
+          ]
+        )
+
+      assert show(module, 404) =~ "300"
+      show(module, 404)
+      show(module, 500)
+
+      assert %{full: %{count: 2, avg_us: us_404}} = RenderMetrics.stats({module, 404})
+      assert about?(us_404, 300)
+      assert %{full: %{count: 1, avg_us: us_500}} = RenderMetrics.stats({module, 500})
+      assert about?(us_500, 100)
+
+      # a new build starts its counts again, every status of it
+      RenderMetrics.handle_build(
+        [:mishka_cms, :runtime, :compilers, :module, :stop],
+        %{duration: 1},
+        %{module: module, cache: :off},
+        nil
+      )
+
+      assert RenderMetrics.stats({module, 404}) == nil
+      assert RenderMetrics.stats({module, 500}) == nil
+    end
+
+    test "with a HEEx root the page is drawn after the call and still timed", %{site: site, n: n} do
+      module =
+        error_page!(site, n,
+          root_layout_template: nil,
+          error_pages: [%{status: 404, template: ~s|<h1>{#{@spin}(300)}</h1>|}]
+        )
+
+      # the first draw of a HEEx root fills what it caches; the second is the template's own time
+      assert show(module, 404) =~ "300"
+      %{full: %{count: 1, avg_us: first}} = RenderMetrics.stats({module, 404})
+      show(module, 404)
+      assert %{full: %{count: 2, avg_us: avg}} = RenderMetrics.stats({module, 404})
+      assert about?(avg * 2 - first, 300)
+    end
+
+    test "the card's fourth box is how often it was shown, per status" do
+      metrics = %{
+        on?: true,
+        loaded?: true,
+        stats: %{
+          full: %{count: 39, avg_us: 1015},
+          update: %{count: 0, avg_us: 0},
+          statuses: [{404, %{count: 37, avg_us: 800}}, {500, %{count: 2, avg_us: 1100}}]
+        },
+        build: nil
+      }
+
+      html =
+        card(
+          MishkaCmsCore.Runtime.ErrorPage,
+          record(MishkaCmsCore.Runtime.ErrorPage, path: "/e"),
+          metrics
+        )
+
+      shown = box(html, "runtime-preview-rerenders")
+      assert shown =~ "Shown"
+      assert shown =~ "39"
+      assert shown =~ "404 800 µs ×37 · 500 1.1 ms ×2"
+      assert box(html, "runtime-preview-render-time") =~ "1.0 ms"
     end
   end
 end

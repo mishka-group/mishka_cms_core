@@ -69,7 +69,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   @excluded :mishka_cms_render_metrics_excluded
   @setting "runtime.render_metrics"
   @switch {__MODULE__, :on}
-  @measured ~w(Component Page Layout)
+  @measured ~w(Component Page Layout ErrorPage)
   @build_handler "mishka-cms-core-render-metrics-builds"
   @compile_handler "mishka-cms-core-render-metrics-compiles"
 
@@ -113,11 +113,14 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
     {:ok, nil}
   end
 
-  @doc "The render counts and average times of `module`, or `nil` before its first render."
-  @spec stats(module()) :: stats() | nil
-  def stats(module) do
-    case lookup(@counters, module) do
-      [{^module, ref}] -> stats_of(ref)
+  @doc """
+  The render counts and average times kept under `key` — a module, or `{module, status}` for an
+  error page — or `nil` before its first render.
+  """
+  @spec stats(term()) :: stats() | nil
+  def stats(key) do
+    case lookup(@counters, key) do
+      [{^key, ref}] -> stats_of(ref)
       _none -> nil
     end
   end
@@ -151,7 +154,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
 
   @doc """
   Draws through `fun` (which returns what the template returned) and times it under `key`: the
-  module drawn.
+  module drawn, or `{module, status}` for an error page, which is counted per status.
 
   `role` is `:inline` for what is drawn where it is called — a component — and `:handed_in` for a
   page, whose output is handed to its layout (see the moduledoc).
@@ -201,6 +204,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
       us = System.convert_time_unit(native, :native, :microsecond)
       :ets.insert(@builds, {module, us, cache, System.system_time(:second)})
       :ets.delete(@counters, module)
+      forget_statuses(module)
     end
 
     :ok
@@ -213,6 +217,12 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
   def handle_compile(_event, %{duration: native}, _metadata, _config) do
     if on?(), do: Process.put(@excluded, Process.get(@excluded, 0) + native)
     :ok
+  end
+
+  # An error page is counted per status, `{module, status}`.
+  defp forget_statuses(module) do
+    if module |> Module.split() |> List.last() == "ErrorPage",
+      do: :ets.match_delete(@counters, {{module, :_}, :_})
   end
 
   defp timed_call(nil, _handed?, fun), do: fun.()
@@ -252,7 +262,12 @@ defmodule MishkaCmsCore.Runtime.RenderMetrics do
     %{rendered | dynamic: &top(dynamic, clock, call, &1)}
   end
 
-  defp timed_rendered(other, _clock, _call), do: other
+  # Drawn in full by the call itself — an error page whose root layout is EEx answers `{:safe, iodata}`
+  # — so the call is its whole render.
+  defp timed_rendered(other, {ref, _handed?}, call) do
+    add(ref, false, call, 1)
+    other
+  end
 
   defp top(dynamic, {ref, handed?} = clock, call, track) do
     {t0, excluded} = start()

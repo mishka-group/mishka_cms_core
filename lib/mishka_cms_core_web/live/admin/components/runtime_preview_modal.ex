@@ -672,8 +672,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
       <div id="runtime-preview-rerenders">
         <.metric
           icon="hero-arrow-path"
-          label={gettext("Re-renders")}
-          value={rerenders(@metrics)}
+          label={rerenders_label(@resource)}
+          value={rerenders(@resource, @metrics)}
           hint={rerenders_hint(@resource, @metrics)}
           hint_navigate={settings_link(@metrics)}
           real={is_map(@metrics) and @metrics.on?}
@@ -1313,12 +1313,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   # RE-RENDERS ARE LIVEVIEW'S UPDATES: a component drawn again after the page was, because something
   # it reads changed. The same counters as Render Time; nothing more is measured for them.
-  defp rerenders(metrics) when not is_map(metrics), do: gettext("Loading…")
-  defp rerenders(%{on?: false}), do: gettext("Not active")
-  defp rerenders(%{loaded?: false}), do: gettext("Not loaded")
-  defp rerenders(%{stats: :hidden}), do: "—"
-  defp rerenders(%{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
-  defp rerenders(_no_renders), do: "0"
+  #
+  # AN ERROR PAGE HAS NONE — a controller draws it whole on every request — so its fourth box is how
+  # many times it was SHOWN, per status: for a 404 page, the 404s visitors hit.
+  defp rerenders_label(ErrorPage), do: gettext("Shown")
+  defp rerenders_label(_resource), do: gettext("Re-renders")
+
+  defp rerenders(_resource, metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp rerenders(_resource, %{on?: false}), do: gettext("Not active")
+  defp rerenders(_resource, %{loaded?: false}), do: gettext("Not loaded")
+  defp rerenders(_resource, %{stats: :hidden}), do: "—"
+  defp rerenders(ErrorPage, %{stats: %{full: %{count: n}}}), do: Integer.to_string(n)
+  defp rerenders(_resource, %{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
+  defp rerenders(_resource, _no_renders), do: "0"
 
   defp rerenders_hint(_resource, metrics) when not is_map(metrics), do: nil
 
@@ -1330,6 +1337,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp rerenders_hint(_resource, %{stats: :hidden}),
     do: gettext("Counted on every site; shown to master admins")
 
+  defp rerenders_hint(ErrorPage, %{stats: %{statuses: [_ | _] = statuses}}) do
+    Enum.map_join(statuses, " · ", fn {status, %{count: n, avg_us: us}} ->
+      "#{status_name(status)} #{duration(us)} ×#{n}"
+    end)
+  end
+
+  defp rerenders_hint(ErrorPage, _never_shown),
+    do: gettext("Counted per status, each time it is shown")
+
   # A LAYOUT IS DRAWN AGAIN WITH EVERY UPDATE OF THE PAGE INSIDE IT: LiveView marks `@inner_content`
   # changed on every render, so its updates are the page's.
   defp rerenders_hint(Layout, %{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
@@ -1340,6 +1356,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp rerenders_hint(_resource, _no_updates),
     do: gettext("Redrawn when something it reads changes")
+
+  defp status_name(:offline), do: gettext("Offline")
+  defp status_name(status), do: to_string(status)
 
   # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).
   defp settings_link(%{on?: false}), do: "/admin/dashboard/settings?tab=general"

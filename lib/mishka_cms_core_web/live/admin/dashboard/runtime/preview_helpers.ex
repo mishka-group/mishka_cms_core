@@ -95,7 +95,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @timed [
     MishkaCmsCore.Runtime.Component,
     MishkaCmsCore.Runtime.Page,
-    MishkaCmsCore.Runtime.Layout
+    MishkaCmsCore.Runtime.Layout,
+    MishkaCmsCore.Runtime.ErrorPage
   ]
 
   # Every runtime resource this modal opens carries a "Configuration" tab hosting its MishkaGervaz
@@ -492,19 +493,50 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     socket
     |> assign(:preview, %{preview | metrics: preview.metrics || :loading})
     |> MishkaGervaz.Messages.start_async(:preview_metrics, fn ->
-      {id, metrics(module, counts?)}
+      {id, metrics(resource, record, module, counts?)}
     end)
   end
 
   defp load_metrics(socket), do: socket
 
-  defp metrics(module, counts?) do
-    %{
+  # AN ERROR PAGE IS COUNTED PER STATUS (`RenderMetrics` keeps `{module, status}`), read here for the
+  # statuses the record holds, as the compiler names them — once each, as the compiler draws each
+  # once; its Render Time is their average, weighted by how often each was shown.
+  defp metrics(MishkaCmsCore.Runtime.ErrorPage, record, module, counts?) do
+    module
+    |> module_state()
+    |> Map.put(:stats, counted(counts?, fn -> record |> statuses(module) |> shown() end))
+  end
+
+  defp metrics(_resource, _record, module, counts?) do
+    module
+    |> module_state()
+    |> Map.put(:stats, counted(counts?, fn -> RenderMetrics.stats(module) end))
+  end
+
+  defp module_state(module),
+    do: %{
       on?: RenderMetrics.on?(),
       loaded?: CompilerHelpers.loaded?(module),
-      stats: if(counts?, do: RenderMetrics.stats(module), else: :hidden),
       build: RenderMetrics.build(module)
     }
+
+  defp counted(true, read), do: read.()
+  defp counted(false, _read), do: :hidden
+
+  defp statuses(record, module) do
+    for status <- record |> RuntimePreview.error_statuses() |> Enum.uniq(),
+        %{full: %{count: n} = full} <- [RenderMetrics.stats({module, status})],
+        n > 0,
+        do: {status, full}
+  end
+
+  defp shown(statuses) do
+    count = statuses |> Enum.map(fn {_status, full} -> full.count end) |> Enum.sum()
+    time = statuses |> Enum.map(fn {_status, full} -> full.avg_us * full.count end) |> Enum.sum()
+    avg = if count > 0, do: div(time, count), else: 0
+
+    %{full: %{count: count, avg_us: avg}, update: %{count: 0, avg_us: 0}, statuses: statuses}
   end
 
   defp metrics_loaded(socket, {:ok, {id, metrics}}) do
