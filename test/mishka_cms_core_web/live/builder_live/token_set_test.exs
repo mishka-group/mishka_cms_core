@@ -61,6 +61,29 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.TokenSetTest do
     refute has_element?(view, "#flash-error")
   end
 
+  # ONE BUILD PER EDIT, AND IT IS THE ROW'S. Saving the sheet queues the site's CSS rebuild, which
+  # builds and stores the CSS (`MishkaCmsCore.Runtime.PageBuilder.TokensTest`). The event used to run
+  # a second Tailwind build of its own, keep nothing of it, and make the author wait for it.
+  test "runs no Tailwind build while the author waits", %{view: view, site: site} do
+    test_pid = self()
+    handler = "token-set-build-#{System.unique_integer([:positive])}"
+
+    :ok =
+      :telemetry.attach(
+        handler,
+        [:mishka_cms, :runtime, :compilers, :tailwind, :start],
+        fn _event, _measurements, meta, _config -> send(test_pid, {:tailwind, meta[:site]}) end,
+        nil
+      )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+
+    render_click(view, "set_token", %{"key" => @key, "value" => "#123456"})
+
+    assert value_of(site.id, @key) == "#123456"
+    refute_received {:tailwind, _site}, "the Studio built the site's CSS and threw it away"
+  end
+
   describe "with a design-system plugin" do
     setup do: register_plugin(BuilderTokenGate, "builder:token:before_set")
 

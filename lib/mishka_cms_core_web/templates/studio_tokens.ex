@@ -257,8 +257,8 @@ defmodule MishkaCmsCoreWeb.Templates.StudioTokens do
       </span>
       <%!-- The value is EDITABLE, because a token is a declaration in the site's own theme
             stylesheet and changing it changes every component that resolves through it. The form
-            carries no `phx-target`, so `set_token` reaches BuilderLive, which owns the write and the
-            recompile. --%>
+            carries no `phx-target`, so `set_token` reaches BuilderLive, which owns the write; the
+            row's save rebuilds the site's CSS. --%>
       <Panels.field_form
         id={"pb-token-form-#{@token.key}"}
         class="flex-none"

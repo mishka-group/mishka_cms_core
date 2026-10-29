@@ -3634,8 +3634,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   # A design token is a declaration in the site's own theme stylesheet, so setting one rewrites that
-  # row and recompiles the site's CSS. Every component that resolves through the token changes at
-  # once — which is the whole reason this lives in the Studio rather than on an element.
+  # row, and the row's save rebuilds the site's CSS. Every component that resolves through the token
+  # changes at once — which is the whole reason this lives in the Studio rather than on an element.
   def handle_event("set_token", %{"key" => key, "value" => value}, socket) do
     editor = socket.assigns.editor
 
@@ -6469,13 +6469,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # A design-system plugin gets a say before a token changes: it can normalise the value — snap a
   # colour to the palette, a length to the scale — or refuse it outright.
   defp set_token(socket, editor, key, value) do
-    case Tokens.put(
-           socket.assigns.current_user,
-           editor.site_id,
-           "--" <> key,
-           value,
-           editor.site_name
-         ) do
+    case Tokens.put(socket.assigns.current_user, editor.site_id, "--" <> key, value) do
       {:ok, _token} ->
         # The table has nothing to subscribe to — a token lives in a stylesheet's CSS text — so the
         # write bumps the revision and the table reads again.
