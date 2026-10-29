@@ -23,7 +23,7 @@
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/builder/panels.ex", :call_without_opaque, 4104},
   {"lib/mishka_cms_core_web/live/admin/builder/panels.ex", :call_without_opaque, 4149},
-  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1384},
+  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1638},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 478},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 504},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 515},
@@ -47,30 +47,30 @@
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 65},
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 82},
   {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 126},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 1015},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 5813},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 7189},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 1090},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 5893},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match, 7263},
 
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
-  {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1827},
-  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1782},
+  {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1831},
+  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1878},
   {"lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex", :pattern_match_cov, 758},
   {"lib/mishka_cms_core/runtime/page_builder/code_check.ex", :pattern_match_cov, 281},
   {"lib/mishka_cms_core/runtime/page_builder/editor_session/journal.ex", :pattern_match_cov, 415},
   {"lib/mishka_cms_core/runtime/page_builder/tree/styles.ex", :pattern_match_cov, 1252},
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov, 152},
   {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 368},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 5723},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 5994},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6139},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6215},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6247},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6278},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6290},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6302},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6314},
-  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 7022},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 5803},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6074},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6219},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6295},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6327},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6358},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6370},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6382},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 6394},
+  {"lib/mishka_cms_core_web/live/admin/builder/builder_live.ex", :pattern_match_cov, 7096},
 
   # `:elixir_tokenizer.tokenize/3` and the project's HEEx tokenizer are called through a clause for
   # each shape either has returned across Elixir releases; dialyzer sees the one of this release.
@@ -91,6 +91,6 @@
   {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :exact_compare, 648},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 178},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 210},
-  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :guard_fail, 1317}
+  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :guard_fail, 1571}
 
 ]
