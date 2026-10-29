@@ -17,7 +17,7 @@
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_with_opaque, 653},
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_without_opaque, 219},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :call_without_opaque, 190},
-  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1638},
+  {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1641},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 478},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 504},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 515},
@@ -41,9 +41,6 @@
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov, 152},
   {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 368},
 
-  # `:elixir_tokenizer.tokenize/3` and the project's HEEx tokenizer are called through a clause for
-  # each shape either has returned across Elixir releases; dialyzer sees the one of this release.
-
   # `ProviderStrategy` stands in for AshAuthentication's `OAuth2` strategy struct (same fields, see its
   # moduledoc), and `OAuth2.Plug` is specified for `OAuth2.t()` only.
   {"lib/mishka_cms_core/accounts/provider_strategy/plug.ex", :call, 33},
@@ -59,5 +56,4 @@
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 178},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 210},
   {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :guard_fail, 1571}
-
 ]
