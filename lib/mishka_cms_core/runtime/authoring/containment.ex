@@ -19,7 +19,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     * **Phrasing-only elements** (`span`, `a`, `p`, `h1`–`h6`, `button`, `pre`, …) take text and
       other phrasing content, never a block element. This is deliberately stricter than the spec —
       `<p>` may legally hold some things this rejects — because the stricter rule is the one that
-      matches what an author means to build. Ported as-is from `containment.js`.
+      matches what an author means to build. Ported from `containment.js`, with one correction: a
+      paragraph, a heading and the other text blocks hold phrasing content without BEING it, so
+      none of them goes inside another one or inside a link.
     * **Structural pairs** the spec fixes exactly: a `table` section takes only `tr`, a `tr` takes
       only `td`/`th`, a list takes only `li`, a `dl` takes `dt`/`dd`/`div`, a `select` takes
       `option`/`optgroup`.
@@ -29,12 +31,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       already hold content, which means a previous author put something there legitimately). A
       dotted tag the kit catalog has never heard of is asked of the compiled module instead, so the
       CMS's own `<.form>` and `<.input>` are containers here the same way they are on the page.
-    * **A form may not go inside a form** — the one ancestor rule in this module, and the only
-      nesting HTML both forbids and fails at silently. What counts as a form is
-      `MishkaCmsCore.Runtime.Authoring.Fields.form_node?/2`, the same answer the insert funnel and
-      the audit rail take, so a kit's own form wrapper is one here too. The thing being dragged is
-      asked about with everything under it, because a Block opens with a band tag and carries its
-      form as a child.
+    * **A component is the element its own markup opens with** for the phrasing and landmark
+      rules: a kit navbar whose markup is one `<nav>` is a `<nav>`, a kit heading is a heading. A
+      component whose markup opens with something else, or that has no markup to read, stays
+      opaque and is let through as before.
+    * **A form may not go inside a form**, and nothing HTML forbids at silently. What counts as a
+      form is `MishkaCmsCore.Runtime.Authoring.Fields.form_node?/2`, the same answer the insert
+      funnel and the audit rail take, so a kit's own form wrapper is one here too. The thing being
+      dragged is asked about with everything under it, because a Block opens with a band tag and
+      carries its form as a child.
+    * **Landmarks keep out of each other**: a `<header>` or a `<footer>` holds no header, footer or
+      `<main>`, and a `<main>` goes in no article, aside, header, footer or nav — HTML's own rules.
+      A `<nav>` holds no header, footer or main either, which is stricter than the spec and is what
+      a page footer clicked in while the navbar was selected needs. Asked of every ancestor, like
+      the form rule.
 
   Every refusal carries a sentence written for the person dragging, which the canvas shows as the
   demo's danger toast near the drop point.
@@ -57,6 +67,27 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     a span b i em strong small code label sub sup mark abbr cite q s u kbd samp var
     time bdi bdo p h1 h2 h3 h4 h5 h6 button summary legend dt figcaption pre
   )
+
+  # TAKING PHRASING CONTENT IS NOT BEING IT. These hold inline content only, which is why they are in
+  # the list above, and are blocks themselves, which the list above cannot say: reading it both ways
+  # let a paragraph clicked in while a heading was selected become the heading's child, and a `<p>`
+  # inside an `<h1>` (or another `<p>`, which the parser closes on the spot) is markup no page means.
+  @text_blocks ~w(p h1 h2 h3 h4 h5 h6 pre summary legend dt figcaption)
+
+  # WHAT A LANDMARK MAY NOT HOLD, by the landmark. `header`, `footer` and `main` are HTML's own:
+  # header and footer take no header, footer or main, and main goes in no article, aside, header,
+  # footer or nav. `nav` refusing the first three is this editor's, stricter than the spec, for the
+  # same reason the phrasing rule is: a page footer inside the navigation bar is valid markup and is
+  # never what the author clicking it in meant.
+  @landmark_bars %{
+    "header" => ~w(header footer main),
+    "footer" => ~w(header footer main),
+    "nav" => ~w(header footer main),
+    "article" => ~w(main),
+    "aside" => ~w(main)
+  }
+
+  @landmarks @landmark_bars |> Map.values() |> List.flatten() |> Enum.uniq()
 
   @interactive ~w(a button input select textarea details label)
 
@@ -181,6 +212,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       block opens with a band tag and only its head node arrives.
     * `:roles` — the memo `MishkaCmsCore.Runtime.Authoring.Fields.roles/2` builds, computed once
       per drag by `accepts_map/3` and rebuilt here when a caller asks about a single drop.
+    * `:outer_tags` — the element each component's markup opens with, by component name; built
+      once per drag by `accepts_map/3`, and read off `:components` as needed for a single drop.
 
   Returns `:ok` or `{:error, message}` with a sentence meant for the person dragging.
   """
@@ -214,7 +247,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
     with :ok <- check_container(target),
          :ok <- check_only_children(child, target) do
-      check_phrasing(child, target)
+      check_phrasing(child, target, [])
     end
   end
 
@@ -223,8 +256,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
          :ok <- check_container(target),
          :ok <- check_component_slots(tree, target, opts),
          :ok <- check_only_children(dragged, target),
-         :ok <- check_phrasing(dragged, target),
+         :ok <- check_phrasing(dragged, target, opts),
          :ok <- check_form_nesting(tree, dragged, target, opts),
+         :ok <- check_landmarks(tree, dragged, target, opts),
          :ok <- check_field_nesting(tree, dragged, target, opts) do
       check_interactive(tree, dragged, target)
     end
@@ -432,17 +466,22 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     end
   end
 
-  defp check_phrasing(dragged, %Node{tag: tag}) when is_binary(tag) do
-    case phrasing_only?(tag) and block?(dragged) do
-      true ->
-        {:error, gettext("%{label} can only hold text and inline elements.", label: label(tag))}
+  defp check_phrasing(dragged, target, opts) do
+    case rendered(target, opts) do
+      tag when is_binary(tag) ->
+        case phrasing_only?(tag) and block?(dragged, opts) do
+          true ->
+            {:error,
+             gettext("%{label} can only hold text and inline elements.", label: label(tag))}
 
-      false ->
+          false ->
+            :ok
+        end
+
+      nil ->
         :ok
     end
   end
-
-  defp check_phrasing(_dragged, _target), do: :ok
 
   # HTML FORBIDS A NESTED FORM AND FAILS SILENTLY AT IT: the parser's form-element pointer discards
   # the inner start tag, `data-node-id` and all, and lets the inner `</form>` close the OUTER one —
@@ -464,6 +503,42 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       false ->
         :ok
     end
+  end
+
+  # A LANDMARK ARRIVING WHERE ITS HOST'S RULES SAY IT MAY NOT. Asked of the target and every
+  # ancestor, like the form rule above: a `<footer>` dropped into a `<div>` inside a `<header>` is
+  # inside the header all the same. What arrives is the dragged node with everything under it, so a
+  # section carrying a footer is held to the footer's rule.
+  defp check_landmarks(tree, dragged, target, opts) do
+    arriving =
+      [dragged | dragged_descendants(dragged, tree, opts)]
+      |> Enum.map(&rendered(&1, opts))
+      |> Enum.filter(&(&1 in @landmarks))
+      |> Enum.uniq()
+
+    case arriving != [] and barred(tree, target, arriving, opts) do
+      {host, landmark} ->
+        {:error,
+         gettext("%{label} cannot hold a `<%{tag}>`. Put it next to it instead.",
+           label: label(host),
+           tag: landmark
+         )}
+
+      _none ->
+        :ok
+    end
+  end
+
+  defp barred(tree, target, arriving, opts) do
+    Enum.find_value([target | Tree.ancestors(tree, target.id)], fn node ->
+      host = rendered(node, opts)
+      refused = Map.get(@landmark_bars, host, [])
+
+      case Enum.find(arriving, &(&1 in refused)) do
+        nil -> nil
+        landmark -> {host, landmark}
+      end
+    end)
   end
 
   # A FIELD DOES NOT HOLD ANOTHER FIELD. A kit field that declares slots (a label, a description)
@@ -531,16 +606,76 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   defp interactive_tag?(tag) when is_binary(tag), do: String.downcase(tag) in @interactive
   defp interactive_tag?(_tag), do: false
 
-  # A component is opaque here: it may render anything, so it is treated as a block and allowed
-  # through structural gates rather than guessed at.
-  defp block?(%{kind: kind}) when kind in [:text, :eex, :eex_comment, :html_comment], do: false
+  # A component whose markup cannot be read is opaque here: it may render anything, so it is let
+  # through rather than guessed at. One whose markup opens with an element is that element.
+  defp block?(%{kind: kind}, _opts) when kind in [:text, :eex, :eex_comment, :html_comment],
+    do: false
 
-  defp block?(dragged) do
-    case dragged_tag(dragged) do
+  defp block?(dragged, opts) do
+    case rendered(dragged, opts) do
       nil -> false
-      tag -> not component_tag?(tag) and String.downcase(tag) not in @phrasing_only
+      tag -> tag in @text_blocks or tag not in @phrasing_only
     end
   end
+
+  # THE ELEMENT A NODE PUTS ON THE PAGE, lowercased: a tag is itself, and a component is the one
+  # element its own markup opens with (a kit navbar's `<nav>`), read off the palette entry's
+  # template. `nil` for anything else — a slot, text, a component with no markup, one whose markup
+  # opens with another component or with several elements — which every rule here reads as
+  # "nothing to check", the way a component always used to be read.
+  defp rendered(%Node{kind: :component} = node, opts),
+    do: node |> Node.component_name() |> outer_tag(opts)
+
+  defp rendered(%Node{kind: :tag, tag: tag}, _opts) when is_binary(tag), do: String.downcase(tag)
+  defp rendered(%Node{}, _opts), do: nil
+
+  defp rendered(dragged, _opts) do
+    tag = dragged_tag(dragged)
+
+    case is_binary(tag) and not component_tag?(tag) do
+      true -> String.downcase(tag)
+      false -> nil
+    end
+  end
+
+  # Memoised for a whole drag by `accepts_map/3`, which asks about every node in the document; a
+  # single drop asks about a handful and reads them as it goes.
+  defp outer_tag(nil, _opts), do: nil
+
+  defp outer_tag(name, opts) do
+    case Keyword.fetch(opts, :outer_tags) do
+      {:ok, memo} when is_map_key(memo, name) -> Map.fetch!(memo, name)
+      _unread -> read_outer_tag(name, Keyword.get(opts, :components, []))
+    end
+  end
+
+  defp read_outer_tag(name, components) do
+    with %{} = entry <- Fields.entry(name, components),
+         {:ok, tree} <- entry |> Inspector.template() |> Tree.parse(),
+         [%Node{kind: :tag, tag: tag}] when is_binary(tag) <- outer_elements(tree) do
+      String.downcase(tag)
+    else
+      _unreadable -> nil
+    end
+  end
+
+  defp outer_elements(tree) do
+    tree.roots
+    |> Enum.map(&Tree.get(tree, &1))
+    |> Enum.filter(&match?(%Node{kind: kind} when kind in [:tag, :component], &1))
+  end
+
+  defp outer_tags(tree, dragged, opts) do
+    components = Keyword.get(opts, :components, [])
+
+    (Tree.walk(tree) ++ [dragged | dragged_descendants(dragged, tree, opts)])
+    |> Enum.flat_map(&component_names/1)
+    |> Enum.uniq()
+    |> Map.new(&{&1, read_outer_tag(&1, components)})
+  end
+
+  defp component_names(%Node{kind: :component} = node), do: List.wrap(Node.component_name(node))
+  defp component_names(_node), do: []
 
   defp dragged_tag(%Node{tag: tag}), do: tag
   defp dragged_tag(%{tag: tag}), do: tag
@@ -579,7 +714,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   """
   @spec accepts_map(Tree.t(), Node.t() | map(), keyword()) :: %{String.t() => boolean()}
   def accepts_map(tree, dragged, opts \\ []) do
-    memoised = memoised(tree, dragged, opts)
+    memoised =
+      tree
+      |> memoised(dragged, opts)
+      |> Keyword.put_new_lazy(:outer_tags, fn -> outer_tags(tree, dragged, opts) end)
 
     Map.new(tree.nodes, fn {id, _node} ->
       {id, can_drop?(tree, dragged, id, memoised) == :ok}

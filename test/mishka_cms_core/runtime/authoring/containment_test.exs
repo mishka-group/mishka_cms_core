@@ -30,6 +30,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
   defp block, do: Node.new(:tag, tag: "div")
   defp inline, do: Node.new(:tag, tag: "span")
   defp text, do: Node.new(:text, text: "hello")
+  defp footer, do: Node.new(:tag, tag: "footer")
+
+  defp component(name, inner \\ ""),
+    do: ~s(<.component component_name="#{name}" site="Global">#{inner}</.component>)
+
+  defp named(tree, name), do: Enum.find(Tree.walk(tree), &(Node.component_name(&1) == name))
 
   describe "accepts_children?/1 — ported from containment.js" do
     test "void elements reject children" do
@@ -127,6 +133,155 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
       p = find(tree, "p")
 
       assert {:error, _message} = Containment.can_drop?(tree, block(), p.id)
+    end
+
+    # A PARAGRAPH IS NOT INLINE BECAUSE IT HOLDS INLINE CONTENT. Reading the phrasing list both ways
+    # put a Paragraph clicked in with a heading selected inside the heading.
+    test "a heading, a paragraph and a link refuse the text blocks" do
+      tree = tree_of(~s(<div><h1>Title</h1><p>Copy</p><a href="/">Go</a><span>x</span></div>))
+
+      for host <- ~w(h1 p a span), arriving <- ~w(p h2 pre figcaption) do
+        target = find(tree, host)
+
+        assert {:error, message} =
+                 Containment.can_drop?(tree, Node.new(:tag, tag: arriving), target.id),
+               "<#{arriving}> must not go inside <#{host}>"
+
+        assert message =~ "text and inline"
+      end
+    end
+
+    test "while a text block still takes inline content, and a box still takes a text block" do
+      tree = tree_of(~s(<div><h1>Title</h1></div>))
+
+      assert Containment.can_drop?(tree, inline(), find(tree, "h1").id) == :ok
+      assert Containment.can_drop?(tree, Node.new(:tag, tag: "p"), find(tree, "div").id) == :ok
+    end
+
+    test "a wrapper cannot be put around a paragraph in an inline tag either" do
+      assert {:error, _message} = Containment.can_hold?(Node.new(:tag, tag: "p"), "span")
+      assert Containment.can_hold?(Node.new(:tag, tag: "p"), "div") == :ok
+    end
+  end
+
+  describe "can_drop?/4 — landmarks" do
+    test "a footer refuses to go inside a nav, a header or another footer, however deep" do
+      tree =
+        tree_of(
+          ~s(<nav><div class="links"></div></nav><header><div></div></header><footer></footer>)
+        )
+
+      for host <- ~w(nav header footer) do
+        assert {:error, message} = Containment.can_drop?(tree, footer(), find(tree, host).id)
+        assert message =~ "cannot hold a `<footer>`"
+      end
+
+      for deep <- Enum.filter(Tree.walk(tree), &(&1.tag == "div")) do
+        assert {:error, _message} = Containment.can_drop?(tree, footer(), deep.id)
+      end
+    end
+
+    test "a main refuses an article, an aside and a nav" do
+      tree = tree_of(~s(<article></article><aside></aside><nav></nav><section></section>))
+      main = Node.new(:tag, tag: "main")
+
+      for host <- ~w(article aside nav) do
+        assert {:error, _message} = Containment.can_drop?(tree, main, find(tree, host).id)
+      end
+
+      assert Containment.can_drop?(tree, main, find(tree, "section").id) == :ok
+    end
+
+    # "Give this section its own footer" is still one click.
+    test "a section, an article and a main still take a footer, and a nav still takes its links" do
+      tree = tree_of(~s(<main><section></section><article></article></main><nav></nav>))
+
+      for host <- ~w(main section article) do
+        assert Containment.can_drop?(tree, footer(), find(tree, host).id) == :ok
+      end
+
+      link = Node.new(:tag, tag: "a")
+      assert Containment.can_drop?(tree, link, find(tree, "nav").id) == :ok
+    end
+
+    test "a section carrying a footer is held to the footer's rule" do
+      tree = tree_of(~s(<header></header>))
+      block = tree_of(~s(<section><footer>bye</footer></section>))
+      head = Tree.get(block, hd(block.roots))
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, head, find(tree, "header").id, dragged_tree: block)
+    end
+  end
+
+  # A KIT COMPONENT IS THE ELEMENT ITS MARKUP OPENS WITH. Chelekom's navbar is one `<nav>`, so the
+  # footer clicked in while it was selected became the navbar's own content.
+  describe "can_drop?/4 — a component read as the element it renders" do
+    setup do
+      %{kit: Factory.chelekom_rows(~w(chelekom-navbar chelekom-h1 chelekom-card chelekom-footer))}
+    end
+
+    test "a navbar refuses a footer, in itself and in its slots", %{kit: kit} do
+      tree = tree_of(component("chelekom-navbar", ~s(<:list><a href="/">Home</a></:list>)))
+      navbar = named(tree, "chelekom-navbar")
+      list = find(tree, ":list")
+
+      assert {:error, message} = Containment.can_drop?(tree, footer(), navbar.id, components: kit)
+      assert message =~ "`<nav>` cannot hold a `<footer>`"
+      assert {:error, _message} = Containment.can_drop?(tree, footer(), list.id, components: kit)
+    end
+
+    test "and a kit footer is a footer on the arriving side too", %{kit: kit} do
+      tree = tree_of(component("chelekom-navbar", "<span>x</span>"))
+      navbar = named(tree, "chelekom-navbar")
+      arriving = tree_of(component("chelekom-footer"))
+      kit_footer = Tree.get(arriving, hd(arriving.roots))
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, kit_footer, navbar.id,
+                 components: kit,
+                 dragged_tree: arriving
+               )
+    end
+
+    test "a kit heading refuses a paragraph and takes a span", %{kit: kit} do
+      tree = tree_of(component("chelekom-h1", "Title"))
+      heading = named(tree, "chelekom-h1")
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, Node.new(:tag, tag: "p"), heading.id, components: kit)
+
+      assert Containment.can_drop?(tree, inline(), heading.id, components: kit) == :ok
+    end
+
+    test "a kit card, which is a box, still takes both", %{kit: kit} do
+      tree = tree_of(component("chelekom-card", "<p>x</p>"))
+      card = named(tree, "chelekom-card")
+
+      assert Containment.can_drop?(tree, footer(), card.id, components: kit) == :ok
+
+      assert Containment.can_drop?(tree, Node.new(:tag, tag: "p"), card.id, components: kit) ==
+               :ok
+    end
+
+    test "a component whose markup cannot be read is let through as before" do
+      tree = tree_of(~s(<.card>existing</.card>))
+
+      assert Containment.can_drop?(tree, footer(), find(tree, ".card").id, components: []) == :ok
+    end
+
+    test "accepts_map/3 gives the same answers from its memo", %{kit: kit} do
+      tree =
+        tree_of(~s(<main>) <> component("chelekom-navbar", "<span>x</span>") <> ~s(</main>))
+
+      accepts = Containment.accepts_map(tree, footer(), components: kit)
+
+      for {id, allowed?} <- accepts do
+        assert allowed? == (Containment.can_drop?(tree, footer(), id, components: kit) == :ok)
+      end
+
+      refute accepts[named(tree, "chelekom-navbar").id]
+      assert accepts[find(tree, "main").id]
     end
   end
 

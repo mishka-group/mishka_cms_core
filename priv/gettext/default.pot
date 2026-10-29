@@ -345,6 +345,11 @@ msgstr ""
 msgid "%{label} cannot contain another clickable element."
 msgstr ""
 
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:522
+#, elixir-autogen, elixir-format
+msgid "%{label} cannot hold a `<%{tag}>`. Put it next to it instead."
+msgstr ""
+
 #: lib/mishka_cms_core/runtime/authoring/containment.ex:265
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot contain other elements."
