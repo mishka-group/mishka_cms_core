@@ -96,7 +96,10 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
   # plugin tries again a second later, after the first tests have already asked its event: the mail
   # provider is not found and every test that sends fails, once. See
   # `MishkaCmsCore.Test.PluginReadiness`.
-  MishkaCmsCore.Test.PluginReadiness.await(MishkaCmsCore.Application.plugins())
+  MishkaCmsCore.Test.PluginReadiness.await(
+    MishkaCmsCore.Application.plugins() ++
+      MishkaCmsCore.Runtime.PageBuilder.BuilderPlugins.plugins()
+  )
 
   # The `:node` tests run browser JavaScript in Node.js. Without it they are left out, and the run
   # says so.
