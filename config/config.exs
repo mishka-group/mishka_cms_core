@@ -66,8 +66,10 @@ config :spark,
 # here reads these with `Application.compile_env!/2` — the CMS and each extension set them to their
 # own; on its own this library uses the ones below. Compile-time, so nothing is paid per query.
 # Whose admin routes `extension_routes(:admin)` mounts. In the CMS this lists every installed
-# extension; on its own this library has only itself.
-config :mishka_cms_core, extensions: [MishkaCmsCoreWeb]
+# extension; on its own this library has itself and the visual editor, which still ships inside it
+# and declares its routes as an extension does (`MishkaCmsCoreWeb.Live.Admin.Builder.Routes`).
+config :mishka_cms_core,
+  extensions: [MishkaCmsCoreWeb, MishkaCmsCoreWeb.Live.Admin.Builder]
 
 config :mishka_cms_core,
   repo: MishkaCmsCore.Repo,

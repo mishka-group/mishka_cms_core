@@ -70,8 +70,9 @@ defmodule MishkaCmsCore.Sidebar do
       that area's name: `["admin:dashboard:runtime:site"]`;
     * a content list every dashboard admin may read — Pages, Layouts, Components, Error Pages,
       Stylesheets, JS Hooks, Media, Translations — lists its area and `{:under, "admin:dashboard"}`;
-    * the builder lists every name that opens a builder — the page, layout, component and error
-      page areas and `admin:dashboard:code` — and the builder asks for the type it opens on;
+    * an editor extension lists every name that opens its editor — the page, layout, component
+      and error page areas and `admin:dashboard:code` — and the editor asks for the type it
+      opens on;
     * Home, Notifications, Settings and the Plugins section list `{:under, "admin:dashboard"}`.
 
   An API admin holds nothing under `admin:dashboard`, so it sees no entry and opens no page.
@@ -468,40 +469,6 @@ defmodule MishkaCmsCore.Sidebar do
                     module: MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index,
                     nav: false,
                     permissions: ["admin:dashboard:runtime:activity"]
-                  },
-                  # The visual builder is reached from a page/layout/component row, never from the
-                  # nav, so both of its LiveViews are declared as pages rather than links. The canvas
-                  # is a separate declaration because it is a separate mount: it answers inside an
-                  # iframe and would otherwise be an undeclared — and therefore refused — page.
-                  %{
-                    key: "runtime.builder",
-                    label: gettext_noop("Page Builder"),
-                    icon: "hero-squares-2x2",
-                    path: "/admin/dashboard/runtime/builder",
-                    module: MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive,
-                    nav: false,
-                    permissions: [
-                      "admin:dashboard:runtime:page",
-                      "admin:dashboard:runtime:layout",
-                      "admin:dashboard:runtime:component",
-                      "admin:dashboard:runtime:error_page",
-                      "admin:dashboard:code"
-                    ]
-                  },
-                  %{
-                    key: "runtime.builder_canvas",
-                    label: gettext_noop("Page Builder canvas"),
-                    icon: "hero-squares-2x2",
-                    path: "/admin/dashboard/runtime/builder-canvas",
-                    module: MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive,
-                    nav: false,
-                    permissions: [
-                      "admin:dashboard:runtime:page",
-                      "admin:dashboard:runtime:layout",
-                      "admin:dashboard:runtime:component",
-                      "admin:dashboard:runtime:error_page",
-                      "admin:dashboard:code"
-                    ]
                   },
                   %{
                     key: "notifications",
