@@ -19,6 +19,7 @@ defmodule MishkaCmsCore.Settings.PrefixDefinitionsTest do
   alias MishkaCmsCore.Runtime.Setting
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Settings
+  alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.PrefixSettingsProbe, as: Probe
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -119,6 +120,23 @@ defmodule MishkaCmsCore.Settings.PrefixDefinitionsTest do
 
       assert Settings.write_permission("acme.k") == [Probe.prefix_permission()]
       assert Settings.definition("acme.") == nil
+    end
+  end
+
+  describe "with nothing registered on settings:register" do
+    # The editor's own keys are covered by its plugin's prefix; with no editor installed, one of
+    # them is a key like any other nobody declared.
+    test "an editor's key takes the setting area" do
+      :ok = EventCannotRun.stub!(@event)
+      Settings.load_definitions()
+
+      assert Settings.write_permission("cms_builder.studio.lock_tokens") == [
+               "admin:dashboard:setting"
+             ]
+
+      assert Settings.write_permission("cms_builder.preset.probe_card") == [
+               "admin:dashboard:setting"
+             ]
     end
   end
 end

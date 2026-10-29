@@ -232,7 +232,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.MentionsTest do
 
       assert [newest | _rest] = feed(named)
       assert length(feed(named)) == before + 1
-      assert newest.type == "cms_core:page_comment:mentioned"
+      assert newest.type == "cms_builder:page_comment:mentioned"
       assert newest.link == "/admin/dashboard/runtime/builder/page/#{page.id}"
       assert newest.body =~ "can you check this?"
     end

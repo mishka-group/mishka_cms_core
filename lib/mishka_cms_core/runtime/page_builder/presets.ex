@@ -22,10 +22,11 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Presets do
 
   ## Where it lives
 
-  In `MishkaCmsCore.Settings`, under `builder:preset:<component>`, scoped to the site. That buys the
-  RAM cache, the per-site override, the authorization and the audit trail without a resource of its
-  own — and a preset is exactly what settings are for: a small, site-wide preference that changes
-  what the software does next time.
+  In `MishkaCmsCore.Settings`, under `cms_builder.preset.<component>`, scoped to the site. That buys
+  the RAM cache, the per-site override, the authorization and the audit trail without a resource of
+  its own — and a preset is exactly what settings are for: a small, site-wide preference that
+  changes what the software does next time. Writing one takes a name that opens a builder, which
+  the editor's `settings:register` plugin declares for every `cms_builder.` key.
 
   Global components are keyed by name like any other. Two sites therefore keep separate presets for
   the same shared component, which is the point of them.
@@ -34,7 +35,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Presets do
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
   alias MishkaCmsCore.Settings
 
-  @prefix "builder:preset:"
+  @prefix "cms_builder.preset."
 
   @doc "Setting key one component's preset is stored under."
   @spec key(String.t()) :: String.t()

@@ -78,17 +78,6 @@ defmodule MishkaCmsCore.Settings do
 
   @definitions_key {__MODULE__, :definitions}
 
-  # The keys the page builder writes for itself, which no definition names, and the names that
-  # write them: any that opens a builder.
-  @builder_key_prefixes ["studio.", "builder:preset:"]
-  @builder_key_permissions [
-    "admin:dashboard:runtime:page",
-    "admin:dashboard:runtime:layout",
-    "admin:dashboard:runtime:component",
-    "admin:dashboard:runtime:error_page",
-    "admin:dashboard:code"
-  ]
-
   @definition_defaults %{
     default: nil,
     label: nil,
@@ -397,9 +386,7 @@ defmodule MishkaCmsCore.Settings do
   definition declares, or `admin:dashboard:setting` when it declares none. Takes a definition, or a
   key. A key no definition names takes what the longest `match: :prefix` definition it starts with
   declares, and `admin:dashboard:setting` when none covers it either — so a key an uninstalled
-  extension used to gate takes the setting area, which fails closed. The builder's own keys — its
-  Studio switches (`studio.*`) and component presets (`builder:preset:*`) — take any name that
-  opens a builder.
+  extension used to gate takes the setting area, which fails closed.
 
       Settings.write_permission("site.title")  #=> ["admin:dashboard:setting"]
 
@@ -415,16 +402,13 @@ defmodule MishkaCmsCore.Settings do
   def write_permission(%{}), do: ["admin:dashboard:setting"]
 
   def write_permission(key) when is_binary(key) do
-    case {definition(key) || prefix_definition(key), builder_key?(key)} do
-      {nil, true} -> @builder_key_permissions
-      {nil, false} -> write_permission(%{})
-      {definition, _builder?} -> write_permission(definition)
+    case definition(key) || prefix_definition(key) do
+      nil -> write_permission(%{})
+      definition -> write_permission(definition)
     end
   end
 
   def write_permission(_no_key), do: write_permission(%{})
-
-  defp builder_key?(key), do: Enum.any?(@builder_key_prefixes, &String.starts_with?(key, &1))
 
   # A PREFIX REGISTERED SINCE THE LAST LOAD. Definitions are loaded at boot, and a plugin can finish
   # registering after that (the settings page loads them again on every mount for the same reason),
@@ -940,24 +924,6 @@ defmodule MishkaCmsCore.Settings do
         label: gettext_noop("User permission changes"),
         description:
           gettext_noop("Tell me when an administrator grants or revokes someone's permissions.")
-      ),
-      define("notify.cms_core.page_comment.mentioned", :boolean,
-        default: true,
-        category: "notifications",
-        group: gettext_noop("Events"),
-        scope: :both,
-        label: gettext_noop("Notify people named in a review note"),
-        description:
-          gettext_noop("Writing @someone in the visual editor's Review panel tells them.")
-      ),
-      define("notify.pref.cms_core.page_comment.mentioned", :boolean,
-        default: true,
-        category: "preferences",
-        group: gettext_noop("Notifications"),
-        scope: :user,
-        label: gettext_noop("Being named in a review note"),
-        description:
-          gettext_noop("Tell me when somebody writes my name in a note in the visual editor.")
       ),
       define("notify.retention_read_days", :integer,
         default: 30,

@@ -1545,13 +1545,13 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
       view = open_studio(conn, page)
       view |> element("#pb-studio-settings") |> render_click()
 
-      refute MishkaCmsCore.Settings.get("studio.dark_pair", false, site.id) == true
+      refute MishkaCmsCore.Settings.get("cms_builder.studio.dark_pair", false, site.id) == true
 
-      view |> element("#pb-studio-opt-studio\\.dark_pair") |> render_click()
+      view |> element("#pb-studio-opt-cms_builder\\.studio\\.dark_pair") |> render_click()
 
-      assert MishkaCmsCore.Settings.get("studio.dark_pair", false, site.id) == true
+      assert MishkaCmsCore.Settings.get("cms_builder.studio.dark_pair", false, site.id) == true
 
-      assert view |> element("#pb-studio-opt-studio\\.dark_pair") |> render() =~
+      assert view |> element("#pb-studio-opt-cms_builder\\.studio\\.dark_pair") |> render() =~
                "aria-checked=\"true\""
     end
 
@@ -1567,7 +1567,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
       |> form("#pb-registry-source-form", %{"registry" => %{"source" => "hex.pm/chelekom"}})
       |> render_change()
 
-      assert MishkaCmsCore.Settings.get("studio.registry_source", nil, site.id) ==
+      assert MishkaCmsCore.Settings.get("cms_builder.studio.registry_source", nil, site.id) ==
                "hex.pm/chelekom"
     end
 

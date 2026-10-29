@@ -13619,11 +13619,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   @spec studio_options() :: [{String.t(), String.t(), String.t()}]
   def studio_options do
     [
-      {"studio.dark_pair", gettext("Generate dark pair"),
+      {"cms_builder.studio.dark_pair", gettext("Generate dark pair"),
        gettext("Auto-derive a dark value for every color token")},
-      {"studio.sync_tokens", gettext("Sync tokens across sites"),
+      {"cms_builder.studio.sync_tokens", gettext("Sync tokens across sites"),
        gettext("Push token edits to every site using this theme")},
-      {"studio.lock_tokens", gettext("Lock tokens"),
+      {"cms_builder.studio.lock_tokens", gettext("Lock tokens"),
        gettext("Prevent per-element color overrides")}
     ]
   end

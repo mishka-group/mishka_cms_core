@@ -118,29 +118,6 @@ defmodule MishkaCmsCore.Settings.SettingAreasTest do
     end
   end
 
-  describe "the builder's own settings" do
-    test "are written by any name that opens a builder, and not by the setting area alone", ctx do
-      builders =
-        Enum.map(
-          [
-            "admin:dashboard:runtime:page",
-            "admin:dashboard:runtime:layout",
-            "admin:dashboard:runtime:component",
-            "admin:dashboard:runtime:error_page",
-            "admin:dashboard:code"
-          ],
-          &holder([&1], ctx.site.id)
-        )
-
-      settings_admin = holder(["admin:dashboard:setting"], ctx.site.id)
-
-      for key <- ["studio.lock_tokens", "builder:preset:probe_card"] do
-        for builder <- builders, do: assert({:ok, _} = tenant_set(builder, ctx.site, key, true))
-        assert {:error, _} = tenant_set(settings_admin, ctx.site, key, false)
-      end
-    end
-  end
-
   describe "a setting that declares its own permission" do
     test "is written by that permission, not by the setting area", _ctx do
       assert {:error, _} = master_set(holder(["admin:dashboard:setting"]), "secret.token", "t1")

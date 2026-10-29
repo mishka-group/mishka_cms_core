@@ -1194,12 +1194,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
     socket
     |> assign(:studio_options, options)
-    |> assign(:license_token, Settings.get("studio.license_token", "", site_id))
+    |> assign(:license_token, Settings.get("cms_builder.studio.license_token", "", site_id))
     |> assign(
       :registry_source,
-      Settings.get("studio.registry_source", "registry.mishka.tools", site_id)
+      Settings.get("cms_builder.studio.registry_source", "registry.mishka.tools", site_id)
     )
-    |> assign(:applied_preset, Settings.get("studio.applied_preset", nil, site_id))
+    |> assign(:applied_preset, Settings.get("cms_builder.studio.applied_preset", nil, site_id))
   end
 
   # Two levels open on arrival — the roots and their children — because a tree that starts fully
@@ -3960,7 +3960,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_event("registry_source", %{"registry" => %{"source" => source}}, socket) do
     site_id = socket.assigns.editor.site_id
 
-    case Settings.put_as(socket.assigns[:current_user], "studio.registry_source", source,
+    case Settings.put_as(
+           socket.assigns[:current_user],
+           "cms_builder.studio.registry_source",
+           source,
            site_id: site_id
          ) do
       {:ok, _value} -> {:noreply, assign_studio_settings(socket)}

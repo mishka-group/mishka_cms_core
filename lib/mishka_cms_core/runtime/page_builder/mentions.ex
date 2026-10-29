@@ -61,11 +61,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Mentions do
   @doc """
   The notification type, and the key its per-site and per-user toggles hang off.
 
-  Public because MishkaCmsCore.Application registers the two Settings under it and
+  Public because the editor's `settings:register` plugin
+  (`MishkaCmsCore.Runtime.PageBuilder.Plugins.Settings`) registers the two Settings under it and
   `MishkaCmsCore.Notify.Delivery` checks them by the same name.
   """
   @spec notification_type() :: String.t()
-  def notification_type, do: "cms_core:page_comment:mentioned"
+  def notification_type, do: "cms_builder:page_comment:mentioned"
 
   @doc """
   A note's body, cut into the runs a card draws.
