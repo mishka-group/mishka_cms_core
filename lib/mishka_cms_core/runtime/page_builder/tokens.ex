@@ -33,7 +33,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tokens do
   which the Stylesheets admin page already owns.
   """
 
-  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace.Token
   alias MishkaCmsCore.Runtime.Stylesheet
 
@@ -102,24 +101,25 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tokens do
   end
 
   @doc """
-  Sets a token's value in the sheet that declares it, as `actor`, and recompiles the site's CSS.
+  Sets a token's value in the sheet that declares it, as `actor`.
+
+  Writing the sheet is the whole job: its save queues the row's rebuild, which builds the site's CSS
+  with the new value and stores it a few seconds later, and the site serves that from then on. A
+  shared sheet rebuilds every site.
 
   Refuses a name the site does not already declare: a token nothing resolves through is a line of
   dead CSS, and silently adding one would look like it worked. The write is the builder's own, so
   it is made by whoever may open a builder rather than by the stylesheet area alone; with no actor
   it is refused.
   """
-  @spec put(map() | nil, String.t() | nil, String.t(), String.t(), String.t() | nil) ::
+  @spec put(map() | nil, String.t() | nil, String.t(), String.t()) ::
           {:ok, Token.t()} | {:error, term()}
-  def put(actor, site_id, key, value, site_name \\ nil)
+  def put(nil, _site_id, _key, _value), do: {:error, :forbidden}
 
-  def put(nil, _site_id, _key, _value, _site_name), do: {:error, :forbidden}
-
-  def put(actor, site_id, key, value, site_name) do
+  def put(actor, site_id, key, value) do
     with {:ok, value} <- sane_value(value),
          {:ok, target} <- target_sheet(site_id, key),
          {:ok, sheet} <- write(target, key, value, actor) do
-      recompile(site_name)
       # The sheet this landed in decides it, the same way `list/1` decides it.
       {:ok, token(key, value, sheet.content, not is_nil(sheet.site_id))}
     end
@@ -354,16 +354,4 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tokens do
   defp category_order("shadow"), do: 4
   defp category_order("motion"), do: 5
   defp category_order(_other), do: 6
-
-  # The token only means something once the site's CSS is rebuilt with it. Without a site name there
-  # is nothing to rebuild — a global sheet edited outside any site's context — and the next compile
-  # of each site picks it up.
-  defp recompile(nil), do: :ok
-
-  defp recompile(site_name) do
-    TailwindCompiler.compile(site_name)
-    :ok
-  rescue
-    error -> {:error, error}
-  end
 end

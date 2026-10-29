@@ -162,13 +162,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
       # DOM id, which made LiveView throw the element away and mount this again — a reload the
       # reader saw as a flash of empty frame on every click. Staying subscribed means the same
       # mounted preview re-renders in place.
-      if connected?(socket), do: EditorSession.subscribe(token)
+      if connected?(socket), do: subscribe(token, session)
 
       {:ok,
        socket
        |> assign(:wizard_name, name)
        |> assign_session(session)
-       |> assign_example(tree, session), layout: false}
+       |> assign_example(tree, session)
+       |> follow_css(session), layout: false}
     else
       :forbidden ->
         {:ok, assign(socket, missing?: :forbidden, token: token, page_title: gettext("Preview")),
@@ -209,12 +210,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
   def mount(%{"token" => token}, _session, socket) do
     case visible_session(token, socket.assigns[:current_user]) do
       {:ok, session} ->
-        if connected?(socket), do: EditorSession.subscribe(token)
+        if connected?(socket), do: subscribe(token, session)
         bound_heap()
 
         {:ok,
-         socket |> assign_session(session) |> assign_layout(session) |> assign(:missing?, false),
-         layout: false}
+         socket
+         |> assign_session(session)
+         |> assign_layout(session)
+         |> assign(:missing?, false)
+         |> follow_css(session), layout: false}
 
       :forbidden ->
         {:ok, assign(socket, missing?: :forbidden, token: token, page_title: gettext("Canvas")),
@@ -533,6 +537,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     |> assign(:dir, session.dir)
     |> assign_new(:canvas_css, fn -> site_css(session.site_name) end)
     |> assign_new(:canvas_css_hrefs, fn -> css_hrefs(session.site_name) end)
+    # WHERE THE FRAME'S LINK POINTS NOW. The root layout linked `canvas_css_hrefs`, and a root
+    # layout is never patched, so a rebuild moves the link from the browser (`follow_css/2`).
+    |> assign_new(:canvas_css_linked, fn assigns -> assigns.canvas_css_hrefs end)
     |> then(
       &assign(
         &1,
@@ -545,7 +552,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     # `suppress_site_js` keeps the site's own bundle (and its LiveSocket) out — a second LiveSocket
     # inside the frame would fight this canvas for the same DOM — and `standalone_assets` loads the
     # admin `app.js` instead, which is where this canvas's hooks live. `suppress_site_css` turns the
-    # layout's `<link>` off because the CSS is inlined here instead; see the moduledoc.
+    # layout's site `<link>` off because the frame links its own bundle, `canvas_css_hrefs`.
     |> assign(:current_site, session.site_name && %{name: session.site_name})
     |> assign(:suppress_site_js, true)
     |> assign(:suppress_site_css, true)
@@ -662,11 +669,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     end
   end
 
-  # The canvas never links the site's public asset URL. That route is keyed on the site's own name
-  # and a content hash, and a site that is inactive, undeployed, or has simply never been compiled has
-  # neither — which is exactly the site someone opens the editor on. Those bytes are already in
-  # `AssetsState`, so they are inlined into the frame instead: no host to resolve, no route to hit,
-  # and no dependence on the site being live.
+  # The canvas links its bundle by the content hash `AssetsState` holds, `/assets/css/<bundle>/<hash>.css`,
+  # from the root layout's `<head>`; a bundle with no hash yet — a site that has never compiled — is
+  # inlined instead (`site_css/1`), and the link takes over once one has an address (`follow_css/2`).
   #
   # Both layers are needed. `__shared_base__` carries the global theme and every global component's
   # CSS; the site's own bundle carries what only that site uses.
@@ -689,10 +694,52 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     case AssetsState.get(id, "css") do
       {:ok, %{hash: hash, value: value}}
       when is_binary(hash) and hash != "" and is_binary(value) and value != "" ->
-        "/assets/css/#{URI.encode_www_form(id)}/#{hash}"
+        "/assets/css/#{URI.encode_www_form(id)}/#{hash}.css"
 
       _no_hash ->
         nil
+    end
+  end
+
+  # AN OPEN FRAME FOLLOWS ITS BUNDLE. It listens for the site's bundle and the shared base, because
+  # a site that has never compiled — or is switched off — is drawn with the base, and a document no
+  # site owns has nothing else. Each rebuild is announced on its bundle's topic
+  # (`TailwindCompiler.compile_and_store/1`, `compile_and_store_shared_base/0`).
+  defp subscribe(token, session) do
+    EditorSession.subscribe(token)
+
+    for bundle <- Enum.uniq([session.site_name || "__shared_base__", "__shared_base__"]),
+        do: Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "site:#{bundle}:assets")
+  end
+
+  # THE LIVE PAGE'S OWN SWAP, `mishka:css-updated` (the host's `css_swap.js`): the newer sheet is
+  # put beside the old one, and the old one goes only once the newer has loaded, so a frame never
+  # shows unstyled and a sheet that fails to load leaves the last one in place. Nothing else in the
+  # frame is touched. Pushed when the address moved since the link was last pointed, and once on
+  # connect: the bundle can be rebuilt between the first render and the socket, and the swap ignores
+  # an address it already links.
+  #
+  # A frame drawn before anything was compiled inlines what there is, read again in place, until a
+  # bundle has an address. Then the link takes over — the root layout keeps an empty one in its
+  # place above the generator for exactly this — and the inlined copy, which sits in `<body>` after
+  # the generator and would overrule what the author types, goes.
+  defp follow_css(socket, session) do
+    current = css_hrefs(session.site_name)
+
+    cond do
+      not connected?(socket) ->
+        socket
+
+      current == [] ->
+        assign(socket, :canvas_css, site_css(session.site_name))
+
+      current != socket.assigns.canvas_css_linked or !socket.assigns[:css_followed?] ->
+        socket
+        |> assign(canvas_css_linked: current, css_followed?: true, canvas_css: "")
+        |> push_event("mishka:css-updated", %{href: hd(current)})
+
+      true ->
+        socket
     end
   end
 
@@ -791,6 +838,21 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive do
     case EditorSession.fetch(token) do
       {:ok, session} -> {:noreply, sync_selection(socket, socket.assigns[:selection], session)}
       :error -> {:noreply, assign(socket, :missing?, true)}
+    end
+  end
+
+  # A BUNDLE THIS FRAME FOLLOWS WAS REBUILT: a token set in the Studio, a stylesheet saved anywhere.
+  # The link follows it, and the `@theme` the generator resolves classes through is read again.
+  def handle_info({:css_updated, _hash}, socket) do
+    case EditorSession.fetch(socket.assigns.token) do
+      {:ok, session} ->
+        socket
+        |> assign(:canvas_theme, theme_source(session.site_id))
+        |> follow_css(session)
+        |> then(&{:noreply, &1})
+
+      :error ->
+        {:noreply, socket}
     end
   end
 

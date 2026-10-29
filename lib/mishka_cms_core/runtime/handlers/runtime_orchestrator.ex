@@ -19,7 +19,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
        (`RuntimeCompilerWorker.refresh_after_bulk/1`)
     2. JS-hook templates (`BootHandler.create_js_hooks_template/0`)
     3. stylesheet load (`BootHandler.load_stylesheets/0`)
-    4. for a global change: drop + rebuild the shared base once
+    4. for a global change: rebuild the shared base once, in place, so a base that does not build
+       leaves the last one that did
     5. fan out per-site asset jobs (unique + debounced)
 
   Step 4 precedes 5 so every site recompiles against a fresh shared base
@@ -98,7 +99,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator do
   end
 
   defp rebuild_assets(:global) do
-    TailwindCompiler.delete_shared_base_css()
     TailwindCompiler.compile_and_store_shared_base()
     JavaScriptCompiler.delete_shared_base_js()
     BootHandler.create_assets_compilation_jobs("asset")

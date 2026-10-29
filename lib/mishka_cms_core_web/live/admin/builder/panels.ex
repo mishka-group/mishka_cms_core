@@ -7826,6 +7826,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   attr(:resumable, :any, default: nil)
   attr(:inherited_draft, :any, default: nil)
 
+  attr(:asset_failures, :list,
+    default: [],
+    doc: "the CSS and JS bundles behind this document whose last build failed"
+  )
+
   attr(:original_changed?, :boolean,
     default: false,
     doc: "whether the document the open draft was made from has changed since"
@@ -8030,6 +8035,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
             "The original was changed after this draft was made. Publishing the draft writes it over those changes."
           )}
         </span>
+      </div>
+
+      <%!-- A BUNDLE DID NOT BUILD. Nothing on screen says so on its own: the canvas and the live site
+            keep the last bundle that built, which is right for a visitor and a trap for an author,
+            whose change is simply not there. The reason is here; the link is to the page that shows
+            it beside the rows, for whoever that page opens to. --%>
+      <div
+        :for={failure <- @asset_failures}
+        id={"pb-asset-build-#{failure.type}-#{:erlang.phash2(failure.bundle)}"}
+        role="alert"
+        class="flex flex-none flex-wrap items-center gap-2.5 border-b border-[#f0d9d9] bg-[#fdf1f1] px-4 py-[9px]"
+      >
+        <span class="grid size-[22px] flex-none place-items-center rounded-[7px] bg-[#f9e2e2] text-[#a33a3a]">
+          <.icon name={:alert} size={12} />
+        </span>
+        <span class="min-w-0 flex-1 text-[11.5px] font-semibold text-[#8a2f2f]">
+          {asset_failure_title(failure)}
+          <span class="block truncate font-normal" title={failure.reason}>{failure.reason}</span>
+        </span>
+        <.link
+          :if={failure.link}
+          navigate={failure.link}
+          class="flex h-7 flex-none items-center rounded-[8px] border border-[#f0d9d9] bg-white px-2.5 font-['Space_Grotesk'] text-[11px] font-bold text-[#a33a3a] hover:bg-[#fef7f7]"
+        >
+          {gettext("See the error")}
+        </.link>
       </div>
 
       <%!-- PUBLISH MODE KEEPS NOTHING, AND HAS TO SAY SO. Every other mode writes as you work; this
@@ -8683,6 +8714,38 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
     </section>
     """
   end
+
+  defp asset_failure_title(%{bundle: "__shared_base__", served: :last_good}),
+    do:
+      gettext(
+        "The shared CSS every site starts with did not build. Every site keeps the last one that built, so the latest changes are not live yet."
+      )
+
+  defp asset_failure_title(%{bundle: "__shared_base__"}),
+    do: gettext("The shared CSS every site starts with did not build.")
+
+  defp asset_failure_title(%{type: "css", bundle: site, served: :last_good}),
+    do:
+      gettext(
+        "The CSS of %{site} did not build. The canvas and the live site keep the last one that built, so the latest changes are not live yet.",
+        site: site
+      )
+
+  defp asset_failure_title(%{type: "css", bundle: site, served: :partial}),
+    do: gettext("The CSS of %{site} did not build completely.", site: site)
+
+  defp asset_failure_title(%{type: "css", bundle: site}),
+    do: gettext("The CSS of %{site} did not build.", site: site)
+
+  defp asset_failure_title(%{type: "js", bundle: site, served: :last_good}),
+    do:
+      gettext(
+        "The JavaScript of %{site} did not build. The live site keeps the last one that built, so the latest changes are not live yet.",
+        site: site
+      )
+
+  defp asset_failure_title(%{type: "js", bundle: site}),
+    do: gettext("The JavaScript of %{site} did not build.", site: site)
 
   attr(:id, :string, required: true)
   attr(:lines, :list, required: true)

@@ -12,9 +12,15 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
+  use Oban.Testing, repo: @repo
+
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.Tokens
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
+  alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
 
   require Ash.Query
 
@@ -213,6 +219,147 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensTest do
     end
   end
 
+  # ONE BUILD PER EDIT, AND IT IS THE ROW'S. `put/4` writes the sheet and nothing else: saving it
+  # queues the row's job (`SendToOban`), that job queues the site's CSS bundle, and the bundle job
+  # builds and stores it (`TailwindCompiler.compile_and_store/1`). Quick edits share one bundle job,
+  # since a site has one pending at a time. `SendToOban` does nothing under `env_test?`, so the flag
+  # is off here.
+  describe "the CSS a token reaches" do
+    setup %{site: site} do
+      Application.put_env(:mishka_cms_core, :env_test?, false)
+
+      :ok =
+        SiteState.save(%{
+          id: site.id,
+          name: site.name,
+          host: site.host,
+          priority: 0,
+          active: true
+        })
+
+      on_exit(fn ->
+        Application.put_env(:mishka_cms_core, :env_test?, true)
+        SiteState.delete(site.id)
+      end)
+    end
+
+    test "a site's first override queues its new sheet's job, active so the job builds it", %{
+      site: site
+    } do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+
+      assert [%{"action" => "create", "data" => sheet}] = sheet_jobs(site.id)
+      assert sheet["active"]
+      assert sheet["content"] =~ "--danger-light: #ff0000;"
+    end
+
+    test "an edit of the site's own sheet queues that sheet's job", %{site: site} do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+      [%{"data" => %{"id" => id}}] = sheet_jobs(site.id)
+      @repo.delete_all(Oban.Job)
+
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#00ff00")
+
+      assert [%{"action" => "update", "data" => %{"id" => ^id} = sheet}] = sheet_jobs(site.id)
+      assert sheet["content"] =~ "--danger-light: #00ff00;"
+    end
+
+    # A site admin writes as the site, so the row and its job carry that site.
+    test "a site admin's writes queue their own site's jobs", %{site: site} do
+      admin = create_user_with_permissions!(["admin:dashboard:runtime:page"], site_id: site.id)
+
+      assert {:ok, _} = Tokens.put(admin, site.id, "--danger-light", "#ff0000")
+      assert [%{"action" => "create", "data" => %{"active" => true}}] = sheet_jobs(site.id)
+      @repo.delete_all(Oban.Job)
+
+      assert {:ok, _} = Tokens.put(admin, site.id, "--danger-light", "#00ff00")
+      assert [%{"action" => "update", "data" => sheet}] = sheet_jobs(site.id)
+      assert sheet["content"] =~ "--danger-light: #00ff00;"
+    end
+
+    test "the sheet's job queues the site's CSS bundle", %{site: site} do
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#ff0000")
+      [job] = sheet_jobs(site.id)
+
+      assert :ok = perform_job(RuntimeCompilerWorker, job)
+
+      assert [_bundle] = bundle_jobs(site.name)
+    end
+
+    test "edits made before the bundle is built are one bundle job", %{site: site} do
+      for value <- ~w(#ff0000 #00ff00 #0000ff) do
+        assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", value)
+        Enum.each(sheet_jobs(site.id), &perform_job(RuntimeCompilerWorker, &1))
+      end
+
+      assert [_bundle] = bundle_jobs(site.name)
+    end
+
+    # The shared sheet is the start of every site's CSS, so its job rebuilds that start in place —
+    # the stored one is replaced only by one that built — and queues every active site's bundle.
+    @tag :integration
+    test "a master's edit of the shared sheet rebuilds the base and queues every active site's bundle",
+         %{site: site} do
+      TailwindCompiler.ensure_installed()
+      other = create_site!(name: "tokens-other", host: "other.tokens.local", active: true)
+
+      :ok =
+        SiteState.save(%{
+          id: other.id,
+          name: other.name,
+          host: other.host,
+          priority: 0,
+          active: true
+        })
+
+      on_exit(fn ->
+        SiteState.delete(other.id)
+        for type <- ~w(css brotli_css gzip_css), do: AssetsState.delete("__shared_base__", type)
+      end)
+
+      :ok =
+        AssetsState.save(%{
+          id: "__shared_base__",
+          type: "css",
+          value: ".old{}",
+          hash: "old",
+          updated_at: DateTime.utc_now()
+        })
+
+      assert {:ok, _} = Tokens.put(builder(), nil, "--danger-light", "#13579b")
+      assert [%{"data" => %{"site_id" => nil}} = job] = sheet_jobs(nil)
+
+      assert :ok = perform_job(RuntimeCompilerWorker, job)
+
+      assert AssetsState.get_value("__shared_base__", "css") =~ ~r/--danger-light:\s*#13579b/
+      assert [_bundle] = bundle_jobs(site.name)
+      assert [_bundle] = bundle_jobs(other.name)
+    end
+
+    @tag :integration
+    test "and the bundle it builds is stored with the new value, and announced", %{site: site} do
+      TailwindCompiler.ensure_installed()
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "site:#{site.name}:assets")
+
+      # The bundle builds the shared base too, out of this test's rows, which roll back.
+      on_exit(fn ->
+        for id <- [site.name, "__shared_base__"],
+            type <- ~w(css brotli_css gzip_css),
+            do: AssetsState.delete(id, type)
+      end)
+
+      assert {:ok, _} = Tokens.put(builder(), site.id, "--danger-light", "#13579b")
+      Enum.each(sheet_jobs(site.id), &perform_job(RuntimeCompilerWorker, &1))
+      [bundle] = bundle_jobs(site.name)
+
+      assert {:ok, _css} = perform_job(RuntimeCompilerWorker, bundle)
+
+      assert AssetsState.get_value(site.name, "css") =~ ~r/--danger-light:\s*#13579b/
+      assert AssetsState.get_value(site.name, "brotli_css")
+      assert_received {:css_updated, _hash}
+    end
+  end
+
   describe "declarations/1" do
     test "reads name and value pairs in source order" do
       assert Tokens.declarations(":root{--a: 1px; --b: red;}") == [{"--a", "1px"}, {"--b", "red"}]
@@ -231,6 +378,19 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensTest do
   end
 
   defp value_of(tokens, key), do: tokens |> Enum.find(&(&1.key == key)) |> Map.get(:value)
+
+  defp sheet_jobs(site_id) do
+    for %{args: %{"resource" => "MishkaCmsCore.Runtime.Stylesheet", "data" => sheet} = args} <-
+          all_enqueued(worker: RuntimeCompilerWorker),
+        sheet["site_id"] == site_id,
+        do: args
+  end
+
+  defp bundle_jobs(site_name) do
+    for %{args: %{"data" => %{"site_name" => ^site_name, "type" => "css"}} = args} <-
+          all_enqueued(worker: RuntimeCompilerWorker),
+        do: args
+  end
 
   defp sheet_count(site_id) do
     MishkaCmsCore.Runtime.Stylesheet

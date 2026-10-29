@@ -70,6 +70,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.PageBuilder.Marketplace
+  alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
@@ -294,6 +295,78 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     Enum.each(@folder_topics, &Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, &1))
   end
 
+  # A BUNDLE THAT DID NOT BUILD, said where the author works. The canvas and the live site keep the
+  # last bundle that built, so nothing on screen looks broken, which is exactly why the author has to
+  # be told the latest change is not live. A site's document hears its own bundles and the shared
+  # base its CSS starts with; a global document is built into every site, so it hears them all.
+  defp subscribe_asset_builds(editor) do
+    editor
+    |> asset_bundles()
+    |> Enum.map(&CompilerHelpers.asset_builds_topic/1)
+    |> Enum.uniq()
+    |> Enum.each(&Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, &1))
+  end
+
+  defp asset_bundles(%{site_name: site_name}) when is_binary(site_name),
+    do: [site_name, "__shared_base__"]
+
+  defp asset_bundles(_global_document), do: [:all]
+
+  @asset_pages %{
+    "css" => "/admin/dashboard/runtime/stylesheets",
+    "js" => "/admin/dashboard/runtime/js-hooks"
+  }
+
+  # The link goes to the page that shows the error, and only for someone that page opens to; the
+  # reason is in the bar itself either way. A site admin on a global document hears only their own
+  # site and the shared base.
+  defp asset_failures(editor, actor) do
+    case failed_builds(editor, actor) do
+      [] ->
+        []
+
+      failures ->
+        links =
+          Map.new(@asset_pages, fn {type, path} -> {type, Sidebar.opens?(actor, path) && path} end)
+
+        Enum.map(failures, &Map.put(&1, :link, links[&1.type] || nil))
+    end
+  end
+
+  # The site's own CSS failure already carries the shared base's reason when that is the cause, so
+  # the base's bar is drawn only when the site's CSS has none of its own.
+  defp failed_builds(%{site_name: site_name}, _actor) when is_binary(site_name) do
+    css =
+      Enum.find_value([site_name, "__shared_base__"], fn bundle ->
+        failure = CompilerHelpers.asset_build_failure(bundle, "css")
+        failure && Map.merge(failure, %{bundle: bundle, type: "css"})
+      end)
+
+    js =
+      case CompilerHelpers.asset_build_failure(site_name, "js") do
+        nil -> nil
+        failure -> Map.merge(failure, %{bundle: site_name, type: "js"})
+      end
+
+    Enum.reject([css, js], &is_nil/1)
+  end
+
+  defp failed_builds(_global_document, actor) do
+    for type <- ~w(css js),
+        {bundle, failure} <- CompilerHelpers.asset_build_failures(type),
+        heard?(bundle, actor),
+        do: Map.merge(failure, %{bundle: bundle, type: type})
+  end
+
+  defp heard?("__shared_base__", _actor), do: true
+  defp heard?(_bundle, %{site_id: nil}), do: true
+
+  defp heard?(bundle, %{site_id: site_id}) do
+    match?({:ok, %{name: ^bundle}}, MishkaCmsCore.Runtime.States.SiteState.get(site_id))
+  end
+
+  defp heard?(_bundle, _actor), do: false
+
   # A STORED TEMPLATE THE TOKENIZER REFUSES USED TO BE A CRASH LOOP. `resume_or_open/5` answers
   # `{:error, %{line:, column:, message:}}` when the document will not parse, and `{opened, editor}`
   # MATCHES that — it is a two-tuple — so the error map became the editor and the mount died on
@@ -344,6 +417,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
       Presence.join(editor.token, actor)
       subscribe_review()
       subscribe_folders()
+      subscribe_asset_builds(editor)
     end
 
     socket = load_palette_async(socket, editor, actor, params)
@@ -383,6 +457,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     # between clicking an element and seeing its panel is a query and a parse too many.
     |> assign(:style_tokens, [])
     |> load_tokens_async(editor)
+    |> assign(:asset_failures, asset_failures(editor, actor))
     |> assign(:section, section)
     # BACK TO WHERE THE AUTHOR CAME FROM. A component opened from a page's Inspector carries that
     # page's builder in `return_to`, so editing what the page uses is a trip rather than a detour
@@ -2302,6 +2377,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   def handle_info({:put_flash, level, message}, socket),
     do: {:noreply, put_flash(socket, level, message)}
 
+  def handle_info({:asset_build, _bundle, _type}, socket) do
+    %{editor: editor, current_user: actor} = socket.assigns
+    {:noreply, assign(socket, :asset_failures, asset_failures(editor, actor))}
+  end
+
   def handle_info(_message, socket), do: {:noreply, socket}
 
   defp sync_session(socket, token) do
@@ -3634,8 +3714,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   end
 
   # A design token is a declaration in the site's own theme stylesheet, so setting one rewrites that
-  # row and recompiles the site's CSS. Every component that resolves through the token changes at
-  # once — which is the whole reason this lives in the Studio rather than on an element.
+  # row, and the row's save rebuilds the site's CSS. Every component that resolves through the token
+  # changes at once — which is the whole reason this lives in the Studio rather than on an element.
   def handle_event("set_token", %{"key" => key, "value" => value}, socket) do
     editor = socket.assigns.editor
 
@@ -6469,13 +6549,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   # A design-system plugin gets a say before a token changes: it can normalise the value — snap a
   # colour to the palette, a length to the scale — or refuse it outright.
   defp set_token(socket, editor, key, value) do
-    case Tokens.put(
-           socket.assigns.current_user,
-           editor.site_id,
-           "--" <> key,
-           value,
-           editor.site_name
-         ) do
+    case Tokens.put(socket.assigns.current_user, editor.site_id, "--" <> key, value) do
       {:ok, _token} ->
         # The table has nothing to subscribe to — a token lives in a stylesheet's CSS text — so the
         # write bumps the revision and the table reads again.
@@ -7440,6 +7514,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
           statuses={@statuses}
           resumable={@resumable}
           inherited_draft={@inherited_draft}
+          asset_failures={@asset_failures}
           original_changed?={
             is_binary(@editor.draft_id) and Drafts.original_changed?(@section, @record, @draft)
           }
