@@ -145,6 +145,80 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
     end
   end
 
+  # THE ROW'S OWN JOB SUCCEEDS EITHER WAY. A stylesheet or hook row only queues its bundle, so its
+  # status said `Live` while the bundle's build failed and the site went on serving the last one.
+  describe "an asset-backed record whose bundle did not build" do
+    alias MishkaCmsCore.Runtime.Compilers.Helpers
+
+    setup do
+      site = create_site!(name: "abf-status-#{System.unique_integer([:positive])}")
+
+      on_exit(fn ->
+        Enum.each([site.name, "abf-status-other"], &Helpers.forget_asset_builds/1)
+      end)
+
+      %{site: site}
+    end
+
+    test "says so, with the reason, and that the last bundle is still served", %{site: site} do
+      hook = [site_id: site.id] |> create_js_hook!() |> Ash.load!(:site, authorize?: false)
+      :ok = Helpers.record_asset_build(site.name, "js", {:error, "Could not resolve x", :last_good})
+
+      status = RuntimeStatus.compute(hook, MishkaCmsCore.Runtime.JsHook)
+
+      assert status.state == :failed
+      assert status.label == "Bundle build failed"
+      assert status.message =~ "The js bundle of #{site.name} did not build."
+      assert status.message =~ "Still serving the last one that built."
+      assert status.message =~ "Could not resolve x"
+    end
+
+    test "does not claim a last bundle when there was none to keep", %{site: site} do
+      hook = [site_id: site.id] |> create_js_hook!() |> Ash.load!(:site, authorize?: false)
+      :ok = Helpers.record_asset_build(site.name, "js", {:error, "broke", :nothing})
+
+      status = RuntimeStatus.compute(hook, MishkaCmsCore.Runtime.JsHook)
+
+      assert status.state == :failed
+      refute status.message =~ "Still serving"
+    end
+
+    test "a site's row hears only its own bundle", %{site: site} do
+      hook = [site_id: site.id] |> create_js_hook!() |> Ash.load!(:site, authorize?: false)
+      :ok = Helpers.record_asset_build("abf-status-other", "js", {:error, "theirs", :last_good})
+
+      assert RuntimeStatus.compute(hook, MishkaCmsCore.Runtime.JsHook).state in [:live, :pending]
+    end
+
+    # A global row is in the shared base and in every site's bundle, so any of them failing is its.
+    test "a global row hears every bundle", %{site: site} do
+      {:ok, sheet} =
+        MishkaCmsCore.Runtime.Stylesheet
+        |> Ash.Changeset.for_create(
+          :master_create,
+          %{
+            name: "abf-global-#{System.unique_integer([:positive])}",
+            kind: :custom,
+            content: ".a{}",
+            site_id: nil,
+            active: true
+          },
+          authorize?: false
+        )
+        |> Ash.create()
+
+      :ok = Helpers.record_asset_build(site.name, "css", {:error, "one", :last_good})
+      :ok = Helpers.record_asset_build("abf-status-other", "css", {:error, "two", :last_good})
+
+      status = RuntimeStatus.compute(sheet, MishkaCmsCore.Runtime.Stylesheet)
+
+      assert status.state == :failed
+      assert status.message =~ site.name
+      assert status.message =~ "abf-status-other"
+      assert status.message =~ "one; two"
+    end
+  end
+
   describe "a compile job from before this node booted" do
     defp job!(page, state, inserted_at) do
       {:ok, job} =

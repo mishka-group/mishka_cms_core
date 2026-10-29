@@ -17,8 +17,12 @@ defmodule MishkaCmsCore.Runtime.States.CompileFailureState do
   `{MishkaCmsCore.Runtime.JsHook, hook_id, bundle}` is a JS hook left out of a site's JavaScript
   bundle — see `MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.left_out/1`.
 
+  `{:asset_build, bundle, "css" | "js"}` is a CSS or JavaScript bundle whose last build failed — see
+  `MishkaCmsCore.Runtime.Compilers.Helpers.record_asset_build/3`.
+
   Read by `MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler`,
-  `MishkaCmsCore.Runtime.RuntimeStatus` and `MishkaCmsWeb.ErrorHTML.offline_page/1`.
+  `MishkaCmsCore.Runtime.RuntimeStatus`, `MishkaCmsWeb.ErrorHTML.offline_page/1` and the builder's
+  bundle bar.
   """
   use GenServer
 

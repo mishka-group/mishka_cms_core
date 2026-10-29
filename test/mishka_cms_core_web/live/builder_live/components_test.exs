@@ -447,7 +447,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.ComponentsTest do
 
       # The same stylesheet the editing canvas gets, by the same cacheable URL — carried as the
       # address here, because the `<link>` is the root layout's now. See the canvas tests.
-      assert css_hrefs(preview) == ["/assets/css/__shared_base__/abc"]
+      assert css_hrefs(preview) == ["/assets/css/__shared_base__/abc.css"]
       # The example's own subtree, resolved through the runtime the way the canvas resolves it.
       assert body =~ ~s(data-component="promo-card")
       # Preview mode: no drop tail, no element toolbar, no chrome stylesheet.

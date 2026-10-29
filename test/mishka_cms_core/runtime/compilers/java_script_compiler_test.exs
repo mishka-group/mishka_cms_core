@@ -36,6 +36,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       AssetsState.delete("test_site", "js")
       AssetsState.delete("test_site", "brotli_js")
       AssetsState.delete("test_site", "gzip_js")
+      # A failed build is recorded beside the bundles (`Helpers.record_asset_build/3`), and this
+      # module is not a DataCase, whose cleanup would forget it.
+      MishkaCmsCore.Runtime.Compilers.Helpers.forget_asset_builds("test_site")
     end)
 
     :ok
@@ -199,6 +202,36 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       assert log_output =~ "Failed to compile JavaScript for site test_site"
 
       ensure_entry_modules_exist()
+    end
+
+    # A BROKEN BUILD IS RECORDED, beside the bundle it did not replace, so the editor and the JS
+    # Hooks page can say the latest change is not live; the next build that works forgets it.
+    test "records a failed build, and forgets it once a build works" do
+      alias MishkaCmsCore.Runtime.Compilers.Helpers
+      on_exit(fn -> Helpers.forget_asset_builds("test_site") end)
+
+      assert {:ok, _js} = JavaScriptCompiler.compile_and_store("test_site")
+      assert Helpers.asset_build_failure("test_site", "js") == nil
+      good = AssetsState.get_value("test_site", "js")
+
+      remove_entry_module("boot.js")
+
+      capture_log(fn ->
+        assert {:error, _reason} = JavaScriptCompiler.compile_and_store("test_site")
+      end)
+
+      ensure_entry_modules_exist()
+
+      assert %{served: :last_good, reason: reason} =
+               Helpers.asset_build_failure("test_site", "js")
+
+      assert reason =~ "Esbuild compilation failed"
+
+      assert AssetsState.get_value("test_site", "js") == good,
+             "the broken build replaced the bundle"
+
+      assert {:ok, _js} = JavaScriptCompiler.compile_and_store("test_site")
+      assert Helpers.asset_build_failure("test_site", "js") == nil
     end
   end
 

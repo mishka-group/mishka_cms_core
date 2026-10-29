@@ -295,9 +295,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensTest do
       assert [_bundle] = bundle_jobs(site.name)
     end
 
-    # The shared sheet is the start of every site's CSS, so its job drops that start and queues
-    # every active site's bundle.
-    test "a master's edit of the shared sheet queues every active site's bundle", %{site: site} do
+    # The shared sheet is the start of every site's CSS, so its job rebuilds that start in place —
+    # the stored one is replaced only by one that built — and queues every active site's bundle.
+    @tag :integration
+    test "a master's edit of the shared sheet rebuilds the base and queues every active site's bundle",
+         %{site: site} do
+      TailwindCompiler.ensure_installed()
       other = create_site!(name: "tokens-other", host: "other.tokens.local", active: true)
 
       :ok =
@@ -309,7 +312,10 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensTest do
           active: true
         })
 
-      on_exit(fn -> SiteState.delete(other.id) end)
+      on_exit(fn ->
+        SiteState.delete(other.id)
+        for type <- ~w(css brotli_css gzip_css), do: AssetsState.delete("__shared_base__", type)
+      end)
 
       :ok =
         AssetsState.save(%{
@@ -320,14 +326,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensTest do
           updated_at: DateTime.utc_now()
         })
 
-      on_exit(fn -> AssetsState.delete("__shared_base__", "css") end)
-
-      assert {:ok, _} = Tokens.put(builder(), nil, "--danger-light", "#ff0000")
+      assert {:ok, _} = Tokens.put(builder(), nil, "--danger-light", "#13579b")
       assert [%{"data" => %{"site_id" => nil}} = job] = sheet_jobs(nil)
 
       assert :ok = perform_job(RuntimeCompilerWorker, job)
 
-      refute AssetsState.exists?("__shared_base__", "css")
+      assert AssetsState.get_value("__shared_base__", "css") =~ ~r/--danger-light:\s*#13579b/
       assert [_bundle] = bundle_jobs(site.name)
       assert [_bundle] = bundle_jobs(other.name)
     end

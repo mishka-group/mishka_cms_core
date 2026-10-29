@@ -112,4 +112,20 @@ defmodule MishkaCmsCore.Runtime.Compilers.SharedBaseStalenessTest do
              "a layout this site cannot render still charged its visitors for the CSS"
     end
   end
+
+  # A document no site owns is drawn with the shared base alone, so its open builder frame listens
+  # for the base's own rebuild, announced the way a site's bundle is.
+  describe "a rebuilt shared base" do
+    test "is announced on its own topic, once per change" do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "site:__shared_base__:assets")
+      TailwindCompiler.delete_shared_base_css()
+
+      {:ok, _base} = TailwindCompiler.compile_and_store_shared_base()
+      hash = AssetsState.hash("__shared_base__", "css")
+      assert_received {:css_updated, ^hash}
+
+      {:ok, _base} = TailwindCompiler.compile_and_store_shared_base()
+      refute_received {:css_updated, _same}, "an unchanged base was announced again"
+    end
+  end
 end

@@ -57,6 +57,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.SiteRuntime do
 
     unloaded = unload_modules(site_name, module_specs)
     assets = AssetsState.delete_by_site(site_name)
+    :ok = Helpers.forget_asset_builds(site_name)
     routes = WebRunTimeMetaDataState.delete_by_site(site_name)
 
     if remove_templates? do
