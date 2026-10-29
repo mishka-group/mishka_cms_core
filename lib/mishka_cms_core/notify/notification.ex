@@ -130,6 +130,12 @@ defmodule MishkaCmsCore.Notify.Notification do
           label fn -> dgettext("mishka_gervaz", "Notification") end
 
           # Weight is the template's (it knows read/unread); the colour is the same either way.
+          #
+          # A PLAIN LINK, because a notification can point outside this page's live_session — a
+          # mention in the visual editor points into the editor's own — and LiveView refuses a live
+          # navigation across that boundary, logs it and falls back to a page load. A cell renders
+          # from the record alone, with no socket to ask the router which kind of link it is, so
+          # it is always the page load the refusal ended in. The bell, which has the socket, asks.
           render fn record ->
             assigns = %{
               title: Gettext.gettext(MishkaCmsCore.Gettext, record.title),
@@ -137,7 +143,7 @@ defmodule MishkaCmsCore.Notify.Notification do
             }
 
             ~H"""
-            <.link :if={@link} navigate={@link} class="text-[#1b1a18] hover:underline">
+            <.link :if={@link} href={@link} class="text-[#1b1a18] hover:underline">
               {@title}
             </.link>
             <span :if={!@link} class="text-[#1b1a18]">{@title}</span>

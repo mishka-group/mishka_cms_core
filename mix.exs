@@ -104,6 +104,10 @@ defmodule MishkaCmsCore.MixProject do
       {:ash_postgres, "~> 2.15"},
       {:ash_json_api, "~> 1.7"},
       {:ash_phoenix, "~> 2.3"},
+      # The admin is LiveView throughout. Named here, not left to what the dependencies above allow,
+      # because the notification bell asks `navigation_type/2` (1.2.10) whether a link may be
+      # followed live.
+      {:phoenix_live_view, "~> 1.2 and >= 1.2.10"},
       {:ash_rate_limiter, "~> 2.0"},
       {:hammer, "~> 7.5"},
       {:remote_ip, "~> 1.2"},

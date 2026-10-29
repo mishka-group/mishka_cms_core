@@ -137,7 +137,87 @@ defmodule MishkaCmsCoreWeb.Test.NotifyUITest do
     assert render_async(view) =~ "Hello there"
   end
 
+  # A NOTIFICATION CAN POINT OUTSIDE THE PAGE'S LIVE_SESSION — a mention in the visual editor points
+  # into the editor's own — and LiveView refuses a live navigation across that boundary, logs
+  # "unauthorized live_redirect" and falls back to a page load. `/probe-editor/…` is routed in no
+  # admin session here; `/admin/dashboard/notifications` is in the admin's own.
+  describe "following a notification's link" do
+    setup %{conn: conn} do
+      admin = create_admin("boss@example.com")
+      %{admin: admin, conn: log_in(conn, admin)}
+    end
+
+    test "from the bell, a page outside the admin's session is a page load", %{
+      conn: conn,
+      admin: admin
+    } do
+      Notify.deliver({:user, admin.id}, %{type: "test:x", title: "Ping", link: "/probe-editor/x"})
+      {:ok, view, _html} = live(conn, "/admin/dashboard")
+      _loaded = render(view)
+
+      open =
+        element(view, "#bell-notif-#{first_unread_id(admin)} button[phx-click='notify_open']")
+
+      assert {:error, {:redirect, %{to: "/probe-editor/x"}}} = render_click(open)
+    end
+
+    test "from the bell, a page inside the admin's session stays a live navigation", %{
+      conn: conn,
+      admin: admin
+    } do
+      link = "/admin/dashboard/notifications"
+      Notify.deliver({:user, admin.id}, %{type: "test:x", title: "Ping", link: link})
+      {:ok, view, _html} = live(conn, "/admin/dashboard")
+      _loaded = render(view)
+
+      open =
+        element(view, "#bell-notif-#{first_unread_id(admin)} button[phx-click='notify_open']")
+
+      assert {:error, {:live_redirect, %{to: ^link}}} = render_click(open)
+    end
+
+    test "from the bell, a link that is not a path of this app only marks it read", %{
+      conn: conn,
+      admin: admin
+    } do
+      Notify.deliver({:user, admin.id}, %{type: "test:x", title: "Ping", link: "//elsewhere.test"})
+
+      {:ok, view, _html} = live(conn, "/admin/dashboard")
+      _loaded = render(view)
+
+      id = first_unread_id(admin)
+      view |> element("#bell-notif-#{id} button[phx-click='notify_open']") |> render_click()
+
+      assert has_element?(view, "#topbar-notifs"), "still on the dashboard"
+      assert unread(admin) == [], "and the notification is read"
+    end
+
+    # A table cell renders from the record alone, with no socket to ask the router, so the inbox's
+    # link is always the plain one.
+    test "from the inbox, the title is a plain link", %{conn: conn, admin: admin} do
+      Notify.deliver({:user, admin.id}, %{type: "test:x", title: "Ping", link: "/probe-editor/x"})
+      {:ok, view, _html} = live(conn, "/admin/dashboard/notifications")
+
+      links =
+        view
+        |> render_async()
+        |> LazyHTML.from_fragment()
+        |> LazyHTML.query(~s(a[href="/probe-editor/x"]))
+
+      refute Enum.empty?(links), "the title is not a link to the notification's page"
+      assert LazyHTML.attribute(links, "data-phx-link") == []
+    end
+  end
+
   # ── helpers (mirrors dashboard_home_test) ───────────────────────────────────
+
+  defp unread(user) do
+    Notification
+    |> Ash.Query.for_read(:feed)
+    |> Ash.Query.filter(is_nil(read_at))
+    |> Ash.read!(actor: user, tenant: user.site_id, page: [limit: 1])
+    |> Map.get(:results)
+  end
 
   defp first_unread_id(user) do
     Notification
