@@ -638,9 +638,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   # A STYLESHEET OR A JS HOOK IS BUILT INTO ITS SITE'S BUNDLE, not rendered: its boxes are that
   # bundle — its size as visitors download it, whether it is built and how long the last rebuild
   # took — and a fourth of its own: when the CSS was built, or how many templates attach the hook.
+  # EVERY BOX ONE HEIGHT. `auto-rows-fr` makes each row as tall as the tallest box in the grid, so a
+  # box with a hint under its value does not leave its neighbours, or the other row, shorter.
   defp metric_grid(%{resource: resource} = assigns) when resource in [Stylesheet, JsHook] do
     ~H"""
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid auto-rows-fr grid-cols-2 gap-3">
       <div id="runtime-preview-bundle">
         <.metric
           icon="hero-archive-box"
@@ -684,7 +686,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp metric_grid(assigns) do
     ~H"""
-    <div class="grid grid-cols-2 gap-3">
+    <div class="grid auto-rows-fr grid-cols-2 gap-3">
       <div id="runtime-preview-render-time">
         <.metric
           icon="hero-clock"
