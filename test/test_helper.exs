@@ -15,47 +15,19 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
   Ecto.Migrator.up(MishkaCmsCore.Repo, 0, MishkaCmsCore.Test.ObanMigration, log: false)
   :ok = Supervisor.stop(MishkaCmsCore.Repo)
 
-  # Runtime module compilation picks its supervisor partition off this counter, so it has to exist
-  # before anything compiles a page, layout or component.
-  :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
-
-  children = [
-    MishkaCmsCore.Repo,
-    # The runtime workers this library owns go through Oban, so it has to exist. `testing: :manual`
-    # means nothing drains a queue behind a test's back — jobs are asserted on, not run.
-    {Oban, Application.fetch_env!(:mishka_cms_core, Oban)},
-    {Phoenix.PubSub, name: MishkaCmsCore.PubSub},
-    MishkaCmsCore.Runtime.States.SiteState,
-    MishkaCmsCore.Runtime.States.SettingsState,
-    MishkaCmsCore.Runtime.States.TranslationsState,
-    MishkaCmsCore.Runtime.States.RedirectsState,
-    MishkaCmsCore.Runtime.States.ViewerState,
-    MishkaCmsCore.Runtime.States.RateLimitState,
-    MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,
-    MishkaCmsCore.Runtime.States.AssetsState,
-    MishkaCmsCore.Runtime.States.CompileFailureState,
-    # Rendered palette-card previews. Keyed on the template a card would drop, because a
-    # component's first render is a module compile and every later one is two milliseconds.
-    MishkaCmsCore.Runtime.States.CardPreviewState,
-    MishkaCmsCore.Runtime.States.EditorSessionState,
-    MishkaCmsCore.Runtime.States.EditorHistoryState,
-    MishkaCmsCore.Runtime.PageBuilder.Presence,
-    # The runtime compiler: the gate that bounds how many compiles run at once, the registry that
-    # makes concurrent requests for one module wait on a single compile, and the partitioned
-    # supervisor those compiles run under. A test that renders a lazy component compiles it for
-    # real, so all three are as necessary here as in the CMS.
-    MishkaCmsCore.Runtime.Handlers.CompileGate,
-    {Registry, keys: :unique, name: MishkaCms.ModuleCompilerHandlerRegistry},
-    {PartitionSupervisor,
-     child_spec: DynamicSupervisor,
-     name: MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandlerPartition,
-     partitions: System.schedulers_online()},
-    # The unlinked tasks `BootHandler.build_sitemaps/0` builds each site's sitemap under, and
-    # `SitemapCompiler` enqueues every site's in once its plugin chain changes.
-    {Task.Supervisor, name: MishkaCmsCore.Runtime.TaskSupervisor},
-    {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
-    MishkaCmsCore.TestEndpoint
-  ]
+  # What a host starts around its repo and endpoint, in the host's order (`MishkaCmsCore.Supervision`).
+  # The PubSub, the partition counter the runtime compiler picks its supervisor off, and the editor's
+  # processes are the core application's own, already running.
+  children =
+    [
+      MishkaCmsCore.Repo,
+      # The runtime workers this library owns go through Oban, so it has to exist. `testing: :manual`
+      # means nothing drains a queue behind a test's back — jobs are asserted on, not run.
+      {Oban, Application.fetch_env!(:mishka_cms_core, Oban)}
+    ] ++
+      MishkaCmsCore.Supervision.children(:caches) ++
+      MishkaCmsCore.Supervision.children(:engine) ++
+      [{AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]}, MishkaCmsCore.TestEndpoint]
 
   {:ok, _} =
     Supervisor.start_link(children, strategy: :one_for_one, name: MishkaCmsCore.TestSupervisor)

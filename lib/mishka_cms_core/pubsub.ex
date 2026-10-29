@@ -9,8 +9,12 @@ defmodule MishkaCmsCore.PubSub do
   This module serves as both the PubSub process name and a loadable module
   so that compile-time verifiers (e.g., MishkaGervaz) can confirm its existence.
 
-  Started in the main application supervisor as:
+  Started by `MishkaCmsCore.Application`, first among its children, as:
 
       {Phoenix.PubSub, name: MishkaCmsCore.PubSub}
+
+  `:mishka_cms_core` is a dependency of every extension and of the host, so it is running before
+  any extension's application starts. A host or a test helper does not start it again: a second
+  child of the same name fails its supervisor's start.
   """
 end

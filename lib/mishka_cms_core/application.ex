@@ -139,11 +139,22 @@ defmodule MishkaCmsCore.Application do
   def start(_type, _args) do
     :ok = MishkaCmsCore.Runtime.Handlers.BootHandler.new_boot_id()
 
+    # Runtime module compilation picks its supervisor partition off this counter, so it exists
+    # before anything can compile a page, layout or component.
+    :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
+
+    # `MishkaCmsCore.PubSub` first: every resource broadcasts on it, and the editor's `Presence`
+    # tracks on it. `:mishka_cms_core` is a dependency of every extension and of the host, so its
+    # application starts before theirs and the PubSub is up before any of their children. What needs
+    # the host's repo or endpoint is the host's to start, in the order `MishkaCmsCore.Supervision`
+    # gives it.
+    #
     # `RenderMetrics` is started here rather than by the host, like the other runtime states, because
     # nothing outside the core reads or writes it: a host that never lists it still gets the
     # component preview's render times.
     children =
-      installer_children() ++
+      [{Phoenix.PubSub, name: MishkaCmsCore.PubSub}] ++
+        installer_children() ++
         [
           {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
           MishkaCmsCore.Runtime.RenderMetrics

@@ -34,9 +34,27 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.BuilderPlugins do
     MishkaCmsCore.Activity.Sources.EditorHistory
   ]
 
-  @doc "The processes the editor needs running, in start order."
+  @children [
+    # Live editing sessions, shared by the editor chrome and its canvas iframe.
+    MishkaCmsCore.Runtime.States.EditorSessionState,
+    # The undo history's documents, beside the session rather than in it — ETS flattens what it
+    # stores, so fifty snapshots that share their nodes in memory would be copied fifty times over
+    # on every read of the session. Started after it: its sweep reads that table's live tokens.
+    MishkaCmsCore.Runtime.States.EditorHistoryState,
+    # Rendered palette-card previews. Keyed on the template a card would drop, because a
+    # component's first render is a module compile and every later one is two milliseconds.
+    MishkaCmsCore.Runtime.States.CardPreviewState,
+    # Co-editing avatars, on the editing session's own topic of `MishkaCmsCore.PubSub`, which the
+    # core's application starts before these.
+    MishkaCmsCore.Runtime.PageBuilder.Presence
+  ]
+
+  @doc """
+  The processes the editor needs running, in start order. None of them reads the repo when it
+  starts: three are ETS tables and one is `Phoenix.Presence`.
+  """
   @spec children() :: [Supervisor.child_spec() | module() | {module(), term()}]
-  def children, do: []
+  def children, do: @children
 
   @doc "The editor's `mishka_installer` plugins that exist and can be supervised, in start order."
   @spec plugins() :: [module()]
