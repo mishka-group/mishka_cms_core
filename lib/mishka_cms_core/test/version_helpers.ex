@@ -24,8 +24,6 @@ defmodule MishkaCmsCore.Test.VersionHelpers do
 
   require Ash.Query
 
-  @repo Application.compile_env!(:mishka_cms_core, :repo)
-
   @doc """
   All versions for `source_id`, oldest first, in a deterministic chronological order.
 
@@ -89,8 +87,10 @@ defmodule MishkaCmsCore.Test.VersionHelpers do
     WHERE version_source_id::text = $1
     """
 
-    count =
-      @repo.query!(query, [resource_id]) |> Map.fetch!(:rows) |> List.first() |> List.first()
+    # Read when it runs: the repo is the host's (or an extension's test repo), which compiles after
+    # this library, so a call written at compile time would name a module that does not exist yet.
+    repo = Application.fetch_env!(:mishka_cms_core, :repo)
+    count = repo.query!(query, [resource_id]) |> Map.fetch!(:rows) |> List.first() |> List.first()
 
     if count >= expected_count do
       :ok
