@@ -53,6 +53,12 @@ defmodule MishkaCmsCore.Settings do
     3. **Runtime plugins** — anything answering the `settings:register` mishka_installer hook
        (`Hook.call("settings:register", %{definitions: [...]})`).
 
+  A definition declared with `match: :prefix` names no key of its own: it covers every key that
+  starts with its `key` and that no definition names exactly, and only its `:permission` is read —
+  what writing such a key takes (`write_permission/1`). It is how an extension gates the keys it
+  writes for itself, a switch or a saved preset per site, without declaring each one. It is never
+  seeded, listed or drawn on the settings page.
+
   ## Secrets
 
   A `:secret` setting (a provider's API key) is stored sealed with the endpoint's
@@ -105,7 +111,8 @@ defmodule MishkaCmsCore.Settings do
     layout: nil,
     inverted: false,
     under: nil,
-    trim: false
+    trim: false,
+    match: :exact
   }
 
   @type input_type :: :string | :text | :boolean | :integer | :select | :list | :secret | :image
@@ -134,7 +141,8 @@ defmodule MishkaCmsCore.Settings do
           layout: :table | nil,
           inverted: boolean(),
           under: String.t() | nil,
-          trim: boolean()
+          trim: boolean(),
+          match: :exact | :prefix
         }
 
   @doc """
@@ -387,12 +395,16 @@ defmodule MishkaCmsCore.Settings do
   @doc """
   What writing a setting takes, as a list where holding ANY entry is enough: the `:permission` its
   definition declares, or `admin:dashboard:setting` when it declares none. Takes a definition, or a
-  key. A key no definition names takes `admin:dashboard:setting` too, except the builder's own —
-  its Studio switches (`studio.*`) and component presets (`builder:preset:*`) — which take any name
-  that opens a builder: a runtime area of a document the builder edits, or `admin:dashboard:code`.
+  key. A key no definition names takes what the longest `match: :prefix` definition it starts with
+  declares, and `admin:dashboard:setting` when none covers it either — so a key an uninstalled
+  extension used to gate takes the setting area, which fails closed. The builder's own keys — its
+  Studio switches (`studio.*`) and component presets (`builder:preset:*`) — take any name that
+  opens a builder.
 
-      Settings.write_permission("site.title")          #=> ["admin:dashboard:setting"]
-      Settings.write_permission("studio.lock_tokens")  #=> ["admin:dashboard:runtime:page", …]
+      Settings.write_permission("site.title")  #=> ["admin:dashboard:setting"]
+
+      # with Settings.define("acme.", :string, match: :prefix, permission: ["x"]) registered
+      Settings.write_permission("acme.k")      #=> ["x"]
   """
   @spec write_permission(definition() | map() | String.t() | nil) :: [
           AccessPermissions.requirement()
@@ -403,7 +415,7 @@ defmodule MishkaCmsCore.Settings do
   def write_permission(%{}), do: ["admin:dashboard:setting"]
 
   def write_permission(key) when is_binary(key) do
-    case {definition(key), builder_key?(key)} do
+    case {definition(key) || prefix_definition(key), builder_key?(key)} do
       {nil, true} -> @builder_key_permissions
       {nil, false} -> write_permission(%{})
       {definition, _builder?} -> write_permission(definition)
@@ -413,6 +425,27 @@ defmodule MishkaCmsCore.Settings do
   def write_permission(_no_key), do: write_permission(%{})
 
   defp builder_key?(key), do: Enum.any?(@builder_key_prefixes, &String.starts_with?(key, &1))
+
+  # A PREFIX REGISTERED SINCE THE LAST LOAD. Definitions are loaded at boot, and a plugin can finish
+  # registering after that (the settings page loads them again on every mount for the same reason),
+  # so a key no stored prefix covers asks the sources once more before it falls back to the setting
+  # area. Only a write the stored prefixes would refuse pays for that.
+  defp prefix_definition(key) do
+    case covering(prefixes(), key) do
+      nil -> covering(refresh_prefixes(), key)
+      definition -> definition
+    end
+  end
+
+  # Longest first, so the first that matches is the longest.
+  defp covering(prefixes, key), do: Enum.find(prefixes, &String.starts_with?(key, &1.key))
+
+  defp refresh_prefixes do
+    {_exact, prefixes} = split(declared())
+    {index, ordered, stored} = store()
+    if prefixes != stored, do: :persistent_term.put(@definitions_key, {index, ordered, prefixes})
+    prefixes
+  end
 
   @doc """
   Whether `user` may write the setting `definition` declares (`write_permission/1`). A definition of
@@ -591,6 +624,13 @@ defmodule MishkaCmsCore.Settings do
   `:inverted` (default `false`) draws a `:boolean` as its opposite: the switch is on while the stored
   value is `false`. A `*.closed` key reads as the way it closes, on while open, beside switches that
   are on while on.
+
+  `:match` (default `:exact`) set to `:prefix` makes the definition cover every key that starts
+  with `key` and that no exact definition names, the longest such prefix winning. Only its
+  `:permission` is read, as what writing one of those keys takes; it is never seeded, never listed
+  by `definitions/0`, `definitions/1` or `definition/1`, and never drawn:
+
+      Settings.define("acme.", :string, match: :prefix, permission: ["admin:dashboard:acme"])
   """
   @spec define(String.t(), input_type(), keyword()) :: definition()
   def define(key, type, opts \\ []) do
@@ -635,7 +675,7 @@ defmodule MishkaCmsCore.Settings do
   """
   @spec load_definitions() :: [definition()]
   def load_definitions do
-    declared = core_definitions() ++ provider_definitions() ++ plugin_definitions()
+    {declared, prefixes} = split(declared())
     index = Map.new(declared, &{&1.key, &1})
 
     ordered =
@@ -644,9 +684,26 @@ defmodule MishkaCmsCore.Settings do
       |> Enum.uniq()
       |> Enum.map(&Map.fetch!(index, &1))
 
-    :persistent_term.put(@definitions_key, {index, ordered})
+    :persistent_term.put(@definitions_key, {index, ordered, prefixes})
     seed_defaults(ordered)
     ordered
+  end
+
+  defp declared, do: core_definitions() ++ provider_definitions() ++ plugin_definitions()
+
+  # THE PREFIX DEFINITIONS APART, longest key first and one per key, the later declaration winning
+  # as an exact one does. Stored beside the index and never in it, so nothing that lists, seeds or
+  # draws definitions meets one.
+  defp split(declared) do
+    {prefixes, exact} = Enum.split_with(declared, &(Map.get(&1, :match) == :prefix))
+
+    prefixes =
+      prefixes
+      |> Enum.reverse()
+      |> Enum.uniq_by(& &1.key)
+      |> Enum.sort_by(&String.length(&1.key), :desc)
+
+    {exact, prefixes}
   end
 
   @doc """
@@ -661,6 +718,8 @@ defmodule MishkaCmsCore.Settings do
   """
   @spec definitions() :: [definition()]
   def definitions, do: elem(store(), 1)
+
+  defp prefixes, do: elem(store(), 2)
 
   @doc """
   A definition's `:label`, `:description`, `:group`, `:global_label` or option label, in the reader's
@@ -1210,5 +1269,5 @@ defmodule MishkaCmsCore.Settings do
     end)
   end
 
-  defp store, do: :persistent_term.get(@definitions_key, {%{}, []})
+  defp store, do: :persistent_term.get(@definitions_key, {%{}, [], []})
 end
