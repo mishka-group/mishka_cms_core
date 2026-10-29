@@ -664,7 +664,7 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
       description "Unguessable token for the shareable preview URL"
     end
 
-    # THE DOCUMENT AS IT WAS WHEN THIS DRAFT WAS MADE, as `MishkaCmsCore.Runtime.PageBuilder.Drafts.hash/2`
+    # THE DOCUMENT AS IT WAS WHEN THIS DRAFT WAS MADE, as `MishkaCmsCore.Runtime.Authoring.Drafts.hash/2`
     # fingerprints it, so the editor can say the original changed since. Written by `Drafts` alone.
     attribute :source_hash, :integer do
       public? true

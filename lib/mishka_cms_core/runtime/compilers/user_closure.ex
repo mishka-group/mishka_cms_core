@@ -72,7 +72,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.UserClosure do
   turns out to want a user.
   """
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Markup
+  alias MishkaCmsCore.Runtime.Authoring.Markup
 
   @assign "current_user"
 

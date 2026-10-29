@@ -78,8 +78,8 @@ defmodule MishkaCmsCore.Runtime.PageSamples do
 
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Runtime.PageDraft
   alias MishkaCmsCore.Runtime.Site
 
@@ -432,7 +432,7 @@ defmodule MishkaCmsCore.Runtime.PageSamples do
   # publishing writes the draft's fields back over the live row — see
   # `MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft`. A field the draft never took is put
   # back to its default when it is published, which is how a publish drops a page's layout, its SEO
-  # tags, its language and its language group. `MishkaCmsCore.Runtime.PageBuilder.Drafts` forks a
+  # tags, its language and its language group. `MishkaCmsCore.Runtime.Authoring.Drafts` forks a
   # page the same way and for the same reason.
   #
   # THE TEMPLATE IS THE ONLY THING TAKEN FROM THE SHIPPED PAGE. Everything else on the row is the

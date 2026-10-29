@@ -25,7 +25,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PurgePreviewAssets do
   which is the whole defect. Purged only when the write succeeded, so a rolled back one keeps its
   cache.
 
-  DROPPED, NOT RECOMPILED, for the reason `MishkaCmsCore.Runtime.PageBuilder.Drafts` gives: a
+  DROPPED, NOT RECOMPILED, for the reason `MishkaCmsCore.Runtime.Authoring.Drafts` gives: a
   Tailwind pass on every save would pay for a preview nobody may open, and `ensure_css/2` already
   compiles on the way in.
   """

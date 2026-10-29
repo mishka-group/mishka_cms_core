@@ -59,7 +59,7 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   @doc """
   The about page this site answers `/:lang/about` with, in place of the plain one
-  `MishkaCmsCore.Dev.StarterPages` writes: the same page, plus a container hidden from visitors (`MishkaCmsCore.Runtime.PageBuilder.Visibility`) holding
+  `MishkaCmsCore.Dev.StarterPages` writes: the same page, plus a container hidden from visitors (`MishkaCmsCore.Runtime.Authoring.Visibility`) holding
   components and containers of its own — what the builder's Hide from visitors looks like when it
   opens, and what the live page leaves out.
   """

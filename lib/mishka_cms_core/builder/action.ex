@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Builder.Action do
   A server action also names the module the compiled page calls, as `{module, function}`. That module
   must be runtime code: it is named inside every published page that uses the action, and a visitor's
   page has no business naming anything under `MishkaCmsCore.Builder.*` or
-  `MishkaCmsCore.Runtime.PageBuilder.*`. Core's own points at
+  `MishkaCmsCore.Runtime.Authoring.*`. Core's own points at
   `MishkaCmsCore.Runtime.PageMessage`.
 
   ## What the panel draws

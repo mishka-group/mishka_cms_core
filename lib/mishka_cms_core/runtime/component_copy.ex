@@ -52,11 +52,11 @@ defmodule MishkaCmsCore.Runtime.ComponentCopy do
 
   Every minted `pb-xxxxxxxx` class in the copied text is swapped for a fresh one and the source's
   CSS for those classes is written under the new ones in the copy's own row — the shared
-  `MishkaCmsCore.Runtime.PageBuilder.ElementScopes`, which says what a kept class costs.
+  `MishkaCmsCore.Runtime.Authoring.ElementScopes`, which says what a kept class costs.
   """
 
   alias MishkaCmsCore.Runtime.Component
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
 
   @marker "-copy-"
   @suffix_length 4

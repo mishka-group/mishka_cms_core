@@ -47,7 +47,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
 
   By reading each field in the language it is compiled in, never by a pattern over the source.
 
-  HEEx is parsed. `MishkaCmsCore.Runtime.PageBuilder.Tree.parse/1` is the same reader the editor
+  HEEx is parsed. `MishkaCmsCore.Runtime.Authoring.Tree.parse/1` is the same reader the editor
   uses, so a `component_name` inside a comment or a code sample is not a placement and a name built
   at runtime — `component_name={@which}` — is not a literal this can resolve. The template's own
   Elixir is read as well, because `{component(%{component_name: "x"})}` reaches the same function.
@@ -72,9 +72,9 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout}
-  alias MishkaCmsCore.Runtime.PageBuilder.Markup
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Markup
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   require Ash.Query
 

@@ -479,8 +479,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
   """
   def build_render_functions({params, functions_ast}) do
     # A HIDDEN ELEMENT IS LEFT OUT FIRST, of what is drawn and of what it names alike. See
-    # `PageBuilder.Visibility`.
-    template = MishkaCmsCore.Runtime.PageBuilder.Visibility.strip(params[:template])
+    # `Authoring.Visibility`.
+    template = MishkaCmsCore.Runtime.Authoring.Visibility.strip(params[:template])
     compiled_template = compile_template(params, template)
 
     {references_ast, prefetch_ast} =

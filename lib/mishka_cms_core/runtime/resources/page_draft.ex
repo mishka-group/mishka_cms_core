@@ -948,7 +948,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
       description "The page's language group; nil keeps the page's own or starts a new one"
     end
 
-    # THE DOCUMENT AS IT WAS WHEN THIS DRAFT WAS MADE, as `MishkaCmsCore.Runtime.PageBuilder.Drafts.hash/2`
+    # THE DOCUMENT AS IT WAS WHEN THIS DRAFT WAS MADE, as `MishkaCmsCore.Runtime.Authoring.Drafts.hash/2`
     # fingerprints it, so the editor can say the original changed since. Written by `Drafts` alone.
     attribute :source_hash, :integer do
       public? true

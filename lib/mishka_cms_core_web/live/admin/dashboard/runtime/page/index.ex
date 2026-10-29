@@ -42,7 +42,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   use MishkaCmsCore.ExtensionLiveView
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
   alias MishkaCmsCore.Runtime.{Languages, Page, PageEditions}
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaGervaz.Table.Web.UrlSync
 

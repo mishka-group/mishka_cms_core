@@ -126,9 +126,9 @@ defmodule MishkaCmsCore.Builder.Events do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   require Logger
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Strict
 
   alias MishkaCmsCore.Builder.Descriptor
 

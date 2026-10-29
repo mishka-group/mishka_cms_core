@@ -56,7 +56,7 @@ defmodule MishkaCmsCore.Builder.RailPluginTest do
       descriptor = %{key: "boom", render: {__MODULE__, :raising_body}}
 
       # Development stops on it, because there the author is the person who can fix it.
-      assert_raise MishkaCmsCore.Runtime.PageBuilder.Strict.Violation, ~r/broken/, fn ->
+      assert_raise MishkaCmsCore.Runtime.Authoring.Strict.Violation, ~r/broken/, fn ->
         Descriptor.render(descriptor, %{__changed__: nil})
       end
     end

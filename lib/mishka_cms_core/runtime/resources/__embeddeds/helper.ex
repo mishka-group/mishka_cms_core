@@ -56,7 +56,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Embeddeds.Helper do
     # Empty list ⇒ helper is unconstrained (always installed).
     attribute :discriminators, {:array, :map}, default: [], public?: true
 
-    # SOMEWHERE TO KEEP THE HMAC. `MishkaCmsCore.Runtime.PageBuilder.CodeSignature` signs each stored
+    # SOMEWHERE TO KEEP THE HMAC. `MishkaCmsCore.Runtime.Authoring.CodeSignature` signs each stored
     # snippet so that code which did not come through this application does not run, and `events` and
     # `infos` — plain maps — have carried one since it existed. A helper could not: there was no field
     # for it and `@derive` would have dropped one anyway, so `trusted?/1` answered false for every

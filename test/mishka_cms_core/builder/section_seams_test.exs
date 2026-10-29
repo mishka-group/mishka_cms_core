@@ -16,7 +16,7 @@ defmodule MishkaCmsCore.Builder.SectionSeamsTest do
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Builder.Events
-  alias MishkaCmsCore.Runtime.PageBuilder.Fields
+  alias MishkaCmsCore.Runtime.Authoring.Fields
 
   alias MishkaCmsCore.Test.Plugins.{BuilderBrokenSeam, BuilderFormRolePlugin, BuilderPreviewStamp}
 
@@ -57,7 +57,7 @@ defmodule MishkaCmsCore.Builder.SectionSeamsTest do
     end
 
     test "and the memo the editor reads carries it" do
-      node = %MishkaCmsCore.Runtime.PageBuilder.Tree.Node{
+      node = %MishkaCmsCore.Runtime.Authoring.Tree.Node{
         id: "n00000001",
         kind: :component,
         tag: ".component",

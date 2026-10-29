@@ -332,7 +332,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
     end
   end
 
-  # Several registered sets are `MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest`'s, which swaps
+  # Several registered sets are `MishkaCmsCore.Runtime.Authoring.IconLibraryTest`'s, which swaps
   # the process-global registry.
   describe "icons/1 — the icon classes a resource stores beside its content" do
     test "a marker's attributes name them, on a component and in its slots alike" do

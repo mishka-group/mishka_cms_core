@@ -241,7 +241,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
                )
                |> Ash.create()
 
-      assert layout.template == MishkaCmsCore.Runtime.PageBuilder.PageStarter.blank(:layout)
+      assert layout.template == MishkaCmsCore.Runtime.Authoring.PageStarter.blank(:layout)
 
       assert layout.template =~ "@inner_content",
              "a layout that renders no page is broken, not empty"

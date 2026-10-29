@@ -26,10 +26,10 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
 
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.PageForm
 
   alias MishkaCmsCore.Test.Plugins.{PageFormBrokenDestination, PageFormDestination}

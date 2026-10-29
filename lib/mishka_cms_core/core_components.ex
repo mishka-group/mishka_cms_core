@@ -178,7 +178,7 @@ defmodule MishkaCmsCore.CoreComponents do
         </:way>
       </.create_menu>
 
-  `@editor_url` is what `MishkaCmsCore.Runtime.PageBuilder.Section.editor_url/1` answered at mount.
+  `@editor_url` is what `MishkaCmsCore.Runtime.Authoring.Section.editor_url/1` answered at mount.
 
   A `:navigate` way is a link and leaves; an `:event` way pushes that event to THIS page and then
   opens the modal, so the page can remember what was asked for by the time the save arrives; a

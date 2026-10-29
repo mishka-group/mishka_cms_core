@@ -20,7 +20,7 @@ defmodule MishkaCmsCore.Runtime.PageMessageTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
   alias MishkaCmsCore.Runtime.PageMessage
 
   @moduletag :unit

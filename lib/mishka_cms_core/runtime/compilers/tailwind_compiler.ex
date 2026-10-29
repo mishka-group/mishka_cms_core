@@ -1906,18 +1906,18 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     |> icon_scan_paths(site_name)
     |> Enum.flat_map(fn path ->
       case File.read(path) do
-        {:ok, source} -> MishkaCmsCore.Runtime.PageBuilder.Icons.classes_in(source)
+        {:ok, source} -> MishkaCmsCore.Runtime.Authoring.Icons.classes_in(source)
         {:error, _reason} -> []
       end
     end)
     |> Enum.concat(content_icons)
     |> Enum.uniq()
-    |> MishkaCmsCore.Runtime.PageBuilder.Icons.css()
+    |> MishkaCmsCore.Runtime.Authoring.Icons.css()
   end
 
   # FIRST in a site or preview input. Those import Tailwind piecemeal, declaring `theme` and
   # `utilities` only, so without it the chunk ranks the icons' `components` layer above utilities.
-  defp layer_order, do: MishkaCmsCore.Runtime.PageBuilder.Icons.layer_order()
+  defp layer_order, do: MishkaCmsCore.Runtime.Authoring.Icons.layer_order()
 
   # SCOPED TO THIS SITE even when the walk gave up: `runtime/*/component/*` matched every OTHER
   # site's component directory too, so one site's icons rode into another's stylesheet.

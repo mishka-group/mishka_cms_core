@@ -74,8 +74,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCoreWeb.Templates.VersionHistory
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
@@ -532,7 +532,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   # A SITE'S OWN HOOK IS IN ITS SITE'S JS. A global one is built into every site's JS — not into a
   # shared base, which exists only for a site with no hooks of its own — so a site admin sees their
   # own site's bundle, and a master in how many site bundles it is. How many templates attach it is
-  # counted where the viewer may look (`PageBuilder.Hooks.named_in/3`).
+  # counted where the viewer may look (`Authoring.Hooks.named_in/3`).
   defp bundle_metrics(MishkaCmsCore.Runtime.JsHook, %{record: record} = source) do
     hook = Ash.load!(record, [:is_global], authorize?: false)
     {site_name, scope} = hook_scope(hook, source)
@@ -543,7 +543,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     |> Map.merge(%{
       lazy?: hook.lazy == true,
       left_out?: left_out?(source.status, site_name),
-      named_in: MishkaCmsCore.Runtime.PageBuilder.Hooks.named_in(hook, site_name, scope)
+      named_in: MishkaCmsCore.Runtime.Authoring.Hooks.named_in(hook, site_name, scope)
     })
   end
 

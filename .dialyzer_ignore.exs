@@ -14,9 +14,9 @@
   {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 476},
   {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 483},
   {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_without_opaque, 474},
-  {"lib/mishka_cms_core/runtime/page_builder/fields.ex", :call_with_opaque, 653},
-  {"lib/mishka_cms_core/runtime/page_builder/fields.ex", :call_without_opaque, 219},
-  {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :call_without_opaque, 190},
+  {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_with_opaque, 653},
+  {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_without_opaque, 219},
+  {"lib/mishka_cms_core/runtime/authoring/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1638},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 478},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 504},
@@ -27,17 +27,17 @@
   # one is "without a local return", and what depends on it is "never called" or "never matches".
   # The shipped (:prod) shape has none of these.
   {"lib/mishka_cms_core/builder/events.ex", :no_return, 318},
-  {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 65},
-  {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 82},
-  {"lib/mishka_cms_core/runtime/page_builder/strict.ex", :pattern_match, 126},
+  {"lib/mishka_cms_core/runtime/authoring/strict.ex", :pattern_match, 65},
+  {"lib/mishka_cms_core/runtime/authoring/strict.ex", :pattern_match, 82},
+  {"lib/mishka_cms_core/runtime/authoring/strict.ex", :pattern_match, 126},
 
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
   {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1831},
   {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1877},
   {"lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex", :pattern_match_cov, 758},
-  {"lib/mishka_cms_core/runtime/page_builder/code_check.ex", :pattern_match_cov, 281},
-  {"lib/mishka_cms_core/runtime/page_builder/tree/styles.ex", :pattern_match_cov, 1252},
+  {"lib/mishka_cms_core/runtime/authoring/code_check.ex", :pattern_match_cov, 281},
+  {"lib/mishka_cms_core/runtime/authoring/tree/styles.ex", :pattern_match_cov, 1252},
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov, 152},
   {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 368},
 
@@ -53,8 +53,8 @@
   # purpose (a limit that is always a number, a list that is a compile-time constant, a refusal map
   # whose keys the caller holds, a JWT claim that reads back as `nil` or `:null`).
   {"lib/mishka_cms_core/activity/activity_entry.ex", :guard_fail, 419},
-  {"lib/mishka_cms_core/runtime/page_builder/icons/heroicons.ex", :exact_compare, 117},
-  {"lib/mishka_cms_core/runtime/page_builder/page_forms/_form_placement.ex", :guard_fail, 1578},
+  {"lib/mishka_cms_core/runtime/authoring/icons/heroicons.ex", :exact_compare, 117},
+  {"lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex", :guard_fail, 1578},
   {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :exact_compare, 648},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 178},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 210},

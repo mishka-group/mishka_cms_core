@@ -184,7 +184,7 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
   # `TenantContext`'s master branch — "this action requires a master user" — reads the actor the
   # changeset was BUILT with; `Ash.destroy(actor: …)` after the fact does not reach it. So a tenant
   # named on the changeset is refused, and a changeset built with NO actor is refused too: a missing
-  # actor is nobody, never a master. That is why every draft write in `PageBuilder.Drafts` and the
+  # actor is nobody, never a master. That is why every draft write in `Authoring.Drafts` and the
   # preview bar names its actor where the changeset is built.
   test "the master destroy refuses a tenant actor named on the changeset, and one built with none" do
     site = create_site!()

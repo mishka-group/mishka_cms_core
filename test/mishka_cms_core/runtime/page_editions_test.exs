@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.PageEditionsTest do
   require Ash.Query
 
   alias MishkaCmsCore.Runtime.{Page, PageEditions, PageProvision, Stylesheet}
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
   alias MishkaCmsCore.Settings
 

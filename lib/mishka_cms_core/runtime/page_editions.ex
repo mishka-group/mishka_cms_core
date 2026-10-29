@@ -45,7 +45,7 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Layout
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementScopes
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.PageLanguageBackfill
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Seo
@@ -491,7 +491,7 @@ defmodule MishkaCmsCore.Runtime.PageEditions do
 
   ITS ELEMENTS ARE ITS OWN. A translation is a page of its own and is edited in the builder as one,
   so it gets fresh element classes and its own copy of the original's element CSS — see
-  `MishkaCmsCore.Runtime.PageBuilder.ElementScopes`, which says what a kept class costs. Every
+  `MishkaCmsCore.Runtime.Authoring.ElementScopes`, which says what a kept class costs. Every
   attribute it is copied from rather than the template alone, because a class is a class wherever
   the page is carrying it: `events`, `infos` and `seo_tags` are plain maps and their text is walked
   too. A helper is the one that is not — it is an embedded resource, and `ElementScopes.rewrite/2`

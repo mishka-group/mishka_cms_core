@@ -77,12 +77,12 @@ defmodule MishkaCmsCore.Runtime.Component do
   }
 
   # THE VOCABULARY PHOENIX ACCEPTS FOR `attr :name, <type>`, read from the one module that already
-  # had to know it: `MishkaCmsCore.Runtime.PageBuilder.Interface` refuses anything outside this list
+  # had to know it: `MishkaCmsCore.Runtime.Authoring.Interface` refuses anything outside this list
   # at the action boundary, and it is asked for in two places in this form — a component's own
   # attributes and a slot's. Written out again here, the form would sooner or later offer a type the
   # validation then rejects.
   @attr_types Enum.map(
-                MishkaCmsCore.Runtime.PageBuilder.Interface.types(),
+                MishkaCmsCore.Runtime.Authoring.Interface.types(),
                 &{Phoenix.Naming.humanize(&1), &1}
               )
 

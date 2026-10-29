@@ -23,7 +23,7 @@ defmodule MishkaCmsCore.Runtime.CompiledPageBase do
   ## Why the core components are in the smallest base
 
   `MishkaCmsBuilder.Blocks` and
-  `MishkaCmsCore.Runtime.PageBuilder.Elements` ship forms built from `<.form>` and `<.input>`, and
+  `MishkaCmsCore.Runtime.Authoring.Elements` ship forms built from `<.form>` and `<.input>`, and
   `MishkaCmsCore.Runtime.Compilers.LiveViewCompiler.render_template/2` already evaluates them against
   the same configured module — so the canvas, the preview and the published page resolve one set of
   components. Leaving them out of the base meant a form dropped from the library rendered in the

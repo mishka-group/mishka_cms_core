@@ -102,7 +102,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAudit
+  alias MishkaCmsCore.Runtime.Authoring.CodeAudit
   alias MishkaCmsCore.Runtime.PageLanguageBackfill
   alias MishkaCmsCore.Runtime.ShareCardQueue
   import Ecto.Query

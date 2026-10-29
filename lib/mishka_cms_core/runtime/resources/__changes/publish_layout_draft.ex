@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishLayoutDraft do
   use Ash.Resource.Change
 
   alias MishkaCmsCore.Runtime.Layout
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
 
   # A PUBLISH COPIES WHAT THE DRAFT HOLDS, templates included, and checks no code: the check ran
   # when a person wrote the draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.

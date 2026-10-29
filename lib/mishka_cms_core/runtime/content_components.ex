@@ -208,7 +208,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   alias MishkaCmsCore.Runtime.{Component, ComponentBoundary, Helpers, LiveViewHelpers}
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
-  alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Icons, Inspector, Markup}
+  alias MishkaCmsCore.Runtime.Authoring.{CodeReads, Icons, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.Hook
 
@@ -400,7 +400,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   (`[[slot item icon="hero-inbox"]]`) and the HTML's own classes (`<span class="hero-inbox">`) alike
   — what a resource stores beside its content when it is written, for the site's stylesheet.
 
-  A class is found by the prefixes `MishkaCmsCore.Runtime.PageBuilder.Icons` registers
+  A class is found by the prefixes `MishkaCmsCore.Runtime.Authoring.Icons` registers
   (`Icons.classes_in/1`), and kept only when a registered set ships it (`Icons.known?/1`): a
   `hero-section` in the text, or a prefix nothing registers, is left out.
 

@@ -225,7 +225,7 @@ defmodule MishkaCmsCore.UiKit.BundleShapeTest do
       unparseable =
         for c <- b["components"],
             ex <- c["examples"],
-            match?({:error, _reason}, MishkaCmsCore.Runtime.PageBuilder.Tree.parse(ex)),
+            match?({:error, _reason}, MishkaCmsCore.Runtime.Authoring.Tree.parse(ex)),
             do: "#{c["name"]}: #{String.slice(ex, 0, 80)}"
 
       assert unparseable == [],

@@ -14,13 +14,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
   duplicate path for a brand-new draft) rolls the whole publish transaction back and surfaces the
   error.
 
-  An existing page keeps its own code — `MishkaCmsCore.Runtime.PageBuilder.CodeAccess.fields/0`. The
+  An existing page keeps its own code — `MishkaCmsCore.Runtime.Authoring.CodeAccess.fields/0`. The
   builder's code drawer writes it to the page directly, so a draft only holds the copy it forked.
   """
   use Ash.Resource.Change
 
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
 
   # A PUBLISH COPIES WHAT THE DRAFT HOLDS, templates included, and checks no code: the check ran
   # when a person wrote the draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.

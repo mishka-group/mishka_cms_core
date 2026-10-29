@@ -23,7 +23,7 @@ defmodule MishkaCmsCore.UiKit.MediaWellTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
 
   @moduletag :unit
 

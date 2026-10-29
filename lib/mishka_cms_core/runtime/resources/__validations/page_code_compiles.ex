@@ -18,12 +18,12 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PageCodeCompiles do
   builder, the JSON:API and a seed script alike — which is the same reason `PathFormat` lives here.
 
   The error is attached to the attribute it came from, so a form puts it under the right box.
-  `MishkaCmsCore.Runtime.PageBuilder.CodeCheck` explains what it can and cannot catch.
+  `MishkaCmsCore.Runtime.Authoring.CodeCheck` explains what it can and cannot catch.
   """
 
   use Ash.Resource.Validation
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
+  alias MishkaCmsCore.Runtime.Authoring.CodeCheck
 
   @fields [:template, :events, :infos, :state, :helpers]
 

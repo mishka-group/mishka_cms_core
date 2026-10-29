@@ -92,7 +92,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
     Translations
   }
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentMediaChooser
   alias Phoenix.LiveView.{AsyncResult, JS}

@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake do
+defmodule MishkaCmsCore.Runtime.Authoring.IconLibraryTest.Fake do
   @moduledoc """
   A second icon set, so the facade can be tested with more than one registered.
 
@@ -11,7 +11,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake do
   set actually ships, rather than offering a button half the results cannot honour.
   """
 
-  @behaviour MishkaCmsCore.Runtime.PageBuilder.IconLibrary
+  @behaviour MishkaCmsCore.Runtime.Authoring.IconLibrary
 
   @impl true
   def prefixes, do: ["fake-"]

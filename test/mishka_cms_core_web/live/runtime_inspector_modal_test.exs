@@ -34,7 +34,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.LiveViewHelpers
-  alias MishkaCmsCore.Runtime.PageBuilder.{CodeAccess, Drafts, Interface}
+  alias MishkaCmsCore.Runtime.Authoring.{CodeAccess, Drafts, Interface}
 
   require Ash.Query
 

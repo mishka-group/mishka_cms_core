@@ -553,7 +553,7 @@ defmodule MishkaCmsCore.Runtime.StatefulComponentTest do
   # `update/2` and `handle_event/3` live — the only code in this runtime that runs in response to a
   # network message rather than to a render, in whatever LiveView renders the component.
   describe "signed lifecycle code" do
-    alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
+    alias MishkaCmsCore.Runtime.Authoring.CodeSignature
 
     @key "a-test-signing-key-that-is-long-enough"
 

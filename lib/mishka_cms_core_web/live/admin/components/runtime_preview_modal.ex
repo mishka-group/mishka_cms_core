@@ -794,7 +794,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp version(_none), do: nil
 
-  # HOW MANY TEMPLATES ATTACH THE HOOK (`PageBuilder.Hooks.named_in/3`): one component that does is
+  # HOW MANY TEMPLATES ATTACH THE HOOK (`Authoring.Hooks.named_in/3`): one component that does is
   # one, however many pages draw it.
   defp named_in(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp named_in(%{named_in: n}), do: ngettext("%{count} template", "%{count} templates", n)
@@ -1381,7 +1381,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: assigns.active_tab == "code" or assigns.preview_source == "draft"
 
   defp draft_label(%{label: label}) when is_binary(label) and label != "",
-    do: MishkaCmsCore.Runtime.PageBuilder.Drafts.display_label(label)
+    do: MishkaCmsCore.Runtime.Authoring.Drafts.display_label(label)
 
   defp draft_label(_draft), do: gettext("Untitled draft")
 

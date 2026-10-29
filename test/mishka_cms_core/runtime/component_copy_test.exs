@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.Runtime.ComponentCopyTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.{Component, ComponentCopy, Stylesheet}
-  alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
 
   @moduletag :integration
   @moduletag :capture_log

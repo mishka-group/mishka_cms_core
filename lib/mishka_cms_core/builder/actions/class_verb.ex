@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Builder.Actions.ClassVerb do
   Toggle, add or remove a class — the three actions that compose with the element's own CSS.
 
   The class lands on the element the click points at, which is the same handle
-  `MishkaCmsCore.Runtime.PageBuilder.ElementCss` keys a rule on. One identity, two features: toggle
+  `MishkaCmsCore.Runtime.Authoring.ElementCss` keys a rule on. One identity, two features: toggle
   `is-open` here and write `&.is-open { … }` in the CSS box, and that is an accordion with no code in
   it.
 

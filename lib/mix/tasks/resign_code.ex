@@ -11,7 +11,7 @@ defmodule Mix.Tasks.Mishka.ResignCode do
   ## When this is needed
 
   A database restored from another environment carries signatures made with that environment's key,
-  so `MishkaCmsCore.Runtime.PageBuilder.CodeSignature` refuses them and every handler and helper in
+  so `MishkaCmsCore.Runtime.Authoring.CodeSignature` refuses them and every handler and helper in
   it compiles to a clause that does nothing. That is the feature working — but on a staging copy of
   production it is a chore rather than an attack, and this is the answer the log line names.
 
@@ -31,8 +31,8 @@ defmodule Mix.Tasks.Mishka.ResignCode do
 
   use Mix.Task
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAudit
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
+  alias MishkaCmsCore.Runtime.Authoring.CodeAudit
+  alias MishkaCmsCore.Runtime.Authoring.CodeSignature
 
   @impl Mix.Task
   def run(_args) do

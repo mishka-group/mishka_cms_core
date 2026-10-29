@@ -31,7 +31,7 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
   alias MishkaCmsCore.Localized
-  alias MishkaCmsCore.Runtime.PageBuilder.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
 
   @impl true
   def name, do: :draft_list

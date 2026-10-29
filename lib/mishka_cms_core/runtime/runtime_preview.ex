@@ -98,7 +98,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.ErrorStatus
   alias MishkaCmsCore.Runtime.LiveViewHelpers
-  alias MishkaCmsCore.Runtime.PageBuilder.Icons
+  alias MishkaCmsCore.Runtime.Authoring.Icons
   alias MishkaCmsCore.Runtime.PreviewHooks
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.States.AssetsState

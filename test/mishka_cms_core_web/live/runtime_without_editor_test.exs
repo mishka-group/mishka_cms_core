@@ -7,7 +7,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeWithoutEditorTest do
   The page, layout, component and error-page lists on a host with no visual editor installed.
 
   The core spells none of the editor's addresses. It asks `runtime:document:editor_url`
-  (`MishkaCmsCore.Runtime.PageBuilder.Section.editor_url/3`) and the editor's own plugin answers.
+  (`MishkaCmsCore.Runtime.Authoring.Section.editor_url/3`) and the editor's own plugin answers.
   Here the event answers as one whose plugins cannot run, which is what a host without the editor
   gets, and every way into an editor has to be gone rather than lead to a page nothing serves: the
   "+ Add" button opens the full form, "Fill in the form, then open the editor" is not offered, a save
@@ -20,7 +20,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeWithoutEditorTest do
   import Phoenix.LiveViewTest
   import MishkaCmsCore.Test.Factory
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.EventCannotRun
 

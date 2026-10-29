@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.BlankTemplateStartsEmpty do
   for `nil`. Filling the blank instead keeps the column's promise exactly as it was and moves the
   choice to where it belongs: what an *empty page* means.
 
-  It means one centred container. `MishkaCmsCore.Runtime.PageBuilder.PageStarter.blank/0` owns that
+  It means one centred container. `MishkaCmsCore.Runtime.Authoring.PageStarter.blank/0` owns that
   answer so the form, the API and the seeds all create the same empty page.
 
   ## Why it runs everywhere, not just in the form
@@ -41,7 +41,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.BlankTemplateStartsEmpty do
   """
   use Ash.Resource.Change
 
-  alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
 
   @impl true
   def change(changeset, opts, _context) do
