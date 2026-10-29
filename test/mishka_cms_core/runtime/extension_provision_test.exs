@@ -10,14 +10,18 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvisionTest do
   snippet, and reads the site. The components, the
   pages and the site are a name each, and a required list is any-of — so
   `ExtensionProvision.required/1` lists one name per step and `allowed?/2` asks each. The snippet
-  is the page builder's, which the pages' name opens. A run by someone missing one is refused before
-  its first write, so a site is never left half set up.
+  is an installed editor's, handed over on `runtime:provision:snippets` and saved under the pages'
+  name. A run by someone missing one is refused before its first write, so a site is never left half
+  set up.
   """
   use MishkaCmsCore.DataCase, async: false
 
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Runtime.{ExtensionProvision, PageProvision}
+  alias MishkaCmsCore.Test.EventCannotRun
+  alias MishkaCmsCore.Test.Plugins.ProvisionSnippetRefused
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   require Ash.Query
 
@@ -162,24 +166,43 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvisionTest do
              |> Ash.read!(page: [limit: 10])
              |> Map.fetch!(:results) == []
     end
+  end
 
-    test "saves the snippet for a site admin holding only the names it asks for",
-         %{dir: dir, site: site} do
+  # THE SNIPPET IS THE EDITOR'S. The run hands it to `runtime:provision:snippets` and reports what an
+  # editor says it saved; the editor's own plugin is tested beside it.
+  describe "ensure!/4 — the snippet" do
+    @snippets_event "runtime:provision:snippets"
+
+    test "reports none, and raises nothing, when no editor answers", %{dir: dir, site: site} do
+      :ok = EventCannotRun.stub!(@snippets_event)
       manifest = manifest(dir, Map.put(@components, "components", []), snippet())
 
       admin =
         create_user_with_permissions!(ExtensionProvision.required(manifest), site_id: site.id)
 
-      assert %{snippets: ["Kit"]} =
-               ExtensionProvision.ensure!(manifest, site.id, %{}, actor: admin)
-
-      assert [%{section: :page}] =
-               MishkaCmsCore.Runtime.Snippet
-               |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-               |> Ash.Query.filter(site_id == ^site.id and name == "Kit")
-               |> Ash.read!(page: [limit: 10])
-               |> Map.fetch!(:results)
+      assert %{snippets: []} = ExtensionProvision.ensure!(manifest, site.id, %{}, actor: admin)
+      assert %{snippets: []} = ExtensionProvision.ensure!(manifest, site.id)
     end
+
+    test "raises with the reason an editor reports, as a refused write always did",
+         %{dir: dir, site: site} do
+      register!(ProvisionSnippetRefused, @snippets_event)
+      manifest = manifest(dir, Map.put(@components, "components", []), snippet())
+
+      assert_raise RuntimeError,
+                   ~r/the snippet Kit could not be saved: :refused_by_the_probe/,
+                   fn ->
+                     ExtensionProvision.ensure!(manifest, site.id)
+                   end
+    end
+  end
+
+  defp register!(plugin, event) do
+    {:ok, _} =
+      Event.write(%{name: plugin, event: event, extension: :mishka_installer, status: :started})
+
+    :ok = EventHandler.do_compile(event, :start, false)
+    on_exit(fn -> Event.unregister(:name, plugin, false) end)
   end
 
   # AN EXTENSION'S NAMES ARRIVE WITH IT, as its components do: created by the first run on any site,
