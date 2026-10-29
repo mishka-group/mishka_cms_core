@@ -161,6 +161,32 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarterTest do
       assert PageStarter.empty?(tree)
     end
 
+    # START FROM SCRATCH IS AN ANSWER TO THE CHOOSER. Read as a page nobody had started, the chooser
+    # stayed up over the box the click had just put down, so the click looked like it did nothing.
+    test "what Start from scratch leaves is a page someone has started" do
+      {:ok, tree} = Tree.parse(PageStarter.scratch())
+      refute PageStarter.empty?(tree)
+    end
+
+    # It is on the PUBLISHED page too. A `<main class="min-h-[200px]">` was a blank band above
+    # everything placed after it, and a second `<main>` inside the layout's own.
+    test "and it is one bare box, with nothing on it for the published page to size" do
+      {:ok, tree} = Tree.parse(PageStarter.scratch())
+
+      assert [root] = Enum.map(tree.roots, &Tree.get(tree, &1))
+      assert root.kind == :tag
+      refute root.tag == "main"
+      assert root.attrs == []
+      assert String.length(PageStarter.scratch()) >= 3, "pages.template has a length check"
+    end
+
+    test "an empty box that is not the one a page is born with is not" do
+      for source <- [~s(<section></section>), ~s(<div class="grid"></div>), ~s(<main></main>)] do
+        {:ok, tree} = Tree.parse(source)
+        refute PageStarter.empty?(tree), "#{source} was put there by the author"
+      end
+    end
+
     test "anything actually on the page is not" do
       for source <- [
             ~s(<div><h1>Hello</h1></div>),

@@ -35,6 +35,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
+
   @type structure :: %{
           id: String.t(),
           title: String.t(),
@@ -50,19 +52,27 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
   # It also has to be at least three characters and non-blank, because `pages.template` is NOT NULL
   # with a `length(template) >= 3` check constraint. A truly empty string would fail at the database
   # rather than at the changeset.
-  @blank ~s(<div class="mx-auto w-full max-w-6xl px-6 py-12"></div>)
+  @born "mx-auto w-full max-w-6xl px-6 py-12"
+  @blank ~s(<div class="#{@born}"></div>)
 
   # A LAYOUT IS NOT A PAGE WITH NOTHING ON IT. Its whole job is to wrap one, and it does that through
   # `@inner_content` — a layout without it renders its own chrome and swallows every page that uses
   # it, which looks exactly like a broken site rather than an empty one. So the blank layout is the
   # same centred container with the slot already in it: the site renders from the first save, and
   # the author builds their header and footer around a chip that says where the page goes.
-  @blank_layout ~s(<div class="mx-auto w-full max-w-6xl px-6 py-12"><%= @inner_content %></div>)
+  @blank_layout ~s(<div class="#{@born}"><%= @inner_content %></div>)
 
-  # WHAT "FROM SCRATCH" LEAVES BEHIND. Not nothing: an empty document has no target to aim at, and
-  # the reader who declined the four structures still has to be able to drop the first thing
-  # somewhere. One `<main>` tall enough to hit is the smallest honest answer.
-  @scratch ~s(<main class="min-h-[200px]"></main>)
+  # WHAT "FROM SCRATCH" LEAVES BEHIND. Not nothing: an empty document has no target to aim at, the
+  # reader who declined the four structures still has to be able to drop the first thing somewhere,
+  # and `pages.template` will not store an empty string. One bare box is the smallest honest answer.
+  #
+  # BARE, because what it leaves is on the PUBLISHED page as well. It was `<main class="min-h-[200px]">`
+  # and that was three mistakes at once: the canvas already gives an empty box a dashed well to aim
+  # at while editing, so the 200px only ever showed to visitors, as a blank band above everything
+  # placed after it; the site's layout wraps every page in its own `<main>`, so this one was a
+  # second, nested one; and one empty container is what `empty?/1` reads as a page nobody has
+  # started, so the chooser stayed up over the page the author had just started.
+  @scratch "<div></div>"
 
   @doc "The one element a page started from scratch begins with."
   @spec scratch() :: String.t()
@@ -162,25 +172,32 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
   Two ways to be empty, and both have to count:
 
     * nothing at all — a document whose content was removed;
-    * ONE container with nothing in it — which is what a page created with no markup arrives as,
-      because `pages.template` is NOT NULL with a length check and a truly empty string would fail
-      at the database. A page whose only content is the container it was born with has not been
-      started, whatever the row says.
+    * the container `blank/0` makes, with nothing in it — which is what a page created with no
+      markup arrives as, because `pages.template` is NOT NULL with a length check and a truly empty
+      string would fail at the database. A page whose only content is the container it was born
+      with has not been started, whatever the row says.
 
   A page with anything else on it is a page someone is already working on, and dropping a chooser
-  over it would be an interruption rather than a help.
+  over it would be an interruption rather than a help. That includes one empty box of any other
+  kind: `scratch/0` is one, and it is what the author asked for when they declined the chooser.
   """
   @spec empty?(MishkaCmsCore.Runtime.Authoring.Tree.t() | nil) :: boolean()
   def empty?(%{roots: []}), do: true
 
   def empty?(%{roots: [id], nodes: nodes}) when is_map(nodes) do
     case Map.get(nodes, id) do
-      %{kind: :tag, children: children} -> Enum.all?(children, &blank_child?(nodes, &1))
-      _other -> false
+      %{kind: :tag, children: children} = root ->
+        born?(root) and Enum.all?(children, &blank_child?(nodes, &1))
+
+      _other ->
+        false
     end
   end
 
   def empty?(_tree), do: false
+
+  defp born?(%{tag: "div"} = root), do: Node.literal(root, "class") == @born
+  defp born?(_root), do: false
 
   # Whitespace between tags parses into text nodes, so "no children" is not the same as an empty
   # list. A container holding nothing but the newline it was written with is still holding nothing.
