@@ -5,7 +5,7 @@
 
 # Mishka CMS Core
 
-**The engine of [Mishka CMS](https://mishka.tools/cms): a multi-tenant runtime, a visual page builder, accounts and an admin dashboard for Elixir and Phoenix LiveView.**
+**The engine of [Mishka CMS](https://mishka.tools/cms): a multi-tenant runtime, accounts and an admin dashboard for Elixir and Phoenix LiveView.**
 
 [Website](https://mishka.tools/cms) · [Documentation](https://mishka.tools/cms/docs) · [Extensions](https://mishka.tools/cms#extensions) · [Hire us](https://mishka.tools/hire-us)
 
@@ -13,19 +13,19 @@
 
 ## 📖 What is Mishka CMS Core?
 
-`mishka_cms_core` is an Elixir library built on Ash and Phoenix LiveView. It holds the resources and the runtime that turn database rows into running websites: sites, pages, layouts, components, error pages, stylesheets, JavaScript hooks, media, translations, redirects and settings. It also holds user accounts, permissions, notifications, the admin dashboard screens and the visual page builder.
+`mishka_cms_core` is an Elixir library built on Ash and Phoenix LiveView. It holds the resources and the runtime that turn database rows into running websites: sites, pages, layouts, components, error pages, stylesheets, JavaScript hooks, media, translations, redirects and settings. It also holds user accounts, permissions, notifications, the admin dashboard screens and the document layer every authored template goes through. The visual page builder is a separate package, [mishka_cms_builder](https://github.com/mishka-group/mishka_cms_builder), which a host adds when it wants the editor.
 
 The package has no endpoint, router or repo of its own. The host application supplies them through the config shown under Getting started.
 
 ## 🧩 Part of Mishka CMS
 
-`mishka_cms_core` is the core of [Mishka CMS](https://mishka.tools/cms), an open source real-time CMS. The [mishka_cms](https://github.com/mishka-group/mishka_cms) application runs it, and the [blog extension](https://mishka.tools/cms/extensions/blog) ([mishka_blog](https://github.com/mishka-group/mishka_blog)) and the [documentation extension](https://mishka.tools/cms/extensions/documentation) ([mishka_document](https://github.com/mishka-group/mishka_document)) are built on it.
+`mishka_cms_core` is the core of [Mishka CMS](https://mishka.tools/cms), an open source real-time CMS. The [mishka_cms](https://github.com/mishka-group/mishka_cms) application runs it, and the visual page builder ([mishka_cms_builder](https://github.com/mishka-group/mishka_cms_builder)), the [blog extension](https://mishka.tools/cms/extensions/blog) ([mishka_blog](https://github.com/mishka-group/mishka_blog)) and the [documentation extension](https://mishka.tools/cms/extensions/documentation) ([mishka_document](https://github.com/mishka-group/mishka_document)) are built on it.
 
 ## ✨ Features
 
 - Multi-tenant sites. A site has its own domain, languages, settings and content, and a request is matched to its site by host. A site can serve Phoenix LiveView pages, the JSON:API, or both. See [multi-tenant sites](https://mishka.tools/cms#tenant).
 - A runtime compiler. Pages, layouts, components and error pages become modules at runtime from HEEx, EEx or Markdown. Each site gets one stylesheet built with Tailwind CSS v4 and one script bundle that includes its JavaScript hooks.
-- A visual page builder and a code editor, with a canvas, an inspector, design tokens, presets, reusable snippets, undo history, review comments and a view of who else is editing the same page.
+- A document layer, `MishkaCmsCore.Runtime.Authoring`, for every template an author writes: the HEEx tree and its edit operations, the checks a template must pass before it compiles, page forms, and the fields and elements an editor offers. The admin's code editor writes through it, and so does the visual page builder of [mishka_cms_builder](https://github.com/mishka-group/mishka_cms_builder), with its canvas, inspector, design tokens, presets, snippets, undo history, review comments and a view of who else is editing the same page.
 - Autosaved drafts that publish on demand, version history with restore, and archiving instead of deletion.
 - Elixir written by an author in a page can be switched off for a whole deployment (`PAGE_CODE=off` in Mishka CMS). With a `CODE_SIGNING_KEY` set, Elixir that did not come through the CMS does not run.
 - A media library with categories, and redirect rules for addresses that moved (301, 302, 307 and 308).
@@ -56,6 +56,8 @@ use MishkaInstaller.Event.Hook,
 
 An extension adds routes with the `MishkaCmsCore.ExtensionRouter` behaviour, adds sidebar entries on the `sidebar:menus` event, and appears in the install wizard by subscribing to `installer:extension:install`.
 
+An editor is an extension too. [mishka_cms_builder](https://github.com/mishka-group/mishka_cms_builder) adds its pages that way, answers `runtime:document:editor_url` with the address of its editor (the admin shows an editor button only when one answers), writes the snippets of an extension's setup on `runtime:provision:snippets`, adds its history to the activity log on `activity:sources` and registers its settings on `settings:register`. A plugin for the editor listens on the `builder:*` events of `MishkaCmsCore.Builder.Events`, which stay in the core so an extension can ship one without depending on the editor.
+
 ## 🚀 Getting started
 
 Add it from Hex:
@@ -77,10 +79,11 @@ config :mishka_cms_core,
   core_components: MishkaCmsWeb.CoreComponents
 
 config :mishka_cms_core,
-  extensions: [MishkaCmsCoreWeb, MishkaBlogWeb, MishkaDocumentWeb]
+  extensions: [MishkaCmsCoreWeb, MishkaBlogWeb, MishkaDocumentWeb, MishkaCmsBuilderWeb]
 
 config :mishka_cms,
   ash_domains: [
+    MishkaCmsBuilder,
     MishkaDocument,
     MishkaBlog,
     MishkaCmsCore.Runtime,
@@ -90,6 +93,8 @@ config :mishka_cms,
   ]
 ```
 
+`MishkaCmsBuilderWeb` and `MishkaCmsBuilder` are the visual page builder's; leave them out to run without it.
+
 To run it, follow [Getting started in mishka_cms](https://github.com/mishka-group/mishka_cms#-getting-started). To work on the engine, check out the packages side by side under `__extensions/` in a `mishka_cms` clone, and Mishka CMS uses those folders:
 
 ```bash
@@ -97,6 +102,7 @@ git clone https://github.com/mishka-group/mishka_cms.git
 cd mishka_cms
 git clone https://github.com/mishka-group/mishka_gervaz.git __extensions/mishka_gervaz
 git clone https://github.com/mishka-group/mishka_cms_core.git __extensions/mishka_cms_core
+git clone https://github.com/mishka-group/mishka_cms_builder.git __extensions/mishka_cms_builder
 git clone https://github.com/mishka-group/mishka_blog.git __extensions/mishka_blog
 git clone https://github.com/mishka-group/mishka_document.git __extensions/mishka_document
 ```

@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Elements do
   ## Why this exists
 
   The editor had two ways to put something on a page and neither of them was "an empty box". The
-  palette lists a UI kit's components; `MishkaCmsBuilder.Blocks` lists whole
+  palette lists a UI kit's components; the block library lists whole
   finished sections. To get a `<section>` of your own you had to drop a Hero and delete everything
   inside it, or open the Code window and type. Every other builder — Elementor's Layout group,
   Gantry's structural particles — puts the primitives first, because they are what a page is
@@ -47,7 +47,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Elements do
 
   **Containers ship empty, and the canvas draws them anyway.** An empty `<section>` is zero pixels
   tall, so without help it cannot be clicked, cannot be dropped into, and looks like the drop
-  failed. `MishkaCmsBuilderWeb.Live.CanvasLive` gives any childless container a dashed
+  failed. The editor's canvas gives any childless container a dashed
   outline and a minimum height while editing — never in preview, and never for a void tag like
   `<img>`, which is childless on purpose.
 

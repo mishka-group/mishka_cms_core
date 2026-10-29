@@ -233,7 +233,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   def editing_status(_section, _record, _opts), do: nil
 
   @doc """
-  The attribute map to hand `MishkaCmsBuilder.Helpers.save_section/4`, with the
+  The attribute map an editor saves a section's markup with, with the
   values that depend on the record left as functions of it.
 
   For an error page the whole `error_pages` list IS the attribute, so the write is every entry with

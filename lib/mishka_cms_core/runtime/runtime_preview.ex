@@ -315,8 +315,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   colour and the generator cannot know them, while the rest of a stylesheet is already in whatever
   compiled bundle the document links — sending it twice would have it fight itself in the cascade.
 
-  Shared with `MishkaCmsBuilderWeb.Live.CanvasLive`, which asks the same question of the
-  same engine.
+  Public so that an editor's canvas (the `mishka_cms_builder` package's) asks the same question of
+  the same engine.
   """
   @spec theme_source(String.t() | nil) :: String.t()
   def theme_source(site_id \\ nil), do: site_id |> stylesheet_source() |> theme_blocks()

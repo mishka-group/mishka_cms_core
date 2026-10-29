@@ -519,8 +519,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms do
   `field_key_from/2` deliberately forgets the second half — the key is the same fact whichever
   member of the field is read — but a renderer cannot forget it. `name={f[:email].name}` wants the
   input name, a string; handing it the whole `%Phoenix.HTML.FormField{}` because both expressions
-  answer `:email` is how the canvas red-boxed a kit that binds by name and value
-  (`MishkaCmsBuilderWeb.Live.CanvasLive`, which is the surface the form is authored on).
+  answer `:email` is how the editor's canvas, the surface the form is authored on, red-boxed a kit
+  that binds by name and value.
 
   The source is parsed and never evaluated, and the path is whatever dots the author wrote — this
   module does not decide which members exist, the struct does.

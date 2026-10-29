@@ -6,8 +6,8 @@ defmodule MishkaCmsCore.Runtime.ComponentCopy do
   @moduledoc """
   A new component made from an existing one — the inspector modal's Duplicate.
 
-  The copy is written through the resource's own `:master_create` or `:create`, chosen by the actor
-  the same way `MishkaCmsBuilder.Helpers.save_section/4` chooses. Nothing is
+  The copy is written through the resource's own `:master_create` or `:create`, chosen by the actor:
+  `:master_create` for one with no site, `:create` in the actor's site. Nothing is
   inserted around them, so a copy is validated, signed, versioned, broadcast and compiled exactly
   like a component somebody typed in — and refused the same way: to an actor who may not write the
   component, and, for one carrying `helpers`, while the deployment's `:page_code` switch is off.
@@ -133,8 +133,8 @@ defmodule MishkaCmsCore.Runtime.ComponentCopy do
 
   defp unique_name_violation?(_error), do: false
 
-  # THE ACTOR GOES ON THE CHANGESET, for the reason `MishkaCmsBuilder.Helpers.save_section/4` gives:
-  # `Validations.CodeChange` runs while the changeset is built and asks who is writing. A copy
+  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL: `Validations.CodeChange` runs while the
+  # changeset is built and asks who is writing. A copy
   # writes its source's template, which nobody typed, so only its helpers are stopped while the
   # deployment's `:page_code` switch is off.
   defp create(source, name, %{site_id: nil} = actor) do

@@ -38,10 +38,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementScopes do
   What comes through here is markup that ends up in a DIFFERENT document: another component
   (`MishkaCmsCore.Runtime.ComponentCopy`), another page
   (`MishkaCmsCore.Runtime.PageEditions.translate/4`), or a snippet, an example or a wizard's
-  composition placed into the document someone is editing — which is TWO doors, not one, because a
-  card can be clicked (`MishkaCmsBuilder.EditorSession.place_template/3`) or
-  dragged (`MishkaCmsBuilder.EditorSession.apply_drop/2`, where the markup arrives
-  in the payload instead), and one gesture told two ways must not give the author two answers.
+  composition placed into the document someone is editing — which is TWO doors, not one, because
+  in the visual editor (`mishka_cms_builder`) a card can be clicked or dragged (where the markup
+  arrives in the payload instead), and one gesture told two ways must not give the author two
+  answers.
   """
 
   alias MishkaCmsCore.Runtime.Authoring.ElementCss

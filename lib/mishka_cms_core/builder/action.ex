@@ -94,8 +94,8 @@ defmodule MishkaCmsCore.Builder.Action do
 
   @typedoc """
   What the click already knows: the clicked element's own scope class, the scope it is aimed at (or
-  `nil` for itself), and what the target says about being opened — see
-  `MishkaCmsBuilder.PaletteEntry.opens/1`.
+  `nil` for itself), and what the target says about being opened: the `data-pb-open` and
+  `data-pb-close` commands its component declares (`MishkaCmsCore.Builder.Actions.OpenVerb`).
   """
   @type context :: %{scope: String.t(), target: String.t() | nil, opener: map()}
 

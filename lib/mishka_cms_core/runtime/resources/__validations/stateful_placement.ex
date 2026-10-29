@@ -16,8 +16,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
       function's own rescue, which falls back to Phoenix's plain default. The site's custom error
       page is replaced for every visitor, with a warning in the log and nothing on the screen.
     * **A layout** wraps error pages as well as pages, so it inherits that.
-    * **Another component's template** is rendered by the builder's canvas through
-      `CanvasLive.contain/3`, which forces iodata on purpose so a component's raise costs the
+    * **Another component's template** is rendered by the editor's canvas inside a containment
+      that forces iodata on purpose so a component's raise costs the
       component and not the author's unsaved session. A live component reached from inside another
       component's markup builds the token anyway and blows up the PARENT's containment — a red chip
       on a component the author did not touch.

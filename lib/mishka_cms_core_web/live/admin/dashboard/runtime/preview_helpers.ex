@@ -1190,10 +1190,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   defp normalize_label(_label), do: nil
 
-  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL, for the reason
-  # `MishkaCmsBuilder.Helpers.create_section/4` gives: validations run when the changeset is BUILT, so
-  # `Ash.create(actor: …)` alone reaches them too late. `TenantContext`'s master branch is the one
-  # that asks who is writing, and it saw a nil actor on every draft write the preview bar makes.
+  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL: validations run when the changeset is
+  # BUILT, so `Ash.create(actor: …)` alone reaches them too late. `TenantContext`'s master branch
+  # is the one that asks who is writing, and it saw a nil actor on every draft write the preview
+  # bar makes.
   defp write_draft(nil, attrs, record, %{site_id: nil} = user, resource) do
     draft_module(resource)
     |> Ash.Changeset.for_create(
@@ -1604,12 +1604,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     MishkaCmsCore.Runtime.Component => "component"
   }
 
-  # A button that leads to a refusal is worse than no button: `BuilderLive` turns a tenant away from
+  # A button that leads to a refusal is worse than no button: the editor turns a tenant away from
   # a shared row's address, so the row does not offer it one. Everything else about the record — the
   # preview, the details, the versions — stays, because seeing it was never the restricted part.
   #
-  # AND ONLY TO SOMEONE WHO MAY OPEN THAT BUILDER — `Section.allowed?/2`, which `BuilderLive` asks
-  # again at mount.
+  # AND ONLY TO SOMEONE WHO MAY OPEN THAT BUILDER — `Section.allowed?/2`, which the editor asks
+  # again when it opens.
   defp visual_editor_url(record, resource, actor) do
     with {:ok, section} <- Map.fetch(@builder_sections, resource),
          true <- can_edit?(resource, record, actor),

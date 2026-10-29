@@ -27,9 +27,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Icons do
   By longest matching PREFIX, so `svg/2` and `css/1` reach the set that owns the class and nothing
   else has to be told which set a value came from. A class no registered set claims is not an error:
   `known?/1` answers false and the control keeps the value anyway, because an author may be naming an
-  icon from a set this editor has never been told about — see
-  `MishkaCmsBuilderWeb.Live.Panels`, where the icon control accepts free text for exactly
-  that reason.
+  icon from a set this install has never been told about, which is also why the editor's icon
+  control accepts free text.
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 

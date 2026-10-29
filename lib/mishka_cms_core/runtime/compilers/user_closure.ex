@@ -54,7 +54,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.UserClosure do
   happens to contain `current_user` pays for a user it does not need, and nothing breaks.
 
   That also makes it indifferent to spelling, which matters here: `@current_user`,
-  `assigns[:current_user]` — the form `MishkaCmsBuilder.Conditions` writes —
+  `assigns[:current_user]` — the form the editor's Show-when conditions write —
   `socket.assigns.current_user` in a handler and `@current_user` inside a helper's `~H` sigil are
   four shapes in three grammars, and the name is the only thing all of them share.
 

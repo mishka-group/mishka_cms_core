@@ -40,7 +40,7 @@ defmodule MishkaCmsCore.MixProject do
   end
 
   defp description do
-    "The engine of Mishka CMS: a multi-tenant runtime, a visual page builder, accounts and an admin dashboard for Elixir and Phoenix LiveView."
+    "The engine of Mishka CMS: a multi-tenant runtime, accounts and an admin dashboard for Elixir and Phoenix LiveView."
   end
 
   # `priv/admin_assets`, `priv/cms_ui_kits/authoring`, `priv/dev_seed_media`, `priv/gettext`,

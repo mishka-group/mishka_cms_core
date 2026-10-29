@@ -1300,7 +1300,8 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
   asked for, and there was no way to find that out except by reading two sorts in two modules.
 
   Owning the key here is what keeps them from drifting apart again — `TailwindCompiler` decides what
-  the browser sees and `MishkaCmsBuilder.Tokens` decides what Studio shows, and they must not disagree.
+  the browser sees, the visual editor's Studio (`mishka_cms_builder`) decides what it shows, and
+  they must not disagree.
 
   A global sheet sorts before the site's own, so a site can always override what it inherited.
   """

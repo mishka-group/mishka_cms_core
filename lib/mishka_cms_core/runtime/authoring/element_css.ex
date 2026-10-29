@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   ## Why this is not the style panel, and not a reusable class
 
   The inspector writes a fixed vocabulary — padding, gap, colour — because a panel can only offer
-  what someone thought to add to it. `MishkaCmsBuilder.Classes` covers the twenty
+  what someone thought to add to it. A reusable class covers the twenty
   cards that are meant to match. Neither answers "this one element needs a `border-image` and a
   `:hover` transform", which is the request every builder eventually gets and which Elementor,
   Bricks, Divi and WordPress all answer with a per-element CSS box.

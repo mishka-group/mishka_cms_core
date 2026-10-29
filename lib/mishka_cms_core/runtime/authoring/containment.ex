@@ -495,7 +495,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   # The document, unless the caller says otherwise. A MOVE drags a node that is already in the tree,
   # so its own children answer; an INSERT drags the head of a freshly parsed template, whose ids the
   # document has never seen — which reads as no descendants rather than the wrong ones, and is why
-  # `MishkaCmsBuilder.EditorSession` hands the parsed template over.
+  # an editor inserting a template hands the parsed template over as `:dragged_tree`.
   defp dragged_descendants(%Node{id: id}, tree, opts) do
     dragged_tree = Keyword.get(opts, :dragged_tree) || tree
 
@@ -573,9 +573,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   drag hook uses to paint drop targets without a round trip per hover. The server still re-checks
   the drop it is actually asked to perform.
 
-  Reached through `MishkaCmsBuilder.EditorSession.drop_hints/2`, which is what the
-  editor calls at `dragstart` and which also folds in the session's locks. A refusal here is not the
-  end of the gesture: `EditorSession.apply_drop/2` places the node beside the target instead.
+  An editor asks for it at `dragstart`; the visual editor (`mishka_cms_builder`) also folds in its
+  session's locks. A refusal here is not the end of the gesture there: it places the node beside the
+  target instead.
   """
   @spec accepts_map(Tree.t(), Node.t() | map(), keyword()) :: %{String.t() => boolean()}
   def accepts_map(tree, dragged, opts \\ []) do

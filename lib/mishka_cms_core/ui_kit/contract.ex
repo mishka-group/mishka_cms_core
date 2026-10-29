@@ -14,8 +14,8 @@ defmodule MishkaCmsCore.UiKit.Contract do
   install; from the Studio's Install button it took the editor's LiveView down with it.
 
   The contract is deliberately about SHAPE, not content: names, types, and which fields have to be
-  present for the rest of the pipeline (`UiKitCatalog`, `Inspector`, `PaletteEntry`, the runtime
-  compiler) to mean anything. A kit is free to add fields this CMS has never heard of —
+  present for the rest of the pipeline (`UiKitCatalog`, `Inspector`, an editor's palette, the
+  runtime compiler) to mean anything. A kit is free to add fields this CMS has never heard of —
   `UiKitHandler` drops those at the Ash boundary — and free to leave optional ones out.
 
   ## What happens to a component that fails

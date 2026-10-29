@@ -490,8 +490,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement do
 
   @doc """
   The ops that make an idle form-lending node (`Fields.hands_form?/2`) a working form: `:let`, the
-  five names with a fresh token, and a binding for every field inside it, ready for
-  `MishkaCmsBuilder.EditorSession.apply_ops/4`.
+  five names with a fresh token, and a binding for every field inside it, ready for an editor to
+  apply as one batch.
 
   `tree` is the page the names must be unique in. A seed the node already carries in `as` is kept.
   A `phx-submit` the page's code already answers (`:events`) is the developer's: then only `:let`,

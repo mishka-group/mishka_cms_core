@@ -186,14 +186,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   end
 
   # The draft's editing history is released as it goes — on the resource's own destroy events, not
-  # here, because the picker's own Delete never comes through this module. The editor's plugins on
-  # `cms_core:<section>_draft:after_destroy` and `…:after_master_destroy` do it; see
-  # `MishkaCmsBuilder.Plugins.ReleaseDraftHistory`.
+  # here, because the picker's own Delete never comes through this module. An editor that keeps
+  # history (the visual editor, `mishka_cms_builder`) listens on
+  # `cms_core:<section>_draft:after_destroy` and `…:after_master_destroy`; with none installed the
+  # draft is only deleted.
   #
-  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL, for the reason
-  # `MishkaCmsBuilder.Helpers.create_section/4` gives: validations run when the changeset is BUILT, so
-  # `Ash.destroy(actor: …)` alone reaches them too late. `TenantContext`'s master branch is the one
-  # that asks who is writing, and it saw a nil actor on every one of these.
+  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL: validations run when the changeset is
+  # BUILT, so `Ash.destroy(actor: …)` alone reaches them too late. `TenantContext`'s master branch
+  # is the one that asks who is writing, and it saw a nil actor on every one of these.
   defp destroy(draft, %{site_id: nil} = actor),
     do:
       draft

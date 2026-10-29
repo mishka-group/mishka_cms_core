@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.Runtime.Authoring.StylesheetRow do
   @moduledoc """
   The stylesheet row the page builder owns for one site, found by its reserved name: the reusable
-  classes (`MishkaCmsBuilder.Classes`) and an element's own CSS
+  classes of the visual editor (`mishka_cms_builder`) and an element's own CSS
   (`MishkaCmsCore.Runtime.Authoring.ElementCss`) are each one row of `Stylesheet`.
 
   ## Scoped, not capped

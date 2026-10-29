@@ -20,9 +20,9 @@ defmodule MishkaCmsCore.Builder.Actions.OpenVerb do
       <div id={@id} data-pb-open={show_modal(@id)} data-pb-close={hide_modal(@id)}>
 
   A click aimed at that compiles to `JS.exec("data-pb-open", to: ".pb-xxxxxxxx")`, so what runs is
-  the component's own sequence — every transition, the body scroll lock, the focus trap. See
-  `MishkaCmsBuilder.PaletteEntry.opens/1`; a package's component joins in by writing one
-  attribute, with nothing registered anywhere.
+  the component's own sequence — every transition, the body scroll lock, the focus trap. The
+  editor reads the declaration off the component's own markup, so a package's component joins in
+  by writing one attribute, with nothing registered anywhere.
 
   A component that declares nothing keeps the plain verb it always had.
   """
