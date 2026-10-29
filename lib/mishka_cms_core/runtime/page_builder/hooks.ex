@@ -32,6 +32,15 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Hooks do
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.JsHook
+  alias MishkaCmsCore.Runtime.PageBuilder.{Markup, Tree}
+  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+
+  # Where each kind of row holds markup: what `named_in/3` reads.
+  @markup_fields [
+    {MishkaCmsCore.Runtime.Page, [:template, :helpers, :extra]},
+    {MishkaCmsCore.Runtime.Layout, [:template, :helpers, :extra]},
+    {MishkaCmsCore.Runtime.Component, [:template, :body, :helpers, :extra]}
+  ]
 
   require Ash.Query
 
@@ -145,6 +154,100 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Hooks do
     |> Ash.read()
     |> listed()
   end
+
+  @doc """
+  How many templates — pages, layouts and components — attach `hook`: carry a `phx-hook` naming it
+  as the browser does (`JavaScriptCompiler.browser_name/2`). Every place a row holds markup is read:
+  its template, its clause templates, and the `~H` written in its helpers, body and prelude
+  (`Markup.sigils/1`) — a kit component often attaches one only in a helper. The markup is parsed,
+  so a comment or a string that only mentions the name is not counted; an EEx block, which the tree
+  keeps as one node, and a template the tree cannot read are matched on their source. `hook` needs
+  its `is_global` calculation loaded.
+
+  `scope` is where to look: a site's own hook is attached on its site alone; a global one on `:all`
+  sites, or on `{:with_globals, site_id}` — a site's rows and the global components — for a site
+  admin. Error pages are drawn by a controller, where no hook mounts, so they are not read.
+  """
+  @spec named_in(map(), String.t() | nil, :all | {:with_globals, String.t()} | String.t()) ::
+          non_neg_integer()
+  def named_in(hook, site_name, scope) do
+    name = JavaScriptCompiler.browser_name(hook, site_name)
+    attribute = ~r/phx-hook\s*=\s*["']#{Regex.escape(name)}["']/
+
+    for {resource, fields} <- @markup_fields,
+        row <- rows_naming(resource, fields, name, scope),
+        Enum.any?(markups(row), &attaches?(&1, name, attribute)),
+        reduce: 0,
+        do: (count -> count + 1)
+  end
+
+  # The text is asked first, so only a row that could name the hook is read and parsed.
+  defp rows_naming(resource, fields, name, scope) do
+    resource
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> naming(resource, name)
+    |> within(scope)
+    |> Ash.Query.select(fields)
+    |> Ash.stream!(authorize?: false)
+  end
+
+  defp naming(query, MishkaCmsCore.Runtime.Component, name) do
+    like = "%" <> name <> "%"
+
+    Ash.Query.filter(
+      query,
+      contains(template, ^name) or contains(body, ^name) or
+        fragment("(?)::text LIKE ?", helpers, ^like) or fragment("(?)::text LIKE ?", extra, ^like)
+    )
+  end
+
+  defp naming(query, _page_or_layout, name) do
+    like = "%" <> name <> "%"
+
+    Ash.Query.filter(
+      query,
+      contains(template, ^name) or fragment("(?)::text LIKE ?", helpers, ^like) or
+        fragment("(?)::text LIKE ?", extra, ^like)
+    )
+  end
+
+  defp within(query, :all), do: query
+
+  defp within(query, {:with_globals, site_id}),
+    do: Ash.Query.filter(query, site_id == ^site_id or is_nil(site_id))
+
+  defp within(query, site_id), do: Ash.Query.filter(query, site_id == ^site_id)
+
+  # Every place a row holds markup.
+  defp markups(row) do
+    extra = field(row, :extra)
+    clauses = extra |> field(:clauses) |> List.wrap()
+
+    code =
+      Enum.map(List.wrap(field(row, :helpers)), &field(&1, :code)) ++
+        [field(row, :body), field(extra, :prelude)] ++ Enum.map(clauses, &field(&1, :body))
+
+    [field(row, :template) | Enum.map(clauses, &field(&1, :template))] ++
+      Enum.flat_map(code, &Markup.sigils/1)
+  end
+
+  defp attaches?(markup, name, attribute) when is_binary(markup) do
+    case Tree.parse(markup) do
+      {:ok, tree} -> tree |> Tree.walk() |> Enum.any?(&names?(&1, name, attribute))
+      _unparsed -> Regex.match?(attribute, markup)
+    end
+  end
+
+  defp attaches?(_no_markup, _name, _attribute), do: false
+
+  defp names?(%{kind: :eex_block, meta: %{source: source}}, _name, attribute)
+       when is_binary(source),
+       do: Regex.match?(attribute, source)
+
+  defp names?(node, name, _attribute), do: Node.attr_text(node, "phx-hook") == name
+
+  defp field(%{} = map, key), do: Map.get(map, key) || Map.get(map, Atom.to_string(key))
+  defp field(_not_a_map, _key), do: nil
 
   defp listed({:ok, %Ash.Page.Offset{results: rows}}), do: rows
   defp listed({:ok, rows}) when is_list(rows), do: rows

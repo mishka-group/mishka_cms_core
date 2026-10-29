@@ -38,6 +38,36 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Markup do
 
   @eex_expression [:start_expr, :expr, :end_expr, :middle_expr]
 
+  @doc """
+  Every `~H` template written inside Elixir code — a helper's, a component's `body`, a prelude — as
+  source, in the order they are written. Code that does not parse answers `[]`.
+
+      iex> MishkaCmsCore.Runtime.PageBuilder.Markup.sigils(~S|def tip(assigns), do: ~H"<b>{@x}</b>"|)
+      ["<b>{@x}</b>"]
+  """
+  @spec sigils(String.t() | nil) :: [String.t()]
+  def sigils(code) when is_binary(code) do
+    case Code.string_to_quoted(code) do
+      {:ok, quoted} ->
+        quoted
+        |> Macro.prewalk([], fn
+          {:sigil_H, _meta, [{:<<>>, _parts, [template]}, _modifiers]} = node, found
+          when is_binary(template) ->
+            {node, [template | found]}
+
+          node, found ->
+            {node, found}
+        end)
+        |> elem(1)
+        |> Enum.reverse()
+
+      {:error, _unparseable} ->
+        []
+    end
+  end
+
+  def sigils(_code), do: []
+
   @doc "Every Elixir expression in a template: attribute values, interpolations and EEx tags."
   @spec expressions(String.t() | nil) :: [String.t()]
   def expressions(template) when is_binary(template) do

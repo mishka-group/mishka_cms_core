@@ -1393,11 +1393,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
         unquote(references_ast)
 
         # The components the page draws are built before it draws them — see
-        # `MishkaCmsCore.Runtime.ComponentPrefetch`.
+        # `MishkaCmsCore.Runtime.ComponentPrefetch` — and before its clock starts: a build is not
+        # the page's render time.
         def render(var!(assigns)) when is_map(var!(assigns)) do
           unquote(prefetch_ast)
-          [primary] = templates(var!(assigns))
-          primary
+          unquote(measured_render(params[:page_module]))
         end
 
         def templates(var!(assigns)) when is_map(var!(assigns)) do
@@ -1406,6 +1406,31 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       end
 
     {params, functions_ast ++ [render_handlers_ast]}
+  end
+
+  # THE PAGE'S CLOCK (`MishkaCmsCore.Runtime.RenderMetrics`), chosen here, when the module is built,
+  # so a draft preview's module gets the template alone. A page is `:handed_in`: its layout draws it
+  # as `@inner_content` and does not count it.
+  defp measured_render(module) do
+    template =
+      quote do
+        [primary] = templates(var!(assigns))
+        primary
+      end
+
+    case MishkaCmsCore.Runtime.RenderMetrics.measured?(module) do
+      true ->
+        quote do
+          MishkaCmsCore.Runtime.RenderMetrics.measure(
+            __MODULE__,
+            fn -> unquote(template) end,
+            :handed_in
+          )
+        end
+
+      false ->
+        template
+    end
   end
 
   # EVERY PAGE SHOWS ITS OWN MESSAGES, because it cannot rely on a layout to.

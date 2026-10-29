@@ -316,7 +316,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   def build_render_functions({params, functions_ast}) do
     render_functions_ast =
       Enum.map(params[:error_pages] || [], fn error_page ->
-        build_render_function(error_page, params[:site])
+        build_render_function(error_page, params[:site], params[:error_module])
       end)
 
     # Add catch-all render function
@@ -621,13 +621,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   # ## Rendering Process
   #
   # render/2 -> layout/2 -> root_layout/1 -> final HTML
-  defp build_render_function(error_page, site) do
+  defp build_render_function(error_page, site, module) do
     %{template: template} = error_page
     status = entry_status(error_page)
     compiled_template = compile_heex_template(template, site)
 
-    quote do
-      def render(var!(conn), unquote(status)) do
+    body =
+      quote do
         # `assigns` is bound BEFORE the inner template renders so a HEEx `<.component site={@site} />`
         # (and any `@status`/`@conn`) resolves; `__changed__`/`socket` let the TagEngine output render
         # outside a live socket (error pages are served by a controller, not a LiveView).
@@ -643,8 +643,26 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
         wrapped = layout(unquote(status), Map.put(var!(assigns), :inner_content, inner))
         root_layout(Map.put(var!(assigns), :inner_content, wrapped))
       end
+
+    quote do
+      def render(var!(conn), unquote(status)) do
+        unquote(timed(MishkaCmsCore.Runtime.RenderMetrics.measured?(module), status, body))
+      end
     end
   end
+
+  # Timed by `MishkaCmsCore.Runtime.RenderMetrics` per status — a 404 page's numbers are the 404s
+  # visitors hit — chosen here, when the module is built, so a draft preview's module gets the body
+  # alone.
+  defp timed(true, status, body) do
+    quote do
+      MishkaCmsCore.Runtime.RenderMetrics.measure({__MODULE__, unquote(status)}, fn ->
+        unquote(body)
+      end)
+    end
+  end
+
+  defp timed(false, _status, body), do: body
 
   # The status an entry's clauses match on: a code, or `:offline` however it was spelled.
   defp entry_status(%{status: status}), do: ErrorStatus.parse(status) || status

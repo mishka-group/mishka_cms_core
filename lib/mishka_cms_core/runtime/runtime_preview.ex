@@ -924,12 +924,14 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   defp maybe_row(_label, ""), do: nil
   defp maybe_row(label, value), do: {label, to_string(value)}
 
-  defp format_bytes(n) when n < 1024, do: gettext("%{size} B", size: n)
+  @doc "`n` bytes as the modal shows a size: `812 B`, `7.8 KB`, `1.2 MB`."
+  @spec format_bytes(non_neg_integer()) :: String.t()
+  def format_bytes(n) when n < 1024, do: gettext("%{size} B", size: n)
 
-  defp format_bytes(n) when n < 1_048_576,
+  def format_bytes(n) when n < 1_048_576,
     do: gettext("%{size} KB", size: Float.round(n / 1024, 1))
 
-  defp format_bytes(n), do: gettext("%{size} MB", size: Float.round(n / 1_048_576, 1))
+  def format_bytes(n), do: gettext("%{size} MB", size: Float.round(n / 1_048_576, 1))
 
   defp escape(value),
     do: value |> to_string() |> Phoenix.HTML.html_escape() |> Phoenix.HTML.safe_to_string()

@@ -491,12 +491,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
         unquote(references_ast)
 
         # The components the layout draws are built before it draws them — see
-        # `MishkaCmsCore.Runtime.ComponentPrefetch`.
+        # `MishkaCmsCore.Runtime.ComponentPrefetch` — and before its clock starts. `render/2` is the
+        # previews' own and is not measured.
         def render(var!(assigns)) when is_map(var!(assigns)) do
           unquote(prefetch_ast)
-          layout_data = get_in(__layout_information__(), [:layout])
-          var!(assigns) = Map.merge(layout_data, var!(assigns))
-          unquote(compiled_template)
+          unquote(measured_render(params[:layout_module], compiled_template))
         end
 
         def render(var!(assigns), var!(inner_content)) when is_map(var!(assigns)) do
@@ -513,6 +512,28 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
       end
 
     {params, functions_ast ++ [render_functions_ast]}
+  end
+
+  # THE LAYOUT'S CLOCK (`MishkaCmsCore.Runtime.RenderMetrics`), chosen here, when the module is built,
+  # so a draft preview's module gets the template alone. The page it draws as `@inner_content` hands
+  # its time over, so the layout's number is its own template.
+  defp measured_render(module, compiled_template) do
+    template =
+      quote do
+        layout_data = get_in(__layout_information__(), [:layout])
+        var!(assigns) = Map.merge(layout_data, var!(assigns))
+        unquote(compiled_template)
+      end
+
+    case MishkaCmsCore.Runtime.RenderMetrics.measured?(module) do
+      true ->
+        quote(
+          do: MishkaCmsCore.Runtime.RenderMetrics.measure(__MODULE__, fn -> unquote(template) end)
+        )
+
+      false ->
+        template
+    end
   end
 
   @doc """

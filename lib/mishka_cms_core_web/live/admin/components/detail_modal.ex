@@ -236,9 +236,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.DetailModal do
   attr :hint, :string, default: nil, doc: "a smaller line under the value, saying what it is"
   attr :hint_navigate, :string, default: nil, doc: "draws the hint as a link to this address"
 
+  # `h-full`: a box fills its cell, so a row of boxes is one height whether or not each has a hint.
   def metric(assigns) do
     ~H"""
-    <div class="rounded-[11px] bg-[#faf9f6] p-[13px]">
+    <div class="h-full rounded-[11px] bg-[#faf9f6] p-[13px]">
       <div class="flex items-center justify-between">
         <span class="text-[10.5px] font-semibold text-[#8a877f]">{@label}</span>
         <.icon name={@icon} class="size-[13px] text-[#a8a5a0]" />

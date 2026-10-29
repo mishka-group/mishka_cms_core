@@ -50,7 +50,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.RuntimePreview
-  alias MishkaCmsCore.Runtime.{Component, ErrorPage}
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, JsHook, Layout, Stylesheet}
   alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimeStatusTimeline
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
@@ -60,6 +60,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   import DetailModal, only: [detail: 1, status_row: 1, metric: 1, datetime: 1]
 
   @modal_id "runtime-preview-modal"
+  # The bundle every site's CSS starts with, which a global stylesheet is built into.
+  @shared_base MishkaCmsCore.Runtime.RuntimeStatus.asset_bundle_id("Global")
   @tabs [
     {"overview", gettext_noop("Overview"), "M4 5h16v14H4z M4 10h16"},
     {"preview", gettext_noop("Preview"), "M2 4h20v13H2z M8 21h8"},
@@ -517,40 +519,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             {gettext("this server, since its last build")}
           </span>
         </h3>
-        <div class="grid grid-cols-2 gap-3">
-          <div id="runtime-preview-render-time">
-            <.metric
-              icon="hero-clock"
-              label={gettext("Render Time")}
-              value={render_time(@metrics)}
-              hint={render_time_hint(@metrics)}
-              hint_navigate={settings_link(@metrics)}
-              real={is_map(@metrics) and @metrics.on?}
-            />
-          </div>
-          <.metric icon="hero-document" label={gettext("Bundle Size")} value={@file_size} real />
-          <div id="runtime-preview-cache">
-            <.metric
-              icon="hero-circle-stack"
-              label={gettext("Cache")}
-              value={cache(@metrics)}
-              hint={cache_hint(@metrics)}
-              real={is_map(@metrics)}
-            />
-          </div>
-          <div id="runtime-preview-rerenders">
-            <.metric
-              icon="hero-arrow-path"
-              label={gettext("Re-renders")}
-              value={rerenders(@metrics)}
-              hint={rerenders_hint(@metrics)}
-              hint_navigate={settings_link(@metrics)}
-              real={is_map(@metrics) and @metrics.on?}
-            />
-          </div>
-        </div>
+        <.metric_grid resource={@resource} metrics={@metrics} file_size={@file_size} />
         <dl class="mt-4 space-y-1 text-sm">
-          <.status_row :if={is_map(@metrics) and @metrics.build} label={gettext("Last Built")}>
+          <.status_row :if={is_map(@metrics) and @metrics[:build]} label={gettext("Last Built")}>
             {datetime(@metrics.build.at)}
           </.status_row>
           <.status_row label={gettext("Last Updated")}>{datetime(@record.updated_at)}</.status_row>
@@ -633,17 +604,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         <h3 class="mb-4 flex items-center gap-2 text-[13.5px] font-bold text-[#1b1a18]">
           <.icon name="hero-presentation-chart-line" class="size-4 text-[#177a53]" />
           {gettext("Performance Metrics")}
-          <span class="ms-auto rounded-[5px] bg-[#fbf1df] px-[7px] py-[3px] text-[8.5px] font-bold uppercase tracking-[0.08em] text-[#c0752a]">
-            {gettext("sample")}
+          <span class="ms-auto text-[10px] font-medium text-[#a8a5a0]">
+            {metrics_scope(@resource)}
           </span>
         </h3>
-        <div class="grid grid-cols-2 gap-3">
-          <.metric icon="hero-clock" label={gettext("Load Time")} value="1.2s" />
-          <.metric icon="hero-document" label={gettext("File Size")} value={@file_size} real />
-          <.metric icon="hero-circle-stack" label={gettext("Cache Hit")} value="98%" />
-          <.metric icon="hero-arrow-trending-up" label={gettext("Usage")} value="847" />
-        </div>
+        <.metric_grid resource={@resource} metrics={@metrics} file_size={@file_size} />
         <dl class="mt-4 space-y-1 text-sm">
+          <.status_row :if={is_map(@metrics) and @metrics[:build]} label={gettext("Last Built")}>
+            {datetime(@metrics.build.at)}
+          </.status_row>
           <.status_row label={gettext("Last Updated")}>{datetime(@record.updated_at)}</.status_row>
           <.status_row label={gettext("Created")}>{datetime(@record.inserted_at)}</.status_row>
           <.status_row label={gettext("Modified By")}>
@@ -654,6 +623,189 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     </div>
     """
   end
+
+  # A bundle lives in this node's memory and is not rebuilt per render, so its numbers are this
+  # server's now; a rendered record's restart with its module.
+  defp metrics_scope(resource) when resource in [Stylesheet, JsHook], do: gettext("this server")
+  defp metrics_scope(_rendered), do: gettext("this server, since its last build")
+
+  # THE FOUR BOXES OF A RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: one grid for the
+  # records `MishkaCmsCore.Runtime.RenderMetrics` times, one for those built into a bundle.
+  attr :resource, :atom, required: true
+  attr :metrics, :any, required: true
+  attr :file_size, :any, required: true
+
+  # A STYLESHEET OR A JS HOOK IS BUILT INTO ITS SITE'S BUNDLE, not rendered: its boxes are that
+  # bundle — its size as visitors download it, whether it is built and how long the last rebuild
+  # took — and a fourth of its own: when the CSS was built, or how many templates attach the hook.
+  # EVERY BOX ONE HEIGHT. `auto-rows-fr` makes each row as tall as the tallest box in the grid, so a
+  # box with a hint under its value does not leave its neighbours, or the other row, shorter.
+  defp metric_grid(%{resource: resource} = assigns) when resource in [Stylesheet, JsHook] do
+    ~H"""
+    <div class="grid auto-rows-fr grid-cols-2 gap-3">
+      <div id="runtime-preview-bundle">
+        <.metric
+          icon="hero-archive-box"
+          label={bundle_label(@resource, @metrics)}
+          value={bundle_size(@metrics)}
+          hint={bundle_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <.metric icon="hero-document" label={file_label(@resource)} value={@file_size} real />
+      <div id="runtime-preview-build">
+        <.metric
+          icon="hero-wrench-screwdriver"
+          label={gettext("Build")}
+          value={build(@metrics)}
+          hint={build_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <div :if={@resource == Stylesheet} id="runtime-preview-last-built">
+        <.metric
+          icon="hero-calendar"
+          label={gettext("Last Built")}
+          value={built_at(@metrics)}
+          hint={version(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <div :if={@resource == JsHook} id="runtime-preview-named-in">
+        <.metric
+          icon="hero-code-bracket"
+          label={gettext("Named In")}
+          value={named_in(@metrics)}
+          hint={named_in_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  defp metric_grid(assigns) do
+    ~H"""
+    <div class="grid auto-rows-fr grid-cols-2 gap-3">
+      <div id="runtime-preview-render-time">
+        <.metric
+          icon="hero-clock"
+          label={gettext("Render Time")}
+          value={render_time(@metrics)}
+          hint={render_time_hint(@metrics)}
+          hint_navigate={settings_link(@metrics)}
+          real={is_map(@metrics) and @metrics.on?}
+        />
+      </div>
+      <.metric icon="hero-document" label={file_label(@resource)} value={@file_size} real />
+      <div id="runtime-preview-cache">
+        <.metric
+          icon="hero-circle-stack"
+          label={gettext("Cache")}
+          value={cache(@metrics)}
+          hint={cache_hint(@metrics)}
+          real={is_map(@metrics)}
+        />
+      </div>
+      <div id="runtime-preview-rerenders">
+        <.metric
+          icon="hero-arrow-path"
+          label={rerenders_label(@resource)}
+          value={rerenders(@resource, @metrics)}
+          hint={rerenders_hint(@resource, @metrics)}
+          hint_navigate={settings_link(@metrics)}
+          real={is_map(@metrics) and @metrics.on?}
+        />
+      </div>
+    </div>
+    """
+  end
+
+  # THE BUNDLE A STYLESHEET IS IN, as `PreviewHelpers` read it from `AssetsState`.
+  defp bundle_label(Stylesheet, %{bundle: @shared_base}), do: gettext("Shared CSS")
+  defp bundle_label(Stylesheet, _site_or_loading), do: gettext("Site CSS")
+  defp bundle_label(JsHook, _site_or_loading), do: gettext("Site JS")
+
+  defp bundle_size(metrics) when not is_map(metrics), do: gettext("Loading…")
+
+  defp bundle_size(%{site_bundles: n}) when is_integer(n),
+    do: ngettext("In %{count} site bundle", "In %{count} site bundles", n)
+
+  defp bundle_size(%{sizes: nil}), do: "—"
+  defp bundle_size(%{sizes: %{brotli: n}}) when is_integer(n), do: RuntimePreview.format_bytes(n)
+  defp bundle_size(%{sizes: %{raw: n}}), do: RuntimePreview.format_bytes(n)
+
+  defp bundle_hint(metrics) when not is_map(metrics), do: nil
+
+  defp bundle_hint(%{lazy?: true, site_bundles: n}) when is_integer(n),
+    do: gettext("Built on its own beside each site's JS, loaded when a page first uses it")
+
+  defp bundle_hint(%{lazy?: true}), do: gettext("Not in it: loaded when a page first uses it")
+
+  defp bundle_hint(%{site_bundles: n}) when is_integer(n),
+    do: gettext("Built into each site's JS")
+
+  defp bundle_hint(%{sizes: nil}), do: gettext("Not built on this server")
+
+  defp bundle_hint(%{sizes: %{brotli: brotli} = sizes} = metrics) when is_integer(brotli),
+    do:
+      with_shared(
+        metrics,
+        gettext("Brotli; raw %{raw} · gzip %{gzip}",
+          raw: RuntimePreview.format_bytes(sizes.raw),
+          gzip: RuntimePreview.format_bytes(sizes.gzip || sizes.raw)
+        )
+      )
+
+  defp bundle_hint(%{sizes: _uncompressed} = metrics),
+    do: with_shared(metrics, gettext("Not compressed"))
+
+  defp with_shared(%{bundle: @shared_base}, hint),
+    do: hint <> " · " <> gettext("the start of every site's CSS")
+
+  defp with_shared(_site, hint), do: hint
+
+  defp build(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp build(%{state: :compiling}), do: gettext("Building…")
+  defp build(%{left_out?: true}), do: gettext("Left out")
+  defp build(%{state: :failed}), do: gettext("Failed")
+  defp build(%{state: state}) when state in [:inactive, :archived], do: gettext("Not in a bundle")
+  defp build(%{site_bundles: n}) when is_integer(n) and n > 0, do: gettext("Built")
+  defp build(%{site_bundles: 0}), do: gettext("Not built")
+  defp build(%{sizes: nil}), do: gettext("Not built")
+  defp build(_built), do: gettext("Built")
+
+  defp build_hint(%{left_out?: true}),
+    do: gettext("It did not build, and the rest of the bundle does; see the Pipeline tab")
+
+  defp build_hint(%{state: :failed}), do: gettext("See the Pipeline tab")
+
+  defp build_hint(%{took_ms: ms}) when is_integer(ms),
+    do: gettext("Last rebuild took %{time}", time: duration(ms * 1000))
+
+  defp build_hint(_no_rebuild_since_boot), do: nil
+
+  defp built_at(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp built_at(%{updated_at: %DateTime{} = at}), do: datetime(at)
+  defp built_at(_never), do: "—"
+
+  defp version(%{hash: hash}) when is_binary(hash),
+    do: gettext("Version %{hash}", hash: String.slice(hash, 0, 8))
+
+  defp version(_none), do: nil
+
+  # HOW MANY TEMPLATES ATTACH THE HOOK (`PageBuilder.Hooks.named_in/3`): one component that does is
+  # one, however many pages draw it.
+  defp named_in(metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp named_in(%{named_in: n}), do: ngettext("%{count} template", "%{count} templates", n)
+
+  defp named_in_hint(%{named_in: 0}), do: gettext("No page, layout or component attaches it")
+  defp named_in_hint(%{named_in: _n}), do: gettext("Pages, layouts and components that attach it")
+  defp named_in_hint(_loading), do: nil
+
+  # A component's file is its template, which the kit calls its bundle.
+  defp file_label(Component), do: gettext("Bundle Size")
+  defp file_label(_resource), do: gettext("File Size")
 
   defp preview_tab(assigns) do
     draft_view? = assigns.preview_source == "draft"
@@ -1258,8 +1410,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp precompile(record), do: Map.get(record, :precompile)
 
-  # THE COMPONENT'S RUNTIME NUMBERS, as `PreviewHelpers.metrics/1` read them: `:loading` until the
-  # read lands, then whether the module is in memory, its render times and its last build.
+  # A TIMED RECORD'S RUNTIME NUMBERS, as `PreviewHelpers` read them: `:loading` until the read lands,
+  # then whether the module is in memory, its render times and its last build.
   defp render_time(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp render_time(%{on?: false}), do: gettext("Not active")
   defp render_time(%{loaded?: false}), do: gettext("Not loaded")
@@ -1281,24 +1433,52 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   # RE-RENDERS ARE LIVEVIEW'S UPDATES: a component drawn again after the page was, because something
   # it reads changed. The same counters as Render Time; nothing more is measured for them.
-  defp rerenders(metrics) when not is_map(metrics), do: gettext("Loading…")
-  defp rerenders(%{on?: false}), do: gettext("Not active")
-  defp rerenders(%{loaded?: false}), do: gettext("Not loaded")
-  defp rerenders(%{stats: :hidden}), do: "—"
-  defp rerenders(%{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
-  defp rerenders(_no_renders), do: "0"
+  #
+  # AN ERROR PAGE HAS NONE — a controller draws it whole on every request — so its fourth box is how
+  # many times it was SHOWN, per status: for a 404 page, the 404s visitors hit.
+  defp rerenders_label(ErrorPage), do: gettext("Shown")
+  defp rerenders_label(_resource), do: gettext("Re-renders")
 
-  defp rerenders_hint(metrics) when not is_map(metrics), do: nil
-  defp rerenders_hint(%{on?: false}), do: gettext("Turn it on in Settings → Performance")
-  defp rerenders_hint(%{loaded?: false}), do: nil
+  defp rerenders(_resource, metrics) when not is_map(metrics), do: gettext("Loading…")
+  defp rerenders(_resource, %{on?: false}), do: gettext("Not active")
+  defp rerenders(_resource, %{loaded?: false}), do: gettext("Not loaded")
+  defp rerenders(_resource, %{stats: :hidden}), do: "—"
+  defp rerenders(ErrorPage, %{stats: %{full: %{count: n}}}), do: Integer.to_string(n)
+  defp rerenders(_resource, %{stats: %{update: %{count: n}}}), do: Integer.to_string(n)
+  defp rerenders(_resource, _no_renders), do: "0"
 
-  defp rerenders_hint(%{stats: :hidden}),
+  defp rerenders_hint(_resource, metrics) when not is_map(metrics), do: nil
+
+  defp rerenders_hint(_resource, %{on?: false}),
+    do: gettext("Turn it on in Settings → Performance")
+
+  defp rerenders_hint(_resource, %{loaded?: false}), do: nil
+
+  defp rerenders_hint(_resource, %{stats: :hidden}),
     do: gettext("Counted on every site; shown to master admins")
 
-  defp rerenders_hint(%{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
+  defp rerenders_hint(ErrorPage, %{stats: %{statuses: [_ | _] = statuses}}) do
+    Enum.map_join(statuses, " · ", fn {status, %{count: n, avg_us: us}} ->
+      "#{status_name(status)} #{duration(us)} ×#{n}"
+    end)
+  end
+
+  defp rerenders_hint(ErrorPage, _never_shown),
+    do: gettext("Counted per status, each time it is shown")
+
+  # A LAYOUT IS DRAWN AGAIN WITH EVERY UPDATE OF THE PAGE INSIDE IT: LiveView marks `@inner_content`
+  # changed on every render, so its updates are the page's.
+  defp rerenders_hint(Layout, %{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
+    do: gettext("With every update of the page inside it, %{time} each", time: duration(us))
+
+  defp rerenders_hint(_resource, %{stats: %{update: %{count: n, avg_us: us}}}) when n > 0,
     do: gettext("Average %{time} each", time: duration(us))
 
-  defp rerenders_hint(_no_updates), do: gettext("Redrawn when something it reads changes")
+  defp rerenders_hint(_resource, _no_updates),
+    do: gettext("Redrawn when something it reads changes")
+
+  defp status_name(:offline), do: gettext("Offline")
+  defp status_name(status), do: to_string(status)
 
   # The setting that turns the render clock on (`MishkaCmsCore.Runtime.RenderMetrics.on?/0`).
   defp settings_link(%{on?: false}), do: "/admin/dashboard/settings?tab=general"
@@ -1321,6 +1501,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp cache_hint(_unknown), do: nil
 
   defp duration(us) when us < 1000, do: "#{us} µs"
+
+  defp duration(us) when us >= 1_000_000,
+    do: "#{:erlang.float_to_binary(us / 1_000_000, decimals: 1)} s"
+
   defp duration(us), do: "#{:erlang.float_to_binary(us / 1000, decimals: 1)} ms"
 
   defp site_name(%{site: %{name: name}}) when is_binary(name), do: name

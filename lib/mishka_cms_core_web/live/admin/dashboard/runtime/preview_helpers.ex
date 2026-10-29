@@ -71,7 +71,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   alias MishkaCmsCore.Runtime.{RuntimePreview, RuntimeStatus, DraftPreviewAssets, ComponentCopy}
   alias MishkaCmsCore.Runtime.{Languages, PageEditions}
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
   alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
@@ -90,6 +90,17 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @versions_per_page 5
   @drafts_per_page 5
   @metrics_every :timer.seconds(5)
+
+  # The records built into a site's bundle rather than rendered: their card is about that bundle.
+  @bundled [MishkaCmsCore.Runtime.Stylesheet, MishkaCmsCore.Runtime.JsHook]
+
+  # The records whose renders `MishkaCmsCore.Runtime.RenderMetrics` times.
+  @timed [
+    MishkaCmsCore.Runtime.Component,
+    MishkaCmsCore.Runtime.Page,
+    MishkaCmsCore.Runtime.Layout,
+    MishkaCmsCore.Runtime.ErrorPage
+  ]
 
   # Every runtime resource this modal opens carries a "Configuration" tab hosting its MishkaGervaz
   # form, so the record is read, inspected and edited in ONE place. Editing used to mean a second,
@@ -320,8 +331,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp status_hook(
          %Phoenix.Socket.Broadcast{event: "oban_activity", payload: %{__oban__: true, job: job}},
          socket
-       ),
-       do: {:cont, refresh_status(socket, &record_matches?(&1, job_record_id(job)))}
+       ) do
+    match? = &record_matches?(&1, job_record_id(job))
+    socket = refresh_status(socket, match?)
+
+    {:cont, if(match?.(socket.assigns.preview), do: load_metrics(socket), else: socket)}
+  end
 
   defp status_hook(
          %Phoenix.Socket.Broadcast{payload: %{__runtime_compiled__: true, module: module}},
@@ -462,51 +477,206 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     |> put_flash(:error, gettext("Failed to load preview"))
   end
 
-  # A COMPONENT'S RUNTIME NUMBERS — its render times, its last build and whether its module is in
-  # memory now — read off the LiveView process, so the card shows "Loading…" rather than the modal
-  # waiting, and read again every few seconds while the modal stays on it. One timer at a time: a new
-  # read replaces the one pending, so opening the same component twice does not start a second loop.
+  # A RECORD'S RUNTIME NUMBERS — its render times, its last build and whether its module is in memory
+  # now — read off the LiveView process, so the card shows "Loading…" rather than the modal waiting,
+  # and read again every few seconds while the modal stays on it. One timer at a time: a new read
+  # replaces the one pending, so opening the same record twice does not start a second loop. The
+  # answer carries the record's id, so one that lands after the modal moved on is dropped.
   #
-  # A GLOBAL COMPONENT'S COUNTS ARE EVERY SITE'S: renders on all of them land on its one module. A
-  # site admin may open it, so its counts are shown to a master admin alone.
+  # A GLOBAL RECORD'S COUNTS ARE EVERY SITE'S: renders on all of them land on its one module. A site
+  # admin may open it, so its counts are shown to a master admin alone.
   defp load_metrics(
          %{
            assigns: %{
              preview:
-               %{resource: MishkaCmsCore.Runtime.Component, status: %{module: module}} = preview
+               %{resource: resource, record: %{id: id} = record, status: %{module: module}} =
+                 preview
            }
-         } =
-           socket
+         } = socket
        )
-       when not is_nil(module) do
-    counts? = preview.record.site_id != nil or master?(preview.current_user)
+       when resource in @timed and not is_nil(module) do
+    counts? = record.site_id != nil or master?(preview.current_user)
 
     socket
     |> assign(:preview, %{preview | metrics: preview.metrics || :loading})
     |> MishkaGervaz.Messages.start_async(:preview_metrics, fn ->
-      {module, metrics(module, counts?)}
+      {id, metrics(resource, record, module, counts?)}
+    end)
+  end
+
+  # A BUNDLED RECORD'S NUMBERS are its bundle's, as `AssetsState` holds it, with the build state and
+  # the last rebuild's job the modal already read. Nothing renders them, so nothing is timed and
+  # nothing ticks: a rebuild's job announces itself (`status_hook/2`).
+  defp load_metrics(
+         %{assigns: %{preview: %{resource: resource, record: %{id: id} = record} = preview}} =
+           socket
+       )
+       when resource in @bundled do
+    source = %{record: record, status: preview.status, viewer: preview.current_user}
+
+    socket
+    |> assign(:preview, %{preview | metrics: preview.metrics || :loading})
+    |> MishkaGervaz.Messages.start_async(:preview_metrics, fn ->
+      {id, bundle_metrics(resource, source)}
     end)
   end
 
   defp load_metrics(socket), do: socket
 
-  defp metrics(module, counts?) do
+  # A SITE'S OWN STYLESHEET IS IN THAT SITE'S CSS; a global one is in the shared base every site's CSS
+  # starts with — so a site admin sees their own site's CSS, which is what their visitors download,
+  # and a master the shared base.
+  defp bundle_metrics(MishkaCmsCore.Runtime.Stylesheet, %{record: record} = source),
+    do: bundle(source, css_bundle(record, source), "css")
+
+  # A SITE'S OWN HOOK IS IN ITS SITE'S JS. A global one is built into every site's JS — not into a
+  # shared base, which exists only for a site with no hooks of its own — so a site admin sees their
+  # own site's bundle, and a master in how many site bundles it is. How many templates attach it is
+  # counted where the viewer may look (`PageBuilder.Hooks.named_in/3`).
+  defp bundle_metrics(MishkaCmsCore.Runtime.JsHook, %{record: record} = source) do
+    hook = Ash.load!(record, [:is_global], authorize?: false)
+    {site_name, scope} = hook_scope(hook, source)
+
+    source
+    |> bundle(js_bundle(hook, site_name), "js")
+    |> then(&Map.put(&1, :build, built(&1)))
+    |> Map.merge(%{
+      lazy?: hook.lazy == true,
+      left_out?: left_out?(source.status, site_name),
+      named_in: MishkaCmsCore.Runtime.PageBuilder.Hooks.named_in(hook, site_name, scope)
+    })
+  end
+
+  defp hook_scope(%{site_id: site_id}, %{status: %{site_name: name}}) when is_binary(site_id),
+    do: {name, site_id}
+
+  defp hook_scope(_global, %{viewer: %{site_id: site_id}}) when is_binary(site_id),
+    do: {site_name(site_id), {:with_globals, site_id}}
+
+  defp hook_scope(_global, _master), do: {nil, :all}
+
+  defp js_bundle(_hook, site_name) when is_binary(site_name), do: site_name
+  defp js_bundle(_global, nil), do: :every_site
+
+  # The card's Last Built row, which a JS hook's card shows under its boxes.
+  defp built(%{updated_at: %DateTime{} = at}), do: %{at: at}
+  defp built(_never), do: nil
+
+  # LEFT OUT OF THE BUNDLE SHOWN. `JavaScriptCompiler.left_out/1` is per bundle, so a global hook
+  # left out of another site's JS is not left out of a site admin's own; a master sees them all.
+  defp left_out?(%{left_out: left_out}, site_name) when is_list(left_out),
+    do: Enum.any?(left_out, fn {bundle, _reason} -> is_nil(site_name) or bundle == site_name end)
+
+  defp left_out?(_status, _site_name), do: false
+
+  defp bundle(source, :every_site, type) do
+    sites = Enum.count(SiteState.get_active_sites(), &AssetsState.exists?(&1.name, type))
+    %{bundle(source, nil, type) | bundle: :every_site, site_bundles: sites}
+  end
+
+  defp bundle(%{status: status}, bundle, type) do
     %{
-      on?: RenderMetrics.on?(),
-      loaded?: CompilerHelpers.loaded?(module),
-      stats: if(counts?, do: RenderMetrics.stats(module), else: :hidden),
-      build: RenderMetrics.build(module)
+      kind: :asset,
+      type: type,
+      bundle: bundle,
+      sizes: sizes(bundle, type),
+      hash: AssetsState.hash(bundle, type),
+      updated_at: AssetsState.updated_at(bundle, type),
+      state: status && status.state,
+      took_ms: took_ms(status),
+      site_bundles: nil
     }
   end
 
-  defp metrics_loaded(socket, {:ok, {module, metrics}}) do
-    case socket.assigns.preview do
-      %{record: %{id: id}, status: %{module: ^module}} = preview ->
-        if timer = socket.assigns[:preview_metrics_timer], do: Process.cancel_timer(timer)
-        timer = Process.send_after(self(), {:preview_metrics_tick, id}, @metrics_every)
+  defp css_bundle(%{site_id: site_id}, %{status: %{site_name: name}}) when is_binary(site_id),
+    do: RuntimeStatus.asset_bundle_id(name)
 
+  defp css_bundle(_global, %{viewer: %{site_id: site_id}}) when is_binary(site_id),
+    do: site_name(site_id) || RuntimeStatus.asset_bundle_id("Global")
+
+  defp css_bundle(_global, _master), do: RuntimeStatus.asset_bundle_id("Global")
+
+  defp site_name(site_id) do
+    case SiteState.get(site_id) do
+      {:ok, %{name: name}} -> name
+      _unknown -> nil
+    end
+  end
+
+  defp sizes(nil, _type), do: nil
+
+  defp sizes(bundle, type) do
+    case size_of(bundle, type) do
+      nil ->
+        nil
+
+      raw ->
+        %{
+          raw: raw,
+          brotli: size_of(bundle, "brotli_" <> type),
+          gzip: size_of(bundle, "gzip_" <> type)
+        }
+    end
+  end
+
+  defp size_of(bundle, type) do
+    case AssetsState.get_value(bundle, type) do
+      nil -> nil
+      value -> byte_size(value)
+    end
+  end
+
+  # How long the last rebuild of this record took, from its own compile job.
+  defp took_ms(%{job: %{attempted_at: %DateTime{} = from, completed_at: %DateTime{} = to}}),
+    do: DateTime.diff(to, from, :millisecond)
+
+  defp took_ms(_no_finished_job), do: nil
+
+  # AN ERROR PAGE IS COUNTED PER STATUS (`RenderMetrics` keeps `{module, status}`), read here for the
+  # statuses the record holds, as the compiler names them — once each, as the compiler draws each
+  # once; its Render Time is their average, weighted by how often each was shown.
+  defp metrics(MishkaCmsCore.Runtime.ErrorPage, record, module, counts?) do
+    module
+    |> module_state()
+    |> Map.put(:stats, counted(counts?, fn -> record |> statuses(module) |> shown() end))
+  end
+
+  defp metrics(_resource, _record, module, counts?) do
+    module
+    |> module_state()
+    |> Map.put(:stats, counted(counts?, fn -> RenderMetrics.stats(module) end))
+  end
+
+  defp module_state(module),
+    do: %{
+      on?: RenderMetrics.on?(),
+      loaded?: CompilerHelpers.loaded?(module),
+      build: RenderMetrics.build(module)
+    }
+
+  defp counted(true, read), do: read.()
+  defp counted(false, _read), do: :hidden
+
+  defp statuses(record, module) do
+    for status <- record |> RuntimePreview.error_statuses() |> Enum.uniq(),
+        %{full: %{count: n} = full} <- [RenderMetrics.stats({module, status})],
+        n > 0,
+        do: {status, full}
+  end
+
+  defp shown(statuses) do
+    count = statuses |> Enum.map(fn {_status, full} -> full.count end) |> Enum.sum()
+    time = statuses |> Enum.map(fn {_status, full} -> full.avg_us * full.count end) |> Enum.sum()
+    avg = if count > 0, do: div(time, count), else: 0
+
+    %{full: %{count: count, avg_us: avg}, update: %{count: 0, avg_us: 0}, statuses: statuses}
+  end
+
+  defp metrics_loaded(socket, {:ok, {id, metrics}}) do
+    case socket.assigns.preview do
+      %{record: %{id: ^id}, resource: resource} = preview ->
         socket
-        |> assign(:preview_metrics_timer, timer)
+        |> refresh_later(resource, id)
         |> assign(:preview, %{preview | metrics: metrics})
 
       _closed_or_another ->
@@ -515,6 +685,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   end
 
   defp metrics_loaded(socket, {:exit, _reason}), do: socket
+
+  defp refresh_later(socket, resource, id) when resource in @timed do
+    if timer = socket.assigns[:preview_metrics_timer], do: Process.cancel_timer(timer)
+
+    assign(
+      socket,
+      :preview_metrics_timer,
+      Process.send_after(self(), {:preview_metrics_tick, id}, @metrics_every)
+    )
+  end
+
+  defp refresh_later(socket, _bundled, _id), do: socket
 
   def set_tab(socket, tab) do
     # EVERYTHING THAT COMPILES HAPPENS HERE, on the Preview tab, and nowhere else — mirroring a
