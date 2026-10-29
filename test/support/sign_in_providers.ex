@@ -30,7 +30,7 @@ defmodule MishkaCmsCore.Test.SignInProviders do
   @doc "Starts every test provider and waits until each is registered on `auth:providers`."
   def start do
     Enum.each(@providers, &start_supervised!/1)
-    MishkaCmsCore.Test.PluginReadiness.await(@providers)
+    MishkaCmsCore.Test.Installer.await(@providers)
     :ok
   end
 

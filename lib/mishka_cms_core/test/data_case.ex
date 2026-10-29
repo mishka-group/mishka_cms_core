@@ -7,10 +7,11 @@ defmodule MishkaCmsCore.DataCase do
   Test case for anything that touches the database but not the web layer — the resources, their
   actions and policies, the version trail, the dashboard queries.
 
-  Stands in for the CMS's `MishkaCms.DataCase` so this suite runs without the CMS around it. Each
-  test gets its own sandboxed connection and everything it writes is rolled back at the end;
-  `async: false` (the default here) shares that connection with any process the test spawns, which
-  the async data loaders behind the dashboard widgets rely on.
+  Stands in for the CMS's `MishkaCms.DataCase` so this suite, and an extension's, runs without the
+  CMS around it: it ships in `lib` for that, and sandboxes the repo `config :mishka_cms_core, repo: …`
+  names. Each test gets its own sandboxed connection and everything it writes is rolled back at the
+  end; `async: false` (the default here) shares that connection with any process the test spawns,
+  which the async data loaders behind the dashboard widgets rely on.
 
   See `MishkaCmsCore.ConnCase` for tests that go through the JSON API instead.
   """

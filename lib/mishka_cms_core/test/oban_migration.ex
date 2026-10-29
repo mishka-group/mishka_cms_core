@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Test.ObanMigration do
 
   Oban's schema is not an Ash resource, so `mix ash.codegen` never emits it — and the migrations this
   extension does generate are a build artifact that is deliberately not committed. Rather than
-  hand-write a migration into `priv/`, the harness runs this one at boot (see `test/test_helper.exs`),
+  hand-write a migration into `priv/`, the harness runs this one at boot (`MishkaCmsCore.Test.Boot`),
   which keeps the generated-only rule intact and leaves nothing to check in.
 
   A host application supplies these tables itself; this exists only so the runtime workers this

@@ -4,12 +4,13 @@
 
 defmodule MishkaCmsCore.Test.Factory do
   @moduledoc """
-  Fixtures for this library's own suite: sites, users, permissions, and the runtime records
-  (components, layouts, pages, error pages, JS hooks, media) that everything else is built on.
+  Fixtures for this library's suite and an extension's: sites, users, permissions, and the runtime
+  records (components, layouts, pages, error pages, JS hooks, media) that everything else is built
+  on.
 
-  These are the same wrappers the CMS's factory exposes and the ones every extension's factory
-  re-states, because a path dependency cannot reach into the CMS's `test/support`. The generators
-  behind them are `MishkaCmsCore.Dev.Generator`, which ships in `lib/`.
+  These are the same wrappers the CMS's factory exposes. They ship in `lib` so an extension's suite
+  imports them instead of re-stating them, since a dependency cannot reach into another project's
+  `test/support`. The generators behind them are `MishkaCmsCore.Dev.Generator`.
 
   Records are tenant-scoped, so each wrapper pops `:site_id` and passes it as the Ash tenant; a
   `nil` tenant means the global row.
@@ -60,6 +61,9 @@ defmodule MishkaCmsCore.Test.Factory do
   `MishkaCmsCore.Runtime.LiveViewHelpers` draws a module only for its own site, and it goes when the
   test does.
   """
+  # sobelow_skip ["DOS.StringToAtom", "XSS.Raw"]
+  # Test support: `name` and `html` are the calling test's literals, and the module is built for that
+  # test and unloaded when it exits.
   def define_component!(name, site, html) do
     module = Helpers.module_name(name, site && site.name, "Component")
     site_id = site && site.id
@@ -71,6 +75,7 @@ defmodule MishkaCmsCore.Test.Factory do
       quote do
         def __component_information__([:private, :site_id]), do: unquote(site_id)
         def __component_information__(_path), do: []
+        # sobelow_skip ["DOS.StringToAtom", "XSS.Raw"]
         def unquote(String.to_atom(name))(_assigns), do: Phoenix.HTML.raw(unquote(html))
       end,
       Macro.Env.location(__ENV__)
@@ -157,6 +162,8 @@ defmodule MishkaCmsCore.Test.Factory do
   The named rows of the Chelekom kit this library ships, as palette entries (`name`, `attrs`,
   `slots`, `template`), in the order asked. The bundle is 12 MB, so call it from `setup_all`.
   """
+  # sobelow_skip ["Traversal.FileModule"]
+  # The path is the bundle `UiKitHandler.default_bundle_path/0` names, never one from a request.
   def chelekom_rows(names) do
     rows =
       @chelekom

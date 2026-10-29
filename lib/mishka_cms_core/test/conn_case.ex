@@ -7,17 +7,23 @@ defmodule MishkaCmsCore.ConnCase do
   Test case for the extension's JSON API, standing in for the CMS's `MishkaCmsWeb.ConnCase`.
 
   Same contract as the CMS's — a sandboxed connection per test and a `conn` to drive it with — but
-  pointed at this extension's own `MishkaCmsCore.TestEndpoint`, so the suite runs without the CMS around
-  it. See the test-only `MishkaCmsCore.Repo` shim for how the database is reached.
+  pointed at the endpoint `config :mishka_cms_core, endpoint: …` names: `MishkaCmsCore.TestEndpoint`
+  in this library's own suite, an extension's test endpoint in its suite. So the suite runs without
+  the CMS around it. See `MishkaCmsCore.Repo` for how the database is reached.
 
   `make_api_request/3` is here rather than in the factory: it builds requests, it does not build data.
   """
 
   use ExUnit.CaseTemplate
 
+  # The configured endpoint, read when this module compiles, as every resource reads it. It is
+  # called through `apply/3`, as the other modules call the host's endpoint: in a dev or prod build
+  # of this library it names a test module that build does not compile.
+  @endpoint Application.compile_env!(:mishka_cms_core, :endpoint)
+
   using do
     quote do
-      @endpoint MishkaCmsCore.TestEndpoint
+      @endpoint unquote(@endpoint)
 
       import Plug.Conn
       import Phoenix.ConnTest
@@ -87,7 +93,7 @@ defmodule MishkaCmsCore.ConnCase do
     |> Map.update!(:params, fn existing ->
       Map.merge(parse_json_api_params(existing), %{"data" => data})
     end)
-    |> MishkaCmsCore.TestEndpoint.call([])
+    |> then(&apply(@endpoint, :call, [&1, []]))
   end
 
   defp put_default_headers(conn) do
@@ -104,26 +110,32 @@ defmodule MishkaCmsCore.ConnCase do
 
   # `page[limit]=2` and `included_page[posts][limit]=1` arrive as flat keys; the router wants
   # `%{"page" => %{"limit" => "2"}}`. Two levels is as deep as the API's own routes go.
-  defp parse_json_api_params(params) when is_map(params) do
-    Enum.reduce(params, %{}, fn {key, value}, acc ->
-      cond do
-        match = Regex.run(~r/^(\w+)\[(\w+)\]\[(\w+)\]$/, key) ->
-          [_, parent, child1, child2] = match
-
-          Map.update(acc, parent, %{child1 => %{child2 => value}}, fn existing ->
-            Map.update(existing, child1, %{child2 => value}, &Map.put(&1, child2, value))
-          end)
-
-        match = Regex.run(~r/^(\w+)\[(\w+)\]$/, key) ->
-          [_, parent, child] = match
-
-          Map.update(acc, parent, %{child => value}, &Map.put(&1, child, value))
-
-        true ->
-          Map.put(acc, key, value)
-      end
-    end)
-  end
+  defp parse_json_api_params(params) when is_map(params),
+    do: Enum.reduce(params, %{}, fn {key, value}, acc -> put_param(acc, key, value) end)
 
   defp parse_json_api_params(_params), do: %{}
+
+  defp put_param(acc, key, value) do
+    cond do
+      match = Regex.run(~r/^(\w+)\[(\w+)\]\[(\w+)\]$/, key) ->
+        [_, parent, child1, child2] = match
+
+        Map.update(
+          acc,
+          parent,
+          %{child1 => %{child2 => value}},
+          &Map.update(&1, child1, %{child2 => value}, fn child ->
+            Map.put(child, child2, value)
+          end)
+        )
+
+      match = Regex.run(~r/^(\w+)\[(\w+)\]$/, key) ->
+        [_, parent, child] = match
+
+        Map.update(acc, parent, %{child => value}, &Map.put(&1, child, value))
+
+      true ->
+        Map.put(acc, key, value)
+    end
+  end
 end
