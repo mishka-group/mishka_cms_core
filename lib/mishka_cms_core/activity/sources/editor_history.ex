@@ -30,15 +30,25 @@ defmodule MishkaCmsCore.Activity.Sources.EditorHistory do
   widening it for this one would change how the others render. Which change it was is in the message
   beside it, in the same words the editor's own timeline uses: "Set gap (base) — <nav>".
 
-  See `MishkaCmsCore.Activity.Behaviours.Source` and `MishkaCmsCore.Activity.Query` (the DB-merge
-  branch, which owns the SQL).
+  ## One more branch of the log's query
+
+  The global feed is one `UNION ALL` (`MishkaCmsCore.Activity.Query`), and this is the branch the
+  editor adds to it, registered on `activity:sources` as a
+  `MishkaCmsCore.Activity.Behaviours.UnionSource`: `union_branch/1` writes the SQL over
+  `page_builder_events` with the query's own clause builders, and `entry_from_row/1` reads back the
+  rows it produced, which carry `source = 'editor'`.
+
+  See `MishkaCmsCore.Activity.Behaviours.Source` for the live feed's half.
   """
 
-  @behaviour MishkaCmsCore.Activity.Behaviours.Source
-
+  use MishkaCmsCore.ProviderRegistry, event: "activity:sources", priority: 50
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  @behaviour MishkaCmsCore.Activity.Behaviours.Source
+  @behaviour MishkaCmsCore.Activity.Behaviours.UnionSource
+
   alias MishkaCmsCore.Activity.Helpers
+  alias MishkaCmsCore.Activity.Query
   alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout, Page}
 
   @label gettext_noop("Editor")
@@ -68,11 +78,62 @@ defmodule MishkaCmsCore.Activity.Sources.EditorHistory do
   @impl true
   def initial_fetch(_scope, _limit), do: []
 
+  @impl MishkaCmsCore.Activity.Behaviours.UnionSource
+  def id, do: "editor"
+
+  # THE EDITOR'S OWN RECORD. Nothing else can see it: `PageBuilderEvent` is not versioned, not an
+  # events log and not a job, so without this branch a whole afternoon in the page builder leaves the
+  # global feed empty while the editor's own sheet is full.
+  #
+  # Skipped for the two severities it cannot reach — every row is somebody making a change, which is
+  # information rather than a warning — so a `warn` read does not scan the table to return nothing.
+  @impl MishkaCmsCore.Activity.Behaviours.UnionSource
+  def union_branch(%{severity: severity}) when severity in ["warn", "error"], do: nil
+
+  def union_branch(%{site_id: site_id, severity: severity, shown: shown}) do
+    # SAID IN THE FEED'S OWN WORDS. The editor files a change under content, style or publish, and
+    # the feed has one shared vocabulary every source reports in — widening it for one source would
+    # change how the others render. A publish is a publish; everything else is an update to the
+    # document, and the message beside it says which ("Set gap (base) — <nav>").
+    action_expr = "(CASE WHEN kind::text = 'publish' THEN 'publish' ELSE 'update' END)"
+
+    # THE MODULE NAME, NOT THE SECTION. Every other branch reports a resource as
+    # `Elixir.MishkaCmsCore.Runtime.Page`, and that is what a resource-scoped feed filters on — a
+    # branch answering `page` would be shown in every document's System Log and filtered out of its
+    # own. Built here rather than in Elixir because the filter is applied in SQL.
+    resource_expr = """
+    (CASE source_type::text
+       WHEN 'page' THEN 'Elixir.MishkaCmsCore.Runtime.Page'
+       WHEN 'layout' THEN 'Elixir.MishkaCmsCore.Runtime.Layout'
+       WHEN 'component' THEN 'Elixir.MishkaCmsCore.Runtime.Component'
+       WHEN 'error_page' THEN 'Elixir.MishkaCmsCore.Runtime.ErrorPage'
+     END)\
+    """
+
+    sql = """
+    (SELECT '#{id()}' AS source, #{resource_expr} AS resource,
+            #{action_expr} AS action,
+            source_id::text AS source_id,
+            id::text AS event_id,
+            site_id::text AS site_id,
+            author_id::text AS user_id,
+            inserted_at AS inserted_at,
+            jsonb_build_object('label', label, 'target', target) AS payload
+       FROM page_builder_events
+      WHERE TRUE#{Query.version_site_clause(site_id, false)}#{Query.content_severity_clause(severity, action_expr)}#{Query.resource_clause(resource_expr)}#{Query.shown_clause(resource_expr, shown)}#{Query.search_clause(["label", "target"])}
+      ORDER BY inserted_at DESC
+      LIMIT $1)\
+    """
+
+    {sql, []}
+  end
+
   @doc """
   Turns one merged row into a feed entry.
 
-  Called by `MishkaCmsCore.Activity.Query` for rows its `editor` branch produced.
+  Called by `MishkaCmsCore.Activity.Query` for rows `union_branch/1` produced.
   """
+  @impl MishkaCmsCore.Activity.Behaviours.UnionSource
   @spec entry_from_row(map()) :: map()
   def entry_from_row(row) do
     payload = row["payload"] || %{}

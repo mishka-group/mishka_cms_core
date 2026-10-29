@@ -155,6 +155,31 @@ defmodule MishkaCmsCore.Activity.Sources.EditorHistoryTest do
     end
   end
 
+  describe "the entry" do
+    # The core's contract test asks whichever union sources are installed; this one asks the
+    # editor's own, so the shape is held to wherever the source lives.
+    test "omits no key a renderer reads" do
+      row = %{
+        "source" => Source.id(),
+        "resource" => to_string(Page),
+        "action" => "update",
+        "source_id" => Ecto.UUID.generate(),
+        "event_id" => Ecto.UUID.generate(),
+        "site_id" => nil,
+        "user_id" => nil,
+        "inserted_at" => ~U[2026-01-01 09:00:00.000000Z],
+        "payload" => %{"label" => "Edited text", "target" => "<h1>"}
+      }
+
+      assert MishkaCmsCore.Activity.Helpers.entry_keys() -- Map.keys(Source.entry_from_row(row)) ==
+               []
+    end
+
+    test "is installed as a union source of the activity log" do
+      assert Source in MishkaCmsCore.Activity.Behaviours.UnionSource.all()
+    end
+  end
+
   describe "what it does not do" do
     # The resource broadcasts nothing on purpose: a row is written on every settled change, and
     # re-reading a table for everybody on every keystroke is the noise the design avoids.

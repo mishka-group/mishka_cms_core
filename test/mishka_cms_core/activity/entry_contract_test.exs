@@ -24,6 +24,7 @@ defmodule MishkaCmsCore.Activity.EntryContractTest do
   """
   use ExUnit.Case, async: true
 
+  alias MishkaCmsCore.Activity.Behaviours.UnionSource
   alias MishkaCmsCore.Activity.Helpers
   alias MishkaCmsCore.Activity.Sources
 
@@ -41,15 +42,28 @@ defmodule MishkaCmsCore.Activity.EntryContractTest do
     "payload" => %{"name" => "Home", "label" => "Edited text", "target" => "<h1>"}
   }
 
-  # Every source `MishkaCmsCore.Activity.Query.dispatch/1` routes a merged row to. Adding a branch
-  # there without adding it here is the one gap this file cannot close on its own.
+  # Every core source `MishkaCmsCore.Activity.Query.dispatch/2` routes a merged row to. Adding a
+  # branch there without adding it here is the one gap this file cannot close on its own. A union
+  # source an extension registers on `activity:sources` is asked below, whichever are installed.
   @db_sources [
     Sources.PaperTrail,
     Sources.EventLog,
     Sources.Oban,
-    Sources.RuntimeDraft,
-    Sources.EditorHistory
+    Sources.RuntimeDraft
   ]
+
+  defp missing_message(source, missing) do
+    """
+    #{inspect(source)} built an entry without #{inspect(missing)}.
+
+    Two renderers dot-access an activity entry as a plain map — the dashboard's Recent
+    activity widget and the ActivityFeed component — so a missing key raises a KeyError
+    in the LiveView process and the page reconnects into the same crash.
+
+    Add the key to the map in entry_from_row/1. A tone you have no value for is `nil`,
+    which every badge/dot helper already draws.
+    """
+  end
 
   describe "every source fills the whole entry shape" do
     for source <- @db_sources do
@@ -57,17 +71,16 @@ defmodule MishkaCmsCore.Activity.EntryContractTest do
         entry = unquote(source).entry_from_row(@row)
         missing = Helpers.entry_keys() -- Map.keys(entry)
 
-        assert missing == [],
-               """
-               #{inspect(unquote(source))} built an entry without #{inspect(missing)}.
+        assert missing == [], missing_message(unquote(source), missing)
+      end
+    end
 
-               Two renderers dot-access an activity entry as a plain map — the dashboard's Recent
-               activity widget and the ActivityFeed component — so a missing key raises a KeyError
-               in the LiveView process and the page reconnects into the same crash.
+    test "and so does every union source installed" do
+      for source <- UnionSource.all() do
+        entry = source.entry_from_row(Map.put(@row, "source", source.id()))
+        missing = Helpers.entry_keys() -- Map.keys(entry)
 
-               Add the key to the map in entry_from_row/1. A tone you have no value for is `nil`,
-               which every badge/dot helper already draws.
-               """
+        assert missing == [], missing_message(source, missing)
       end
     end
   end
