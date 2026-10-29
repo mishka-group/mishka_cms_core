@@ -79,48 +79,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SectionTest do
     end
   end
 
-  describe "the builder's addresses" do
-    test "a document's builder is addressed in the URL spelling, whatever it is given" do
-      assert Section.builder_path("page", "p1") == "/admin/dashboard/runtime/builder/page/p1"
-
-      assert Section.builder_path(:error_page, "e1") ==
-               "/admin/dashboard/runtime/builder/error-page/e1"
-    end
-
-    test "and a document not saved yet is the builder that makes one" do
-      assert Section.builder_path("page") == "/admin/dashboard/runtime/builder/page"
-
-      assert Section.builder_path("error_page", nil, 500) ==
-               "/admin/dashboard/runtime/builder/error-page"
-    end
-
-    test "and an error page keeps the entry it was on" do
-      assert Section.builder_path("error_page", "e1", 500) ==
-               "/admin/dashboard/runtime/builder/error-page/e1?status=500"
-    end
-
-    test "the back link honours another builder" do
-      assert Section.back_path("component", "/admin/dashboard/runtime/builder/page/p1") ==
-               "/admin/dashboard/runtime/builder/page/p1"
-    end
-
-    # AN OPEN REDIRECT WITH THE ADMIN'S SESSION BEHIND IT. `return_to` is something a URL supplied.
-    test "and nothing else, falling back to the section's list" do
-      for elsewhere <- [
-            nil,
-            "",
-            "//evil.example/admin/dashboard/runtime/builder/page/p1",
-            "https://evil.example/admin/dashboard/runtime/builder/page/p1",
-            "javascript:alert(1)",
-            "/admin/dashboard/runtime/builder",
-            "/admin/dashboard/runtime/pages"
-          ] do
-        assert Section.back_path("component", elsewhere) == "/admin/dashboard/runtime/components",
-               "#{inspect(elsewhere)} was honoured"
-      end
-    end
-  end
-
   describe "what the log files a section under" do
     test "agrees with what the builder calls it" do
       # The two lists were maintained separately, in different spellings, and only met when the
@@ -149,11 +107,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SectionTest do
       assert Section.status(@record, status: "offline") == :offline
       assert Section.editing_status("error-page", @record, status: "offline") == :offline
       assert Section.template("error-page", @record, status: "offline") == "<p>Soon</p>"
-    end
-
-    test "and its address names it" do
-      assert Section.builder_path("error-page", "e1", :offline) ==
-               "/admin/dashboard/runtime/builder/error-page/e1?status=offline"
     end
 
     test "is the entry a save replaces, the others kept" do

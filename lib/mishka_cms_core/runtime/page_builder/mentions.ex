@@ -44,7 +44,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Mentions do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCoreWeb.Live.Admin.Builder.Paths
   alias MishkaCmsCore.Accounts.User
   alias MishkaCmsCore.Notify
 
@@ -409,6 +409,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Mentions do
   defp link(comment, scope) do
     section = comment.section || scope[:section] || :page
 
-    Section.builder_path(section, comment.document_id)
+    Paths.builder_path(section, comment.document_id)
   end
 end

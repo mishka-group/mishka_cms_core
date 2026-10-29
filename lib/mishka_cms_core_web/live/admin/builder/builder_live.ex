@@ -83,6 +83,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   alias MishkaCmsCore.Runtime.PageBuilder.Presence
   alias MishkaCmsCore.Runtime.PageBuilder.Presets
   alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCoreWeb.Live.Admin.Builder.Paths
   alias MishkaCmsCore.Runtime.PageBuilder.SeoSettings
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.Wizard
@@ -209,7 +210,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         {:ok,
          socket
          |> put_flash(:info, gettext("This site already has an error page — here it is."))
-         |> redirect(to: Section.builder_path("error-page", existing.id))}
+         |> redirect(to: Paths.builder_path("error-page", existing.id))}
     end
   end
 
@@ -461,8 +462,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
     |> assign(:section, section)
     # BACK TO WHERE THE AUTHOR CAME FROM. A component opened from a page's Inspector carries that
     # page's builder in `return_to`, so editing what the page uses is a trip rather than a detour
-    # through the component list. See `Section.back_path/2` for why it is matched, not trusted.
-    |> assign(:back_path, Section.back_path(section, params["return_to"]))
+    # through the component list. See `Paths.back_path/2` for why it is matched, not trusted.
+    |> assign(:back_path, Paths.back_path(section, params["return_to"]))
     |> assign(:record, record)
     # ASKED OF THE URL, not of the record. The two agree by the time this runs — `mount_document/3`
     # turns an id that resolves to nothing away — and the URL is the one that says what was MEANT: an
@@ -734,10 +735,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
   @spec share_url(map()) :: String.t()
   def share_url(%{section: section, record: record, token: token} = assigns)
       when not is_nil(record),
-      do: Section.builder_path(section, record.id) <> invitation(token, assigns)
+      do: Paths.builder_path(section, record.id) <> invitation(token, assigns)
 
   def share_url(%{section: section, token: token} = assigns),
-    do: Section.builder_path(section) <> invitation(token, assigns)
+    do: Paths.builder_path(section) <> invitation(token, assigns)
 
   # A TOKEN IS ONE ONLY ONCE THE SOCKET IS UP — `:token` is `false` on the static render — and an
   # address carrying `session=false` invites a reader into a session that never existed. The bare
@@ -2040,7 +2041,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
         {:form_saved, :create, record},
         %{assigns: %{new_document?: true, record: nil, section: section}} = socket
       ) do
-    {:noreply, push_navigate(socket, to: Section.builder_path(section, record.id))}
+    {:noreply, push_navigate(socket, to: Paths.builder_path(section, record.id))}
   end
 
   def handle_info(
@@ -6832,7 +6833,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive do
 
   defp recover_path(%{assigns: %{section: section, record: record, status: status}}),
     do:
-      Section.builder_path(
+      Paths.builder_path(
         section,
         record.id,
         Section.editing_status(section, record, status: status)

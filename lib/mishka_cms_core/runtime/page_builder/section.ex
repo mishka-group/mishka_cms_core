@@ -55,8 +55,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Section do
 
   @default_status 404
 
-  @builder "/admin/dashboard/runtime/builder/"
-
   @editor_url_event "runtime:document:editor_url"
 
   @doc "The section names the builder can open."
@@ -194,38 +192,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Section do
       _no_editor -> nil
     end
   end
-
-  @doc """
-  The builder's address for one document, or for making a new one when `id` is `nil`.
-
-  `status` names the error-page entry being edited. Without it an error page reopens on its 404
-  entry, which is not the one the author left.
-
-  THE ONE SPELLING. `back_path/2` honours an address by this prefix, so an address written out by
-  hand somewhere else is one the two could disagree about.
-  """
-  @spec builder_path(String.t() | atom(), String.t() | nil, ErrorStatus.t() | nil) :: String.t()
-  def builder_path(section, id \\ nil, status \\ nil)
-
-  def builder_path(section, nil, _status), do: @builder <> normalize(section)
-
-  def builder_path(section, id, nil), do: builder_path(section) <> "/" <> id
-
-  def builder_path(section, id, status),
-    do: builder_path(section, id) <> "?" <> URI.encode_query(%{"status" => status})
-
-  @doc """
-  Where the builder's back link goes: `return_to` when it names another builder, the section's list
-  otherwise.
-
-  THE ADDRESS IS SOMETHING A URL SUPPLIED, so it is matched on the builder's own prefix rather than
-  trusted. That prefix starts with a single `/`, which is what rules out `//elsewhere.example` and
-  `https://elsewhere.example` — a back link that could be pointed off-site is an open redirect with
-  the admin's session behind it.
-  """
-  @spec back_path(String.t(), String.t() | nil) :: String.t()
-  def back_path(_section, @builder <> _document = return_to), do: return_to
-  def back_path(section, _return_to), do: list_path(section)
 
   @doc "A human name for the section, used in flash messages."
   @spec label(String.t()) :: String.t()

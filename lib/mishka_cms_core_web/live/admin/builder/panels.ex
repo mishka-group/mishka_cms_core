@@ -45,6 +45,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   alias MishkaCmsCore.Runtime.PageBuilder.Containment
   alias MishkaCmsCore.Runtime.PageBuilder.Review
   alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCoreWeb.Live.Admin.Builder.Paths
   alias MishkaCmsCore.Runtime.PageBuilder.Visibility
   alias MishkaCmsCore.Runtime.PageBuilder.SeoSettings
   alias MishkaCmsCore.Runtime.PageComment
@@ -7919,7 +7920,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
               session, so switching has to re-mount rather than swap assigns under a live tree. --%>
         <.link
           :for={status <- @statuses}
-          navigate={Section.builder_path("error-page", @record.id, status)}
+          navigate={Paths.builder_path("error-page", @record.id, status)}
           id={"pb-status-#{status}"}
           class={[
             "h-7 rounded-[8px] px-2.5 font-['Space_Grotesk'] text-[11.5px] font-bold leading-7",
@@ -7938,7 +7939,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
           <div class="absolute left-0 top-8 z-30 flex max-h-72 w-56 flex-col overflow-y-auto rounded-[10px] border border-[#ecebe6] bg-white p-1 shadow-[0_12px_30px_rgba(20,18,26,.12)]">
             <.link
               :for={status <- Section.offered_statuses() -- @statuses}
-              navigate={Section.builder_path("error-page", @record.id, status)}
+              navigate={Paths.builder_path("error-page", @record.id, status)}
               id={"pb-status-add-#{status}"}
               class="rounded-[7px] px-2.5 py-1.5 text-[11.5px] font-semibold text-[#3a382f] hover:bg-[#f6f5f2]"
             >
@@ -15318,7 +15319,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp docs_url(_entry), do: nil
 
   # THE COMPONENT'S OWN EDITOR, AND THE WAY BACK TO THIS ONE. `return_to` is this document's builder,
-  # which `Section.back_path/2` turns into the component editor's back link — without it, editing
+  # which `Paths.back_path/2` turns into the component editor's back link — without it, editing
   # what a page uses ended on the component list and the page had to be found all over again.
   #
   # `nil` where there is nowhere to go: an entry with no row behind it (a slot's declaration, lent by
@@ -15333,7 +15334,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
   defp component_editor_path(%{id: id} = entry, %{resource_id: here} = editor, actor)
        when is_binary(id) and id != here do
     case editable_by?(entry, actor) do
-      true -> Section.builder_path("component", id) <> return_to(editor)
+      true -> Paths.builder_path("component", id) <> return_to(editor)
       false -> nil
     end
   end
@@ -15346,7 +15347,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   # A document not saved yet has no address of its own to come back to, so it asks for none.
   defp return_to(%{resource_id: id, section: section, status: status}) when is_binary(id),
-    do: "?" <> URI.encode_query(%{"return_to" => Section.builder_path(section, id, status)})
+    do: "?" <> URI.encode_query(%{"return_to" => Paths.builder_path(section, id, status)})
 
   defp return_to(_editor), do: ""
 
