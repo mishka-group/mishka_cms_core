@@ -14903,7 +14903,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Builder.Panels do
 
   A draft picker is a list of moments, and a bare timestamp makes the reader do the arithmetic.
   Anything that is not a `DateTime` answers `""`, so a row with no timestamp shortens rather than
-  raising. Shared with `MishkaCmsCoreWeb.Templates.DraftList`, which stamps the same rows.
+  raising.
   """
   @spec ago(DateTime.t() | term()) :: String.t()
   def ago(%DateTime{} = at) do

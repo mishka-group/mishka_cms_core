@@ -4,17 +4,18 @@
 
 defmodule MishkaCmsCoreWeb.Templates.DraftList do
   @moduledoc """
-  A MishkaGervaz custom table template: the list of drafts inside the page builder's Versions sheet.
+  A MishkaGervaz custom table template: the list of drafts inside the visual editor's Versions sheet.
 
-  It is the third block of the `drafts_sheet` component in `MishkaCmsCoreWeb.Live.Admin.Builder.Panels` — the rows,
-  their skeleton and their empty state. The "Save as" form and the name-collision banner above it are
-  not a table and stay in `Panels`.
+  It draws the rows of that sheet, their skeleton and their empty state. The "Save as" form and the
+  name-collision banner above it are not a table and belong to the editor. The skeleton, the "2h
+  ago" stamp and the layers glyph are drawn here, so this template — which the three draft resources
+  name as their presentation — depends on no module of the editor.
 
   The template owns the whole list and nothing else: no filter bar, no selection, no pagination
   footer (`features/0` is empty), because the sheet is 420px wide and the read is capped at one
   document's drafts. Its row buttons deliberately carry no `phx-target`, so `open_draft`,
-  `fork_draft` and `delete_draft` reach `MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive`, which owns
-  the editing session those events move.
+  `fork_draft` and `delete_draft` reach the editor's LiveView, which owns the editing session those
+  events move.
 
   Which row reads as "Editing" is not a property of the row — it is the editor's save target — so it
   travels in `path_params[:editing_draft_id]`, the same channel the scoping `source_*_id` uses.
@@ -29,8 +30,8 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
   alias MishkaCmsCoreWeb.Templates.CardChrome, as: Shared
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
 
+  alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.PageBuilder.Drafts
-  alias MishkaCmsCoreWeb.Live.Admin.Builder.Panels
 
   @impl true
   def name, do: :draft_list
@@ -57,12 +58,24 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
   The skeleton drawn before the table has any state of its own.
 
   It takes none of the table's assigns, because at this point there are none — `@static` and
-  `@state` do not exist until the first load.
+  `@state` do not exist until the first load. Three placeholder rows, each the tile, title and stamp
+  of a draft row, so the sheet opens at once and fills in.
   """
   @impl true
   def render_loading(assigns) do
     ~H"""
-    <Panels.loading_rows rows={3} />
+    <div class="flex flex-col gap-1.5" aria-hidden="true">
+      <div
+        :for={_row <- 1..3}
+        class="flex items-center gap-2.5 rounded-[10px] border border-[#f0efea] bg-white px-3 py-2.5"
+      >
+        <span class="size-[26px] flex-none animate-pulse rounded-[8px] bg-[#f2f1ec]"></span>
+        <span class="min-w-0 flex-1">
+          <span class="block h-[9px] w-2/5 animate-pulse rounded-full bg-[#f2f1ec]"></span>
+          <span class="mt-1.5 block h-[7px] w-3/5 animate-pulse rounded-full bg-[#f6f5f2]"></span>
+        </span>
+      </div>
+    </div>
     """
   end
 
@@ -136,7 +149,7 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
         Enum.filter(assigns.static.row_actions, &Gervaz.action_visible?(&1, draft, assigns.state))
       )
       |> assign(:saved, saved_label(draft))
-      |> assign(:ago, Panels.ago(draft.updated_at))
+      |> assign(:ago, ago(draft.updated_at))
 
     ~H"""
     <div
@@ -158,7 +171,7 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
           "grid size-[26px] flex-none place-items-center rounded-[8px]",
           (@editing? && "bg-[#e4e2f7] text-[#4f4bcc]") || "bg-[#f2f1ec] text-[#6d6a63]"
         ]}>
-          <Panels.icon name={:layers} size={13} />
+          <.layers_icon />
         </span>
         <span class="min-w-0 flex-1">
           <span class={[
@@ -190,6 +203,36 @@ defmodule MishkaCmsCoreWeb.Templates.DraftList do
     </div>
     """
   end
+
+  # The editor's "layers" glyph — three bars, a stack of versions — drawn as the editor draws it.
+  defp layers_icon(assigns) do
+    ~H"""
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="1.9"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+    """
+  end
+
+  # How long ago, in the reader's language — "2h ago", "yesterday" — and past two days the day and
+  # time, "Jul 3, 18:04": a draft picker is a list of moments, and a bare timestamp makes the reader
+  # do the arithmetic. A row with no timestamp shortens rather than raising.
+  defp ago(%DateTime{} = at) do
+    if DateTime.diff(DateTime.utc_now(), at, :second) < 172_800,
+      do: Localized.ago(at, format: :narrow),
+      else: Localized.datetime(at, :MMMdHm)
+  end
+
+  defp ago(_missing), do: ""
 
   defp saved_label(%{label: label}) do
     case Drafts.autosave_label() do
