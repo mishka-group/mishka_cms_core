@@ -17,9 +17,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.VisibilityTest do
     ModuleCompiler
   }
 
-  alias MishkaCmsCore.Runtime.Authoring.{Visibility}
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
+  alias MishkaCmsCore.Runtime.Authoring.Visibility
 
   @page ~S"""
   <main>

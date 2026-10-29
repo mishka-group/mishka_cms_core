@@ -911,4 +911,76 @@ defmodule MishkaCmsCore.Runtime.StatefulPlacementTest do
                |> Ash.update(authorize?: false)
     end
   end
+
+  # THE DUPLICATE-ID RULE. `Phoenix.LiveView.Diff` raises "found duplicate ID … for component …"
+  # inside whichever LiveView renders the page, where nothing contains it — so this is a rule and
+  # not a finding.
+  #
+  # The editor's own minting does not cover it: it renames the nodes that ARRIVED and answers
+  # nothing when a whole document arrives at once, which is exactly what the source window, a draft
+  # restore and a seeded template do. So the page asks it of the stored markup, and this suite
+  # needs no editor to hold it.
+  describe "two live components under one id" do
+    defp page(site, template) do
+      Page
+      |> Ash.Changeset.for_create(
+        :create,
+        %{
+          name: "ids-#{System.unique_integer([:positive])}",
+          title: "Ids",
+          path: "/ids-#{System.unique_integer([:positive])}",
+          template: template
+        },
+        tenant: site.id,
+        context: %{page_code: :package}
+      )
+      |> Ash.create(authorize?: false)
+    end
+
+    defp twice(name, id_one, id_two) do
+      ~s(<div><.component component_name="#{name}" site="Global" id="#{id_one}" />) <>
+        ~s(<.component component_name="#{name}" site="Global" id="#{id_two}" /></div>)
+    end
+
+    test "is refused, with both named" do
+      site = create_site!()
+      _live = live_component!(site)
+
+      assert {:error, error} = page(site, twice("live-widget", "same", "same"))
+
+      message = Exception.message(error)
+      assert message =~ "same"
+      assert message =~ "live-widget"
+      assert message =~ "give each its own"
+    end
+
+    test "and two with their own ids are fine" do
+      site = create_site!()
+      _live = live_component!(site)
+
+      assert {:ok, _page} = page(site, twice("live-widget", "one", "two"))
+    end
+
+    # A FUNCTION COMPONENT SHARING AN ID IS A BAD IDEA AND NOT A CRASH, and the editor already
+    # renames those. This rule is about the one that takes the page down.
+    test "and two function components sharing one are not this rule's business" do
+      site = create_site!()
+      _plain = create_component!(name: "plain-widget", site_id: site.id)
+
+      assert {:ok, _page} = page(site, twice("plain-widget", "same", "same"))
+    end
+
+    # `id={@row.id}` IS THE AUTHOR BINDING THE ID TO THEIR DATA, and two of them are not a
+    # collision.
+    test "and an expression is not a literal this can compare" do
+      site = create_site!()
+      _live = live_component!(site)
+
+      template =
+        ~s(<div><.component component_name="live-widget" site="Global" id={@a} />) <>
+          ~s(<.component component_name="live-widget" site="Global" id={@b} /></div>)
+
+      assert {:ok, _page} = page(site, template)
+    end
+  end
 end
