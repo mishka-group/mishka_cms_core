@@ -176,3 +176,18 @@ jobs:
       # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files,
       # each in the partition that compiles it.
       - run: mix test --warnings-as-errors --partitions 4
+
+  # The admin hooks the package ships in assets/js (package.json's `main`), run in jsdom by vitest.
+  # They need neither Mix nor a build, so this job starts from nothing and waits for no other.
+  assets:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.4"
+
+      - run: bun install --frozen-lockfile && bun run test
+        working-directory: assets
