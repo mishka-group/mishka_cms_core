@@ -5,7 +5,7 @@
 defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
   @moduledoc """
   The offline page in the Error Pages admin, as a site's own admin uses it: the form offers it next to
-  404 and 500 and saves it, the builder adds it, and the preview's error-code picker shows it.
+  404 and 500 and saves it, and the preview's error-code picker shows it.
 
   Its own file: nothing else drives the Error Pages index as a LiveView.
   """

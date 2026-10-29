@@ -21,9 +21,9 @@ defmodule MishkaCmsCore.UiKit.LayoutFurnishingTest do
     * deleting the middle column leaves "First" and "Third", because the ordinals are hardcoded
       words rather than anything the tree counts.
 
-  The canvas already draws an empty container as a dashed drop target (`@hollow_style` in
-  `MishkaCmsBuilderWeb.Live.CanvasLive`) and that treatment is editing-only — it is never
-  written to the document. So bare columns lose nothing on the canvas and take nothing to the page.
+  The visual editor's canvas already draws an empty container as a dashed drop target and that
+  treatment is editing-only — it is never written to the document. So bare columns lose nothing on
+  the canvas and take nothing to the page.
   """
   use ExUnit.Case, async: true
   @moduletag :unit

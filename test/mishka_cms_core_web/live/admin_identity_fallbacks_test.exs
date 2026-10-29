@@ -13,8 +13,6 @@ defmodule MishkaCmsCoreWeb.Test.AdminIdentityFallbacksTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
-  import MishkaCmsCore.Test.Factory
-
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Home.Index, as: Home
 
   describe "the dashboard greeting" do

@@ -4,35 +4,19 @@
 
 defmodule MishkaCmsCore.UiKit.DropRenderableTest do
   @moduledoc """
-  Every component in every installed kit must survive being DROPPED, with nothing filled in.
+  A blank the kit's icon refuses must not take a published page down.
 
-  The editor's own answer to "what did I just place" is whatever the palette writes, and the palette
-  writes a component with only the attributes it cannot render without. That is a different markup
-  from any example the kit ships, from anything the wizard composes, and from anything a person would
-  type — which is why the two renderability suites next door never saw the twelve components that
-  did not survive it.
-
-  Twelve of a hundred and thirty-six, in three separate causes:
-
-    * NINE forwarded a seeded `icon=""` to `chelekom-icon`, whose own body is
-      `%{name: "hero-" <> _} = assigns` — a function head the kit exporter turned into an assertion,
-      so a name that is not an icon raises `MatchError` rather than declining to match. `""` is
-      truthy in Elixir, so every `:if={@icon}` guard written for `nil` let it straight through. They
-      were seeded at all because `default: nil` and "no default" were the same question to
-      `PaletteEntry.seed?/3`, and the kit declares `default: nil` on 584 attributes;
-    * `chelekom-icon` itself, which declares `name` required with no default and was therefore
-      seeded the blank the assertion rejects;
-    * `chelekom-modal`, which never compiled at all: it ships `show_modal/1` and `hide_modal/1`, the
-      core components ship the same two, and Elixir refuses to compile a module whose local function
-      collides with an import. Nothing said so — a module that does not compile renders the runtime's
-      red "Component failed to render!" box wherever it is placed.
+  The visual editor places a component with only the attributes it cannot render without, and an
+  icon is placed blank on purpose so that the editor can ask for one. What makes that safe is on this
+  side: `chelekom-icon`'s own body is `%{name: "hero-" <> _} = assigns` — a function head the kit
+  exporter turned into an assertion — so a name that is not an icon raises `MatchError` rather than
+  declining to match. The compiler catches a body that refuses its assigns, and the page draws an
+  empty icon instead of the runtime's red "Component failed to render!" box.
 
   Rendering is through `LiveViewCompiler.render_template/2`, which is the PUBLISHED PAGE's path: the
-  same tag handler, the same imports, `<.component>` resolving to the real compiled module. The
-  canvas has `CanvasLive.contain/2` around it and a live page has nothing, so this is the harsher of
-  the two and the one worth asserting.
-
-  A red placeholder is not rendering, and neither is an empty string. Both are failures here.
+  same tag handler, the same imports, `<.component>` resolving to the real compiled module. What the
+  palette writes for every component of the kit, and that each of those survives being dropped, is
+  asserted where the palette lives, in the editor's package.
   """
   use MishkaCmsCore.DataCase, async: false
 

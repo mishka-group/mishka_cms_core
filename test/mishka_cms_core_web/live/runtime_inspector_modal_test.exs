@@ -1246,16 +1246,6 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
         assert has_element?(view, "#preview-code-form")
       end
 
-      # THE BUILDER OPENS FOR ITS OWN TYPE'S SECTION OR CODE, which `BuilderLive` asks again.
-      test "#{Enum.join(names, " + ")} is offered the Visual Editor", %{site: site, page: page} do
-        view =
-          site
-          |> tenant_conn(@names)
-          |> inspect_record("/admin/dashboard/runtime/pages", page)
-
-        assert render(view) =~ "Visual Editor"
-      end
-
       # CODE TYPED ON THE CODE TAB IS A PAGE WRITTEN, so the page's own section saves it.
       test "#{Enum.join(names, " + ")} saves a draft from the Code tab", %{site: site, page: page} do
         view =
