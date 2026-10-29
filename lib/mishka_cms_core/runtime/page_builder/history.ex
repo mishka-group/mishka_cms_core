@@ -366,12 +366,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.History do
 
   # THE SAME BRANCH RULE `PageBuilderEvent`'s `:for_anchor` READS BY — a draft is the live record's
   # rows plus its own — and here it is also what makes the collect independent of the publish's own
-  # order. Publishing deletes the draft, and that destroy's `ReleaseBuilderHistory` sets `draft_id`
-  # to nil on every row it held, so by the time this runs the rows it must collect have moved to the
-  # live branch. Asking for the draft alone matched nothing and dropped ZERO payloads on the ordinary
-  # publish — ordinary because autosave mints a draft before the author ever reaches the button — and
-  # the released rows then read on the page's own timeline still offering a Restore, under a summary
-  # row saying they are no longer restorable.
+  # order. Publishing deletes the draft, and the `ReleaseDraftHistory` plugin on that destroy sets
+  # `draft_id` to nil on every row it held, so by the time this runs the rows it must collect have
+  # moved to the live branch. Asking for the draft alone matched nothing and dropped ZERO payloads on
+  # the ordinary publish — ordinary because autosave mints a draft before the author ever reaches the
+  # button — and the released rows then read on the page's own timeline still offering a Restore,
+  # under a summary row saying they are no longer restorable.
   #
   # THE LIVE BRANCH GOES WITH IT, deliberately and not as a side effect: those rows are exactly what
   # the published document's timeline draws — the published stage writes there too, and an error

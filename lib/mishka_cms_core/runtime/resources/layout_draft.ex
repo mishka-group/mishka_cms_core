@@ -218,8 +218,8 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
       end
     end
 
-    # WHAT THE BUILDER'S SETTINGS EDIT ON A DRAFT — the same fields, with the same rules, as the
-    # layout's own form; see `MishkaCmsCoreWeb.Live.Admin.Builder.Panels.settings_modal/1`.
+    # WHAT AN EDITOR'S SETTINGS EDIT ON A DRAFT — the same fields, with the same rules, as the
+    # layout's own form, so a draft cannot be given what the layout itself would refuse.
     form do
       identity do
         name :layout_draft_form
@@ -499,14 +499,12 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
     destroy :destroy do
       primary? true
       require_atomic? false
-      change MishkaCmsCore.Runtime.Resources.Changes.ReleaseBuilderHistory
       validate {TenantContext, require_master: false}
     end
 
     destroy :master_destroy do
       require_atomic? false
       multitenancy :bypass
-      change MishkaCmsCore.Runtime.Resources.Changes.ReleaseBuilderHistory
       validate {TenantContext, require_master: true}
     end
   end

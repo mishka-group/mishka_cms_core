@@ -10,6 +10,8 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
   @moduletag :integration
 
   alias MishkaCmsCore.Runtime.{Page, PageDraft}
+  alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
+  alias MishkaCmsCore.Test.EventCannotRun
 
   # A FIXTURE, NOT AN AUTHOR: it has no actor, so it says what it is — the code check applies to a
   # person writing code into a draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.
@@ -329,5 +331,41 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
     ids = Enum.map(listed.results, & &1.id)
     assert pending.id in ids
     refute to_publish.id in ids
+  end
+
+  # A DELETE IS THE RESOURCE'S ALONE. What else a deleted draft takes with it — the editor releases
+  # its editing history — hangs off the announcements its two destroy actions fire after they
+  # commit, so with nothing able to answer them (no editor installed) the draft still goes, and the
+  # delete answers as it always does.
+  describe "a draft deleted with nothing listening on its destroy" do
+    setup do
+      EventCannotRun.stub!([
+        PluginHook.event_name(PageDraft, :destroy),
+        PluginHook.event_name(PageDraft, :master_destroy)
+      ])
+    end
+
+    test "is gone, through a site admin's destroy and a master's" do
+      site = create_site!()
+
+      for action <- [:destroy, :master_destroy] do
+        draft =
+          create_draft!(site.id, %{
+            name: "gone-#{action}",
+            title: "Gone",
+            path: "/gone-#{action}",
+            template: "<i>gone</i>"
+          })
+
+        assert :ok =
+                 draft
+                 |> Ash.Changeset.for_destroy(action, %{}, tenant: site.id, authorize?: false)
+                 |> Ash.destroy(authorize?: false)
+
+        assert {:error, %Ash.Error.Invalid{}} =
+                 Ash.get(PageDraft, draft.id, action: :master_get, authorize?: false),
+               "the #{action} left the draft behind"
+      end
+    end
   end
 end

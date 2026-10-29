@@ -156,12 +156,12 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.HistorySectionsTest do
   # WHAT THE FOREIGN KEY USED TO DO, now that there is no key to do it. Publishing and discarding
   # both delete the draft, and its rows have to stay and join the live record's timeline rather than
   # sit in a branch nothing can name again. Asserted through the RESOURCE's own destroy, because
-  # that is the path the draft picker's Delete takes — `Drafts.discard/3` is only one of three.
-  for section <- [:page, :layout, :error_page] do
-    test "deleting a #{section}'s draft releases its history instead of losing it", %{
-      site: site,
-      author: author
-    } do
+  # that is the path the draft picker's Delete takes — `Drafts.discard/3` is only one of three — and
+  # through both of its actions, a site admin's and a master's, because each announces itself on an
+  # event of its own and the release listens on both.
+  for section <- [:page, :layout, :error_page], action <- [:destroy, :master_destroy] do
+    test "deleting a #{section}'s draft through #{action} releases its history instead of losing it",
+         %{site: site, author: author} do
       {record, draft} = fixture(unquote(section), site)
 
       {:ok, session} =
@@ -185,7 +185,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.HistorySectionsTest do
       assert branch == draft.id
 
       draft
-      |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
+      |> Ash.Changeset.for_destroy(unquote(action), %{}, authorize?: false, tenant: site.id)
       |> Ash.destroy!(authorize?: false)
 
       assert [row] = rows(record.id), "the history went with the draft"

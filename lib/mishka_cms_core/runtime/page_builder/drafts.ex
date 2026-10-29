@@ -185,9 +185,10 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Drafts do
     end
   end
 
-  # The draft's editing history is released as it goes — by the resource, not here, because the
-  # picker's own Delete never comes through this module. See
-  # `MishkaCmsCore.Runtime.Resources.Changes.ReleaseBuilderHistory`.
+  # The draft's editing history is released as it goes — on the resource's own destroy events, not
+  # here, because the picker's own Delete never comes through this module. The editor's plugins on
+  # `cms_core:<section>_draft:after_destroy` and `…:after_master_destroy` do it; see
+  # `MishkaCmsCore.Runtime.PageBuilder.Plugins.ReleaseDraftHistory`.
   #
   # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL, for the reason
   # `PageBuilder.Helpers.create_section/4` gives: validations run when the changeset is BUILT, so
