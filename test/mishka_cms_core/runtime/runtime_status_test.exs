@@ -162,7 +162,9 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
 
     test "says so, with the reason, and that the last bundle is still served", %{site: site} do
       hook = [site_id: site.id] |> create_js_hook!() |> Ash.load!(:site, authorize?: false)
-      :ok = Helpers.record_asset_build(site.name, "js", {:error, "Could not resolve x", :last_good})
+
+      :ok =
+        Helpers.record_asset_build(site.name, "js", {:error, "Could not resolve x", :last_good})
 
       status = RuntimeStatus.compute(hook, MishkaCmsCore.Runtime.JsHook)
 
