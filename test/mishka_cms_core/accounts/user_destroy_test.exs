@@ -22,20 +22,11 @@ defmodule MishkaCmsCore.Accounts.UserDestroyTest do
 
   alias MishkaCmsCore.Accounts.User
 
-  require Ash.Query
-
   @moduletag :unit
   @repo Application.compile_env!(:mishka_cms_core, :repo)
 
   setup do
-    site = create_site!(active: true)
-
-    %{
-      site: site,
-      page: create_page!(site_id: site.id),
-      master: create_user_with_permissions!(["*"]),
-      site_admin: create_user_with_permissions!(["*"], site_id: site.id)
-    }
+    %{master: create_user_with_permissions!(["*"])}
   end
 
   defp gone?(context, user),

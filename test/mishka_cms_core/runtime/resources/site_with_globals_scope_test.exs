@@ -5,8 +5,8 @@
 defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
   @moduledoc """
   The reads that answer "this site's rows plus the shared ones" — `:for_tenant_with_globals` and its
-  single-row twin, the builder's `:for_editor` reads, a stylesheet's `:for_compiler` and a setting's
-  own — decide whose rows they show from WHO IS ASKING, never from a missing tenant.
+  single-row twin, a stylesheet's `:for_compiler` and a setting's own — decide whose rows they show
+  from WHO IS ASKING, never from a missing tenant.
 
   A master is a user whose `site_id` is nil. A site user, whatever it holds, reads its own site and
   the shared rows and nothing else: not with no tenant, not by naming another site in `site_id`, not
@@ -20,6 +20,10 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
   alias MishkaCmsCore.Runtime.{Component, JsHook, Layout, Setting, Stylesheet}
 
   @moduletag :unit
+
+  def layout(site_id), do: create_layout!(site_id: site_id)
+  def component(site_id), do: create_component!(site_id: site_id)
+  def js_hook(site_id), do: create_js_hook!(site_id: site_id)
 
   def stylesheet(site_id) do
     Stylesheet
@@ -291,8 +295,8 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
       |> Enum.any?(&(applies_to_reads?(&1) and masters_only_by_identity?(&1)))
     end
 
-    # Every configured domain, not only `MishkaCmsCore.Runtime`: a resource of another domain — the
-    # visual editor's notes and snippets — reads through the same preparation.
+    # Every configured domain, not only `MishkaCmsCore.Runtime`: a resource of another domain reads
+    # through the same preparation.
     test "is held by a policy on the actor when it runs" do
       scoped =
         for domain <- Application.fetch_env!(:mishka_cms_core, :ash_domains),
@@ -302,7 +306,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
             Enum.any?(action.preparations, &site_with_globals?/1),
             do: {resource, action.name}
 
-      assert length(scoped) >= 11, "found #{length(scoped)}; the scan proves nothing"
+      assert length(scoped) >= 10, "found #{length(scoped)}; the scan proves nothing"
 
       for {resource, action} <- scoped do
         assert held_by_identity?(resource),

@@ -23,7 +23,7 @@ defmodule MishkaCmsCore.Builder.RailPluginTest do
 
   import Phoenix.LiveViewTest
 
-  alias MishkaCmsCore.Builder.{Descriptor}
+  alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Test.Plugins.BuilderRailProbe, as: Probe
 
   @moduletag :unit

@@ -9,13 +9,14 @@ defmodule MishkaCmsCore.Builder.EventsTest do
 
   The gates matter most. A `builder:save:before` hook that cannot actually stop a write would be
   decoration, and the whole point of putting content lint and link checking there is that a refusal
-  is binding. That is asserted end to end against the live editor in the `builder_live/` tests;
-  here the contract itself is pinned down.
+  is binding. That is asserted end to end against the live editor in the `builder_live/` tests of
+  `mishka_cms_builder`; here the contract itself is pinned down.
   """
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Builder.Descriptor
   alias MishkaCmsCore.Builder.Events
+  alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
   alias MishkaCmsCore.Test.Plugins.BuilderSaveGatePlugin
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarInvokedProbe
   alias MishkaCmsCore.Test.Plugins.BuilderToolbarProbe
@@ -88,6 +89,19 @@ defmodule MishkaCmsCore.Builder.EventsTest do
 
     test "an unknown registry raises rather than silently returning nothing" do
       assert_raise FunctionClauseError, fn -> Events.collect(:not_a_registry, []) end
+    end
+  end
+
+  describe "fetch/3" do
+    # `entry_id/1` answers a bare module with itself, because the icon libraries ARE modules. Nothing
+    # resolves those by id, and an entry of that shape must stay inert rather than reach a caller
+    # that will read `:template` off it.
+    test "an entry that is not a map is not an answer" do
+      assert Events.fetch(:icon_libraries, [Bundled], Bundled) == nil
+    end
+
+    test "an unknown registry raises rather than silently answering nil" do
+      assert_raise FunctionClauseError, fn -> Events.fetch(:not_a_registry, [], "x") end
     end
   end
 
