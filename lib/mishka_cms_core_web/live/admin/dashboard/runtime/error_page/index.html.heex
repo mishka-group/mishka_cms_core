@@ -10,11 +10,14 @@ SPDX-License-Identifier: Apache-2.0
     <:subtitle>{gettext("Configure custom error pages for your sites.")}</:subtitle>
     <:actions>
       <%!-- CREATING WRITES, so it is offered to a writer of the type; everyone else reads the list. --%>
+      <%!-- THE EDITOR IS THE MAIN HALF ONLY WHEN ONE ANSWERS `runtime:document:editor_url`; without one
+            the main half is the full form, and "then open the editor" is not offered. --%>
       <.create_menu
         :if={@writable?}
         id="add-error_page"
         label={gettext("+ Add Error Page")}
-        navigate={Section.builder_path("error-page")}
+        navigate={@editor_url}
+        event="preview_add"
         modal={MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.modal_id()}
       >
         <:way
@@ -25,6 +28,7 @@ SPDX-License-Identifier: Apache-2.0
           {gettext("Every field this one has, on one form — then back to this list.")}
         </:way>
         <:way
+          :if={@editor_url}
           id="pb-create-open-error_page"
           label={gettext("Fill in the form, then open the editor")}
           event="create_and_open"

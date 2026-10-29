@@ -47,7 +47,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
       |> assign(:page_title, gettext("Listing Error Pages"))
       |> assign(:url_state, nil)
 
-    {:ok, assign(new_socket, :open_builder?, false)}
+    {:ok,
+     new_socket
+     |> assign(:open_builder?, false)
+     |> assign(:editor_url, Section.editor_url("error-page"))}
   end
 
   @impl true
@@ -57,19 +60,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
   end
 
   @impl true
+  # THE EDITOR IS ASKED AGAIN, NOT REMEMBERED from mount: it answers with the new record's own
+  # address, and an editor gone since the menu was drawn leaves the plain create behind.
   def handle_info({:form_saved, :create, result}, %{assigns: %{open_builder?: true}} = socket) do
-    {:noreply,
-     socket
-     |> assign(:open_builder?, false)
-     |> push_navigate(to: Section.builder_path("error-page", result.id))}
+    socket = assign(socket, :open_builder?, false)
+
+    case Section.editor_url("error-page", result.id) do
+      nil -> {:noreply, created(socket)}
+      url -> {:noreply, push_navigate(socket, to: url)}
+    end
   end
 
-  def handle_info({:form_saved, :create, _result}, socket) do
-    {:noreply,
-     socket
-     |> PreviewHelpers.dismiss()
-     |> put_flash(:info, gettext("Error page created successfully"))}
-  end
+  def handle_info({:form_saved, :create, _result}, socket), do: {:noreply, created(socket)}
 
   @impl true
   def handle_info({:form_saved, :update, _result}, socket) do
@@ -229,4 +231,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
   @impl true
   def handle_event("preview_version_restore", %{"id" => id}, socket),
     do: {:noreply, PreviewHelpers.restore_version(socket, id)}
+
+  defp created(socket),
+    do:
+      socket
+      |> PreviewHelpers.dismiss()
+      |> put_flash(:info, gettext("Error page created successfully"))
 end

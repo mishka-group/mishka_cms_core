@@ -16,10 +16,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
       guarded `{:form_saved, :create, result}` clause below turns it into a redirect. The question is
       asked where the reader is choosing how to make one, not at the bottom of a modal they have
       already committed to.
-    * **Create empty & open editor** — a plain link to `/admin/dashboard/runtime/builder/component`.
-      It LEAVES without opening the modal at all, so none of this form's validations fire on a form
-      the reader has just said they do not want to fill in; the editor asks for the two or three
-      things a record cannot exist without and makes it there.
+    * **Create empty & open editor** — the button's main half, a plain link to the editor's address
+      for a new component. It LEAVES without opening the modal at all, so none of this form's validations
+      fire on a form the reader has just said they do not want to fill in; the editor asks for the
+      two or three things a record cannot exist without and makes it there.
+
+  Both ask `runtime:document:editor_url` for that address (`Section.editor_url/2`). With no editor
+  installed it answers `nil`: the main half opens the full form and the first way is not offered.
 
   ## One modal for everything
 
@@ -67,7 +70,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
       |> assign(:page_title, gettext("Listing Components"))
       |> assign(:url_state, nil)
 
-    {:ok, assign(new_socket, :open_builder?, false)}
+    {:ok,
+     new_socket
+     |> assign(:open_builder?, false)
+     |> assign(:editor_url, Section.editor_url("component"))}
   end
 
   @impl true
@@ -77,19 +83,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
   end
 
   @impl true
+  # THE EDITOR IS ASKED AGAIN, NOT REMEMBERED from mount: it answers with the new record's own
+  # address, and an editor gone since the menu was drawn leaves the plain create behind.
   def handle_info({:form_saved, :create, result}, %{assigns: %{open_builder?: true}} = socket) do
-    {:noreply,
-     socket
-     |> assign(:open_builder?, false)
-     |> push_navigate(to: Section.builder_path("component", result.id))}
+    socket = assign(socket, :open_builder?, false)
+
+    case Section.editor_url("component", result.id) do
+      nil -> {:noreply, created(socket)}
+      url -> {:noreply, push_navigate(socket, to: url)}
+    end
   end
 
-  def handle_info({:form_saved, :create, _result}, socket) do
-    {:noreply,
-     socket
-     |> PreviewHelpers.dismiss()
-     |> put_flash(:info, gettext("Component created successfully"))}
-  end
+  def handle_info({:form_saved, :create, _result}, socket), do: {:noreply, created(socket)}
 
   @impl true
   def handle_info({:form_saved, :update, _result}, socket) do
@@ -213,4 +218,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
   @impl true
   def handle_event("preview_code_save", %{"source" => source}, socket),
     do: {:noreply, PreviewHelpers.save_source(socket, source)}
+
+  defp created(socket),
+    do:
+      socket
+      |> PreviewHelpers.dismiss()
+      |> put_flash(:info, gettext("Component created successfully"))
 end

@@ -146,10 +146,12 @@ defmodule MishkaCmsCore.CoreComponents do
   @doc """
   The page's own "+ Add …" button, with the other ways of making one behind a caret beside it.
 
-  THE MAIN HALF OPENS THE VISUAL EDITOR, because that is what making one usually means now: the
-  editor asks for the two or three things a record cannot exist without and then shows the structure
-  chooser. The long form — every field the resource declares — is still one click away under the
-  caret, for the times somebody wants to fill it in.
+  THE MAIN HALF OPENS THE VISUAL EDITOR when there is one, because that is what making one usually
+  means then: the editor asks for the two or three things a record cannot exist without and then
+  shows the structure chooser. The long form — every field the resource declares — is still one
+  click away under the caret, for the times somebody wants to fill it in. With no editor installed
+  `navigate` is `nil` and the main half opens the create modal itself, pushing `event` first when
+  one is given, as an `:event` way does.
 
   The menu is markup, shown by a JS command: nothing behind it needs the server, and a round trip to
   open a two-item list would be a round trip that changes nothing. Each item closes it, because a
@@ -160,16 +162,23 @@ defmodule MishkaCmsCore.CoreComponents do
       <.create_menu
         id="add-page"
         label="+ Add Page"
-        navigate="/admin/dashboard/runtime/builder/page"
+        navigate={@editor_url}
         modal="page-form-modal"
       >
         <:way id="pb-create-form-page" label="Create with the full form" modal>
           Every field this resource has, on one form.
         </:way>
-        <:way id="pb-create-open-page" label="Fill in the form, then open the editor" event="create_and_open">
+        <:way
+          :if={@editor_url}
+          id="pb-create-open-page"
+          label="Fill in the form, then open the editor"
+          event="create_and_open"
+        >
           The same form, and the editor opens on what it saved.
         </:way>
       </.create_menu>
+
+  `@editor_url` is what `MishkaCmsCore.Runtime.PageBuilder.Section.editor_url/1` answered at mount.
 
   A `:navigate` way is a link and leaves; an `:event` way pushes that event to THIS page and then
   opens the modal, so the page can remember what was asked for by the time the save arrives; a
@@ -177,7 +186,15 @@ defmodule MishkaCmsCore.CoreComponents do
   """
   attr :id, :string, required: true
   attr :label, :string, required: true
-  attr :navigate, :string, required: true, doc: "where the main half goes — the visual editor"
+
+  attr :navigate, :string,
+    default: nil,
+    doc: "where the main half goes — the visual editor; `nil` opens the modal instead"
+
+  attr :event, :string,
+    default: nil,
+    doc: "with no `navigate`, an event this page handles before the main half opens the modal"
+
   attr :modal, :string, required: true, doc: "the create modal the caret's items can open"
 
   slot :way, doc: "one other way to create, drawn under the caret" do
@@ -193,7 +210,23 @@ defmodule MishkaCmsCore.CoreComponents do
 
     ~H"""
     <div class="relative flex w-fit" phx-click-away={JS.hide(to: "##{@menu}")}>
-      <.button navigate={@navigate} class={create_menu_class(:main)}>{@label}</.button>
+      <.button
+        :if={@navigate}
+        id={@id <> "-main"}
+        navigate={@navigate}
+        class={create_menu_class(:main)}
+      >
+        {@label}
+      </.button>
+      <.button
+        :if={!@navigate}
+        id={@id <> "-main"}
+        type="button"
+        phx-click={open_create(@event, @modal)}
+        class={create_menu_class(:main)}
+      >
+        {@label}
+      </.button>
       <button
         type="button"
         id={@id <> "-toggle"}
@@ -224,6 +257,11 @@ defmodule MishkaCmsCore.CoreComponents do
     </div>
     """
   end
+
+  # NO EDITOR TO GO TO, so the main half is the form: the page's own event first when it has one —
+  # the dashboards build their create form on the server — then the modal.
+  defp open_create(nil, modal), do: show_modal(modal)
+  defp open_create(event, modal), do: show_modal(JS.push(event), modal)
 
   attr :way, :map, required: true
   attr :menu, :string, required: true

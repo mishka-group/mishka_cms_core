@@ -57,6 +57,8 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Section do
 
   @builder "/admin/dashboard/runtime/builder/"
 
+  @editor_url_event "runtime:document:editor_url"
+
   @doc "The section names the builder can open."
   @spec names() :: [String.t()]
   def names, do: Map.keys(@sections)
@@ -167,6 +169,29 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Section do
 
       :error ->
         false
+    end
+  end
+
+  @doc """
+  The visual editor's address for one document, or for making a new one when `id` is `nil` — or
+  `nil` when no editor is installed.
+
+  THE CORE DOES NOT SPELL THE EDITOR'S ADDRESSES. It asks `runtime:document:editor_url`, a transform
+  whose payload is `%{section: "page" | "layout" | "component" | "error-page", id:, status:, url: nil}`,
+  and the editor's own plugin answers with `url` filled in. No plugin, or one that cannot run,
+  leaves `url` as `nil`, and every caller then leaves its "open in the editor" button out: the
+  dashboards' create menu opens the form instead, and the inspector offers no Visual Editor.
+
+  `status` names the error-page entry to open, as the editor's own address does.
+  """
+  @spec editor_url(String.t() | atom(), String.t() | nil, ErrorStatus.t() | nil) ::
+          String.t() | nil
+  def editor_url(section, id \\ nil, status \\ nil) do
+    payload = %{section: normalize(section), id: id, status: status, url: nil}
+
+    case MishkaInstaller.Event.Hook.call(@editor_url_event, payload, cannot_run: payload) do
+      %{url: url} when is_binary(url) -> url
+      _no_editor -> nil
     end
   end
 

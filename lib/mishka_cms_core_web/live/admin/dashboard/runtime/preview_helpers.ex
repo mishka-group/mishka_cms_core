@@ -1588,9 +1588,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
        when is_binary(site_id),
        do: {tenant, [actor: actor, tenant: site_id]}
 
-  # The builder's route is `/runtime/builder/:section/:id`, one shape for all four kinds. This used
-  # to name a `/builder/layout/:site/:id/edit` path that matched no route at all, and returned `nil`
-  # for error pages and components — so three of the four editable resources had no way in.
+  # The editor's address is the editor's to spell: `Section.editor_url/2` asks
+  # `runtime:document:editor_url`, one question for all four kinds, and no editor installed is no
+  # link. This used to name a `/builder/layout/:site/:id/edit` path that matched no route at all, and
+  # returned `nil` for error pages and components — so three of the four editable resources had no
+  # way in.
   #
   # `site_id` travels as a query param because a MASTER can edit another site's record and the
   # builder needs to know which tenant to scope its palette and its save to; a tenant admin's own
@@ -1611,8 +1613,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp visual_editor_url(record, resource, actor) do
     with {:ok, section} <- Map.fetch(@builder_sections, resource),
          true <- can_edit?(resource, record, actor),
-         true <- Section.allowed?(actor, section) do
-      Section.builder_path(section, record.id) <> site_query(record)
+         true <- Section.allowed?(actor, section),
+         url when is_binary(url) <- Section.editor_url(section, record.id) do
+      url <> site_query(record)
     else
       _no_way_in -> nil
     end
