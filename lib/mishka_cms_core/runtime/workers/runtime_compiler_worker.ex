@@ -256,9 +256,11 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
             do: BootHandler.delete_template_file(template_site(hook), "js_hook", hook["name"])
 
           if is_nil(site_id) do
-            TailwindCompiler.delete_shared_base_css()
             JavaScriptCompiler.delete_shared_base_js()
+            # The shared base scans the global hooks' templates, so it is rebuilt after they are
+            # written; in place, so a base that does not build leaves the last one that did.
             BootHandler.create_js_hooks_template()
+            TailwindCompiler.compile_and_store_shared_base()
             BootHandler.create_assets_compilation_jobs()
           else
             create_js_hooks_template_run_js_compiler(site_id, site_name)
@@ -281,7 +283,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
           :ok
         else
           if is_nil(site_id) do
-            TailwindCompiler.delete_shared_base_css()
+            TailwindCompiler.compile_and_store_shared_base()
             BootHandler.create_assets_compilation_jobs("css")
           else
             run_asset_compiler(site_name, site_id, "css")

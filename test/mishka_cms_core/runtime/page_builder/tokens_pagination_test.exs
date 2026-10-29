@@ -55,7 +55,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.TokensPaginationTest do
                "were never seen — and #{@count} sheets is an ordinary install, not an extreme one"
     end
 
-    # The same capped read backs `put/5` through `declaring_sheet/2`, so a token past the cap could
+    # The same capped read backs `put/4` through `declaring_sheet/2`, so a token past the cap could
     # not be listed OR written: the Studio would have refused it as a name the site does not declare.
     test "a token declared past the cap can still be written" do
       run = System.unique_integer([:positive])

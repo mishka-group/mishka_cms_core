@@ -481,13 +481,53 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   @doc """
   Compiles shared base CSS and stores it in AssetsState for reuse.
+
+  Rebuilt in place: the stored base is replaced only by one that built, so a broken global stylesheet
+  leaves every site on the last base that worked. A changed one is announced as `{:css_updated, hash}`
+  on `site:__shared_base__:assets`, the way a site's bundle is on its own topic.
   """
-  def compile_and_store_shared_base do
+  def compile_and_store_shared_base, do: one_shared_base_at_a_time(&build_and_store_shared_base/0)
+
+  # ONE SHARED BASE BUILD AT A TIME. Two global saves close together run two jobs at once, and the
+  # one that read the stylesheets first could finish last and store the older base over the newer.
+  # Taken in turn, the last to run reads every save before it. This node's lock, like `alone/1`'s:
+  # the base is this node's, in its own `AssetsState`.
+  defp one_shared_base_at_a_time(fun) do
+    case :global.trans(
+           {{__MODULE__, :shared_base}, self()},
+           fun,
+           [node()],
+           Helpers.install_lock_retries()
+         ) do
+      :aborted -> {:error, "could not take the shared base lock"}
+      result -> result
+    end
+  end
+
+  # The stored base, or one built now. Asked again inside the lock: the sites that found it missing
+  # at the same moment build it once between them, not once each.
+  defp shared_base do
+    case AssetsState.get_value("__shared_base__", "css") do
+      nil ->
+        one_shared_base_at_a_time(fn ->
+          case AssetsState.get_value("__shared_base__", "css") do
+            nil -> build_and_store_shared_base()
+            css -> {:ok, css}
+          end
+        end)
+
+      css ->
+        {:ok, css}
+    end
+  end
+
+  defp build_and_store_shared_base do
     case compile_shared_base() do
       {:ok, css} ->
         {brotli, gzip} = Helpers.compress_asset(css)
         updated_at = DateTime.utc_now()
         hash = Base.encode16(:crypto.hash(:md5, css), case: :lower)
+        previous_hash = AssetsState.get!("__shared_base__", "css")[:hash]
 
         [
           %{id: "__shared_base__", type: "css", value: css, hash: hash, updated_at: updated_at},
@@ -508,11 +548,25 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         ]
         |> AssetsState.save_batch()
 
+        # Announced like a site's bundle: a document no site owns is drawn with this one alone.
+        if hash != previous_hash do
+          MishkaCmsCore.PubSub
+          |> Phoenix.PubSub.broadcast("site:__shared_base__:assets", {:css_updated, hash})
+        end
+
         Logger.info("[TailwindCompiler] Shared base CSS compiled and cached")
+        Helpers.record_asset_build("__shared_base__", "css", :ok)
         {:ok, css}
 
       {:error, reason} = error ->
         Logger.error("[TailwindCompiler] Failed to compile shared base CSS: #{reason}")
+
+        Helpers.record_asset_build(
+          "__shared_base__",
+          "css",
+          {:error, reason, served("__shared_base__")}
+        )
+
         error
     end
   end
@@ -521,15 +575,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   Gets the cached shared base CSS, or compiles it if not available.
   """
   def get_or_compile_shared_base do
-    case AssetsState.get_value("__shared_base__", "css") do
-      nil ->
-        case compile_and_store_shared_base() do
-          {:ok, css} -> css
-          {:error, _} -> ""
-        end
-
-      css ->
-        css
+    case shared_base() do
+      {:ok, css} -> css
+      {:error, _reason} -> ""
     end
   end
 
@@ -560,10 +608,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   There used to be a second way to answer this — `compile_full/1`, a `use_shared_base: false` mode
   that assembled the whole stylesheet in one Tailwind run. Nothing called it outside its own tests,
   and it restated every decision made here, so the two drifted apart with each change to what gets
-  scanned. A stale shared base is dropped with `delete_shared_base_css/0` instead, which is what
-  every writer already does.
+  scanned. A global writer rebuilds the shared base in place (`compile_and_store_shared_base/0`);
+  the dev watcher drops it with `delete_shared_base_css/0` and the next compile builds it.
   """
   def compile(site_name) do
+    with {:ok, css, _shared_base} <- build(site_name), do: {:ok, css}
+  end
+
+  # The site's CSS and how its shared base went: `:ok`, or `{:error, reason}` when the base did not
+  # build and the site's part was put on `""`. Answered by the build itself rather than read back
+  # from `AssetsState` afterwards, where another job may have stored or dropped the base meanwhile.
+  defp build(site_name) do
     :telemetry.span(
       [:mishka_cms, :runtime, :compilers, :tailwind],
       %{site: site_name},
@@ -571,9 +626,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         result =
           try do
             ensure_installed()
-            shared_css = get_or_compile_shared_base()
+
+            {shared_css, shared_base} =
+              case shared_base() do
+                {:ok, css} -> {css, :ok}
+                {:error, _reason} = error -> {"", error}
+              end
+
             site_css = execute_tailwind_site_only(site_name)
-            {:ok, shared_css <> "\n/* Site: #{site_name} */\n" <> site_css}
+            {:ok, shared_css <> "\n/* Site: #{site_name} */\n" <> site_css, shared_base}
           rescue
             e -> {:error, Exception.message(e)}
           end
@@ -858,8 +919,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
       return: false
     )
 
-    case compile(site_name) do
-      {:ok, css} ->
+    case site_build(site_name) do
+      {built, css, outcome} when built in [:ok, :partial] ->
         css =
           Hook.call("runtime:compile:css", css, meta: %{site: site_name})
 
@@ -881,11 +942,46 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         end
 
         Logger.debug("Tailwind CSS compiled and stored in AssetsState for site: #{site_name}")
+        Helpers.record_asset_build(site_name, "css", outcome)
         {:ok, css}
 
       {:error, reason} = error ->
         Logger.error("Failed to compile Tailwind CSS for site #{site_name}: #{reason}")
+        Helpers.record_asset_build(site_name, "css", {:error, reason, served(site_name)})
         error
+    end
+  end
+
+  # A BROKEN BUILD NEVER REPLACES ONE THAT WORKED. A site's CSS is built on `""` when the shared
+  # base does not compile, and storing that would take the theme and every global component's rules
+  # off a site that had them, so with a last good bundle to keep the build fails instead. A site with
+  # none — after a restart `AssetsState` starts empty — or with only the partial one from before gets
+  # the partial one, which is more than nothing, and it is recorded either way.
+  defp site_build(site_name) do
+    case build(site_name) do
+      {:ok, css, :ok} ->
+        {:ok, css, :ok}
+
+      {:ok, css, {:error, reason}} ->
+        reason = "The shared CSS every site starts with did not build: " <> to_string(reason)
+
+        case served(site_name) do
+          :last_good -> {:error, reason}
+          _partial_or_nothing -> {:partial, css, {:error, reason, :partial}}
+        end
+
+      {:error, _reason} = error ->
+        error
+    end
+  end
+
+  # What visitors get while the bundle's last build failed: the last one that built, a partial one
+  # (stored without the shared base), or nothing.
+  defp served(bundle) do
+    cond do
+      not AssetsState.exists?(bundle, "css") -> :nothing
+      match?(%{served: :partial}, Helpers.asset_build_failure(bundle, "css")) -> :partial
+      true -> :last_good
     end
   end
 

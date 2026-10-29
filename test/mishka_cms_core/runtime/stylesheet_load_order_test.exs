@@ -105,7 +105,7 @@ defmodule MishkaCmsCore.Runtime.StylesheetLoadOrderTest do
              "priority 90 beats priority 10 — that is what the attribute promises"
     end
 
-    # `put/5` writes into the sheet whose declaration WINS, so the value an operator edits is the
+    # `put/4` writes into the sheet whose declaration WINS, so the value an operator edits is the
     # value they were shown. That falls out of the same ordering.
     test "writing a token edits the sheet whose declaration wins" do
       run = System.unique_integer([:positive])

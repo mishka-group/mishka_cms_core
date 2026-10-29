@@ -158,7 +158,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.DesignToken do
   end
 
   # A TOKEN IS A LINE OF A STYLESHEET, so it is read as a stylesheet is: by anyone under the
-  # surface the request came from. Changing one is `Tokens.put/5`'s, as the builder.
+  # surface the request came from. Changing one is `Tokens.put/4`'s, as the builder.
   policies do
     policy action_type(:read) do
       authorize_if {MishkaCmsCore.Accounts.Checks.AccessPermissions, under: :surface}

@@ -4,6 +4,8 @@
 
 defmodule MishkaCmsCore.Runtime.Compilers.Helpers do
   @moduledoc false
+  alias MishkaCmsCore.Runtime.States.CompileFailureState
+
   @doc """
   Generates a unique module name for runtime-compiled resources.
 
@@ -107,4 +109,77 @@ defmodule MishkaCmsCore.Runtime.Compilers.Helpers do
 
     {brotli, gzip}
   end
+
+  # HOW EACH BUNDLE'S LAST BUILD WENT, beside the modules that did not compile in `CompileFailureState`.
+  # A bundle is a site's name or `"__shared_base__"`, and its `type` is `"css"` or `"js"`. A failure
+  # stays until a build of that bundle works. `served` says what visitors get meanwhile: the last
+  # bundle that built (`:last_good`), one stored without the shared base (`:partial`), or `:nothing`.
+
+  @doc """
+  Records the outcome of building `bundle`'s `type`: `:ok`, or `{:error, reason, served}`.
+
+  A change is announced as `{:asset_build, bundle, type}` on `asset_builds_topic/1`, for that bundle
+  and for `:all`, which the editor's bar and the runtime status rows listen on.
+  """
+  @spec record_asset_build(
+          String.t(),
+          String.t(),
+          :ok | {:error, term(), :last_good | :partial | :nothing}
+        ) :: :ok
+  def record_asset_build(bundle, type, outcome) do
+    key = asset_build_key(bundle, type)
+    before = CompileFailureState.reason(key)
+
+    after_build =
+      case outcome do
+        :ok -> nil
+        {:error, reason, served} -> %{reason: reason_text(reason), served: served}
+      end
+
+    case after_build do
+      nil -> CompileFailureState.clear(key)
+      failure -> CompileFailureState.record(key, failure)
+    end
+
+    if before != after_build do
+      for topic <- [asset_builds_topic(bundle), asset_builds_topic(:all)],
+          do: Phoenix.PubSub.broadcast(MishkaCmsCore.PubSub, topic, {:asset_build, bundle, type})
+    end
+
+    :ok
+  end
+
+  @doc "`bundle`'s last failed `type` build, `%{reason: String.t(), served: atom()}`, or `nil`."
+  @spec asset_build_failure(String.t(), String.t()) :: map() | nil
+  def asset_build_failure(bundle, type),
+    do: CompileFailureState.reason(asset_build_key(bundle, type))
+
+  @doc "Every bundle whose last `type` build failed, sorted by bundle: `[{bundle, failure}]`."
+  @spec asset_build_failures(String.t()) :: [{String.t(), map()}]
+  def asset_build_failures(type) do
+    {:asset_build, :_, type}
+    |> CompileFailureState.matching()
+    |> Enum.map(fn {{:asset_build, bundle, _type}, failure} -> {bundle, failure} end)
+    |> Enum.sort()
+  end
+
+  @doc "Forgets both of `bundle`'s builds, for a site whose bundles are purged, and says so."
+  @spec forget_asset_builds(String.t()) :: :ok
+  def forget_asset_builds(bundle) do
+    for {{:asset_build, ^bundle, type}, _failure} <-
+          CompileFailureState.matching({:asset_build, bundle, :_}),
+        do: record_asset_build(bundle, type, :ok)
+
+    :ok
+  end
+
+  @doc "The topic a change to `bundle`'s build record is announced on; `:all` hears every bundle."
+  @spec asset_builds_topic(String.t() | :all) :: String.t()
+  def asset_builds_topic(:all), do: "asset_builds"
+  def asset_builds_topic(bundle), do: "site:#{bundle}:asset_builds"
+
+  defp asset_build_key(bundle, type), do: {:asset_build, bundle, type}
+
+  defp reason_text(reason) when is_binary(reason), do: reason
+  defp reason_text(reason), do: inspect(reason)
 end

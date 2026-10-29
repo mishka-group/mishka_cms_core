@@ -96,6 +96,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       site_name: site_name,
       module: module_of(cfg, record, site_name),
       left_out: left_out(cfg, record),
+      build_failures: build_failures(cfg, site_name),
       job: job
     }
 
@@ -131,8 +132,10 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       else: {false, gettext("module not loaded")}
   end
 
-  defp asset_bundle_id("Global"), do: "__shared_base__"
-  defp asset_bundle_id(site_name), do: site_name
+  @doc "The bundle a row's site name builds into: the site's own, or the shared base for `\"Global\"`."
+  @spec asset_bundle_id(String.t()) :: String.t()
+  def asset_bundle_id("Global"), do: "__shared_base__"
+  def asset_bundle_id(site_name), do: site_name
 
   defp bundle_name("__shared_base__"), do: "Global"
   defp bundle_name(site_name), do: site_name
@@ -142,6 +145,38 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
     do: JavaScriptCompiler.left_out(record.id)
 
   defp left_out(_cfg, _record), do: []
+
+  # A site's row is in its site's bundle. A global one is in the shared base and in every site's
+  # bundle — a global theme row and a global hook are built into each — so any of them may have failed.
+  defp build_failures(%{kind: :asset, asset_type: type}, "Global"),
+    do: Helpers.asset_build_failures(type)
+
+  defp build_failures(%{kind: :asset, asset_type: type}, site_name) do
+    case Helpers.asset_build_failure(site_name, type) do
+      nil -> []
+      failure -> [{site_name, failure}]
+    end
+  end
+
+  defp build_failures(_cfg, _site_name), do: []
+
+  defp build_failure_message(failures, type) do
+    kept =
+      if Enum.all?(failures, fn {_bundle, failure} -> failure.served == :last_good end),
+        do: gettext("Still serving the last one that built. Your latest change is not live. "),
+        else: ""
+
+    gettext("The %{type} bundle of %{bundles} did not build. %{kept}%{reason}",
+      type: type,
+      bundles: Enum.map_join(failures, ", ", fn {bundle, _failure} -> bundle_name(bundle) end),
+      kept: kept,
+      reason:
+        failures
+        |> Enum.map(fn {_bundle, failure} -> failure.reason end)
+        |> Enum.uniq()
+        |> Enum.join("; ")
+    )
+  end
 
   # First match wins.
   defp classify(%{archived?: true}, _cfg),
@@ -169,6 +204,11 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
       false -> classify_runtime(base, cfg)
     end
   end
+
+  # THE BUNDLE DID NOT BUILD, so `Live` would say the row's latest change is served. The row's own
+  # job only queues the bundle and succeeds either way; the bundle's build record says what happened.
+  defp classify(%{build_failures: [_ | _] = failures}, cfg),
+    do: {:failed, gettext("Bundle build failed"), build_failure_message(failures, cfg.asset_type)}
 
   # The bundle was built without this hook, so `Live` would say it runs when no page can run it.
   defp classify(%{left_out: [_ | _] = left_out}, _cfg) do

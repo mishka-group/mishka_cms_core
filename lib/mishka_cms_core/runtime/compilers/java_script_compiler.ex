@@ -458,8 +458,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
           |> Phoenix.PubSub.broadcast("site:#{site_name}:assets", {:js_updated, hash})
         end
 
-      _ ->
-        :ok
+        Helpers.record_asset_build(site_name, "js", :ok)
+
+      failed ->
+        reason = with {:error, reason} <- failed, do: reason
+        served = if AssetsState.exists?(site_name, "js"), do: :last_good, else: :nothing
+        Helpers.record_asset_build(site_name, "js", {:error, reason, served})
     end
 
     result

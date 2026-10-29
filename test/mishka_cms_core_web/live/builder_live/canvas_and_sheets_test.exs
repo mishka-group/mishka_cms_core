@@ -800,7 +800,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasAndSheetsTest do
       # the classes the editor generates are appended after the bundle and win. What the canvas
       # still owes is the ADDRESS, and that is what is checked here — the test endpoint renders a
       # bare layout, so the tag is not observable from a LiveView test.
-      assert css_hrefs(canvas) == ["/assets/css/__shared_base__/abc"]
+      assert css_hrefs(canvas) == ["/assets/css/__shared_base__/abc.css"]
       refute html =~ ".from-shared-base{color:#123456}"
     end
 

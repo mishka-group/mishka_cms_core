@@ -42,6 +42,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive do
 
   import Phoenix.LiveView, only: [attach_hook: 4, send_update: 2, connected?: 1]
 
+  alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.RuntimeStatus
   alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimeStatusTimeline
 
@@ -151,32 +152,40 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive do
   # Halt: consumed here (no LiveView handle_info clause for them).
   defp oban_hook({:css_updated, _hash}, socket), do: {:halt, refresh(socket)}
   defp oban_hook({:js_updated, _hash}, socket), do: {:halt, refresh(socket)}
+  defp oban_hook({:asset_build, _bundle, _type}, socket), do: {:halt, refresh(socket)}
 
   defp oban_hook(_message, socket), do: {:cont, socket}
 
   # The asset bundle's compile job carries no record id, so the per-record oban match
-  # never sees it. Subscribe the open asset row to its site's asset-update broadcast
-  # and refresh when the bundle is (re)built — then the status flips Bundled → Live.
+  # never sees it. Subscribe the open asset row to its bundle's asset-update broadcast
+  # and its build record, and refresh when either changes — the status flips Bundled →
+  # Live, or to a failed build. A global row is in every site's bundle, so it hears
+  # every bundle's build record.
   defp maybe_subscribe_assets(socket, %{mode: :asset, site_name: site_name}) do
-    topic = "site:#{site_name}:assets"
+    topics = site_name |> RuntimeStatus.asset_bundle_id() |> asset_topics()
 
     cond do
       !connected?(socket) ->
         socket
 
-      socket.assigns[:asset_topic] == topic ->
+      socket.assigns[:asset_topic] == topics ->
         socket
 
       true ->
-        if socket.assigns[:asset_topic],
-          do: Phoenix.PubSub.unsubscribe(MishkaCmsCore.PubSub, socket.assigns.asset_topic)
+        for topic <- List.wrap(socket.assigns[:asset_topic]),
+            do: Phoenix.PubSub.unsubscribe(MishkaCmsCore.PubSub, topic)
 
-        Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, topic)
-        assign(socket, :asset_topic, topic)
+        for topic <- topics, do: Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, topic)
+        assign(socket, :asset_topic, topics)
     end
   end
 
   defp maybe_subscribe_assets(socket, _status), do: socket
+
+  defp asset_topics("__shared_base__" = bundle),
+    do: ["site:#{bundle}:assets", Helpers.asset_builds_topic(:all)]
+
+  defp asset_topics(bundle), do: ["site:#{bundle}:assets", Helpers.asset_builds_topic(bundle)]
 
   defp match_open?(%{assigns: %{expanded_id: nil}}, _id), do: false
   defp match_open?(_socket, nil), do: false
