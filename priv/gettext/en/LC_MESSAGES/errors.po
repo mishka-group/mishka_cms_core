@@ -11,11 +11,6 @@ msgstr ""
 "Language: en\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:44
-#, elixir-autogen, elixir-format
-msgid "A note cannot be a reply to itself."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/__validations/master_site_stays.ex:35
 #, elixir-autogen, elixir-format
 msgid "Another site is the master site. Use Set Master to move it to this one."
@@ -111,19 +106,9 @@ msgstr ""
 msgid "That %{label} is not one this site can use."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:67
-#, elixir-autogen, elixir-format
-msgid "That note is about a different document, so this cannot be a reply to it."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/__changes/restore_version.ex:134
 #, elixir-autogen, elixir-format
 msgid "That version was not found for this record."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/__validations/parent_belongs_to_document.ex:75
-#, elixir-autogen, elixir-format
-msgid "The note being replied to is no longer here."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/tenant_context.ex:154
@@ -172,13 +157,6 @@ msgstr ""
 msgid "actor"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:352
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:319
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:361
-#, elixir-autogen
-msgid "author"
-msgstr ""
-
 #: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:999
 #: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1022
 #: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:1066
@@ -222,21 +200,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/component.ex:1248
 #, elixir-autogen
 msgid "component"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:338
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:306
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:349
-#: lib/mishka_cms_core/runtime/resources/snippet.ex:225
-#: lib/mishka_cms_core/runtime/resources/snippet.ex:243
-#, elixir-autogen
-msgid "document"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:344
-#: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:386
-#, elixir-autogen
-msgid "draft"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/stateful_placement.ex:326
@@ -291,17 +254,6 @@ msgstr ""
 msgid "layout"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:312
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:355
-#, elixir-autogen
-msgid "note"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:371
-#, elixir-autogen
-msgid "note's author"
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:492
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:538
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:576
@@ -335,12 +287,6 @@ msgstr ""
 #: lib/mishka_cms_core/notify/notification.ex:319
 #, elixir-autogen
 msgid "recipient"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:392
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:414
-#, elixir-autogen
-msgid "resolver"
 msgstr ""
 
 #: ../mishka_document/lib/mishka_document/resources/__changes/set_section_lineage_id.ex:79
@@ -423,16 +369,6 @@ msgstr ""
 #: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:1140
 #, elixir-autogen, elixir-format
 msgid "workspace"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/page_comment.ex:95
-#, elixir-autogen, elixir-format
-msgid "A note needs something in it, and under 4000 characters."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/snippet.ex:62
-#, elixir-autogen, elixir-format
-msgid "A snippet needs some markup to save."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/site.ex:939
@@ -784,11 +720,6 @@ msgstr ""
 msgid "Name must be between 1 and 255 characters."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/snippet.ex:58
-#, elixir-autogen, elixir-format
-msgid "Name must be between 2 and 120 characters."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/media_category.ex:78
 #, elixir-autogen, elixir-format
 msgid "Name must be between 2 and 200 characters."
@@ -891,11 +822,6 @@ msgstr ""
 msgid "This draft has already been published."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/global_row_is_master_only.ex:42
-#, elixir-autogen, elixir-format
-msgid "This note is on something shared by every site. Only a master can change it."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/page.ex:140
 #, elixir-autogen, elixir-format
 msgid "Title must be between 1 and 200 characters."
@@ -959,16 +885,6 @@ msgstr ""
 msgid "Version does not belong to this page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/anchor_site_required.ex:41
-#, elixir-autogen, elixir-format
-msgid "a %{source_type} always belongs to a site, so its history cannot be global"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/page_builder_event.ex:121
-#, elixir-autogen, elixir-format
-msgid "a page or error page always belongs to a site, so its history cannot be global"
-msgstr ""
-
 #: lib/mishka_cms_core/accounts/__validations/valid_email.ex:57
 #, elixir-autogen, elixir-format
 msgid "cannot be empty"
@@ -1028,21 +944,6 @@ msgstr ""
 #: lib/mishka_cms_core/accounts/__validations/grant_within_actor_scope.ex:63
 #, elixir-autogen, elixir-format
 msgid "only a signed-in user can grant permissions"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/__validations/site_scoped_document.ex:63
-#, elixir-autogen, elixir-format
-msgid "A note about a page belongs to one site, so it needs that site."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/__validations/site_scoped_document.ex:67
-#, elixir-autogen, elixir-format
-msgid "A note about an error page belongs to one site, so it needs that site."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/__validations/site_scoped_document.ex:73
-#, elixir-autogen, elixir-format
-msgid "A note about this belongs to one site, so it needs that site."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/media.ex:2146
@@ -1140,11 +1041,6 @@ msgstr ""
 msgid "A site user can act only on their own site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/snippet.ex:426
-#, elixir-autogen, elixir-format
-msgid "A snippet with that name is already saved here."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:939
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:969
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:1000
@@ -1209,7 +1105,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1008
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1262
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
@@ -1290,11 +1186,11 @@ msgid "Please select a file to upload"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:1871
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:676
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:674
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1993
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:712
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:710
 #: lib/mishka_cms_core/runtime/resources/page.ex:2708
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:1003
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:1001
 #, elixir-autogen, elixir-format
 msgid "Preview token collision."
 msgstr ""
@@ -1651,17 +1547,17 @@ msgstr ""
 msgid "is required"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3132
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3164
 #, elixir-autogen, elixir-format
 msgid "A blog post with this language already exists in this language group."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2174
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2209
 #, elixir-autogen, elixir-format
 msgid "A collection with this language already exists in this language group."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1872
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1906
 #, elixir-autogen, elixir-format
 msgid "A tag with this language already exists in this language group."
 msgstr ""
@@ -1686,7 +1582,7 @@ msgstr ""
 msgid "Blog post is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3124
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3156
 #, elixir-autogen, elixir-format
 msgid "Blog post slug must be unique within a site."
 msgstr ""
@@ -1819,7 +1715,7 @@ msgstr ""
 msgid "Collection not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2166
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2201
 #, elixir-autogen, elixir-format
 msgid "Collection slug must be unique within a site."
 msgstr ""
@@ -1993,7 +1889,7 @@ msgstr ""
 msgid "Tag not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1864
+#: ../mishka_blog/lib/mishka_blog/resources/tag.ex:1898
 #: ../mishka_document/lib/mishka_document/resources/tag.ex:1091
 #, elixir-autogen, elixir-format
 msgid "Tag slug must be unique within a site."
@@ -2046,12 +1942,12 @@ msgstr ""
 msgid "A section with this language already exists in this language group."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2077
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2138
 #, elixir-autogen, elixir-format
 msgid "A workspace with this language already exists in this language group."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2089
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2150
 #, elixir-autogen, elixir-format
 msgid "Another document in this language is read at this address."
 msgstr ""
@@ -2327,7 +2223,7 @@ msgstr ""
 msgid "Version number must be between 1 and 50 characters."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:1320
+#: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:1325
 #, elixir-autogen, elixir-format
 msgid "Version number must be unique within a workspace."
 msgstr ""
@@ -2353,7 +2249,7 @@ msgstr ""
 msgid "Workspace not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2069
+#: ../mishka_document/lib/mishka_document/resources/workspace.ex:2130
 #, elixir-autogen, elixir-format
 msgid "Workspace slug must be unique within a site."
 msgstr ""
@@ -2441,4 +2337,113 @@ msgstr ""
 #: ../mishka_document/lib/mishka_document/resources/__changes/detach_version.ex:47
 #, elixir-autogen, elixir-format
 msgid "This version is not cloned from another."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1601
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1627
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:353
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:319
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:361
+#, elixir-autogen, elixir-format
+msgid "author"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:312
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:355
+#: ../mishka_document/lib/mishka_document/resources/issue.ex:1095
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1476
+#: ../mishka_document/lib/mishka_document/resources/note_draft.ex:1506
+#, elixir-autogen, elixir-format
+msgid "note"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/site_scoped_document.ex:63
+#, elixir-autogen, elixir-format
+msgid "A note about a page belongs to one site, so it needs that site."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/site_scoped_document.ex:67
+#, elixir-autogen, elixir-format
+msgid "A note about an error page belongs to one site, so it needs that site."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/site_scoped_document.ex:73
+#, elixir-autogen, elixir-format
+msgid "A note about this belongs to one site, so it needs that site."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/parent_belongs_to_document.ex:44
+#, elixir-autogen, elixir-format
+msgid "A note cannot be a reply to itself."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:95
+#, elixir-autogen, elixir-format
+msgid "A note needs something in it, and under 4000 characters."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:62
+#, elixir-autogen, elixir-format
+msgid "A snippet needs some markup to save."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:426
+#, elixir-autogen, elixir-format
+msgid "A snippet with that name is already saved here."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:58
+#, elixir-autogen, elixir-format
+msgid "Name must be between 2 and 120 characters."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/parent_belongs_to_document.ex:67
+#, elixir-autogen, elixir-format
+msgid "That note is about a different document, so this cannot be a reply to it."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/parent_belongs_to_document.ex:75
+#, elixir-autogen, elixir-format
+msgid "The note being replied to is no longer here."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/global_row_is_master_only.ex:42
+#, elixir-autogen, elixir-format
+msgid "This note is on something shared by every site. Only a master can change it."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/__validations/anchor_site_required.ex:41
+#, elixir-autogen, elixir-format
+msgid "a %{source_type} always belongs to a site, so its history cannot be global"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:122
+#, elixir-autogen, elixir-format
+msgid "a page or error page always belongs to a site, so its history cannot be global"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:339
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:306
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:349
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:225
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:243
+#, elixir-autogen, elixir-format
+msgid "document"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:345
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:387
+#, elixir-autogen, elixir-format
+msgid "draft"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:372
+#, elixir-autogen, elixir-format
+msgid "note's author"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:392
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:414
+#, elixir-autogen, elixir-format
+msgid "resolver"
 msgstr ""
