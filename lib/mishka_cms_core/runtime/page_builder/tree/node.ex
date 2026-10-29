@@ -81,7 +81,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Node do
 
   # THE DOCUMENT'S OWN ELEMENTS. A layout is rooted at `<body>` — every one in this CMS is — and a
   # document holds exactly one of each of these, so there is no "beside" one and nothing to put
-  # around one. `MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive` substitutes a `div` for them so the
+  # around one. `MishkaCmsBuilderWeb.Live.CanvasLive` substitutes a `div` for them so the
   # frame can hold the node at all, which is precisely what made breaking the rule invisible.
   @document_tags ~w(html head body)
 
@@ -170,7 +170,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Tree.Node do
   What to call this node in front of a reader — `"h1"`, `"text"`, a component's name.
 
   Here rather than in the panel because it is not only a label any more: a review note captures it
-  at write time, and `MishkaCmsCore.Runtime.PageBuilder.Review` compares it against the element a
+  at write time, and `MishkaCmsBuilder.Review` compares it against the element a
   stored address resolves to. A positional anchor with nothing to check it against selects whatever
   slid into that slot after an edit; this is the check.
   """

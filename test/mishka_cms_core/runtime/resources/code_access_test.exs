@@ -304,46 +304,6 @@ defmodule MishkaCmsCore.Runtime.Resources.CodeAccessTest do
     end
   end
 
-  # THE ACTOR HAS TO REACH THE CHANGESET, not just the call. Validations run when the changeset is
-  # BUILT, so `save_section/5` hands the actor to the changeset — without it the write names nobody
-  # and its Elixir is refused.
-  describe "save_section/5 hands the actor to the changeset" do
-    test "so a holder of the page area writes Elixir through the builder's own path", %{
-      site: site
-    } do
-      page = create_page!(site_id: site.id)
-
-      assert {:ok, saved} =
-               save_section(
-                 page,
-                 site,
-                 %{"events" => @handler, "infos" => [], "helpers" => []},
-                 user_with("admin:dashboard:runtime:page", site.id)
-               )
-
-      assert [%{name: "save"}] = saved.events
-    end
-
-    test "and a master holding every name, through the same path", %{site: site} do
-      page = create_page!(site_id: site.id)
-
-      assert {:ok, saved} = save_section(page, site, %{"events" => @handler}, user_with("*"))
-      assert [%{name: "save"}] = saved.events
-    end
-
-    test "and refuses one who may not write the page", %{site: site} do
-      page = create_page!(site_id: site.id)
-
-      assert {:error, _refused} =
-               save_section(
-                 page,
-                 site,
-                 %{"events" => @handler},
-                 user_with("admin:dashboard:runtime:layout", site.id)
-               )
-    end
-  end
-
   # A deployment that does not want author-written server code turns it off in ONE place.
   describe "the deployment switch" do
     setup do
@@ -418,29 +378,6 @@ defmodule MishkaCmsCore.Runtime.Resources.CodeAccessTest do
 
         assert Exception.message(error) =~ "turned off on this deployment", inspect(resource)
       end
-    end
-
-    # What the builder generates from its tree is not typed; its code drawer's Elixir is.
-    test "off lets the builder's generated template through and refuses its Elixir", %{
-      site: site
-    } do
-      actor = user_with("admin:dashboard:runtime:page", site.id)
-      page = create_page!(site_id: site.id)
-
-      assert {:ok, %{template: "<section>built</section>"}} =
-               save_section(page, site, %{"template" => "<section>built</section>"}, actor)
-
-      assert code_error?(save_section(page, site, %{"events" => @handler}, actor))
-    end
-
-    # The recovery screen's box: markup typed by hand, not generated from a tree.
-    test "off refuses a template the builder was handed typed", %{site: site} do
-      page = create_page!(site_id: site.id, template: "<div>stored</div>")
-      actor = user_with("admin:dashboard:runtime:page", site.id)
-
-      assert code_error?(
-               save_section(page, site, %{"template" => "<div>typed</div>"}, actor, typed: true)
-             )
     end
 
     test "off lets a copy write its source's template and refuses its Elixir", %{site: site} do
@@ -525,16 +462,6 @@ defmodule MishkaCmsCore.Runtime.Resources.CodeAccessTest do
       Application.delete_env(:mishka_cms_core, :page_code)
       assert CodeAccess.enabled?()
     end
-  end
-
-  defp save_section(page, site, fields, actor, opts \\ []) do
-    MishkaCmsCore.Runtime.PageBuilder.Helpers.save_section(
-      MishkaCmsCore.Runtime.Page,
-      &Ash.get(MishkaCmsCore.Runtime.Page, &1, &2),
-      Map.merge(%{"id" => page.id, "site_id" => site.id}, fields),
-      actor,
-      opts
-    )
   end
 
   defp helpers, do: [%{"name" => "shout", "args" => "text", "code" => "String.upcase(text)"}]

@@ -495,7 +495,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Containment do
   # The document, unless the caller says otherwise. A MOVE drags a node that is already in the tree,
   # so its own children answer; an INSERT drags the head of a freshly parsed template, whose ids the
   # document has never seen — which reads as no descendants rather than the wrong ones, and is why
-  # `MishkaCmsCore.Runtime.PageBuilder.EditorSession` hands the parsed template over.
+  # `MishkaCmsBuilder.EditorSession` hands the parsed template over.
   defp dragged_descendants(%Node{id: id}, tree, opts) do
     dragged_tree = Keyword.get(opts, :dragged_tree) || tree
 
@@ -573,7 +573,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Containment do
   drag hook uses to paint drop targets without a round trip per hover. The server still re-checks
   the drop it is actually asked to perform.
 
-  Reached through `MishkaCmsCore.Runtime.PageBuilder.EditorSession.drop_hints/2`, which is what the
+  Reached through `MishkaCmsBuilder.EditorSession.drop_hints/2`, which is what the
   editor calls at `dragstart` and which also folds in the session's locks. A refusal here is not the
   end of the gesture: `EditorSession.apply_drop/2` places the node beside the target instead.
   """

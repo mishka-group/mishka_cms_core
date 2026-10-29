@@ -478,7 +478,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
 
   ## Why the canvas cannot call `component/1`
 
-  MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive.contain/3 forces every node's render to iodata on
+  MishkaCmsBuilderWeb.Live.CanvasLive.contain/3 forces every node's render to iodata on
   purpose, so that a component's raise, throw or exit lands inside a rescue the editor owns rather
   than taking an author's unsaved session with it. `Phoenix.LiveView.Engine` implements
   `Phoenix.HTML.Safe` for `%Phoenix.LiveView.Component{}` only to raise — the two facts are

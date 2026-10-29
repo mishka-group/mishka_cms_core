@@ -23,7 +23,7 @@ defmodule MishkaCmsCore.Builder.RailPluginTest do
 
   import Phoenix.LiveViewTest
 
-  alias MishkaCmsCore.Builder.{Descriptor, Events}
+  alias MishkaCmsCore.Builder.{Descriptor}
   alias MishkaCmsCore.Test.Plugins.BuilderRailProbe, as: Probe
 
   @moduletag :unit
@@ -35,15 +35,6 @@ defmodule MishkaCmsCore.Builder.RailPluginTest do
       assert Descriptor.key(descriptor) == Probe.key()
       assert Descriptor.label(descriptor) == "Probe"
       assert descriptor.render == {Probe, :body}
-    end
-
-    test "and the core's own rails are still there when it is added" do
-      collected = Events.collect(:rails, MishkaCmsCoreWeb.Live.Admin.Builder.Panels.core_rails())
-      keys = Enum.map(collected, &Descriptor.key/1)
-
-      assert "layers" in keys
-      assert "assistant" in keys
-      assert "audit" in keys
     end
   end
 

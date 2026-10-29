@@ -21,7 +21,7 @@ defmodule MishkaCmsCore.Builder.Actions.OpenVerb do
 
   A click aimed at that compiles to `JS.exec("data-pb-open", to: ".pb-xxxxxxxx")`, so what runs is
   the component's own sequence — every transition, the body scroll lock, the focus trap. See
-  `MishkaCmsCore.Builder.PaletteEntry.opens/1`; a package's component joins in by writing one
+  `MishkaCmsBuilder.PaletteEntry.opens/1`; a package's component joins in by writing one
   attribute, with nothing registered anywhere.
 
   A component that declares nothing keeps the plain verb it always had.

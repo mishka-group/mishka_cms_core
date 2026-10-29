@@ -11,7 +11,7 @@ defmodule MishkaCmsCore.Runtime.Resources.TemplateCompilesTest do
   `RuntimeStatus` reported `Ready`, the compile then failed into `CompileFailureState`, and the site
   went on serving the module it already had. Nobody was told at any point.
 
-  `MishkaCmsCoreWeb.Test.EditorSectionsTest` covers the editor's own gate. This is the other half —
+  `MishkaCmsBuilderWeb.Live.EditorSectionsTest` covers the editor's own gate. This is the other half —
   a seed, an import, the JSON API and the list page's form all write through these actions and none
   of them go anywhere near the builder.
 

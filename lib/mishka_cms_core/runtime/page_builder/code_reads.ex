@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeReads do
   @moduledoc """
   What a snippet reads, what it calls and what it assigns, read off the parsed code.
 
-  The sibling of `MishkaCmsCore.Runtime.PageBuilder.CodeFlags`, which answers a different question
+  The sibling of `MishkaCmsBuilder.CodeFlags`, which answers a different question
   the same way: parse it, walk it, and let the shape of the tree say what a thing is. An assign is
   the node `{:@, meta, [{name, meta, context}]}` — so `@flash` inside a string, inside a comment, or
   written out in a code sample is not one, and neither is `@moduledoc "…"`, whose context is the

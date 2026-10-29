@@ -23,7 +23,6 @@ defmodule MishkaCmsCore.Runtime.ComponentSiteScopeTest do
 
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
   alias MishkaCmsCore.Runtime.{LiveViewHelpers, Page, RuntimePreview, Translations}
-  alias MishkaCmsCore.Runtime.PageBuilder.CardPreview
   alias MishkaCmsCore.Runtime.States.{CompileFailureState, SiteState}
   alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsCore.Test.Plugins.ComponentUnavailable
@@ -252,31 +251,6 @@ defmodule MishkaCmsCore.Runtime.ComponentSiteScopeTest do
         )
 
       assert html =~ "probe-example-own"
-      assert Translations.site() == other.id
-    end
-
-    test "a palette card draws the editor's site's component and not another's", %{
-      home: home,
-      other: other
-    } do
-      own = component!(home, "card-own")
-      foreign = component!(other, "card-foreign")
-      :ok = Translations.put_site(other.id)
-
-      {:ok, card} =
-        CardPreview.document(
-          ~s(<.component component_name="#{own.name}" site="#{home.name}" />),
-          home.name
-        )
-
-      {:ok, stranger} =
-        CardPreview.document(
-          ~s(<.component component_name="#{foreign.name}" site="#{other.name}" />),
-          home.name
-        )
-
-      assert card =~ "probe-card-own"
-      refute stranger =~ "probe-card-foreign"
       assert Translations.site() == other.id
     end
   end

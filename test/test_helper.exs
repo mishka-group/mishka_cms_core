@@ -20,9 +20,7 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
       otp_app: :mishka_cms_core,
       repo: MishkaCmsCore.Repo,
       endpoint: MishkaCmsCore.TestEndpoint,
-      plugins:
-        MishkaCmsCore.Application.plugins() ++
-          MishkaCmsCore.Runtime.PageBuilder.BuilderPlugins.plugins(),
+      plugins: MishkaCmsCore.Application.plugins(),
       sweep: ["Elixir.MishkaCmsCore.Test.Plugins."],
       js_assets: Application.app_dir(:mishka_cms_core, "priv/static/temp/js_assets/node_modules")
     )

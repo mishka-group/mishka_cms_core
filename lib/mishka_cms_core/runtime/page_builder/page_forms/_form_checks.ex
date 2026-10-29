@@ -36,7 +36,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.FormChecks do
   is nothing without its five. There is also no id to write them onto: the wrapper is minted inside
   the combinator. So the field's own source is re-parsed, wrapped and bound in one go by
   `FormPlacement.wrap/3`, inserted where the field stood, and the field deleted — two ops in one
-  `MishkaCmsCore.Runtime.PageBuilder.EditorSession.apply_ops/4` run, which is one undo step.
+  `MishkaCmsBuilder.EditorSession.apply_ops/4` run, which is one undo step.
 
   ## A Fix that cannot act says so
 

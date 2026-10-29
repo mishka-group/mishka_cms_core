@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionKit do
   ## The other path
 
   A component that cannot be a stored template — one that streams live data — is not this. That is
-  `MishkaCmsCore.Builder.PaletteEntry` on the `builder:components` hook.
+  `MishkaCmsBuilder.PaletteEntry` on the `builder:components` hook.
 
   ## Shipping a bundle
 

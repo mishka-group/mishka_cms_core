@@ -190,7 +190,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Fields do
 
   @doc """
   The modules a dotted tag with no catalog row is asked of, in the order a compiled page imports
-  them — `MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive` resolves a component the same way, and
+  them — `MishkaCmsBuilderWeb.Live.CanvasLive` resolves a component the same way, and
   `MishkaCmsCore.Runtime.PageBuilder.Containment` asks them what declares a slot.
   """
   @spec local_modules() :: [module()]

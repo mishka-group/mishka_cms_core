@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.UiKit.LayoutFurnishingTest do
       words rather than anything the tree counts.
 
   The canvas already draws an empty container as a dashed drop target (`@hollow_style` in
-  `MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive`) and that treatment is editing-only — it is never
+  `MishkaCmsBuilderWeb.Live.CanvasLive`) and that treatment is editing-only — it is never
   written to the document. So bare columns lose nothing on the canvas and take nothing to the page.
   """
   use ExUnit.Case, async: true

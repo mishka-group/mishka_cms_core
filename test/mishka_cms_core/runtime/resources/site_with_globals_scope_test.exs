@@ -17,21 +17,9 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
 
   import MishkaCmsCore.Test.Factory
 
-  alias MishkaCmsCore.Runtime.{
-    Component,
-    JsHook,
-    Layout,
-    PageComment,
-    Setting,
-    Snippet,
-    Stylesheet
-  }
+  alias MishkaCmsCore.Runtime.{Component, JsHook, Layout, Setting, Stylesheet}
 
   @moduletag :unit
-
-  def layout(site_id), do: create_layout!(site_id: site_id)
-  def component(site_id), do: create_component!(site_id: site_id)
-  def js_hook(site_id), do: create_js_hook!(site_id: site_id)
 
   def stylesheet(site_id) do
     Stylesheet
@@ -263,108 +251,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
         )
 
       assert MapSet.member?(read, theirs.id)
-    end
-  end
-
-  describe "the builder's :for_editor reads" do
-    setup context do
-      page_b = create_page!(site_id: context.site_b.id)
-
-      note =
-        PageComment
-        |> Ash.Changeset.for_create(
-          :create,
-          %{body: "site B's note", type: :information, section: :page, document_id: page_b.id},
-          tenant: context.site_b.id,
-          authorize?: false
-        )
-        |> Ash.create!()
-
-      snippet =
-        Snippet
-        |> Ash.Changeset.for_create(
-          :master_create,
-          %{
-            name: "site-b-snippet",
-            source: "<p>site B</p>",
-            section: :page,
-            scope: :shared,
-            site_id: context.site_b.id
-          },
-          authorize?: false
-        )
-        |> Ash.create!()
-
-      %{page_b: page_b, note: note, snippet: snippet}
-    end
-
-    test "a site user reads no note of another site, by site_id or by tenant", context do
-      args = %{site_id: context.site_b.id, section: :page, document_id: context.page_b.id}
-
-      by_argument =
-        ids(PageComment, :for_editor, args, [actor: context.star_a], actor: context.star_a)
-
-      by_tenant =
-        ids(
-          PageComment,
-          :for_editor,
-          args,
-          [actor: context.star_a, tenant: context.site_b.id],
-          actor: context.star_a
-        )
-
-      refute MapSet.member?(by_argument, context.note.id)
-      refute MapSet.member?(by_tenant, context.note.id)
-    end
-
-    test "nor through the system read the builder's own thread list makes", context do
-      read =
-        ids(
-          PageComment,
-          :for_editor,
-          %{site_id: context.site_b.id, section: :page, document_id: context.page_b.id},
-          [actor: context.star_a, authorize?: false],
-          actor: context.star_a,
-          authorize?: false
-        )
-
-      refute MapSet.member?(read, context.note.id)
-    end
-
-    test "a site user reads no snippet of another site", context do
-      read =
-        ids(
-          Snippet,
-          :for_editor,
-          %{site_id: context.site_b.id, section: :page},
-          [actor: context.star_a],
-          actor: context.star_a
-        )
-
-      refute MapSet.member?(read, context.snippet.id)
-    end
-
-    test "a master reads another site's note and snippet by naming the site", context do
-      notes =
-        ids(
-          PageComment,
-          :for_editor,
-          %{site_id: context.site_b.id, section: :page, document_id: context.page_b.id},
-          [actor: context.master],
-          actor: context.master
-        )
-
-      snippets =
-        ids(
-          Snippet,
-          :for_editor,
-          %{site_id: context.site_b.id, section: :page},
-          [actor: context.master],
-          actor: context.master
-        )
-
-      assert MapSet.member?(notes, context.note.id)
-      assert MapSet.member?(snippets, context.snippet.id)
     end
   end
 

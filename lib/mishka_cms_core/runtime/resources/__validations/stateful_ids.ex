@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
 
   ## Why the editor's own minting is not enough
 
-  `EditorSession.with_id/4` mints one per drop and `PageBuilder.Ids.dedupe/2` renames the arrivals
+  `EditorSession.with_id/4` mints one per drop and `MishkaCmsBuilder.Ids.dedupe/2` renames the arrivals
   that collided — but `dedupe/2` is deliberately given the nodes that ARRIVED, and answers nothing
   when a whole document arrives at once. That is exactly what the source window does: an author
   pastes markup, and a copy-paste of a component tag inside it carries the same id twice with
@@ -30,7 +30,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
 
   A function component with a duplicate id is a bad idea and not a crash, and the editor already
   renames those. `id={@row.id}` is the author binding the id to their data and two of them are not a
-  collision — the same distinction `PageBuilder.Ids` draws.
+  collision — the same distinction `MishkaCmsBuilder.Ids` draws.
   """
 
   use Ash.Resource.Validation

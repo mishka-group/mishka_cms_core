@@ -15,7 +15,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.FieldsRoleTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Builder.PaletteEntry
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
   alias MishkaCmsCore.Runtime.PageBuilder.Tree
   alias MishkaCmsCore.Test.Factory
@@ -1123,24 +1122,4 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.FieldsRoleTest do
   defp kit(by_name), do: by_name |> Map.values() |> Enum.map(&entry/1) |> Enum.sort_by(& &1.name)
 
   defp renamed(component, name), do: %{entry(component) | name: name}
-
-  # `Phoenix.Component.form/1` hands `for` to `to_form/2`, and `Phoenix.HTML.FormData` has no
-  # implementation for a binary, so a wrapper seeded with a string raises a protocol error the
-  # instant it is dropped. This is the one consumer of `wrapper?/1` that a regression would be
-  # silent in, because the seeding is invisible until the canvas renders.
-  describe "what a dropped wrapper is seeded with" do
-    test "a form owner gets an empty map, not a string", %{by_name: by_name} do
-      for name <- ~w(chelekom-form-wrapper chelekom-simple-form) do
-        markup = PaletteEntry.template(entry(by_name[name]), "Global")
-
-        assert markup =~ ~s(for={%{}}), "#{name} must seed `for` with a map"
-      end
-    end
-
-    test "a label's `for` is still a string", %{by_name: by_name} do
-      markup = PaletteEntry.template(entry(by_name["chelekom-label"]), "Global")
-
-      refute markup =~ ~s(for={%{}})
-    end
-  end
 end

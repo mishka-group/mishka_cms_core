@@ -164,40 +164,6 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewModalRenderTest do
     test "it asks first, in the words the builder's own draft list uses" do
       assert render_strip() =~ "Delete the draft “Middle”? This cannot be undone."
     end
-
-    # LEAVING FOR THE BUILDER USED TO FORGET THE CHOICE. The editor read the drafts table for itself
-    # and offered whichever was newest, so picking the second badge and clicking through arrived at
-    # an offer to carry on with the first.
-    test "the Visual Editor link carries the selected draft" do
-      html =
-        render_strip(%{
-          visual_editor_url: "/admin/dashboard/runtime/builder/page/rec-page",
-          draft: draft("d-2", "Middle", 25)
-        })
-
-      assert html =~ "/admin/dashboard/runtime/builder/page/rec-page?draft_id=d-2"
-    end
-
-    test "and joins it onto a site_id that is already on the URL" do
-      html =
-        render_strip(%{
-          visual_editor_url: "/admin/dashboard/runtime/builder/page/rec-page?site_id=site-9",
-          draft: draft("d-2", "Middle", 25)
-        })
-
-      assert html =~ "builder/page/rec-page?site_id=site-9&amp;draft_id=d-2"
-    end
-
-    test "with nothing selected the link is left exactly as it was" do
-      html =
-        render_strip(%{
-          visual_editor_url: "/admin/dashboard/runtime/builder/page/rec-page",
-          draft: nil
-        })
-
-      assert html =~ "/admin/dashboard/runtime/builder/page/rec-page"
-      refute html =~ "draft_id="
-    end
   end
 
   # The modal is drawn by six tables and the button by one. What decides it is the state the helper

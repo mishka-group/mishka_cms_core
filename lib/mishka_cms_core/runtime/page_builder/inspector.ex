@@ -71,13 +71,13 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   question — "what does this node need in order to be a working form" — and neither is derived from a
   kit's attribute list, so both are declared: `form_sections/0` returns them as ordinary
   `builder:inspector:sections` descriptors carrying their controls in `config`, seeded into the
-  registry by `MishkaCmsCoreWeb.Live.Admin.Builder.Panels.core_inspector_sections/0`. An extension
+  registry by `MishkaCmsBuilderWeb.Live.Panels.core_inspector_sections/0`. An extension
   contributing a section of its own writes the same shape.
 
   **Form** shows on a node that declares a page form (`form_node?/1`). Its one real control is the
   seed — the single word every other name on the form is derived from — so `rename_ops/3` writes all
   five of `MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming.derived/0` as one batch through
-  `MishkaCmsCore.Runtime.PageBuilder.EditorSession.apply_ops/4`, with the token `rename_token/4`
+  `MishkaCmsBuilder.EditorSession.apply_ops/4`, with the token `rename_token/4`
   picks. One history entry, and the five can never disagree because nothing edits one of them alone.
   `seed_refusal/3` is what stops a rename landing on a name another form is already using, and
   `rename_warning/2` says what stored code a rename would stop.
@@ -1452,7 +1452,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
   def form_seed(node), do: PageForms.param_name(node)
 
   @doc """
-  The ops a rename issues, ready for `MishkaCmsCore.Runtime.PageBuilder.EditorSession.apply_ops/4`,
+  The ops a rename issues, ready for `MishkaCmsBuilder.EditorSession.apply_ops/4`,
   with `token` inside both event names (`nil` writes the untagged names).
 
   All five in one batch, because five separate ops would be five undo steps and four of them would
@@ -1694,7 +1694,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Inspector do
 
   @doc """
   The op a control issues for `value`, ready for
-  `MishkaCmsCore.Runtime.PageBuilder.EditorSession.apply_op/3`.
+  `MishkaCmsBuilder.EditorSession.apply_op/3`.
 
   Turning a rule off DELETES its attribute rather than writing an empty one: `required=""` is still
   required to a browser, and `minlength=""` reads back as no rule on the server, so an emptied

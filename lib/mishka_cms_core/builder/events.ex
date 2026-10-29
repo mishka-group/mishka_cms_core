@@ -45,7 +45,7 @@ defmodule MishkaCmsCore.Builder.Events do
   | `builder:page_starters` | `%{structures: [Starter]}` | the empty-page picker |
   | `builder:icon:libraries` | `%{libraries: [Library]}` | the icon picker |
   | `builder:interactions` | `%{actions: [Action]}` | the Interactions section — see `MishkaCmsCore.Builder.Action` |
-  | `builder:conditions` | `%{rules: [Rule]}` | the Show-when section — see `MishkaCmsCore.Runtime.PageBuilder.Conditions` |
+  | `builder:conditions` | `%{rules: [Rule]}` | the Show-when section — see `MishkaCmsBuilder.Conditions` |
   | `builder:js_hooks` | `%{hooks: [Hook]}` | the hook picker |
   | `builder:mention:sources` | `%{sources: [Source]}` | @-mentions in review notes |
 

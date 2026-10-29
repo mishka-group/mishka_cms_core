@@ -315,7 +315,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   colour and the generator cannot know them, while the rest of a stylesheet is already in whatever
   compiled bundle the document links — sending it twice would have it fight itself in the cascade.
 
-  Shared with `MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive`, which asks the same question of the
+  Shared with `MishkaCmsBuilderWeb.Live.CanvasLive`, which asks the same question of the
   same engine.
   """
   @spec theme_source(String.t() | nil) :: String.t()

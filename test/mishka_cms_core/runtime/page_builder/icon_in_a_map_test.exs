@@ -36,7 +36,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconInAMapTest do
   """
   use ExUnit.Case, async: true
 
-  alias MishkaCmsCore.Builder.PaletteEntry
   alias MishkaCmsCore.Runtime.PageBuilder.Icons
   alias MishkaCmsCore.Runtime.PageBuilder.Inspector
 
@@ -50,38 +49,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.IconInAMapTest do
   end
 
   defp attr(entry, name), do: Enum.find(Inspector.attrs(entry), &(Inspector.name(&1) == name))
-
-  # `seeded/3` takes the palette's own entry shape, which is atom-keyed — the bundle's is the JSON
-  # it was read from.
-  defp placeable(entry) do
-    %{
-      name: entry["name"],
-      template: entry["template"],
-      attrs: entry["attrs"] || [],
-      slots: entry["slots"] || []
-    }
-  end
-
-  describe "a required number the author never filled in" do
-    test "is dropped as something the component can draw", %{by_name: by_name} do
-      placed = PaletteEntry.seeded(placeable(by_name["chelekom-pagination"]))
-
-      assert placed =~ ~r/total=\{(\d+)\}/
-      assert [_whole, total] = Regex.run(~r/total=\{(\d+)\}/, placed)
-      assert String.to_integer(total) > 0, "a pagination of nothing pages renders no page"
-    end
-
-    # THE RULE, NOT THE ONE COMPONENT. Every required numeric in every installed kit.
-    test "and so is every other required number in the kit", %{entries: entries} do
-      zeroed =
-        for entry <- entries,
-            placed = PaletteEntry.seeded(placeable(entry)),
-            [_whole, name] <- Regex.scan(~r/(\w+)=\{0\}/, placed),
-            do: "#{entry["name"]}.#{name}"
-
-      assert zeroed == [], "these are placed holding the one number that can render as nothing"
-    end
-  end
 
   describe "an icon carried in a map" do
     test "is recognised from what the component declared", %{by_name: by_name} do

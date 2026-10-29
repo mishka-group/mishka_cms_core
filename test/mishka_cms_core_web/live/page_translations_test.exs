@@ -267,20 +267,6 @@ defmodule MishkaCmsCoreWeb.Test.PageTranslationsTest do
 
       assert has_element?(view, "#pages-table_pages-#{fa.id}")
     end
-
-    test "a chip opens that edition", %{conn: conn, site: site, master: master} do
-      fa = translate!(site, master, "fa")
-      view = open_pages(conn)
-
-      view |> element(chip(fa)) |> render_click()
-      render_async(view, @await)
-
-      assert has_element?(
-               view,
-               ~s(#runtime-preview-modal a[href^="/admin/dashboard/runtime/builder/page/#{fa.id}?"])
-             ),
-             "the chip did not open the Persian edition"
-    end
   end
 
   # THE TABLE PUTS A CHANGED ROW IN BY READING THAT ONE ROW, never through the hook that keeps the

@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Builder.Furnishing do
 
   ## Why this exists
 
-  `MishkaCmsCore.Runtime.PageBuilder.Starter` can furnish a dropped component without being told
+  `MishkaCmsBuilder.Starter` can furnish a dropped component without being told
   anything: it reads Phoenix's own `inner_block` convention and the conventional slot names, and
   falls back to a generic line. That works, and it works for a kit this install has never seen — but
   it is inference. The word "alert" in a component's name is a guess about what the component means,

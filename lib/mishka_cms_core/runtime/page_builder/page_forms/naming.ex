@@ -53,7 +53,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming do
   ## Why renumbering runs at the op layer
 
   `dedupe/2` is applied to the whole tree after a mutating op rather than at one insert route,
-  because paste (`kind: :insert`, built by `MishkaCmsCore.Runtime.PageBuilder.EditorSession.paste/2`)
+  because paste (`kind: :insert`, built by `MishkaCmsBuilder.EditorSession.paste/2`)
   and duplicate (`kind: :duplicate`) never pass through the insert funnel — and "duplicate this form"
   is how an author actually makes the second one. `MishkaCmsCore.Runtime.PageBuilder.Tree.duplicate/2`
   re-mints NODE ids and copies every attribute verbatim, so the copy arrives carrying the original's
@@ -363,7 +363,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming do
   one that can be renamed for free.
 
   With no arrivals named, document order decides, which is what a whole document arriving at once
-  (`MishkaCmsCore.Runtime.PageBuilder.EditorSession.put_tree/3`) wants: there is no incumbent there.
+  (`MishkaCmsBuilder.EditorSession.put_tree/3`) wants: there is no incumbent there.
 
   Tokens follow the same order. A renumbered form keeps its token unless an earlier form holds it,
   and gets a fresh one otherwise. A form whose token an earlier form holds gets a fresh one. An

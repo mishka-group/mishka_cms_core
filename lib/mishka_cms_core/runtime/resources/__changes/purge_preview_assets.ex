@@ -13,7 +13,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PurgePreviewAssets do
   reviewer handed the shareable `/_preview/:resource/:token` link read the markup as broken.
 
   ON THE RESOURCE, NOT ON A CALLER, because the callers are many and each one was a separate chance
-  to forget: the builder's `PageBuilder.Helpers.save_section/4` purged; a draft publish
+  to forget: the builder's `MishkaCmsBuilder.Helpers.save_section/4` purged; a draft publish
   (`Changes.PublishPageDraft` and its layout / error-page twins), a version restore and the
   inspector's Configuration form all wrote the same row and did not. Registered on the update and
   destroy types — archiving a document is a soft destroy, and the key of a row nobody can read again

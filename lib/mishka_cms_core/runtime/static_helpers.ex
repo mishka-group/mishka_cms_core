@@ -17,7 +17,7 @@ defmodule MishkaCmsCore.Runtime.StaticHelpers do
   Four surfaces render a runtime template to a string and then hand the string somewhere that is not
   a LiveView: the admin's Preview tab and its version previews
   (`MishkaCmsCore.Runtime.RuntimePreview`), the palette's card thumbnails
-  (`MishkaCmsCore.Runtime.PageBuilder.CardPreview`), the examples encoder, and the public
+  (`MishkaCmsBuilder.CardPreview`), the examples encoder, and the public
   draft-preview URL. Before this, a page holding a live component gave every one of them that
   message instead of a picture.
 

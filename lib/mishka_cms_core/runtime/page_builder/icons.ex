@@ -28,7 +28,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.Icons do
   else has to be told which set a value came from. A class no registered set claims is not an error:
   `known?/1` answers false and the control keeps the value anyway, because an author may be naming an
   icon from a set this editor has never been told about — see
-  `MishkaCmsCoreWeb.Live.Admin.Builder.Panels`, where the icon control accepts free text for exactly
+  `MishkaCmsBuilderWeb.Live.Panels`, where the icon control accepts free text for exactly
   that reason.
   """
   use Gettext, backend: MishkaCmsCore.Gettext

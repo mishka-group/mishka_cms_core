@@ -520,7 +520,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageForms do
   member of the field is read — but a renderer cannot forget it. `name={f[:email].name}` wants the
   input name, a string; handing it the whole `%Phoenix.HTML.FormField{}` because both expressions
   answer `:email` is how the canvas red-boxed a kit that binds by name and value
-  (`MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive`, which is the surface the form is authored on).
+  (`MishkaCmsBuilderWeb.Live.CanvasLive`, which is the surface the form is authored on).
 
   The source is parsed and never evaluated, and the path is whatever dots the author wrote — this
   module does not decide which members exist, the struct does.

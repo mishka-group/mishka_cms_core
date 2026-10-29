@@ -156,36 +156,4 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.FieldsTest do
       assert Fields.stage("<.component/>", nil) == "<.component/>"
     end
   end
-
-  # The staged form belongs to the preview and nowhere else. These are the two functions the INSERT
-  # handlers call, so asserting the negative here is asserting it about the document.
-  describe "what an insert places" do
-    alias MishkaCmsCore.Builder.PaletteEntry
-    alias MishkaCmsCore.Runtime.PageBuilder.Wizard
-
-    test "a dropped field is not wrapped in a form", %{components: components} do
-      wrapped =
-        for component <- components,
-            entry = entry(component),
-            Fields.field?(entry),
-            markup = PaletteEntry.template(Map.put(entry, :render, nil), "Global"),
-            markup =~ "<form",
-            do: component["name"]
-
-      assert wrapped == [],
-             "a nested form is discarded by the HTML parser, silently:\n" <>
-               Enum.join(wrapped, "\n")
-    end
-
-    test "the wizard composes a field without a form", %{components: components} do
-      wrapped =
-        for component <- components,
-            entry = entry(component),
-            Fields.field?(entry),
-            Wizard.compose(entry, %{}, nil) =~ "<form",
-            do: component["name"]
-
-      assert wrapped == [], Enum.join(wrapped, "\n")
-    end
-  end
 end

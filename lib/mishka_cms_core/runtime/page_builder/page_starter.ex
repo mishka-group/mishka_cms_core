@@ -24,7 +24,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.PageStarter do
 
   ## Why the structures are plain HTML
 
-  Same reason as `MishkaCmsCore.Runtime.PageBuilder.Blocks`: a starter that reached for a kit
+  Same reason as `MishkaCmsBuilder.Blocks`: a starter that reached for a kit
   component would fail on an install without that kit. Every structure here is `div` and utility
   classes, so it renders anywhere and every node inside it is an ordinary element the Inspector
   already knows how to style.

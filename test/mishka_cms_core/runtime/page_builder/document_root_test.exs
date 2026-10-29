@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.DocumentRootTest do
   What may happen at the root of a document-rooted tree.
 
   A layout's root is `<body>` — every one in this CMS opens with it, and
-  `MishkaCmsCoreWeb.Live.Admin.Builder.CanvasLive` draws it as a `div` precisely so the frame can
+  `MishkaCmsBuilderWeb.Live.CanvasLive` draws it as a `div` precisely so the frame can
   hold it. That substitution is what made these three invisible: wrapping the root produced
   `<div><body>…</body></div>`, duplicating it produced a layout with two `<body>` roots, and a drop
   or a paste resolved to `:root` landed a sibling of `<body>` — markup after `</body>` — and the

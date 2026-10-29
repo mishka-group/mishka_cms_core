@@ -1191,7 +1191,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   defp normalize_label(_label), do: nil
 
   # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL, for the reason
-  # `PageBuilder.Helpers.create_section/4` gives: validations run when the changeset is BUILT, so
+  # `MishkaCmsBuilder.Helpers.create_section/4` gives: validations run when the changeset is BUILT, so
   # `Ash.create(actor: …)` alone reaches them too late. `TenantContext`'s master branch is the one
   # that asks who is writing, and it saw a nil actor on every draft write the preview bar makes.
   defp write_draft(nil, attrs, record, %{site_id: nil} = user, resource) do

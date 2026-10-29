@@ -17,15 +17,8 @@ defmodule MishkaCmsCore.Builder.SectionSeamsTest do
 
   alias MishkaCmsCore.Builder.Events
   alias MishkaCmsCore.Runtime.PageBuilder.Fields
-  alias MishkaCmsCore.Runtime.PageComment
 
-  alias MishkaCmsCore.Test.Plugins.{
-    BuilderBrokenSeam,
-    BuilderCommentGate,
-    BuilderFormRolePlugin,
-    BuilderHistoryScope,
-    BuilderPreviewStamp
-  }
+  alias MishkaCmsCore.Test.Plugins.{BuilderBrokenSeam, BuilderFormRolePlugin, BuilderPreviewStamp}
 
   alias MishkaInstaller.Event.{Event, EventHandler}
 
@@ -43,25 +36,6 @@ defmodule MishkaCmsCore.Builder.SectionSeamsTest do
     :ok = EventHandler.do_compile(event, :start, false)
     on_exit(fn -> Event.unregister(:name, module, false) end)
     :ok
-  end
-
-  describe "the review composer's gate" do
-    setup do: register(BuilderCommentGate, "builder:review:before_comment")
-
-    test "a plugin's house rule refuses the note, in its own words" do
-      assert PageComment.refuse(%{"body" => BuilderCommentGate.refused(), "type" => "bug"}) =~
-               "Say what needs doing"
-    end
-
-    test "and a note it is happy with still saves" do
-      assert PageComment.refuse(%{"body" => "The gap is wrong here.", "type" => "bug"}) == nil
-    end
-
-    # The core's own rules run first, so a plugin never sees a blank note and cannot be the reason
-    # one is refused — which keeps the message the author reads the most specific true one.
-    test "the core's rules still come first" do
-      assert PageComment.refuse(%{"body" => "  ", "type" => "bug"}) == "Write something first."
-    end
   end
 
   describe "a component's part in a form" do
@@ -125,25 +99,6 @@ defmodule MishkaCmsCore.Builder.SectionSeamsTest do
 
     test "and the document it was given is still all there" do
       assert Events.preview_document("<main>page</main>", %{resource: nil}) =~ "<main>page</main>"
-    end
-  end
-
-  describe "the history timeline's read" do
-    setup do: register(BuilderHistoryScope, "builder:history:query")
-
-    test "a plugin can narrow it, and the sheet still pages honestly" do
-      query = Ash.Query.new(MishkaCmsCore.Runtime.PageBuilderEvent)
-
-      scoped = Events.history_query(query, %{source_type: :page, source_id: nil, branch_id: nil})
-
-      assert %Ash.Query{} = scoped
-      assert inspect(scoped.filter) =~ "kind"
-    end
-
-    test "and a plugin that answers with something else leaves the read alone" do
-      query = Ash.Query.new(MishkaCmsCore.Runtime.PageBuilderEvent)
-
-      assert Events.history_query(query, %{source_type: nil, source_id: nil, branch_id: nil})
     end
   end
 

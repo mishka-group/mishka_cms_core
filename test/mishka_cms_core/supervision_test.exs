@@ -12,7 +12,6 @@ defmodule MishkaCmsCore.SupervisionTest do
   use ExUnit.Case, async: false
 
   alias MishkaCmsCore.Runtime.Handlers
-  alias MishkaCmsCore.Runtime.PageBuilder.BuilderPlugins
   alias MishkaCmsCore.Runtime.States
   alias MishkaCmsCore.Supervision
 
@@ -73,16 +72,6 @@ defmodule MishkaCmsCore.SupervisionTest do
 
       for child <- Supervision.children(:caches) ++ Supervision.children(:engine) do
         assert id(child) in running, "#{inspect(id(child))} is not supervised"
-      end
-    end
-  end
-
-  describe "the editor's processes" do
-    test "run under the core's application" do
-      ids = ids_of(MishkaCmsCore.Supervisor)
-
-      for child <- BuilderPlugins.children() do
-        assert child in ids, "#{inspect(child)} is not supervised by the core's application"
       end
     end
   end

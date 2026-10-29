@@ -9,8 +9,6 @@ defmodule MishkaCmsCore.Application do
 
   use Application
 
-  alias MishkaCmsCore.Runtime.PageBuilder.BuilderPlugins
-
   @dashboard_widgets [
     MishkaCmsCore.Dashboard.Widgets.OverviewMetrics,
     MishkaCmsCore.Dashboard.Widgets.SiteOverview,
@@ -112,10 +110,8 @@ defmodule MishkaCmsCore.Application do
   ]
 
   @doc """
-  Every mishka_installer plugin the core ships, and exactly the core plugins `start/2` supervises. A
-  plugin left out of it never registers, so the event it listens on never reaches it. The visual
-  editor's plugins are listed apart, in `MishkaCmsCore.Runtime.PageBuilder.BuilderPlugins`, and
-  supervised after these.
+  Every mishka_installer plugin the core ships, and exactly the plugins `start/2` supervises. A plugin
+  left out of it never registers, so the event it listens on never reaches it.
   """
   @spec plugins() :: [module()]
   def plugins,
@@ -159,7 +155,7 @@ defmodule MishkaCmsCore.Application do
           {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
           MishkaCmsCore.Runtime.RenderMetrics
         ] ++
-        plugins() ++ BuilderPlugins.children() ++ BuilderPlugins.plugins()
+        plugins()
 
     MishkaCmsCore.Activity.Sources.Oban.attach()
     MishkaCmsCore.Activity.Sources.RuntimeCompile.attach()

@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.ElementCssSitesTest do
   Which site's row an element's CSS is read out of.
 
   `element_css_test.exs` reaches no database, so the read that finds the row is not exercised there
-  at all. It is the read `MishkaCmsCore.Runtime.PageBuilder.Classes` makes — one reserved row name,
+  at all. It is the read `MishkaCmsBuilder.Classes` makes — one reserved row name,
   an identity of `[:name, :site_id]`, and a master read that bypasses multitenancy — and it broke
   there by asking for ONE row before saying which site it was for.
 

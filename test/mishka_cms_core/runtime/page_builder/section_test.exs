@@ -79,15 +79,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SectionTest do
     end
   end
 
-  describe "what the log files a section under" do
-    test "agrees with what the builder calls it" do
-      # The two lists were maintained separately, in different spellings, and only met when the
-      # editor tried to open an error page.
-      assert Enum.sort(Section.atoms()) ==
-               Enum.sort(MishkaCmsCore.Runtime.PageBuilderEvent.sources())
-    end
-  end
-
   # The page an offline site shows sits in the error page beside the codes, and the builder opens,
   # switches to and saves it by the `offline` its address spells it with.
   describe "an error page's offline entry" do

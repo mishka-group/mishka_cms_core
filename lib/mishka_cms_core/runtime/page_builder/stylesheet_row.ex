@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.Runtime.PageBuilder.StylesheetRow do
   @moduledoc """
   The stylesheet row the page builder owns for one site, found by its reserved name: the reusable
-  classes (`MishkaCmsCore.Runtime.PageBuilder.Classes`) and an element's own CSS
+  classes (`MishkaCmsBuilder.Classes`) and an element's own CSS
   (`MishkaCmsCore.Runtime.PageBuilder.ElementCss`) are each one row of `Stylesheet`.
 
   ## Scoped, not capped

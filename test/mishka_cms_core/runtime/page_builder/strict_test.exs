@@ -152,25 +152,6 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.StrictTest do
   end
 
   describe "the mutation funnel is checked" do
-    test "an ordinary edit leaves a consistent document" do
-      {:ok, session} =
-        MishkaCmsCore.Runtime.PageBuilder.EditorSession.open(%{
-          section: "page",
-          template: ~s(<section><h1>Title</h1><p>hello</p></section>)
-        })
-
-      id = tagged(session.tree, "h1").id
-
-      {:ok, edited} =
-        MishkaCmsCore.Runtime.PageBuilder.EditorSession.apply_op(session.token, %{
-          kind: :set_text,
-          node_id: id,
-          text: "Changed"
-        })
-
-      assert :ok = Strict.inspect_tree(edited.tree)
-    end
-
     test "unwrapping keeps the children it cannot promote, rather than deleting them" do
       tree = Tree.parse!(~s(<div><section><p>kept</p></section></div>))
       section = tagged(tree, "section")

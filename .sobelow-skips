@@ -10,7 +10,6 @@ Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/content_
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:233,4B66FE0
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:263,42B5786
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/page_builder/tree.ex:809,3845DAA
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6503,13DA38C
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/activity/sources/runtime_compile.ex:108,3E92A6F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:124,69BBDA4
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/_helpers.ex:58,2261ED1
@@ -21,7 +20,6 @@ DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runt
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/sitemap_compiler.ex:462,4570480
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:234,71D8E6C
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/page_builder/code_check.ex:301,6314ECE
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2885,74F6EEF
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1975,53AD084
 RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/page_builder/code_check.ex:370,7951CFE
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:184,6F8C77E
@@ -115,12 +113,6 @@ XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:540,4E9443A
 XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:560,53492B4
 XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:672,3E59D47
 XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:828,3F964C0
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:1662,7BEA234
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:1686,5F2F368
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2161,3381968
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2460,70EAB76
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2823,31605F2
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:3296,1737C40
 XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/components/two_factor.ex:244,4A4E93
 XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/dashboard/runtime/translation/index.html.heex:11,2CBFCB4
 XSS.SendResp: XSS in `send_resp`,lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:148,72575DB

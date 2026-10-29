@@ -144,32 +144,6 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
            ]
   end
 
-  # The builder opens a status the row lacks empty, and saving what is built there writes the entry
-  # beside the others.
-  test "the builder adds the offline page beside the row's entries", %{conn: conn, row: row} do
-    {:ok, builder, _html} = live(conn, "/admin/dashboard/runtime/builder/error-page/#{row.id}")
-    refute has_element?(builder, "#pb-status-offline")
-
-    assert {:error, {:live_redirect, %{to: to}}} =
-             builder |> element("#pb-status-add-offline") |> render_click()
-
-    {:ok, builder, _html} = live(conn, to)
-    assert has_element?(builder, "#pb-status-offline")
-
-    render_click(builder, "drop", %{
-      "template" => "<h1>Back soon</h1>",
-      "parent_id" => "root",
-      "index" => "0"
-    })
-
-    render_click(builder, "publish", %{})
-
-    assert Map.new(stored(row).error_pages, &{&1.status, &1.template}) |> Map.take([404, 500]) ==
-             %{404 => "<p>Not here</p>", 500 => "<p>Broke</p>"}
-
-    assert Enum.find(stored(row).error_pages, &(&1.status == :offline)).template =~ "Back soon"
-  end
-
   # The picker used to read its status with `String.to_integer/1`, so choosing `offline` took the
   # whole page down.
   test "the preview's error-code picker shows the offline page", %{conn: conn, row: row} do
