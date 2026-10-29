@@ -19,8 +19,8 @@ defmodule Mix.Tasks.MishkaCmsCore.Gettext.Extensions do
       mix mishka_cms_core.gettext.extensions
       mix gettext.merge priv/gettext --no-fuzzy
 
-  With no arguments it reads `../mishka_blog` and `../mishka_document`. Give the paths of the
-  extensions to read others:
+  With no arguments it reads `../mishka_blog`, `../mishka_document` and `../mishka_cms_builder`, the
+  visual editor. Give the paths of the extensions to read others:
 
       mix mishka_cms_core.gettext.extensions ../mishka_blog ../mishka_document ../my_extension
 
@@ -43,7 +43,7 @@ defmodule Mix.Tasks.MishkaCmsCore.Gettext.Extensions do
 
   alias Mix.MishkaCmsCore.GettextTemplates
 
-  @extensions ["../mishka_blog", "../mishka_document"]
+  @extensions ["../mishka_blog", "../mishka_document", "../mishka_cms_builder"]
 
   @impl Mix.Task
   def run(args) do
