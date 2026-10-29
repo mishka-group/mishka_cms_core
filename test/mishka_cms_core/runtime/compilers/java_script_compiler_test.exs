@@ -7,7 +7,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
 
   import ExUnit.CaptureLog
 
-  alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
+  alias MishkaCmsCore.Runtime.Compilers.{Helpers, JavaScriptCompiler}
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
@@ -207,7 +207,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
     # A BROKEN BUILD IS RECORDED, beside the bundle it did not replace, so the editor and the JS
     # Hooks page can say the latest change is not live; the next build that works forgets it.
     test "records a failed build, and forgets it once a build works" do
-      alias MishkaCmsCore.Runtime.Compilers.Helpers
       on_exit(fn -> Helpers.forget_asset_builds("test_site") end)
 
       assert {:ok, _js} = JavaScriptCompiler.compile_and_store("test_site")

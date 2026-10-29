@@ -201,15 +201,17 @@ defmodule MishkaCmsCore.Runtime.States.AssetsState do
   def exists?(id, type), do: :ets.member(@main_table, {id, type})
 
   @doc """
-  The `hash` of an asset without reading its (large) value — `nil` if absent.
+  The `hash` of an asset without reading its (large) value — `nil` if absent, which is also what a
+  `nil` id (the "every site" bundle of the dashboard) answers.
 
   One lookup that copies the hash alone, for the paths that run on every page render.
   """
-  @spec hash(String.t(), String.t()) :: String.t() | nil
+  @spec hash(String.t() | nil, String.t()) :: String.t() | nil
   def hash(id, type), do: :ets.lookup_element(@main_table, {id, type}, 3, nil)
 
   @doc """
-  The `updated_at` of an asset without reading its (large) value — `nil` if absent.
+  The `updated_at` of an asset without reading its (large) value — `nil` if absent, which is also
+  what a `nil` id (the "every site" bundle of the dashboard) answers.
   """
   def updated_at(id, type), do: :ets.lookup_element(@main_table, {id, type}, 4, nil)
 

@@ -508,16 +508,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # at the same moment build it once between them, not once each.
   defp shared_base do
     case AssetsState.get_value("__shared_base__", "css") do
-      nil ->
-        one_shared_base_at_a_time(fn ->
-          case AssetsState.get_value("__shared_base__", "css") do
-            nil -> build_and_store_shared_base()
-            css -> {:ok, css}
-          end
-        end)
+      nil -> one_shared_base_at_a_time(&shared_base_in_lock/0)
+      css -> {:ok, css}
+    end
+  end
 
-      css ->
-        {:ok, css}
+  defp shared_base_in_lock do
+    case AssetsState.get_value("__shared_base__", "css") do
+      nil -> build_and_store_shared_base()
+      css -> {:ok, css}
     end
   end
 

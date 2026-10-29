@@ -107,8 +107,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeMetricsCardsTest do
         {view, _html} = open(conn, url, record)
         render_time = text(view, "#runtime-preview-render-time")
 
-        assert render_time =~ "Not loaded" or render_time =~ "No renders",
-               "#{url}: #{render_time}"
+        assert render_time =~ ~r/Not loaded|No renders/, "#{url}: #{render_time}"
 
         refute render_time =~ "Loading…", "#{url}: the numbers never arrived"
       end

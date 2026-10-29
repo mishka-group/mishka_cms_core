@@ -104,8 +104,16 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.CodeFlags do
   # lead; joining a longer chain would only build a name no entry can match, and a long enough one
   # outgrows the atom table. Reading past it leaves a later line the badge it earned.
   defp named([Elixir, segment]), do: named([segment])
-  defp named([segment]) when is_atom(segment), do: Module.concat([segment])
+  defp named([segment]) when is_atom(segment), do: existing(segment)
   defp named(_segments), do: nil
+
+  # `@watched` holds atoms that exist, so a name with no atom of its own is not one of them and is
+  # left alone rather than made.
+  defp existing(segment) do
+    Module.safe_concat([segment])
+  rescue
+    ArgumentError -> nil
+  end
 
   defp label(module, fun) do
     case List.keyfind(@watched, {module, fun}, 0) do

@@ -816,6 +816,14 @@ defmodule MishkaCmsCore.Builder.PaletteEntry do
   def permitted?(template, whitelist) when is_binary(template) do
     ~r/<([A-Z][A-Za-z0-9_.]*)\./
     |> Regex.scan(template, capture: :all_but_first)
-    |> Enum.all?(fn [name] -> MapSet.member?(whitelist, Module.concat([name])) end)
+    |> Enum.all?(fn [name] -> listed?(whitelist, name) end)
+  end
+
+  # A name nobody has an atom for cannot be in the whitelist, whose members are atoms already, so a
+  # tag the author typed is refused without minting one.
+  defp listed?(whitelist, name) do
+    MapSet.member?(whitelist, Module.safe_concat([name]))
+  rescue
+    ArgumentError -> false
   end
 end

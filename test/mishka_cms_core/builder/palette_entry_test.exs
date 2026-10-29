@@ -282,6 +282,14 @@ defmodule MishkaCmsCore.Builder.PaletteEntryTest do
       refute PaletteEntry.permitted?(~s(<div><File.rm_rf /></div>), whitelist)
     end
 
+    # A name the author typed is only looked up: asking about it must not leave an atom behind.
+    test "a tag naming no module is refused without making an atom of it", %{whitelist: whitelist} do
+      name = "NoSuchRoot#{System.unique_integer([:positive])}"
+
+      refute PaletteEntry.permitted?("<#{name}.run />", whitelist)
+      assert_raise ArgumentError, fn -> String.to_existing_atom("Elixir." <> name) end
+    end
+
     test "plain markup and wrapper components are unaffected", %{whitelist: whitelist} do
       assert PaletteEntry.permitted?(~s(<div class="x"><p>hi</p></div>), whitelist)
       assert PaletteEntry.permitted?(~s(<.component component_name="card" site="a" />), whitelist)

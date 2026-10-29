@@ -190,6 +190,9 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.AssetBuildBarTest do
       view
     end
 
+    # The topics are what the row subscribed to, and nothing in the markup shows them; what they
+    # deliver is asserted from the markup below.
+    # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
     defp topics(view), do: :sys.get_state(view.pid).socket.assigns.asset_topic
 
     test "an open site row hears its bundle's build record", %{conn: conn, site: site} do
@@ -216,16 +219,21 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.AssetBuildBarTest do
     end
   end
 
+  # The document and the selection are the editor session's own state, which the markup shows only in
+  # part, so the test compares the state itself.
+  # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
+  defp assigns(view), do: :sys.get_state(view.pid).socket.assigns
+
   # THE BAR TAKES NOTHING FROM THE AUTHOR. It is drawn and dropped around the document without
   # touching it.
   test "leaves the document and the selection as they were", %{conn: conn, page: page, site: site} do
     {:ok, view, _html} = open_builder(conn, page)
-    before = :sys.get_state(view.pid).socket.assigns
+    before = assigns(view)
 
     :ok = Helpers.record_asset_build(site.name, "css", {:error, "broke", :last_good})
     assert has_element?(view, @bar)
 
-    now = :sys.get_state(view.pid).socket.assigns
+    now = assigns(view)
 
     for key <- [:tree, :selection, :dirty?, :stage, :token],
         do: assert(Map.get(now, key) == Map.get(before, key), "#{key} changed")
