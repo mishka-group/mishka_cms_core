@@ -12,17 +12,19 @@ defmodule MishkaCmsCore.BuilderLiveCase do
 
   The tests live in `test/mishka_cms_core_web/live/builder_live/`, one module per topic, so a
   partitioned run spreads them. `use MishkaCmsCore.BuilderLiveCase` gives each of them
-  `MishkaCmsCore.ConnCase`, the shared imports, aliases and module attributes, and a setup that
-  signs `boss@example.com` in as a `*` admin of a cached `localhost` master site with one page —
-  `%{conn: conn, site: site, page: page}`. The helpers below are imported into every one of them.
+  `MishkaCmsCore.ConnCase`, the shared imports, aliases and module attributes, and
+  `MishkaCmsCore.Test.Admin.serve_localhost!/1` as its setup: `boss@example.com` signed in as a `*`
+  admin of a cached `localhost` master site with one page — `%{conn: conn, site: site, page: page}`.
+  The editor's helpers below and the admin ones of `MishkaCmsCore.Test.Admin` (admins, signed-in
+  connections, flashes) are imported into every one of them.
   """
   use ExUnit.CaseTemplate
 
   import Phoenix.LiveViewTest
   import Phoenix.ConnTest
   import MishkaCmsCore.Test.Factory
+  import MishkaCmsCore.Test.Admin
 
-  alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.PageBuilder.EditorSession
   alias MishkaCmsCore.Runtime.PageBuilder.ElementCss
   alias MishkaCmsCore.Runtime.PageBuilder.PageForms
@@ -30,7 +32,6 @@ defmodule MishkaCmsCore.BuilderLiveCase do
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Serializer
   alias MishkaCmsCore.Runtime.PageBuilder.Tree.Styles
-  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.Plugins.BuilderBlockPlugin, as: BlockPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderPageStarterPlugin, as: PageStarterPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderFormCreatedProbe, as: FormCreatedProbe
@@ -42,9 +43,8 @@ defmodule MishkaCmsCore.BuilderLiveCase do
 
   require Ash.Query
 
-  @endpoint MishkaCmsCore.TestEndpoint
-
-  @password "Password123!"
+  # The configured endpoint, as `MishkaCmsCore.ConnCase` gives the test modules: `live/2` reads it.
+  @endpoint Application.compile_env!(:mishka_cms_core, :endpoint)
 
   # Two forms, each with its field and Send button in a column of a grid in a card: Phoenix's own
   # `<.form>`, and Chelekom's Form Wrapper wired as a page form.
@@ -58,6 +58,7 @@ defmodule MishkaCmsCore.BuilderLiveCase do
 
       import Phoenix.LiveViewTest
       import MishkaCmsCore.Test.Factory
+      import MishkaCmsCore.Test.Admin
       import MishkaCmsCore.BuilderLiveCase
 
       alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
@@ -124,113 +125,8 @@ defmodule MishkaCmsCore.BuilderLiveCase do
       @click_source ~S|JS.toggle_class("is-open", to: ".pb-1")|
       @condition_source "assigns[:current_user]"
 
-      setup %{conn: conn} do
-        SiteState.clear()
-        Application.put_env(:ash_json_api, MishkaCmsCore.Accounts, router: MishkaCmsWeb.Router)
-
-        site = create_site!(name: "localhost", host: "localhost", active: true, master: true)
-        cache_site(site)
-        :persistent_term.put(:mishka_installed, true)
-
-        page = create_page!(site_id: site.id, template: @template)
-
-        # `SiteState` is process-global ETS, not sandboxed, so a cached site outlives this test's
-        # transaction. Leaving "localhost" behind breaks any sibling that asserts a host does NOT
-        # resolve — which is exactly how it broke ApiTenantLookupPlugTest.
-        on_exit(fn ->
-          :persistent_term.erase(:mishka_installed)
-          SiteState.clear()
-        end)
-
-        conn =
-          conn
-          |> Map.put(:host, "localhost")
-          |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
-
-        {:ok, conn: log_in(conn, create_admin("boss@example.com")), site: site, page: page}
-      end
+      setup context, do: serve_localhost!(Map.put(context, :template, @template))
     end
-  end
-
-  @doc false
-  def cache_site(site) do
-    SiteState.save(%{
-      id: site.id,
-      name: site.name,
-      host: site.host,
-      priority: site.priority,
-      active: site.active,
-      master: site.master
-    })
-  end
-
-  @doc false
-  def permission!(name) do
-    case Permission |> Ash.Query.filter(name == ^name) |> Ash.read_one(authorize?: false) do
-      {:ok, nil} ->
-        Permission
-        |> Ash.Changeset.for_create(:create, %{name: name}, authorize?: false)
-        |> Ash.create!()
-
-      {:ok, permission} ->
-        permission
-    end
-  end
-
-  @doc false
-  def create_admin(email, site_id \\ nil, permissions \\ ["*"]) do
-    {:ok, user} =
-      User
-      |> Ash.Changeset.for_create(
-        :register_with_password,
-        %{email: email, password: @password, password_confirmation: @password},
-        authorize?: false
-      )
-      |> then(&if(site_id, do: Ash.Changeset.set_tenant(&1, site_id), else: &1))
-      |> Ash.create()
-
-    for permission <- permissions do
-      UserPermission
-      |> Ash.Changeset.for_create(:assign, %{}, authorize?: false)
-      |> Ash.Changeset.force_change_attribute(:user_id, user.id)
-      |> Ash.Changeset.force_change_attribute(:permission_id, permission!(permission).id)
-      |> Ash.create!(authorize?: false)
-    end
-
-    user
-  end
-
-  # A REAL USER WITH NOTHING GRANTED. `create_admin/2` assigns `*`, which passes every policy in
-  # the CMS; what is wanted here is an actor the resource has no reason to allow.
-  @doc false
-  def create_user_without_permissions(email) do
-    {:ok, user} =
-      User
-      |> Ash.Changeset.for_create(
-        :register_with_password,
-        %{email: email, password: @password, password_confirmation: @password},
-        authorize?: false
-      )
-      |> Ash.create()
-
-    user
-  end
-
-  # A fresh conn on a site's own address, the test host unless told — the setup's conn is already
-  # signed in as the master.
-  @doc false
-  def build_conn_for_host(host \\ "localhost") do
-    Phoenix.ConnTest.build_conn()
-    |> Map.put(:host, host)
-    |> Map.update!(:req_headers, &[{"host", host} | List.keydelete(&1, "host", 0)])
-  end
-
-  @doc false
-  def log_in(conn, user) do
-    conn
-    |> Plug.Test.init_test_session(%{})
-    |> Plug.Conn.put_session(:master_mode, true)
-    |> AshAuthentication.Plug.Helpers.store_in_session(user)
   end
 
   # Save moved off the top bar into the ••• menu when the header was matched to the prototype: the
@@ -356,19 +252,7 @@ defmodule MishkaCmsCore.BuilderLiveCase do
 
   # A plugin registered for the length of one test, exactly as an extension registers one.
   @doc false
-  def register_plugin(module, event) do
-    {:ok, _} =
-      MishkaInstaller.Event.Event.write(%{
-        name: module,
-        event: event,
-        extension: :mishka_installer,
-        status: :started
-      })
-
-    :ok = MishkaInstaller.Event.EventHandler.do_compile(event, :start, false)
-
-    on_exit(fn -> MishkaInstaller.Event.Event.unregister(:name, module, false) end)
-  end
+  def register_plugin(module, event), do: MishkaCmsCore.Test.Installer.register!(module, event)
 
   # The resume bar is computed once, at mount, and only for a session that has no draft of its own —
   # so the work has to be left behind by a session that is then closed.
@@ -697,27 +581,6 @@ defmodule MishkaCmsCore.BuilderLiveCase do
   @doc false
   def node_count(view), do: view |> editor() |> Map.fetch!(:tree) |> Tree.walk() |> length()
 
-  # WHATEVER IS ON SCREEN, both notices at once: a flash is the only place a refused command speaks
-  # to the author, and which of the two it picks is not the point of the assertions below. The tags
-  # come off first — Tailwind writes `hover:bg-white` into the class list, which reads exactly like
-  # an inspected atom to anything looking for one.
-  @doc false
-  def flashes(view) do
-    ["#flash-info", "#flash-error"]
-    |> Enum.filter(&has_element?(view, &1))
-    |> Enum.map_join(" ", &(view |> element(&1) |> render() |> String.replace(~r/<[^>]*>/, "")))
-    |> String.trim()
-  end
-
-  # A flash is set, never unset: nothing on the server clears one, and the hook that pushes
-  # `lv:clear-flash` after the fade does not run here — so a stale sentence would answer for the
-  # next command and hide a handler that went silent.
-  @doc false
-  def clear_flashes(view) do
-    for key <- ~w(info error), do: render_click(view, "lv:clear-flash", %{"key" => key})
-    view
-  end
-
   # AN INSPECTED TERM WHERE A SENTENCE BELONGS: a map, a tuple, or a bare atom reason. Every one of
   # them is an internal the author has no word for, and all three read the same way in a flash.
   @doc false
@@ -841,14 +704,6 @@ defmodule MishkaCmsCore.BuilderLiveCase do
   @doc false
   def indexed(entries),
     do: entries |> Enum.with_index() |> Map.new(fn {entry, i} -> {to_string(i), entry} end)
-
-  @doc false
-  def narrow_conn(site, permissions) do
-    admin =
-      create_admin("n#{System.unique_integer([:positive])}@example.com", site.id, permissions)
-
-    log_in(build_conn_for_host(), admin)
-  end
 
   # THE FIVE SHAPES A CONTROL COMES IN. A field in a form, the picture row an enumerated layout
   # property gets, the styled-label pills the typographic ones get, a cell in the spacing box, and
