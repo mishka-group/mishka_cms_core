@@ -60,6 +60,11 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasCssRefreshTest do
 
   defp href(id, hash), do: "/assets/css/#{id}/#{hash}.css"
 
+  # The document, the selection and the locks are the frame's own state, which the markup shows only
+  # in part, so the test compares the state itself.
+  # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
+  defp assigns(canvas), do: :sys.get_state(canvas.pid).socket.assigns
+
   describe "a frame that links its bundle" do
     setup %{conn: conn, page: page} do
       bundle!(@shared, @a)
@@ -168,13 +173,13 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasCssRefreshTest do
     # THE AUTHOR'S WORK STAYS PUT. Only the stylesheet moves: no remount, no reload of the frame, the
     # document and the selection exactly as they were.
     test "touches nothing but the CSS", %{canvas: canvas, site: site} do
-      before = :sys.get_state(canvas.pid).socket.assigns
+      before = assigns(canvas)
 
       bundle!(@shared, @b)
       rebuilt(site.name)
       _ = render(canvas)
 
-      now = :sys.get_state(canvas.pid).socket.assigns
+      now = assigns(canvas)
 
       for key <- [:tree, :selection, :locked, :hidden, :pinned, :revision, :element_css],
           do: assert(Map.get(now, key) == Map.get(before, key), "#{key} changed")
@@ -184,7 +189,7 @@ defmodule MishkaCmsCoreWeb.Test.BuilderLive.CanvasCssRefreshTest do
 
     test "a frame whose session is gone ignores the rebuild", %{canvas: canvas, site: site} do
       assert_push_event(canvas, "mishka:css-updated", _connect)
-      EditorSession.close(:sys.get_state(canvas.pid).socket.assigns.token)
+      EditorSession.close(assigns(canvas).token)
 
       bundle!(@shared, @b)
       rebuilt(site.name)

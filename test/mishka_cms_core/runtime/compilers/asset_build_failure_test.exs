@@ -24,6 +24,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.AssetBuildFailureTest do
 
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, TailwindCompiler}
   alias MishkaCmsCore.Runtime.Handlers.{BootHandler, SiteRuntime}
+  alias MishkaCmsCore.Runtime.Resources.Changes.SendToOban
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Runtime.Stylesheet
 
@@ -229,8 +230,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.AssetBuildFailureTest do
 
     # The shared base scans the global hooks' templates, so a global hook's job writes them first.
     test "a global hook's classes reach the shared base its job rebuilds" do
-      alias MishkaCmsCore.Runtime.Resources.Changes.SendToOban
-
       Application.put_env(:mishka_cms_core, :env_test?, false)
       on_exit(fn -> Application.put_env(:mishka_cms_core, :env_test?, true) end)
 

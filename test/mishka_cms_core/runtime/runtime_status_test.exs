@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
 
   import Ecto.Query
 
+  alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.RuntimeStatus
   alias MishkaCmsCore.Runtime.States.CompileFailureState
@@ -148,8 +149,6 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatusTest do
   # THE ROW'S OWN JOB SUCCEEDS EITHER WAY. A stylesheet or hook row only queues its bundle, so its
   # status said `Live` while the bundle's build failed and the site went on serving the last one.
   describe "an asset-backed record whose bundle did not build" do
-    alias MishkaCmsCore.Runtime.Compilers.Helpers
-
     setup do
       site = create_site!(name: "abf-status-#{System.unique_integer([:positive])}")
 

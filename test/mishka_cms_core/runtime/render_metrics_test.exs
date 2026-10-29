@@ -17,9 +17,11 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
 
   import Phoenix.LiveViewTest
 
-  alias MishkaCmsCore.Runtime.{LiveViewHelpers, RenderMetrics, Translations}
+  alias MishkaCmsCore.Runtime.{Component, LiveViewHelpers, RenderMetrics, Translations}
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
+  alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
 
   @moduletag :integration
   @endpoint MishkaCmsCore.TestEndpoint
@@ -290,10 +292,6 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsTest do
   end
 
   describe "the component card" do
-    alias MishkaCmsCore.Runtime.Component
-    alias MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal
-    alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
-
     defp card(record_attrs, metrics) do
       record =
         struct(
