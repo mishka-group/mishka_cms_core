@@ -164,6 +164,23 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewModalRenderTest do
     test "it asks first, in the words the builder's own draft list uses" do
       assert render_strip() =~ "Delete the draft “Middle”? This cannot be undone."
     end
+
+    # THE EDITOR'S ADDRESS IS WHATEVER THE EDITOR ANSWERED on `runtime:document:editor_url`; the
+    # modal only adds the selected draft to it, after a `?` or an `&` as the address needs, so the
+    # editor opens that draft rather than the newest. With none selected the address is untouched.
+    test "the editor link carries the selected draft, joined onto the address it was given" do
+      selected = draft("d-2", "Middle", 25)
+
+      for {url, draft, href} <- [
+            {"/editor/page/rec-page", selected, "/editor/page/rec-page?draft_id=d-2"},
+            {"/editor/page/rec-page?site_id=site-9", selected,
+             "/editor/page/rec-page?site_id=site-9&amp;draft_id=d-2"},
+            {"/editor/page/rec-page", nil, "/editor/page/rec-page"}
+          ] do
+        assert render_strip(%{visual_editor_url: url, draft: draft}) =~ ~s(href="#{href}"),
+               "#{url} with #{inspect(draft && draft.id)} did not link to #{href}"
+      end
+    end
   end
 
   # The modal is drawn by six tables and the button by one. What decides it is the state the helper
