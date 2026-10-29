@@ -150,8 +150,13 @@ defmodule MishkaCmsCore.CoreComponents do
   means then: the editor asks for the two or three things a record cannot exist without and then
   shows the structure chooser. The long form — every field the resource declares — is still one
   click away under the caret, for the times somebody wants to fill it in. With no editor installed
-  `navigate` is `nil` and the main half opens the create modal itself, pushing `event` first when
-  one is given, as an `:event` way does.
+  `href` is `nil` and the main half opens the create modal itself, pushing `event` first when one
+  is given, as an `:event` way does.
+
+  The editor is a document of its own — an `:admin_standalone` route, see
+  `MishkaCmsCore.ExtensionRouter` — so the main half is a plain link and arriving is one page load.
+  A `navigate` link would ask LiveView for a live navigation it refuses across that boundary: it
+  logs the refusal on both ends and only then loads the page.
 
   The menu is markup, shown by a JS command: nothing behind it needs the server, and a round trip to
   open a two-item list would be a round trip that changes nothing. Each item closes it, because a
@@ -162,7 +167,7 @@ defmodule MishkaCmsCore.CoreComponents do
       <.create_menu
         id="add-page"
         label="+ Add Page"
-        navigate={@editor_url}
+        href={@editor_url}
         modal="page-form-modal"
       >
         <:way id="pb-create-form-page" label="Create with the full form" modal>
@@ -187,13 +192,13 @@ defmodule MishkaCmsCore.CoreComponents do
   attr :id, :string, required: true
   attr :label, :string, required: true
 
-  attr :navigate, :string,
+  attr :href, :string,
     default: nil,
-    doc: "where the main half goes — the visual editor; `nil` opens the modal instead"
+    doc: "where the main half goes — the editor, by a page load; `nil` opens the modal instead"
 
   attr :event, :string,
     default: nil,
-    doc: "with no `navigate`, an event this page handles before the main half opens the modal"
+    doc: "with no `href`, an event this page handles before the main half opens the modal"
 
   attr :modal, :string, required: true, doc: "the create modal the caret's items can open"
 
@@ -211,15 +216,15 @@ defmodule MishkaCmsCore.CoreComponents do
     ~H"""
     <div class="relative flex w-fit" phx-click-away={JS.hide(to: "##{@menu}")}>
       <.button
-        :if={@navigate}
+        :if={@href}
         id={@id <> "-main"}
-        navigate={@navigate}
+        href={@href}
         class={create_menu_class(:main)}
       >
         {@label}
       </.button>
       <.button
-        :if={!@navigate}
+        :if={!@href}
         id={@id <> "-main"}
         type="button"
         phx-click={open_create(@event, @modal)}

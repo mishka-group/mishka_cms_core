@@ -86,12 +86,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
   @impl true
   # THE EDITOR IS ASKED AGAIN, NOT REMEMBERED from mount: it answers with the new record's own
   # address, and an editor gone since the menu was drawn leaves the plain create behind.
+  # A redirect rather than a live navigation, for the reason the menu's main half is a plain link.
   def handle_info({:form_saved, :create, result}, %{assigns: %{open_builder?: true}} = socket) do
     socket = assign(socket, :open_builder?, false)
 
     case Section.editor_url("component", result.id) do
       nil -> {:noreply, created(socket)}
-      url -> {:noreply, push_navigate(socket, to: url)}
+      url -> {:noreply, redirect(socket, to: url)}
     end
   end
 

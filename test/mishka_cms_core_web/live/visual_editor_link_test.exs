@@ -119,4 +119,55 @@ defmodule MishkaCmsCoreWeb.Live.VisualEditorLinkTest do
 
     assert html =~ ~s(href="/probe-editor/layout/#{record.id}?site_id=#{site.id}")
   end
+
+  # THE EDITOR IS A DOCUMENT OF ITS OWN. An editor routes its pages in `:admin_standalone`, a
+  # `live_session` of their own (`MishkaCmsCore.ExtensionRouter`), and LiveView refuses a live
+  # navigation across that boundary: the list asked the server to mount the editor inside its own
+  # document, the server logged "navigate event … redirecting across live_sessions", the client
+  # logged "unauthorized live_redirect" and only then loaded the page. Every way in is therefore a
+  # plain link or a redirect — one page load, and nothing for the console to report.
+  @lists [
+    {"page", "/admin/dashboard/runtime/pages", "add-page"},
+    {"layout", "/admin/dashboard/runtime/layouts", "add-layout"},
+    {"component", "/admin/dashboard/runtime/components", "add-component"},
+    {"error-page", "/admin/dashboard/runtime/error-pages", "add-error_page"}
+  ]
+
+  # `[]` when the anchor is a plain link; `["redirect"]` when LiveView would try to navigate live.
+  defp live_link(html, href) do
+    html
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s(a[href="#{href}"]))
+    |> tap(&refute(Enum.empty?(&1), "no link to #{href}"))
+    |> LazyHTML.attribute("data-phx-link")
+  end
+
+  describe "the way into the editor" do
+    for {section, path, menu} <- @lists do
+      test "is a page load from the #{section} list's + Add", %{master_conn: conn} do
+        {:ok, view, _html} = live(conn, unquote(path))
+        main = view |> element("##{unquote(menu)}-main") |> render()
+
+        assert live_link(main, "/probe-editor/#{unquote(section)}/") == []
+      end
+
+      test "is a redirect once the #{section} list's form has saved", %{master_conn: conn} do
+        {:ok, view, _html} = live(conn, unquote(path))
+        render_click(view, "create_and_open", %{})
+
+        watch = Process.monitor(view.pid)
+        send(view.pid, {:form_saved, :create, %{id: "made"}})
+
+        assert_receive {:DOWN, ^watch, :process, _pid, {:shutdown, {kind, %{to: to}}}}
+        assert {kind, to} == {:redirect, "/probe-editor/#{unquote(section)}/made"}
+      end
+    end
+
+    test "is a page load from the inspector's Visual Editor", %{master_conn: conn} do
+      record = record!(:layout, nil)
+      html = inspector(conn, :layout, record)
+
+      assert live_link(html, "/probe-editor/layout/#{record.id}") == []
+    end
+  end
 end

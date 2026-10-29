@@ -182,10 +182,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
               leaving for the builder used to forget it — the editor read the drafts table for
               itself and offered whichever was newest, so picking the second badge and clicking
               through landed on an offer to carry on with the first. The id rides in the URL and the
-              editor offers THAT one. --%>
+              editor offers THAT one. A plain link, because the editor is a document of its own: see
+              `MishkaCmsCore.CoreComponents.create_menu/1`. --%>
         <.link
           :if={@visual_editor_url}
-          navigate={builder_url(@visual_editor_url, @draft)}
+          href={builder_url(@visual_editor_url, @draft)}
           class="inline-flex h-9 items-center gap-[7px] rounded-[10px] border border-[#ecebe6] bg-white px-[13px] text-[12px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3]"
         >
           <.icon name="hero-paint-brush" class="size-4 text-[#5b57d6]" /> {gettext("Visual Editor")}
