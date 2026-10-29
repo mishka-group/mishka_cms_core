@@ -133,6 +133,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
       |> assign(:metrics, p.metrics)
       |> assign(:current_user, p.current_user)
       |> assign(:form_record_id, p.form_record_id)
+      # What a create made for the visual editor leaves off the form, and what it saves instead
+      # (`PreviewHelpers.open_new/2`). Read with defaults: a preview map built before these keys
+      # existed is an ordinary form.
+      |> assign(:form_hidden, Map.get(p, :form_hidden, []))
+      |> assign(:form_defaults, Map.get(p, :form_defaults))
       |> assign(:form_id, p.resource && MishkaGervaz.Resource.Info.Form.component_id(p.resource))
       |> assign(:title, title_for(p))
       |> assign(:tabs, tabs_for(p.resource, p.code_visible?, p.has_config?))
@@ -402,6 +407,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             resource={@resource}
             current_user={@current_user}
             record_id={@form_record_id}
+            hidden_fields={@form_hidden}
+            defaults={@form_defaults}
           />
         </div>
       </div>

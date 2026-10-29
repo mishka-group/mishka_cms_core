@@ -297,7 +297,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     duplicable?: false,
     duplicating?: false,
     writable?: false,
-    metrics: nil
+    metrics: nil,
+    form_hidden: [],
+    form_defaults: nil
   }
 
   @doc "The shared modal DOM id (used by the gervaz show/hide JS)."
@@ -407,17 +409,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @doc """
   Open the modal on an empty Configuration form to ADD a record (the page's + button) — for a writer
   of the resource; anyone else is told what it needs.
+
+  `for_editor: true` is the "fill in the form, then open the editor" way. A document headed for the
+  visual editor goes live when it is published there, the way one named in the editor's own first
+  step does: so this form does not offer the Active switch, and the record is saved inactive. Without
+  it the form's Active box arrived ticked (the resource's default) and the page was live, still
+  empty, while its author built it in drafts.
   """
-  def open_new(socket) do
+  def open_new(socket, opts \\ []) do
     config = socket.assigns.runtime_status_opts
 
     case writable?(config.resource, socket.assigns.current_user) do
-      true -> open_blank(socket, config)
+      true -> open_blank(socket, config, Keyword.get(opts, :for_editor, false))
       false -> put_flash(socket, :error, refusal(config.resource))
     end
   end
 
-  defp open_blank(socket, config) do
+  defp open_blank(socket, config, for_editor?) do
     socket
     |> assign(:preview, %{
       @empty
@@ -426,7 +434,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         current_user: socket.assigns.current_user,
         form_record_id: nil,
         has_config?: configurable?(config.resource, socket.assigns.current_user),
-        config_mounted?: true
+        config_mounted?: true,
+        form_hidden: (for_editor? && [:active]) || [],
+        form_defaults: (for_editor? && %{"active" => false}) || nil
     })
     |> exec_modal_js(&MishkaCmsCore.CoreComponents.show_modal/1)
   end

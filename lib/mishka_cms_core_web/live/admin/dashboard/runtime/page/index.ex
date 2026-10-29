@@ -12,10 +12,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   up in the visual editor with a new page:
 
     * **Fill in the details, then open the editor** — pressing it records the intent in
-      `open_builder?` and opens the ordinary modal. The save that follows is the ordinary save; the
-      guarded `{:form_saved, :create, result}` clause below turns it into a redirect. The question is
-      asked where the reader is choosing how to make one, not at the bottom of a modal they have
-      already committed to.
+      `open_builder?` and opens the ordinary modal, less its Active switch: the record is saved
+      inactive, as one the editor makes itself is, because Publish there is what puts it live
+      (`PreviewHelpers.open_new/2`). The guarded `{:form_saved, :create, result}` clause below turns
+      the save into a redirect. The question is asked where the reader is choosing how to make one,
+      not at the bottom of a modal they have already committed to.
     * **Create empty & open editor** — the button's main half, a plain link to the editor's address
       for a new page. It LEAVES without opening the modal at all, so none of this form's validations
       fire on a form the reader has just said they do not want to fill in; the editor asks for the
@@ -188,7 +189,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   # save arrives. It used to ride the form as a hidden param on a second submit button, which put the
   # question at the bottom of a modal the reader had already committed to.
   def handle_event("create_and_open", _params, socket) do
-    {:noreply, socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new()}
+    {:noreply,
+     socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new(for_editor: true)}
   end
 
   @impl true

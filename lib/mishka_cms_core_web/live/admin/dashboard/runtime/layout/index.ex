@@ -146,7 +146,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
   # save arrives. It used to ride the form as a hidden param on a second submit button, which put the
   # question at the bottom of a modal the reader had already committed to.
   def handle_event("create_and_open", _params, socket) do
-    {:noreply, socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new()}
+    {:noreply,
+     socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new(for_editor: true)}
   end
 
   @impl true
