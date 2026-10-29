@@ -405,9 +405,12 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteWithGlobalsScopeTest do
       |> Enum.any?(&(applies_to_reads?(&1) and masters_only_by_identity?(&1)))
     end
 
+    # Every configured domain, not only `MishkaCmsCore.Runtime`: a resource of another domain — the
+    # visual editor's notes and snippets — reads through the same preparation.
     test "is held by a policy on the actor when it runs" do
       scoped =
-        for resource <- Ash.Domain.Info.resources(MishkaCmsCore.Runtime),
+        for domain <- Application.fetch_env!(:mishka_cms_core, :ash_domains),
+            resource <- Ash.Domain.Info.resources(domain),
             action <- Ash.Resource.Info.actions(resource),
             action.type == :read,
             Enum.any?(action.preparations, &site_with_globals?/1),

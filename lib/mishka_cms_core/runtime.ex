@@ -522,27 +522,5 @@ defmodule MishkaCmsCore.Runtime do
 
     resource MishkaCmsCore.Runtime.Redirect do
     end
-
-    resource MishkaCmsCore.Runtime.Snippet do
-    end
-
-    resource MishkaCmsCore.Runtime.PageBuilderEvent do
-    end
-
-    resource MishkaCmsCore.Runtime.PageBuilderSnapshot do
-    end
-
-    resource MishkaCmsCore.Runtime.PageComment do
-    end
-
-    # A resource with no data layer: the Studio's Design tokens tab, whose rows are parsed out of the
-    # site's stylesheets and handed to `Ash.DataLayer.Simple` by the table's own `on_load` hook.
-    resource MishkaCmsCore.Runtime.PageBuilder.DesignToken do
-    end
-
-    # Another: the SEO a page or a layout stores, as the builder's settings modal edits it — read
-    # from the document and written back through the document's own action.
-    resource MishkaCmsCore.Runtime.PageBuilder.SeoSettings do
-    end
   end
 end

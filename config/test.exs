@@ -26,7 +26,8 @@ config :mishka_cms_core,
     MishkaCmsCore.Runtime,
     MishkaCmsCore.Accounts,
     MishkaCmsCore.Notify,
-    MishkaCmsCore.Mail
+    MishkaCmsCore.Mail,
+    MishkaCmsCore.Runtime.PageBuilder.Domain
   ]
 
 config :mishka_cms_core, MishkaCmsCore.TestEndpoint,

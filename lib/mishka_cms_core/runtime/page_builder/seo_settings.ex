@@ -49,7 +49,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.SeoSettings do
 
   use Ash.Resource,
     otp_app: :mishka_cms_core,
-    domain: MishkaCmsCore.Runtime,
+    domain: MishkaCmsCore.Runtime.PageBuilder.Domain,
     extensions: [MishkaGervaz.Resource]
 
   use Gettext, backend: MishkaCmsCore.Gettext

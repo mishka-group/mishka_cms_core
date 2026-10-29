@@ -48,7 +48,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilderEvent do
 
   use Ash.Resource,
     otp_app: :mishka_cms_core,
-    domain: MishkaCmsCore.Runtime,
+    domain: MishkaCmsCore.Runtime.PageBuilder.Domain,
     data_layer: AshPostgres.DataLayer,
     extensions: [MishkaGervaz.Resource],
     authorizers: [Ash.Policy.Authorizer]

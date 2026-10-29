@@ -28,7 +28,7 @@ defmodule MishkaCmsCore.Runtime.Snippet do
 
   use Ash.Resource,
     otp_app: :mishka_cms_core,
-    domain: MishkaCmsCore.Runtime,
+    domain: MishkaCmsCore.Runtime.PageBuilder.Domain,
     data_layer: AshPostgres.DataLayer,
     extensions: [MishkaGervaz.Resource],
     notifiers: [Ash.Notifier.PubSub, MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook],

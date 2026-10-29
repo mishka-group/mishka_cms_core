@@ -33,7 +33,7 @@ defmodule MishkaCmsCore.Runtime.PageBuilder.DesignToken do
 
   use Ash.Resource,
     otp_app: :mishka_cms_core,
-    domain: MishkaCmsCore.Runtime,
+    domain: MishkaCmsCore.Runtime.PageBuilder.Domain,
     extensions: [MishkaGervaz.Resource],
     authorizers: [Ash.Policy.Authorizer]
 
