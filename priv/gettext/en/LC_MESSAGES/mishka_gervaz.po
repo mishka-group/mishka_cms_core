@@ -219,7 +219,7 @@ msgstr ""
 msgid "Add this code under Settings → Languages as well, or its URL answers 404."
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:194
+#: lib/mishka_cms_core/notify/notification.ex:200
 #, elixir-autogen, elixir-format
 msgid "All"
 msgstr ""
@@ -387,7 +387,7 @@ msgstr ""
 msgid "Date"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:234
+#: lib/mishka_cms_core/notify/notification.ex:240
 #: lib/mishka_cms_core/runtime/resources/component.ex:601
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:558
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:165
@@ -707,7 +707,7 @@ msgid "Live component"
 msgstr ""
 
 #: lib/mishka_cms_core/mail/delivery.ex:174
-#: lib/mishka_cms_core/notify/notification.ex:261
+#: lib/mishka_cms_core/notify/notification.ex:267
 #, elixir-autogen, elixir-format
 msgid "Load more"
 msgstr ""
@@ -992,7 +992,7 @@ msgid "Select site..."
 msgstr ""
 
 #: lib/mishka_cms_core/activity/activity_entry.ex:174
-#: lib/mishka_cms_core/notify/notification.ex:177
+#: lib/mishka_cms_core/notify/notification.ex:183
 #, elixir-autogen, elixir-format
 msgid "Severity"
 msgstr ""
@@ -1044,7 +1044,7 @@ msgid "Source"
 msgstr ""
 
 #: lib/mishka_cms_core/mail/delivery.ex:95
-#: lib/mishka_cms_core/notify/notification.ex:195
+#: lib/mishka_cms_core/notify/notification.ex:201
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:779
 #: lib/mishka_cms_core/runtime/resources/redirect.ex:159
 #: lib/mishka_cms_core/runtime/resources/site.ex:329
@@ -1377,7 +1377,7 @@ msgid "All resources"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/activity_entry.ex:173
-#: lib/mishka_cms_core/notify/notification.ex:176
+#: lib/mishka_cms_core/notify/notification.ex:182
 #, elixir-autogen, elixir-format
 msgid "All severities"
 msgstr ""
@@ -1565,7 +1565,7 @@ msgstr ""
 msgid "Delete permanently"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:251
+#: lib/mishka_cms_core/notify/notification.ex:257
 #, elixir-autogen, elixir-format
 msgid "Delete selected notifications?"
 msgstr ""
@@ -1620,7 +1620,7 @@ msgid "Drafts"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/activity_entry.ex:168
-#: lib/mishka_cms_core/notify/notification.ex:171
+#: lib/mishka_cms_core/notify/notification.ex:177
 #, elixir-autogen, elixir-format
 msgid "Error"
 msgstr ""
@@ -1696,7 +1696,7 @@ msgid "Inactive"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/activity_entry.ex:166
-#: lib/mishka_cms_core/notify/notification.ex:168
+#: lib/mishka_cms_core/notify/notification.ex:174
 #, elixir-autogen, elixir-format
 msgid "Info"
 msgstr ""
@@ -1732,7 +1732,7 @@ msgstr ""
 msgid "Load more events"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:207
+#: lib/mishka_cms_core/notify/notification.ex:213
 #, elixir-autogen, elixir-format
 msgid "Mark read"
 msgstr ""
@@ -1748,7 +1748,7 @@ msgstr ""
 msgid "Media"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:149
+#: lib/mishka_cms_core/notify/notification.ex:155
 #, elixir-autogen, elixir-format
 msgid "Message"
 msgstr ""
@@ -1953,18 +1953,18 @@ msgstr ""
 msgid "Pricing"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:189
-#: lib/mishka_cms_core/notify/notification.ex:222
+#: lib/mishka_cms_core/notify/notification.ex:195
+#: lib/mishka_cms_core/notify/notification.ex:228
 #, elixir-autogen, elixir-format
 msgid "Read"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:154
+#: lib/mishka_cms_core/notify/notification.ex:160
 #, elixir-autogen, elixir-format
 msgid "Received"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:231
+#: lib/mishka_cms_core/notify/notification.ex:237
 #, elixir-autogen, elixir-format
 msgid "Remove this notification?"
 msgstr ""
@@ -2156,12 +2156,12 @@ msgstr ""
 msgid "Select type..."
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:262
+#: lib/mishka_cms_core/notify/notification.ex:268
 #, elixir-autogen, elixir-format
 msgid "Showing {count} notifications"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:169
+#: lib/mishka_cms_core/notify/notification.ex:175
 #, elixir-autogen, elixir-format
 msgid "Success"
 msgstr ""
@@ -2182,7 +2182,7 @@ msgstr ""
 msgid "The page builder's draft picker"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:188
+#: lib/mishka_cms_core/notify/notification.ex:194
 #, elixir-autogen, elixir-format
 msgid "Unread"
 msgstr ""
@@ -2193,7 +2193,7 @@ msgid "Video"
 msgstr ""
 
 #: lib/mishka_cms_core/activity/activity_entry.ex:167
-#: lib/mishka_cms_core/notify/notification.ex:170
+#: lib/mishka_cms_core/notify/notification.ex:176
 #, elixir-autogen, elixir-format
 msgid "Warning"
 msgstr ""
@@ -2214,7 +2214,7 @@ msgstr ""
 msgid "Wrapper template"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:272
+#: lib/mishka_cms_core/notify/notification.ex:278
 #, elixir-autogen, elixir-format
 msgid "You have no notifications."
 msgstr ""
@@ -5308,7 +5308,7 @@ msgstr ""
 msgid "Other"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:59
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:60
 #: ../mishka_document/lib/mishka_document/resources/section_draft.ex:1041
 #, elixir-autogen, elixir-format
 msgid "Review"
@@ -5332,13 +5332,13 @@ msgstr ""
 msgid "Asked"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:377
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:513
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:383
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:538
 #, elixir-autogen, elixir-format
 msgid "Assistant"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:388
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:394
 #, elixir-autogen, elixir-format
 msgid "Assistant · annotated by %{who}"
 msgstr ""
@@ -5413,7 +5413,7 @@ msgstr ""
 msgid "No snippets saved yet"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:65
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:66
 #, elixir-autogen, elixir-format
 msgid "Notes left on this document"
 msgstr ""
@@ -5421,11 +5421,6 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:297
 #, elixir-autogen, elixir-format
 msgid "Nothing yet"
-msgstr ""
-
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:357
-#, elixir-autogen, elixir-format
-msgid "Older than this page keeps documents for. The change is recorded; it can no longer be restored."
 msgstr ""
 
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:125
@@ -5476,11 +5471,6 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:119
 #, elixir-autogen, elixir-format
 msgid "Shared"
-msgstr ""
-
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:346
-#, elixir-autogen, elixir-format
-msgid "Snapshot dropped"
 msgstr ""
 
 #: ../mishka_cms_builder/lib/mishka_cms_builder/design_token.ex:103
@@ -5538,7 +5528,7 @@ msgstr ""
 msgid "Too large to restore"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:474
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:499
 #, elixir-autogen, elixir-format
 msgid "bug"
 msgstr ""
@@ -5548,12 +5538,12 @@ msgstr ""
 msgid "content"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:475
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:500
 #, elixir-autogen, elixir-format
 msgid "information"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:479
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:504
 #, elixir-autogen, elixir-format
 msgid "other"
 msgstr ""
@@ -5563,7 +5553,7 @@ msgstr ""
 msgid "publish"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:477
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:502
 #, elixir-autogen, elixir-format
 msgid "question"
 msgstr ""
@@ -5578,12 +5568,12 @@ msgstr ""
 msgid "style"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:476
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:501
 #, elixir-autogen, elixir-format
 msgid "suggestion"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:478
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:503
 #, elixir-autogen, elixir-format
 msgid "task"
 msgstr ""
@@ -5591,4 +5581,19 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:317
 #, elixir-autogen, elixir-format
 msgid "undo"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:363
+#, elixir-autogen, elixir-format
+msgid "A later publish keeps the record of this change but not its restore point. Revert to that publish instead."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:346
+#, elixir-autogen, elixir-format
+msgid "No restore point"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:359
+#, elixir-autogen, elixir-format
+msgid "This publish kept no copy of the page it published."
 msgstr ""
