@@ -15343,12 +15343,49 @@ msgstr ""
 msgid "Not published — this markup will not compile. %{reason}"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/builder_live.ex:6145
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/builder_live.ex:6304
 #, elixir-autogen, elixir-format
 msgid "Not saved — %{fields} is required and empty."
 msgid_plural "Not saved — %{fields} are required and empty."
 msgstr[0] ""
 msgstr[1] ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/builder_live.ex:6284
+#, elixir-autogen, elixir-format
+msgid "Not saved — %{fields} holds text where the component takes a list or a map. Remove it in the Inspector to use the default."
+msgid_plural "Not saved — %{fields} hold text where the component takes a list or a map. Remove them in the Inspector to use the defaults."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/panels.ex:4499
+#, elixir-autogen, elixir-format
+msgid "This holds text where the component takes a list or a map, so the page cannot be saved with it. Remove it to go back to the default."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:492
+#, elixir-autogen, elixir-format
+msgid "%{label} takes a list, so typed text cannot go in it. Add its items one by one."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:502
+#, elixir-autogen, elixir-format
+msgid "%{label} takes a map, so typed text cannot go in it."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:508
+#, elixir-autogen, elixir-format
+msgid "%{label} is on or off: true or false."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:515
+#, elixir-autogen, elixir-format
+msgid "%{label} takes a number."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:524
+#, elixir-autogen, elixir-format
+msgid "%{label} takes one word, such as danger."
+msgstr ""
 
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/studio_tokens.ex:289
 #, elixir-autogen, elixir-format
@@ -15998,7 +16035,7 @@ msgstr ""
 msgid "Replying to"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/panels.ex:4288
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/panels.ex:4492
 #, elixir-autogen, elixir-format
 msgid "Required — the page cannot be saved without it."
 msgstr ""
