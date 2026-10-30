@@ -195,6 +195,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     * `runtime:site:after_auth_pages` — the report `ensure_auth!/1` returns, with `site_id`.
   """
 
+  alias MishkaCmsCore.EveryPage
+
   alias MishkaCmsCore.Runtime.{
     Component,
     ErrorPage,
@@ -214,8 +216,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
   require Ash.Query
 
   @section "starter"
-
-  @row_limit 50
 
   # THE ADMIN PALETTE AND THE HOME PAGE'S, as this site's own design tokens. Written as `@theme`
   # rather than as a hundred arbitrary hex values in the markup, because a site's CSS bundle only
@@ -4097,9 +4097,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     )
   end
 
-  defp rows(query) do
-    query |> Ash.read!(authorize?: false, page: [limit: @row_limit]) |> Map.fetch!(:results)
-  end
+  # EVERY PAGE: one page of 50 read a site's 51st row as absent.
+  defp rows(query), do: EveryPage.read!(query, authorize?: false)
 
   defp site!(site_id) do
     case find_site(site_id) do

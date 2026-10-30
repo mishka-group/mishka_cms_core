@@ -26,6 +26,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Runtime.DraftPreviewAssets
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.ErrorPageDraft
@@ -102,13 +103,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   defp query(module, tenant, _master, argument, id, %{site_id: site_id} = actor),
     do: read(module, tenant, argument, id, actor, tenant: site_id)
 
+  # EVERY PAGE. The list actions page at most 50 rows, and the resource is uncapped — a seed or a
+  # migration may write more — so reading one page left the rest out of the picker and the prune.
   defp read(module, action, argument, id, actor, opts) do
     module
     |> Ash.Query.for_read(action, %{argument => id}, Keyword.put(opts, :actor, actor))
-    |> Ash.read(page: [limit: 50])
+    |> EveryPage.read()
     |> case do
-      {:ok, %{results: results}} -> results
-      {:ok, results} when is_list(results) -> results
+      {:ok, results} -> results
       _error -> []
     end
   end

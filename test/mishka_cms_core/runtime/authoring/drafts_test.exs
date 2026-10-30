@@ -112,6 +112,31 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
       assert "Sitting 4" in kept
     end
 
+    # THE RESOURCE IS UNCAPPED, the façade is not: a seed or a migration may write more drafts than
+    # one page of the list read holds (50). Listing only that page left the rest out of the editor's
+    # picker and out of the prune, so the cap kept thirty rows instead of twenty.
+    test "past one page of the list read, every draft is listed and the cap still holds", %{
+      site: site,
+      page: page,
+      master: master
+    } do
+      first = save!(page, master, "Sitting 1")
+
+      fields =
+        Map.take(first, [:name, :title, :path, :template, :format, :source_page_id, :layout_id])
+
+      create_many!(
+        PageDraft,
+        for(i <- 2..60, do: Map.put(fields, :label, "Sitting #{i}")),
+        site.id
+      )
+
+      assert length(labels(page, master)) == 60
+
+      Drafts.prune("page", page, master)
+      assert length(labels(page, master)) == Drafts.keep()
+    end
+
     test "under the cap nothing is dropped", %{page: page, master: master} do
       for i <- 1..3, do: save!(page, master, "Sitting #{i}")
 

@@ -1500,17 +1500,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   defp layouts_by_id([]), do: {:ok, []}
 
-  # PAGINATED BY THE ANSWER'S OWN SIZE. `Layout.read_any` does not declare `required?: false`, so
-  # `page: false` is refused there — and one page cannot use more layouts than there are ids.
+  # EVERY PAGE. `Layout.read_any` does not declare `required?: false`, so `page: false` is refused
+  # there, and a page as long as the list of ids was cut to the action's 250 past that many.
   defp layouts_by_id(ids) do
     MishkaCmsCore.Runtime.Layout
     |> Ash.Query.for_read(:read_any)
     |> Ash.Query.filter(id in ^ids)
     |> Ash.Query.load(:site)
-    |> Ash.read(authorize?: false, page: [limit: length(ids)])
+    |> MishkaCmsCore.EveryPage.read(authorize?: false)
     |> case do
-      {:ok, %{results: layouts}} -> {:ok, layouts}
-      {:ok, layouts} when is_list(layouts) -> {:ok, layouts}
+      {:ok, layouts} -> {:ok, layouts}
       {:error, _reason} -> :error
     end
   end

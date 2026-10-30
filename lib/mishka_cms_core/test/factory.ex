@@ -327,6 +327,24 @@ defmodule MishkaCmsCore.Test.Factory do
     |> generate()
   end
 
+  @doc """
+  `rows` of `resource`, written in one bulk create through its `:create` action under `tenant` (`nil`
+  for global rows), as a fixture: for a suite that needs more rows than one page of a read holds,
+  where a create per row costs seconds. Each row is the action's input, and nothing is compiled.
+  """
+  def create_many!(resource, rows, tenant \\ nil) do
+    rows
+    |> Ash.bulk_create!(resource, :create,
+      tenant: tenant,
+      authorize?: false,
+      context: %{page_code: :package},
+      return_records?: true,
+      return_errors?: true,
+      stop_on_error?: true
+    )
+    |> Map.fetch!(:records)
+  end
+
   # Media factory
   def create_media!(overrides \\ []) do
     {site_id, overrides} = Keyword.pop(overrides, :site_id)

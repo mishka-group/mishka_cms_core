@@ -71,6 +71,7 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Install.Bootstrap
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
@@ -78,11 +79,6 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Site
   alias MishkaInstaller.Event.Hook
-
-  # Every read here is narrowed to at most the handful of rows one extension writes, so a single
-  # page of results holds all of them — and asking for a page keeps this working whether the action
-  # paginates by keyset, by offset, or not at all.
-  @row_limit 50
 
   @package %{page_code: :package}
 
@@ -478,12 +474,10 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
     end
   end
 
-  defp rows(query, actor) do
-    case Ash.read!(query, reading(actor) ++ [page: [limit: @row_limit]]) do
-      %{results: found} -> found
-      found when is_list(found) -> found
-    end
-  end
+  # EVERY PAGE, whether the action pages by keyset, by offset or not at all. A read here is narrowed
+  # to the rows one extension writes, but nothing caps how many components a kit ships, and the 51st
+  # used to read as absent.
+  defp rows(query, actor), do: EveryPage.read!(query, reading(actor))
 
   # SEE `MishkaCmsCore.Runtime.PageProvision`'s own `reading/1`, which says why the read action does
   # not change with the actor while the write action does.

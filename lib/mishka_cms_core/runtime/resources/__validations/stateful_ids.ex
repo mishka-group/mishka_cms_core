@@ -114,10 +114,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(name in ^names and stateful == true)
     |> Ash.Query.select([:name])
-    |> Ash.read()
+    # EVERY PAGE: `:read_any` answers its first 100 rows when no page is asked for, and one name is a
+    # row on every site that has it.
+    |> MishkaCmsCore.EveryPage.read()
     |> case do
-      {:ok, %{results: rows}} -> Enum.map(rows, & &1.name)
-      {:ok, rows} when is_list(rows) -> Enum.map(rows, & &1.name)
+      {:ok, rows} -> Enum.map(rows, & &1.name)
       _unreadable -> []
     end
   end

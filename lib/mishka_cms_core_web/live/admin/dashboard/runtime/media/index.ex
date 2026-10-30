@@ -518,18 +518,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
     end)
   end
 
+  # THE PAGES ALREADY SHOWN, read again as they were loaded. One read of all of them at once asked a
+  # master's read for more than the 100 it takes a page, so from the sixth page on a refresh dropped
+  # the folders past the hundredth.
   defp refresh_categories_silently(socket) do
-    user = socket.assigns.current_user
-    total_limit = socket.assigns.categories_page * @categories_page_size
+    query = folders_query(socket.assigns.current_user, socket.assigns.folder_id)
 
-    page_result =
-      user
-      |> folders_query(socket.assigns.folder_id)
-      |> Ash.read!(page: [limit: total_limit])
+    pages =
+      for page <- 1..socket.assigns.categories_page//1 do
+        Ash.read!(query,
+          page: [offset: (page - 1) * @categories_page_size, limit: @categories_page_size]
+        )
+      end
 
     socket
-    |> assign(:categories_has_more, page_result.more?)
-    |> stream(:categories, page_result.results, reset: true)
+    |> assign(:categories_has_more, pages |> List.last() |> Map.fetch!(:more?))
+    |> stream(:categories, Enum.flat_map(pages, & &1.results), reset: true)
   end
 
   # The folders directly inside `folder_id`, or at the top level for none — every site's top level,
