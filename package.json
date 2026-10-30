@@ -1,6 +1,6 @@
 {
   "name": "mishka_cms_core",
-  "version": "0.0.2",
+  "version": "0.0.3",
   "description": "The LiveView hooks of the Mishka CMS admin, as ES module sources a host bundles.",
   "license": "Apache-2.0",
   "type": "module",
