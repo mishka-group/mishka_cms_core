@@ -140,8 +140,8 @@ defmodule MishkaCmsCore.MixProject do
 
       # Runtime Asset Stuff
       {:esbuild, "~> 0.10"},
-      {:tailwind, "~> 0.5"},
-      {:igniter_js, "~> 0.5"},
+      {:tailwind, "~> 0.5 and >= 0.5.2"},
+      {:igniter_js, "~> 0.5 and >= 0.5.2"},
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
