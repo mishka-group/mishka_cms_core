@@ -12874,7 +12874,12 @@ msgstr ""
 msgid "%{reason} Placed after %{target} instead."
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder/editor_session.ex:1321
+#: ../mishka_cms_builder/lib/mishka_cms_builder/editor_session.ex:1363
+#, elixir-autogen, elixir-format
+msgid "%{reason} Placed before %{where} instead."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/editor_session.ex:1366
 #, elixir-autogen, elixir-format
 msgid "%{reason} Placed after %{where} instead."
 msgstr ""
@@ -18181,7 +18186,7 @@ msgstr ""
 msgid "the element around it"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder/editor_session.ex:1317
+#: ../mishka_cms_builder/lib/mishka_cms_builder/editor_session.ex:1351
 #, elixir-autogen, elixir-format
 msgid "the element you dropped it on"
 msgstr ""
