@@ -198,4 +198,53 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarterTest do
       end
     end
   end
+
+  # THE BORN CONTAINER IS A PLACEHOLDER, NOT CONTENT. A component dropped straight onto a page born
+  # blank landed beside it, and the container stayed on the published page as an empty `py-12` band,
+  # 96px of nothing above the component. Placed inside it, the component got a width and a padding
+  # the author never chose.
+  describe "landing/3" do
+    test "the first thing placed on a page born blank takes the born container's place" do
+      {:ok, tree} = Tree.parse(PageStarter.blank())
+      [born] = tree.roots
+
+      for {parent, index} <- [{:root, 1}, {:root, 0}, {nil, 9999}, {born, 0}, {born, 9999}] do
+        assert {cleared, :root, 0} = PageStarter.landing(tree, parent, index)
+        assert cleared.roots == [], "aimed at #{inspect({parent, index})}"
+        assert cleared.nodes == %{}
+      end
+    end
+
+    # The born container is often written with the newline it was formatted with inside it.
+    test "a born container holding only whitespace is a placeholder too" do
+      {:ok, tree} = Tree.parse(~s(<div class="mx-auto w-full max-w-6xl px-6 py-12">\n  \n</div>))
+      [born] = tree.roots
+
+      assert {%Tree{roots: []}, :root, 0} = PageStarter.landing(tree, born, 9999)
+    end
+
+    test "a page someone has started is placed into as it is" do
+      sources =
+        [
+          PageStarter.scratch(),
+          ~s(<div class="mx-auto w-full max-w-6xl px-6 py-12"><h1>Hello</h1></div>),
+          ~s(<div class="mx-auto w-full max-w-6xl px-6 py-12"></div><section></section>),
+          PageStarter.blank(:layout)
+        ] ++ Enum.map(PageStarter.all(), & &1.template)
+
+      for source <- sources do
+        {:ok, tree} = Tree.parse(source)
+        [first | _rest] = tree.roots
+
+        assert PageStarter.landing(tree, first, 3) == {tree, first, 3}, source
+        assert PageStarter.landing(tree, :root, 1) == {tree, :root, 1}, source
+      end
+    end
+
+    test "a page emptied by hand has nothing to take away" do
+      tree = Tree.new()
+
+      assert PageStarter.landing(tree, :root, 0) == {tree, :root, 0}
+    end
+  end
 end

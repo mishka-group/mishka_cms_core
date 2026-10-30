@@ -35,6 +35,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @type structure :: %{
@@ -181,7 +182,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
   over it would be an interruption rather than a help. That includes one empty box of any other
   kind: `scratch/0` is one, and it is what the author asked for when they declined the chooser.
   """
-  @spec empty?(MishkaCmsCore.Runtime.Authoring.Tree.t() | nil) :: boolean()
+  @spec empty?(Tree.t() | nil) :: boolean()
   def empty?(%{roots: []}), do: true
 
   def empty?(%{roots: [id], nodes: nodes}) when is_map(nodes) do
@@ -195,6 +196,30 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
   end
 
   def empty?(_tree), do: false
+
+  @doc """
+  The tree and the spot `{parent, index}` a placement is made against.
+
+  On a page nobody has started — the container `blank/0` makes and nothing in it, see `empty?/1` —
+  the container is taken away and the spot is the top of the document, wherever the placement was
+  aimed: beside the container or inside it. Anything else comes back as it is.
+
+  THE BORN CONTAINER IS A PLACEHOLDER, NOT CONTENT. It is only there because `pages.template` will
+  not store an empty string. A component dropped straight onto a page born blank landed beside it,
+  and the container stayed on the published page as an empty `py-12` band, 96px of nothing above
+  the component; placed inside it, the component got a width and a padding nobody chose. A starter
+  and Start from scratch already replace it, so the first thing placed does the same.
+  """
+  @spec landing(Tree.t(), String.t() | :root | nil, non_neg_integer()) ::
+          {Tree.t(), String.t() | :root | nil, non_neg_integer()}
+  def landing(%Tree{roots: [_born]} = tree, parent, index) do
+    case empty?(tree) do
+      true -> {Tree.new(), :root, 0}
+      false -> {tree, parent, index}
+    end
+  end
+
+  def landing(tree, parent, index), do: {tree, parent, index}
 
   defp born?(%{tag: "div"} = root), do: Node.literal(root, "class") == @born
   defp born?(_root), do: false
