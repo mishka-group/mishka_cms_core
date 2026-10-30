@@ -12,9 +12,8 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
   # The repo, Oban, the caches and the runtime compiler a host starts around its repo and endpoint
   # (`MishkaCmsCore.Supervision`), then the test endpoint; Oban's tables first, swept test plugins an
   # earlier run left registered, the `node_modules` esbuild resolves `import … from "phoenix"`
-  # through, and a run that starts once the plugins are live. The PubSub, the partition counter and
-  # the editor's processes are the core application's own, already running. See
-  # `MishkaCmsCore.Test.Boot`.
+  # through, and a run that starts once the plugins are live. The PubSub and the partition counter
+  # are the core application's own, already running. See `MishkaCmsCore.Test.Boot`.
   :ok =
     MishkaCmsCore.Test.Boot.start!(
       otp_app: :mishka_cms_core,
@@ -27,18 +26,17 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
 
   # `render_async/1` WAITS THIS LONG, and 100ms is not a number anybody here chose. LiveView's
   # default is `Application.fetch_env!(:ex_unit, :assert_receive_timeout)`, and every `render_async`
-  # in these suites is waiting on a real database load — the editor's `start_async` record fetch,
+  # in these suites is waiting on a real database load — an admin modal's `start_async` record fetch,
   # most of them. On a machine running another suite beside this one that load takes longer than
   # 100ms, and the test fails with "expected async processes to finish within 100ms" from a line that
   # was asserting something else entirely.
   #
-  # Raising it here rather than at 156 call sites: it is the knob LiveView itself reads, it covers
+  # Raising it here rather than at 201 call sites: it is the knob LiveView itself reads, it covers
   # every future `render_async` without anyone remembering, and it costs nothing on a passing run —
   # a longer timeout only delays FAILURES, never successes.
   #
-  # The bound is the editor's own for its slowest mount task: opening it on a page that places a
-  # runtime component awaits `warm_components`, a module compile the editor allows 30 seconds. One
-  # second failed that wait while a second suite shared the machine.
+  # The bound covers the slowest of those tasks, a module compile (the preview modal's Force compile).
+  # One second failed such a wait while a second suite shared the machine.
   ExUnit.configure(assert_receive_timeout: :timer.seconds(30))
 
   # The `:node` tests run browser JavaScript in Node.js. Without it they are left out, and the run

@@ -17,7 +17,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
   ## Why this module is not async
 
   One test here reads `:code.all_loaded/0`, which is the whole VM's, and asserts that a check leaves
-  no rehearsal module behind. A builder test in `builder_live/` runs checks too, and run
+  no rehearsal module behind. Any other test that saves a page's code runs a check too, and run
   concurrently its in-flight module lands in the count — the baseline reads one, the check purges
   nothing of ours, and the test fails with `0 != 1` having found nothing wrong. A guarantee about a
   global can only be measured with the global to ourselves.
