@@ -22,6 +22,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
 
   Component drafts do not exist as a resource, so a component's autosave is a no-op and its Save
   button is the only persistence — reported honestly rather than silently doing nothing.
+
+  ## Publishing what a draft holds
+
+  A draft is the whole document, its settings included: the layout, the SEO, the path, who may open
+  it. Its own `:publish` writes all of that over the original, and an editor that publishes its
+  working copy straight to the original writes `carried/2` beside its markup, so neither publish
+  leaves a setting behind in a draft it then throws away. The original keeps its own code either
+  way; the fingerprint `original_changed?/3` compares covers exactly what a publish writes over, and
+  `follow/5` keeps a draft in step with what its own editor saved to the original meanwhile.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -33,6 +42,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   alias MishkaCmsCore.Runtime.ErrorPageDraft
   alias MishkaCmsCore.Runtime.LayoutDraft
   alias MishkaCmsCore.Runtime.PageDraft
+  alias MishkaCmsCore.Runtime.Resources.Changes.PublishErrorPageDraft
+  alias MishkaCmsCore.Runtime.Resources.Changes.PublishLayoutDraft
+  alias MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft
 
   @drafts %{
     "page" => {PageDraft, :source_page_id, "page"},
@@ -55,6 +67,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   # read and a table that only grows. Twenty is far past the point where anyone scrolls back, and
   # still leaves a fortnight of daily work to return to.
   @keep 20
+
+  # What each draft's own `:publish` writes over its original, the one list `carried/2` answers from.
+  @publishes %{
+    PageDraft => PublishPageDraft,
+    LayoutDraft => PublishLayoutDraft,
+    ErrorPageDraft => PublishErrorPageDraft
+  }
 
   # The list actions each draft resource exposes, tenant and master. Same pair the preview modal's
   # draft picker reads, so the editor and the modal show one list rather than two views of it.
@@ -187,6 +206,85 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
       error -> error
     end
   end
+
+  @doc """
+  The draft `draft_id` of `section`, read as `actor`: `{:ok, draft}`, or `{:error, reason}` for a
+  draft that is gone, is not theirs to read, or a section that keeps none.
+  """
+  @spec get(String.t(), String.t(), map()) :: {:ok, struct()} | {:error, term()}
+  def get(section, draft_id, actor) do
+    case Map.fetch(@drafts, section) do
+      {:ok, {module, _source_key, _segment}} -> fetch(module, draft_id, actor)
+      :error -> {:error, :unsupported}
+    end
+  end
+
+  @doc """
+  What publishing `draft` writes over the document it was made from — every field it carries but
+  the document's code — exactly as the draft's own `:publish` writes it. `%{}` for anything that is
+  not a draft of `section`.
+
+  For an editor that publishes its working copy straight to the original: written beside the
+  markup, in the same write, these are the draft's layout, SEO, path, title and permissions, which
+  would otherwise go with the draft when the publish discards it.
+  """
+  @spec carried(String.t(), map()) :: map()
+  def carried(section, %module{} = draft) do
+    case {resource(section), Map.fetch(@publishes, module)} do
+      {^module, {:ok, publish}} -> publish.carried(draft)
+      _not_a_draft_of_it -> %{}
+    end
+  end
+
+  def carried(_section, _draft), do: %{}
+
+  @doc """
+  Keeps `draft` in step with a change its own editor made to the original while it was open — a
+  setting saved to the page itself, say. `before` is the original as it stood, `now` as it is.
+
+  Every setting the change moved is written to the draft too, so publishing the draft does not put
+  the older one back; and the draft takes `now`'s fingerprint, so the change is not reported as
+  somebody else's by `original_changed?/3`. The draft's own markup is never replaced: when the
+  original's moved as well, the settings are carried and the fingerprint is kept, notice and all.
+
+  A draft that was already behind `before` — someone else changed the original first — is returned
+  as it is. Returns `{:ok, draft}` or `{:error, reason}`.
+  """
+  @spec follow(String.t(), struct(), map(), map(), map()) :: {:ok, struct()} | {:error, term()}
+  def follow(section, %module{} = draft, before, now, actor) do
+    if module == resource(section) and
+         Map.get(draft, :source_hash) in [nil, hash(section, before)] do
+      markup = markup_fields(section)
+
+      section
+      |> fingerprinted(now)
+      |> Enum.reject(&(Map.get(before, &1) == Map.get(now, &1)))
+      |> Enum.split_with(&(&1 in markup))
+      |> followed(section, draft, now, actor)
+    else
+      {:ok, draft}
+    end
+  end
+
+  defp followed({[], []}, _section, draft, _now, _actor), do: {:ok, draft}
+
+  defp followed({markup, settings}, section, draft, now, actor) do
+    draft
+    |> update_changeset(Map.new(settings, &{&1, Map.get(now, &1)}), actor)
+    |> restamp(markup, hash(section, now))
+    |> Ash.update(actor: actor)
+    |> invalidate_preview()
+  end
+
+  defp restamp(changeset, [], hash),
+    do: Ash.Changeset.force_change_attribute(changeset, :source_hash, hash)
+
+  defp restamp(changeset, _markup_moved, _hash), do: changeset
+
+  # Where the section keeps the markup its editor writes, which a draft holds for itself.
+  defp markup_fields(section),
+    do:
+      section |> Section.save_fields("", []) |> Map.keys() |> Enum.map(&String.to_existing_atom/1)
 
   # The draft's editing history is released as it goes — on the resource's own destroy events, not
   # here, because the picker's own Delete never comes through this module. An editor that keeps
@@ -494,19 +592,23 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
         context: @fork
       )
 
-  defp update(draft, attrs, %{site_id: nil} = actor),
+  defp update(draft, attrs, actor),
     do:
       draft
-      |> Ash.Changeset.for_update(:master_update, attrs, actor: actor, context: @fork)
+      |> update_changeset(attrs, actor)
       |> Ash.update(actor: actor)
       |> invalidate_preview()
 
-  defp update(draft, attrs, %{site_id: site_id} = actor),
+  defp update_changeset(draft, attrs, %{site_id: nil} = actor),
+    do: Ash.Changeset.for_update(draft, :master_update, attrs, actor: actor, context: @fork)
+
+  defp update_changeset(draft, attrs, %{site_id: site_id} = actor),
     do:
-      draft
-      |> Ash.Changeset.for_update(:update, attrs, tenant: site_id, actor: actor, context: @fork)
-      |> Ash.update(actor: actor)
-      |> invalidate_preview()
+      Ash.Changeset.for_update(draft, :update, attrs,
+        tenant: site_id,
+        actor: actor,
+        context: @fork
+      )
 
   # A DRAFT'S PREVIEW STYLESHEET IS COMPILED ONCE AND KEYED BY THE DRAFT'S TOKEN.
   # `DraftPreviewAssets.ensure_css/2` compiles only when that key is absent, which is what keeps

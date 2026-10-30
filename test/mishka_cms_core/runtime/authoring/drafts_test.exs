@@ -502,5 +502,140 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
     end
   end
 
+  # WHAT A PUBLISH OF THE DRAFT PUTS ON THE PAGE, beside its markup. The editor publishes its working
+  # copy straight to the page and then throws the draft away, so anything the draft held that this
+  # list leaves out is gone: the layout, the SEO and the path an author chose in the draft were.
+  describe "what publishing a draft carries" do
+    defp drafted!(draft, attrs, actor) do
+      draft
+      |> Ash.Changeset.for_update(:master_update, attrs,
+        actor: actor,
+        context: %{page_code: :fork}
+      )
+      |> Ash.update!(actor: actor)
+    end
+
+    test "is every setting the draft holds and none of the page's code", %{
+      site: site,
+      page: page,
+      master: master
+    } do
+      layout = create_layout!(site_id: site.id, name: "carried", path: "/layouts/carried")
+
+      draft =
+        page
+        |> save!(master, "Carried")
+        |> drafted!(
+          %{
+            layout_id: layout.id,
+            title: "Carried title",
+            path: "/carried",
+            description: "Written in the draft.",
+            seo_tags: [
+              %{"tag" => "meta", "attrs" => %{"property" => "og:image"}, "content" => "/a.png"}
+            ],
+            permissions: ["admin:dashboard:runtime:page"],
+            events: [%{name: "drafted", code: "{:noreply, socket}"}]
+          },
+          master
+        )
+
+      carried = Drafts.carried("page", draft)
+
+      assert carried.layout_id == layout.id
+      assert carried.title == "Carried title"
+      assert carried.path == "/carried"
+      assert carried.description == "Written in the draft."
+      assert [%{"content" => "/a.png"}] = carried.seo_tags
+      assert carried.permissions == ["admin:dashboard:runtime:page"]
+      assert carried.template == draft.template
+
+      for field <- MishkaCmsCore.Runtime.Authoring.CodeAccess.fields(),
+          do: refute(Map.has_key?(carried, field), "#{field} is the page's code")
+    end
+
+    test "is what the draft's own publish writes over the page", %{
+      site: site,
+      page: page,
+      master: master
+    } do
+      layout = create_layout!(site_id: site.id, name: "published", path: "/layouts/published")
+
+      draft =
+        page
+        |> save!(master, "Published")
+        |> drafted!(%{layout_id: layout.id, description: "Through the action."}, master)
+
+      draft
+      |> Ash.Changeset.for_update(:master_publish, %{}, actor: master)
+      |> Ash.update!(actor: master)
+
+      live = reread_page(page)
+
+      for {field, value} <- Drafts.carried("page", draft),
+          do: assert(Map.get(live, field) == value, "the publish wrote #{field} differently")
+    end
+
+    test "is nothing for a section that keeps no drafts", %{page: page} do
+      assert Drafts.carried("component", page) == %{}
+    end
+  end
+
+  # THE EDITOR'S OWN CHANGE TO THE ORIGINAL. A setting saved to the page itself while the editor has
+  # a draft open is the same author's, made a second ago: told "the original was changed after this
+  # draft was made", they were warned about themselves — and publishing the draft from the editor
+  # would have put the draft's older setting back over the one they had just saved.
+  describe "following the editor's own change to the original" do
+    test "brings the setting into the draft and the draft back in step", %{
+      site: site,
+      page: page,
+      master: master
+    } do
+      layout = create_layout!(site_id: site.id, name: "followed", path: "/layouts/followed")
+      draft = save!(page, master, "Followed")
+      saved = change_page!(page, %{layout_id: layout.id, description: "Saved to the page."})
+
+      assert Drafts.original_changed?("page", saved, draft)
+
+      assert {:ok, followed} = Drafts.follow("page", draft, page, saved, master)
+
+      assert followed.layout_id == layout.id
+      assert followed.description == "Saved to the page."
+      assert followed.template == draft.template, "the draft's own markup was replaced"
+      refute Drafts.original_changed?("page", saved, followed)
+      refute Drafts.original_changed?(followed)
+    end
+
+    test "leaves a draft whose original someone else had already changed", %{
+      page: page,
+      master: master
+    } do
+      draft = save!(page, master, "Behind")
+      elsewhere = change_page!(page, %{title: "Changed by someone else"})
+      saved = change_page!(elsewhere, %{description: "Then saved here."})
+
+      assert {:ok, same} = Drafts.follow("page", draft, elsewhere, saved, master)
+
+      assert same.description == draft.description
+      assert Drafts.original_changed?("page", saved, same)
+    end
+
+    test "carries the setting but keeps the notice when the original's markup moved too", %{
+      page: page,
+      master: master
+    } do
+      draft = save!(page, master, "Markup moved")
+
+      saved =
+        change_page!(page, %{template: "<p>Published elsewhere</p>", description: "And saved."})
+
+      assert {:ok, followed} = Drafts.follow("page", draft, page, saved, master)
+
+      assert followed.description == "And saved."
+      assert followed.template == draft.template
+      assert Drafts.original_changed?("page", saved, followed)
+    end
+  end
+
   defp stringify(map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
 end

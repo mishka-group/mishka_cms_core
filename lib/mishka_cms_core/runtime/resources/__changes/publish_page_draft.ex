@@ -79,7 +79,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
     case Ash.get(Page, page_id, tenant: draft.site_id, authorize?: false) do
       {:ok, page} ->
         page
-        |> Ash.Changeset.for_update(:update, Map.drop(page_attrs(draft), CodeAccess.fields()),
+        |> Ash.Changeset.for_update(:update, carried(draft),
           tenant: draft.site_id,
           authorize?: false,
           context: @publish
@@ -90,6 +90,16 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
         error
     end
   end
+
+  @doc """
+  What publishing `draft` writes over the page it was made from: every field it carries but the
+  page's code (`MishkaCmsCore.Runtime.Authoring.CodeAccess.fields/0`).
+
+  The editor publishes its working copy straight to the page, and asks
+  `MishkaCmsCore.Runtime.Authoring.Drafts.carried/2` for this, so both publishes write the same.
+  """
+  @spec carried(struct()) :: map()
+  def carried(draft), do: draft |> page_attrs() |> Map.drop(CodeAccess.fields())
 
   # A DRAFT THAT NAMES NO LANGUAGE GROUP SAYS NOTHING ABOUT ONE. Handing the page `nil` would make a
   # translation the master of a group of its own — `SetLanguageGroupId` turns an emptied group into

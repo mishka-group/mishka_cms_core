@@ -61,9 +61,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishErrorPageDraft do
     case Ash.get(ErrorPage, error_page_id, tenant: draft.site_id, authorize?: false) do
       {:ok, error_page} ->
         error_page
-        |> Ash.Changeset.for_update(
-          :update,
-          Map.drop(error_page_attrs(draft), CodeAccess.fields()),
+        |> Ash.Changeset.for_update(:update, carried(draft),
           tenant: draft.site_id,
           authorize?: false,
           context: @publish
@@ -74,6 +72,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishErrorPageDraft do
         error
     end
   end
+
+  @doc """
+  What publishing `draft` writes over the error page it was made from: every field it carries but
+  the error page's code. See `MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft.carried/1`.
+  """
+  @spec carried(struct()) :: map()
+  def carried(draft), do: draft |> error_page_attrs() |> Map.drop(CodeAccess.fields())
 
   defp error_page_attrs(draft), do: Map.take(draft, @error_page_fields)
 end
