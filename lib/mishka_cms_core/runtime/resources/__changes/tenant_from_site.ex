@@ -7,10 +7,18 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite do
   Runs the action under the tenant of the record's `site_id`.
 
   A master's create names the site it writes for, and the rest of the action (the tenant-scoped
-  validations, the version row) reads that site as its tenant. A record with no `site_id`, a global
-  one, is left as it is.
+  validations, the version row) reads that site as its tenant. A master's update does the same with
+  the site the record is on, or moves to: the version row takes its `site_id` from the tenant alone,
+  so an update run with the master's nil tenant was recorded as a Global change. A record with no
+  `site_id`, a global one, is left as it is.
 
       create :master_create do
+        change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
+      end
+
+      update :master_update do
+        validate {MishkaCmsCore.Runtime.Resources.Validations.TenantContext, require_master: true}
+        # last, so the checks above still see the master's nil tenant
         change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
       end
   """
