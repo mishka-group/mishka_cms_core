@@ -104,6 +104,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Builder.Descriptor
+  alias MishkaCmsCore.Builder.Literal
   alias MishkaCmsCore.Runtime.Authoring.Fields
   alias MishkaCmsCore.Runtime.Authoring.PageForms
   alias MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks
@@ -129,6 +130,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   @segmented_limit 5
   @segmented_value_length 8
   @textarea_doc_length 90
+
+  # The declared types a collection is held in, and the numeric ones.
+  @collections ~w(list keyword_list map)
+  @numbers ~w(integer float pos_integer)
 
   # Which attribute names fall under which heading. The ORDER of the panel is `@group_order`, not
   # this list — "Properties" is the catch-all and has no key list to match on.
@@ -300,8 +305,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   end
 
   @doc """
-  Everything this node was told it must have and has not got — its required properties left blank,
-  and the required slots nobody added.
+  Everything this node was told it must have and has not got — its required properties left blank
+  (`{:attr, name}`), the required slots nobody added (`{:slot, name}`), and a property holding text
+  where the component takes a list or a map (`{:type, name}`, read by `value_type/1`).
 
   READ OFF THE DECLARATION, never off a list of names. A kit this editor has never seen says which of
   its properties are required the same way Chelekom does — `opts.required` on the attribute, and
@@ -319,12 +325,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   `<:inner_block>` is not something anybody adds.
   """
   @spec unmet(Node.t(), Tree.t(), %{optional(String.t()) => map()}) :: [
-          {:attr | :slot, String.t()}
+          {:attr | :slot | :type, String.t()}
         ]
   def unmet(node, tree, components)
 
   def unmet(%Node{} = node, %Tree{} = tree, components) when is_map(components),
-    do: unmet_attrs(node, tree, components) ++ unmet_slots(node, tree, components)
+    do:
+      unmet_attrs(node, tree, components) ++
+        unmet_slots(node, tree, components) ++ mistyped(node, tree, components)
 
   def unmet(_node, _tree, _components), do: []
 
@@ -348,6 +356,22 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   end
 
   defp unmet_slots(_node, _tree, _components), do: []
+
+  # TEXT WHERE THE COMPONENT TAKES A LIST OR A MAP. Typed words are a string, and a component that
+  # maps over its attribute or reads a key out of it raises on one — on the canvas, and on every
+  # visit to the published page.
+  defp mistyped(node, tree, components) do
+    for attr <- declared_attrs(node, tree, components),
+        attr_name = name(attr),
+        is_binary(attr_name),
+        value_type(attr) in @collections,
+        text?(Node.attr(node, attr_name)),
+        do: {:type, attr_name}
+  end
+
+  defp text?({:string, _text}), do: true
+  defp text?(:boolean), do: true
+  defp text?(_expression_or_unset), do: false
 
   # Both kinds declare properties, in different places. A component's are its own; a SLOT's are
   # declared in the slot's block on the component that owns it.
@@ -404,6 +428,133 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   @doc "An attribute's declared type, defaulting to `\"string\"`."
   @spec type(map()) :: String.t()
   def type(attr), do: field(attr, "type") || "string"
+
+  @doc """
+  The type an attribute's VALUE has: the one it declares, or — for one declared `any` — the type of
+  its default.
+
+  `any` is a kit declining to say, and the default is the kit saying it anyway. `blog-term-row`
+  declares `terms` as `any` with `default: []` and maps over it; reading only the declaration gave
+  it a textarea, the typed words went in as a string, and the component raised `protocol
+  Enumerable not implemented for BitString` on the published page. A list, a map, a boolean or a
+  number default names the type; `nil`, a string or no default at all leaves `"any"`.
+  """
+  @spec value_type(map()) :: String.t()
+  def value_type(attr) do
+    case type(attr) do
+      "any" -> attr |> default() |> default_type()
+      declared -> declared
+    end
+  end
+
+  defp default_type(value) when is_list(value), do: "list"
+  defp default_type(value) when is_map(value), do: "map"
+  defp default_type(value) when is_boolean(value), do: "boolean"
+  defp default_type(value) when is_integer(value), do: "integer"
+  defp default_type(value) when is_float(value), do: "float"
+  defp default_type(_value), do: "any"
+
+  @doc """
+  What a value TYPED into a property's box is written as, decided by what the attribute takes —
+  or why it cannot be written at all.
+
+  `held` is what the node holds now. A box shows a binding's source, so that source posted back, or
+  source typed over it that still reads something (`MishkaCmsCore.Builder.Literal.expression?/1`), is
+  written as an expression again; the same box with words typed over it writes the words. `attr` is `nil` where nothing declares the
+  attribute, and the words are then text.
+
+  By the type the attribute's value has (`value_type/1`):
+
+    * a list or a map takes only a literal of its own shape — `["a", "b"]` — because typed words are
+      a string, and a component that maps over its attribute raises on one. Anything else is
+      refused with a sentence that says what it takes;
+    * a boolean takes `true` or `false`, a number a number and an atom one word, each written the
+      way HEEx spells it — `{false}`, `{7}`, `{:danger}` — and refused otherwise;
+    * anything else takes the text as it was typed.
+  """
+  @spec typed(map() | nil, String.t(), {:string | :expr, String.t()} | :boolean | nil) ::
+          {:ok, {:string, String.t()} | {:expr, String.t()}} | {:error, String.t()}
+  def typed(attr, text, held) when is_binary(text) do
+    case still_bound?(held, text) do
+      true -> {:ok, {:expr, text}}
+      false -> typed_as(attr && value_type(attr), attr, text, held)
+    end
+  end
+
+  defp still_bound?({:expr, source}, text), do: text == source or Literal.expression?(text)
+  defp still_bound?(_held, _text), do: false
+
+  defp typed_as(type, attr, text, _held) when type in ["list", "keyword_list"],
+    do:
+      literal_of(
+        text,
+        &is_list/1,
+        gettext("%{label} takes a list, so typed text cannot go in it. Add its items one by one.",
+          label: label(attr)
+        )
+      )
+
+  defp typed_as("map", attr, text, _held),
+    do:
+      literal_of(
+        text,
+        &is_map/1,
+        gettext("%{label} takes a map, so typed text cannot go in it.", label: label(attr))
+      )
+
+  defp typed_as("boolean", attr, text, _held) do
+    case String.trim(text) do
+      word when word in ["true", "false"] -> {:ok, {:expr, word}}
+      _other -> {:error, gettext("%{label} is on or off: true or false.", label: label(attr))}
+    end
+  end
+
+  defp typed_as(type, attr, text, _held) when type in @numbers do
+    case number_in(type, String.trim(text)) do
+      {:ok, number} -> {:ok, {:expr, number}}
+      :error -> {:error, gettext("%{label} takes a number.", label: label(attr))}
+    end
+  end
+
+  defp typed_as("atom", attr, text, _held) do
+    word = text |> String.trim() |> String.trim_leading(":")
+
+    case Regex.match?(~r/\A[a-z_][a-zA-Z0-9_]*[?!]?\z/, word) do
+      true -> {:ok, {:expr, ":" <> word}}
+      false -> {:error, gettext("%{label} takes one word, such as danger.", label: label(attr))}
+    end
+  end
+
+  # A number or an atom the editor wrote is a literal expression, and the box posts it back as one.
+  defp typed_as(_text_type, _attr, text, {:expr, _source}) do
+    case Literal.value(text) do
+      {:ok, _term} -> {:ok, {:expr, text}}
+      :error -> {:ok, {:string, text}}
+    end
+  end
+
+  defp typed_as(_text_type, _attr, text, _held), do: {:ok, {:string, text}}
+
+  defp literal_of(text, shape?, refusal) do
+    case Literal.value(text) do
+      {:ok, value} -> (shape?.(value) && {:ok, {:expr, String.trim(text)}}) || {:error, refusal}
+      :error -> {:error, refusal}
+    end
+  end
+
+  defp number_in("float", text) do
+    case Float.parse(text) do
+      {_number, ""} -> {:ok, text}
+      _other -> :error
+    end
+  end
+
+  defp number_in(type, text) do
+    case Integer.parse(text) do
+      {number, ""} when type != "pos_integer" or number > 0 -> {:ok, text}
+      _other -> :error
+    end
+  end
 
   @doc """
   Whether the attribute takes an ATOM rather than a string.
@@ -602,7 +753,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   # An explicit `text` is the kit overruling a guess this module would otherwise make — an attribute
   # called `icon` that holds something else, a `color` that is prose. Without this clause it fell to
   # the heuristics below and the override did nothing, which is the one thing a hint must never do.
-  defp hinted("collection", attr, _values), do: {:collection, type(attr)}
+  defp hinted("collection", attr, _values), do: {:collection, collection_kind(attr)}
 
   defp hinted("text", _attr, _values), do: :text
 
@@ -612,7 +763,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
 
   defp infer(attr, name, opts, values, component) do
     cond do
-      type(attr) == "boolean" -> :toggle
+      value_type(attr) == "boolean" -> :toggle
       type(attr) == "global" -> :global
       type(attr) == "struct" -> {:struct, field(attr, "struct_name")}
       icon_map?(attr) -> :icon
@@ -620,10 +771,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
       # list attributes, and a one-line box wrote what was typed into it as a STRING — so the
       # component, which maps over them, raised the moment anything was entered. The one control
       # that cannot be wrong here is the one that knows it is holding a collection.
-      collection?(attr) -> {:collection, type(attr)}
+      collection?(attr) -> {:collection, collection_kind(attr)}
       columns?(name, values) -> {:columns, values}
       is_list(values) and values != [] -> select_or_segmented(values)
-      type(attr) in ["integer", "float", "pos_integer"] -> number(opts)
+      value_type(attr) in @numbers -> number(opts)
       styling?(name) -> :text
       named?(name, @colour_names) -> :color
       named?(name, @icon_names) -> :icon
@@ -637,11 +788,22 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
     end
   end
 
-  @collections ~w(list keyword_list map)
+  @doc """
+  Whether an attribute holds a collection rather than one value: one declared a list, a keyword
+  list or a map, or one declared `any` whose default is a list (`value_type/1`).
 
-  @doc "Whether an attribute holds a collection rather than one value."
+  A map under `any` is not offered the list editor: it is read and written as pairs, and the
+  attributes holding one (a chart's options, a query's parameters) are set in code.
+  """
   @spec collection?(map()) :: boolean()
-  def collection?(attr), do: type(attr) in @collections
+  def collection?(attr), do: type(attr) in @collections or value_type(attr) == "list"
+
+  defp collection_kind(attr) do
+    case type(attr) do
+      declared when declared in @collections -> declared
+      _any -> value_type(attr)
+    end
+  end
 
   # A CLASS IS A CLASS, WHATEVER IT IS A CLASS FOR. `named?/2` matches on whole words, so
   # `icon_class` reads as an icon, `image_class` as a picture and `link_class` as an address — each

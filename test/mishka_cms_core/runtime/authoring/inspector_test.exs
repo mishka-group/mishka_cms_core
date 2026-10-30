@@ -1789,4 +1789,123 @@ defmodule MishkaCmsCore.Runtime.Authoring.InspectorTest do
       assert "animated" in Map.get(groups, "Behavior", [])
     end
   end
+
+  # THE TYPE AN ATTRIBUTE'S VALUE REALLY HAS. A kit that declares `:any` still says what it holds
+  # through its default: `blog-term-row` declares `terms` as `any` with `default: []` and maps over it.
+  # A textarea wrote the typed words as a string, the component raised `protocol Enumerable not
+  # implemented for BitString`, and the published page answered HTTP 500.
+  describe "value_type/1 and the control it picks" do
+    test "an :any attribute is read by its default" do
+      assert Inspector.value_type(attr("terms", "any", %{"default" => []})) == "list"
+      assert Inspector.value_type(attr("params", "any", %{"default" => %{}})) == "map"
+      assert Inspector.value_type(attr("value", "any", %{"default" => 0})) == "integer"
+      assert Inspector.value_type(attr("step", "any", %{"default" => 0.5})) == "float"
+      assert Inspector.value_type(attr("modal", "any", %{"default" => true})) == "boolean"
+      assert Inspector.value_type(attr("class", "any", %{"default" => "p-2"})) == "any"
+      assert Inspector.value_type(attr("class", "any", %{"default" => nil})) == "any"
+      assert Inspector.value_type(attr("label", "string", %{"default" => []})) == "string"
+    end
+
+    test "a list under :any gets the list editor, not a textarea" do
+      terms =
+        attr("terms", "any", %{
+          "default" => [],
+          "doc" => String.duplicate("A list of maps carrying name, href and patch. ", 4)
+        })
+
+      assert Inspector.widget(terms) == {:collection, "list"}
+      assert Inspector.collection?(terms)
+    end
+
+    test "a number under :any gets a number box, and a boolean a switch" do
+      assert {:number, _min, _max, _step} =
+               Inspector.widget(attr("value", "any", %{"default" => 3}))
+
+      assert Inspector.widget(attr("modal", "any", %{"default" => false})) == :toggle
+    end
+  end
+
+  # WHAT A FREE-TEXT WRITE BECOMES. Typed words are a string where the component takes a string; a
+  # number, a switch and an atom are written the way HEEx spells them; and a list or a map cannot be
+  # typed at all, so the write is refused with a sentence rather than stored to crash the page.
+  describe "typed/3" do
+    test "a string attribute takes the words as they are" do
+      assert Inspector.typed(attr("label"), "E2E-0", nil) == {:ok, {:string, "E2E-0"}}
+      assert Inspector.typed(nil, "E2E-0", nil) == {:ok, {:string, "E2E-0"}}
+    end
+
+    test "words typed over a binding are words; a binding stays one" do
+      held = {:expr, "f[:email].value"}
+
+      assert Inspector.typed(attr("input_value"), "E2E-0", held) == {:ok, {:string, "E2E-0"}}
+      assert Inspector.typed(attr("input_value"), "@other", held) == {:ok, {:expr, "@other"}}
+    end
+
+    test "a list or a map refuses text, and says what it takes" do
+      terms = attr("terms", "any", %{"default" => []})
+
+      assert {:error, message} = Inspector.typed(terms, "E2E-0", nil)
+      assert message =~ "Terms"
+      assert message =~ "list"
+
+      assert {:error, message} = Inspector.typed(attr("params", "map"), "E2E-0", nil)
+      assert message =~ "map"
+
+      assert Inspector.typed(terms, ~S(["a", "b"]), nil) == {:ok, {:expr, ~S(["a", "b"])}}
+      assert Inspector.typed(terms, "@terms", {:expr, "@terms"}) == {:ok, {:expr, "@terms"}}
+    end
+
+    test "a number, a switch and an atom are written as HEEx spells them" do
+      assert Inspector.typed(attr("count", "integer"), " 7 ", nil) == {:ok, {:expr, "7"}}
+
+      assert Inspector.typed(attr("step", "any", %{"default" => 0.5}), "2.5", nil) ==
+               {:ok, {:expr, "2.5"}}
+
+      assert {:error, message} = Inspector.typed(attr("count", "integer"), "seven", nil)
+      assert message =~ "number"
+
+      assert Inspector.typed(attr("open", "boolean"), "false", nil) == {:ok, {:expr, "false"}}
+      assert {:error, _sentence} = Inspector.typed(attr("open", "boolean"), "E2E-0", nil)
+
+      assert Inspector.typed(attr("kind", "atom"), "danger", nil) == {:ok, {:expr, ":danger"}}
+      assert {:error, _sentence} = Inspector.typed(attr("kind", "atom"), "E2E-0", nil)
+    end
+  end
+
+  defp unmet_of(template, components) do
+    tree = Tree.parse!(template)
+    node = tree |> Tree.walk() |> Enum.find(&(&1.kind == :component))
+    Inspector.unmet(node, tree, components)
+  end
+
+  # A PROPERTY HOLDING TEXT WHERE THE COMPONENT TAKES A LIST is the same promise broken as a required
+  # one left blank: the component will not render, so the page is not publishable either.
+  describe "unmet/3 and a property of the wrong type" do
+    setup do
+      components = %{
+        "blog-term-row" => %{
+          "name" => "blog-term-row",
+          "attrs" => [attr("terms", "any", %{"default" => []}), attr("label")]
+        }
+      }
+
+      %{components: components}
+    end
+
+    test "text in a list is reported", %{components: components} do
+      assert unmet_of(
+               ~S(<.component component_name="blog-term-row" terms="E2E-0" label="x" />),
+               components
+             ) == [{:type, "terms"}]
+    end
+
+    test "a list, a binding or nothing at all is not", %{components: components} do
+      for terms <- [~S(terms={[%{name: "a"}]}), ~S(terms={@terms}), ""] do
+        assert unmet_of(
+                 ~s(<.component component_name="blog-term-row" #{terms} label="x" />),
+                 components
+               ) == []
+      end
+    end
+  end
 end
