@@ -19,10 +19,6 @@ permissions:
   contents: read
 
 env:
-  # TEMPORARY: OTP 29.0.5, the pin of ci.yml. See the comment on OTP_VERSION there; both files move
-  # back to the latest OTP together.
-  OTP_VERSION: "29.0.5"
-  ELIXIR_VERSION: "1.20.4-otp-29"
   # setup-beam tries these in order, so one slow builds.hex.pm cannot fail the run.
   HEXPM_MIRRORS: |
     https://builds.hex.pm
@@ -84,8 +80,7 @@ jobs:
 
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: ${{ env.OTP_VERSION }}
-          elixir-version: ${{ env.ELIXIR_VERSION }}
+          version-file: .tool-versions
           version-type: strict
           hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
 
@@ -118,8 +113,7 @@ jobs:
 
       - uses: erlef/setup-beam@v1
         with:
-          otp-version: ${{ env.OTP_VERSION }}
-          elixir-version: ${{ env.ELIXIR_VERSION }}
+          version-file: .tool-versions
           version-type: strict
           hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
 
