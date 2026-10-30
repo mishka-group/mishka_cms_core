@@ -340,6 +340,11 @@ msgstr ""
 msgid "%{label} can only hold text and inline elements."
 msgstr ""
 
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:618
+#, elixir-autogen, elixir-format
+msgid "%{label} sits in a `<%{host}>` here, so it can only hold text and inline elements."
+msgstr ""
+
 #: lib/mishka_cms_core/runtime/authoring/containment.ex:513
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot contain another clickable element."

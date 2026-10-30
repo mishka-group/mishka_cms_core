@@ -45,9 +45,23 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
 
     test "phrasing-only elements can still hold children — just not block ones" do
-      for tag <- ~w(a span p h1 button pre label code) do
+      for tag <- ~w(span p h1 button pre label code) do
         assert Containment.accepts_children?(tag)
         assert Containment.phrasing_only?(tag)
+      end
+    end
+
+    # HTML's `<a>` IS TRANSPARENT: it holds whatever its parent may hold. A card that is one link
+    # around a heading and a paragraph is valid in a `<div>`, and the same `<p>` inside an `<a>`
+    # inside a `<p>` is not.
+    test "a link is neither phrasing-only nor a block: it is transparent" do
+      assert Containment.accepts_children?("a")
+      refute Containment.phrasing_only?("a")
+      assert Containment.transparent?("a")
+      assert Containment.transparent?("A")
+
+      for tag <- ~w(span p div section button) do
+        refute Containment.transparent?(tag)
       end
     end
 
@@ -137,10 +151,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
 
     # A PARAGRAPH IS NOT INLINE BECAUSE IT HOLDS INLINE CONTENT. Reading the phrasing list both ways
     # put a Paragraph clicked in with a heading selected inside the heading.
-    test "a heading, a paragraph and a link refuse the text blocks" do
-      tree = tree_of(~s(<div><h1>Title</h1><p>Copy</p><a href="/">Go</a><span>x</span></div>))
+    test "a heading, a paragraph and an inline tag refuse the text blocks" do
+      tree = tree_of(~s(<div><h1>Title</h1><p>Copy</p><span>x</span></div>))
 
-      for host <- ~w(h1 p a span), arriving <- ~w(p h2 pre figcaption) do
+      for host <- ~w(h1 p span), arriving <- ~w(p h2 pre figcaption) do
         target = find(tree, host)
 
         assert {:error, message} =
@@ -161,6 +175,106 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     test "a wrapper cannot be put around a paragraph in an inline tag either" do
       assert {:error, _message} = Containment.can_hold?(Node.new(:tag, tag: "p"), "span")
       assert Containment.can_hold?(Node.new(:tag, tag: "p"), "div") == :ok
+    end
+  end
+
+  describe "can_drop?/4 — a link holds what its parent holds" do
+    test "a link in a box takes the text blocks and the boxes a box takes" do
+      tree = tree_of(~s(<div><a href="/">Go</a></div>))
+      link = find(tree, "a")
+
+      for arriving <- ~w(p h2 pre figcaption div section) do
+        assert Containment.can_drop?(tree, Node.new(:tag, tag: arriving), link.id) == :ok,
+               "<#{arriving}> may go inside an <a> inside a <div>"
+      end
+    end
+
+    test "and at the top of a page, which is a body" do
+      tree = tree_of(~s(<a href="/">Go</a>))
+
+      assert Containment.can_drop?(tree, Node.new(:tag, tag: "p"), find(tree, "a").id) == :ok
+    end
+
+    test "a link in a paragraph, a heading or an inline tag takes inline content only" do
+      for host <- ~w(p h1 span) do
+        tree = tree_of(~s(<div><#{host}><a href="/">Go</a></#{host}></div>))
+        link = find(tree, "a")
+
+        assert {:error, message} =
+                 Containment.can_drop?(tree, Node.new(:tag, tag: "p"), link.id),
+               "<p> must not go inside an <a> inside a <#{host}>"
+
+        assert message =~ "sits in a `<#{host}>`"
+        assert message =~ "text and inline"
+        assert Containment.can_drop?(tree, inline(), link.id) == :ok
+      end
+    end
+
+    test "the nearest parent that is not transparent decides, however deep" do
+      tree = tree_of(~s(<p><b><a href="/">Go</a></b></p><section><a href="/">Go</a></section>))
+      [in_bold, in_section] = Enum.filter(Tree.walk(tree), &(&1.tag == "a"))
+
+      assert {:error, _message} = Containment.can_drop?(tree, block(), in_bold.id)
+      assert Containment.can_drop?(tree, block(), in_section.id) == :ok
+    end
+
+    test "a link holding a block is a block where it arrives" do
+      tree = tree_of(~s(<p>Copy</p><span>x</span><div></div><a href="/"><h2>Card</h2></a>))
+      card = find(tree, "a")
+
+      for host <- ~w(p span) do
+        assert {:error, message} = Containment.can_drop?(tree, card, find(tree, host).id)
+        assert message =~ "text and inline"
+      end
+
+      assert Containment.can_drop?(tree, card, find(tree, "div").id) == :ok
+    end
+
+    test "while a link holding words is inline wherever it goes" do
+      tree = tree_of(~s(<p>Copy</p><a href="/"><em>Go</em></a>))
+
+      assert Containment.can_drop?(tree, find(tree, "a"), find(tree, "p").id) == :ok
+    end
+
+    test "an arriving link is read off the tree it comes in" do
+      tree = tree_of(~s(<p>Copy</p>))
+      arriving = tree_of(~s(<a href="/"><p>Card</p></a>))
+      link = Tree.get(arriving, hd(arriving.roots))
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, link, find(tree, "p").id, dragged_tree: arriving)
+    end
+
+    test "a link put around a paragraph takes the place the paragraph had" do
+      boxed = tree_of(~s(<div><p>hello</p></div>))
+      inline = tree_of(~s(<span><p>hello</p></span>))
+
+      assert Containment.can_hold?(find(boxed, "p"), "a", tree: boxed) == :ok
+      assert {:error, message} = Containment.can_hold?(find(inline, "p"), "a", tree: inline)
+      assert message =~ "sits in a `<span>`"
+
+      # With nothing to say where it lands, the pair alone is asked, and a link takes anything.
+      assert Containment.can_hold?(Node.new(:tag, tag: "p"), "a") == :ok
+    end
+
+    test "a link holding a block cannot be boxed in an inline tag" do
+      tree = tree_of(~s(<div><a href="/"><p>Card</p></a></div>))
+
+      assert {:error, _message} = Containment.can_hold?(find(tree, "a"), "span", tree: tree)
+      assert Containment.can_hold?(find(tree, "a"), "div", tree: tree) == :ok
+    end
+
+    test "accepts_map/3 gives the same answers" do
+      tree = tree_of(~s(<div><a href="/">Go</a></div><p><a href="/">Go</a></p>))
+      dragged = Node.new(:tag, tag: "p")
+      accepts = Containment.accepts_map(tree, dragged)
+
+      for {id, allowed?} <- accepts do
+        assert allowed? == (Containment.can_drop?(tree, dragged, id) == :ok)
+      end
+
+      assert [true, false] ==
+               tree |> Tree.walk() |> Enum.filter(&(&1.tag == "a")) |> Enum.map(&accepts[&1.id])
     end
   end
 
@@ -495,13 +609,56 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
       assert message =~ "clickable"
     end
 
-    test "a block subtree is refused by the phrasing rule before the interactive one" do
+    test "a block subtree with a clickable element in it is refused for the clickable element" do
       tree = tree_of(~s(<a href="#"></a><section><button>x</button></section>))
       a = find(tree, "a")
       section = find(tree, "section")
 
       assert {:error, message} = Containment.can_drop?(tree, section, a.id)
+      assert message =~ "clickable"
+    end
+
+    test "a block subtree is refused by the phrasing rule where the link is inline" do
+      tree = tree_of(~s(<p><a href="#"></a></p><section><em>x</em></section>))
+
+      assert {:error, message} =
+               Containment.can_drop?(tree, find(tree, "section"), find(tree, "a").id)
+
       assert message =~ "text and inline"
+    end
+
+    # NO CLICKABLE ELEMENT ANYWHERE INSIDE A LINK OR A BUTTON, which is HTML's rule for both: a link
+    # card holds a `<div>` now, and a button dropped in that `<div>` is still inside the link.
+    test "a link and a button refuse a clickable element at any depth" do
+      tree = tree_of(~s(<a href="#"><div></div></a><button><span></span></button>))
+
+      assert {:error, message} =
+               Containment.can_drop?(tree, Node.new(:tag, tag: "button"), find(tree, "div").id)
+
+      assert message =~ "`<a>` cannot contain another clickable element"
+
+      assert {:error, message} =
+               Containment.can_drop?(tree, Node.new(:tag, tag: "a"), find(tree, "span").id)
+
+      assert message =~ "`<button>` cannot contain another clickable element"
+    end
+
+    test "an arriving subtree is read off the tree it comes in" do
+      tree = tree_of(~s(<a href="#"></a>))
+      arriving = tree_of(~s(<span><button>x</button></span>))
+      span = Tree.get(arriving, hd(arriving.roots))
+
+      assert {:error, message} =
+               Containment.can_drop?(tree, span, find(tree, "a").id, dragged_tree: arriving)
+
+      assert message =~ "clickable"
+    end
+
+    test "while a disclosure still takes a button deep inside it" do
+      tree = tree_of(~s(<details><summary>More</summary><div></div></details>))
+
+      assert Containment.can_drop?(tree, Node.new(:tag, tag: "button"), find(tree, "div").id) ==
+               :ok
     end
 
     test "an anchor accepts a subtree with no clickable descendant" do

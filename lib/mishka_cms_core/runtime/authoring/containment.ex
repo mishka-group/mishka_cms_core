@@ -16,17 +16,22 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   ## The rules
 
     * **Void elements** (`br`, `img`, `input`, …) take no children at all.
-    * **Phrasing-only elements** (`span`, `a`, `p`, `h1`–`h6`, `button`, `pre`, …) take text and
+    * **Phrasing-only elements** (`span`, `p`, `h1`–`h6`, `button`, `pre`, …) take text and
       other phrasing content, never a block element. This is deliberately stricter than the spec —
       `<p>` may legally hold some things this rejects — because the stricter rule is the one that
       matches what an author means to build. Ported from `containment.js`, with one correction: a
       paragraph, a heading and the other text blocks hold phrasing content without BEING it, so
-      none of them goes inside another one or inside a link.
+      none of them goes inside another one.
+    * **A link is transparent**, as HTML's `<a>` is: it holds what its parent may hold. In a
+      `<div>` or at the top of a page it takes a heading and a paragraph — a card that is one link —
+      and in a `<p>`, a heading or a `<span>` it takes inline content only. The nearest ancestor
+      that is not a link decides. Arriving, a link is a block when it holds one.
     * **Structural pairs** the spec fixes exactly: a `table` section takes only `tr`, a `tr` takes
       only `td`/`th`, a list takes only `li`, a `dl` takes `dt`/`dd`/`div`, a `select` takes
       `option`/`optgroup`.
     * **Anchors** may not contain another interactive element — nested interactive content is
-      invalid and unusable with a keyboard.
+      invalid and unusable with a keyboard. A link and a button refuse one at any depth, which is
+      HTML's rule for both; the other interactive elements are asked as the target only.
     * **Components and slots** accept children when their metadata declares a slot (or when they
       already hold content, which means a previous author put something there legitimately). A
       dotted tag the kit catalog has never heard of is asked of the compiled module instead, so the
@@ -70,9 +75,16 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   @void ~w(area base br col embed hr img input link meta param source track wbr)
 
   @phrasing_only ~w(
-    a span b i em strong small code label sub sup mark abbr cite q s u kbd samp var
+    span b i em strong small code label sub sup mark abbr cite q s u kbd samp var
     time bdi bdo p h1 h2 h3 h4 h5 h6 button summary legend dt figcaption pre
   )
+
+  # A LINK HAS NO CONTENT MODEL OF ITS OWN. HTML's `<a>` is transparent: it holds what its parent may
+  # hold, so a link around a heading and a paragraph is a valid card in a `<div>`, and the same
+  # paragraph in a link in a `<p>` is the `<p>` inside a `<p>` the parser closes on the spot. Listed
+  # with the phrasing tags, a link refused the card; left out of both lists, it would be a box and
+  # take a `<section>` inside a heading.
+  @transparent ~w(a)
 
   # TAKING PHRASING CONTENT IS NOT BEING IT. These hold inline content only, which is why they are in
   # the list above, and are blocks themselves, which the list above cannot say: reading it both ways
@@ -96,6 +108,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   @landmarks @landmark_bars |> Map.values() |> List.flatten() |> Enum.uniq()
 
   @interactive ~w(a button input select textarea details label)
+
+  # HTML forbids an interactive DESCENDANT in these two, not just an interactive child. A disclosure
+  # or a label may hold a button further down; a link or a button may not.
+  @no_interactive_inside ~w(a button)
 
   @only_children %{
     "table" => ~w(thead tbody tfoot tr caption colgroup),
@@ -140,6 +156,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   @spec phrasing_only?(String.t() | nil) :: boolean()
   def phrasing_only?(tag) when is_binary(tag), do: String.downcase(tag) in @phrasing_only
   def phrasing_only?(_tag), do: false
+
+  @doc """
+  Whether a tag holds what its parent may hold rather than a content model of its own: an `<a>`
+  takes a paragraph in a `<div>` and inline content only in a `<p>`.
+  """
+  @spec transparent?(String.t() | nil) :: boolean()
+  def transparent?(tag) when is_binary(tag), do: String.downcase(tag) in @transparent
+  def transparent?(_tag), do: false
 
   # Flow content that @only_children happens to also permit somewhere narrow. `<img>` is listed
   # under `picture` and `<script>`/`<template>` under the lists, but all three are ordinary content
@@ -291,18 +315,30 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   asked here; the ones that depend on where the wrapper lands (cycles, form nesting, an interactive
   ancestor) are asked of the wrapper's destination instead, which is a real position in a real tree.
 
+  One pair is not a property of the pair alone: a link holds what its parent holds. Pass the tree
+  `child` sits in as `:tree`, and a link put around it holds what `child`'s parent holds, since the
+  wrapper takes `child`'s place; a link that is `child` is read with its own children. Without it a
+  link takes anything, and a link arriving is inline.
+
   Returns `:ok` or `{:error, message}`, in the same words a refused drop uses.
   """
-  @spec can_hold?(Node.t() | map(), String.t()) :: :ok | {:error, String.t()}
-  def can_hold?(child, tag) when is_binary(tag) do
+  @spec can_hold?(Node.t() | map(), String.t(), keyword()) :: :ok | {:error, String.t()}
+  def can_hold?(child, tag, opts \\ []) when is_binary(tag) do
     target = Node.new(:tag, tag: tag)
+    tree = Keyword.get(opts, :tree)
 
     with :ok <- check_container(target),
          :ok <- check_only_children(child, target),
          :ok <- check_table_part(child, target, []) do
-      check_phrasing(child, target, [])
+      check_phrasing(tree, child, [target | landing(tree, child)], [])
     end
   end
+
+  # Where a wrapper put around `child` sits: `child`'s own parent and every ancestor above it.
+  defp landing(%Tree{} = tree, %Node{parent_id: parent_id}) when is_binary(parent_id),
+    do: [Tree.get(tree, parent_id) | Tree.ancestors(tree, parent_id)]
+
+  defp landing(_tree, _child), do: []
 
   defp check(tree, dragged, target, opts) do
     with :ok <- check_cycle(tree, dragged, target),
@@ -310,11 +346,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
          :ok <- check_component_slots(tree, target, opts),
          :ok <- check_only_children(dragged, target),
          :ok <- check_table_part(dragged, target, opts),
-         :ok <- check_phrasing(dragged, target, opts),
+         :ok <- check_phrasing(tree, dragged, [target | Tree.ancestors(tree, target.id)], opts),
          :ok <- check_form_nesting(tree, dragged, target, opts),
          :ok <- check_landmarks(tree, dragged, target, opts),
          :ok <- check_field_nesting(tree, dragged, target, opts) do
-      check_interactive(tree, dragged, target)
+      check_interactive(tree, dragged, target, opts)
     end
   end
 
@@ -552,22 +588,37 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
         list: humanize_list(homes)
       )
 
-  defp check_phrasing(dragged, target, opts) do
-    case rendered(target, opts) do
-      tag when is_binary(tag) ->
-        case phrasing_only?(tag) and block?(dragged, opts) do
-          true ->
-            {:error,
-             gettext("%{label} can only hold text and inline elements.", label: label(tag))}
-
-          false ->
-            :ok
-        end
-
-      nil ->
-        :ok
+  # `chain` is the target and then every ancestor above it, nearest first. A link takes its rule
+  # from the first of them that is not a link; past the top of the page there is a body, which
+  # holds anything, and an opaque component or a slot is let through as it always was.
+  defp check_phrasing(tree, dragged, [target | _above] = chain, opts) do
+    with host when is_binary(host) <- phrasing_host(chain, opts),
+         true <- phrasing_only?(host) and block?(dragged, tree, opts) do
+      {:error, phrasing_refusal(rendered(target, opts), host)}
+    else
+      _holds_it -> :ok
     end
   end
+
+  defp phrasing_host(chain, opts) do
+    Enum.reduce_while(chain, nil, fn node, _below ->
+      case rendered(node, opts) do
+        tag when tag in @transparent -> {:cont, nil}
+        tag -> {:halt, tag}
+      end
+    end)
+  end
+
+  defp phrasing_refusal(host, host),
+    do: gettext("%{label} can only hold text and inline elements.", label: label(host))
+
+  defp phrasing_refusal(target, host),
+    do:
+      gettext(
+        "%{label} sits in a `<%{host}>` here, so it can only hold text and inline elements.",
+        label: label(target),
+        host: host
+      )
 
   # HTML FORBIDS A NESTED FORM AND FAILS SILENTLY AT IT: the parser's form-element pointer discards
   # the inner start tag, `data-node-id` and all, and lets the inner `</form>` close the OUTER one —
@@ -668,41 +719,70 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   defp dragged_descendants(_dragged, _tree, _opts), do: []
 
-  defp check_interactive(tree, dragged, %Node{tag: tag}) when is_binary(tag) do
-    case String.downcase(tag) in @interactive and interactive?(tree, dragged) do
-      true ->
-        {:error, gettext("%{label} cannot contain another clickable element.", label: label(tag))}
-
-      false ->
-        :ok
+  # The target itself when it is interactive, and a link or a button anywhere above it: what lands
+  # in a `<div>` inside a link card is inside the link.
+  defp check_interactive(tree, dragged, %Node{} = target, opts) do
+    with host when is_binary(host) <- clickable_host(tree, target),
+         true <- interactive?(dragged, tree, opts) do
+      {:error, gettext("%{label} cannot contain another clickable element.", label: label(host))}
+    else
+      _no_clash -> :ok
     end
   end
 
-  defp check_interactive(_tree, _dragged, _target), do: :ok
+  defp clickable_host(tree, %Node{tag: tag} = target) do
+    case interactive_tag?(tag) do
+      true ->
+        String.downcase(tag)
 
-  defp interactive?(tree, %Node{} = dragged) do
-    interactive_tag?(dragged.tag) or
-      Enum.any?(Tree.descendant_ids(tree, dragged.id), fn id ->
-        tree |> Tree.get(id) |> then(&(&1 && interactive_tag?(&1.tag)))
-      end)
+      false ->
+        tree
+        |> Tree.ancestors(target.id)
+        |> Enum.map(&lowered_tag/1)
+        |> Enum.find(&(&1 in @no_interactive_inside))
+    end
   end
 
-  defp interactive?(_tree, dragged), do: interactive_tag?(dragged_tag(dragged))
+  defp lowered_tag(%Node{tag: tag}) when is_binary(tag), do: String.downcase(tag)
+  defp lowered_tag(_node), do: nil
+
+  defp interactive?(%Node{} = dragged, tree, opts),
+    do: Enum.any?([dragged | dragged_descendants(dragged, tree, opts)], &interactive_tag?(&1.tag))
+
+  defp interactive?(dragged, _tree, _opts), do: interactive_tag?(dragged_tag(dragged))
 
   defp interactive_tag?(tag) when is_binary(tag), do: String.downcase(tag) in @interactive
   defp interactive_tag?(_tag), do: false
 
   # A component whose markup cannot be read is opaque here: it may render anything, so it is let
-  # through rather than guessed at. One whose markup opens with an element is that element.
-  defp block?(%{kind: kind}, _opts) when kind in [:text, :eex, :eex_comment, :html_comment],
-    do: false
+  # through rather than guessed at. One whose markup opens with an element is that element. A link
+  # is what it holds: a card around a heading is a block, a link around words is not.
+  defp block?(%{kind: kind}, _tree, _opts)
+       when kind in [:text, :eex, :eex_comment, :html_comment],
+       do: false
 
-  defp block?(dragged, opts) do
+  defp block?(dragged, tree, opts) do
     case rendered(dragged, opts) do
-      nil -> false
-      tag -> tag in @text_blocks or tag not in @phrasing_only
+      nil ->
+        false
+
+      tag when tag in @transparent ->
+        Enum.any?(children_of(dragged, tree, opts), &block?(&1, tree, opts))
+
+      tag ->
+        tag in @text_blocks or tag not in @phrasing_only
     end
   end
+
+  # Read where `dragged_descendants/3` reads, so an arriving link is read off its own template.
+  defp children_of(%Node{children: ids}, tree, opts) do
+    case Keyword.get(opts, :dragged_tree) || tree do
+      %Tree{} = source -> ids |> Enum.map(&Tree.get(source, &1)) |> Enum.reject(&is_nil/1)
+      nil -> []
+    end
+  end
+
+  defp children_of(_dragged, _tree, _opts), do: []
 
   # THE ELEMENT A NODE PUTS ON THE PAGE, lowercased: a tag is itself, and a component is the one
   # element its own markup opens with (a kit navbar's `<nav>`), read off the palette entry's
