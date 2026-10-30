@@ -18,9 +18,9 @@
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_without_opaque, 219},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex", :call_without_opaque, 1651},
-  {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 478},
-  {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 504},
-  {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 515},
+  {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 463},
+  {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 489},
+  {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 500},
 
   # `Strict.violation!/2` and `Strict.check!/3` are macros that compile to an unconditional `raise` in
   # :dev and :test (and to nothing in :prod), and dialyzer runs in :dev. Every function that reaches

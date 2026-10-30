@@ -113,10 +113,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   @spec void_tags() :: [String.t()]
   def void_tags, do: @void
 
-  @doc "Tags that hold phrasing content only — no block child may be dropped into them."
-  @spec phrasing_only_tags() :: [String.t()]
-  def phrasing_only_tags, do: @phrasing_only
-
   @doc """
   Whether a bare HTML tag can hold children **at all** — false only for void elements.
 
@@ -157,17 +153,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
                          do: child
 
   @doc """
-  Tags the content model only permits under a specific parent — `<td>` outside a `<tr>` is not a
-  cell, it is foster-parented out of the table by the parser.
+  Whether a tag may only appear under a specific parent — `<td>` outside a `<tr>` is not a cell, it is
+  foster-parented out of the table by the parser.
 
   The page builder asks this before it wraps a node in its own element: an editor wrapper around a
   `<td>` lands where only a `<td>` may go, so the parser moves it out and the wrapper becomes an
   orphan sitting above the table, taking the node's markers with it.
   """
-  @spec parent_restricted_tags() :: [String.t()]
-  def parent_restricted_tags, do: @parent_restricted
-
-  @doc "Whether a tag may only appear under a specific parent — see `parent_restricted_tags/0`."
   @spec parent_restricted?(String.t() | nil) :: boolean()
   def parent_restricted?(tag) when is_binary(tag), do: String.downcase(tag) in @parent_restricted
   def parent_restricted?(_tag), do: false

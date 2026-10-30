@@ -257,7 +257,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   end
 
   @doc """
-  The scrolling body of an admin modal, capped so the head and footer stay put on a short screen.
+  The scrolling body of an admin modal, capped so the head stays put on a short screen.
 
   Its scrollbar is hidden, as every scrolling surface in this admin is.
   """
@@ -268,21 +268,6 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     ~H"""
     <div class={[
       "max-h-[min(60vh,520px)] overflow-y-auto px-[22px] py-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden",
-      @class
-    ]}>
-      {render_slot(@inner_block)}
-    </div>
-    """
-  end
-
-  @doc "The footer of an admin modal — a ruled band under the body for counts and controls."
-  attr :class, :string, default: nil
-  slot :inner_block, required: true
-
-  def modal_footer(assigns) do
-    ~H"""
-    <div class={[
-      "flex flex-wrap items-center justify-between gap-3 border-t border-[#f0efea] px-[22px] py-3.5",
       @class
     ]}>
       {render_slot(@inner_block)}

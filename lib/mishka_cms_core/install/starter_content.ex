@@ -2055,28 +2055,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
     end)
   end
 
-  @doc """
-  What the sign-in page of `role` (`"sign_in"`, `"register"`, …, its `extra["auth_role"]`) is
-  written with today: `%{template:, events:, helpers:}`, as `ensure_auth!/1` writes them. Nothing
-  here updates a page a site already has; this is for a script that brings one up to date, written
-  with `context: %{page_code: :package}` as these are. `nil` for a role there is no page for.
-  """
-  @spec auth_page_code(String.t()) ::
-          %{template: String.t(), events: list(), helpers: list()} | nil
-  def auth_page_code(role) do
-    case Enum.find(auth_pages(), &(&1.role == role)) do
-      nil ->
-        nil
-
-      page ->
-        %{
-          template: page.template,
-          events: Enum.map(page.events, &auth_event/1),
-          helpers: Enum.map(page.helpers, &auth_helper/1)
-        }
-    end
-  end
-
   # SIGNING OUT IS FOR SOMEBODY SIGNED IN; every other flow is for a visitor.
   defp auth_extra("sign_out" = role), do: %{"auth_role" => role, "signed_in_only" => true}
   defp auth_extra(role), do: %{"auth_role" => role, "visitors_only" => true}

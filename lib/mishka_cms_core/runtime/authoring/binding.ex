@@ -144,11 +144,4 @@ defmodule MishkaCmsCore.Runtime.Authoring.Binding do
       nil -> if String.match?(rest, ~r/^@\w+$/), do: {:ok, rest, nil}, else: :error
     end
   end
-
-  @doc """
-  How many preview rows the canvas renders for a bound node — the demo's three, with a badge — since
-  the editor has no real data to loop over.
-  """
-  @spec preview_count() :: pos_integer()
-  def preview_count, do: 3
 end
