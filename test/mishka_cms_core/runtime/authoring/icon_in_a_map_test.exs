@@ -82,9 +82,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.IconInAMapTest do
   end
 
   describe "the icons a page could draw" do
-    # `CanvasLive` walks a term for these; the names have to be findable wherever the kit puts them,
-    # which is what the walk is for. Asserted against `Icons.known?/1`, the same question the walk
-    # asks, so a kit shipping a set this install does not have is not a failure here.
+    # The editor's canvas (`MishkaCmsBuilderWeb.Live.CanvasLive` in mishka_cms_builder) walks a term
+    # for these; the names have to be findable wherever the kit puts them, which is what the walk is
+    # for. Asserted against `Icons.known?/1`, the same question the walk asks, so a kit shipping a set
+    # this install does not have is not a failure here.
     test "include the ones a component defaults to inside a map", %{by_name: by_name} do
       defaults =
         for attr <- Inspector.attrs(by_name["chelekom-pagination"]),

@@ -1064,9 +1064,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   # `:root` IS NOT A PLACE IN A DOCUMENT-ROOTED TREE. A layout's roots are one `<body>`, so content
   # aimed at the root belongs INSIDE it — everything else is markup after `</body>`. Both clients
-  # hardcode `"root"` for a drop on empty canvas and for the layers rail's top row, and
-  # `Placement.after_node/2` answers `{:root, index + 1}` for a paste beside the body, so the answer
-  # has to be given here, in the one funnel all of them reach, rather than at each door.
+  # hardcode `"root"` for a drop on empty canvas and for the layers rail's top row, and the editor's
+  # placement answers `{:root, index + 1}` for a paste beside the body, so the answer has to be
+  # given here, in the one funnel all of them reach, rather than at each door.
   defp settle_root(tree, :root) do
     case document_root(tree) do
       nil -> :root

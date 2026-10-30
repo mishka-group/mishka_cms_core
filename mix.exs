@@ -118,8 +118,8 @@ defmodule MishkaCmsCore.MixProject do
       # `Phoenix.LiveViewTest` parses rendered markup with this. Test-only: it is never a burden on
       # anything that depends on this library.
       {:lazy_html, "~> 0.1", only: :test},
-      # The editor's Heroicons catalogue (`Icons.Heroicons`) reads these SVGs at compile time. A host
-      # brings its own copy, so this one serves only work on this library alone.
+      # The icon catalogue (`MishkaCmsCore.Runtime.Authoring.Icons.Heroicons`) reads these SVGs at
+      # compile time. A host brings its own copy, so this one serves only work on this library alone.
       {:heroicons,
        github: "tailwindlabs/heroicons",
        tag: "v2.2.0",

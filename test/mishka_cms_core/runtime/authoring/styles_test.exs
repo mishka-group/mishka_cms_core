@@ -526,7 +526,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.StylesTest do
 
     # THE MOVE THE SWATCHES COULD NOT HOLD. `#dadada` is none of the five the panel paints, so the
     # control that receives it has to take any colour at all — which is why Background is a field
-    # with the swatches over it rather than the swatches alone. See `Panels.appearance_props/0`.
+    # with the swatches over it rather than the swatches alone. See
+    # `MishkaCmsBuilderWeb.Live.Panels.appearance_props/0` in mishka_cms_builder.
     test "a colour the palette does not name moves like any other value" do
       assert Styles.from_declaration("background-color", "#dadada") ==
                {:ok, {"background", "#dadada"}}

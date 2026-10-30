@@ -34,7 +34,8 @@ defmodule MishkaCmsCore.UiKit.MediaWellTest do
     |> Map.fetch!("components")
   end
 
-  # What `CanvasLive.media_attrs/1` computes, against the same function it computes it with.
+  # What the editor's canvas computes (`MishkaCmsBuilderWeb.Live.CanvasLive`'s `media_attrs/1` in
+  # mishka_cms_builder), against the same functions it computes it with.
   defp media_attrs(entry) do
     features = Inspector.features(entry)
 
