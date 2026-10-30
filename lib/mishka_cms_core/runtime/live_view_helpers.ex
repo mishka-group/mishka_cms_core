@@ -61,6 +61,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     answer with markup of its own.
   - `runtime:render:before_content_component` — before each component a `rich_content/1` marker
     names is drawn; see `MishkaCmsCore.Runtime.ContentComponents`.
+  - `runtime:component:crashed` — a function component raised while it was drawn, and a box was
+    drawn in its place; see `MishkaCmsCore.Runtime.ComponentBoundary`.
 
   See also `MishkaCmsCore.Runtime.Compilers.ComponentCompiler` for how the target modules and their
   `__component_information__/0` metadata surface are generated.
@@ -71,6 +73,7 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   import Phoenix.Component
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
   alias MishkaCmsCore.Runtime.Compilers.Helpers
+  alias MishkaCmsCore.Runtime.ComponentBoundary
   alias MishkaCmsCore.Runtime.ContentComponents
   alias MishkaCmsCore.Runtime.CspNonce
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
@@ -223,6 +226,11 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   `MishkaCmsCore.Runtime.States.CompileFailureState` so the next render short-circuits to the
   placeholder instead of retrying.
 
+  A function component that raises while it draws a full render — the HTTP render, the connected
+  mount, any render without change tracking — is drawn as a small box, and the rest of the page
+  draws; see `MishkaCmsCore.Runtime.ComponentBoundary`. A re-render of a component whose attributes
+  changed is drawn as it always was, with change tracking.
+
   The component's CSS does not depend on this: `MishkaCmsCore.Runtime.Handlers.BootHandler` writes
   a template file for every active component whether or not it compiles a module, and that file is
   what the closure walk and Tailwind read. So a lazily-built component renders styled the first
@@ -364,17 +372,41 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   # never be handed to Tailwind and it would render completely unstyled on every site — silently,
   # in production only, with the canvas looking fine because it links the shared base. So the page
   # goes on writing `<.component component_name="…" …/>` and the fork happens HERE.
+  #
+  # A FULL RENDER OF A FUNCTION COMPONENT IS DRAWN INSIDE `ComponentBoundary.draw/3`, so one that
+  # raises while it draws is a box on the page rather than the page's HTTP 500. `blog-term-row`
+  # handed text where it maps over a list took every visitor's page down this way, while the canvas
+  # drew "could not render" in its place.
+  #
+  # FULL, NOT EVERY. HEEx hands a component `__changed__: nil` when nothing is tracked — the HTTP
+  # render, the connected mount — and the boundary costs nothing there: every value is computed once
+  # either way. On an update it would cost the change tracking (`draw/3` settles every closure with
+  # tracking off, so a component re-drawn for one changed attribute would run every expression it
+  # has again), so an update is drawn as it always was. One that raises there stops the visitor's
+  # LiveView, which reconnects with a full render, and that one draws the box.
   defp applied(module, name, assigns) do
-    case stateful?(module) do
-      false ->
-        RenderMetrics.measure(module, fn ->
-          apply(module, String.to_existing_atom(name), [assigns])
+    case {stateful?(module), assigns[:__changed__]} do
+      {true, _changed} ->
+        live(module, name, assigns)
+
+      {false, nil} ->
+        ComponentBoundary.draw(name, owner_name(assigns[:site]), fn ->
+          called(module, name, assigns)
         end)
 
-      true ->
-        live(module, name, assigns)
+      {false, _tracked} ->
+        called(module, name, assigns)
     end
   end
+
+  defp called(module, name, assigns) do
+    RenderMetrics.measure(module, fn ->
+      apply(module, String.to_existing_atom(name), [assigns])
+    end)
+  end
+
+  defp owner_name(site) when site in [nil, "Global"], do: nil
+  defp owner_name(site), do: site
 
   defp stateful?(module) do
     Code.ensure_loaded?(module) and function_exported?(module, :__component_information__, 1) and
@@ -511,9 +543,10 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     static_render(reachable(name, site, module), module, name, assigns)
   end
 
+  # NO BOUNDARY HERE: the canvas contains a raise itself, and shows the author the reason.
   defp static_render(true, module, name, assigns) do
     case stateful?(module) do
-      false -> render_component(true, module, name, assigns)
+      false -> slotted(module, name, assigns, &called/3)
       true -> cold(module, assigns)
     end
   end
@@ -582,11 +615,14 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
     """
   end
 
-  defp render_component(true, module, name, assigns) do
+  defp render_component(true, module, name, assigns),
+    do: slotted(module, name, assigns, &applied/3)
+
+  defp slotted(module, name, assigns, draw) do
     case runtime_slot_assigns(module, assigns[:runtime_slot]) do
       {:ok, slot_assigns} ->
         assigns = assigns |> Map.drop([:runtime_slot]) |> Map.merge(slot_assigns)
-        applied(module, name, with_source(assigns, module))
+        draw.(module, name, with_source(assigns, module))
 
       {:error, message} ->
         assigns = Map.put(assigns, :slot_error, message)
