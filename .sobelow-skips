@@ -1,5 +1,6 @@
 CI.System: Command Injection via `System` function,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1209,3E21AA0
 CI.System: Command Injection via `System` function,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:388,2848528
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/authoring/tree.ex:809,6EA56E8
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/_helpers.ex:56,6168F81
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:548,667E8DF
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:581,7E2E986
@@ -9,10 +10,9 @@ Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compiler
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/content_editor_styles.ex:103,767652A
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:233,4B66FE0
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:263,42B5786
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/page_builder/tree.ex:809,3845DAA
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core_web/live/admin/builder/builder_live.ex:6503,13DA38C
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/activity/sources/runtime_compile.ex:108,3E92A6F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:124,69BBDA4
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/authoring/code_check.ex:301,3ABB6FB
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/_helpers.ex:58,2261ED1
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/component_compiler.ex:1742,36E6C05
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:302,20BDF42
@@ -20,16 +20,14 @@ DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runt
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:310,7D09F8B
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/sitemap_compiler.ex:462,4570480
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:234,71D8E6C
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/page_builder/code_check.ex:301,6314ECE
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2885,74F6EEF
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1975,53AD084
-RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/page_builder/code_check.ex:370,7951CFE
-SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:184,6F8C77E
-SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:208,33E2D4F
-SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:246,34D1D1
-SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:261,4A011C1
-SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:479,2EBA097
-SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:596,1B6C072
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1988,1635147
+RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/authoring/code_check.ex:370,3A0746E
+SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:197,1CD06A0
+SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:220,6CCAA4
+SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:258,B4D652
+SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:273,6990D27
+SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:520,1A07765
+SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:660,7A2B126
 SQL.Query: SQL injection,lib/mishka_cms_core/runtime/draft_archival_purge.ex:156,21720DD
 SQL.Query: SQL injection,lib/mishka_cms_core/runtime/draft_archival_purge.ex:179,481FAA2
 SQL.Query: SQL injection,lib/mishka_cms_core/runtime/page_language_backfill.ex:94,7943DDD
@@ -68,10 +66,10 @@ Traversal.FileModule: Directory Traversal in `File.open`,lib/mishka_cms_core/run
 Traversal.FileModule: Directory Traversal in `File.read!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:914,58D879D
 Traversal.FileModule: Directory Traversal in `File.read!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1169,8338DF
 Traversal.FileModule: Directory Traversal in `File.read!`,lib/mix/mishka_cms_core/gettext_templates.ex:78,3C0E847
+Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/authoring/icons/bundled.ex:217,6EB2D40
 Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:273,11BE6C2
 Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/compilers/css_closure.ex:469,4DB3E4D
 Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/compilers/npm_packages.ex:154,2349702
-Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/page_builder/icons/bundled.ex:217,1AE65F3
 Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/resources/media.ex:2463,30116AC
 Traversal.FileModule: Directory Traversal in `File.read`,lib/mishka_cms_core/runtime/runtime_preview.ex:810,7DA9538
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:384,171EA96
@@ -115,12 +113,6 @@ XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:540,4E9443A
 XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:560,53492B4
 XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:672,3E59D47
 XSS.Raw: XSS,lib/mishka_cms_core/runtime/runtime_preview.ex:828,3F964C0
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:1662,7BEA234
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:1686,5F2F368
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2161,3381968
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2460,70EAB76
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:2823,31605F2
-XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/builder/canvas_live.ex:3296,1737C40
 XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/components/two_factor.ex:244,4A4E93
 XSS.Raw: XSS,lib/mishka_cms_core_web/live/admin/dashboard/runtime/translation/index.html.heex:11,2CBFCB4
 XSS.SendResp: XSS in `send_resp`,lib/mishka_cms_core/runtime/plugs/api_availability_plug.ex:148,72575DB

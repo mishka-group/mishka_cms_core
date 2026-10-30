@@ -21,7 +21,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
 
   alias MishkaCmsCore.Runtime.{RenderMetrics, Translations}
   alias MishkaCmsCore.Runtime.Compilers.{ErrorCompiler, JavaScriptCompiler}
-  alias MishkaCmsCore.Runtime.PageBuilder.Hooks
+  alias MishkaCmsCore.Runtime.Authoring.Hooks
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
@@ -536,13 +536,13 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
         """
       end|
 
-      assert MishkaCmsCore.Runtime.PageBuilder.Markup.sigils(code) == [
+      assert MishkaCmsCore.Runtime.Authoring.Markup.sigils(code) == [
                "<b>{@x}</b>",
                "<i>y</i>\n"
              ]
 
-      assert MishkaCmsCore.Runtime.PageBuilder.Markup.sigils("not elixir (") == []
-      assert MishkaCmsCore.Runtime.PageBuilder.Markup.sigils(nil) == []
+      assert MishkaCmsCore.Runtime.Authoring.Markup.sigils("not elixir (") == []
+      assert MishkaCmsCore.Runtime.Authoring.Markup.sigils(nil) == []
     end
 
     @hook_metrics %{

@@ -19,10 +19,10 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
   alias MishkaCmsCore.Install.StarterContent
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.{Layout, Page, PageProvision, Translations}
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Settings
 
   require Ash.Query

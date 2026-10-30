@@ -46,8 +46,8 @@ defmodule MishkaCmsCore.Runtime.PreviewHooks do
   """
 
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   require Ash.Query
 

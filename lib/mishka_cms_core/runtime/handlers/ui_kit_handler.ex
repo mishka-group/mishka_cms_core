@@ -28,8 +28,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   alias MishkaCmsCore.Runtime.{Component, JsHook, Stylesheet}
   alias MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
-  alias MishkaCmsCore.Runtime.PageBuilder.Markup
+  alias MishkaCmsCore.Runtime.Authoring.CodeReads
+  alias MishkaCmsCore.Runtime.Authoring.Markup
   alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
   alias MishkaCmsCore.UiKit.Contract
 

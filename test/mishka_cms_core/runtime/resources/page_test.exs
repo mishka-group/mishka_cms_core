@@ -204,7 +204,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
                )
                |> Ash.create()
 
-      assert page.template == MishkaCmsCore.Runtime.PageBuilder.PageStarter.blank()
+      assert page.template == MishkaCmsCore.Runtime.Authoring.PageStarter.blank()
     end
 
     test "validates format constraints" do

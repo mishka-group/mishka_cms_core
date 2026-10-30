@@ -18,8 +18,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
 
   ## Why the editor's own minting is not enough
 
-  `EditorSession.with_id/4` mints one per drop and `PageBuilder.Ids.dedupe/2` renames the arrivals
-  that collided — but `dedupe/2` is deliberately given the nodes that ARRIVED, and answers nothing
+  The visual editor (`mishka_cms_builder`) mints an id per drop and renames the arrivals
+  that collided — but it deliberately renames only the nodes that ARRIVED, and answers nothing
   when a whole document arrives at once. That is exactly what the source window does: an author
   pastes markup, and a copy-paste of a component tag inside it carries the same id twice with
   nothing to call an arrival. A draft restore and a seeded template have the same shape.
@@ -30,15 +30,15 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
 
   A function component with a duplicate id is a bad idea and not a crash, and the editor already
   renames those. `id={@row.id}` is the author binding the id to their data and two of them are not a
-  collision — the same distinction `PageBuilder.Ids` draws.
+  collision — the same distinction the editor's renaming draws.
   """
 
   use Ash.Resource.Validation
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.Component
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   require Ash.Query
 
@@ -114,10 +114,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulIds do
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(name in ^names and stateful == true)
     |> Ash.Query.select([:name])
-    |> Ash.read()
+    # EVERY PAGE: `:read_any` answers its first 100 rows when no page is asked for, and one name is a
+    # row on every site that has it.
+    |> MishkaCmsCore.EveryPage.read()
     |> case do
-      {:ok, %{results: rows}} -> Enum.map(rows, & &1.name)
-      {:ok, rows} when is_list(rows) -> Enum.map(rows, & &1.name)
+      {:ok, rows} -> Enum.map(rows, & &1.name)
       _unreadable -> []
     end
   end

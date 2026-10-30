@@ -6,8 +6,8 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
   @moduledoc """
   A component a `[[component …]]` marker names that raises while it draws is drawn as a box, and
   the rest of the page draws — in the HTTP render, in the connected LiveView and in its re-renders,
-  and for a marker inside another component's content. A page's own `<.component>` call is not
-  wrapped.
+  and for a marker inside another component's content. A page's own `<.component>` call is drawn
+  through the same boundary on a full render: the HTTP render and the connected mount.
 
   The components are real rows compiled by the runtime on first use, on a site this process renders
   for. `async: false` — `SiteState`, compiled modules and the event registry are process-global.
@@ -148,6 +148,21 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
     def render(assigns) do
       ~H"""
       <div id="host"><Page.content html={@html} site={@site} /></div>
+      """
+    end
+  end
+
+  defmodule PageHost do
+    use Phoenix.LiveView
+
+    def mount(_params, session, socket) do
+      :ok = MishkaCmsCore.Runtime.Translations.put_site(session["site_id"])
+      {:ok, assign(socket, site: session["site"], names: session["names"])}
+    end
+
+    def render(assigns) do
+      ~H"""
+      <div id="host"><Page.page names={@names} site={@site} /></div>
       """
     end
   end
@@ -328,27 +343,64 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
     end
   end
 
-  describe "what it does not contain" do
-    test "a page's own <.component> call is not wrapped, and raises as it always did", %{
-      site: site,
-      names: names
-    } do
+  # A PAGE'S OWN `<.component>` CALL IS DRAWN THROUGH THE SAME BOUNDARY. `blog-term-row` given text
+  # where it maps over a list raised inside its template, and the published page answered HTTP 500 for
+  # every visitor while the editor's canvas drew "could not render" in the component's place. The two
+  # now agree: the component is a box and the page around it draws.
+  describe "a page's own <.component> call" do
+    test "that raises is a box, and the rest of the page draws", %{site: site, names: names} do
+      log =
+        capture_log(fn ->
+          send(self(), {:html, to_html(Page.page(%{names: names, site: site.name}))})
+        end)
+
+      assert_received {:html, html}
+      assert count(html, @box) == 1
+      assert html |> query(".probe-fine") |> LazyHTML.attribute("data-title") == ["before"]
+      assert count(html, ".probe-boom") == 0
+      assert log =~ names.boom
+      assert log =~ "KeyError"
+    end
+
+    test "that draws is the component's own markup", %{site: site, names: names} do
       rendered =
         LiveViewHelpers.component(%{component_name: names.fine, site: site.name, title: "t"})
 
-      refute :erlang.fun_info(rendered.dynamic, :module) == {:module, ComponentBoundary}
-
-      {error, stacktrace} =
-        try do
-          to_html(Page.page(%{names: names, site: site.name}))
-        rescue
-          error -> {error, __STACKTRACE__}
-        end
-
-      assert %KeyError{} = error
-      refute Enum.any?(stacktrace, &(elem(&1, 0) == ComponentBoundary))
+      html = to_html(rendered)
+      assert count(html, @box) == 0
+      assert html |> query(".probe-fine") |> LazyHTML.text() == "t"
     end
 
+    test "that raises in the connected LiveView is a box, and the LiveView stays up", %{
+      site: site,
+      names: names
+    } do
+      {view, _html} =
+        capture_log_value(fn ->
+          {:ok, view, html} =
+            live_isolated(Phoenix.ConnTest.build_conn(), PageHost,
+              session: %{"site" => site.name, "site_id" => site.id, "names" => names}
+            )
+
+          {view, html}
+        end)
+
+      assert Process.alive?(view.pid)
+      assert has_element?(view, @box)
+      assert has_element?(view, ".probe-fine[data-title=before]")
+    end
+
+    test "a marker inside a page is boxed once, not once per boundary", %{
+      site: site,
+      names: names
+    } do
+      html = drawn(site, marker(names.broken))
+
+      assert count(html, @box) == 1
+    end
+  end
+
+  describe "what it does not contain" do
     test "an exception that names a 4xx status is the page's answer, and is raised on", %{
       site: site,
       names: names

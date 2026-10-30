@@ -138,7 +138,7 @@ config :mishka_cms_core, :prefer_local_ui_kits, true
 config :mishka_cms_core, :ui_kits_dir, Path.expand("../test/fixtures/cms_ui_kits", __DIR__)
 
 # The code default also offers the headless package, which is not among the fixtures, so every cold
-# catalogue — the Studio sheet, the Registry tab — fell through to a real HTTP request and parsed
+# catalogue — the installer's kit list among them — fell through to a real HTTP request and parsed
 # Chelekom behind it, and a test waiting on that render timed out whenever the internet was slow.
 # `url: nil` fails without a request, so a missing file is reported rather than fetched. A test about
 # downloading configures its own list and a `:ui_kit_req_options` plug, and restores this one

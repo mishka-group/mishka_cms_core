@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.Resources.TenantSiteChangesTest do
   @moduledoc """
   The two changes that tie a record's `site_id` to the tenant an action runs under, used by the
   create actions of the layout, component, JavaScript hook, stylesheet, setting and notification
-  resources.
+  resources, and by the master's update of the first four.
   """
   use ExUnit.Case, async: true
 

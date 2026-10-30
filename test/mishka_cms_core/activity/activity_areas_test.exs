@@ -99,41 +99,6 @@ defmodule MishkaCmsCore.Activity.ActivityAreasTest do
         )
     end
 
-    defp editor_change!(site, page) do
-      MishkaCmsCore.Runtime.PageBuilderEvent
-      |> Ash.Changeset.for_create(
-        :create,
-        %{
-          id: Ecto.UUID.generate(),
-          source_type: :page,
-          source_id: page.id,
-          site_id: site.id,
-          label: "Set gap (base)",
-          target: "<nav>",
-          kind: :style,
-          op: :set_style
-        },
-        tenant: site.id,
-        authorize?: false
-      )
-      |> Ash.create!(authorize?: false)
-    end
-
-    defp page_draft!(site) do
-      MishkaCmsCore.Runtime.PageDraft
-      |> Ash.Changeset.for_create(
-        :create,
-        %{
-          name: "areas-draft",
-          title: "areas-draft",
-          path: "/areas-draft",
-          template: "<h1>x</h1>"
-        },
-        tenant: site.id
-      )
-      |> Ash.create!(authorize?: false)
-    end
-
     defp entries(actor, site, kind) do
       Query.page(%{
         site_id: site.id,
@@ -153,30 +118,6 @@ defmodule MishkaCmsCore.Activity.ActivityAreasTest do
 
       assert length(entries(reader, site, "job")) == 1
       assert length(entries(full, site, "job")) == 2
-    end
-
-    test "the activity area alone shows no job and no editor change", %{site: site} do
-      job!("MishkaCmsCore.Runtime.Media", site)
-      editor_change!(site, create_page!(site_id: site.id))
-
-      reader = holder(["admin:dashboard:runtime:activity"], site)
-
-      assert entries(reader, site, nil) == []
-    end
-
-    test "an editor change and a draft follow their document's area", %{site: site} do
-      page = create_page!(site_id: site.id)
-      editor_change!(site, page)
-      page_draft!(site)
-
-      reader = holder(["admin:dashboard:runtime:activity", "admin:dashboard:runtime:media"], site)
-      full = holder(["admin:dashboard:*"], site)
-      badges = fn actor -> actor |> entries(site, "content") |> Enum.map(& &1.resource_label) end
-
-      assert "Page Draft" in badges.(full)
-      assert Enum.any?(badges.(full), &(&1 =~ "Editor"))
-      refute "Page Draft" in badges.(reader)
-      refute Enum.any?(badges.(reader), &(&1 =~ "Editor"))
     end
   end
 

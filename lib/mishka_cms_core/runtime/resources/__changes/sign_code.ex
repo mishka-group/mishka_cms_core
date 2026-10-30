@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.SignCode do
   @moduledoc """
   Signs each stored snippet on the way in, so the compiler can tell what this application wrote.
 
-  `MishkaCmsCore.Runtime.PageBuilder.CodeSignature` holds the rule and is off unless a key is
+  `MishkaCmsCore.Runtime.Authoring.CodeSignature` holds the rule and is off unless a key is
   configured; with no key this change is a no-op and nothing about the row changes.
 
   ## Why here rather than at each caller
@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.SignCode do
 
   use Ash.Resource.Change
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
+  alias MishkaCmsCore.Runtime.Authoring.CodeSignature
 
   @code_fields [:events, :infos, :state, :helpers]
 

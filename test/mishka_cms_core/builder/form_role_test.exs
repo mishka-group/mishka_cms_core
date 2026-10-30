@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Builder.FormRoleTest do
 
   Two things are pinned here. Every role a kit may declare reads back unchanged, and everything a
   kit may get wrong — an invented role, no role at all, a value that is not a map — costs the
-  declaration and nothing more, so `MishkaCmsCore.Runtime.PageBuilder.Fields` infers instead.
+  declaration and nothing more, so `MishkaCmsCore.Runtime.Authoring.Fields` infers instead.
 
   The binding tests are the point of the module. A key naming an attribute the component does not
   declare has to be dropped: kept, it would write `bind={f[:email]}` onto a component with no `bind`

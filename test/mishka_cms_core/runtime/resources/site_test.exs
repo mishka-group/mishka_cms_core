@@ -1037,22 +1037,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
       refute function_exported?(MishkaCmsCore.Runtime, :builder_raw, 2)
       refute function_exported?(MishkaCmsCore.Runtime, :builder_raw!, 2)
     end
-
-    # What that read fed: an AST built from every row it returned, each page wrapped in whatever
-    # layout its id named, and a cache for it. Nothing calls either.
-    test "nor the AST it was encoded into, nor the cache that held it" do
-      Code.ensure_loaded!(MishkaCmsCore.Runtime.PageBuilder.Helpers)
-
-      for arity <- [2, 3] do
-        refute function_exported?(
-                 MishkaCmsCore.Runtime.PageBuilder.Helpers,
-                 :builder_encoded_ast,
-                 arity
-               )
-      end
-
-      refute Code.ensure_loaded?(MishkaCmsCore.Runtime.States.PageBuilderAstState)
-    end
   end
 
   # THE BYPASS READS ARE A MASTER'S. `:read_any` and `:get_any` skip tenancy so a master, and the

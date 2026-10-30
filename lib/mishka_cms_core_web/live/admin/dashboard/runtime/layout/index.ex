@@ -11,7 +11,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
   """
   use MishkaCmsCore.ExtensionLiveView
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaGervaz.Table.Web.UrlSync
 
@@ -44,7 +44,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
       |> assign(:page_title, gettext("Listing Layouts"))
       |> assign(:url_state, nil)
 
-    {:ok, assign(new_socket, :open_builder?, false)}
+    {:ok,
+     new_socket
+     |> assign(:open_builder?, false)
+     |> assign(:editor_url, Section.editor_url("layout"))}
   end
 
   @impl true
@@ -54,19 +57,19 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
   end
 
   @impl true
+  # THE EDITOR IS ASKED AGAIN, NOT REMEMBERED from mount: it answers with the new record's own
+  # address, and an editor gone since the menu was drawn leaves the plain create behind.
+  # A redirect rather than a live navigation, for the reason the menu's main half is a plain link.
   def handle_info({:form_saved, :create, result}, %{assigns: %{open_builder?: true}} = socket) do
-    {:noreply,
-     socket
-     |> assign(:open_builder?, false)
-     |> push_navigate(to: Section.builder_path("layout", result.id))}
+    socket = assign(socket, :open_builder?, false)
+
+    case Section.editor_url("layout", result.id) do
+      nil -> {:noreply, created(socket)}
+      url -> {:noreply, redirect(socket, to: url)}
+    end
   end
 
-  def handle_info({:form_saved, :create, _result}, socket) do
-    {:noreply,
-     socket
-     |> PreviewHelpers.dismiss()
-     |> put_flash(:info, gettext("Layout created successfully"))}
-  end
+  def handle_info({:form_saved, :create, _result}, socket), do: {:noreply, created(socket)}
 
   @impl true
   def handle_info({:form_saved, :update, _result}, socket) do
@@ -144,7 +147,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
   # save arrives. It used to ride the form as a hidden param on a second submit button, which put the
   # question at the bottom of a modal the reader had already committed to.
   def handle_event("create_and_open", _params, socket) do
-    {:noreply, socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new()}
+    {:noreply,
+     socket |> assign(:open_builder?, true) |> PreviewHelpers.open_new(for_editor: true)}
   end
 
   @impl true
@@ -221,4 +225,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
   @impl true
   def handle_event("preview_version_restore", %{"id" => id}, socket),
     do: {:noreply, PreviewHelpers.restore_version(socket, id)}
+
+  defp created(socket),
+    do:
+      socket
+      |> PreviewHelpers.dismiss()
+      |> put_flash(:info, gettext("Layout created successfully"))
 end

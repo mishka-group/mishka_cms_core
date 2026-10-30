@@ -588,13 +588,19 @@ defmodule Mix.Tasks.AdminCss do
   # same package lives in either depending on how it was installed: `__extensions/` while it is
   # developed in the tree, `deps/mishka_*` once released to hex — which is where they are all headed.
   # An extension must not lose its styling by changing how it was fetched.
+  #
+  # And its `assets/js`: an extension that ships its LiveView hooks as JavaScript the host imports
+  # (the visual editor does) sets classes from there, which no `.ex` file spells and the host's own
+  # `assets/js` no longer carries.
   defp extension_sources(root) do
     vendored = root |> Path.join("__extensions") |> directories()
     released = root |> Path.join("deps") |> directories() |> Enum.filter(&mishka?/1)
 
     (vendored ++ released)
     |> Enum.sort()
-    |> Enum.map_join("\n", &~s|@source "#{&1}/**/*.{ex,heex,eex}";|)
+    |> Enum.map_join("\n", fn dir ->
+      ~s|@source "#{dir}/**/*.{ex,heex,eex}";\n@source "#{dir}/assets/js/**/*.{js,ts}";|
+    end)
   end
 
   defp directories(parent) do

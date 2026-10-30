@@ -195,6 +195,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     * `runtime:site:after_auth_pages` — the report `ensure_auth!/1` returns, with `site_id`.
   """
 
+  alias MishkaCmsCore.EveryPage
+
   alias MishkaCmsCore.Runtime.{
     Component,
     ErrorPage,
@@ -214,8 +216,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
   require Ash.Query
 
   @section "starter"
-
-  @row_limit 50
 
   # THE ADMIN PALETTE AND THE HOME PAGE'S, as this site's own design tokens. Written as `@theme`
   # rather than as a hundred arbitrary hex values in the markup, because a site's CSS bundle only
@@ -2053,28 +2053,6 @@ defmodule MishkaCmsCore.Install.StarterContent do
       }
       |> PageProvision.serving_all_languages()
     end)
-  end
-
-  @doc """
-  What the sign-in page of `role` (`"sign_in"`, `"register"`, …, its `extra["auth_role"]`) is
-  written with today: `%{template:, events:, helpers:}`, as `ensure_auth!/1` writes them. Nothing
-  here updates a page a site already has; this is for a script that brings one up to date, written
-  with `context: %{page_code: :package}` as these are. `nil` for a role there is no page for.
-  """
-  @spec auth_page_code(String.t()) ::
-          %{template: String.t(), events: list(), helpers: list()} | nil
-  def auth_page_code(role) do
-    case Enum.find(auth_pages(), &(&1.role == role)) do
-      nil ->
-        nil
-
-      page ->
-        %{
-          template: page.template,
-          events: Enum.map(page.events, &auth_event/1),
-          helpers: Enum.map(page.helpers, &auth_helper/1)
-        }
-    end
   end
 
   # SIGNING OUT IS FOR SOMEBODY SIGNED IN; every other flow is for a visitor.
@@ -4119,9 +4097,8 @@ defmodule MishkaCmsCore.Install.StarterContent do
     )
   end
 
-  defp rows(query) do
-    query |> Ash.read!(authorize?: false, page: [limit: @row_limit]) |> Map.fetch!(:results)
-  end
+  # EVERY PAGE: one page of 50 read a site's 51st row as absent.
+  defp rows(query), do: EveryPage.read!(query, authorize?: false)
 
   defp site!(site_id) do
     case find_site(site_id) do

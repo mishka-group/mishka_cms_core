@@ -152,45 +152,6 @@ defmodule MishkaCmsCoreWeb.Test.AuthTestHelpers do
   end
 
   @doc """
-  Performs a complete password reset flow.
-  Returns the new authentication token.
-  """
-  def reset_user_password(user, new_password, site, api_user_path, make_api_request_fn) do
-    # Get reset token
-    reset_token = get_password_reset_token(user, site, api_user_path, make_api_request_fn)
-
-    # Build headers and host based on whether site exists
-    {headers, host} =
-      if site do
-        {[{"x-no-tenant", "false"}], site.host}
-      else
-        {[{"x-no-tenant", "true"}], nil}
-      end
-
-    # Reset password
-    response =
-      make_api_request_fn.(
-        "#{api_user_path}/reset-password",
-        %{
-          "type" => "user",
-          "attributes" => %{
-            "reset_token" => reset_token,
-            "password" => new_password,
-            "password_confirmation" => new_password
-          }
-        },
-        headers: headers,
-        host: host
-      )
-
-    assert response.status == 201
-    result = Jason.decode!(response.resp_body)
-
-    # Return the new auth token
-    result["meta"]["token"]
-  end
-
-  @doc """
   Verifies that password was successfully changed.
   """
   def verify_password_changed(
@@ -243,23 +204,6 @@ defmodule MishkaCmsCoreWeb.Test.AuthTestHelpers do
 
     assert new_response.status == 201
     Jason.decode!(new_response.resp_body)["meta"]["token"]
-  end
-
-  @doc """
-  Helper to build request options based on site context
-  """
-  def build_request_opts(site) do
-    if site do
-      %{
-        headers: [{"x-no-tenant", "false"}],
-        host: site.host
-      }
-    else
-      %{
-        headers: [{"x-no-tenant", "true"}],
-        host: nil
-      }
-    end
   end
 
   # Private functions

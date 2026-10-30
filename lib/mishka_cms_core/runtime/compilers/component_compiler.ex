@@ -802,7 +802,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # with it. Each delegating clause now marks itself spent, so it runs at most once per render and a
   # second entry falls through to a rendering clause; a bundle that clears its own pattern never
   # notices, and a malformed one costs the declaration rather than the process. This is the same rule
-  # `MishkaCmsCore.Builder.FormRole` and `MishkaCmsCore.Runtime.PageBuilder.Fields` already follow.
+  # `MishkaCmsCore.Builder.FormRole` and `MishkaCmsCore.Runtime.Authoring.Fields` already follow.
   defp branch(%{delegates: true} = clause, _params, title_atom, index) do
     body_ast = parse_clause_body(Map.get(clause, :body))
     marker = spent_key(index)
@@ -880,7 +880,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
     ]
 
     str
-    |> MishkaCmsCore.Runtime.PageBuilder.Visibility.strip()
+    |> MishkaCmsCore.Runtime.Authoring.Visibility.strip()
     |> Phoenix.LiveView.TagEngine.compile(opts)
   end
 
@@ -1123,12 +1123,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   end
 
   defp trusted_code(helper, name, head_args, code) do
-    case MishkaCmsCore.Runtime.PageBuilder.CodeSignature.trusted?(helper) do
+    case MishkaCmsCore.Runtime.Authoring.CodeSignature.trusted?(helper) do
       true ->
         code
 
       false ->
-        MishkaCmsCore.Runtime.PageBuilder.CodeSignature.warn_untrusted(
+        MishkaCmsCore.Runtime.Authoring.CodeSignature.warn_untrusted(
           "component helper",
           name
         )
@@ -1400,8 +1400,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # A KIT EXPORTER TURNS A FUNCTION HEAD INTO ONE OF THESE. `chelekom-icon` was written
   # `def icon(%{name: "hero-" <> _} = assigns)`, which is a clause that declines to match; exported
   # as `"body": "%{name: \"hero-\" <> _} = assigns = assigns"` it becomes an assertion that RAISES,
-  # and a raise here is not contained by anything on a published page — `CanvasLive.contain/2`
-  # guards the editor's canvas and there is no equivalent in front of a live render, so one icon
+  # and a raise here is not contained by anything on a published page — the editor's canvas
+  # guards its own render and there is no equivalent in front of a live render, so one icon
   # whose name an author typed by hand took the visitor's whole page down.
   #
   # Around the body only, not around the template: the template's `dynamic` is a closure LiveView
@@ -1655,7 +1655,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
         ]
 
         params[:template]
-        |> MishkaCmsCore.Runtime.PageBuilder.Visibility.strip()
+        |> MishkaCmsCore.Runtime.Authoring.Visibility.strip()
         |> Phoenix.LiveView.TagEngine.compile(opts)
       else
         quote do: ~H""

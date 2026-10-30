@@ -83,6 +83,11 @@ defmodule MishkaCmsCore.ExtensionRouter do
   which also sheds whatever the page installed. Navigation BETWEEN two routes in this list stays
   live, which is what makes it the right home for a group of pages that share a head.
 
+  So an admin page links INTO one with `href` (or `redirect/2`), not `navigate` (or
+  `push_navigate/2`). A `navigate` link still arrives, but only after LiveView has tried the live
+  navigation and refused it, logging "redirecting across live_sessions" on the server and
+  "unauthorized live_redirect" in the browser.
+
   Everything else belongs in `:admin`. The boundary costs a page load in each direction, and a page
   that is dressed like the rest of the admin has nothing to buy with it.
   """

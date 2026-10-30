@@ -22,7 +22,7 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
   alias MishkaCmsCore.Runtime.{Layout, Page, PageProvision, Site, Translation, Translations}
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, LiveViewCompiler}
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Workers.SiteRuntimeWorker
   alias MishkaCmsCore.Settings

@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.Builder.ActionRegistryTest do
 
   alias MishkaCmsCore.Builder.Action
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
   alias MishkaCmsCore.Test.Plugins.BuilderActionPlugin
   alias MishkaCmsCore.Test.Plugins.BuilderHijackPlugin
   alias MishkaInstaller.Event.{Event, EventHandler}

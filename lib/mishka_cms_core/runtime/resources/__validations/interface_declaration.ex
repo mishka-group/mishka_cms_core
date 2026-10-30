@@ -19,7 +19,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.InterfaceDeclaration do
   where `MishkaCmsCore.Runtime.Resources.Validations.CodeChange` and `TemplateCompiles` already sit
   for the same reason.
 
-  `MishkaCmsCore.Runtime.PageBuilder.Interface.validate/2` holds the rules themselves, because the
+  `MishkaCmsCore.Runtime.Authoring.Interface.validate/2` holds the rules themselves, because the
   editor also wants them BEFORE a save — to mark the offending row while somebody is still typing in
   it. This is the half that makes them true of the record.
 
@@ -34,7 +34,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.InterfaceDeclaration do
   use Ash.Resource.Validation
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Interface
+  alias MishkaCmsCore.Runtime.Authoring.Interface
 
   @impl true
   def init(opts), do: {:ok, opts}

@@ -9,94 +9,35 @@
 # lists this directory in its own `test_paths`, so when the helper is loaded from there it must do
 # nothing at all: starting a second repo, endpoint or Oban on top of the host's would fight it.
 if Mix.Project.config()[:app] == :mishka_cms_core do
-  # Oban's tables are not an Ash resource, so `mix ash.codegen` never emits them. Create them before
-  # anything that enqueues starts — see `MishkaCmsCore.Test.ObanMigration`.
-  {:ok, _} = MishkaCmsCore.Repo.start_link()
-  Ecto.Migrator.up(MishkaCmsCore.Repo, 0, MishkaCmsCore.Test.ObanMigration, log: false)
-  :ok = Supervisor.stop(MishkaCmsCore.Repo)
-
-  # Runtime module compilation picks its supervisor partition off this counter, so it has to exist
-  # before anything compiles a page, layout or component.
-  :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
-
-  children = [
-    MishkaCmsCore.Repo,
-    # The runtime workers this library owns go through Oban, so it has to exist. `testing: :manual`
-    # means nothing drains a queue behind a test's back — jobs are asserted on, not run.
-    {Oban, Application.fetch_env!(:mishka_cms_core, Oban)},
-    {Phoenix.PubSub, name: MishkaCmsCore.PubSub},
-    MishkaCmsCore.Runtime.States.SiteState,
-    MishkaCmsCore.Runtime.States.SettingsState,
-    MishkaCmsCore.Runtime.States.TranslationsState,
-    MishkaCmsCore.Runtime.States.RedirectsState,
-    MishkaCmsCore.Runtime.States.ViewerState,
-    MishkaCmsCore.Runtime.States.RateLimitState,
-    MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState,
-    MishkaCmsCore.Runtime.States.AssetsState,
-    MishkaCmsCore.Runtime.States.CompileFailureState,
-    # Rendered palette-card previews. Keyed on the template a card would drop, because a
-    # component's first render is a module compile and every later one is two milliseconds.
-    MishkaCmsCore.Runtime.States.CardPreviewState,
-    MishkaCmsCore.Runtime.States.EditorSessionState,
-    MishkaCmsCore.Runtime.States.EditorHistoryState,
-    MishkaCmsCore.Runtime.PageBuilder.Presence,
-    # The runtime compiler: the gate that bounds how many compiles run at once, the registry that
-    # makes concurrent requests for one module wait on a single compile, and the partitioned
-    # supervisor those compiles run under. A test that renders a lazy component compiles it for
-    # real, so all three are as necessary here as in the CMS.
-    MishkaCmsCore.Runtime.Handlers.CompileGate,
-    {Registry, keys: :unique, name: MishkaCms.ModuleCompilerHandlerRegistry},
-    {PartitionSupervisor,
-     child_spec: DynamicSupervisor,
-     name: MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandlerPartition,
-     partitions: System.schedulers_online()},
-    # The unlinked tasks `BootHandler.build_sitemaps/0` builds each site's sitemap under, and
-    # `SitemapCompiler` enqueues every site's in once its plugin chain changes.
-    {Task.Supervisor, name: MishkaCmsCore.Runtime.TaskSupervisor},
-    {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
-    MishkaCmsCore.TestEndpoint
-  ]
-
-  {:ok, _} =
-    Supervisor.start_link(children, strategy: :one_for_one, name: MishkaCmsCore.TestSupervisor)
-
-  # A TEST PLUGIN THAT OUTLIVED ITS RUN. MishkaInstaller keeps registrations in Mnesia, which is on
-  # disk and survives the run that made them — so a suite killed part-way (a crash, a Ctrl-C, a
-  # timeout) leaves its plugin registered forever, and every later run boots with it live. That is
-  # invisible and it changes unrelated suites: a leftover `builder:components` plugin puts an extra
-  # card in the palette, and a test asserting on one card sees two.
-  #
-  # Only this project's own test plugins are swept — a real plugin belongs to whoever installed it.
-  for event <- List.wrap(MishkaInstaller.Event.Event.get()),
-      String.starts_with?(to_string(event.name), "Elixir.MishkaCmsCore.Test.Plugins.") do
-    MishkaInstaller.Event.Event.unregister(:name, event.name, false)
-  end
-
-  # esbuild resolves the generated entry file's `import … from "phoenix"` through here.
-  MishkaCmsCore.Test.JsAssets.install!()
+  # The repo, Oban, the caches and the runtime compiler a host starts around its repo and endpoint
+  # (`MishkaCmsCore.Supervision`), then the test endpoint; Oban's tables first, swept test plugins an
+  # earlier run left registered, the `node_modules` esbuild resolves `import … from "phoenix"`
+  # through, and a run that starts once the plugins are live. The PubSub and the partition counter
+  # are the core application's own, already running. See `MishkaCmsCore.Test.Boot`.
+  :ok =
+    MishkaCmsCore.Test.Boot.start!(
+      otp_app: :mishka_cms_core,
+      repo: MishkaCmsCore.Repo,
+      endpoint: MishkaCmsCore.TestEndpoint,
+      plugins: MishkaCmsCore.Application.plugins(),
+      sweep: ["Elixir.MishkaCmsCore.Test.Plugins."],
+      js_assets: Application.app_dir(:mishka_cms_core, "priv/static/temp/js_assets/node_modules")
+    )
 
   # `render_async/1` WAITS THIS LONG, and 100ms is not a number anybody here chose. LiveView's
   # default is `Application.fetch_env!(:ex_unit, :assert_receive_timeout)`, and every `render_async`
-  # in these suites is waiting on a real database load — the editor's `start_async` record fetch,
+  # in these suites is waiting on a real database load — an admin modal's `start_async` record fetch,
   # most of them. On a machine running another suite beside this one that load takes longer than
   # 100ms, and the test fails with "expected async processes to finish within 100ms" from a line that
   # was asserting something else entirely.
   #
-  # Raising it here rather than at 156 call sites: it is the knob LiveView itself reads, it covers
+  # Raising it here rather than at 201 call sites: it is the knob LiveView itself reads, it covers
   # every future `render_async` without anyone remembering, and it costs nothing on a passing run —
   # a longer timeout only delays FAILURES, never successes.
   #
-  # The bound is the editor's own for its slowest mount task: opening it on a page that places a
-  # runtime component awaits `warm_components`, a module compile the editor allows 30 seconds. One
-  # second failed that wait while a second suite shared the machine.
+  # The bound covers the slowest of those tasks, a module compile (the preview modal's Force compile).
+  # One second failed such a wait while a second suite shared the machine.
   ExUnit.configure(assert_receive_timeout: :timer.seconds(30))
-
-  # THE RUN STARTS ONCE THE CORE'S PLUGINS ARE LIVE. Each registers from its own `handle_continue`,
-  # and on a slow boot — the first run after a recompile — `mishka_installer` is not ready yet, so the
-  # plugin tries again a second later, after the first tests have already asked its event: the mail
-  # provider is not found and every test that sends fails, once. See
-  # `MishkaCmsCore.Test.PluginReadiness`.
-  MishkaCmsCore.Test.PluginReadiness.await(MishkaCmsCore.Application.plugins())
 
   # The `:node` tests run browser JavaScript in Node.js. Without it they are left out, and the run
   # says so.

@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishLayoutDraft do
   use Ash.Resource.Change
 
   alias MishkaCmsCore.Runtime.Layout
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
 
   # A PUBLISH COPIES WHAT THE DRAFT HOLDS, templates included, and checks no code: the check ran
   # when a person wrote the draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.
@@ -68,7 +68,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishLayoutDraft do
     case Ash.get(Layout, layout_id, tenant: draft.site_id, authorize?: false) do
       {:ok, layout} ->
         layout
-        |> Ash.Changeset.for_update(:update, Map.drop(layout_attrs(draft), CodeAccess.fields()),
+        |> Ash.Changeset.for_update(:update, carried(draft),
           tenant: draft.site_id,
           authorize?: false,
           context: @publish
@@ -79,6 +79,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishLayoutDraft do
         error
     end
   end
+
+  @doc """
+  What publishing `draft` writes over the layout it was made from: every field it carries but the
+  layout's code. See `MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft.carried/1`.
+  """
+  @spec carried(struct()) :: map()
+  def carried(draft), do: draft |> layout_attrs() |> Map.drop(CodeAccess.fields())
 
   defp layout_attrs(draft), do: Map.take(draft, @layout_fields)
 end

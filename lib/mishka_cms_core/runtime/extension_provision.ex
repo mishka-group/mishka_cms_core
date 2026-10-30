@@ -5,8 +5,8 @@
 defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   @moduledoc """
   Gives a site everything an extension ships and it is missing: the permission names, the
-  components, the sample pages, the snippet. One implementation, driven by a `t:manifest/0` the
-  extension declares.
+  components, the sample pages, and the snippet an installed editor offers. One implementation,
+  driven by a `t:manifest/0` the extension declares.
 
   ## Why it is here and not in each extension
 
@@ -53,34 +53,45 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   Not the logs. The admin pressed a button and is owed the answer: what arrived, what was written
   under another name because the one it wanted was taken, and what was left alone because something
   of theirs holds it. `PageProvision.note/1` writes each of those as a sentence.
+
+  ## The snippet belongs to the editor
+
+  The core keeps no snippet of its own: a snippet is a row of whichever visual editor the host
+  installed, offered back in that editor's list. So the run hands it over on
+  `runtime:provision:snippets`, a transform event, with the payload in `t:snippet_payload/0`. The
+  editor's plugin writes the row the site is missing and adds its name to `installed`; a site that
+  already has it is left alone, as everything else here is.
+
+  A WRITE THAT FAILS IS REPORTED, NOT RAISED. A plugin that raises is skipped and the event answers
+  the payload it was given, which reads as "nothing to install" — so the plugin puts the reason in
+  `error`, and the run raises with it, as a refused write raised here before. With no editor
+  installed nothing answers, and the report says `snippets: []`.
   """
 
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Install.Bootstrap
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.PageProvision
   alias MishkaCmsCore.Runtime.Site
-  alias MishkaCmsCore.Runtime.Snippet
-
-  # Every read here is narrowed to at most the handful of rows one extension writes, so a single
-  # page of results holds all of them — and asking for a page keeps this working whether the action
-  # paginates by keyset, by offset, or not at all.
-  @row_limit 50
+  alias MishkaInstaller.Event.Hook
 
   @package %{page_code: :package}
+
+  @snippets_event "runtime:provision:snippets"
 
   @typedoc """
   What an extension declares about itself. `pages` and `snippet` are functions of the SITE because a
   stored `<.component>` call names the site whose component it draws, so the markup cannot be
   written until the site is known.
 
-  `snippet` is optional — an extension with nothing to put in the Studio's list leaves it out.
-  `permissions` is optional too: the names the extension's own areas are gated by, each with its
-  description.
+  `snippet` is optional — an extension with nothing to put in an editor's snippet list leaves it
+  out. `permissions` is optional too: the names the extension's own areas are gated by, each with
+  its description.
   """
   @type manifest :: %{
           required(:app) => atom(),
@@ -89,6 +100,24 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
           required(:pages) => (map() -> [map()]),
           optional(:snippet) => %{name: String.t(), source: (String.t() -> String.t())},
           optional(:permissions) => [{String.t(), String.t()}]
+        }
+
+  @typedoc """
+  What `runtime:provision:snippets` is handed, and answers with.
+
+  `snippet.source` is already the markup for this site (the manifest's function, applied to
+  `site_name`). A plugin appends the name of each snippet it wrote to `installed`, or sets `error`
+  to the reason a write was refused; it never raises. `actor` is the person running the provision,
+  or `nil` when the system does (the seeds, the install wizard).
+  """
+  @type snippet_payload :: %{
+          app: atom(),
+          snippet: %{name: String.t(), source: String.t()},
+          site_id: String.t(),
+          site_name: String.t(),
+          actor: map() | nil,
+          installed: [String.t()],
+          error: term() | nil
         }
 
   @type report :: %{
@@ -108,8 +137,8 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
     * `admin:dashboard:runtime:component` — the kit's components are written;
     * `admin:dashboard:runtime:js_hook`, `admin:dashboard:runtime:stylesheet` — when the bundle
       ships JS hooks or stylesheets, the kit writes them too;
-    * `admin:dashboard:runtime:page` — the sample pages are written, and the snippet is saved for the
-      page builder, which this name opens;
+    * `admin:dashboard:runtime:page` — the sample pages are written, and an installed editor saves
+      the snippet for its page editor, which this name opens;
     * `admin:dashboard:runtime:site` — the site is read, to name the pages after it.
   """
   @spec required(manifest()) :: [String.t()]
@@ -390,65 +419,39 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
   # The snippet
   # ---------------------------------------------------------------------------
 
-  # SECTION `:page`, and only that one. A live component runs on a page and nowhere else — see
-  # `MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement` — so offering one in the layout
-  # or error-page editor would offer markup those editors are forbidden to save.
+  # THE SOURCE IS RENDERED HERE, so what crosses the hook is data: a plugin sees the markup this site
+  # gets, never the extension's function.
   defp install_missing_snippet(
-         %{snippet: %{name: name, source: source}},
+         %{snippet: %{name: name, source: source}} = manifest,
          site_id,
          site_name,
          actor
        ) do
-    if snippet_saved?(name, site_id, actor) do
-      []
-    else
-      attrs = %{
-        name: name,
-        source: source.(site_name),
-        section: :page,
-        scope: :shared,
-        site_id: site_id
-      }
+    payload = %{
+      app: manifest.app,
+      snippet: %{name: name, source: source.(site_name)},
+      site_id: site_id,
+      site_name: site_name,
+      actor: actor,
+      installed: [],
+      error: nil
+    }
 
-      Snippet
-      |> write_snippet(attrs, site_id, actor)
-      |> Ash.create!()
+    case Hook.call(@snippets_event, payload) do
+      %{error: nil, installed: installed} when is_list(installed) ->
+        installed
 
-      [name]
+      # RAISED, as the `Ash.create!` this replaced did: a refused write is one every caller wants
+      # to know about, and the screen says so.
+      %{error: reason} when not is_nil(reason) ->
+        raise "the snippet #{name} could not be saved: #{inspect(reason)}"
+
+      _no_answer ->
+        []
     end
   end
 
   defp install_missing_snippet(_no_snippet, _site_id, _site_name, _actor), do: []
-
-  # THE SAME THREE ANSWERS `write_page!/2` GIVES, for the resource beside it.
-  defp write_snippet(resource, attrs, _site_id, nil),
-    do: Ash.Changeset.for_create(resource, :master_create, attrs, authorize?: false)
-
-  defp write_snippet(resource, attrs, _site_id, %{site_id: nil} = actor),
-    do: Ash.Changeset.for_create(resource, :master_create, attrs, actor: actor)
-
-  defp write_snippet(resource, attrs, site_id, actor) do
-    Ash.Changeset.for_create(resource, :create, Map.delete(attrs, :site_id),
-      actor: actor,
-      tenant: site_id
-    )
-  end
-
-  # THE ROW THE CREATE WOULD WRITE, AND NOTHING WIDER. `Snippet`'s `unique_name_per_scope` is
-  # `[:name, :site_id, :section, :document_id]` with `nils_distinct? false`, so `document_id` is part
-  # of what makes the name taken: a snippet an author saved out of one page's editor under this same
-  # name holds a different key entirely. Reading without it, a site that has such a row is reported
-  # as already having this one and never gets it.
-  defp snippet_saved?(name, site_id, actor) do
-    Snippet
-    |> Ash.Query.for_read(:read_any, %{}, reading(actor))
-    |> Ash.Query.filter(
-      name == ^name and section == :page and site_id == ^site_id and is_nil(document_id)
-    )
-    |> Ash.Query.select([:id])
-    |> rows(actor)
-    |> Enum.any?()
-  end
 
   # ---------------------------------------------------------------------------
   # Reading
@@ -471,12 +474,10 @@ defmodule MishkaCmsCore.Runtime.ExtensionProvision do
     end
   end
 
-  defp rows(query, actor) do
-    case Ash.read!(query, reading(actor) ++ [page: [limit: @row_limit]]) do
-      %{results: found} -> found
-      found when is_list(found) -> found
-    end
-  end
+  # EVERY PAGE, whether the action pages by keyset, by offset or not at all. A read here is narrowed
+  # to the rows one extension writes, but nothing caps how many components a kit ships, and the 51st
+  # used to read as absent.
+  defp rows(query, actor), do: EveryPage.read!(query, reading(actor))
 
   # SEE `MishkaCmsCore.Runtime.PageProvision`'s own `reading/1`, which says why the read action does
   # not change with the actor while the write action does.

@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.PageForm.Rules do
   ## What a rule is
 
   A rule is one of the HTML constraint attributes already on the field node, lifted at compile time
-  by `MishkaCmsCore.Runtime.PageBuilder.PageForms` into the field's `:rules` list. There is no second
+  by `MishkaCmsCore.Runtime.Authoring.PageForms` into the field's `:rules` list. There is no second
   place to declare one, so the browser and the server enforce the same sentence:
 
       :required                 required

@@ -5,7 +5,8 @@
 defmodule MishkaCmsCore.Install.UiKitCatalog do
   @moduledoc """
   Pure view of a `mishka.ui_kit.bundle.v3` for the installer's component picker: groups the
-  components by `type`, keeps only the light fields the picker needs (name / label / deps — never
+  components by `type` (one group per category however a kit spelled it, see `file_categories/2`),
+  keeps only the light fields the picker needs (name / label / deps — never
   the heavy body/template/examples), and computes the transitive COMPONENT-dependency closure of a
   selection so required components can be locked.
 
@@ -194,14 +195,18 @@ defmodule MishkaCmsCore.Install.UiKitCatalog do
     }
   end
 
+  # Each kit's groups are filed again over all the kits at once: one kit's `button` sits under
+  # another's `buttons` only when both are on the table.
   defp merge_groups(catalogs) do
-    catalogs
-    |> Enum.flat_map(& &1.groups)
-    |> Enum.group_by(& &1.key)
+    groups = Enum.flat_map(catalogs, & &1.groups)
+    filed = file_categories(Enum.map(groups, & &1.key), @group_order)
+
+    groups
+    |> Enum.group_by(&Map.fetch!(filed, &1.key))
     |> Enum.map(fn {key, groups} ->
       %{
         key: key,
-        label: groups |> hd() |> Map.fetch!(:label),
+        label: group_label(key),
         entries: groups |> Enum.flat_map(& &1.entries) |> Enum.sort_by(& &1.label)
       }
     end)
@@ -363,18 +368,68 @@ defmodule MishkaCmsCore.Install.UiKitCatalog do
   end
 
   defp build_groups(entries) do
-    by_type = Enum.group_by(entries, & &1.type)
+    filed = file_categories(Enum.map(entries, & &1.type), @group_order)
+    by_key = Enum.group_by(entries, &Map.fetch!(filed, &1.type))
 
     @group_order
-    |> Enum.concat(Map.keys(by_type))
+    |> Enum.concat(Map.keys(by_key))
     |> Enum.uniq()
-    |> Enum.filter(&Map.has_key?(by_type, &1))
-    |> Enum.map(fn type ->
+    |> Enum.filter(&Map.has_key?(by_key, &1))
+    |> Enum.map(fn key ->
       %{
-        key: type,
-        label: group_label(type),
-        entries: by_type |> Map.fetch!(type) |> Enum.sort_by(& &1.label)
+        key: key,
+        label: group_label(key),
+        entries: by_key |> Map.fetch!(key) |> Enum.sort_by(& &1.label)
       }
     end)
+  end
+
+  @doc """
+  Files each category under one spelling, decided over all of them at once: a map from every
+  category as a kit wrote it to the key it is filed under.
+
+  KITS DO NOT AGREE ON THE WORDS. Chelekom's headless kit wrote `data display` on eight components
+  and `data-display` on four, and `navigation` where its styled kit writes `navigations`, so a
+  picker or a palette that grouped by the word as written drew each category twice, each heading
+  holding half of it.
+
+  Case, spaces, hyphens and underscores are one spelling (`category_key/1`), and a category that
+  sits beside its own plural is filed under the plural, the form most kits use. `known` are
+  spellings that count as present whether or not a kit wrote them — the installer passes its own
+  group order, so a kit that only ever says `navigation` still lands in the picker's `navigations`.
+
+      iex> MishkaCmsCore.Install.UiKitCatalog.file_categories(["data-display", "Data display"])
+      %{"data-display" => "data display", "Data display" => "data display"}
+
+      iex> MishkaCmsCore.Install.UiKitCatalog.file_categories(["navigation", "navigations"])
+      %{"navigation" => "navigations", "navigations" => "navigations"}
+  """
+  @spec file_categories(Enum.t(), Enum.t()) :: %{optional(term()) => String.t()}
+  def file_categories(categories, known \\ []) do
+    spellings = known |> Enum.concat(categories) |> MapSet.new(&category_key/1)
+
+    Map.new(categories, fn category ->
+      key = category_key(category)
+      plural = key <> "s"
+      {category, (MapSet.member?(spellings, plural) && plural) || key}
+    end)
+  end
+
+  @doc """
+  One category's spelling with case, spaces, hyphens and underscores folded: `Data-Display`,
+  `data_display` and `data  display` are all `data display`. A component with no category is
+  `general`, as the installer has always filed it.
+  """
+  @spec category_key(String.t() | atom() | nil) :: String.t()
+  def category_key(category) do
+    (category || "")
+    |> to_string()
+    |> String.downcase()
+    |> String.split(~r/[\s_-]+/u, trim: true)
+    |> Enum.join(" ")
+    |> case do
+      "" -> "general"
+      key -> key
+    end
   end
 end

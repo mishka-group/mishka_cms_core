@@ -785,6 +785,11 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
       end
 
       change slugify(:name, into: :name)
+
+      # RECORDED AGAINST THE SITE IT WRITES. A master acts with no tenant, and the version row takes
+      # its `site_id` from the tenant alone, so without this every master edit of a site's record
+      # was a Global entry in Activity. Last, so every check above still sees the master's nil.
+      change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
     end
 
     read :get_any do
@@ -1300,7 +1305,8 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
   asked for, and there was no way to find that out except by reading two sorts in two modules.
 
   Owning the key here is what keeps them from drifting apart again — `TailwindCompiler` decides what
-  the browser sees and `PageBuilder.Tokens` decides what Studio shows, and they must not disagree.
+  the browser sees, the visual editor's Studio (`mishka_cms_builder`) decides what it shows, and
+  they must not disagree.
 
   A global sheet sorts before the site's own, so a site can always override what it inherited.
   """

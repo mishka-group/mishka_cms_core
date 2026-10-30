@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageMessageCompileTest do
 
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.Interactions
+  alias MishkaCmsCore.Runtime.Authoring.Interactions
 
   @moduletag :unit
 

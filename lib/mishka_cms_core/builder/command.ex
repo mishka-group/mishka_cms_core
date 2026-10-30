@@ -29,7 +29,7 @@ defmodule MishkaCmsCore.Builder.Command do
 
   ## Where the application happens
 
-  In the editor, once, when an author presses Apply — `MishkaCmsCore.Runtime.PageBuilder.Interactions`
+  In the editor, once, when an author presses Apply — `MishkaCmsCore.Runtime.Authoring.Interactions`
   calls this from the admin LiveView. What reaches a document is the printed source and only that,
   so nothing here is in a visitor's page, in the compiled module, or on the render path.
 

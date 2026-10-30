@@ -109,7 +109,7 @@ defmodule MishkaCmsCore.Runtime.PageForm do
   require Logger
 
   alias MishkaCmsCore.Builder.Events
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageForm.Rules
   alias MishkaCmsCore.Runtime.PageUpload
 

@@ -16,8 +16,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
       function's own rescue, which falls back to Phoenix's plain default. The site's custom error
       page is replaced for every visitor, with a warning in the log and nothing on the screen.
     * **A layout** wraps error pages as well as pages, so it inherits that.
-    * **Another component's template** is rendered by the builder's canvas through
-      `CanvasLive.contain/3`, which forces iodata on purpose so a component's raise costs the
+    * **Another component's template** is rendered by the editor's canvas inside a containment
+      that forces iodata on purpose so a component's raise costs the
       component and not the author's unsaved session. A live component reached from inside another
       component's markup builds the token anyway and blows up the PARENT's containment — a red chip
       on a component the author did not touch.
@@ -47,7 +47,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
 
   By reading each field in the language it is compiled in, never by a pattern over the source.
 
-  HEEx is parsed. `MishkaCmsCore.Runtime.PageBuilder.Tree.parse/1` is the same reader the editor
+  HEEx is parsed. `MishkaCmsCore.Runtime.Authoring.Tree.parse/1` is the same reader the editor
   uses, so a `component_name` inside a comment or a code sample is not a placement and a name built
   at runtime — `component_name={@which}` — is not a literal this can resolve. The template's own
   Elixir is read as well, because `{component(%{component_name: "x"})}` reaches the same function.
@@ -72,9 +72,9 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout}
-  alias MishkaCmsCore.Runtime.PageBuilder.Markup
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Markup
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   require Ash.Query
 
@@ -187,10 +187,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
     |> Ash.Query.filter(name in ^names and stateful == true)
     |> Ash.Query.select([:name])
-    |> Ash.read()
+    # EVERY PAGE: `:read_any` answers its first 100 rows when no page is asked for, and one name is a
+    # row on every site that has it.
+    |> MishkaCmsCore.EveryPage.read()
     |> case do
-      {:ok, %{results: rows}} -> Enum.map(rows, & &1.name)
-      {:ok, rows} when is_list(rows) -> Enum.map(rows, & &1.name)
+      {:ok, rows} -> Enum.map(rows, & &1.name)
       _unreadable -> []
     end
   end

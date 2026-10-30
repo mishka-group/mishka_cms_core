@@ -11,7 +11,7 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
   THEY COME FROM THE COMPONENTS' OWN EXAMPLES — a component's `examples`, finished uses of it as a
   page would hold them, which a kit ships with its components and a component an author adds in the
   CMS may carry too. Each example of each component the palette lists is read with the page builder's
-  template parser (`MishkaCmsCore.Runtime.PageBuilder.Tree`) and written as a marker: a component
+  template parser (`MishkaCmsCore.Runtime.Authoring.Tree`) and written as a marker: a component
   as a component marker, a slot as a slot marker, HTML as the HTML it is. An example that needs
   more than a marker holds — an expression, a loop, a component the palette does not list, a slot
   its component does not declare — is not offered. Only the attributes a component declares and a
@@ -36,7 +36,7 @@ defmodule MishkaCmsCore.Runtime.ContentBlocks do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.ContentComponents
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaInstaller.Event.Hook
 
   @event "runtime:content:editor_blocks"

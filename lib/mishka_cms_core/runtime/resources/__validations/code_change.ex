@@ -9,7 +9,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.CodeChange do
 
   Who may write a document, its code included, is the resource's policy: the document's own runtime
   area or `admin:<surface>:code`. What this enforces at the action boundary is the deployment switch
-  of `MishkaCmsCore.Runtime.PageBuilder.CodeAccess` — `config :mishka_cms_core, :page_code, :off`
+  of `MishkaCmsCore.Runtime.Authoring.CodeAccess` — `config :mishka_cms_core, :page_code, :off`
   stops code the server runs for everybody, master included. A form, the admin JSON:API, a script
   and the builder all pass through here.
 
@@ -19,7 +19,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.CodeChange do
       APPEAR to count: a create sets these to `[]`, and removing code is always allowed.
     * **HEEx typed by hand** — `template`, `root_layout_template`, and each template of an error
       page's `error_pages` entries. A template that changed counts, except an empty document's
-      starter markup (`MishkaCmsCore.Runtime.PageBuilder.PageStarter.blank/1`).
+      starter markup (`MishkaCmsCore.Runtime.Authoring.PageStarter.blank/1`).
 
   ## Who is writing, read from the changeset context
 
@@ -39,8 +39,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.CodeChange do
 
   use Ash.Resource.Validation
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
-  alias MishkaCmsCore.Runtime.PageBuilder.PageStarter
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
 
   @template_fields [:template, :root_layout_template]
 

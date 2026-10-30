@@ -1058,8 +1058,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       end)
 
       Application.put_env(:mishka_cms_core, :icon_libraries, [
-        MishkaCmsCore.Runtime.PageBuilder.Icons.Heroicons,
-        MishkaCmsCore.Runtime.PageBuilder.IconLibraryTest.Fake
+        MishkaCmsCore.Runtime.Authoring.Icons.Heroicons,
+        MishkaCmsCore.Runtime.Authoring.IconLibraryTest.Fake
       ])
 
       :ok

@@ -13,7 +13,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PurgePreviewAssets do
   reviewer handed the shareable `/_preview/:resource/:token` link read the markup as broken.
 
   ON THE RESOURCE, NOT ON A CALLER, because the callers are many and each one was a separate chance
-  to forget: the builder's `PageBuilder.Helpers.save_section/4` purged; a draft publish
+  to forget: the visual editor's save purged; a draft publish
   (`Changes.PublishPageDraft` and its layout / error-page twins), a version restore and the
   inspector's Configuration form all wrote the same row and did not. Registered on the update and
   destroy types — archiving a document is a soft destroy, and the key of a row nobody can read again
@@ -25,7 +25,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PurgePreviewAssets do
   which is the whole defect. Purged only when the write succeeded, so a rolled back one keeps its
   cache.
 
-  DROPPED, NOT RECOMPILED, for the reason `MishkaCmsCore.Runtime.PageBuilder.Drafts` gives: a
+  DROPPED, NOT RECOMPILED, for the reason `MishkaCmsCore.Runtime.Authoring.Drafts` gives: a
   Tailwind pass on every save would pay for a preview nobody may open, and `ensure_css/2` already
   compiles on the way in.
   """

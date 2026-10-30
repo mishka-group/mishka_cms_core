@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.PageStateTest do
 
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
+  alias MishkaCmsCore.Runtime.Authoring.CodeCheck
   alias MishkaCmsCore.Runtime.PageState
 
   defp compile(state, opts \\ []) do
@@ -181,7 +181,7 @@ defmodule MishkaCmsCore.Runtime.PageStateTest do
         create_page!(site_id: site.id, template: "<p>x</p>", state: [%{name: "count", code: "3"}])
 
       {:ok, draft} =
-        MishkaCmsCore.Runtime.PageBuilder.Drafts.save_as(
+        MishkaCmsCore.Runtime.Authoring.Drafts.save_as(
           "page",
           page,
           nil,

@@ -14,13 +14,13 @@ defmodule MishkaCmsCore.Builder.FormRole do
   ever knowing the word "field".
 
   `field`, `name` and `value` are attributes the editor WRITES; `label` is one it reads the author's
-  own word out of (`MishkaCmsCore.Runtime.PageBuilder.Fields.field_label/2`). Every one of the four is
+  own word out of (`MishkaCmsCore.Runtime.Authoring.Fields.field_label/2`). Every one of the four is
   an attribute, which is why a slot is not a candidate — see below.
 
   ## A wrong role is worse than no role
 
   Same doctrine and same failure mode as `MishkaCmsCore.Builder.Furnishing`: this is a third party's
-  JSON, so anything unreadable answers `:none` and `MishkaCmsCore.Runtime.PageBuilder.Fields` infers
+  JSON, so anything unreadable answers `:none` and `MishkaCmsCore.Runtime.Authoring.Fields` infers
   instead — which is what every kit shipped before this key existed gets, and is right most of the
   time. A malformed declaration never costs the component, and a malformed component never costs the
   kit (`MishkaCmsCore.UiKit.Contract`).
@@ -41,7 +41,7 @@ defmodule MishkaCmsCore.Builder.FormRole do
 
   use GuardedStruct
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Inspector
+  alias MishkaCmsCore.Runtime.Authoring.Inspector
 
   @roles ~w(wrapper field error fieldset submit)
 

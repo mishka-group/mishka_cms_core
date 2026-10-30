@@ -18,7 +18,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
 
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
 
   @moduletag :unit
 

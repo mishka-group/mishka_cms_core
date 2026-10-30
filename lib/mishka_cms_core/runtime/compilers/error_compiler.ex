@@ -716,7 +716,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
     ]
 
     template
-    |> MishkaCmsCore.Runtime.PageBuilder.Visibility.strip()
+    |> MishkaCmsCore.Runtime.Authoring.Visibility.strip()
     |> Phoenix.LiveView.TagEngine.compile(opts)
   end
 

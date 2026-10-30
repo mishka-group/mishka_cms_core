@@ -34,7 +34,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, ModuleCompiler}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.LiveViewHelpers
-  alias MishkaCmsCore.Runtime.PageBuilder.{CodeAccess, Drafts, Interface}
+  alias MishkaCmsCore.Runtime.Authoring.{CodeAccess, Drafts, Interface}
 
   require Ash.Query
 
@@ -1244,16 +1244,6 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
         render_click(view, "preview_set_tab", %{"tab" => "code"})
         view |> element("#runtime-preview-edit-code") |> render_click()
         assert has_element?(view, "#preview-code-form")
-      end
-
-      # THE BUILDER OPENS FOR ITS OWN TYPE'S SECTION OR CODE, which `BuilderLive` asks again.
-      test "#{Enum.join(names, " + ")} is offered the Visual Editor", %{site: site, page: page} do
-        view =
-          site
-          |> tenant_conn(@names)
-          |> inspect_record("/admin/dashboard/runtime/pages", page)
-
-        assert render(view) =~ "Visual Editor"
       end
 
       # CODE TYPED ON THE CODE TAB IS A PAGE WRITTEN, so the page's own section saves it.

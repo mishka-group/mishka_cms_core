@@ -20,12 +20,11 @@ defmodule MishkaCmsCore.UiKit.AuthoringExampleTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
-  alias MishkaCmsCore.Builder.PaletteEntry
   alias MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.JsHook
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree
-  alias MishkaCmsCore.Runtime.PageBuilder.Tree.Node
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.UiKit.Contract
 
   require Ash.Query
@@ -114,22 +113,6 @@ defmodule MishkaCmsCore.UiKit.AuthoringExampleTest do
           assert {:ok, _tree} = Tree.parse(example)
         end
       end
-    end
-
-    # RULE 6. Declare nothing and the author is offered the generic `JS.show`, which on anything more
-    # elaborate than `display:none` reveals the wrong half — a backdrop with no panel under it.
-    test "the component that opens declares how, on its root, where the editor reads it" do
-      panel = Enum.find(bundle()["components"], &(&1["name"] == "acme-panel"))
-
-      entry = %{name: panel["name"], template: panel["template"]}
-
-      assert PaletteEntry.opens(entry) == %{
-               "show" => "data-pb-open",
-               "hide" => "data-pb-close"
-             }
-
-      assert PaletteEntry.concealed?(entry),
-             "a component that declares an opener is the one the canvas shows open while editing"
     end
 
     # RULE 7. The live key is rebuilt from the ROW NAME, so a template naming anything else finds no

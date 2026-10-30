@@ -27,8 +27,8 @@ defmodule MishkaCmsCore.Runtime.ResignCodeTest do
   use ExUnit.Case, async: false
 
   alias MishkaCmsCore.Runtime.Component
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAudit
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
+  alias MishkaCmsCore.Runtime.Authoring.CodeAudit
+  alias MishkaCmsCore.Runtime.Authoring.CodeSignature
 
   require Ash.Query
 

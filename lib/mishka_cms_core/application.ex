@@ -34,13 +34,6 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Notify.Producers.PermissionsChanged
   ]
 
-  # Cache coherence as a plugin rather than a call wired into the compiler: the core participates in
-  # its own events (ADR-14), so this reacts to `runtime:after_module_compile` exactly as an extension
-  # would.
-  @cache_plugins [
-    MishkaCmsCore.Runtime.PageBuilder.CardPreviewInvalidator
-  ]
-
   # A page's share card refreshed after the page is saved, on `cms_core:page:after_save` — the same
   # event an extension's plugin would listen on (`MishkaCmsCore.Runtime.ShareCard`) — and the
   # share-card queue scaled when its Share-card workers setting is saved, on
@@ -126,7 +119,6 @@ defmodule MishkaCmsCore.Application do
       @dashboard_widgets ++
         @notify_producers ++
         @settings_plugins ++
-        @cache_plugins ++
         @share_card_plugins ++
         @site_icon_plugins ++
         @mail_providers ++ @captcha_providers ++ @account_notices
@@ -143,15 +135,27 @@ defmodule MishkaCmsCore.Application do
   def start(_type, _args) do
     :ok = MishkaCmsCore.Runtime.Handlers.BootHandler.new_boot_id()
 
+    # Runtime module compilation picks its supervisor partition off this counter, so it exists
+    # before anything can compile a page, layout or component.
+    :persistent_term.put(:module_compiler_partition_counter, :atomics.new(1, signed: false))
+
+    # `MishkaCmsCore.PubSub` first: every resource broadcasts on it, and the editor's `Presence`
+    # tracks on it. `:mishka_cms_core` is a dependency of every extension and of the host, so its
+    # application starts before theirs and the PubSub is up before any of their children. What needs
+    # the host's repo or endpoint is the host's to start, in the order `MishkaCmsCore.Supervision`
+    # gives it.
+    #
     # `RenderMetrics` is started here rather than by the host, like the other runtime states, because
     # nothing outside the core reads or writes it: a host that never lists it still gets the
     # component preview's render times.
     children =
-      installer_children() ++
+      [{Phoenix.PubSub, name: MishkaCmsCore.PubSub}] ++
+        installer_children() ++
         [
           {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
           MishkaCmsCore.Runtime.RenderMetrics
-        ] ++ plugins()
+        ] ++
+        plugins()
 
     MishkaCmsCore.Activity.Sources.Oban.attach()
     MishkaCmsCore.Activity.Sources.RuntimeCompile.attach()

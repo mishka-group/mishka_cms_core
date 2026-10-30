@@ -14,13 +14,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
   duplicate path for a brand-new draft) rolls the whole publish transaction back and surfaces the
   error.
 
-  An existing page keeps its own code — `MishkaCmsCore.Runtime.PageBuilder.CodeAccess.fields/0`. The
+  An existing page keeps its own code — `MishkaCmsCore.Runtime.Authoring.CodeAccess.fields/0`. The
   builder's code drawer writes it to the page directly, so a draft only holds the copy it forked.
   """
   use Ash.Resource.Change
 
   alias MishkaCmsCore.Runtime.Page
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
 
   # A PUBLISH COPIES WHAT THE DRAFT HOLDS, templates included, and checks no code: the check ran
   # when a person wrote the draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.
@@ -79,7 +79,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
     case Ash.get(Page, page_id, tenant: draft.site_id, authorize?: false) do
       {:ok, page} ->
         page
-        |> Ash.Changeset.for_update(:update, Map.drop(page_attrs(draft), CodeAccess.fields()),
+        |> Ash.Changeset.for_update(:update, carried(draft),
           tenant: draft.site_id,
           authorize?: false,
           context: @publish
@@ -90,6 +90,16 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
         error
     end
   end
+
+  @doc """
+  What publishing `draft` writes over the page it was made from: every field it carries but the
+  page's code (`MishkaCmsCore.Runtime.Authoring.CodeAccess.fields/0`).
+
+  The editor publishes its working copy straight to the page, and asks
+  `MishkaCmsCore.Runtime.Authoring.Drafts.carried/2` for this, so both publishes write the same.
+  """
+  @spec carried(struct()) :: map()
+  def carried(draft), do: draft |> page_attrs() |> Map.drop(CodeAccess.fields())
 
   # A DRAFT THAT NAMES NO LANGUAGE GROUP SAYS NOTHING ABOUT ONE. Handing the page `nil` would make a
   # translation the master of a group of its own — `SetLanguageGroupId` turns an emptied group into

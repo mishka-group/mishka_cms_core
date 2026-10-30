@@ -37,6 +37,12 @@ defmodule MishkaCmsCore.Activity.Query do
   Per-source presentation (label, message, badge, icon) is applied in Elixir over
   only the page's rows via each source's `entry_from_row/1`.
 
+  A table of an extension's own joins the same UNION as one more branch: its owner registers a
+  `MishkaCmsCore.Activity.Behaviours.UnionSource` on `activity:sources`, which writes the branch
+  for each read with the public clause builders below and turns its rows into entries. The sources
+  are asked once per read, so the branches a query runs and the rows it decodes agree. With none
+  registered the log is the core's branches alone.
+
   See `MishkaCmsCore.Activity.ActivityEntry` (calls `page/1` from its manual read)
   and the source adapters `MishkaCmsCore.Activity.Sources.PaperTrail`,
   `MishkaCmsCore.Activity.Sources.EventLog`, `MishkaCmsCore.Activity.Sources.Oban`.
@@ -44,8 +50,9 @@ defmodule MishkaCmsCore.Activity.Query do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Activity.Behaviours.UnionSource
   alias MishkaCmsCore.Activity.{Discovery, Helpers}
-  alias MishkaCmsCore.Activity.Sources.{EditorHistory, EventLog, Oban, RuntimeDraft, PaperTrail}
+  alias MishkaCmsCore.Activity.Sources.{EventLog, Oban, RuntimeDraft, PaperTrail}
 
   require Logger
 
@@ -64,6 +71,8 @@ defmodule MishkaCmsCore.Activity.Query do
   ]
 
   @oban_table "oban_jobs"
+  # The `source` values the core's own branches write, which no union source may answer to.
+  @core_sources ~w(version event draft job)
   @warn_actions "'destroy','master_destroy','permanent_destroy','master_permanent_destroy'"
   @default_limit 20
   # Per-branch LIMIT ceiling so a crafted huge page can't make each branch scan unbounded.
@@ -95,7 +104,7 @@ defmodule MishkaCmsCore.Activity.Query do
     cap = min(offset + limit, @max_cap)
 
     site_id
-    |> branches(kind, severity, shown)
+    |> branches(kind, severity, shown, UnionSource.all())
     |> run(site_id, cap, limit, offset, resource, search)
   end
 
@@ -123,12 +132,13 @@ defmodule MishkaCmsCore.Activity.Query do
     resource = blank(Map.get(opts, :resource))
     search = like(Map.get(opts, :search))
     shown = shown(opts)
+    sources = UnionSource.all()
 
     %{total: nil, info: "info", warn: "warn", error: "error"}
     |> Map.new(fn {key, severity} ->
       {key,
        site_id
-       |> branches(kind, severity, shown)
+       |> branches(kind, severity, shown, sources)
        |> count(site_id, resource, search)}
     end)
   end
@@ -145,7 +155,7 @@ defmodule MishkaCmsCore.Activity.Query do
     site_id = Map.get(opts, :site_id)
 
     site_id
-    |> branches(Map.get(opts, :kind), Map.get(opts, :severity), shown(opts))
+    |> branches(Map.get(opts, :kind), Map.get(opts, :severity), shown(opts), UnionSource.all())
     |> count(site_id, blank(Map.get(opts, :resource)), like(Map.get(opts, :search)))
   end
 
@@ -164,46 +174,48 @@ defmodule MishkaCmsCore.Activity.Query do
     resource = blank(Map.get(opts, :resource))
     search = like(Map.get(opts, :search))
 
-    case branches(site_id, kind, Map.get(opts, :severity), shown(opts)) do
-      [] ->
-        %{}
+    site_id
+    |> branches(kind, Map.get(opts, :severity), shown(opts), UnionSource.all())
+    |> per_day(site_id, resource, search)
+  end
 
-      branches ->
-        sql = """
-        SELECT day, COUNT(*) FROM (
-          SELECT inserted_at::date AS day FROM (
-          #{Enum.join(branches, "\n  UNION ALL\n")}
-          ) t
-          LIMIT $2 OFFSET $3
-        ) capped
-        GROUP BY day
-        """
+  defp per_day(%{sql: []}, _site_id, _resource, _search), do: %{}
 
-        params = [@max_cap, @max_cap, 0, resource, search] ++ if(site_id, do: [site_id], else: [])
+  defp per_day(union, site_id, resource, search) do
+    sql = """
+    SELECT day, COUNT(*) FROM (
+      SELECT inserted_at::date AS day FROM (
+      #{Enum.join(union.sql, "\n  UNION ALL\n")}
+      ) t
+      LIMIT $2 OFFSET $3
+    ) capped
+    GROUP BY day
+    """
 
-        case Ecto.Adapters.SQL.query(@repo, sql, params) do
-          {:ok, %{rows: rows}} -> Map.new(rows, fn [day, total] -> {day, total} end)
-          other -> log_failure("sparkline", other, %{})
-        end
+    params = params([@max_cap, @max_cap, 0, resource, search], site_id, union)
+
+    case Ecto.Adapters.SQL.query(@repo, sql, params) do
+      {:ok, %{rows: rows}} -> Map.new(rows, fn [day, total] -> {day, total} end)
+      other -> log_failure("sparkline", other, %{})
     end
   end
 
-  defp count([], _site_id, _resource, _search), do: 0
+  defp count(%{sql: []}, _site_id, _resource, _search), do: 0
 
-  # Same param shape as `run/6` — the branches read $1/$4/$5/$6, and the LIMIT/OFFSET keeps $2/$3
+  # Same param shape as `run/7` — the branches read $1/$4/$5/$6, and the LIMIT/OFFSET keeps $2/$3
   # referenced so Postgres can still infer their types (they are positional, so neither can be
   # skipped). The limit doubles as the cap: a log past `@max_cap` reports the cap.
-  defp count(branches, site_id, resource, search) do
+  defp count(union, site_id, resource, search) do
     sql = """
     SELECT COUNT(*) FROM (
       SELECT 1 FROM (
-      #{Enum.join(branches, "\n  UNION ALL\n")}
+      #{Enum.join(union.sql, "\n  UNION ALL\n")}
       ) t
       LIMIT $2 OFFSET $3
     ) capped
     """
 
-    params = [@max_cap, @max_cap, 0, resource, search] ++ if(site_id, do: [site_id], else: [])
+    params = params([@max_cap, @max_cap, 0, resource, search], site_id, union)
 
     case Ecto.Adapters.SQL.query(@repo, sql, params) do
       {:ok, %{rows: [[total]]}} -> total
@@ -264,13 +276,82 @@ defmodule MishkaCmsCore.Activity.Query do
     end
   end
 
-  defp branches(site_id, kind, severity, shown) do
-    []
-    |> maybe_concat(kind in [nil, "content"], fn -> version_branches(site_id, severity, shown) end)
-    |> maybe_concat(kind in [nil, "content"], fn -> event_branches(site_id, severity, shown) end)
-    |> maybe_concat(kind in [nil, "content"], fn -> draft_branches(site_id, severity, shown) end)
-    |> maybe_concat(kind in [nil, "content"], fn -> editor_branches(site_id, severity, shown) end)
-    |> maybe_concat(kind in [nil, "job"], fn -> oban_branches(site_id, severity, shown) end)
+  # THE BRANCHES OF ONE READ, with what the query needs beside them: `params`, the union sources'
+  # own parameters, which follow the shared ones, and `sources`, the source behind each `source`
+  # value a row can come back with.
+  defp branches(site_id, kind, severity, shown, union_sources) do
+    content? = kind in [nil, "content"]
+
+    union =
+      if content?,
+        do: union_branches(union_sources, site_id, severity, shown),
+        else: %{sql: [], params: [], sources: %{}}
+
+    sql =
+      []
+      |> maybe_concat(content?, fn -> version_branches(site_id, severity, shown) end)
+      |> maybe_concat(content?, fn -> event_branches(site_id, severity, shown) end)
+      |> maybe_concat(content?, fn -> draft_branches(site_id, severity, shown) end)
+      |> Enum.concat(union.sql)
+      |> maybe_concat(kind in [nil, "job"], fn -> oban_branches(site_id, severity, shown) end)
+
+    %{union | sql: sql}
+  end
+
+  # $1-$5 are every read's; $6 is the tenant's site, and only there when a site is read, because
+  # Postgres has to infer a type for every parameter it is sent. A union source's own come after.
+  defp params(shared, site_id, union),
+    do: shared ++ if(site_id, do: [site_id], else: []) ++ union.params
+
+  # EACH SOURCE IS ASKED FOR ITS BRANCH ON ITS OWN, so one that raises or answers something else is
+  # left out of this read alone, and the log keeps every other source.
+  defp union_branches(sources, site_id, severity, shown) do
+    first = if site_id, do: 7, else: 6
+
+    Enum.reduce(sources, %{sql: [], params: [], sources: %{}}, fn source, union ->
+      read = %{
+        site_id: site_id,
+        severity: severity,
+        shown: shown,
+        first_param: first + length(union.params)
+      }
+
+      case union_branch(source, read) do
+        {:ok, {sql, params}} ->
+          %{
+            sql: union.sql ++ [sql],
+            params: union.params ++ params,
+            sources: Map.put(union.sources, source.id(), source)
+          }
+
+        :none ->
+          union
+
+        {:error, reason} ->
+          Logger.error(
+            "[Activity.Query] #{inspect(source)} gave no branch, its rows are left out: " <>
+              inspect(reason)
+          )
+
+          union
+      end
+    end)
+  end
+
+  defp union_branch(source, read) do
+    id = source.id()
+
+    if id in @core_sources or not valid_ident?(id) do
+      {:error, {:source_id_not_allowed, id}}
+    else
+      case source.union_branch(read) do
+        {sql, params} = branch when is_binary(sql) and is_list(params) -> {:ok, branch}
+        nil -> :none
+        other -> {:error, {:not_a_branch, other}}
+      end
+    end
+  rescue
+    error -> {:error, error}
   end
 
   # WHOSE ENTRIES A VIEWER'S LOG SHOWS: `:all`, or only those of the resources named. A name is a
@@ -282,10 +363,16 @@ defmodule MishkaCmsCore.Activity.Query do
     end
   end
 
-  defp shown_clause(_expr, :all), do: ""
-  defp shown_clause(_expr, []), do: " AND FALSE"
+  @doc """
+  The predicate that keeps a branch to the resources a viewer may see: nothing for `:all`, and
+  otherwise `expr` (the SQL of the row's resource module name) among `resources`, which `page/1`
+  has already checked are module names. A clause builder for a union source's branch.
+  """
+  @spec shown_clause(String.t(), :all | [String.t()]) :: String.t()
+  def shown_clause(_expr, :all), do: ""
+  def shown_clause(_expr, []), do: " AND FALSE"
 
-  defp shown_clause(expr, resources),
+  def shown_clause(expr, resources),
     do: " AND #{expr} IN (#{Enum.map_join(resources, ", ", &"'#{&1}'")})"
 
   defp maybe_concat(acc, true, fun), do: acc ++ fun.()
@@ -387,52 +474,6 @@ defmodule MishkaCmsCore.Activity.Query do
     end)
   end
 
-  # THE EDITOR'S OWN RECORD. Nothing else can see it: `PageBuilderEvent` is not versioned, not an
-  # events log and not a job, so without this branch a whole afternoon in the page builder leaves the
-  # global feed empty while the editor's own sheet is full.
-  #
-  # Skipped for the two severities it cannot reach — every row is somebody making a change, which is
-  # information rather than a warning — so a `warn` read does not scan the table to return nothing.
-  defp editor_branches(_site_id, severity, _shown) when severity in ["warn", "error"], do: []
-
-  defp editor_branches(site_id, severity, shown) do
-    # SAID IN THE FEED'S OWN WORDS. The editor files a change under content, style or publish, and
-    # the feed has one shared vocabulary every source reports in — widening it for one source would
-    # change how the others render. A publish is a publish; everything else is an update to the
-    # document, and the message beside it says which ("Set gap (base) — <nav>").
-    action_expr = "(CASE WHEN kind::text = 'publish' THEN 'publish' ELSE 'update' END)"
-
-    # THE MODULE NAME, NOT THE SECTION. Every other branch reports a resource as
-    # `Elixir.MishkaCmsCore.Runtime.Page`, and that is what a resource-scoped feed filters on — a
-    # branch answering `page` would be shown in every document's System Log and filtered out of its
-    # own. Built here rather than in Elixir because the filter is applied in SQL.
-    resource_expr = """
-    (CASE source_type::text
-       WHEN 'page' THEN 'Elixir.MishkaCmsCore.Runtime.Page'
-       WHEN 'layout' THEN 'Elixir.MishkaCmsCore.Runtime.Layout'
-       WHEN 'component' THEN 'Elixir.MishkaCmsCore.Runtime.Component'
-       WHEN 'error_page' THEN 'Elixir.MishkaCmsCore.Runtime.ErrorPage'
-     END)\
-    """
-
-    [
-      """
-      (SELECT 'editor' AS source, #{resource_expr} AS resource,
-              #{action_expr} AS action,
-              source_id::text AS source_id,
-              id::text AS event_id,
-              site_id::text AS site_id,
-              author_id::text AS user_id,
-              inserted_at AS inserted_at,
-              jsonb_build_object('label', label, 'target', target) AS payload
-         FROM page_builder_events
-        WHERE TRUE#{version_site_clause(site_id, false)}#{content_severity_clause(severity, action_expr)}#{resource_clause(resource_expr)}#{shown_clause(resource_expr, shown)}#{search_clause(["label", "target"])}
-        ORDER BY inserted_at DESC
-        LIMIT $1)\
-      """
-    ]
-  end
-
   defp oban_branches(site_id, severity, shown) do
     site_expr = "COALESCE(args->>'site_id', args#>>'{data,site_id}')"
 
@@ -460,24 +501,24 @@ defmodule MishkaCmsCore.Activity.Query do
     ]
   end
 
-  defp run([], _site_id, _cap, _limit, _offset, _resource, _search), do: []
+  defp run(%{sql: []}, _site_id, _cap, _limit, _offset, _resource, _search), do: []
 
   # Params: $1 = cap, $2 = limit, $3 = offset, $4 = resource (or nil), $5 = search
-  # (or nil), $6 = tenant site_id (tenant only).
-  defp run(branches, site_id, cap, limit, offset, resource, search) do
+  # (or nil), $6 = tenant site_id (tenant only), then the union sources' own.
+  defp run(union, site_id, cap, limit, offset, resource, search) do
     sql = """
     SELECT source, resource, action, source_id, event_id, site_id, user_id, inserted_at, payload
     FROM (
-    #{Enum.join(branches, "\n  UNION ALL\n")}
+    #{Enum.join(union.sql, "\n  UNION ALL\n")}
     ) t
     ORDER BY inserted_at DESC NULLS LAST
     LIMIT $2 OFFSET $3
     """
 
-    params = [cap, limit, offset, resource, search] ++ if(site_id, do: [site_id], else: [])
+    params = params([cap, limit, offset, resource, search], site_id, union)
 
     case Ecto.Adapters.SQL.query(@repo, sql, params) do
-      {:ok, %{columns: columns, rows: rows}} -> decode(columns, rows)
+      {:ok, %{columns: columns, rows: rows}} -> decode(columns, rows, union.sources)
       other -> log_failure("page", other, [])
     end
   end
@@ -494,21 +535,27 @@ defmodule MishkaCmsCore.Activity.Query do
     empty
   end
 
-  defp decode(columns, rows) do
+  defp decode(columns, rows, sources) do
     index = columns |> Enum.with_index() |> Map.new()
 
     # `complete_entry/1` is the seam: a source writes whatever map it likes, and what leaves here is
     # always whole, so the widgets and the timeline can dot-access an entry without a KeyError.
-    Enum.map(rows, fn row -> row |> to_map(index) |> dispatch() |> Helpers.complete_entry() end)
+    Enum.map(rows, fn row ->
+      row |> to_map(index) |> dispatch(sources) |> Helpers.complete_entry()
+    end)
   end
 
   defp to_map(row, index), do: Map.new(index, fn {column, i} -> {column, Enum.at(row, i)} end)
 
-  defp dispatch(%{"source" => "version"} = row), do: PaperTrail.entry_from_row(row)
-  defp dispatch(%{"source" => "event"} = row), do: EventLog.entry_from_row(row)
-  defp dispatch(%{"source" => "draft"} = row), do: RuntimeDraft.entry_from_row(row)
-  defp dispatch(%{"source" => "job"} = row), do: Oban.entry_from_row(row)
-  defp dispatch(%{"source" => "editor"} = row), do: EditorHistory.entry_from_row(row)
+  defp dispatch(%{"source" => "version"} = row, _sources), do: PaperTrail.entry_from_row(row)
+  defp dispatch(%{"source" => "event"} = row, _sources), do: EventLog.entry_from_row(row)
+  defp dispatch(%{"source" => "draft"} = row, _sources), do: RuntimeDraft.entry_from_row(row)
+  defp dispatch(%{"source" => "job"} = row, _sources), do: Oban.entry_from_row(row)
+
+  # A union source's row: the sources were asked once for this read, so every `source` value its
+  # SQL can answer with is one of theirs.
+  defp dispatch(%{"source" => source} = row, sources),
+    do: Map.fetch!(sources, source).entry_from_row(row)
 
   # Tenant version scope. A tenant always sees its OWN site; it ALSO sees global
   # (site_id IS NULL) rows ONLY for resources that share their globals with tenants
@@ -516,25 +563,42 @@ defmodule MishkaCmsCore.Activity.Query do
   # shows globals read-only (Component/Layout/JsHook/Stylesheet). It never sees
   # another tenant. Master (site_id nil) gets no clause and sees everything.
   #
-  # `$4::text::uuid` (not `$4::uuid`): the inner `::text` forces Postgrex to send
-  # $4 as text — the same type the event/oban jsonb branches compare against — so
+  # `$6::text::uuid` (not `$6::uuid`): the inner `::text` forces Postgrex to send
+  # $6 as text — the same type the event/oban jsonb branches compare against — so
   # one text param serves every branch; the outer `::uuid` makes the right side a
   # uuid constant, leaving the column un-cast so the index is usable.
-  defp version_site_clause(nil, _shared?), do: ""
+  @doc """
+  The tenant scope of a branch over a table with a `site_id` uuid column: nothing when every site
+  is read (`site_id` is `nil`), else the tenant's own rows (`$6`), and the shared ones too when
+  `shared?`. A clause builder for a union source's branch.
+  """
+  @spec version_site_clause(String.t() | nil, boolean()) :: String.t()
+  def version_site_clause(nil, _shared?), do: ""
 
-  defp version_site_clause(_site_id, true),
+  def version_site_clause(_site_id, true),
     do: " AND (site_id = $6::text::uuid OR site_id IS NULL)"
 
-  defp version_site_clause(_site_id, false), do: " AND site_id = $6::text::uuid"
+  def version_site_clause(_site_id, false), do: " AND site_id = $6::text::uuid"
 
   # Events (per-extension logs) and Oban jobs are NOT globally shared with tenants,
   # so a tenant sees only its own site for those — never global.
   defp site_text_clause(nil, _expr), do: ""
   defp site_text_clause(_site_id, expr), do: " AND #{expr} = $6::text"
 
-  defp resource_clause(expr), do: " AND ($4::text IS NULL OR #{expr} = $4::text)"
+  @doc """
+  The predicate a resource-scoped log narrows a branch by: `expr` (the SQL of the row's resource
+  module name) equal to `$4`, or anything when no resource is asked for. A clause builder for a
+  union source's branch.
+  """
+  @spec resource_clause(String.t()) :: String.t()
+  def resource_clause(expr), do: " AND ($4::text IS NULL OR #{expr} = $4::text)"
 
-  defp search_clause(exprs) do
+  @doc """
+  The predicate a search narrows a branch by: any of `exprs` (SQL text expressions) matching `$5`,
+  or anything when nothing is searched for. A clause builder for a union source's branch.
+  """
+  @spec search_clause([String.t()]) :: String.t()
+  def search_clause(exprs) do
     ors = Enum.map_join(exprs, " OR ", &"#{&1} ILIKE $5::text")
     " AND ($5::text IS NULL OR #{ors})"
   end
@@ -609,11 +673,17 @@ defmodule MishkaCmsCore.Activity.Query do
   def shares_globals?(resource),
     do: !is_nil(Ash.Resource.Info.action(resource, :for_tenant_with_globals))
 
-  defp content_severity_clause("warn", column), do: " AND #{column} IN (#{@warn_actions})"
-  defp content_severity_clause("info", column), do: " AND #{column} NOT IN (#{@warn_actions})"
+  @doc """
+  The predicate a severity narrows a content branch by, over `column` (the SQL of the row's action):
+  a `"warn"` read keeps the destroy family, an `"info"` read everything else, and any other value,
+  `nil` included, keeps every row. A clause builder for a union source's branch.
+  """
+  @spec content_severity_clause(String.t() | nil, String.t()) :: String.t()
+  def content_severity_clause("warn", column), do: " AND #{column} IN (#{@warn_actions})"
+  def content_severity_clause("info", column), do: " AND #{column} NOT IN (#{@warn_actions})"
   # Catch-all (incl. nil) → no severity predicate. Total by construction, so a value
   # that slips past the normalize_filters whitelist can never raise here.
-  defp content_severity_clause(_severity, _column), do: ""
+  def content_severity_clause(_severity, _column), do: ""
 
   defp oban_states("info"), do: "'completed'"
   defp oban_states("warn"), do: "'retryable'"

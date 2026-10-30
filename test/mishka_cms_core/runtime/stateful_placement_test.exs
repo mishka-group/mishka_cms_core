@@ -916,12 +916,13 @@ defmodule MishkaCmsCore.Runtime.StatefulPlacementTest do
   # inside whichever LiveView renders the page, where nothing contains it — so this is a rule and
   # not a finding.
   #
-  # The editor's own minting does not cover it: `Ids.dedupe/2` renames the nodes that ARRIVED and
-  # answers nothing when a whole document arrives at once, which is exactly what the source window,
-  # a draft restore and a seeded template do.
+  # The editor's own minting does not cover it: it renames the nodes that ARRIVED and answers
+  # nothing when a whole document arrives at once, which is exactly what the source window, a draft
+  # restore and a seeded template do. So the page asks it of the stored markup, and this suite
+  # needs no editor to hold it.
   describe "two live components under one id" do
     defp page(site, template) do
-      MishkaCmsCore.Runtime.Page
+      Page
       |> Ash.Changeset.for_create(
         :create,
         %{
@@ -939,33 +940,6 @@ defmodule MishkaCmsCore.Runtime.StatefulPlacementTest do
     defp twice(name, id_one, id_two) do
       ~s(<div><.component component_name="#{name}" site="Global" id="#{id_one}" />) <>
         ~s(<.component component_name="#{name}" site="Global" id="#{id_two}" /></div>)
-    end
-
-    # AND AN AUTHOR SHOULD NEVER MEET THAT REFUSAL BY DUPLICATING ONE, which is the ordinary way to
-    # get a second of anything. `Tree.duplicate/2` copies every attribute verbatim, so the copy
-    # arrives wearing the original's id; `Ids.dedupe/2` renames the node that ARRIVED and leaves the
-    # one already placed alone. Nothing about that mechanism is specific to live components — which
-    # is exactly why it is pinned here, where getting it wrong means a save the author cannot
-    # complete rather than two buttons opening one dialog.
-    test "a duplicate arrives with an id of its own, so the rule is never met" do
-      alias MishkaCmsCore.Runtime.PageBuilder.Ids
-      alias MishkaCmsCore.Runtime.PageBuilder.Tree
-
-      {:ok, tree} = Tree.parse(twice("live-widget", "phx-F8kQ2n1aRxY", "phx-F8kQ2n1aRxY"))
-
-      [_original, copy] = Tree.walk(tree) |> Enum.filter(&(&1.kind == :component))
-
-      ids =
-        tree
-        |> Ids.dedupe([copy.id])
-        |> Tree.walk()
-        |> Enum.filter(&(&1.kind == :component))
-        |> Enum.map(&Tree.Node.attr(&1, "id"))
-
-      assert [{:string, "phx-F8kQ2n1aRxY"}, {:string, fresh}] = ids
-
-      assert fresh != "phx-F8kQ2n1aRxY",
-             "the copy kept the original's id — every duplicate would be a save the author cannot complete"
     end
 
     test "is refused, with both named" do
@@ -997,7 +971,7 @@ defmodule MishkaCmsCore.Runtime.StatefulPlacementTest do
     end
 
     # `id={@row.id}` IS THE AUTHOR BINDING THE ID TO THEIR DATA, and two of them are not a
-    # collision — the same distinction `PageBuilder.Ids` draws.
+    # collision.
     test "and an expression is not a literal this can compare" do
       site = create_site!()
       _live = live_component!(site)

@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Builder.Action do
   A server action also names the module the compiled page calls, as `{module, function}`. That module
   must be runtime code: it is named inside every published page that uses the action, and a visitor's
   page has no business naming anything under `MishkaCmsCore.Builder.*` or
-  `MishkaCmsCore.Runtime.PageBuilder.*`. Core's own points at
+  `MishkaCmsCore.Runtime.Authoring.*`. Core's own points at
   `MishkaCmsCore.Runtime.PageMessage`.
 
   ## What the panel draws
@@ -94,8 +94,8 @@ defmodule MishkaCmsCore.Builder.Action do
 
   @typedoc """
   What the click already knows: the clicked element's own scope class, the scope it is aimed at (or
-  `nil` for itself), and what the target says about being opened — see
-  `MishkaCmsCore.Builder.PaletteEntry.opens/1`.
+  `nil` for itself), and what the target says about being opened: the `data-pb-open` and
+  `data-pb-close` commands its component declares (`MishkaCmsCore.Builder.Actions.OpenVerb`).
   """
   @type context :: %{scope: String.t(), target: String.t() | nil, opener: map()}
 

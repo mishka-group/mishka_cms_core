@@ -74,8 +74,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeAccess
-  alias MishkaCmsCore.Runtime.PageBuilder.Section
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCoreWeb.Templates.VersionHistory
   alias MishkaCmsCore.Runtime.Compilers.Helpers, as: CompilerHelpers
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
@@ -297,7 +297,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     duplicable?: false,
     duplicating?: false,
     writable?: false,
-    metrics: nil
+    metrics: nil,
+    form_hidden: [],
+    form_defaults: nil
   }
 
   @doc "The shared modal DOM id (used by the gervaz show/hide JS)."
@@ -407,17 +409,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   @doc """
   Open the modal on an empty Configuration form to ADD a record (the page's + button) — for a writer
   of the resource; anyone else is told what it needs.
+
+  `for_editor: true` is the "fill in the form, then open the editor" way. A document headed for the
+  visual editor goes live when it is published there, the way one named in the editor's own first
+  step does: so this form does not offer the Active switch, and the record is saved inactive. Without
+  it the form's Active box arrived ticked (the resource's default) and the page was live, still
+  empty, while its author built it in drafts.
   """
-  def open_new(socket) do
+  def open_new(socket, opts \\ []) do
     config = socket.assigns.runtime_status_opts
 
     case writable?(config.resource, socket.assigns.current_user) do
-      true -> open_blank(socket, config)
+      true -> open_blank(socket, config, Keyword.get(opts, :for_editor, false))
       false -> put_flash(socket, :error, refusal(config.resource))
     end
   end
 
-  defp open_blank(socket, config) do
+  defp open_blank(socket, config, for_editor?) do
     socket
     |> assign(:preview, %{
       @empty
@@ -426,7 +434,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         current_user: socket.assigns.current_user,
         form_record_id: nil,
         has_config?: configurable?(config.resource, socket.assigns.current_user),
-        config_mounted?: true
+        config_mounted?: true,
+        form_hidden: (for_editor? && [:active]) || [],
+        form_defaults: (for_editor? && %{"active" => false}) || nil
     })
     |> exec_modal_js(&MishkaCmsCore.CoreComponents.show_modal/1)
   end
@@ -532,7 +542,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   # A SITE'S OWN HOOK IS IN ITS SITE'S JS. A global one is built into every site's JS — not into a
   # shared base, which exists only for a site with no hooks of its own — so a site admin sees their
   # own site's bundle, and a master in how many site bundles it is. How many templates attach it is
-  # counted where the viewer may look (`PageBuilder.Hooks.named_in/3`).
+  # counted where the viewer may look (`Authoring.Hooks.named_in/3`).
   defp bundle_metrics(MishkaCmsCore.Runtime.JsHook, %{record: record} = source) do
     hook = Ash.load!(record, [:is_global], authorize?: false)
     {site_name, scope} = hook_scope(hook, source)
@@ -543,7 +553,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     |> Map.merge(%{
       lazy?: hook.lazy == true,
       left_out?: left_out?(source.status, site_name),
-      named_in: MishkaCmsCore.Runtime.PageBuilder.Hooks.named_in(hook, site_name, scope)
+      named_in: MishkaCmsCore.Runtime.Authoring.Hooks.named_in(hook, site_name, scope)
     })
   end
 
@@ -1190,10 +1200,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   defp normalize_label(_label), do: nil
 
-  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL, for the reason
-  # `PageBuilder.Helpers.create_section/4` gives: validations run when the changeset is BUILT, so
-  # `Ash.create(actor: …)` alone reaches them too late. `TenantContext`'s master branch is the one
-  # that asks who is writing, and it saw a nil actor on every draft write the preview bar makes.
+  # THE ACTOR GOES ON THE CHANGESET, NOT ONLY ON THE CALL: validations run when the changeset is
+  # BUILT, so `Ash.create(actor: …)` alone reaches them too late. `TenantContext`'s master branch
+  # is the one that asks who is writing, and it saw a nil actor on every draft write the preview
+  # bar makes.
   defp write_draft(nil, attrs, record, %{site_id: nil} = user, resource) do
     draft_module(resource)
     |> Ash.Changeset.for_create(
@@ -1588,9 +1598,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
        when is_binary(site_id),
        do: {tenant, [actor: actor, tenant: site_id]}
 
-  # The builder's route is `/runtime/builder/:section/:id`, one shape for all four kinds. This used
-  # to name a `/builder/layout/:site/:id/edit` path that matched no route at all, and returned `nil`
-  # for error pages and components — so three of the four editable resources had no way in.
+  # The editor's address is the editor's to spell: `Section.editor_url/2` asks
+  # `runtime:document:editor_url`, one question for all four kinds, and no editor installed is no
+  # link. This used to name a `/builder/layout/:site/:id/edit` path that matched no route at all, and
+  # returned `nil` for error pages and components — so three of the four editable resources had no
+  # way in.
   #
   # `site_id` travels as a query param because a MASTER can edit another site's record and the
   # builder needs to know which tenant to scope its palette and its save to; a tenant admin's own
@@ -1602,17 +1614,18 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     MishkaCmsCore.Runtime.Component => "component"
   }
 
-  # A button that leads to a refusal is worse than no button: `BuilderLive` turns a tenant away from
+  # A button that leads to a refusal is worse than no button: the editor turns a tenant away from
   # a shared row's address, so the row does not offer it one. Everything else about the record — the
   # preview, the details, the versions — stays, because seeing it was never the restricted part.
   #
-  # AND ONLY TO SOMEONE WHO MAY OPEN THAT BUILDER — `Section.allowed?/2`, which `BuilderLive` asks
-  # again at mount.
+  # AND ONLY TO SOMEONE WHO MAY OPEN THAT BUILDER — `Section.allowed?/2`, which the editor asks
+  # again when it opens.
   defp visual_editor_url(record, resource, actor) do
     with {:ok, section} <- Map.fetch(@builder_sections, resource),
          true <- can_edit?(resource, record, actor),
-         true <- Section.allowed?(actor, section) do
-      Section.builder_path(section, record.id) <> site_query(record)
+         true <- Section.allowed?(actor, section),
+         url when is_binary(url) <- Section.editor_url(section, record.id) do
+      url <> site_query(record)
     else
       _no_way_in -> nil
     end

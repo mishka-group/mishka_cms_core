@@ -85,6 +85,60 @@ defmodule MishkaCmsCore.Builder.Literal do
   def term(_other), do: :error
 
   @doc """
+  Whether a source string reads something only the running page has: an assign, the `assigns`
+  map, a field or a key of something (`f[:email].value`, `item.title`), or a function it calls by
+  name with parentheses or as a sigil (`t("Hi")`, `~p"/about"`).
+
+  The other side of `value/1`, and the question a property box has to ask of what was typed into
+  it, because typed words parse. `E2E-0` is the alias `E2E` minus zero, `my-page` is `my` minus
+  `page` and `hello world` is the call `hello(world)`; none of them reads anything the page has, and
+  each is what an author types as words. A bare name is a word for the same reason.
+
+      iex> MishkaCmsCore.Builder.Literal.expression?("f[:email].value")
+      true
+
+      iex> MishkaCmsCore.Builder.Literal.expression?("E2E-0")
+      false
+  """
+  @spec expression?(String.t()) :: boolean()
+  def expression?(source) when is_binary(source) do
+    case Code.string_to_quoted(source, token_metadata: true) do
+      {:ok, quoted} -> reads?(quoted)
+      _unparseable -> false
+    end
+  end
+
+  def expression?(_source), do: false
+
+  defp reads?(quoted) do
+    {_quoted, read?} =
+      Macro.prewalk(quoted, false, fn
+        node, true -> {node, true}
+        node, false -> {node, reading?(node)}
+      end)
+
+    read?
+  end
+
+  # The forms that build a value out of what is inside them, rather than call anything. An alias is
+  # a name, not a call: `{:__aliases__, meta, [:E2E]}` has the shape of one.
+  @builds [:__aliases__, :__block__, :{}, :%{}, :%, :<<>>]
+
+  defp reading?({:@, _meta, [{name, _var_meta, context}]})
+       when is_atom(name) and is_atom(context),
+       do: true
+
+  defp reading?({:assigns, _meta, context}) when is_atom(context), do: true
+  defp reading?({{:., _meta, _target}, _call_meta, _args}), do: true
+
+  defp reading?({name, meta, args}) when is_atom(name) and is_list(args) do
+    name not in @builds and not Macro.operator?(name, length(args)) and
+      (Keyword.has_key?(meta, :closing) or String.starts_with?(Atom.to_string(name), "sigil_"))
+  end
+
+  defp reading?(_name_literal_or_pair), do: false
+
+  @doc """
   Whether a term is data a page can carry — no function, no pid, no reference.
 
   The check a writer needs before printing a term as source, and the trap it is guarding against is

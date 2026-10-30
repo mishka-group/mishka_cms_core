@@ -208,7 +208,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   alias MishkaCmsCore.Runtime.{Component, ComponentBoundary, Helpers, LiveViewHelpers}
   alias MishkaCmsCore.Runtime.Translations
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
-  alias MishkaCmsCore.Runtime.PageBuilder.{CodeReads, Icons, Inspector, Markup}
+  alias MishkaCmsCore.Runtime.Authoring.{CodeReads, Icons, Inspector, Markup}
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaInstaller.Event.Hook
 
@@ -400,7 +400,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   (`[[slot item icon="hero-inbox"]]`) and the HTML's own classes (`<span class="hero-inbox">`) alike
   — what a resource stores beside its content when it is written, for the site's stylesheet.
 
-  A class is found by the prefixes `MishkaCmsCore.Runtime.PageBuilder.Icons` registers
+  A class is found by the prefixes `MishkaCmsCore.Runtime.Authoring.Icons` registers
   (`Icons.classes_in/1`), and kept only when a registered set ships it (`Icons.known?/1`): a
   `hero-section` in the text, or a prefix nothing registers, is left out.
 
@@ -1429,9 +1429,10 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp visitor(assigns, true, user), do: Map.put(assigns, :current_user, user)
   defp visitor(assigns, false, _user), do: assigns
 
-  # A MARKER IS DRAWN INSIDE `ComponentBoundary.draw/3`: a component that raises while it draws is a
-  # box in the content, and the page around it draws. Only here — a page's, a layout's and an error
-  # page's own `<.component>` calls go straight to `LiveViewHelpers.component/1`.
+  # A MARKER IS DRAWN INSIDE `ComponentBoundary.draw/3` ON EVERY RENDER: a component that raises
+  # while it draws is a box in the content, and the page around it draws. A page's, a layout's and an
+  # error page's own `<.component>` calls are drawn through it on a full render only — see
+  # `LiveViewHelpers.component/1`.
   defp drawn(%{component_name: name, site: site} = assigns, :live),
     do: ComponentBoundary.draw(name, site, fn -> LiveViewHelpers.component(assigns) end)
 

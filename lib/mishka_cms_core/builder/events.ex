@@ -45,7 +45,7 @@ defmodule MishkaCmsCore.Builder.Events do
   | `builder:page_starters` | `%{structures: [Starter]}` | the empty-page picker |
   | `builder:icon:libraries` | `%{libraries: [Library]}` | the icon picker |
   | `builder:interactions` | `%{actions: [Action]}` | the Interactions section — see `MishkaCmsCore.Builder.Action` |
-  | `builder:conditions` | `%{rules: [Rule]}` | the Show-when section — see `MishkaCmsCore.Runtime.PageBuilder.Conditions` |
+  | `builder:conditions` | `%{rules: [Rule]}` | the Show-when section, whose rules write the element's `:if={…}` |
   | `builder:js_hooks` | `%{hooks: [Hook]}` | the hook picker |
   | `builder:mention:sources` | `%{sources: [Source]}` | @-mentions in review notes |
 
@@ -126,9 +126,9 @@ defmodule MishkaCmsCore.Builder.Events do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   require Logger
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Strict
 
   alias MishkaCmsCore.Builder.Descriptor
 

@@ -15,7 +15,7 @@ defmodule MishkaCmsCore.Runtime.PageMessage do
   the one the framework ships would have to be styled twice and dismissed twice.
 
   The client half is `Phoenix.LiveView.JS.push/2`, which is what
-  `MishkaCmsCore.Runtime.PageBuilder.Interactions` compiles:
+  `MishkaCmsCore.Runtime.Authoring.Interactions` compiles:
 
       <button phx-click={JS.push("pb:say", value: %{"kind" => "info", "message" => "Saved!"})}>
 

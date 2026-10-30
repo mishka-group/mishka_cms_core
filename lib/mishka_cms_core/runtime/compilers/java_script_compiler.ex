@@ -1343,7 +1343,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
       # A SITE HOOK WITH NO SITE NAME cannot be given the prefix it is compiled under, and this used
       # to hand `nil` to `String.split/3` — a 500 on the way into the editor rather than a missing
-      # name. Callers should not ask (see `MishkaCmsCore.Runtime.PageBuilder.Hooks.available/3`);
+      # name. Callers should not ask (see `MishkaCmsCore.Runtime.Authoring.Hooks.available/3`);
       # answering the bare name is better than raising if one does.
       {_site_scoped, nil} ->
         base_name

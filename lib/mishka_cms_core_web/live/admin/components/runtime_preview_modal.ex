@@ -133,6 +133,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
       |> assign(:metrics, p.metrics)
       |> assign(:current_user, p.current_user)
       |> assign(:form_record_id, p.form_record_id)
+      # What a create made for the visual editor leaves off the form, and what it saves instead
+      # (`PreviewHelpers.open_new/2`). Read with defaults: a preview map built before these keys
+      # existed is an ordinary form.
+      |> assign(:form_hidden, Map.get(p, :form_hidden, []))
+      |> assign(:form_defaults, Map.get(p, :form_defaults))
       |> assign(:form_id, p.resource && MishkaGervaz.Resource.Info.Form.component_id(p.resource))
       |> assign(:title, title_for(p))
       |> assign(:tabs, tabs_for(p.resource, p.code_visible?, p.has_config?))
@@ -177,10 +182,11 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
               leaving for the builder used to forget it — the editor read the drafts table for
               itself and offered whichever was newest, so picking the second badge and clicking
               through landed on an offer to carry on with the first. The id rides in the URL and the
-              builder offers THAT one; see `MishkaCmsCoreWeb.Live.Admin.Builder.BuilderLive`. --%>
+              editor offers THAT one. A plain link, because the editor is a document of its own: see
+              `MishkaCmsCore.CoreComponents.create_menu/1`. --%>
         <.link
           :if={@visual_editor_url}
-          navigate={builder_url(@visual_editor_url, @draft)}
+          href={builder_url(@visual_editor_url, @draft)}
           class="inline-flex h-9 items-center gap-[7px] rounded-[10px] border border-[#ecebe6] bg-white px-[13px] text-[12px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3]"
         >
           <.icon name="hero-paint-brush" class="size-4 text-[#5b57d6]" /> {gettext("Visual Editor")}
@@ -402,6 +408,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             resource={@resource}
             current_user={@current_user}
             record_id={@form_record_id}
+            hidden_fields={@form_hidden}
+            defaults={@form_defaults}
           />
         </div>
       </div>
@@ -794,7 +802,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
 
   defp version(_none), do: nil
 
-  # HOW MANY TEMPLATES ATTACH THE HOOK (`PageBuilder.Hooks.named_in/3`): one component that does is
+  # HOW MANY TEMPLATES ATTACH THE HOOK (`Authoring.Hooks.named_in/3`): one component that does is
   # one, however many pages draw it.
   defp named_in(metrics) when not is_map(metrics), do: gettext("Loading…")
   defp named_in(%{named_in: n}), do: ngettext("%{count} template", "%{count} templates", n)
@@ -1381,7 +1389,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: assigns.active_tab == "code" or assigns.preview_source == "draft"
 
   defp draft_label(%{label: label}) when is_binary(label) and label != "",
-    do: MishkaCmsCore.Runtime.PageBuilder.Drafts.display_label(label)
+    do: MishkaCmsCore.Runtime.Authoring.Drafts.display_label(label)
 
   defp draft_label(_draft), do: gettext("Untitled draft")
 

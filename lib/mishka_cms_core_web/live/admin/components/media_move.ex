@@ -38,12 +38,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaMove do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Runtime.{Media, MediaCategory}
   alias Phoenix.LiveView.{AsyncResult, JS}
-
-  # The folders inside one folder, read at once. A folder holding more than this has a different
-  # problem than how to move a file into one of them.
-  @listing_limit 200
 
   @impl true
   def mount(socket) do
@@ -142,12 +139,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaMove do
     |> inside(folder_id)
     |> leave_out(moving)
     |> Ash.Query.sort(name: :asc)
-    |> Ash.read(page: [limit: @listing_limit])
-    |> case do
-      {:ok, %{results: folders}} -> {:ok, folders}
-      {:ok, folders} when is_list(folders) -> {:ok, folders}
-      {:error, error} -> {:error, error}
-    end
+    # EVERY FOLDER INSIDE IT. This asked for 200 at once, and a master's read takes 100 a page, so
+    # the 101st folder was never offered as a place to move a file to.
+    |> EveryPage.read()
   end
 
   defp inside(query, nil), do: Ash.Query.filter(query, is_nil(parent_id))

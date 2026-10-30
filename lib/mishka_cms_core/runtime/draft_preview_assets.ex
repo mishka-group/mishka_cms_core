@@ -238,7 +238,7 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
     do: "#{inspect(Map.get(record, :updated_at))}:#{Map.get(asset_site || %{}, :id)}"
 
   # The compiler raises "cannot compile module … (errors have been logged)" and hands the sentence
-  # that names the fault back as a diagnostic, as `MishkaCmsCore.Runtime.PageBuilder.CodeCheck` reads it.
+  # that names the fault back as a diagnostic, as `MishkaCmsCore.Runtime.Authoring.CodeCheck` reads it.
   defp failure(error, diagnostics) do
     case Enum.find(diagnostics, &(&1.severity == :error)) do
       %{message: message} -> message

@@ -7,6 +7,9 @@
 # The directory Mix downloads your dependencies sources to.
 /deps/
 
+# What `bun install` puts in assets/ to run the hooks' tests (assets/package.json).
+/assets/node_modules/
+
 # Where third-party dependencies like ExDoc output generated docs.
 /doc/
 

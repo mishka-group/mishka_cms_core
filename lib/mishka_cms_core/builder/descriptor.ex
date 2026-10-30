@@ -26,9 +26,9 @@ defmodule MishkaCmsCore.Builder.Descriptor do
   """
 
   require Logger
-  require MishkaCmsCore.Runtime.PageBuilder.Strict
+  require MishkaCmsCore.Runtime.Authoring.Strict
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Strict
+  alias MishkaCmsCore.Runtime.Authoring.Strict
   use GuardedStruct
 
   @kinds [

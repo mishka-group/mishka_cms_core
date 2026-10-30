@@ -20,7 +20,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.SiteIconCssTest do
   """
   use ExUnit.Case, async: false
 
-  alias MishkaCmsCore.Runtime.PageBuilder.Icons
+  alias MishkaCmsCore.Runtime.Authoring.Icons
 
   @kits_dir MishkaCmsCore.Runtime.Handlers.UiKitHandler.kits_dir()
   @fixture Path.join(@kits_dir, "icontest.json")

@@ -14,7 +14,7 @@ defmodule MishkaCmsCoreWeb.Runtime.ComponentExamplesTest do
   import Phoenix.LiveViewTest
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaCmsCore.Runtime.RuntimePreview
-  alias MishkaCmsCore.Runtime.PageBuilder.Icons
+  alias MishkaCmsCore.Runtime.Authoring.Icons
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
   alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper

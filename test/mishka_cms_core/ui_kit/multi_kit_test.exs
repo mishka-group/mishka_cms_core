@@ -393,8 +393,7 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
   defp installed_names do
     Component
     |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.read!(page: [limit: 500])
-    |> Map.fetch!(:results)
+    |> MishkaCmsCore.EveryPage.read!()
     |> Enum.map(& &1.name)
   end
 end

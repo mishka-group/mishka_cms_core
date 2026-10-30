@@ -177,11 +177,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
 
   require Logger
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeSignature
-  alias MishkaCmsCore.Runtime.PageBuilder.Markup
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms
-  alias MishkaCmsCore.Runtime.PageBuilder.PageForms.Naming
+  alias MishkaCmsCore.Runtime.Authoring.CodeReads
+  alias MishkaCmsCore.Runtime.Authoring.CodeSignature
+  alias MishkaCmsCore.Runtime.Authoring.Markup
+  alias MishkaCmsCore.Runtime.Authoring.PageForms
+  alias MishkaCmsCore.Runtime.Authoring.PageForms.Naming
   alias MishkaCmsCore.Runtime.PageUpload
 
   # Compiled modules are built on the host's web entrypoint when it names one, so runtime templates
@@ -293,10 +293,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       %{name: params[:title] || params["title"], site: params[:site] || params["site"]},
       fn ->
         # A HIDDEN ELEMENT IS LEFT OUT FIRST, so every stage after this one — the forms the page
-        # declares included — sees only what a visitor gets. See `PageBuilder.Visibility`.
+        # declares included — sees only what a visitor gets. See `Authoring.Visibility`.
         result =
           MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
-          |> Map.update(:template, nil, &MishkaCmsCore.Runtime.PageBuilder.Visibility.strip/1)
+          |> Map.update(:template, nil, &MishkaCmsCore.Runtime.Authoring.Visibility.strip/1)
           |> build_assigns()
           |> build_uploads()
           |> build_page_state()
@@ -603,7 +603,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   `handle_event/3` heads with the same name would make the author's unreachable and their page would
   silently stop responding.
 
-  The author's entries are first renamed with `MishkaCmsCore.Runtime.PageBuilder.PageForms.follow/2`
+  The author's entries are first renamed with `MishkaCmsCore.Runtime.Authoring.PageForms.follow/2`
   and put back into `params[:events]`, so an entry stored under a renamed form's old tagged event
   compiles under the form's current one, and an entry for a deleted form never answers a new form
   that happens to reuse its seed.
@@ -626,7 +626,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   def build_page_forms({params, functions_ast}) do
     specs =
       params[:template]
-      |> MishkaCmsCore.Runtime.PageBuilder.PageForms.declared()
+      |> MishkaCmsCore.Runtime.Authoring.PageForms.declared()
       |> Enum.map(&with_upload_fields(&1, declared_uploads(params[:uploads])))
 
     events = PageForms.follow(params[:events] || [], current_events(specs))
@@ -765,7 +765,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
 
   ## Why the registry rather than a name
 
-  Because the list is not core's to close. `MishkaCmsCore.Runtime.PageBuilder.Interactions` collects
+  Because the list is not core's to close. `MishkaCmsCore.Runtime.Authoring.Interactions` collects
   every action through `builder:interactions`, and each server one names the event it pushes and the
   `{module, function}` that answers it — so an installed package's action compiles into a page the
   same way core's does, with nothing here knowing that package exists.
@@ -793,7 +793,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   """
   def build_page_messages({params, functions_ast}) do
     declared = MapSet.union(author_events(params), form_events(params))
-    answering = MishkaCmsCore.Runtime.PageBuilder.Interactions.server_actions()
+    answering = MishkaCmsCore.Runtime.Authoring.Interactions.server_actions()
 
     clauses =
       for action <- answering,
@@ -1192,7 +1192,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   # `Code.string_to_quoted!/1` and share its variable context.
   # SIGNED CODE RUNS; ANYTHING ELSE DOES NOTHING, AND THE PAGE STILL RENDERS.
   #
-  # `MishkaCmsCore.Runtime.PageBuilder.CodeSignature` is off unless a key is configured, and then
+  # `MishkaCmsCore.Runtime.Authoring.CodeSignature` is off unless a key is configured, and then
   # `trusted?/1` answers true for everything and this is exactly the old behaviour. With a key, a
   # snippet whose signature is missing or does not match — a restored dump, a row written by
   # something other than this application — compiles to `inert` instead of to what it says.
@@ -2003,7 +2003,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   # Renders a template an admin stored (a page, layout, error page, component or a draft of one) for a
   # preview; templates are code by design, and only the runtime and code permissions can write them.
   def render_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns) do
-    template = MishkaCmsCore.Runtime.PageBuilder.Visibility.strip(template)
+    template = MishkaCmsCore.Runtime.Authoring.Visibility.strip(template)
 
     assigns =
       assigns

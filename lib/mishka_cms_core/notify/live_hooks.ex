@@ -18,7 +18,9 @@ defmodule MishkaCmsCore.Notify.LiveHooks do
   `MishkaCmsCore.PubSub`, matching the resource's `Ash.Notifier.PubSub` topics.
   """
 
-  import Phoenix.LiveView, only: [connected?: 1, attach_hook: 4, push_navigate: 2]
+  import Phoenix.LiveView,
+    only: [connected?: 1, attach_hook: 4, navigation_type: 2, push_navigate: 2, redirect: 2]
+
   import Phoenix.Component, only: [assign: 2]
 
   require Ash.Query
@@ -62,12 +64,7 @@ defmodule MishkaCmsCore.Notify.LiveHooks do
   # every unread row. Non-bell events fall through untouched.
   defp handle_action("notify_open", %{"id" => id} = params, socket) do
     read_one(socket.assigns[:current_user], id)
-    socket = refresh(socket)
-
-    case params["link"] do
-      link when is_binary(link) and link != "" -> {:halt, push_navigate(socket, to: link)}
-      _ -> {:halt, socket}
-    end
+    {:halt, socket |> refresh() |> open_link(params["link"])}
   end
 
   defp handle_action("notify_read", %{"id" => id}, socket) do
@@ -81,6 +78,23 @@ defmodule MishkaCmsCore.Notify.LiveHooks do
   end
 
   defp handle_action(_event, _params, socket), do: {:cont, socket}
+
+  # A NOTIFICATION LINKS WHEREVER ITS PRODUCER POINTED IT, and the bell is on every admin page.
+  # LiveView navigates live only inside the page's own live_session: the visual editor, for one,
+  # is in a session of its own, and a live navigation into it from the bell was refused by the
+  # server and retried by the browser as a page load, logging "unauthorized live_redirect" on the
+  # way. The router answers which kind of link it is, so a page outside the session gets a plain
+  # redirect and one inside keeps the live navigation. A link that is not a path of this app goes
+  # nowhere: it arrives from the browser, and `link` is documented as an internal path.
+  defp open_link(socket, "/" <> _path = link) do
+    cond do
+      String.starts_with?(link, "//") or String.contains?(link, "\\") -> socket
+      navigation_type(socket, link) == :href -> redirect(socket, to: link)
+      true -> push_navigate(socket, to: link)
+    end
+  end
+
+  defp open_link(socket, _link), do: socket
 
   defp refresh(socket) do
     user = socket.assigns[:current_user]

@@ -112,7 +112,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   require Logger
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeReads
+  alias MishkaCmsCore.Runtime.Authoring.CodeReads
 
   @global "__global__"
 
@@ -394,7 +394,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
 
   The default is written when it is a non-empty string without a quote or a line break. Code that
   does not parse, or that assigns an attribute whose name it works out at runtime, marks nothing —
-  see `MishkaCmsCore.Runtime.PageBuilder.CodeReads.assigned/1`.
+  see `MishkaCmsCore.Runtime.Authoring.CodeReads.assigned/1`.
 
   `component` is the component's row, or the same record decoded from a job, with string keys.
   `MishkaCmsCore.Runtime.Handlers.BootHandler.build_component_class_content/1` writes the lines into

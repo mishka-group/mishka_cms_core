@@ -47,7 +47,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles do
   use Ash.Resource.Validation
   use Gettext, backend: MishkaCmsCore.Gettext
 
-  alias MishkaCmsCore.Runtime.PageBuilder.CodeCheck
+  alias MishkaCmsCore.Runtime.Authoring.CodeCheck
 
   @impl true
   def init(opts), do: {:ok, opts}

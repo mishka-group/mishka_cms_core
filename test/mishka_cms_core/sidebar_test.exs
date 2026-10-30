@@ -19,7 +19,6 @@ defmodule MishkaCmsCore.SidebarTest do
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCore.Sidebar.{Group, Item}
-  alias MishkaCmsCoreWeb.Live.Admin.Builder.{BuilderLive, CanvasLive}
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.{Account, Runtime}
 
   # Both cache writes are ETS-only, so they never touch the sandboxed connection — but ETS outlives
@@ -58,6 +57,30 @@ defmodule MishkaCmsCore.SidebarTest do
       %{items: items} = Sidebar.core_menu()
 
       assert Enum.all?(items, &(&1.permissions != []))
+    end
+
+    # THE CORE DECLARES ITS OWN PAGES AND NO OTHER. A page another package ships — the visual
+    # editor's among them — is declared by that package's `"sidebar:menus"` plugin, so a CMS
+    # without it has no such page to open.
+    test "declares only the pages the core itself routes" do
+      routed =
+        MapSet.new(MishkaCmsCoreWeb.Routes.routes(:admin), fn {:live, _path, module, _action} ->
+          module
+        end)
+
+      for item <- Sidebar.core_menu().items do
+        assert MapSet.member?(routed, item.module),
+               "#{item.key} declares #{inspect(item.module)}, which the core does not route"
+      end
+    end
+
+    test "with no plugin answering, no page under the editor's paths is declared" do
+      MishkaCmsCore.Test.EventCannotRun.stub!(Sidebar.event())
+
+      paths = Enum.map(Sidebar.collect().items, & &1.path)
+
+      assert paths == Enum.map(Sidebar.core_menu().items, & &1.path)
+      refute Enum.any?(paths, &String.starts_with?(&1, "/admin/dashboard/runtime/builder"))
     end
   end
 
@@ -378,6 +401,10 @@ defmodule MishkaCmsCore.SidebarTest do
       end
     end
 
+    test "the core routes no standalone page: an editor's arrive with the package that ships it" do
+      assert MishkaCmsCoreWeb.Routes.routes(:admin_standalone) == []
+    end
+
     test "every declared nav link points at a real static path" do
       for item <- Sidebar.core_menu().items, item.nav do
         assert String.starts_with?(item.path, "/admin/dashboard") or item.path == "/"
@@ -469,26 +496,6 @@ defmodule MishkaCmsCore.SidebarTest do
   describe "the area each page asks for" do
     defp opens?(user, module) do
       AccessPermissions.match?(user, %{}, permissions: Sidebar.permissions_for_module(module))
-    end
-
-    test "the builder and its canvas open to any name that opens a builder, and to no other" do
-      for name <- [
-            "admin:dashboard:runtime:page",
-            "admin:dashboard:runtime:layout",
-            "admin:dashboard:runtime:component",
-            "admin:dashboard:runtime:error_page",
-            "admin:dashboard:code"
-          ],
-          module <- [BuilderLive, CanvasLive] do
-        assert opens?(create_user_with_permissions!([name]), module),
-               "#{inspect(module)} refused #{name}"
-      end
-
-      for name <- ["admin:dashboard:runtime:stylesheet", "admin:api:runtime:page"],
-          module <- [BuilderLive, CanvasLive] do
-        refute opens?(create_user_with_permissions!([name]), module),
-               "#{inspect(module)} opened to #{name}"
-      end
     end
 
     test "a content list opens to every dashboard admin and to no API admin" do

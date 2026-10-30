@@ -4,15 +4,19 @@
 
 defmodule MishkaCmsCore.Runtime.ComponentBoundary do
   @moduledoc """
-  Where a component a `[[component …]]` marker names, in stored content, is drawn as a small box
-  when it raises while it draws, and the rest of the page draws around it.
+  Where a runtime function component is drawn as a small box when it raises while it draws, and the
+  rest of the page draws around it.
 
   `MishkaCmsCore.Runtime.ContentComponents` draws every marker of `rich_content/1` through `draw/3`
   — a docs note's, a blog post's, any stored content's, a marker inside another marker included —
-  so a component that raises takes neither the HTTP response nor the visitor's LiveView with it.
+  on every render, so a component that raises takes neither the HTTP response nor the visitor's
+  LiveView with it.
 
-  A page's, a layout's and an error page's own `<.component>` calls are not drawn through it: their
-  author sees the component in the builder's canvas, and they render at full speed.
+  `MishkaCmsCore.Runtime.LiveViewHelpers.component/1` draws a page's, a layout's and an error page's
+  own `<.component>` calls through it on a full render — the HTTP render and the connected mount,
+  where HEEx tracks no change — so a component that raises there is a box and the page answers. The
+  editor's canvas draws the same raise as "could not render" with its reason. A re-render of one
+  whose attributes changed keeps its change tracking and is not drawn through it.
 
   ## What it catches
 
@@ -41,7 +45,10 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundary do
       process drawing the page.
     * A stateful component. LiveView runs its `update/2` and `render/1` itself, after the page is
       drawn; one that raises stops the visitor's LiveView, as before.
-    * A component a page, a layout or an error page names in its own template.
+    * A page's own `<.component>` call re-drawn because its attributes changed. It keeps its change
+      tracking; a raise stops the visitor's LiveView, which reconnects and draws the box.
+    * An attribute expression the page itself evaluates before it calls the component — the raise
+      is the page's, not the component's.
     * Content drawn in the canvas and the previews, which draw through `static_component/1` and
       contain a raise themselves.
 

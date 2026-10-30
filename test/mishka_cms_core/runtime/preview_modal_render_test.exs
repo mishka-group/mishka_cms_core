@@ -165,38 +165,21 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewModalRenderTest do
       assert render_strip() =~ "Delete the draft “Middle”? This cannot be undone."
     end
 
-    # LEAVING FOR THE BUILDER USED TO FORGET THE CHOICE. The editor read the drafts table for itself
-    # and offered whichever was newest, so picking the second badge and clicking through arrived at
-    # an offer to carry on with the first.
-    test "the Visual Editor link carries the selected draft" do
-      html =
-        render_strip(%{
-          visual_editor_url: "/admin/dashboard/runtime/builder/page/rec-page",
-          draft: draft("d-2", "Middle", 25)
-        })
+    # THE EDITOR'S ADDRESS IS WHATEVER THE EDITOR ANSWERED on `runtime:document:editor_url`; the
+    # modal only adds the selected draft to it, after a `?` or an `&` as the address needs, so the
+    # editor opens that draft rather than the newest. With none selected the address is untouched.
+    test "the editor link carries the selected draft, joined onto the address it was given" do
+      selected = draft("d-2", "Middle", 25)
 
-      assert html =~ "/admin/dashboard/runtime/builder/page/rec-page?draft_id=d-2"
-    end
-
-    test "and joins it onto a site_id that is already on the URL" do
-      html =
-        render_strip(%{
-          visual_editor_url: "/admin/dashboard/runtime/builder/page/rec-page?site_id=site-9",
-          draft: draft("d-2", "Middle", 25)
-        })
-
-      assert html =~ "builder/page/rec-page?site_id=site-9&amp;draft_id=d-2"
-    end
-
-    test "with nothing selected the link is left exactly as it was" do
-      html =
-        render_strip(%{
-          visual_editor_url: "/admin/dashboard/runtime/builder/page/rec-page",
-          draft: nil
-        })
-
-      assert html =~ "/admin/dashboard/runtime/builder/page/rec-page"
-      refute html =~ "draft_id="
+      for {url, draft, href} <- [
+            {"/editor/page/rec-page", selected, "/editor/page/rec-page?draft_id=d-2"},
+            {"/editor/page/rec-page?site_id=site-9", selected,
+             "/editor/page/rec-page?site_id=site-9&amp;draft_id=d-2"},
+            {"/editor/page/rec-page", nil, "/editor/page/rec-page"}
+          ] do
+        assert render_strip(%{visual_editor_url: url, draft: draft}) =~ ~s(href="#{href}"),
+               "#{url} with #{inspect(draft && draft.id)} did not link to #{href}"
+      end
     end
   end
 
