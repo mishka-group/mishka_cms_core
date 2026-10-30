@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.MixProject do
   use Mix.Project
 
-  @version "0.0.3"
+  @version "0.0.4"
   @source_url "https://github.com/mishka-group/mishka_cms_core"
 
   def project do
@@ -140,12 +140,12 @@ defmodule MishkaCmsCore.MixProject do
 
       # Runtime Asset Stuff
       {:esbuild, "~> 0.10"},
-      {:tailwind, "~> 0.5"},
-      {:igniter_js, "~> 0.5"},
+      {:tailwind, "~> 0.5 and >= 0.5.2"},
+      {:igniter_js, "~> 0.5 and >= 0.5.2"},
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
-      mishka_dep(:mishka_installer, "~> 0.1.14"),
+      mishka_dep(:mishka_installer, "~> 0.1.15"),
       {:guarded_struct, "~> 0.1.4"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
@@ -156,7 +156,7 @@ defmodule MishkaCmsCore.MixProject do
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
       {:localize, "~> 1.4"},
-      mishka_dep(:mishka_gervaz, "~> 0.0.2"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.3"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},

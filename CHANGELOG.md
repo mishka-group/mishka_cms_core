@@ -1,3 +1,10 @@
+# Changelog for MishkaCmsCore 0.0.4
+
+- The release runs on Erlang 29.1.2 and Elixir 1.20.5. The temporary OTP 29.0.5 pin is gone, and every workflow reads `.tool-versions` again
+- `igniter_js` is 0.5.2 and `tailwind` is 0.5.2 or later, the releases that let a newer OTP download their binaries from GitHub. mix.exs asks for both as a minimum
+- Every dependency is at its latest release, including `phoenix_html` 4.4.0, which fixes a security advisory
+- The core asks for `mishka_installer` 0.1.15 and `mishka_gervaz` 0.0.3 or later
+
 # Changelog for MishkaCmsCore 0.0.3
 
 - Breaking: the visual editor is no longer in the core. It is the new package [mishka_cms_builder](https://github.com/mishka-group/mishka_cms_builder) (`MishkaCmsBuilder`, `MishkaCmsBuilderWeb`), with the editor's pages, canvas, Studio, history, review notes and snippets and their resources. A host that wants the editor adds the package, `MishkaCmsBuilderWeb` to `config :mishka_cms_core, extensions:`, `MishkaCmsBuilder` to its `ash_domains`, `config :mishka_cms_core, builder_strict: config_env() != :prod`, and the package's JavaScript import beside the core's in the admin's `app.js`. The editor's own application starts its processes, so a host drops those children. Without the package the admin keeps the code editor and a create menu opens the form. The editor's tables, addresses and permissions are unchanged
