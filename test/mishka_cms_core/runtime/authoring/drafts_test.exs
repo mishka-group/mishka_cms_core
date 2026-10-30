@@ -476,6 +476,30 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
       refute Drafts.original_changed?("page", changed, %{draft | source_hash: nil})
       refute Drafts.original_changed?("page", changed, %{draft | status: :published})
     end
+
+    # THE PAGE'S CODE IS NOT THE DRAFT'S TO WRITE. The editor's code drawer saves it to the page
+    # itself while a draft is open, and publishing the draft leaves it where it is — so a change to
+    # it is no change the draft would write over, and the notice said otherwise after every save.
+    test "a change to the original's code is not one the draft writes over", %{
+      page: page,
+      master: master
+    } do
+      draft = save!(page, master, "Code beside it")
+
+      changed =
+        page
+        |> Ash.Changeset.for_update(
+          :update,
+          %{events: [%{name: "saved_since", code: "{:noreply, socket}"}]},
+          tenant: page.site_id,
+          authorize?: false,
+          context: %{page_code: :package}
+        )
+        |> Ash.update!(authorize?: false)
+
+      refute Drafts.original_changed?("page", changed, draft)
+      refute Drafts.original_changed?(draft)
+    end
   end
 
   defp stringify(map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)

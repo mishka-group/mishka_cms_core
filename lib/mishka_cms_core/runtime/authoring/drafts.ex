@@ -28,6 +28,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
 
   alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Runtime.DraftPreviewAssets
+  alias MishkaCmsCore.Runtime.Authoring.CodeAccess
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.ErrorPageDraft
   alias MishkaCmsCore.Runtime.LayoutDraft
@@ -379,21 +380,25 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
 
   @doc """
   A fingerprint of `original`, a section's live document: `:erlang.phash2/1` of every field its draft
-  carries. A draft keeps the one it was made from (`source_hash`), so a different one now means the
-  original was changed since — see `original_changed?/3`.
+  carries and publishing it writes over. A draft keeps the one it was made from (`source_hash`), so a
+  different one now means the original was changed since — see `original_changed?/3`.
+
+  The original's code is not in it. The editor's code drawer saves code to the original itself while
+  a draft is open, and no publish of the draft writes it, so a change to it is nothing the draft
+  would overwrite.
   """
   @spec hash(String.t(), map()) :: non_neg_integer()
-  def hash(section, original) do
+  def hash(section, original),
+    do: :erlang.phash2(Map.take(original, fingerprinted(section, original)))
+
+  defp fingerprinted(section, %live{}) do
     {module, _source_key, _segment} = Map.fetch!(@drafts, section)
-    live = original.__struct__
 
-    fields =
-      for field <- Ash.Resource.Info.action(module, :create).accept,
-          field != :label,
-          Ash.Resource.Info.attribute(live, field),
-          do: field
-
-    :erlang.phash2(Map.take(original, fields))
+    for field <- Ash.Resource.Info.action(module, :create).accept,
+        field != :label,
+        field not in CodeAccess.fields(),
+        Ash.Resource.Info.attribute(live, field),
+        do: field
   end
 
   @doc """
