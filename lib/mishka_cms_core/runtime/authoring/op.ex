@@ -32,6 +32,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Op do
   use GuardedStruct
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Builder.Literal
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
@@ -314,15 +315,30 @@ defmodule MishkaCmsCore.Runtime.Authoring.Op do
   # Only where nothing was stated. `Inspector.rename_ops/2` and `rule_op/3` say `:string` when a
   # string is what they mean, and clearing a box is a `delete_attr` — so a literal stays reachable
   # both ways.
+  #
+  # AND ONLY WHILE WHAT WAS TYPED IS STILL AN EXPRESSION. The box offers the binding's source to
+  # edit, and an author who types words over it means the words: `E2E-0` over `f[:field].value` was
+  # stored as `{E2E - 0}` — the alias `E2E` minus zero, which compiles and raises ArithmeticError on
+  # every render, so the published page answered HTTP 500. The source posted back unchanged stays an
+  # expression, so does source that still reads something (`Literal.expression?/1`), and so does a
+  # literal (`{45}`, `{:danger}`), which is how the editor writes a number or an atom; anything else
+  # is the text it looks like.
   defp attr_value(%{value: value} = op, tree) do
     case Tree.get(tree, op.node_id) do
-      %Node{} = node -> as_held(Node.attr(node, op.name), value)
+      %Node{} = node -> as_held(Node.attr(node, op.name), value || "")
       _gone -> {:string, value || ""}
     end
   end
 
-  defp as_held({:expr, _source}, value), do: {:expr, value || ""}
-  defp as_held(_plain_or_unset, value), do: {:string, value || ""}
+  defp as_held({:expr, source}, value) do
+    case value == source or Literal.expression?(value) or
+           match?({:ok, _term}, Literal.value(value)) do
+      true -> {:expr, value}
+      false -> {:string, value}
+    end
+  end
+
+  defp as_held(_plain_or_unset, value), do: {:string, value}
 
   defp blank_to_nil(nil), do: nil
   defp blank_to_nil(""), do: nil
