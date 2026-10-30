@@ -3,6 +3,7 @@
 - The release runs on Erlang 29.1.2 and Elixir 1.20.5. The temporary OTP 29.0.5 pin is gone, and every workflow reads `.tool-versions` again
 - `igniter_js` is 0.5.2 and `tailwind` is 0.5.2 or later, the releases that let a newer OTP download their binaries from GitHub. mix.exs asks for both as a minimum
 - Every dependency is at its latest release, including `phoenix_html` 4.4.0, which fixes a security advisory
+- The core asks for `mishka_installer` 0.1.15 and `mishka_gervaz` 0.0.3 or later
 
 # Changelog for MishkaCmsCore 0.0.3
 
