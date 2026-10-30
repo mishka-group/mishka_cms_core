@@ -356,6 +356,127 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
+  # A parser IGNORES a `<td>` outside a table: the words stay, the cell and everything the editor put
+  # on it are gone. Dropped on a page, a kit cell left a layers row with nothing on the canvas to
+  # select and a raw `<td>` on the published page.
+  describe "can_drop?/4 — a table's own parts" do
+    setup do
+      %{kit: Factory.chelekom_rows(~w(chelekom-table chelekom-tr chelekom-td chelekom-card))}
+    end
+
+    defp kit_head(name, inner \\ "") do
+      tree = tree_of(component(name, inner))
+      {Tree.get(tree, hd(tree.roots)), tree}
+    end
+
+    test "a cell goes only in a row, a row only in a table or one of its sections" do
+      tree = tree_of("<main><div></div><table><tbody><tr></tr></tbody></table></main>")
+      td = Node.new(:tag, tag: "td")
+      tr = Node.new(:tag, tag: "tr")
+
+      assert Containment.can_drop?(tree, td, find(tree, "tr").id) == :ok
+      assert Containment.can_drop?(tree, tr, find(tree, "tbody").id) == :ok
+      assert Containment.can_drop?(tree, tr, find(tree, "table").id) == :ok
+
+      for tag <- ~w(main div) do
+        assert {:error, message} = Containment.can_drop?(tree, td, find(tree, tag).id)
+        assert message == "A `<td>` goes only inside `<tr>` elements."
+        assert {:error, _message} = Containment.can_drop?(tree, tr, find(tree, tag).id)
+      end
+
+      assert {:error, message} =
+               Containment.can_drop?(tree, Node.new(:tag, tag: "thead"), find(tree, "div").id)
+
+      assert message =~ "`<table>`"
+    end
+
+    test "nor at the top of a page, while a component's own markup may open with one" do
+      tree = tree_of("<div></div>")
+      td = Node.new(:tag, tag: "td")
+
+      assert {:error, _message} = Containment.can_drop?(tree, td, :root)
+      assert Containment.can_drop?(tree, td, :root, fragment?: true) == :ok
+      assert Containment.can_drop?(tree, block(), :root) == :ok
+    end
+
+    test "a kit cell is the `<td>` its markup opens with", %{kit: kit} do
+      tree = tree_of("<main></main>" <> component("chelekom-tr"))
+      {cell, cell_tree} = kit_head("chelekom-td", "Cell")
+      opts = [components: kit, dragged_tree: cell_tree]
+
+      assert {:error, _message} = Containment.can_drop?(tree, cell, find(tree, "main").id, opts)
+      assert {:error, _message} = Containment.can_drop?(tree, cell, :root, opts)
+      assert Containment.can_drop?(tree, cell, named(tree, "chelekom-tr").id, opts) == :ok
+    end
+
+    test "and a kit table holds its rows in the `<tbody>` its markup renders them in", %{kit: kit} do
+      tree = tree_of(component("chelekom-table") <> component("chelekom-card", "<p>x</p>"))
+      table = named(tree, "chelekom-table")
+      {row, row_tree} = kit_head("chelekom-tr")
+      {cell, cell_tree} = kit_head("chelekom-td")
+
+      assert Containment.content_element(table, components: kit) == "tbody"
+
+      assert Containment.can_drop?(tree, row, table.id, components: kit, dragged_tree: row_tree) ==
+               :ok
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, cell, table.id,
+                 components: kit,
+                 dragged_tree: cell_tree
+               )
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, row, named(tree, "chelekom-card").id,
+                 components: kit,
+                 dragged_tree: row_tree
+               )
+
+      assert Containment.can_drop?(tree, block(), named(tree, "chelekom-card").id,
+               components: kit
+             ) == :ok
+    end
+
+    test "accepts_map/3 gives the same answers from its memo", %{kit: kit} do
+      tree =
+        tree_of(
+          "<main>" <>
+            component("chelekom-table", component("chelekom-tr")) <> "<tr></tr></main>"
+        )
+
+      {cell, cell_tree} = kit_head("chelekom-td")
+      opts = [components: kit, dragged_tree: cell_tree]
+      accepts = Containment.accepts_map(tree, cell, opts)
+
+      for {id, allowed?} <- accepts do
+        assert allowed? == (Containment.can_drop?(tree, cell, id, opts) == :ok)
+      end
+
+      assert accepts[named(tree, "chelekom-tr").id]
+      assert accepts[find(tree, "tr").id]
+      refute accepts[find(tree, "main").id]
+      refute accepts[named(tree, "chelekom-table").id]
+    end
+
+    test "a cell cannot be put in a box either" do
+      assert {:error, _message} = Containment.can_hold?(Node.new(:tag, tag: "td"), "div")
+      assert Containment.can_hold?(Node.new(:tag, tag: "td"), "tr") == :ok
+    end
+
+    test "the parts' homes, and the elements a component draws", %{kit: kit} do
+      assert Containment.table_homes("TD") == ["tr"]
+      assert Containment.table_homes("tr") == ~w(table tbody tfoot thead)
+      assert Containment.table_homes("li") == nil
+      assert Containment.table_homes(nil) == nil
+
+      {cell, _tree} = kit_head("chelekom-td")
+      assert Containment.element(cell, components: kit) == "td"
+      assert Containment.element(Node.new(:tag, tag: "TR")) == "tr"
+      assert Containment.content_element(cell, components: kit) == "td"
+      assert Containment.content_element(cell, components: []) == nil
+    end
+  end
+
   describe "can_drop?/4 — interactive nesting" do
     test "an anchor refuses another clickable element" do
       tree = tree_of(~s(<a href="#"></a>))

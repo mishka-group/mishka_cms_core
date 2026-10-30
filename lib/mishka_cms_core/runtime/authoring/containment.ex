@@ -45,6 +45,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       A `<nav>` holds no header, footer or main either, which is stricter than the spec and is what
       a page footer clicked in while the navbar was selected needs. Asked of every ancestor, like
       the form rule.
+    * **A table's own parts go only where a table holds them**: a cell only in a row, a row only in
+      a table or one of its sections, a section, a caption or a column group only in a table — the
+      parents that list them as their only children, read the other way. A kit component is the
+      part its markup opens with, and a kit component holding one is the element its markup renders
+      its content in (a kit table's `<tbody>`). Not at the top of a page either; a component's own
+      markup may open with one (`fragment?: true`).
 
   Every refusal carries a sentence written for the person dragging, which the canvas shows as the
   demo's danger toast near the drop point.
@@ -164,6 +170,58 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   def parent_restricted?(tag) when is_binary(tag), do: String.downcase(tag) in @parent_restricted
   def parent_restricted?(_tag), do: false
 
+  # A TABLE'S OWN PARTS ARE THROWN AWAY ANYWHERE ELSE. Outside a table a parser does not move a
+  # `<td>`, it ignores the tag: the cell's words stay where they were written and the cell is gone,
+  # with every marker the editor put on it, so the canvas has nothing to select and the published
+  # page has a stray `<td>` in its source. A `<li>` outside a list is still drawn, and so is an
+  # `<option>`; these are the ones a browser drops. Their homes are read off `@only_children`.
+  @table_parts ~w(caption colgroup col thead tbody tfoot tr td th)
+
+  @table_homes for part <- @table_parts,
+                   into: %{},
+                   do: {part, for({parent, kids} <- @only_children, part in kids, do: parent)}
+
+  @doc """
+  The elements a table part may sit directly inside — `["tr"]` for a cell — or `nil` for a tag a
+  browser keeps wherever it is written.
+  """
+  @spec table_homes(String.t() | nil) :: [String.t()] | nil
+  def table_homes(tag) when is_binary(tag), do: Map.get(@table_homes, String.downcase(tag))
+  def table_homes(_tag), do: nil
+
+  @doc """
+  The element `node` puts on the page, lowercased: a tag is itself, and a component is the one
+  element its own markup opens with (`"td"` for a kit cell). `nil` when that cannot be read.
+
+  `node` is a `Tree.Node` or a palette entry carrying `:tag`; `opts` takes `:components`.
+  """
+  @spec element(Node.t() | map(), keyword()) :: String.t() | nil
+  def element(node, opts \\ []), do: rendered(node, opts)
+
+  @doc """
+  The element `node`'s children land in, lowercased: a tag is itself, and a component is the element
+  its own markup renders its inner block in (`"tbody"` for a kit table, `"tr"` for a kit row).
+
+  `nil` for a slot, for a component whose markup cannot be read and for one that hands its content
+  on to another component. `opts` takes `:components`.
+  """
+  @spec content_element(Node.t() | term(), keyword()) :: String.t() | nil
+  def content_element(node, opts \\ [])
+
+  def content_element(%Node{kind: :tag, tag: tag}, _opts) when is_binary(tag),
+    do: String.downcase(tag)
+
+  def content_element(%Node{kind: :component} = node, opts) do
+    name = Node.component_name(node)
+
+    case Keyword.fetch(opts, :inner_hosts) do
+      {:ok, memo} when is_map_key(memo, name) -> Map.fetch!(memo, name)
+      _unread -> read_inner_host(name, Keyword.get(opts, :components, []))
+    end
+  end
+
+  def content_element(_node, _opts), do: nil
+
   @doc """
   Whether this node may hold children at all, asked without a node being dragged.
 
@@ -206,6 +264,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       per drag by `accepts_map/3` and rebuilt here when a caller asks about a single drop.
     * `:outer_tags` — the element each component's markup opens with, by component name; built
       once per drag by `accepts_map/3`, and read off `:components` as needed for a single drop.
+    * `:fragment?` — `true` when the tree is a fragment placed somewhere else later (a component's
+      own markup), so its top level may hold a table part. A page's or a layout's may not.
 
   Returns `:ok` or `{:error, message}` with a sentence meant for the person dragging.
   """
@@ -213,7 +273,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
           :ok | {:error, String.t()}
   def can_drop?(tree, dragged, target, opts \\ [])
 
-  def can_drop?(_tree, _dragged, :root, _opts), do: :ok
+  def can_drop?(_tree, dragged, :root, opts), do: check_table_root(dragged, opts)
 
   def can_drop?(tree, dragged, target_id, opts) when is_binary(target_id) do
     case Tree.get(tree, target_id) do
@@ -238,7 +298,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     target = Node.new(:tag, tag: tag)
 
     with :ok <- check_container(target),
-         :ok <- check_only_children(child, target) do
+         :ok <- check_only_children(child, target),
+         :ok <- check_table_part(child, target, []) do
       check_phrasing(child, target, [])
     end
   end
@@ -248,6 +309,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
          :ok <- check_container(target),
          :ok <- check_component_slots(tree, target, opts),
          :ok <- check_only_children(dragged, target),
+         :ok <- check_table_part(dragged, target, opts),
          :ok <- check_phrasing(dragged, target, opts),
          :ok <- check_form_nesting(tree, dragged, target, opts),
          :ok <- check_landmarks(tree, dragged, target, opts),
@@ -458,6 +520,38 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     end
   end
 
+  # Asked of where the target puts its children, which for a kit component is not its first tag: a
+  # kit row's content lands in its `<tr>`, a kit table's in its `<tbody>`. A target whose content
+  # element cannot be read lets the part through, as an opaque component always was.
+  defp check_table_part(dragged, target, opts) do
+    with tag when is_binary(tag) <- rendered(dragged, opts),
+         [_ | _] = homes <- table_homes(tag),
+         host when is_binary(host) <- content_element(target, opts),
+         false <- host in homes do
+      {:error, table_refusal(tag, homes)}
+    else
+      _at_home_or_unread -> :ok
+    end
+  end
+
+  # The top of a page or a layout is its body, which holds no table part.
+  defp check_table_root(dragged, opts) do
+    with false <- Keyword.get(opts, :fragment?, false),
+         tag when is_binary(tag) <- rendered(dragged, opts),
+         [_ | _] = homes <- table_homes(tag) do
+      {:error, table_refusal(tag, homes)}
+    else
+      _anywhere -> :ok
+    end
+  end
+
+  defp table_refusal(tag, homes),
+    do:
+      gettext("%{label} goes only inside %{list}.",
+        label: label(tag),
+        list: humanize_list(homes)
+      )
+
   defp check_phrasing(dragged, target, opts) do
     case rendered(target, opts) do
       tag when is_binary(tag) ->
@@ -657,6 +751,42 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     |> Enum.filter(&match?(%Node{kind: kind} when kind in [:tag, :component], &1))
   end
 
+  # The element `{render_slot(@inner_block)}` sits directly inside in the component's own markup.
+  defp read_inner_host(nil, _components), do: nil
+
+  defp read_inner_host(name, components) do
+    with %{} = entry <- Fields.entry(name, components),
+         {:ok, tree} <- entry |> Inspector.template() |> Tree.parse(),
+         %Node{} = slot <- Enum.find(Tree.walk(tree), &inner_block?/1),
+         %Node{kind: :tag, tag: tag} when is_binary(tag) <- Tree.get(tree, slot.parent_id) do
+      String.downcase(tag)
+    else
+      _unreadable -> nil
+    end
+  end
+
+  defp inner_block?(%Node{kind: :eex, text: text}) when is_binary(text),
+    do: String.contains?(text, "render_slot(@inner_block")
+
+  defp inner_block?(_node), do: false
+
+  # Only a table part is ever asked where a target's content goes, so only its drag reads them.
+  defp inner_hosts(tree, dragged, opts) do
+    components = Keyword.get(opts, :components, [])
+
+    case dragged |> rendered(opts) |> table_homes() do
+      nil ->
+        %{}
+
+      _homes ->
+        tree
+        |> Tree.walk()
+        |> Enum.flat_map(&component_names/1)
+        |> Enum.uniq()
+        |> Map.new(&{&1, read_inner_host(&1, components)})
+    end
+  end
+
   defp outer_tags(tree, dragged, opts) do
     components = Keyword.get(opts, :components, [])
 
@@ -710,6 +840,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       tree
       |> memoised(dragged, opts)
       |> Keyword.put_new_lazy(:outer_tags, fn -> outer_tags(tree, dragged, opts) end)
+
+    memoised =
+      Keyword.put_new_lazy(memoised, :inner_hosts, fn -> inner_hosts(tree, dragged, memoised) end)
 
     Map.new(tree.nodes, fn {id, _node} ->
       {id, can_drop?(tree, dragged, id, memoised) == :ok}
