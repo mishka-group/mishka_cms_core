@@ -108,6 +108,46 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
       assert_round_trip(~s(<pre>  keep   me  </pre>), ["  keep   me  "])
     end
 
+    # `<pre><code>…</code></pre>` is how a code block is written. Read as one run of source, the
+    # `<code>` came back as text in the tree, nothing an editor could select or style.
+    test "a pre keeps the elements in it through parse, serialize and parse" do
+      heex = ~s(<pre><code>x</code></pre>)
+      {:ok, saved} = heex |> Tree.parse!() |> Serializer.to_heex()
+
+      assert String.trim(saved) == heex
+
+      assert [{:tag, "pre"}, {:tag, "code"}, {:text, "x"}] =
+               saved |> Tree.parse!() |> Tree.walk() |> Enum.map(&{&1.kind, &1.tag || &1.text})
+    end
+
+    test "with every space and newline where it was written" do
+      heex = "<pre>  line one\n\n    <code class=\"x\">{@two}</code>  \n<b> three </b></pre>"
+      tree = Tree.parse!(heex)
+
+      assert Serializer.serialize(tree) == heex
+      assert {:ok, ^heex <> "\n"} = Serializer.to_heex(tree)
+      assert assert_fixed_point(heex) == heex
+
+      assert Enum.map(Tree.walk(tree), &{&1.kind, &1.tag}) == [
+               {:tag, "pre"},
+               {:text, nil},
+               {:tag, "code"},
+               {:eex, nil},
+               {:text, nil},
+               {:tag, "b"},
+               {:text, nil}
+             ]
+    end
+
+    # A comment arrives in one token with the text written beside it, so a `<pre>` holding one is
+    # still read whole: as text it keeps the comment and the words around it as they were written.
+    test "a pre that holds a comment is still read as it was written" do
+      heex = ~s(<pre>  a <!-- note -->  b  </pre>)
+
+      assert assert_round_trip(heex, []) == heex
+      assert [%Node{tag: "pre"}, %Node{kind: :text}] = heex |> Tree.parse!() |> Tree.walk()
+    end
+
     test "phx-no-format is preserved" do
       assert_round_trip(~s(<div phx-no-format>a   b</div>), ["phx-no-format", "a   b"])
     end

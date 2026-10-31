@@ -501,13 +501,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
          opts
        ) do
     {mode, block} =
-      if tag_name in ["pre", "textarea"] or contains_special_attrs?(attrs) do
-        content =
-          content_from_source(opts.source, open_meta.inner_location, close_meta.inner_location)
+      cond do
+        tag_name == "textarea" or contains_special_attrs?(attrs) ->
+          {:preserve, [whole_text(opts, open_meta, close_meta)]}
 
-        {:preserve, [{:text, content, %{newlines_before_text: 0, newlines_after_text: 0}}]}
-      else
-        {:normal, Enum.reverse(reversed_buffer)}
+        tag_name == "pre" ->
+          {:preserve, pre_children(reversed_buffer, whole_text(opts, open_meta, close_meta))}
+
+        true ->
+          {:normal, Enum.reverse(reversed_buffer)}
       end
 
     tag_block = {:tag_block, tag_name, attrs, block, %{mode: mode}}
@@ -618,6 +620,28 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
       {"phx-no-format", _v, _} -> true
       _ -> false
     end)
+  end
+
+  # An element's content as it is written in the source, as one text token.
+  defp whole_text(opts, open_meta, close_meta) do
+    content =
+      content_from_source(opts.source, open_meta.inner_location, close_meta.inner_location)
+
+    {:text, content, %{newlines_before_text: 0, newlines_after_text: 0}}
+  end
+
+  # A `<pre>` keeps its whitespace and its elements: `<pre><code>…</code></pre>` is how a code block
+  # is written. Its text tokens already carry every space and newline as written, so its children
+  # are read like any other element's. Read back as one run of source, the `<code>` was text in the
+  # tree, nothing an editor could select or style.
+  #
+  # One that holds an HTML comment is still read whole. A comment arrives in one token with the text
+  # written beside it, and the tree would write that text back inside the comment.
+  defp pre_children(reversed_buffer, {:text, content, _meta} = whole) do
+    case String.contains?(content, "<!--") do
+      true -> [whole]
+      false -> Enum.reverse(reversed_buffer)
+    end
   end
 
   defp content_from_source(
