@@ -38,10 +38,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   ## Error handling
 
-  `parse/1` is the one place in the editor that rescues. `EEx.tokenize/1` and the LiveView tokenizer
-  signal a malformed template by raising, there is no non-raising variant, and an admin pasting
-  broken HEEx into the code drawer must get an inline `{:error, %{line:, column:, message:}}`
-  instead of a 500. Every other function in this module is total.
+  `parse/1` is the one place in the editor that rescues. The LiveView tokenizer signals a malformed
+  template by raising, there is no non-raising variant, and an admin pasting broken HEEx into the
+  code drawer must get an inline `{:error, %{line:, column:, message:}}` instead of a 500. Every
+  other function in this module is total.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext

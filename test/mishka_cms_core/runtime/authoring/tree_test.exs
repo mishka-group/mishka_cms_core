@@ -499,6 +499,26 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
       end
     end
 
+    test "an EEx tag left open reports its line, its column and EEx's own sentence" do
+      assert Tree.parse("<p>\n  hi <%= @x </p>") ==
+               {:error,
+                %{line: 2, column: 6, message: "expected closing '%>' for EEx expression"}}
+    end
+
+    test "a closing tag with nothing to close reports its line and column" do
+      assert Tree.parse("<div></div>\n</div>") ==
+               {:error, %{line: 2, column: 1, message: "unmatched closing tag </div>"}}
+
+      assert Tree.parse("</p>") ==
+               {:error, %{line: 1, column: 1, message: "unmatched closing tag </p>"}}
+
+      assert Tree.parse("<%= if @x do %></div><% end %>") ==
+               {:error, %{line: 1, column: 16, message: "unmatched closing tag </div>"}}
+
+      assert Tree.parse("<.button>Go</.button></.button>") ==
+               {:error, %{line: 1, column: 22, message: "unmatched closing tag </.button>"}}
+    end
+
     test "malformed eex does not crash the caller" do
       assert {:error, %{message: message}} = Tree.parse("<%= if true do %>")
       assert is_binary(message)

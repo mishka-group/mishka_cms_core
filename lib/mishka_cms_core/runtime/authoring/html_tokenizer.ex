@@ -281,9 +281,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   def build_tokenize(source) do
     newlines = :binary.matches(source, ["\r\n", "\n"])
 
-    source
-    |> tokenize()
-    |> to_tree([], [], %{source: {source, newlines}})
+    case tokenize(source) do
+      {:error, _line, _column, _message} = error -> error
+      tokens -> to_tree(tokens, [], [], %{source: {source, newlines}})
+    end
   end
 
   # Tokenize contents using EEx.tokenize and Phoenix.Live.Tokenizer respectively.
@@ -314,11 +315,22 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   #
   @eex_expr [:start_expr, :expr, :end_expr, :middle_expr]
 
+  # An EEx tag left open is reported at its line and column, with the first line of EEx's message
+  # ("expected closing '%>' for EEx expression") and without the source excerpt under it.
   defp tokenize(source) do
-    {:ok, eex_nodes} = EEx.tokenize(source)
-    {tokens, cont} = Enum.reduce(eex_nodes, {[], {:text, :enabled}}, &do_tokenize(&1, &2, source))
-    Tokenizer.finalize(tokens, "nofile", cont, source)
+    case EEx.tokenize(source) do
+      {:ok, eex_nodes} ->
+        {tokens, cont} =
+          Enum.reduce(eex_nodes, {[], {:text, :enabled}}, &do_tokenize(&1, &2, source))
+
+        Tokenizer.finalize(tokens, "nofile", cont, source)
+
+      {:error, message, %{line: line, column: column}} ->
+        {:error, line, column, first_line(message)}
+    end
   end
+
+  defp first_line(message), do: message |> String.split("\n", parts: 2) |> hd()
 
   defp do_tokenize({:text, text, meta}, {tokens, cont}, source) do
     text = List.to_string(text)
@@ -550,7 +562,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
          reversed_buffer,
          [{tag_name, attrs, open_meta, upper_buffer} | stack],
          opts
-       ) do
+       )
+       when is_binary(tag_name) do
     {mode, block} =
       cond do
         # A `<textarea>`'s and a `<title>`'s content is text: a browser reads everything up to the
@@ -572,6 +585,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
 
     tag_block = {:tag_block, tag_name, attrs, block, %{mode: mode}}
     to_tree(tokens, [tag_block | upper_buffer], stack, opts)
+  end
+
+  # A closing tag with no open tag to close, at the top of the template or directly inside an EEx
+  # block.
+  defp to_tree([{:close, _type, _name, meta} | _tokens], _buffer, _stack, _opts) do
+    message = gettext("unmatched closing tag </%{name}>", name: meta.tag_name)
+    {:error, meta.line, meta.column, message}
   end
 
   # handle eex
