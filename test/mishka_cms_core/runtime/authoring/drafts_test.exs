@@ -17,6 +17,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
   @moduletag :integration
 
   alias MishkaCmsCore.Runtime.Authoring.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
+  alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.PageDraft
   alias MishkaCmsCore.Runtime.States.AssetsState
 
@@ -420,6 +423,74 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
         |> Enum.filter(fn {name, _arity} -> name in [:autosave, :save_as] end)
 
       assert writes == [autosave: 7, save_as: 8]
+    end
+  end
+
+  # AN AUTHOR WHO DELETES EVERYTHING HAS AN EMPTY TREE, which serializes to "". A template is never
+  # empty in the database, so every autosave of it was refused ("Autosave is failing" for good) and
+  # so was its publish. It is saved as the document a blank create starts with instead.
+  describe "an emptied document" do
+    # What the editor opens on, read back off the row that was written.
+    defp reopened(section, record, status \\ nil),
+      do: section |> Section.template(record, status: status) |> Tree.parse!()
+
+    test "is saved as the born container, and reopens as a page nobody has started", %{
+      page: page,
+      master: master
+    } do
+      for markup <- ["", " \n "] do
+        assert {:ok, draft} =
+                 Drafts.autosave("page", page, markup, master, nil, "Emptied", nil)
+
+        assert draft.template == PageStarter.blank(:page)
+        assert PageStarter.empty?(reopened("page", draft))
+      end
+    end
+
+    test "a layout keeps the container around the page it wraps", %{site: site, master: master} do
+      layout = create_layout!(site_id: site.id)
+
+      assert {:ok, draft} = Drafts.save_as("layout", layout, nil, "", master, nil, "Emptied", nil)
+      assert draft.template == PageStarter.blank(:layout)
+    end
+
+    test "an error page's status takes the born container", %{site: site, master: master} do
+      error_page =
+        create_error_page!(
+          site_id: site.id,
+          error_pages: [%{"status" => 404, "template" => "<p>Not found</p>", "layout" => %{}}]
+        )
+
+      assert {:ok, draft} =
+               Drafts.autosave("error-page", error_page, "", master, nil, "Emptied", 404)
+
+      assert by_status(draft)[404] == PageStarter.blank(:page)
+      assert PageStarter.empty?(reopened("error-page", draft, 404))
+    end
+
+    # A publish writes the same fields to the live record, through the resource's update. A
+    # component has no drafts, so this is the only way its editor saves.
+    test "and so is a publish of one, a component's included", %{page: page, site: site} do
+      component = create_component!(site_id: site.id)
+
+      for {section, record} <- [{"page", page}, {"component", component}] do
+        published = publish!(section, record, "")
+
+        assert published.template == PageStarter.blank(:page), section
+        assert PageStarter.empty?(reopened(section, published)), section
+      end
+    end
+
+    defp publish!(section, record, heex) do
+      fields =
+        section
+        |> Section.save_fields(heex, [])
+        |> Section.apply_fields(record)
+        |> Map.new(fn {key, value} -> {String.to_existing_atom(key), value} end)
+
+      record
+      |> Ash.Changeset.for_update(:update, fields, tenant: record.site_id, authorize?: false)
+      |> Ash.update!(authorize?: false)
     end
   end
 

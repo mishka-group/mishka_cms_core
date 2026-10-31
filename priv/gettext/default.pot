@@ -1661,7 +1661,7 @@ msgstr ""
 msgid "Compiling…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/section.ex:51
+#: lib/mishka_cms_core/runtime/authoring/section.ex:52
 #: lib/mishka_cms_core/runtime/resources/__mixins/component_paper_trail_mixin.ex:33
 #: lib/mishka_cms_core/runtime/runtime_status.ex:46
 #: lib/mishka_cms_core/runtime/site_health.ex:47
@@ -2266,7 +2266,7 @@ msgstr ""
 msgid "Error code"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/section.ex:45
+#: lib/mishka_cms_core/runtime/authoring/section.ex:46
 #, elixir-autogen, elixir-format
 msgid "Error page"
 msgstr ""
@@ -3002,7 +3002,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/elements.ex:189
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:143
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:161
-#: lib/mishka_cms_core/runtime/authoring/section.ex:39
+#: lib/mishka_cms_core/runtime/authoring/section.ex:40
 #: lib/mishka_cms_core/runtime/content_components.ex:1129
 #: lib/mishka_cms_core/runtime/resources/__mixins/layout_paper_trail_mixin.ex:33
 #: lib/mishka_cms_core/runtime/runtime_preview.ex:696
@@ -3994,7 +3994,7 @@ msgstr ""
 msgid "Pack to the start"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/section.ex:33
+#: lib/mishka_cms_core/runtime/authoring/section.ex:34
 #: lib/mishka_cms_core/runtime/resources/__mixins/page_paper_trail_mixin.ex:33
 #: lib/mishka_cms_core/runtime/runtime_status.ex:73
 #: lib/mishka_cms_core/runtime/site_health.ex:45

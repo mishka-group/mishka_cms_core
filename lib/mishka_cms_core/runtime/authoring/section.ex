@@ -20,6 +20,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.ErrorPage
   alias MishkaCmsCore.Runtime.ErrorStatus
@@ -246,13 +247,31 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
 
   Every other section sets `template` outright and never reads the record, so its value is the
   markup and nothing about it can go stale.
+
+  Markup that is empty or only whitespace is saved as the document a blank create starts with,
+  `MishkaCmsCore.Runtime.Authoring.PageStarter.blank/1`: the layout's container around
+  `@inner_content` for a layout, the empty container for the rest. A template is never empty in
+  the database, so an author who deleted everything had a save the resource refused on every
+  autosave and a publish that failed. The container is what the editor reads as a document nobody
+  has started, so it reopens on the starter.
   """
   @spec save_fields(String.t(), String.t(), keyword()) :: %{String.t() => term()}
-  def save_fields("error-page", heex, opts) do
+  def save_fields("error-page" = section, heex, opts) do
+    heex = filled(section, heex)
     %{"error_pages" => fn record -> replace_entry(record, write_status(record, opts), heex) end}
   end
 
-  def save_fields(_section, heex, _opts), do: %{"template" => heex}
+  def save_fields(section, heex, _opts), do: %{"template" => filled(section, heex)}
+
+  defp filled(section, heex) do
+    case String.trim(heex) do
+      "" -> PageStarter.blank(starter(section))
+      _markup -> heex
+    end
+  end
+
+  defp starter("layout"), do: :layout
+  defp starter(_section), do: :page
 
   # THE STATUS THE SESSION IS ON, AND NO FALLING BACK FROM IT. `status/2` answers "which entry should
   # the editor open", and it falls back because an editor has to open on something. A write must not:
