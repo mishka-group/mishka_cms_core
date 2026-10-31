@@ -45,6 +45,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
     end
   end
 
+  # Where the parser put the first error, as the refusal names it.
+  defp at(line, column), do: "That CSS has an error on line #{line}, column #{column}"
+
+  @closes "This `}` closes the block it is written in; everything after it is outside."
+
+  defp closed_early(line, column), do: "#{at(line, column)}, at `}`: #{@closes}"
+
   describe "the scope class" do
     test "an element has none until it is given one" do
       {tree, id} = tree_with_p()
@@ -299,42 +306,44 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
     # refusals through the error tuple — the validation is the part worth pinning.
     test "an unmatched brace is refused", %{scope: scope} do
       assert {:error, message} = ElementCss.put(nil, nil, "page-x", scope, "padding: 1px; }")
-      assert message =~ "unmatched"
+      assert message == closed_early(1, 15)
 
-      assert {:error, _message} = ElementCss.put(nil, nil, "page-x", scope, "&:hover { gap: 1px;")
+      assert {:error, message} = ElementCss.put(nil, nil, "page-x", scope, "&:hover { gap: 1px;")
+      assert message == "#{at(1, 20)}: Expected a `}` to close the `{` on line 1, column 9."
     end
 
     # A BODY TAILWIND CANNOT PARSE STOPS EVERY STYLESHEET IT IS IN, not just its own rule: the site's
     # CSS build fails and keeps its last good bundle, the draft preview cannot build its styles, and
-    # the canvas stops generating for the whole page. Its braces all match, so the brace check let
-    # each of these through.
-    test "a declaration with no colon is refused, and quoted back" do
-      for {body, declaration} <- [
-            {"color crimson", "color crimson"},
-            {"color crimson;", "color crimson"},
-            {"gap: 1px;\n/* note */ color crimson;\nmargin: 0;", "color crimson"},
-            {"color: red; background", "background"},
-            {"--brand;", "--brand"},
-            {"&:hover { color navy }", "color navy"},
-            {"@media (max-width: 600px) { color red }", "color red"}
+    # the canvas stops generating for the whole page. Its braces all match, so a brace check let each
+    # of these through. The parser reads a word with no colon as the start of a nested selector, and
+    # igniter_css names it as the declaration it is, where the author wrote it.
+    test "a declaration with no colon is refused, where it starts" do
+      for {body, line, column, property} <- [
+            {"color crimson", 1, 1, "color"},
+            {"color crimson;", 1, 1, "color"},
+            {"gap: 1px;\n/* note */ color crimson;\nmargin: 0;", 2, 12, "color"},
+            {"color: red; background", 1, 13, "background"},
+            {"--brand;", 1, 1, "--brand"},
+            {"&:hover { color navy }", 1, 11, "color"},
+            {"@media (max-width: 600px) { color red }", 1, 29, "color"}
           ] do
-        assert refused(body) == "That CSS has a declaration with no colon: `#{declaration}`.",
-               body
+        message = refused(body)
+        assert message =~ at(line, column), body
+        assert message =~ ": Expected a `:` after the property name `#{property}`.", body
       end
     end
 
     # A CSS string cannot run onto the next line: the newline ends it unclosed, and Tailwind refuses
     # the stylesheet over it however far away the closing quote is.
     test "a string whose line ends before its closing quote is refused" do
-      for {body, string} <- [
-            {~s|content: "abc\ncolor: red;|, ~s|"abc|},
-            {"content: 'abc", "'abc"},
-            {~s|&:hover { content: "a\nb" }|, ~s|"a|},
-            {~s|&[data-x="a\nb"] { gap: 1px; }|, ~s|"a|}
+      for {body, column, string} <- [
+            {~s|content: "abc\ncolor: red;|, 10, ~s|"abc|},
+            {"content: 'abc", 10, "'abc"},
+            {~s|&:hover { content: "a\nb" }|, 20, ~s|"a|},
+            {~s|&[data-x="a\nb"] { gap: 1px; }|, 10, ~s|"a|},
+            {~s|&[data-x="a\nb"] {\n  gap: 1px;\n}|, 10, ~s|"a|}
           ] do
-        assert refused(body) ==
-                 "That CSS has a string with no closing quote on its line: `#{string}`.",
-               body
+        assert refused(body) == "#{at(1, column)}, at `#{string}`: Missing closing quote.", body
       end
     end
 
@@ -367,17 +376,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
 
     # A MISSING `;` BUILDS, and that is the trouble with it: the browser reads
     # `letter-spacing: 2pxcolor: teal` as one declaration whose value no property takes and drops
-    # it, while the box says the rule was applied. The second colon is where the next one began.
-    test "a missing `;` is refused, and names the property after it" do
-      for {body, property} <- [
-            {"letter-spacing: 2pxcolor: teal", "2pxcolor"},
-            {"color: red color: blue", "color"},
-            {"color: red\nbackground: blue;", "background"},
-            {"gap: 1px;\ncolor: red /* x */ opacity: .5;", "opacity"},
-            {"&:hover { color: red opacity: .5 }", "opacity"},
-            {"@media (max-width: 600px) { padding: 1px\nmargin: 0; }", "margin"}
+    # it, while the box says the rule was applied. The second colon is where the next one began, and
+    # it is where the parser points.
+    test "a missing `;` is refused at the colon of the declaration after it" do
+      for {body, line, column, rest} <- [
+            {"letter-spacing: 2pxcolor: teal", 1, 25, ": teal"},
+            {"color: red color: blue", 1, 17, ": blue"},
+            {"color: red\nbackground: blue;", 2, 11, ": blue"},
+            {"gap: 1px;\ncolor: red /* x */ opacity: .5;", 2, 27, ": .5"},
+            {"&:hover { color: red opacity: .5 }", 1, 29, ": .5"},
+            {"@media (max-width: 600px) { padding: 1px\nmargin: 0; }", 2, 7, ": 0"}
           ] do
-        assert refused(body) == "Missing `;` before `#{property}:`.", body
+        assert refused(body) ==
+                 "#{at(line, column)}, at `#{rest}`: Unexpected value or character.",
+               body
       end
     end
 
@@ -403,14 +415,18 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
     # not because a guard refused it, but because the write reached the database and failed there.
     # Asserting on the message is what makes the difference visible, and what showed that the rule
     # demanding `&` refused `body { … }` written first while allowing it after a declaration.
+    #
+    # The first of these parses once wrapped: its `}` closes the wrapper and the wrapper's own `}`
+    # closes `body {`, so nothing is unbalanced and only where the wrapper closes gives it away.
     test "a `}` typed at the top level is refused, wherever it is", %{scope: scope} do
-      for body <- [
-            "gap: 1px; } body { display: none; ",
-            "} &:hover { gap: 1px; }",
-            "&:hover { gap: 1px; } } .evil { gap: 2px; }"
+      for {body, column} <- [
+            {"gap: 1px; } body { display: none; ", 11},
+            {"} &:hover { gap: 1px; }", 1},
+            {"&:hover { gap: 1px; } } .evil { gap: 2px; }", 23}
           ] do
-        assert {:error, "That CSS has an unmatched { or }."} =
-                 ElementCss.put(nil, nil, "page-x", scope, body),
+        expected = closed_early(1, column)
+
+        assert {:error, ^expected} = ElementCss.put(nil, nil, "page-x", scope, body),
                "#{body} escaped the wrapper"
       end
     end
@@ -765,17 +781,16 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
     # Skipping a string must not become the way out of the wrapper: a `}` written after one still
     # closes it early, and is still refused.
     test "but a real closing brace is not smuggled past on the back of one" do
-      assert refused(~s|content: "{"; } .evil { color: red }|) ==
-               "That CSS has an unmatched { or }."
-
-      assert refused("/* } */ } .evil { color: red }") == "That CSS has an unmatched { or }."
+      assert refused(~s|content: "{"; } .evil { color: red }|) == closed_early(1, 15)
+      assert refused("/* } */ } .evil { color: red }") == closed_early(1, 9)
     end
 
     # A COMMENT NOBODY CLOSED IS NOT THE SAME MISTAKE, and refusing it with the brace message would
     # send the author looking for a brace that is fine. It swallows the `}` that ends the wrapper, so
     # everything after it in the stylesheet is eaten until the next `*/`.
     test "a comment left open is refused, and says so in its own words" do
-      assert refused("/* never closed\ngap: 1px;") == "That CSS has a /* that is never closed."
+      assert refused("/* never closed\ngap: 1px;") ==
+               "#{at(1, 1)}, at `/* never closed gap: 1px;`: Unterminated block comment."
     end
 
     # `css/1` indents every line of a body, so a line inside a string can never look like the start
@@ -792,30 +807,23 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
   # of it, braces included, so `calc(1px` takes the wrapper's `}` and every rule after it in the
   # stylesheet. Counting only braces let all of these through.
   describe "a parenthesis or a square bracket" do
-    test "left open, or closed with nothing open, is refused in its own words" do
-      for body <- [
-            "width: calc(1px + 2px;",
-            "&:hover { width: calc(1px + 2px; }",
-            "width: 1px);",
-            "& a:not(.x { color: red; }"
+    test "left open, or closed with nothing open, is refused where the parser finds it" do
+      for {body, column, text} <- [
+            {"width: calc(1px + 2px;", 22, ";"},
+            {"&:hover { width: calc(1px + 2px; }", 32, ";"},
+            {"width: 1px);", 11, ")"},
+            {"& a:not(.x { color: red; }", 12, "{"},
+            {"&[data-open { gap: 1px; }", 13, "{"},
+            {"gap: 1px ];", 10, "]"},
+            {"&:hover { & a[href { color: red; } }", 20, "{"}
           ] do
-        assert refused(body) == "That CSS has an unmatched ( or ).", body
-      end
-
-      for body <- [
-            "&[data-open { gap: 1px; }",
-            "gap: 1px ];",
-            "&:hover { & a[href { color: red; } }"
-          ] do
-        assert refused(body) == "That CSS has an unmatched [ or ].", body
+        assert refused(body) =~ "#{at(1, column)}, at `#{text}`: ", body
       end
     end
 
-    test "a stray brace beside an open bracket is still a brace" do
-      assert refused("width: calc(1px } .evil { color: red }") ==
-               "That CSS has an unmatched { or }."
-
-      assert refused("&:hover { gap: 1px; ] }") == "That CSS has an unmatched [ or ]."
+    test "a stray brace beside an open bracket is still refused" do
+      assert refused("width: calc(1px } .evil { color: red }") =~ "#{at(1, 17)}, at `}`: "
+      assert refused("&:hover { gap: 1px; ] }") =~ "#{at(1, 21)}, at `]`: "
     end
 
     test "a valid rule with functions, selectors and escapes is kept" do
@@ -835,6 +843,98 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
         refute refused(body), body
         assert kept_body(body) == body, body
       end
+    end
+  end
+
+  # THE BODIES THE TAILWIND CLI WAS RUN AGAINST, each wrapped as `css/1` writes it. The valid ones
+  # build, and the box keeps them. The refused ones either stop the build, or build into a rule the
+  # browser drops (`2pxcolor: teal`, a missing `;`), which the box must not announce as applied.
+  describe "the parser's verdict on bodies Tailwind was run against" do
+    test "what builds is kept" do
+      for body <- [
+            ~S|display:grid; grid-template-areas: "a b" "c d";|,
+            ~S|content: "a:b";|,
+            ~S|content: 'it\'s: x'|,
+            ~S|background: url(http://x.test/a.png);|,
+            ~S|background: url(data:image/png;base64,iVBOR)|,
+            ~S|background: var(--x)|,
+            ~S|--foo: a:b;|,
+            ~S|@apply hover:bg-red-500 md:p-4;|,
+            ~S|&:hover { color: red }|,
+            ~S|& > a:hover { color: blue }|,
+            ~S|a:not(.x) { color: red }|,
+            ~S|@media (min-width: 600px) { color: red }|,
+            ~S|@supports (display: grid) { display: grid }|,
+            ~S|@container card (min-width: 400px) { color: red }|,
+            ~S|color: red !important;|,
+            ~S|font-family: "A:B", serif;|,
+            ~S|grid-template-columns: [full-start] minmax(1rem, 1fr) [content-start] 3fr;|,
+            ~S|filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#80000000', endColorstr='#80000000');|,
+            ~S|/* note: x */ color: red; /* a:b */|,
+            ~S|transition: opacity .2s ease-in-out, transform .2s;|,
+            ~S|&:is(.a, .b):hover { color: red }|,
+            ~S|&:hover { color: red; background: blue }|,
+            ~S|@layer base { color: red }|,
+            ~S|anchor-name: --x; position-anchor: --x;|,
+            ~S|color: color-mix(in srgb, red 50%, blue);|,
+            ~S|grid-area: a\:b;|,
+            ~S|src: url("x:y.woff2") format("woff2")|,
+            ~S|quotes: "\201C" "\201D";|,
+            ~S|inset: 0; &::before { content: ""; }|,
+            ~S|&[data-x="a:b"] { color: red }|,
+            ~S|color: red;;|,
+            "padding: 20px;\n\n&:hover {\n  transform: translateY(-2px);\n}\n@media (max-width: 900px) { padding: 12px; }",
+            ~S|content: "}"; color: red|,
+            ~S|background-image: url("a;b.png")|,
+            "@apply bg-[#fff] w-[calc(100%-2rem)] data-[state=open]:block;",
+            "@media (width >= 40rem) { @apply p-2; }",
+            "--x: [a:b];",
+            "&:hover { --x: a:b; }",
+            "--x: a:b !important;",
+            "color: red;;; gap: 1px"
+          ] do
+        refute refused(body), body
+        assert kept_body(body) == body, body
+      end
+    end
+
+    test "what stops the build, or builds into a dropped rule, is refused" do
+      for body <- [
+            ~S|color crimson|,
+            ~S|color crimson;|,
+            ~S|&:hover { color navy }|,
+            ~S|@media (max-width: 600px) { color red }|,
+            ~S|letter-spacing: 2pxcolor: teal|,
+            ~S|--foo;|,
+            ~S|color: red color: blue|,
+            "content: \"abc\ncolor: red;",
+            ~S|color: red; background|
+          ] do
+        assert refused(body) =~ "That CSS has an error on line ", body
+      end
+    end
+
+    # Valid only at the top of a stylesheet, and Tailwind refuses to build one written inside a rule.
+    test "an @import is refused" do
+      assert refused(~s|@import "x.css";|) ==
+               ~s|#{at(1, 1)}, at `@import "x.css";`: `@import` is valid only at the top level of a stylesheet.|
+    end
+
+    # Internet Explorer 7's star hack. Tailwind passes it through and every current browser drops
+    # it; the parser reads it as a selector with no block.
+    test "a star hack is refused" do
+      assert refused("*zoom: 1;") ==
+               "#{at(1, 1)}, at `*zoom: 1`: Expected a `{` after the selector `*zoom: 1`."
+    end
+
+    # `//` starts no comment in a browser or in Tailwind, so what follows it is read as CSS.
+    test "a // line is refused" do
+      assert refused("color: red; // note") =~ "#{at(1, 13)}, at `//`: "
+    end
+
+    # The box shows what was typed, blank lines above the CSS included.
+    test "a line and a column are counted in the text as it was typed" do
+      assert refused("\n\n  color crimson") =~ "#{at(3, 3)}, at `color crimson`: "
     end
   end
 

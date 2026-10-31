@@ -77,6 +77,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias IgniterCss.Diagnostic
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.StylesheetRow
   alias MishkaCmsCore.Runtime.Authoring.Tree
@@ -470,8 +471,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   defp strip_comments(text), do: String.replace(text, ~r|/\*.*?\*/|s, "")
 
   # WHERE A COMMENT ENDS, and `:none` when nobody closed it. The scanners that read half-typed text
-  # take `:none` as running to the end of what there is; `structure/4` refuses it, because in a body
-  # about to be saved it swallows the `}` that closes the wrapper and eats the rest of the sheet.
+  # take `:none` as running to the end of what there is; a body about to be saved with one is refused
+  # by the parser, because it swallows the `}` that closes the wrapper and eats the rest of the sheet.
   defp comment_end(body, pos, stop) do
     case :binary.match(body, "*/", scope: {pos, stop - pos}) do
       {at, _length} -> at + 2
@@ -523,26 +524,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     end
   end
 
-  # THE ONE STRUCTURAL RULE, and it is about braces rather than selectors. Scoping works because the
-  # text is wrapped in `.pb-xxxxxxxx { … }`, so the only way out is to close that wrapper early with
-  # a `}` — after which everything is loose CSS on the whole site. A nested selector cannot escape:
-  # under CSS nesting `body { … }` inside the braces means `.pb-xxxxxxxx body { … }`, which is a
-  # descendant of this element and is a thing authors legitimately want.
-  #
-  # An earlier version also demanded that every nested selector start with `&`. It refused
-  # `body { … }` written first and allowed the same thing written after a declaration, because a
-  # pattern anchored on `^` or `}` cannot see the second one — inconsistent, and guarding against
-  # nothing.
-  #
-  # A BRACE THAT IS TEXT CLOSES NOTHING. `content: "}"`, `url("a}b.png")` and `/* } */` are all
-  # ordinary CSS, and a check that counted every brace in the body refused all three with a message
-  # about an unmatched brace — the author reads it, cannot find one, and the box has nothing more to
-  # say. The one thing that IS refused alongside them is a comment nobody closed: it swallows the
-  # `}` that ends the wrapper, so everything after it in the stylesheet is eaten until the next `*/`.
-  #
-  # A `(` or a `[` nobody closed does the same. CSS reads everything up to its match as part of it,
-  # braces included, so `width: calc(1px` takes the wrapper's `}` and every rule after it in the
-  # stylesheet. Brackets are matched with braces on one stack, each with its own message.
   @doc """
   What is worth telling an author about CSS that is valid and probably not what they meant.
 
@@ -590,241 +571,68 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     |> Enum.uniq()
   end
 
+  # WHAT A BODY IS CHECKED WITH: igniter_css's parser, reading the text as the contents of one rule,
+  # which is how `css/1` writes it into the row, with every error placed by line and column in the
+  # body itself. What it refuses is what a body here may not do:
+  #
+  #   * close the wrapper early. Scoping works because the text is wrapped in `.pb-xxxxxxxx { … }`,
+  #     so a `}` that closes it leaves everything after it loose on the whole site, and that is
+  #     refused even when what follows parses. A nested selector cannot escape: under CSS nesting
+  #     `body { … }` inside the braces means `.pb-xxxxxxxx body { … }`, a descendant of this element
+  #     and a thing authors legitimately want;
+  #   * leave a comment, a string, a `(` or a `[` open. CSS reads everything up to the match as part
+  #     of it, so the wrapper's `}` goes with it and the rest of the stylesheet after that;
+  #   * write a declaration Tailwind cannot parse, `color crimson` or `--brand;`. The site's CSS build
+  #     fails and keeps the last good bundle, the draft preview cannot build its styles, and the
+  #     canvas's in-browser build stops for every element on the page until the frame reloads;
+  #   * miss a `;`, as in `letter-spacing: 2pxcolor: teal`. That builds: the browser drops it as a
+  #     value no property takes while the box says the rule was applied;
+  #   * write an `@import`, which is valid only at the top of a stylesheet and stops Tailwind's build.
+  #
+  # A brace, a `;` or a `:` inside a string, a comment, brackets or an escape is text to a parser, so
+  # `content: "}"`, `url(data:image/png;base64,…)`, `--x: a:b` and `.w-\[10px\]` are all kept.
+  #
+  # `//` starts no comment in a browser or in Tailwind, so the parser is not asked to read one.
   defp valid_body(nil), do: {:ok, ""}
-  defp valid_body(body), do: body |> String.trim() |> checked()
+  defp valid_body(body), do: checked(String.trim(body), body)
 
-  defp checked(""), do: {:ok, ""}
-  defp checked(body), do: body |> structure() |> shaped(body) |> verdict(body)
+  # Read as it was typed, so a line and a column are where the author sees them; kept trimmed.
+  defp checked("", _typed), do: {:ok, ""}
 
-  # The declarations are read only once the brackets match: they are read block by block, and
-  # `block_end/4` has nowhere to stop in a body whose braces do not.
-  defp shaped(:ok, body), do: shape(body)
-  defp shaped(unbalanced, _body), do: unbalanced
-
-  # Each closing bracket and the one it closes.
-  @opening %{?} => ?{, ?) => ?(, ?] => ?[}
-
-  # `.w-\[10px\]` escapes its brackets, which are part of the class name and close nothing. A brace
-  # stays counted either way, as the scanner that finds where a block ends counts it.
-  @escaped_brackets ~c"()[]\\"
-
-  defp verdict(:ok, body), do: {:ok, body}
-
-  defp verdict({:unmatched, ?{}, _body),
-    do: {:error, gettext("That CSS has an unmatched { or }.")}
-
-  defp verdict({:unmatched, ?(}, _body),
-    do: {:error, gettext("That CSS has an unmatched ( or ).")}
-
-  defp verdict({:unmatched, ?[}, _body),
-    do: {:error, gettext("That CSS has an unmatched [ or ].")}
-
-  defp verdict(:open_comment, _body),
-    do: {:error, gettext("That CSS has a /* that is never closed.")}
-
-  defp verdict({:open_string, string}, _body),
-    do:
-      {:error,
-       gettext("That CSS has a string with no closing quote on its line: `%{string}`.",
-         string: string
-       )}
-
-  defp verdict({:no_colon, declaration}, _body),
-    do:
-      {:error,
-       gettext("That CSS has a declaration with no colon: `%{declaration}`.",
-         declaration: declaration
-       )}
-
-  defp verdict({:missing_semicolon, property}, _body),
-    do: {:error, gettext("Missing `;` before `%{property}:`.", property: property)}
-
-  # `open` is the stack of brackets not yet closed, innermost first.
-  defp structure(body), do: structure(body, 0, byte_size(body), [])
-
-  defp structure(_body, pos, stop, []) when pos >= stop, do: :ok
-
-  defp structure(_body, pos, stop, [innermost | _open]) when pos >= stop,
-    do: {:unmatched, innermost}
-
-  defp structure(body, pos, stop, open) do
-    case binary_part(body, pos, min(2, stop - pos)) do
-      "/*" -> commented(comment_end(body, pos + 2, stop), body, stop, open)
-      <<?\\, escaped>> when escaped in @escaped_brackets -> structure(body, pos + 2, stop, open)
-      _other -> structure_step(body, :binary.at(body, pos), pos, stop, open)
+  defp checked(body, typed) do
+    case IgniterCss.validate_block(typed, allow_wrong_line_comments: false) do
+      {:ok, _validation} -> {:ok, body}
+      {:error, %{errors: [first | _rest]}} -> {:error, refusal(first)}
+      {:error, _validation} -> {:error, gettext("That CSS could not be read.")}
     end
   end
 
-  defp commented(:none, _body, _stop, _open), do: :open_comment
-  defp commented(at, body, stop, open), do: structure(body, at, stop, open)
-
-  defp structure_step(body, quote_char, pos, stop, open) when quote_char in [?", ?'],
-    do: structure(body, quoted_end(body, pos + 1, stop, quote_char), stop, open)
-
-  defp structure_step(body, char, pos, stop, open) when char in ~c"{([",
-    do: structure(body, pos + 1, stop, [char | open])
-
-  defp structure_step(body, char, pos, stop, open) when is_map_key(@opening, char),
-    do: closed(body, Map.fetch!(@opening, char), pos, stop, open)
-
-  defp structure_step(body, _char, pos, stop, open), do: structure(body, pos + 1, stop, open)
-
-  defp closed(body, opener, pos, stop, [opener | open]), do: structure(body, pos + 1, stop, open)
-  defp closed(_body, opener, _pos, _stop, open), do: {:unmatched, unmatched(opener, open)}
-
-  # A closer that meets another kind of bracket: when its own kind is open further out, the bracket
-  # in between was never closed (`calc(1px }`); when it is not, the closer is the stray one.
-  defp unmatched(opener, [innermost | _rest] = open) do
-    case opener in open do
-      true -> innermost
-      false -> opener
-    end
-  end
-
-  defp unmatched(opener, []), do: opener
-
-  # WHAT TAILWIND CANNOT PARSE, WITH EVERY BRACKET MATCHED. Tailwind parses a whole stylesheet before
-  # it builds any of it, and a declaration with no colon (`color crimson`, `--brand;`) or a string
-  # whose line ends before its closing quote is a syntax error there. The site's CSS build fails and
-  # keeps the last good bundle, the draft preview cannot build its styles, and the canvas's
-  # in-browser build stops for every element on the page until the frame reloads.
-  #
-  # So the body is read as that parser reads it: a declaration ends at a `;` or at the end of its
-  # block, a block's prelude (`&:hover`, `a:not(.x)`, `@media (…)`) is a selector rather than a
-  # declaration, and an at-rule statement (`@apply p-4`) needs no colon. A `;` or a `:` inside a
-  # string, a comment, a bracket or an escape is part of the value, so `url(data:image/png;base64,…)`
-  # is one declaration. `scan/6` cannot answer this: it reads half-typed text for the panel and
-  # splits on a `;` inside `url(…)`.
-  #
-  # `colons` holds where the declaration being read has a `:` outside all of those, latest first. An
-  # escaped brace is still a brace, as `block_end/4` counts it.
-  defp shape(body), do: shape(body, 0, 0, byte_size(body), 0, [])
-
-  defp shape(body, pos, start, stop, _depth, colons) when pos >= stop,
-    do: segment(body, start, stop, colons)
-
-  defp shape(body, pos, start, stop, depth, colons) do
-    case binary_part(body, pos, min(2, stop - pos)) do
-      "/*" ->
-        shape(
-          body,
-          past_comment(comment_end(body, pos + 2, stop), stop),
-          start,
-          stop,
-          depth,
-          colons
+  # The first error, where it is, and what the parser said about it. `text` is the part of the body
+  # the error is about, and it is empty when the error is about the end of the body.
+  defp refusal(%Diagnostic{} = error) do
+    case excerpt(error.text) do
+      "" ->
+        gettext("That CSS has an error on line %{line}, column %{column}: %{reason}",
+          line: error.line,
+          column: error.column,
+          reason: sentence(error.message)
         )
 
-      <<?\\, escaped>> when escaped not in ~c"{}" ->
-        shape(body, pos + 2, start, stop, depth, colons)
-
-      _other ->
-        shape_step(body, :binary.at(body, pos), pos, start, stop, depth, colons)
+      text ->
+        gettext(
+          "That CSS has an error on line %{line}, column %{column}, at `%{text}`: %{reason}",
+          line: error.line,
+          column: error.column,
+          text: text,
+          reason: sentence(error.message)
+        )
     end
   end
 
-  defp shape_step(body, quote_char, pos, start, stop, depth, colons)
-       when quote_char in [?", ?'] do
-    case string_end(body, pos + 1, stop, quote_char) do
-      :open -> {:open_string, body |> line_from(pos, stop) |> excerpt()}
-      at -> shape(body, at, start, stop, depth, colons)
-    end
-  end
-
-  defp shape_step(body, char, pos, start, stop, depth, colons) when char in ~c"([",
-    do: shape(body, pos + 1, start, stop, depth + 1, colons)
-
-  defp shape_step(body, char, pos, start, stop, depth, colons) when char in ~c")]",
-    do: shape(body, pos + 1, start, stop, max(depth - 1, 0), colons)
-
-  defp shape_step(body, ?:, pos, start, stop, 0, colons),
-    do: shape(body, pos + 1, start, stop, 0, [pos | colons])
-
-  defp shape_step(body, ?;, pos, start, stop, 0, colons) do
-    with :ok <- segment(body, start, pos, colons),
-         do: shape(body, pos + 1, pos + 1, stop, 0, [])
-  end
-
-  # What came before the `{` was the block's selector, and what is inside it is read on its own.
-  defp shape_step(body, ?{, pos, _start, stop, 0, _colons) do
-    close = block_end(body, pos + 1, stop, 1)
-
-    with :ok <- shape(body, pos + 1, pos + 1, close, 0, []),
-         do: shape(body, close + 1, close + 1, stop, 0, [])
-  end
-
-  defp shape_step(body, _char, pos, start, stop, depth, colons),
-    do: shape(body, pos + 1, start, stop, depth, colons)
-
-  # One declaration, from just after the `;` in front of it, read from its first word: the blank
-  # lines and comments before it are skipped as `lead/1` skips them for the panel.
-  defp segment(_body, start, stop, _colons) when start >= stop, do: :ok
-
-  defp segment(body, start, stop, colons) do
-    at = start + lead(binary_part(body, start, stop - start))
-
-    case binary_part(body, at, stop - at) do
-      "" -> :ok
-      "@" <> _statement -> :ok
-      text -> declared(text, colons |> Enum.reverse() |> Enum.map(&(&1 - at)))
-    end
-  end
-
-  # `colons` are offsets into `text`, first to last.
-  defp declared(text, []), do: {:no_colon, text |> strip_comments() |> excerpt()}
-  defp declared(_text, [_one]), do: :ok
-
-  # A SECOND COLON IS WHERE THE NEXT DECLARATION BEGAN. `letter-spacing: 2pxcolor: teal` is missing
-  # the `;` after `2px`: nothing fails to build, the browser drops the whole declaration as a value
-  # no property takes, and the author is told the rule was applied. A custom property's value is
-  # any text at all (`--x: a:b`), and a legacy filter's names itself with one (`progid:DX…`).
-  defp declared("--" <> _custom, _colons), do: :ok
-
-  defp declared(text, [first, second | _rest]) do
-    case progid?(binary_part(text, first + 1, byte_size(text) - first - 1)) do
-      true -> :ok
-      false -> {:missing_semicolon, word_before(text, second, first + 1)}
-    end
-  end
-
-  defp progid?(value),
-    do: value |> String.trim_leading() |> String.downcase() |> String.starts_with?("progid:")
-
-  # The word in front of the second colon, which is the property the author began without ending
-  # the one before it; never reaching back past the first colon.
-  defp word_before(text, colon, floor) do
-    from = word_start(text, colon, floor)
-    binary_part(text, from, colon - from)
-  end
-
-  defp word_start(_text, pos, floor) when pos <= floor, do: floor
-
-  defp word_start(text, pos, floor) do
-    case :binary.at(text, pos - 1) do
-      char when char in ~c" \t\n\r\f" -> pos
-      _char -> word_start(text, pos - 1, floor)
-    end
-  end
-
-  # Where a string ends, or `:open` when its line ends first, because a CSS string cannot run onto
-  # the next line. `quoted_end/4` runs on to the next quote however far away it is, which suits the
-  # scanners that read half-typed text and would pass `content: "abc` here.
-  defp string_end(_body, pos, stop, _quote_char) when pos >= stop, do: :open
-
-  defp string_end(body, pos, stop, quote_char) do
-    case :binary.at(body, pos) do
-      ?\\ -> string_end(body, pos + 2, stop, quote_char)
-      ^quote_char -> pos + 1
-      char when char in ~c"\n\r\f" -> :open
-      _other -> string_end(body, pos + 1, stop, quote_char)
-    end
-  end
-
-  defp line_from(body, pos, stop) do
-    case :binary.match(body, "\n", scope: {pos, stop - pos}) do
-      {at, _length} -> binary_part(body, pos, at - pos)
-      :nomatch -> binary_part(body, pos, stop - pos)
-    end
+  # The parser's own words, which start in either case and end with or without a full stop.
+  defp sentence(message) do
+    {first, rest} = message |> String.trim() |> String.trim_trailing(".") |> String.split_at(1)
+    String.upcase(first) <> rest <> "."
   end
 
   # What a refusal quotes back to the author: one line, short enough to sit in a sentence.

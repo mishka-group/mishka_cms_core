@@ -133,7 +133,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
                  element_css: %{"pb-1a2b3c4d" => "color: red; } body { display: none;"}
                )
 
-      assert Exception.message(error) =~ "unmatched"
+      assert Exception.message(error) =~
+               "That CSS has an error on line 1, column 13, at `}`: This `}` closes the block"
 
       assert {:error, _not_a_scope} =
                Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil,
