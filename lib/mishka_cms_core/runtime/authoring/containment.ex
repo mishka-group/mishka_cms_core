@@ -79,8 +79,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   @void ~w(area base br col embed hr img input link meta param source track wbr)
 
   # HTML's raw text elements: a browser reads everything up to the closing tag as text, and so does
-  # `MishkaCmsCore.Runtime.Authoring.HtmlTokenizer`, which keeps a `<textarea>`'s, a `<script>`'s
-  # and a `<style>`'s content as one text node.
+  # `MishkaCmsCore.Runtime.Authoring.HtmlTokenizer`, which keeps a `<textarea>`'s, a `<title>`'s,
+  # a `<script>`'s and a `<style>`'s content as text.
   @text_only ~w(script style textarea title)
 
   @phrasing_only ~w(

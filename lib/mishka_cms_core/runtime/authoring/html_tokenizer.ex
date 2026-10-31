@@ -553,7 +553,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
        ) do
     {mode, block} =
       cond do
-        tag_name == "textarea" or contains_special_attrs?(attrs) ->
+        # A `<textarea>`'s and a `<title>`'s content is text: a browser reads everything up to the
+        # closing tag as it is written, a `<b>` included. Phoenix's tokenizer reads a `<script>` and
+        # a `<style>` that way itself, but these two as markup, so their content is taken from the
+        # source as one text token.
+        tag_name in ["textarea", "title"] or contains_special_attrs?(attrs) ->
           {:preserve, [whole_text(opts, open_meta, close_meta)]}
 
         # A `<pre>` keeps its whitespace and its elements: `<pre><code>…</code></pre>` is how a code

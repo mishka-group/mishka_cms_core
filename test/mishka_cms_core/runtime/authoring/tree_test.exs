@@ -360,6 +360,48 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
     end
   end
 
+  # A browser reads a `<title>`'s, a `<textarea>`'s, a `<script>`'s and a `<style>`'s content up to
+  # the closing tag as text. The tokenizer read a `<title>`'s as markup, so `<title>Bad <b>title</b>
+  # end</title>` held a `<b>` the canvas does not draw in a title: it showed "Bad  end", where the
+  # published page shows the words and the tags as written.
+  describe "parse/1 — a title, a textarea, a script and a style hold text" do
+    test "a title holds one text node, its tags included" do
+      tree = assert_exact_round_trip("<title>a <b>x</b> c</title>")
+      assert kinds(tree) == [{:tag, "title"}, {:text, "a <b>x</b> c"}]
+    end
+
+    test "and so does a title with a comment or an expression in it" do
+      assert kinds(assert_exact_round_trip("<title>a <!-- c --> b</title>")) ==
+               [{:tag, "title"}, {:text, "a <!-- c --> b"}]
+
+      assert kinds(assert_exact_round_trip("<title>{@page_title} - Site</title>")) ==
+               [{:tag, "title"}, {:text, "{@page_title} - Site"}]
+    end
+
+    test "a textarea holds one text node" do
+      tree = assert_exact_round_trip("<textarea>a <b>x</b> c</textarea>")
+      assert kinds(tree) == [{:tag, "textarea"}, {:text, "a <b>x</b> c"}]
+    end
+
+    test "a script holds one text node" do
+      tree = assert_exact_round_trip("<script>if (a < b) {}</script>")
+      assert kinds(tree) == [{:tag, "script"}, {:text, "if (a < b) {}"}]
+    end
+
+    # The serializer gives a `<style>` the response's nonce unless it names one, so the one written
+    # with its nonce comes back byte for byte.
+    test "a style holds one text node" do
+      tree = assert_exact_round_trip("<style nonce={@csp_nonce}>a > b { color: red }</style>")
+      assert kinds(tree) == [{:tag, "style"}, {:text, "a > b { color: red }"}]
+
+      tree = Tree.parse!("<style>a > b { color: red }</style>")
+      assert kinds(tree) == [{:tag, "style"}, {:text, "a > b { color: red }"}]
+
+      assert Serializer.serialize(tree) ==
+               "<style nonce={csp_nonce()}>a > b { color: red }</style>"
+    end
+  end
+
   describe "parse/1 — eex blocks are atomic and byte-identical" do
     test "if/else block" do
       heex = ~s(<%= if @ok do %><b>y</b><% else %><i>n</i><% end %>)
