@@ -16,6 +16,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   ## The rules
 
     * **Void elements** (`br`, `img`, `input`, …) take no children at all.
+    * **Raw text elements** (`textarea`, `title`, `script`, `style`) take text and expressions
+      only. A browser reads an element written inside one as text and shows its markup.
     * **Phrasing-only elements** (`span`, `p`, `h1`–`h6`, `button`, `pre`, …) take text and
       other phrasing content, never a block element. This is deliberately stricter than the spec —
       `<p>` may legally hold some things this rejects — because the stricter rule is the one that
@@ -75,6 +77,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
 
   @void ~w(area base br col embed hr img input link meta param source track wbr)
+
+  # HTML's raw text elements: a browser reads everything up to the closing tag as text, and so does
+  # `MishkaCmsCore.Runtime.Authoring.HtmlTokenizer`, which keeps a `<textarea>`'s, a `<script>`'s
+  # and a `<style>`'s content as one text node.
+  @text_only ~w(script style textarea title)
 
   @phrasing_only ~w(
     span b i em strong small code label sub sup mark abbr cite q s u kbd samp var
@@ -355,6 +362,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     tree = Keyword.get(opts, :tree)
 
     with :ok <- check_container(target),
+         :ok <- check_text_only(child, target),
          :ok <- check_only_children(child, target),
          :ok <- check_table_part(child, target, []) do
       check_phrasing(tree, child, [target | landing(tree, child)], [])
@@ -370,6 +378,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   defp check(tree, dragged, target, opts) do
     with :ok <- check_cycle(tree, dragged, target),
          :ok <- check_container(target),
+         :ok <- check_text_only(dragged, target),
          :ok <- check_component_slots(tree, target, opts),
          :ok <- check_only_children(dragged, target),
          :ok <- check_table_part(dragged, target, opts),
@@ -416,6 +425,24 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       false -> {:error, gettext("%{label} cannot contain other elements.", label: label(tag))}
     end
   end
+
+  # What a browser reads as text takes text and expressions only. An element, a component or a
+  # comment put in one is written out as its own markup, which the browser shows as the text it
+  # holds: the published page has `<h1 …>` in the box where a heading was meant, and the next parse
+  # of the template folds it into the text too.
+  defp check_text_only(dragged, %Node{tag: tag}) when is_binary(tag) do
+    tag = String.downcase(tag)
+
+    case tag in @text_only and not text_like?(dragged) do
+      true -> {:error, gettext("%{label} holds text only.", label: label(tag))}
+      false -> :ok
+    end
+  end
+
+  defp check_text_only(_dragged, _target), do: :ok
+
+  defp text_like?(%{kind: kind}) when kind in [:text, :eex, :eex_block, :eex_comment], do: true
+  defp text_like?(_dragged), do: false
 
   # A SLOT THE COMPONENT NEVER RENDERS IS NOT SOMEWHERE TO PUT ANYTHING.
   #

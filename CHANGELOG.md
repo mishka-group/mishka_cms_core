@@ -1,6 +1,7 @@
 # Changelog for MishkaCmsCore 0.0.5
 
 - Placement reads the CMS's own function components as the element they render: a `<.form>` is a `<form>`, an `<.input>` the `<div>` around its control, a `<.link>` an `<a>`, a `<.button>` a `<button>` and an `<.icon>` a `<span>`. A form or a field dropped in a `<p>`, a heading or an inline tag is refused, so the editor places it beside them; it used to go inside, and the browser closed the paragraph in front of it
+- A `<textarea>`, a `<title>`, a `<script>` and a `<style>` take text and expressions only. An element, a component or a comment dropped or wrapped into one is refused with "A `<textarea>` holds text only.", where it used to be saved and shown on the published page as its own markup
 
 # Changelog for MishkaCmsCore 0.0.4
 

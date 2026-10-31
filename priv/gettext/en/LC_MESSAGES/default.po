@@ -210,7 +210,7 @@ msgstr ""
 msgid "%{first} and %{second} on the Handlers tab will stop being called."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:938
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:965
 #, elixir-autogen, elixir-format
 msgid "%{front} or `<%{last}>` elements"
 msgstr ""
@@ -330,32 +330,32 @@ msgstr ""
 msgid "%{label} archived"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:579
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:606
 #, elixir-autogen, elixir-format
 msgid "%{label} can only contain %{list}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:640
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:667
 #, elixir-autogen, elixir-format
 msgid "%{label} can only hold text and inline elements."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:644
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:671
 #, elixir-autogen, elixir-format
 msgid "%{label} sits in a `<%{host}>` here, so it can only hold text and inline elements."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:754
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:781
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot contain another clickable element."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:686
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:713
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot hold a `<%{tag}>`. Put it next to it instead."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:416
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:425
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot contain other elements."
 msgstr ""
@@ -376,12 +376,12 @@ msgstr ""
 msgid "%{label} discarded"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:457
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:484
 #, elixir-autogen, elixir-format
 msgid "%{label} does not declare a slot to put content in."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:438
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:465
 #, elixir-autogen, elixir-format
 msgid "%{label} is set by its properties — it does not draw content."
 msgstr ""
@@ -738,7 +738,7 @@ msgstr ""
 msgid "4 columns"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:931
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:958
 #, elixir-autogen, elixir-format
 msgid "A `<%{tag}>`"
 msgstr ""
@@ -763,7 +763,7 @@ msgstr ""
 msgid "A copy of this page — its template, layout, code and permissions — that stays inactive until you activate it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:716
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:743
 #, elixir-autogen, elixir-format
 msgid "A field cannot go inside another field. Put it next to it."
 msgstr ""
@@ -773,7 +773,7 @@ msgstr ""
 msgid "A fifth-level heading."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:665
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:692
 #, elixir-autogen, elixir-format
 msgid "A form cannot go inside another form — browsers drop the inner one."
 msgstr ""
@@ -1105,7 +1105,7 @@ msgstr ""
 msgid "An anchor. Set where it goes in the Inspector."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:403
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:412
 #, elixir-autogen, elixir-format
 msgid "An element cannot be moved inside itself."
 msgstr ""
@@ -5330,7 +5330,7 @@ msgstr ""
 msgid "That draft is no longer there."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:331
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:338
 #, elixir-autogen, elixir-format
 msgid "That drop target no longer exists."
 msgstr ""
@@ -5340,7 +5340,7 @@ msgstr ""
 msgid "That element has no style scope."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:411
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:420
 #, elixir-autogen, elixir-format
 msgid "That element holds text only — drop next to it instead of inside it."
 msgstr ""
@@ -5544,7 +5544,7 @@ msgstr ""
 msgid "This component needs attributes — add an example to preview it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:930
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:957
 #, elixir-autogen, elixir-format
 msgid "This element"
 msgstr ""
@@ -6509,7 +6509,7 @@ msgstr ""
 msgid "`%{selector}` styles a %{selector} INSIDE this element. For the element itself write the declarations on their own, or start the selector with `&`."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:933
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:960
 #, elixir-autogen, elixir-format
 msgid "`<%{tag}>` elements"
 msgstr ""
@@ -18357,7 +18357,7 @@ msgstr ""
 msgid "✕ whole document"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:613
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:640
 #, elixir-autogen, elixir-format
 msgid "%{label} goes only inside %{list}."
 msgstr ""
@@ -18546,4 +18546,9 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/panels.ex:15968
 #, elixir-autogen, elixir-format
 msgid "not live until you press Publish"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:437
+#, elixir-autogen, elixir-format
+msgid "%{label} holds text only."
 msgstr ""

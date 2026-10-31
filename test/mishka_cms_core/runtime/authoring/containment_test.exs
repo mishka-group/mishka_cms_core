@@ -490,6 +490,65 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
+  # A browser reads everything up to `</textarea>` as text, so a heading dropped in one is shown as
+  # `<h1>…</h1>` on the published page, and the next parse folds it into the textarea's text.
+  describe "can_drop?/4 — a raw text element holds text only" do
+    @raw_text ~w(textarea title script style)
+
+    test "it refuses an element, and says why" do
+      for tag <- @raw_text, arriving <- ~w(h1 span div) do
+        tree = tree_of("<div><#{tag}>x</#{tag}></div>")
+
+        assert {:error, message} =
+                 Containment.can_drop?(tree, Node.new(:tag, tag: arriving), find(tree, tag).id)
+
+        assert message == "A `<#{tag}>` holds text only.", "#{arriving} in #{tag}"
+      end
+    end
+
+    test "and a component, a slot and a comment, which a structural gate lets through" do
+      tree = tree_of(~s(<form><textarea name="note"></textarea></form>))
+      textarea = find(tree, "textarea")
+
+      for arriving <- [
+            Node.new(:component, tag: ".row"),
+            Node.new(:component, tag: ".input"),
+            Node.new(:slot, tag: ":item"),
+            Node.new(:html_comment, text: " note ")
+          ] do
+        assert {:error, "A `<textarea>` holds text only."} =
+                 Containment.can_drop?(tree, arriving, textarea.id, components: []),
+               inspect(arriving)
+      end
+    end
+
+    test "while it takes text and expressions" do
+      for tag <- @raw_text do
+        tree = tree_of("<div><#{tag}></#{tag}></div>")
+        target = find(tree, tag).id
+
+        assert Containment.can_drop?(tree, text(), target) == :ok
+        assert Containment.can_drop?(tree, Node.new(:eex, text: "@value"), target) == :ok
+        assert Containment.can_drop?(tree, Node.new(:eex_comment, text: " x "), target) == :ok
+      end
+    end
+
+    test "a wrapper of one takes the same" do
+      for tag <- @raw_text do
+        assert {:error, "A `<" <> _rest} = Containment.can_hold?(Node.new(:tag, tag: "b"), tag)
+        assert Containment.can_hold?(text(), tag) == :ok
+      end
+    end
+
+    test "accepts_map/3 gives the same answers" do
+      tree = tree_of("<div><textarea></textarea></div>")
+      accepts = Containment.accepts_map(tree, inline())
+
+      refute accepts[find(tree, "textarea").id]
+      assert accepts[find(tree, "div").id]
+    end
+  end
+
   # A parser IGNORES a `<td>` outside a table: the words stay, the cell and everything the editor put
   # on it are gone. Dropped on a page, a kit cell left a layers row with nothing on the canvas to
   # select and a raw `<td>` on the published page.
