@@ -323,7 +323,33 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeCombinatorsTest do
       assert Tree.get(tree, text.id).meta.whitespace?
 
       {:ok, edited} = Tree.set_text(tree, text.id, "content")
-      refute Map.has_key?(Tree.get(edited, text.id).meta, :whitespace?)
+      refute Tree.get(edited, text.id).meta.whitespace?
+    end
+
+    test "and text emptied to whitespace starts being marked as whitespace" do
+      tree = Tree.parse!(~s(<div>words</div>))
+      text = Enum.find(Tree.walk(tree), &(&1.kind == :text))
+
+      {:ok, edited} = Tree.set_text(tree, text.id, "  ")
+      assert Tree.get(edited, text.id).meta.whitespace?
+      assert Tree.blank?(edited, hd(edited.roots))
+    end
+
+    # A node's own text written back is no change. The flag used to be dropped, so the first such
+    # edit returned a different tree and an editor's history recorded "Edited text" for nothing.
+    test "the same text written back returns an equal tree" do
+      tree = Tree.parse!(~s(<div><p>Hello</p> <span>x</span></div>))
+
+      for %{kind: :text} = text <- Tree.walk(tree) do
+        assert Tree.set_text(tree, text.id, text.text) == {:ok, tree}, inspect(text.text)
+      end
+    end
+
+    test "an expression keeps its own meta" do
+      tree = Tree.parse!(~s(<p>{@name}</p>))
+      expr = Enum.find(Tree.walk(tree), &(&1.kind == :eex))
+
+      assert Tree.set_text(tree, expr.id, expr.text) == {:ok, tree}
     end
   end
 

@@ -685,14 +685,24 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   defp cleared_class(%Node{} = node, _held),
     do: Enum.reject(node.attrs, &match?({"class", _}, &1))
 
-  @doc "Replaces a node's text content."
+  @doc """
+  Replaces a node's text content.
+
+  A text node's `whitespace?` flag is set from the new text, as `parse/1` sets it, so writing a
+  node's own text back returns an equal tree.
+  """
   @spec set_text(t(), String.t(), String.t()) :: {:ok, t()} | error()
   def set_text(tree, id, text) when is_binary(text) do
     with :ok <- validate_present(tree, id) do
       node = get(tree, id)
-      {:ok, put_node(tree, %{node | text: text, meta: Map.delete(node.meta, :whitespace?)})}
+      {:ok, put_node(tree, %{node | text: text, meta: text_meta(node, text)})}
     end
   end
+
+  defp text_meta(%Node{kind: :text, meta: meta}, text),
+    do: Map.put(meta, :whitespace?, String.trim(text) == "")
+
+  defp text_meta(%Node{meta: meta}, _text), do: meta
 
   @doc """
   The class that names this element for its own CSS, or `nil` when it has none yet.
