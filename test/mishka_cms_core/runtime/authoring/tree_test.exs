@@ -15,6 +15,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsCore.Runtime.Authoring.CodeCheck
+  alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
@@ -45,6 +46,25 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
     out
   end
+
+  # Serializes back to the very bytes it was read from, and those bytes parse to the same tree.
+  defp assert_exact_round_trip(heex) do
+    tree = Tree.parse!(heex)
+    out = Serializer.serialize(tree)
+
+    assert out == heex
+    assert shape(Tree.parse!(out)) == shape(tree)
+    tree
+  end
+
+  defp shape(tree), do: Enum.map(tree.roots, &shape(tree, &1))
+
+  defp shape(tree, id) do
+    node = Tree.get(tree, id)
+    {node.kind, node.tag, node.attrs, node.text, Enum.map(node.children, &shape(tree, &1))}
+  end
+
+  defp kinds(tree), do: tree |> Tree.walk() |> Enum.map(&{&1.kind, &1.tag || &1.text})
 
   describe "parse/1 — the corpus round-trips" do
     test "plain nested HTML" do
@@ -139,13 +159,23 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
              ]
     end
 
-    # A comment arrives in one token with the text written beside it, so a `<pre>` holding one is
-    # still read whole: as text it keeps the comment and the words around it as they were written.
-    test "a pre that holds a comment is still read as it was written" do
-      heex = ~s(<pre>  a <!-- note -->  b  </pre>)
+    # A `<pre>` that held a comment used to be read whole, as one run of text, because the comment
+    # came in one token with the words beside it. It reads its children like any other `<pre>`.
+    test "a pre that holds a comment reads its children, every space where it was written" do
+      heex = "<pre>  a <!-- note -->\n  <code>b</code>  </pre>"
+      tree = assert_exact_round_trip(heex)
 
-      assert assert_round_trip(heex, []) == heex
-      assert [%Node{tag: "pre"}, %Node{kind: :text}] = heex |> Tree.parse!() |> Tree.walk()
+      assert {:ok, ^heex <> "\n"} = Serializer.to_heex(tree)
+
+      assert kinds(tree) == [
+               {:tag, "pre"},
+               {:text, "  a "},
+               {:html_comment, " note "},
+               {:text, "\n  "},
+               {:tag, "code"},
+               {:text, "b"},
+               {:text, "  "}
+             ]
     end
 
     test "phx-no-format is preserved" do
@@ -163,6 +193,170 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
     test "an unknown component is kept, not dropped" do
       assert_round_trip(~s(<.totally_unknown_thing x="1" />), ["<.totally_unknown_thing"])
+    end
+  end
+
+  # Phoenix's tokenizer hands the text before a `<!--` and after its `-->` over in the same token as
+  # the comment, and the tree wrote that text back inside the comment: `<div>a <!-- c --></div>`
+  # came back as `<div><!--a <!-- c --></div>`, and `<div><!-- c --> b</div>` as
+  # `<div><!-- c --> b--></div>`, which showed "b-->" on the page.
+  describe "parse/1 — an HTML comment and the text beside it" do
+    test "the tokenizer gives the text and the comment a token each" do
+      assert {:ok,
+              [{:text, "a ", _}, {:html_comment, [{:text, "<!-- c -->", _}]}, {:text, " b", _}]} =
+               HtmlTokenizer.build_tokenize("a <!-- c --> b")
+    end
+
+    test "text before a comment" do
+      tree = assert_exact_round_trip("<div>a <!-- c --></div>")
+      assert kinds(tree) == [{:tag, "div"}, {:text, "a "}, {:html_comment, " c "}]
+    end
+
+    test "text after a comment" do
+      tree = assert_exact_round_trip("<div><!-- c --> b</div>")
+      assert kinds(tree) == [{:tag, "div"}, {:html_comment, " c "}, {:text, " b"}]
+    end
+
+    test "text on both sides" do
+      tree = assert_exact_round_trip("<div>a <!-- c --> b</div>")
+      assert kinds(tree) == [{:tag, "div"}, {:text, "a "}, {:html_comment, " c "}, {:text, " b"}]
+    end
+
+    test "a comment alone" do
+      assert kinds(assert_exact_round_trip("<!-- c -->")) == [{:html_comment, " c "}]
+
+      assert kinds(assert_exact_round_trip("<div><!-- c --></div>")) ==
+               [{:tag, "div"}, {:html_comment, " c "}]
+    end
+
+    test "two comments in a row" do
+      tree = assert_exact_round_trip("<div><!-- a --><!-- b --></div>")
+      assert kinds(tree) == [{:tag, "div"}, {:html_comment, " a "}, {:html_comment, " b "}]
+    end
+
+    test "a comment with -- or < inside" do
+      tree = assert_exact_round_trip("<div>x <!-- a -- b < c <!-- d --> y</div>")
+
+      assert kinds(tree) == [
+               {:tag, "div"},
+               {:text, "x "},
+               {:html_comment, " a -- b < c <!-- d "},
+               {:text, " y"}
+             ]
+    end
+
+    test "an empty comment and a blank one" do
+      assert kinds(assert_exact_round_trip("<!---->")) == [{:html_comment, ""}]
+      assert kinds(assert_exact_round_trip("<!-- -->")) == [{:html_comment, " "}]
+
+      assert kinds(assert_exact_round_trip("a<!---->b")) == [
+               {:text, "a"},
+               {:html_comment, ""},
+               {:text, "b"}
+             ]
+    end
+
+    test "a comment at the start and at the end of the document" do
+      tree = assert_exact_round_trip("<!-- top --><div>a</div><!-- bottom -->")
+
+      assert kinds(tree) == [
+               {:html_comment, " top "},
+               {:tag, "div"},
+               {:text, "a"},
+               {:html_comment, " bottom "}
+             ]
+    end
+
+    test "a comment in a p beside inline elements" do
+      tree = assert_exact_round_trip("<p>a <b>b</b> <!-- c --> <i>d</i> e</p>")
+
+      assert kinds(tree) == [
+               {:tag, "p"},
+               {:text, "a "},
+               {:tag, "b"},
+               {:text, "b"},
+               {:text, " "},
+               {:html_comment, " c "},
+               {:text, " "},
+               {:tag, "i"},
+               {:text, "d"},
+               {:text, " e"}
+             ]
+    end
+
+    test "a comment over several lines keeps the lines around it" do
+      heex = "<div>\n  <!--\n    one\n    two\n  -->\n  <p>x</p>\n</div>"
+      tree = assert_exact_round_trip(heex)
+
+      assert {:ok, ^heex <> "\n"} = Serializer.to_heex(tree)
+
+      assert [{:tag, "div"}, {:text, "\n  "}, {:html_comment, "\n    one\n    two\n  "} | _] =
+               kinds(tree)
+    end
+
+    test "a comment beside an expression in either form" do
+      tree = assert_exact_round_trip("<p>{@x} <!-- c --> {@y}</p>")
+
+      assert kinds(tree) == [
+               {:tag, "p"},
+               {:eex, "@x"},
+               {:text, " "},
+               {:html_comment, " c "},
+               {:text, " "},
+               {:eex, "@y"}
+             ]
+
+      tree = assert_exact_round_trip("<p><%= @x %><!-- c --><%= @y %></p>")
+      assert kinds(tree) == [{:tag, "p"}, {:eex, "@x"}, {:html_comment, " c "}, {:eex, "@y"}]
+    end
+
+    # EEx cuts the source at its tag, so a comment with one inside arrives in two halves. Each half
+    # is still parted from the text beside it, and the tag goes back as written.
+    test "a comment with an EEx tag inside" do
+      tree = assert_exact_round_trip("<p>a <!-- <%= @x %> --> b <!-- c --> d</p>")
+
+      assert kinds(tree) == [
+               {:tag, "p"},
+               {:text, "a "},
+               {:html_comment, " <%= @x %> "},
+               {:text, " b "},
+               {:html_comment, " c "},
+               {:text, " d"}
+             ]
+    end
+
+    test "a braced expression inside a comment is part of the comment" do
+      tree = assert_exact_round_trip("<p>a <!-- {@x} --> b</p>")
+      assert kinds(tree) == [{:tag, "p"}, {:text, "a "}, {:html_comment, " {@x} "}, {:text, " b"}]
+    end
+
+    test "<!-- in an attribute, a script or after a doctype is read as Phoenix reads it" do
+      tree =
+        assert_exact_round_trip(~s(<div title="<!-- x -->">a</div><script><!-- y --></script>))
+
+      assert kinds(tree) == [{:tag, "div"}, {:text, "a"}, {:tag, "script"}, {:text, "<!-- y -->"}]
+
+      tree = assert_exact_round_trip("<!DOCTYPE html><!-- c --><p>a</p>")
+
+      assert kinds(tree) == [
+               {:text, "<!DOCTYPE html>"},
+               {:html_comment, " c "},
+               {:tag, "p"},
+               {:text, "a"}
+             ]
+    end
+
+    # What the editor holds: the comment is a comment node it folds, and the words beside it are a
+    # text node it selects and edits on their own.
+    test "the text beside a comment is edited without touching the comment" do
+      tree = Tree.parse!("<div>a <!-- c --> b</div>")
+      [_div, text, comment, _after] = Tree.walk(tree)
+
+      assert Node.comment?(comment)
+      refute Node.comment?(text)
+
+      assert {:ok, edited} = Tree.set_text(tree, text.id, "changed ")
+      assert Serializer.serialize(edited) == "<div>changed <!-- c --> b</div>"
     end
   end
 

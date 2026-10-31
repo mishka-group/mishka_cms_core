@@ -324,7 +324,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     text = List.to_string(text)
     meta = [line: meta.line, column: meta.column]
     state = Tokenizer.init(0, "nofile", source, Phoenix.LiveView.HTMLEngine)
-    Tokenizer.tokenize(text, meta, tokens, cont, state)
+    {read, cont} = Tokenizer.tokenize(text, meta, [], cont, state)
+    {Enum.flat_map(read, &comment_tokens/1) ++ tokens, cont}
   end
 
   defp do_tokenize({:comment, text, meta}, {tokens, cont}, _contents) do
@@ -339,6 +340,56 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
 
   defp do_tokenize(_node, acc, _contents) do
     acc
+  end
+
+  # Phoenix's tokenizer reads an HTML comment in its text state and carries on, so the text written
+  # before a `<!--` and after its `-->` comes back in the same token as the comment, marked with a
+  # `:comment_start` / `:comment_end` context. `Phoenix.LiveView.HTMLFormatter` prints that run as
+  # it was written; a tree wraps a comment node in its own `<!--` … `-->`, and wrote the words beside
+  # it back inside the comment.
+  #
+  # So a token Phoenix marks as holding a comment is read again through the states it was read in:
+  # text, comment and doctype. `<!--` opens a comment, `-->` closes it, and each run of text and
+  # each comment becomes its own token, newest first like the rest. A comment keeps Phoenix's
+  # markers: `[:comment_start, :comment_end]` when it is whole, `[:comment_start]` up to an EEx tag
+  # written inside it, `[:comment_end]` from the last one on. Text beside it carries no context.
+  defp comment_tokens({:text, text, %{context: [:comment_end | _]}}),
+    do: in_comment(text, [], [], [])
+
+  defp comment_tokens({:text, text, %{context: [:comment_start | _]}}),
+    do: in_text(text, [], [])
+
+  defp comment_tokens(token), do: [token]
+
+  defp in_text("<!--" <> rest, buffer, acc),
+    do: in_comment(rest, ["<!--"], text_token(buffer, [], acc), [:comment_start])
+
+  defp in_text("<!doctype" <> rest, buffer, acc),
+    do: in_doctype(rest, ["<!doctype" | buffer], acc)
+
+  defp in_text("<!DOCTYPE" <> rest, buffer, acc),
+    do: in_doctype(rest, ["<!DOCTYPE" | buffer], acc)
+
+  defp in_text(<<c, rest::binary>>, buffer, acc), do: in_text(rest, [c | buffer], acc)
+  defp in_text(<<>>, buffer, acc), do: text_token(buffer, [], acc)
+
+  defp in_doctype(">" <> rest, buffer, acc), do: in_text(rest, [?> | buffer], acc)
+  defp in_doctype(<<c, rest::binary>>, buffer, acc), do: in_doctype(rest, [c | buffer], acc)
+  defp in_doctype(<<>>, buffer, acc), do: text_token(buffer, [], acc)
+
+  defp in_comment("-->" <> rest, buffer, acc, context),
+    do: in_text(rest, [], text_token(["-->" | buffer], context ++ [:comment_end], acc))
+
+  defp in_comment(<<c, rest::binary>>, buffer, acc, context),
+    do: in_comment(rest, [c | buffer], acc, context)
+
+  defp in_comment(<<>>, buffer, acc, context), do: text_token(buffer, context, acc)
+
+  defp text_token([], _context, acc), do: acc
+
+  defp text_token(buffer, context, acc) do
+    meta = if context == [], do: %{}, else: %{context: context}
+    [{:text, buffer |> Enum.reverse() |> IO.iodata_to_binary(), meta} | acc]
   end
 
   # Build an HTML Tree according to the tokens from the EEx and HTML tokenizers.
@@ -505,8 +556,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
         tag_name == "textarea" or contains_special_attrs?(attrs) ->
           {:preserve, [whole_text(opts, open_meta, close_meta)]}
 
+        # A `<pre>` keeps its whitespace and its elements: `<pre><code>…</code></pre>` is how a code
+        # block is written. Its text tokens already carry every space and newline as written, so its
+        # children are read like any other element's.
         tag_name == "pre" ->
-          {:preserve, pre_children(reversed_buffer, whole_text(opts, open_meta, close_meta))}
+          {:preserve, Enum.reverse(reversed_buffer)}
 
         true ->
           {:normal, Enum.reverse(reversed_buffer)}
@@ -628,20 +682,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
       content_from_source(opts.source, open_meta.inner_location, close_meta.inner_location)
 
     {:text, content, %{newlines_before_text: 0, newlines_after_text: 0}}
-  end
-
-  # A `<pre>` keeps its whitespace and its elements: `<pre><code>…</code></pre>` is how a code block
-  # is written. Its text tokens already carry every space and newline as written, so its children
-  # are read like any other element's. Read back as one run of source, the `<code>` was text in the
-  # tree, nothing an editor could select or style.
-  #
-  # One that holds an HTML comment is still read whole. A comment arrives in one token with the text
-  # written beside it, and the tree would write that text back inside the comment.
-  defp pre_children(reversed_buffer, {:text, content, _meta} = whole) do
-    case String.contains?(content, "<!--") do
-      true -> [whole]
-      false -> Enum.reverse(reversed_buffer)
-    end
   end
 
   defp content_from_source(

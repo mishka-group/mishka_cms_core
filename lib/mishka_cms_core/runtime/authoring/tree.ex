@@ -1242,9 +1242,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
     {node, Map.put(nodes, node.id, node)}
   end
 
-  # The tokenizer hands an HTML comment back with its own `<!--` / `-->` still attached (it slices
-  # the raw run), so the delimiters are stripped here and re-added by the serializer. Keeping them
-  # in `text` would nest a fresh pair on every save.
   # Overrides live in `meta.styles` while editing and as Tailwind utilities in the template. Lifting
   # them out on parse is what lets the inspector show the real recorded state of a saved page rather
   # than an empty panel over classes it cannot read.
@@ -1349,12 +1346,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
     end
   end
 
+  # The tokenizer hands an HTML comment back with its own `<!--` / `-->` still attached, so the
+  # delimiters are stripped here and re-added by the serializer. Keeping them in `text` would nest a
+  # fresh pair on every save. An EEx tag written inside a comment arrives as its own token between
+  # the comment's two halves, and goes back as the source it was read from.
   defp comment_text(children) do
     children
-    |> Enum.map_join("", fn
-      {:text, text, _meta} -> text
-      other -> inspect(other)
-    end)
+    |> Enum.map(&token_source/1)
+    |> IO.iodata_to_binary()
     |> String.replace_prefix("<!--", "")
     |> String.replace_suffix("-->", "")
   end

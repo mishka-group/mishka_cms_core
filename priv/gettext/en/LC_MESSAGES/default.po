@@ -6599,7 +6599,7 @@ msgstr ""
 msgid "en, fa, ar, ..."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:433
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:484
 #, elixir-autogen, elixir-format
 msgid "end of template reached without closing tag for <%{name}>"
 msgstr ""
