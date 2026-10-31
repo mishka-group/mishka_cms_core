@@ -476,6 +476,29 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
       assert message =~ "closing tag"
     end
 
+    test "a < typed inside an opening tag is refused at that attribute" do
+      assert {:error, %{line: 1, column: 13, message: message}} =
+               Tree.parse(~s(<.component compone<nt_name="chelekom-navbar"></.component>))
+
+      assert message == "a tag is opened inside another tag; close the <.component> with > first"
+
+      assert {:error, %{line: 2, column: 20, message: "a tag is opened" <> _}} =
+               Tree.parse(~s(<div>\n  <img src="a.png" <br/>\n</div>))
+
+      assert {:error, %{line: 1, column: 26}} =
+               Tree.parse(~s(<%= if @x do %><p id="a" <b="1">x</p><% end %>))
+    end
+
+    test "a < in an attribute's value or expression still parses" do
+      for heex <- [
+            ~s(<.component name="chelekom-navbar" title="a < b"></.component>),
+            ~s(<div :if={@a < 1} class={["x", @y < 2 && "z"]}></div>),
+            ~s(<div {@rest} data-x="a<b"><input value={@v < 1} /></div>)
+          ] do
+        assert {:ok, %Tree{}} = Tree.parse(heex)
+      end
+    end
+
     test "malformed eex does not crash the caller" do
       assert {:error, %{message: message}} = Tree.parse("<%= if true do %>")
       assert is_binary(message)

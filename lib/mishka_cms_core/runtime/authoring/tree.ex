@@ -44,6 +44,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   instead of a 500. Every other function in this module is total.
   """
 
+  use Gettext, backend: MishkaCmsCore.Gettext
+
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
@@ -70,8 +72,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   def parse(""), do: {:ok, new()}
 
   def parse(source) when is_binary(source) do
-    case tokenize(source) do
-      {:ok, tokens} -> {:ok, from_tokens(tokens)}
+    with {:ok, tokens} <- tokenize(source),
+         nil <- tag_in_tag(tokens) do
+      {:ok, from_tokens(tokens)}
+    else
       {:error, _line, _column, _message} = error -> {:error, parse_error(error)}
       {:error, %{} = error} -> {:error, error}
     end
@@ -90,6 +94,33 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
     HtmlTokenizer.build_tokenize(source)
   rescue
     error -> {:error, parse_error(error)}
+  end
+
+  # Phoenix's tokenizer reads a `<` inside an opening tag as part of an attribute name, so
+  # `<.component compone<nt_name="x">` is valid HEEx: a `.component` with no `name`. No attribute
+  # an author means has a `<` in its name, so the first tag holding one is refused at that attribute.
+  defp tag_in_tag(tokens) do
+    Enum.find_value(tokens, fn
+      {:tag_block, tag, attrs, children, _meta} -> lt_attr(tag, attrs) || tag_in_tag(children)
+      {:tag_self_close, tag, attrs} -> lt_attr(tag, attrs)
+      {:eex_block, _expr, block, _meta} -> Enum.find_value(block, &tag_in_tag(elem(&1, 0)))
+      _other -> nil
+    end)
+  end
+
+  defp lt_attr(tag, attrs) do
+    Enum.find_value(attrs, fn
+      {name, _value, %{line: line, column: column}} when is_binary(name) ->
+        if String.contains?(name, "<"),
+          do:
+            {:error, line, column,
+             gettext("a tag is opened inside another tag; close the <%{tag}> with > first",
+               tag: tag
+             )}
+
+      _root_attr ->
+        nil
+    end)
   end
 
   defp parse_error({:error, line, column, message}),

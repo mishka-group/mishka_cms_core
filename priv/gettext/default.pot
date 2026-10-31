@@ -18577,3 +18577,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Missing `;` before `%{property}:`."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/tree.ex:117
+#, elixir-autogen, elixir-format
+msgid "a tag is opened inside another tag; close the <%{tag}> with > first"
+msgstr ""
