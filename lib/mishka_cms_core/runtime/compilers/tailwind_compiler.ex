@@ -716,16 +716,28 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   draft's OWN template (so brand-new classes in an unpublished draft are styled). Writes the draft
   template into an isolated temp namespace, scans it alongside the site, and removes it after — it
   NEVER touches the live site bundle. Returns `{:ok, css}` | `{:error, reason}`.
+
+  `opts` takes `rows:`, `%{name => fun}`: the site's stylesheet row called `name` is compiled as
+  `fun.(content)` instead of its saved content, and a name the site has no row for is added after its
+  rows as `fun.(nil)`. Both pass through Tailwind like a saved row, so `@apply` and nesting resolve.
+  This is how a draft's own element CSS reaches its preview — see
+  `MishkaCmsCore.Runtime.DraftPreviewAssets.css/2`.
   """
-  def compile_preview(site_name, preview_ns, template_name, template_content) do
+  @spec compile_preview(String.t(), String.t(), String.t(), String.t(), keyword()) ::
+          {:ok, String.t()} | {:error, String.t()}
+  def compile_preview(site_name, preview_ns, template_name, template_content, opts \\ []) do
     ensure_installed()
     write_preview_template(preview_ns, template_name, template_content)
 
     try do
       shared = get_or_compile_shared_base()
+      rows = Keyword.get(opts, :rows, %{})
 
       delta =
-        run_tailwind(build_css_content_preview(site_name, preview_ns), "preview_#{preview_ns}")
+        run_tailwind(
+          build_css_content_preview(site_name, preview_ns, rows),
+          "preview_#{preview_ns}"
+        )
 
       {:ok, shared <> "\n/* Preview: #{preview_ns} */\n" <> delta}
     rescue
@@ -755,12 +767,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
-  defp build_css_content_preview(site_name, preview_ns) do
+  defp build_css_content_preview(site_name, preview_ns, rows) do
     content = content_named(site_name)
     closure = closure_for(site_name, content.components, [preview_ns])
 
     {global_pre, _global_post} = read_global_stylesheets()
-    {site_pre, post_tailwind} = read_site_stylesheets(site_name)
+    {site_pre, post_tailwind} = read_site_stylesheets(site_name, rows)
 
     """
     #{layer_order()}
@@ -1771,22 +1783,45 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # Its duplicated just is for documenting and making understanding easy
   defp read_global_stylesheets, do: read_stylesheets_for(nil)
 
-  defp read_site_stylesheets(site_name) do
+  defp read_site_stylesheets(site_name, rows \\ %{}) do
     case site_id_for_name(site_name) do
-      nil -> {"", ""}
-      site_id -> read_stylesheets_for(site_id)
+      nil -> {"", added_rows([], rows)}
+      site_id -> read_stylesheets_for(site_id, rows)
     end
   end
 
-  defp read_stylesheets_for(site_id) do
+  defp read_stylesheets_for(site_id, rows \\ %{}) do
     sheets =
       Stylesheet
       |> Ash.Query.for_read(:for_compiler, %{site_id: site_id}, authorize?: false)
       |> Ash.read!(authorize?: false)
+      |> Enum.map(&laid_over(&1, rows))
 
     {pre, post} = Enum.split_with(sheets, fn s -> s.kind in [:app_base, :theme] end)
 
-    {format_stylesheets(pre), format_stylesheets(post)}
+    {format_stylesheets(pre), format_stylesheets(post) <> added_rows(sheets, rows)}
+  end
+
+  # A ROW AS A PREVIEW HOLDS IT, not as it is saved — see `compile_preview/5`. Only the content moves,
+  # so the row keeps its place in the load order, and `authored/1` still strips what it strips.
+  defp laid_over(%{name: name} = sheet, rows) do
+    case Map.fetch(rows, name) do
+      {:ok, fun} -> %{sheet | content: fun.(sheet.content)}
+      :error -> sheet
+    end
+  end
+
+  # A row the preview holds and the site has none of yet comes last, after every saved row, as an
+  # element's own CSS does in the site's bundle.
+  defp added_rows(sheets, rows) do
+    saved = MapSet.new(sheets, & &1.name)
+
+    rows
+    |> Enum.reject(fn {name, _fun} -> MapSet.member?(saved, name) end)
+    |> Enum.sort_by(fn {name, _fun} -> name end)
+    |> Enum.map_join(fn {name, fun} ->
+      "\n\n/* Preview row name=#{inspect(name)} */\n#{authored(%{content: fun.(nil), name: name})}"
+    end)
   end
 
   defp format_stylesheets([]), do: ""

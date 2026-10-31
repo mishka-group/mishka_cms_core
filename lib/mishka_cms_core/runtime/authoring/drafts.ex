@@ -38,8 +38,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   the site's stylesheet row, which is the live site. The draft holds it instead, in `element_css`,
   next to the markup that carries the scope classes it is keyed on: `autosave/8` writes it with that
   markup when the editor hands it over as `element_css:`, and `save_as/8` takes it from the source it
-  is given. A copy of a draft carries it like any other field. It goes when the draft goes, so
-  nothing else has to be cleaned up.
+  is given. The draft preview compiles it (`MishkaCmsCore.Runtime.DraftPreviewAssets.css/2`), and a
+  copy of a draft carries it like any other field. It goes when the draft goes, so nothing else has
+  to be cleaned up.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -675,14 +676,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
         context: @fork
       )
 
-  # A DRAFT'S PREVIEW STYLESHEET IS COMPILED ONCE AND KEYED BY THE DRAFT'S TOKEN.
-  # `DraftPreviewAssets.ensure_css/2` compiles only when that key is absent, which is what keeps
-  # opening a preview cheap — and meant every edit after the first preview was rendered against the
-  # stylesheet of the version before it. A utility class typed a moment ago simply had no rule, so
-  # the element drew unstyled and looked exactly like a class that does not exist.
-  #
-  # DROPPED, NOT RECOMPILED. A Tailwind pass on every autosave would pay for a preview nobody may
-  # open; `ensure_css/2` already compiles on the way in, so throwing the key away is the whole fix.
+  # A WRITTEN DRAFT'S PREVIEW MODULE IS UNLOADED, and the site its token recorded is forgotten: the
+  # next preview compiles the draft as it is now. Its CSS is compiled on every open and kept nowhere
+  # (`DraftPreviewAssets.css/2`), so there is no stylesheet to drop.
   defp invalidate_preview({:ok, draft} = result) do
     DraftPreviewAssets.purge(draft)
     result

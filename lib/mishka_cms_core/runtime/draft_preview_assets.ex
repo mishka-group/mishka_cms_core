@@ -5,26 +5,29 @@
 defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   @moduledoc """
   Temporary, isolated CSS and compiled module for a runtime preview — a draft (Page/Layout/ErrorPage)
-  or a live original reached by its `preview_token` — keyed by that token in `AssetsState` (ETS),
-  NEVER the live site bundle or the live page module.
+  or a live original reached by its `preview_token` — NEVER the live site bundle or the live page
+  module.
 
-  Compiled on demand (so a draft with brand-new Tailwind classes still styles correctly) via
-  `TailwindCompiler.compile_preview/4`, and **purged** when the draft is published or discarded.
-  Served at `/_preview/:resource/:token/css` (see `MishkaCmsWeb.DraftPreviewController`), and linked
-  by `MishkaCmsWeb.DraftPreviewLive`. JS is NOT compiled per-draft — the preview is a real LiveView
+  The CSS is compiled on every request and kept nowhere (`css/2`): the saved stylesheets, Tailwind
+  over the record's own markup (so a draft with brand-new classes is styled), and a draft's own
+  element CSS (`element_css`) laid over its document's row as its publish writes it. A draft's CSS
+  therefore lives in the draft alone, and goes when the draft is published or deleted. Served at
+  `/_preview/:resource/:token/css` (see `MishkaCmsWeb.DraftPreviewController`), and linked by
+  `MishkaCmsWeb.DraftPreviewLive`. JS is NOT compiled per-draft — the preview is a real LiveView
   that loads the site's existing JS bundle, which already exports every active hook (a draft
   template's `phx-hook` references `JsHook` rows in that bundle), so hooks run with no extra work.
-  The token records the site its assets belong to (`remember_site/2`) — the record's own, or for a
-  global record the host's its CSS was compiled against — so they are handed to whoever holds the
-  link, by that site's state (`site/1`), on an address `served_on?/2` allows.
+  The token records the site its JS belongs to in `AssetsState` (`remember_site/2`) — the record's
+  own, or for a global record the host's it is opened on — so the bundle is handed to whoever holds
+  the link, by that site's state (`site/1`), on an address `served_on?/2` allows.
 
   A page or a layout is drawn by its compiled module (`ensure_module/2`), built by the compiler its
   site uses, so its own helpers and the live components it nests render as on the published page.
   The module is named after the token, so a draft never replaces the live one, and is compiled again
   only when the record was saved since or is opened on another site. `purge/1` unloads it with the
-  CSS, and `MishkaCmsWeb.DraftPreviewLive` unloads it when the preview closes.
+  site, and `MishkaCmsWeb.DraftPreviewLive` unloads it when the preview closes.
   """
   alias MishkaCmsCore.Runtime.{Layout, LayoutDraft, Page, PageDraft, PreviewHooks}
+  alias MishkaCmsCore.Runtime.Authoring.{Drafts, ElementCss}
 
   alias MishkaCmsCore.Runtime.Compilers.{
     Helpers,
@@ -40,31 +43,35 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   @compiled [Page, PageDraft, Layout, LayoutDraft]
 
   @doc """
-  Compile + store the draft's temp CSS under its token if missing, or if it was compiled against
-  another site. `asset_site` is an optional fallback site (the host the admin is viewing from) used
-  when the draft has no site of its own — a global layout draft — so its CSS compiles against a real
-  site's base. Returns `:ok` | `:error`.
+  The preview's temporary CSS, compiled now from the record as it is: the shared base, the site's
+  saved stylesheets, Tailwind over the record's own markup, and a draft's own element CSS laid over
+  its document's element-CSS row (`element_css`, see `MishkaCmsCore.Runtime.Authoring.Drafts`).
+
+  `asset_site` is the site a record with none of its own — a global layout — is compiled against:
+  the host the preview is opened on.
+
+  NOTHING IS CACHED. A preview is opened to see the draft as it stands, so it is compiled on every
+  call, a Tailwind pass of a few seconds. One record compiles one at a time: its markup is written
+  to a temporary folder named after it, which a second compile alongside would delete under the
+  first. Returns `{:ok, css}` or `:error`.
   """
-  def ensure_css(draft, asset_site \\ nil)
+  @spec css(map(), map() | nil) :: {:ok, String.t()} | :error
+  def css(%{preview_token: token, id: id, name: name} = record, asset_site)
+      when is_binary(token) do
+    site = asset_site_name(asset_site) || site_name(record)
+    rows = element_rows(record)
 
-  def ensure_css(%{preview_token: token} = draft, asset_site) when is_binary(token) do
-    cond do
-      not AssetsState.exists?(token, "css") ->
-        compile_and_store(draft, asset_site)
-
-      site(token) == {:ok, assets_site(draft, asset_site)} ->
-        :ok
-
-      true ->
-        AssetsState.delete(token, "css")
-        compile_and_store(draft, asset_site)
-    end
+    alone({:css, id}, fn ->
+      case TailwindCompiler.compile_preview(site, "preview_#{id}", name, scan_content(record),
+             rows: rows
+           ) do
+        {:ok, css} -> {:ok, css}
+        {:error, _reason} -> :error
+      end
+    end)
   end
 
-  def ensure_css(_draft, _asset_site), do: :error
-
-  @doc "Recompile + replace the draft's temp CSS (after an edit)."
-  def refresh_css(draft, asset_site \\ nil), do: compile_and_store(draft, asset_site)
+  def css(_record, _asset_site), do: :error
 
   @doc """
   Records the site the preview's assets under the record's token belong to: the record's own, or for
@@ -113,11 +120,10 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   def served_on?(site_id, %{id: site_id}) when is_binary(site_id), do: true
   def served_on?(_site_id, _current_site), do: false
 
-  @doc "Delete the draft's temp CSS, its site and its compiled module (on publish / discard)."
+  @doc "Delete the record's preview site and its compiled module (on publish / discard)."
   def purge(%{preview_token: token} = record) when is_binary(token) do
     :ok = unload_module(record)
     AssetsState.delete(token, "site")
-    AssetsState.delete(token, "css")
   end
 
   def purge(_draft), do: :ok
@@ -168,9 +174,10 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   def unload_module(_record), do: :ok
 
   # ONE COMPILE OR UNLOAD OF A MODULE AT A TIME. Two previews of one record share its module, so one
-  # closing would otherwise delete the version the other is loading.
-  defp alone(module, retries \\ :infinity, fun),
-    do: :global.trans({{__MODULE__, module}, self()}, fun, [node()], retries)
+  # closing would otherwise delete the version the other is loading. `css/2` takes the same kind of
+  # lock under `{:css, id}` for the record's temporary folder.
+  defp alone(resource, retries \\ :infinity, fun),
+    do: :global.trans({{__MODULE__, resource}, self()}, fun, [node()], retries)
 
   # Asked again inside the lock: whoever held it was most likely compiling this very revision, and
   # every preview that waited would otherwise compile it again in turn.
@@ -249,27 +256,20 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   defp message(error) when is_exception(error), do: Exception.message(error)
   defp message(error), do: inspect(error)
 
-  defp compile_and_store(%{preview_token: token, id: id, name: name} = draft, asset_site) do
-    site = asset_site_name(asset_site) || site_name(draft)
-
-    case TailwindCompiler.compile_preview(site, "preview_#{id}", name, scan_content(draft)) do
-      {:ok, css} ->
-        :ok = put_site(token, assets_site(draft, asset_site))
-
-        AssetsState.save(%{
-          id: token,
-          type: "css",
-          value: css,
-          hash: :crypto.hash(:md5, css) |> Base.encode16(case: :lower),
-          updated_at: DateTime.utc_now()
-        })
-
-        :ok
-
-      {:error, _reason} ->
-        :error
-    end
+  # A DRAFT'S OWN ELEMENT CSS, over its document's element-CSS row the way the editor's publish
+  # folds it in (`ElementCss.merge/2`): a rule the draft rewrote replaces the row's, a rule it cleared
+  # is gone, and the rest of the row is left as it is. Compiled in the row's place, so the preview
+  # orders it as the published bundle will. A draft of a document not published yet has no row, and
+  # its rules are added after the site's.
+  defp element_rows(%{element_css: edits} = record) when is_map(edits) and map_size(edits) > 0 do
+    owner = Drafts.element_owner(record) || "draft-#{record.id}"
+    %{ElementCss.row_name(owner) => &held(&1, edits)}
   end
+
+  defp element_rows(_record), do: %{}
+
+  defp held(content, edits),
+    do: content |> ElementCss.parse() |> ElementCss.merge(edits) |> ElementCss.css()
 
   defp put_site(token, site_id) do
     AssetsState.save(%{

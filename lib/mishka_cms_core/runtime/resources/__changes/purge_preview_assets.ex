@@ -4,30 +4,25 @@
 
 defmodule MishkaCmsCore.Runtime.Resources.Changes.PurgePreviewAssets do
   @moduledoc """
-  Drops a record's cached preview stylesheet after the row is written.
+  Drops what a record's preview keeps under its token after the row is written: the compiled preview
+  module and the site its JS bundle is served for. `MishkaCmsCore.Runtime.DraftPreviewAssets` keeps
+  no stylesheet: a preview's CSS is compiled on every open.
 
-  A LIVE RECORD HAS A PREVIEW TOKEN TOO, and its temporary stylesheet is compiled once and cached
-  under it. `MishkaCmsCore.Runtime.DraftPreviewAssets.ensure_css/2` compiles only when that key is
-  ABSENT, so a document written with new utility classes went on being previewed against the CSS of
-  the version before it — the new classes had no rules at all, for the life of the node, and the
-  reviewer handed the shareable `/_preview/:resource/:token` link read the markup as broken.
+  A LIVE RECORD HAS A PREVIEW TOKEN TOO, so its `/_preview/:resource/:token` keeps a module like a
+  draft's. That module is compiled again once the record's `updated_at` moves, so this is what lets
+  the old one go rather than what keeps a stale one away — and on a destroy, it is the only thing
+  that ever unloads it.
 
-  ON THE RESOURCE, NOT ON A CALLER, because the callers are many and each one was a separate chance
-  to forget: the visual editor's save purged; a draft publish
-  (`Changes.PublishPageDraft` and its layout / error-page twins), a version restore and the
-  inspector's Configuration form all wrote the same row and did not. Registered on the update and
-  destroy types — archiving a document is a soft destroy, and the key of a row nobody can read again
-  is a leak nothing else will ever drop.
+  ON THE RESOURCE, NOT ON A CALLER, because the callers are many: the visual editor's save, a draft
+  publish (`Changes.PublishPageDraft` and its layout / error-page twins), a version restore and the
+  inspector's Configuration form all write the same row. Registered on the update and destroy types —
+  archiving a document is a soft destroy, and the key of a row nobody can read again is a leak
+  nothing else will ever drop.
 
   AFTER THE TRANSACTION, NOT AFTER THE ACTION. An `after_action` hook runs while the new row is
-  still uncommitted, so a preview opened in that window compiles the row as it WAS and stores it
-  under the key this purge has already dropped — the stale stylesheet back for the life of the node,
-  which is the whole defect. Purged only when the write succeeded, so a rolled back one keeps its
-  cache.
-
-  DROPPED, NOT RECOMPILED, for the reason `MishkaCmsCore.Runtime.Authoring.Drafts` gives: a
-  Tailwind pass on every save would pay for a preview nobody may open, and `ensure_css/2` already
-  compiles on the way in.
+  still uncommitted, so a preview opened in that window would compile the row as it WAS and keep it
+  under the key this purge has already dropped. Purged only when the write succeeded, so a rolled
+  back one keeps its module.
   """
 
   use Ash.Resource.Change

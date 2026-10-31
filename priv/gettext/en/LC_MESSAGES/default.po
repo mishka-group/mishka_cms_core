@@ -1210,7 +1210,7 @@ msgstr ""
 msgid "Autofill"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/drafts.ex:68
+#: lib/mishka_cms_core/runtime/authoring/drafts.ex:69
 #, elixir-autogen, elixir-format
 msgid "Autosave"
 msgstr ""

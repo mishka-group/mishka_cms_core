@@ -21,7 +21,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.PageDraft
-  alias MishkaCmsCore.Runtime.States.AssetsState
 
   setup do
     site = create_site!()
@@ -204,62 +203,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
   end
 
   defp reread(draft), do: Ash.get!(PageDraft, draft.id, action: :master_get, authorize?: false)
-
-  # A DRAFT'S PREVIEW CSS IS COMPILED ONCE AND KEYED BY THE DRAFT'S TOKEN. `ensure_css/2` compiles
-  # only when the key is absent — which is what keeps opening a preview cheap, and also meant every
-  # edit after the first preview was served against the stylesheet of the version before it. A class
-  # typed a moment ago had no rule, so the element it was typed on drew unstyled and nothing told the
-  # author that apart from the result looking wrong.
-  describe "the preview stylesheet" do
-    test "is dropped when the draft it belongs to is written again", %{
-      page: page,
-      master: master
-    } do
-      draft = save!(page, master, "First")
-      assert is_binary(draft.preview_token)
-
-      AssetsState.save(%{
-        id: draft.preview_token,
-        type: "css",
-        value: ".stale{}",
-        hash: "deadbeef",
-        updated_at: DateTime.utc_now()
-      })
-
-      assert AssetsState.exists?(draft.preview_token, "css")
-
-      {:ok, _same} =
-        Drafts.autosave(
-          "page",
-          page,
-          ~s(<p class="mt-9">again</p>),
-          master,
-          draft.id,
-          "First",
-          nil
-        )
-
-      refute AssetsState.exists?(draft.preview_token, "css"),
-             "the preview kept serving the stylesheet of the version before the edit"
-    end
-
-    test "and again when it is saved under a name", %{page: page, master: master} do
-      draft = save!(page, master, "First")
-
-      AssetsState.save(%{
-        id: draft.preview_token,
-        type: "css",
-        value: ".stale{}",
-        hash: "deadbeef",
-        updated_at: DateTime.utc_now()
-      })
-
-      {:ok, _renamed} =
-        Drafts.save_as("page", page, nil, "<p>renamed</p>", master, draft.id, "Second", nil)
-
-      refute AssetsState.exists?(draft.preview_token, "css")
-    end
-  end
 
   describe "prune" do
     test "a document keeps the newest drafts and drops the rest", %{page: page, master: master} do
