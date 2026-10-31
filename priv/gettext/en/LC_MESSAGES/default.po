@@ -18572,3 +18572,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "That CSS has a string with no closing quote on its line: `%{string}`."
 msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:640
+#, elixir-autogen, elixir-format
+msgid "Missing `;` before `%{property}:`."
+msgstr ""

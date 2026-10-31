@@ -636,6 +636,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
          declaration: declaration
        )}
 
+  defp verdict({:missing_semicolon, property}, _body),
+    do: {:error, gettext("Missing `;` before `%{property}:`.", property: property)}
+
   # `open` is the stack of brackets not yet closed, innermost first.
   defp structure(body), do: structure(body, 0, byte_size(body), [])
 
@@ -763,12 +766,45 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     case binary_part(body, at, stop - at) do
       "" -> :ok
       "@" <> _statement -> :ok
-      text -> declared(text, colons)
+      text -> declared(text, colons |> Enum.reverse() |> Enum.map(&(&1 - at)))
     end
   end
 
+  # `colons` are offsets into `text`, first to last.
   defp declared(text, []), do: {:no_colon, text |> strip_comments() |> excerpt()}
-  defp declared(_text, _colons), do: :ok
+  defp declared(_text, [_one]), do: :ok
+
+  # A SECOND COLON IS WHERE THE NEXT DECLARATION BEGAN. `letter-spacing: 2pxcolor: teal` is missing
+  # the `;` after `2px`: nothing fails to build, the browser drops the whole declaration as a value
+  # no property takes, and the author is told the rule was applied. A custom property's value is
+  # any text at all (`--x: a:b`), and a legacy filter's names itself with one (`progid:DX…`).
+  defp declared("--" <> _custom, _colons), do: :ok
+
+  defp declared(text, [first, second | _rest]) do
+    case progid?(binary_part(text, first + 1, byte_size(text) - first - 1)) do
+      true -> :ok
+      false -> {:missing_semicolon, word_before(text, second, first + 1)}
+    end
+  end
+
+  defp progid?(value),
+    do: value |> String.trim_leading() |> String.downcase() |> String.starts_with?("progid:")
+
+  # The word in front of the second colon, which is the property the author began without ending
+  # the one before it; never reaching back past the first colon.
+  defp word_before(text, colon, floor) do
+    from = word_start(text, colon, floor)
+    binary_part(text, from, colon - from)
+  end
+
+  defp word_start(_text, pos, floor) when pos <= floor, do: floor
+
+  defp word_start(text, pos, floor) do
+    case :binary.at(text, pos - 1) do
+      char when char in ~c" \t\n\r\f" -> pos
+      _char -> word_start(text, pos - 1, floor)
+    end
+  end
 
   # Where a string ends, or `:open` when its line ends first, because a CSS string cannot run onto
   # the next line. `quoted_end/4` runs on to the next quote however far away it is, which suits the

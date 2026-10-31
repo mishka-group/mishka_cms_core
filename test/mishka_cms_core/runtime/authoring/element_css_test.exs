@@ -365,6 +365,36 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
       end
     end
 
+    # A MISSING `;` BUILDS, and that is the trouble with it: the browser reads
+    # `letter-spacing: 2pxcolor: teal` as one declaration whose value no property takes and drops
+    # it, while the box says the rule was applied. The second colon is where the next one began.
+    test "a missing `;` is refused, and names the property after it" do
+      for {body, property} <- [
+            {"letter-spacing: 2pxcolor: teal", "2pxcolor"},
+            {"color: red color: blue", "color"},
+            {"color: red\nbackground: blue;", "background"},
+            {"gap: 1px;\ncolor: red /* x */ opacity: .5;", "opacity"},
+            {"&:hover { color: red opacity: .5 }", "opacity"},
+            {"@media (max-width: 600px) { padding: 1px\nmargin: 0; }", "margin"}
+          ] do
+        assert refused(body) == "Missing `;` before `#{property}:`.", body
+      end
+    end
+
+    test "a custom property, an at-rule and a legacy filter keep a second colon" do
+      for body <- [
+            "--x: a:b;",
+            "--x: a:b",
+            "@apply hover:bg-red-500 md:p-4;",
+            "&:hover { @apply hover:underline md:p-2; }",
+            "filter: progid:DXImageTransform.Microsoft.gradient(startColorstr='#80000000');",
+            "-ms-filter: PROGID:DXImageTransform.Microsoft.Alpha(Opacity=80);"
+          ] do
+        refute refused(body), body
+        assert kept_body(body) == body, body
+      end
+    end
+
     # THE ONE WAY OUT OF THE WRAPPER is a `}` typed at the top level, which closes it early and
     # leaves everything after it loose on the whole site. A nested selector cannot escape: under CSS
     # nesting `body { … }` inside the braces means `.pb-xxxxxxxx body { … }`.
