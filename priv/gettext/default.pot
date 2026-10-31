@@ -496,7 +496,7 @@ msgstr ""
 msgid "%{removed} unused translation(s) removed"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:570
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:574
 #, elixir-autogen, elixir-format
 msgid "%{selectors} style elements INSIDE this one. For the element itself write the declarations on their own, or start the selector with `&`."
 msgstr ""
@@ -5315,12 +5315,12 @@ msgstr ""
 msgid "Thanks — we'll be in touch."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:599
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:618
 #, elixir-autogen, elixir-format
 msgid "That CSS has a /* that is never closed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:596
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:609
 #, elixir-autogen, elixir-format
 msgid "That CSS has an unmatched { or }."
 msgstr ""
@@ -6504,7 +6504,7 @@ msgstr ""
 msgid "Your personal settings — only you see these"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:564
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:568
 #, elixir-autogen, elixir-format
 msgid "`%{selector}` styles a %{selector} INSIDE this element. For the element itself write the declarations on their own, or start the selector with `&`."
 msgstr ""
@@ -18551,4 +18551,14 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/containment.ex:437
 #, elixir-autogen, elixir-format
 msgid "%{label} holds text only."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:612
+#, elixir-autogen, elixir-format
+msgid "That CSS has an unmatched ( or )."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:615
+#, elixir-autogen, elixir-format
+msgid "That CSS has an unmatched [ or ]."
 msgstr ""

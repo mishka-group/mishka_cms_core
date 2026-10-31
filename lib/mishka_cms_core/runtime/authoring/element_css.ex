@@ -539,6 +539,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   # about an unmatched brace — the author reads it, cannot find one, and the box has nothing more to
   # say. The one thing that IS refused alongside them is a comment nobody closed: it swallows the
   # `}` that ends the wrapper, so everything after it in the stylesheet is eaten until the next `*/`.
+  #
+  # A `(` or a `[` nobody closed does the same. CSS reads everything up to its match as part of it,
+  # braces included, so `width: calc(1px` takes the wrapper's `}` and every rule after it in the
+  # stylesheet. Brackets are matched with braces on one stack, each with its own message.
   @doc """
   What is worth telling an author about CSS that is valid and probably not what they meant.
 
@@ -592,34 +596,70 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   defp checked(""), do: {:ok, ""}
   defp checked(body), do: body |> structure() |> verdict(body)
 
+  # Each closing bracket and the one it closes.
+  @opening %{?} => ?{, ?) => ?(, ?] => ?[}
+
+  # `.w-\[10px\]` escapes its brackets, which are part of the class name and close nothing. A brace
+  # stays counted either way, as the scanner that finds where a block ends counts it.
+  @escaped_brackets ~c"()[]\\"
+
   defp verdict(:ok, body), do: {:ok, body}
-  defp verdict(:unbalanced, _body), do: {:error, gettext("That CSS has an unmatched { or }.")}
+
+  defp verdict({:unmatched, ?{}, _body),
+    do: {:error, gettext("That CSS has an unmatched { or }.")}
+
+  defp verdict({:unmatched, ?(}, _body),
+    do: {:error, gettext("That CSS has an unmatched ( or ).")}
+
+  defp verdict({:unmatched, ?[}, _body),
+    do: {:error, gettext("That CSS has an unmatched [ or ].")}
 
   defp verdict(:open_comment, _body),
     do: {:error, gettext("That CSS has a /* that is never closed.")}
 
-  defp structure(body), do: structure(body, 0, byte_size(body), 0)
+  # `open` is the stack of brackets not yet closed, innermost first.
+  defp structure(body), do: structure(body, 0, byte_size(body), [])
 
-  defp structure(_body, pos, stop, 0) when pos >= stop, do: :ok
-  defp structure(_body, pos, stop, _depth) when pos >= stop, do: :unbalanced
+  defp structure(_body, pos, stop, []) when pos >= stop, do: :ok
 
-  defp structure(body, pos, stop, depth) do
+  defp structure(_body, pos, stop, [innermost | _open]) when pos >= stop,
+    do: {:unmatched, innermost}
+
+  defp structure(body, pos, stop, open) do
     case binary_part(body, pos, min(2, stop - pos)) do
-      "/*" -> commented(comment_end(body, pos + 2, stop), body, stop, depth)
-      _other -> structure_step(body, :binary.at(body, pos), pos, stop, depth)
+      "/*" -> commented(comment_end(body, pos + 2, stop), body, stop, open)
+      <<?\\, escaped>> when escaped in @escaped_brackets -> structure(body, pos + 2, stop, open)
+      _other -> structure_step(body, :binary.at(body, pos), pos, stop, open)
     end
   end
 
-  defp commented(:none, _body, _stop, _depth), do: :open_comment
-  defp commented(at, body, stop, depth), do: structure(body, at, stop, depth)
+  defp commented(:none, _body, _stop, _open), do: :open_comment
+  defp commented(at, body, stop, open), do: structure(body, at, stop, open)
 
-  defp structure_step(body, quote_char, pos, stop, depth) when quote_char in [?", ?'],
-    do: structure(body, quoted_end(body, pos + 1, stop, quote_char), stop, depth)
+  defp structure_step(body, quote_char, pos, stop, open) when quote_char in [?", ?'],
+    do: structure(body, quoted_end(body, pos + 1, stop, quote_char), stop, open)
 
-  defp structure_step(body, ?{, pos, stop, depth), do: structure(body, pos + 1, stop, depth + 1)
-  defp structure_step(_body, ?}, _pos, _stop, 0), do: :unbalanced
-  defp structure_step(body, ?}, pos, stop, depth), do: structure(body, pos + 1, stop, depth - 1)
-  defp structure_step(body, _char, pos, stop, depth), do: structure(body, pos + 1, stop, depth)
+  defp structure_step(body, char, pos, stop, open) when char in ~c"{([",
+    do: structure(body, pos + 1, stop, [char | open])
+
+  defp structure_step(body, char, pos, stop, open) when is_map_key(@opening, char),
+    do: closed(body, Map.fetch!(@opening, char), pos, stop, open)
+
+  defp structure_step(body, _char, pos, stop, open), do: structure(body, pos + 1, stop, open)
+
+  defp closed(body, opener, pos, stop, [opener | open]), do: structure(body, pos + 1, stop, open)
+  defp closed(_body, opener, _pos, _stop, open), do: {:unmatched, unmatched(opener, open)}
+
+  # A closer that meets another kind of bracket: when its own kind is open further out, the bracket
+  # in between was never closed (`calc(1px }`); when it is not, the closer is the stray one.
+  defp unmatched(opener, [innermost | _rest] = open) do
+    case opener in open do
+      true -> innermost
+      false -> opener
+    end
+  end
+
+  defp unmatched(opener, []), do: opener
 
   defp indent(body) do
     body

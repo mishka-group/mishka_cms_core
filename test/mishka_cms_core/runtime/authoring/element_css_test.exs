@@ -697,6 +697,56 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
     end
   end
 
+  # A `(` OR A `[` NOBODY CLOSED IS THE SAME ESCAPE. CSS reads everything up to the match as part
+  # of it, braces included, so `calc(1px` takes the wrapper's `}` and every rule after it in the
+  # stylesheet. Counting only braces let all of these through.
+  describe "a parenthesis or a square bracket" do
+    test "left open, or closed with nothing open, is refused in its own words" do
+      for body <- [
+            "width: calc(1px + 2px;",
+            "&:hover { width: calc(1px + 2px; }",
+            "width: 1px);",
+            "& a:not(.x { color: red; }"
+          ] do
+        assert refused(body) == "That CSS has an unmatched ( or ).", body
+      end
+
+      for body <- [
+            "&[data-open { gap: 1px; }",
+            "gap: 1px ];",
+            "&:hover { & a[href { color: red; } }"
+          ] do
+        assert refused(body) == "That CSS has an unmatched [ or ].", body
+      end
+    end
+
+    test "a stray brace beside an open bracket is still a brace" do
+      assert refused("width: calc(1px } .evil { color: red }") ==
+               "That CSS has an unmatched { or }."
+
+      assert refused("&:hover { gap: 1px; ] }") == "That CSS has an unmatched [ or ]."
+    end
+
+    test "a valid rule with functions, selectors and escapes is kept" do
+      for body <- [
+            ~s|background-image: url("a(b.png");|,
+            "background-image: url(data:image/png;base64,AAAA);",
+            "width: calc(100% - var(--gap, 4px));",
+            ~s|&[data-state="open"] { gap: 1px; }|,
+            ~s|& a[href^="http"]:not(.x) { color: red; }|,
+            "@media (max-width: 900px) { padding: 12px; }",
+            ~s|content: "(";\ngap: 1px;|,
+            ~s|content: "]";|,
+            "/* ( [ */\ngap: 1px;",
+            "& .w-\\[10px\\] { gap: 1px; }",
+            "& .a\\( { gap: 1px; }"
+          ] do
+        refute refused(body), body
+        assert kept_body(body) == body, body
+      end
+    end
+  end
+
   describe "values that stay in the text" do
     test "a custom property and the var that reads it both survive" do
       body = "--brand: red;\ncolor: var(--brand);"

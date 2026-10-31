@@ -4,6 +4,7 @@
 - A `<textarea>`, a `<title>`, a `<script>` and a `<style>` take text and expressions only. An element, a component or a comment dropped or wrapped into one is refused with "A `<textarea>` holds text only.", where it used to be saved and shown on the published page as its own markup
 - A `<pre>` keeps the elements in it when a template is read: `<pre><code>…</code></pre>` comes back as a `<code>` an editor can select and style, where it used to be one run of text. Every space and newline stays as it was written, and a `<pre>` that holds an HTML comment is still read whole
 - `Tree.set_text/3` sets a text node's `whitespace?` flag from the new text, as a parse does. Writing a node's own text back returns an equal tree, so an editor's history no longer records "Edited text" for a change that changed nothing, and text emptied to spaces counts as blank
+- An element's own CSS refuses a `(` or a `[` nobody closed, or a `)` or a `]` with nothing open, with "That CSS has an unmatched ( or )." or "That CSS has an unmatched [ or ].". CSS reads everything up to the match as part of the bracket, so `calc(1px` took the wrapper's closing brace and the rules after it in the stylesheet. Brackets in strings and comments are text, as braces are, and `url(…)`, `[attr]` selectors and escaped brackets such as `.w-\[10px\]` are kept
 
 # Changelog for MishkaCmsCore 0.0.4
 
