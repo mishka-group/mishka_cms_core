@@ -1150,6 +1150,7 @@ msgstr ""
 msgid "Page name must be unique within a site."
 msgstr ""
 
+#: lib/mishka_cms_core/runtime/resources/__validations/page_path_unique.ex:36
 #: lib/mishka_cms_core/runtime/resources/page.ex:2715
 #, elixir-autogen, elixir-format
 msgid "Page path must be unique within a site."
@@ -1190,7 +1191,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1998
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:729
 #: lib/mishka_cms_core/runtime/resources/page.ex:2708
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:1020
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:1023
 #, elixir-autogen, elixir-format
 msgid "Preview token collision."
 msgstr ""

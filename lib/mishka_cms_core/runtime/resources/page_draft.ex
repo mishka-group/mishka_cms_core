@@ -805,6 +805,9 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
   validations do
     validate {MishkaCmsCore.Runtime.Resources.Validations.ElementCssRules, []},
       on: [:create, :update]
+
+    validate {MishkaCmsCore.Runtime.Resources.Validations.PagePathUnique, []},
+      on: [:create, :update]
   end
 
   multitenancy do
