@@ -31,6 +31,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   leaves a setting behind in a draft it then throws away. The original keeps its own code either
   way; the fingerprint `original_changed?/3` compares covers exactly what a publish writes over, and
   `follow/5` keeps a draft in step with what its own editor saved to the original meanwhile.
+
+  ## The element CSS a draft holds
+
+  Custom CSS an author applies to an element while the editor's stage says Draft is not written to
+  the site's stylesheet row, which is the live site. The draft holds it instead, in `element_css`,
+  next to the markup that carries the scope classes it is keyed on: `autosave/8` writes it with that
+  markup when the editor hands it over as `element_css:`, and `save_as/8` takes it from the source it
+  is given. A copy of a draft carries it like any other field. It goes when the draft goes, so
+  nothing else has to be cleaned up.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -38,6 +47,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Runtime.DraftPreviewAssets
   alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.ErrorPageDraft
   alias MishkaCmsCore.Runtime.LayoutDraft
@@ -156,7 +166,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   Saves the document under a NAME, creating that draft or updating it.
 
   `draft_id` names the row to update — pass `nil` to create. Autosave has its own entry point,
-  `autosave/7`, and its own label, so naming a draft never collides with it.
+  `autosave/8`, and its own label, so naming a draft never collides with it.
 
   `source` is the document a NEW row copies its fields from — the draft being forked or saved under
   another name, and `nil` when the save starts from the live document, which is then the source. It
@@ -166,7 +176,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   working copy, not another document to copy from.
 
   `status` says which of an error page's templates is being written, and is `nil` for every section
-  that keeps one template — see `autosave/7` for why it is asked for rather than defaulted.
+  that keeps one template — see `autosave/8` for why it is asked for rather than defaulted.
+
+  A source that holds `element_css` hands it to the draft, as `autosave/8` takes it: a new row copies
+  it with the rest, and a named draft written over takes it too. The editor passes the open document
+  with the element CSS it holds, so the named draft is the document as it stands, its CSS included.
   """
   @spec save_as(
           String.t(),
@@ -180,9 +194,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
         ) ::
           {:ok, struct()} | :unsupported | {:error, term()}
   def save_as(section, record, source, heex, actor, draft_id, label, status) do
+    source = source || record
+    saving = %{label: String.trim(label), status: status, element_css: element_css(source)}
+
     if supported?(section) do
       section
-      |> write(record, source || record, heex, actor, draft_id, String.trim(label), status)
+      |> write(record, source, heex, actor, draft_id, saving)
       |> prune_after_create(draft_id, section, record, actor)
     else
       :unsupported
@@ -364,6 +381,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   work lands on a template nobody opened and buries the one that was there. A default made that
   silent, and the one caller that took it up was "Keep it as a draft" on the way out.
 
+  `opts` takes `element_css:`, the Custom CSS the editor holds for this document's elements as
+  `%{scope => body}`, a blank body for a rule the author cleared. Given, the draft holds exactly that
+  map from this write on, beside the markup; left out, the draft keeps the element CSS it holds.
+
   Returns `{:ok, draft}`, `:unsupported` for a section with no draft resource, or `{:error, reason}`.
   """
   @spec autosave(
@@ -373,13 +394,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
           map(),
           String.t() | nil,
           String.t() | nil,
-          integer() | nil
+          integer() | nil,
+          keyword()
         ) ::
           {:ok, struct()} | :unsupported | {:error, term()}
-  def autosave(section, record, heex, actor, draft_id, label, status) do
+  def autosave(section, record, heex, actor, draft_id, label, status, opts \\ []) do
+    saving = %{
+      label: label || @autosave_label,
+      status: status,
+      element_css: Keyword.get(opts, :element_css)
+    }
+
     if supported?(section) do
       section
-      |> write(record, record, heex, actor, draft_id, label || @autosave_label, status)
+      |> write(record, record, heex, actor, draft_id, saving)
       |> prune_after_create(draft_id, section, record, actor)
     else
       :unsupported
@@ -431,15 +459,18 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   # every session that opened without a `draft_id` joined the same row — so a colleague editing the
   # same page wrote over your unsaved work, and yesterday's sitting was overwritten by today's. A
   # session creates its row on the first change and writes to that id for the rest of its life.
-  defp write(_section, nil, _source, _heex, _actor, _draft_id, _label, _status),
-    do: :unsupported
+  #
+  # `saving` is what this write names: `%{label, status, element_css}`.
+  defp write(_section, nil, _source, _heex, _actor, _draft_id, _saving), do: :unsupported
 
-  defp write(section, record, source, heex, actor, nil, label, status) do
+  defp write(section, record, source, heex, actor, nil, saving) do
     {module, source_key, _segment} = Map.fetch!(@drafts, section)
 
     module
     |> create_changeset(
-      attrs(module, record, source, heex, source_key, label, section, status),
+      module
+      |> attrs(record, source, heex, source_key, saving.label, section, saving.status)
+      |> held_css(saving),
       record,
       actor
     )
@@ -453,21 +484,35 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   # THE FIELDS COME FROM THE DRAFT, not from the live record: an error page's draft holds a snapshot
   # of every status, and editing the 404 must replace that entry of the DRAFT while keeping the 500
   # the author already changed in it. Reading the live record here would put the published 500 back.
-  defp write(section, record, source, heex, actor, draft_id, label, status) do
+  defp write(section, record, source, heex, actor, draft_id, saving) do
     {module, _source_key, _segment} = Map.fetch!(@drafts, section)
 
     case fetch(module, draft_id, actor) do
       {:ok, draft} ->
         update(
           draft,
-          Map.put(template_fields(section, draft, heex, status), :label, label),
+          section
+          |> template_fields(draft, heex, saving.status)
+          |> Map.put(:label, saving.label)
+          |> held_css(saving),
           actor
         )
 
       _missing ->
-        write(section, record, source, heex, actor, nil, label, status)
+        write(section, record, source, heex, actor, nil, saving)
     end
   end
+
+  # THE ELEMENT CSS GOES IN THE SAME WRITE AS THE MARKUP, so the draft never holds a scope class
+  # without the rule keyed on it. Not handed over, the draft keeps the CSS it holds: a copy keeps the
+  # source's, which `attrs/8` read with every other field.
+  defp held_css(attrs, %{element_css: css}) when is_map(css),
+    do: Map.put(attrs, :element_css, css)
+
+  defp held_css(attrs, _saving), do: attrs
+
+  defp element_css(%{element_css: css}) when is_map(css), do: css
+  defp element_css(_source), do: nil
 
   # A copy of a draft is as old as that draft; a copy of the document is as old as now.
   defp source_hash(section, record, %module{} = source) do
@@ -516,8 +561,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   """
   @spec original_changed?(struct()) :: boolean()
   def original_changed?(%module{} = draft) do
-    with {section, {_module, source_key, _segment}} <-
-           Enum.find(@drafts, fn {_section, {draft_module, _, _}} -> draft_module == module end),
+    with {section, {_module, source_key, _segment}} <- drafted(module),
          id when is_binary(id) <- Map.get(draft, source_key),
          {:ok, original} <-
            Ash.get(Section.resource(section), id, action: :read_any, authorize?: false) do
@@ -526,6 +570,27 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
       _no_original -> false
     end
   end
+
+  @doc """
+  The owner of the element-CSS stylesheet row of the document `draft` was made from
+  (`MishkaCmsCore.Runtime.Authoring.ElementScopes.owner/2`): the row the editor's publish writes the
+  draft's `element_css` into. `nil` for a draft of a document not published yet, or for anything
+  that is not a draft.
+  """
+  @spec element_owner(map()) :: String.t() | nil
+  def element_owner(%module{} = draft) do
+    with {section, {_module, source_key, _segment}} <- drafted(module),
+         id when is_binary(id) <- Map.get(draft, source_key) do
+      ElementScopes.owner(section, id)
+    else
+      _no_original -> nil
+    end
+  end
+
+  def element_owner(_draft), do: nil
+
+  defp drafted(module),
+    do: Enum.find(@drafts, fn {_section, {draft_module, _, _}} -> draft_module == module end)
 
   # A DRAFT CARRIES THE WHOLE OF THE DOCUMENT IT FORKS — every field its `:create` accepts. Its
   # create validates the same required fields the live resource does, so a draft with no `path` is

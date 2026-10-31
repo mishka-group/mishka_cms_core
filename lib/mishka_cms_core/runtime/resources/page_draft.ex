@@ -11,6 +11,8 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     * `source_page_id` — the live Page it edits, or `nil` for a brand-new draft-only page.
     * `preview_token` — an unguessable token for the shareable `/_preview/:token` URL.
     * `status` (`:draft` / `:published`) and `applied_at` — set when the draft is published.
+    * `element_css` — the Custom CSS applied to its elements in the editor's Draft stage, which the
+      draft preview compiles and the editor's publish writes into the site's stylesheet row.
 
   Publishing is explicit (`:publish` / `:master_publish`): it writes the draft's fields to the
   live Page (creating it when `source_page_id` is `nil`, otherwise updating all but the page's
@@ -83,7 +85,8 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     :source_page_id,
     :layout_id,
     :language,
-    :language_group_id
+    :language_group_id,
+    :element_css
   ]
 
   @admin_fields @editable_fields ++ [:site_id]
@@ -799,6 +802,11 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     publish :master_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  validations do
+    validate {MishkaCmsCore.Runtime.Resources.Validations.ElementCssRules, []},
+      on: [:create, :update]
+  end
+
   multitenancy do
     strategy :attribute
     attribute :site_id
@@ -932,6 +940,17 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
       allow_nil? false
       public? true
       description "Unguessable token for the shareable preview URL"
+    end
+
+    # THE CUSTOM CSS APPLIED TO THIS DRAFT'S ELEMENTS while the editor's stage said Draft, as
+    # `%{scope => body}`, a blank body for a rule the author cleared. It is the draft's own, beside
+    # the markup that carries those scope classes: the draft preview compiles it, the editor's publish
+    # writes it into the site's stylesheet row, and it goes when the draft goes. See
+    # `MishkaCmsCore.Runtime.Authoring.ElementCss`.
+    attribute :element_css, :map do
+      default %{}
+      public? true
+      description "Custom CSS applied to this draft's elements, by scope class"
     end
 
     attribute :language, :string do

@@ -203,10 +203,10 @@ msgid "component"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/stateful_placement.ex:327
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:281
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:310
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:333
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:352
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:284
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:313
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:336
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:355
 #, elixir-autogen
 msgid "error page"
 msgstr ""
@@ -227,37 +227,37 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/page.ex:1566
 #: lib/mishka_cms_core/runtime/resources/page.ex:1624
 #: lib/mishka_cms_core/runtime/resources/page.ex:2014
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:497
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:543
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:581
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:615
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:500
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:546
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:584
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:618
 #, elixir-autogen
 msgid "language group"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/stateful_placement.ex:326
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1022
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:294
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:324
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:348
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:368
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:297
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:327
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:351
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:371
 #: lib/mishka_cms_core/runtime/resources/page.ex:1441
 #: lib/mishka_cms_core/runtime/resources/page.ex:1510
 #: lib/mishka_cms_core/runtime/resources/page.ex:1559
 #: lib/mishka_cms_core/runtime/resources/page.ex:1617
 #: lib/mishka_cms_core/runtime/resources/page.ex:2008
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:486
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:532
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:570
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:604
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:489
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:535
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:573
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:607
 #, elixir-autogen
 msgid "layout"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:492
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:538
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:576
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:610
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:495
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:541
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:579
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:613
 #, elixir-autogen
 msgid "page"
 msgstr ""
@@ -812,12 +812,12 @@ msgstr ""
 msgid "Template must have at least 1 character."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:367
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:393
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:384
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:410
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:630
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:656
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:370
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:396
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:387
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:413
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:633
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:659
 #, elixir-autogen, elixir-format
 msgid "This draft has already been published."
 msgstr ""
@@ -1186,11 +1186,11 @@ msgid "Please select a file to upload"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/error_page.ex:1871
-#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:674
+#: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:693
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1998
-#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:710
+#: lib/mishka_cms_core/runtime/resources/layout_draft.ex:729
 #: lib/mishka_cms_core/runtime/resources/page.ex:2708
-#: lib/mishka_cms_core/runtime/resources/page_draft.ex:1001
+#: lib/mishka_cms_core/runtime/resources/page_draft.ex:1020
 #, elixir-autogen, elixir-format
 msgid "Preview token collision."
 msgstr ""
@@ -2446,4 +2446,9 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:414
 #, elixir-autogen, elixir-format
 msgid "resolver"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/element_css_rules.ex:48
+#, elixir-autogen, elixir-format
+msgid "Element CSS must map each element's scope to its CSS."
 msgstr ""

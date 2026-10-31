@@ -8,7 +8,9 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
   of `MishkaCmsCore.Runtime.PageDraft`.
 
   Unlike Page/Layout (a single `:template`), an ErrorPage's editable content is the **`error_pages`
-  collection** (a list of `%{status, template, layout}`), so a draft carries that whole collection.
+  collection** (a list of `%{status, template, layout}`), so a draft carries that whole collection,
+  and its `element_css`, the Custom CSS applied to the elements of all of them in the editor's Draft
+  stage, as on `PageDraft`.
   The preview modal's Code tab edits the collection serialized as `<!-- 404 -->`-delimited blocks —
   `<!-- offline -->` for the offline page, see `MishkaCmsCore.Runtime.ErrorStatus` — (round-tripped
   via `RuntimePreview.source/1` + `RuntimePreview.parse_error_pages/1`).
@@ -45,7 +47,8 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
     :active,
     :precompile,
     :extra,
-    :source_error_page_id
+    :source_error_page_id,
+    :element_css
   ]
 
   @admin_fields @editable_fields ++ [:site_id]
@@ -536,6 +539,11 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
     publish :master_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  validations do
+    validate {MishkaCmsCore.Runtime.Resources.Validations.ElementCssRules, []},
+      on: [:create, :update]
+  end
+
   multitenancy do
     strategy :attribute
     attribute :site_id
@@ -625,6 +633,17 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraft do
       allow_nil? false
       public? true
       description "Unguessable token for the shareable preview URL"
+    end
+
+    # THE CUSTOM CSS APPLIED TO THIS DRAFT'S ELEMENTS while the editor's stage said Draft, as
+    # `%{scope => body}`, a blank body for a rule the author cleared. It is the draft's own, beside
+    # the markup that carries those scope classes: the draft preview compiles it, the editor's publish
+    # writes it into the site's stylesheet row, and it goes when the draft goes. See
+    # `MishkaCmsCore.Runtime.Authoring.ElementCss`.
+    attribute :element_css, :map do
+      default %{}
+      public? true
+      description "Custom CSS applied to this draft's elements, by scope class"
     end
 
     # THE DOCUMENT AS IT WAS WHEN THIS DRAFT WAS MADE, as `MishkaCmsCore.Runtime.Authoring.Drafts.hash/2`

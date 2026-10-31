@@ -46,6 +46,165 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
     end)
   end
 
+  # THE ELEMENT CSS APPLIED IN DRAFT IS THE DRAFT'S OWN, written beside the markup that carries its
+  # scope classes. It used to be held in the editor's memory alone, so the new-tab preview had the
+  # class and no rule, and a reload of the editor lost it.
+  describe "the element CSS a draft holds" do
+    @css %{"pb-1a2b3c4d" => "color: crimson;"}
+
+    test "is written with the markup when the editor hands it over", %{
+      page: page,
+      master: master
+    } do
+      {:ok, draft} =
+        Drafts.autosave("page", page, ~s(<h1 class="pb-1a2b3c4d">Hi</h1>), master, nil, nil, nil,
+          element_css: @css
+        )
+
+      assert reread(draft).element_css == @css
+    end
+
+    test "is kept by a write that hands none over", %{page: page, master: master} do
+      {:ok, draft} =
+        Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil, element_css: @css)
+
+      {:ok, _same} = Drafts.autosave("page", page, "<p>two</p>", master, draft.id, nil, nil)
+
+      assert %{template: "<p>two</p>", element_css: @css} = reread(draft)
+    end
+
+    test "is replaced by the next map handed over, a cleared rule included", %{
+      page: page,
+      master: master
+    } do
+      {:ok, draft} =
+        Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil, element_css: @css)
+
+      cleared = %{"pb-1a2b3c4d" => "", "pb-5e6f7a8b" => "&:hover { color: navy; }"}
+
+      {:ok, _same} =
+        Drafts.autosave("page", page, "<p>two</p>", master, draft.id, nil, nil,
+          element_css: cleared
+        )
+
+      assert reread(draft).element_css == cleared
+    end
+
+    test "goes with a copy of the draft", %{page: page, master: master} do
+      {:ok, draft} =
+        Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil, element_css: @css)
+
+      {:ok, copy} = Drafts.save_as("page", page, draft, "<p>copy</p>", master, nil, "Copy", nil)
+      assert copy.element_css == @css
+    end
+
+    # The editor names the open document with the element CSS it holds as the source, so a named
+    # draft — a new one, or one written over — is the document as it stands, its CSS included.
+    test "is what a named save's source holds, new or written over", %{
+      page: page,
+      master: master
+    } do
+      held = Map.put(page, :element_css, %{"pb-0f0f0f0f" => "padding: 2px;"})
+
+      {:ok, named} = Drafts.save_as("page", page, held, "<p>named</p>", master, nil, "Named", nil)
+      assert named.element_css == %{"pb-0f0f0f0f" => "padding: 2px;"}
+
+      again = Map.put(page, :element_css, @css)
+
+      {:ok, _over} =
+        Drafts.save_as("page", page, again, "<p>again</p>", master, named.id, "Named", nil)
+
+      assert reread(named).element_css == @css
+
+      {:ok, _plain} =
+        Drafts.save_as("page", page, nil, "<p>plain</p>", master, named.id, "Named", nil)
+
+      assert reread(named).element_css == @css, "a save that handed no CSS dropped the draft's"
+    end
+
+    test "refuses CSS that would escape its element, as the editor's box does", %{
+      page: page,
+      master: master
+    } do
+      assert {:error, error} =
+               Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil,
+                 element_css: %{"pb-1a2b3c4d" => "color: red; } body { display: none;"}
+               )
+
+      assert Exception.message(error) =~ "unmatched"
+
+      assert {:error, _not_a_scope} =
+               Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil,
+                 element_css: %{"body" => "color: red;"}
+               )
+    end
+
+    test "is not a field publishing writes over the page", %{
+      site: site,
+      page: page,
+      master: master
+    } do
+      {:ok, draft} =
+        Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil, element_css: @css)
+
+      refute Map.has_key?(Drafts.carried("page", draft), :element_css)
+
+      draft
+      |> Ash.Changeset.for_update(:publish, %{}, tenant: site.id)
+      |> Ash.update!(authorize?: false)
+
+      published =
+        Ash.get!(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
+
+      assert published.template == "<p>one</p>"
+    end
+
+    test "is held by a layout's draft and an error page's draft alike", %{
+      site: site,
+      master: master
+    } do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          path: "/layouts/css-#{System.unique_integer([:positive])}"
+        )
+
+      error_page =
+        create_error_page!(
+          site_id: site.id,
+          error_pages: [%{"status" => 404, "template" => "<p>Not found</p>", "layout" => %{}}]
+        )
+
+      {:ok, layout_draft} =
+        Drafts.autosave("layout", layout, layout.template, master, nil, nil, nil,
+          element_css: @css
+        )
+
+      {:ok, error_draft} =
+        Drafts.autosave("error-page", error_page, "<p>Gone</p>", master, nil, nil, 404,
+          element_css: @css
+        )
+
+      assert layout_draft.element_css == @css
+      assert error_draft.element_css == @css
+      assert Drafts.element_owner(layout_draft) == "layout-#{layout.id}"
+      assert Drafts.element_owner(error_draft) == "error-page-#{error_page.id}"
+    end
+
+    test "is filed under the row of the document the draft was made from", %{
+      page: page,
+      master: master
+    } do
+      draft = save!(page, master, "Sitting")
+
+      assert Drafts.element_owner(draft) == "page-#{page.id}"
+      assert Drafts.element_owner(%{draft | source_page_id: nil}) == nil
+      assert Drafts.element_owner(page) == nil
+    end
+  end
+
+  defp reread(draft), do: Ash.get!(PageDraft, draft.id, action: :master_get, authorize?: false)
+
   # A DRAFT'S PREVIEW CSS IS COMPILED ONCE AND KEYED BY THE DRAFT'S TOKEN. `ensure_css/2` compiles
   # only when the key is absent — which is what keeps opening a preview cheap, and also meant every
   # edit after the first preview was served against the stylesheet of the version before it. A class
@@ -416,13 +575,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
     # accident — the editor's way out did exactly that — so both entry points take it, and a section
     # with one template answers `nil` at the call site rather than by saying nothing. The same rule
     # covers the source a copy is taken from: `save_as/8` asks for it, and a fork that forgets it is
-    # a compile error rather than a copy of the live record.
+    # a compile error rather than a copy of the live record. The autosave's options are the only
+    # part either may leave off.
     test "and neither entry point has a shorter form to forget it in" do
       writes =
         Drafts.__info__(:functions)
         |> Enum.filter(fn {name, _arity} -> name in [:autosave, :save_as] end)
 
-      assert writes == [autosave: 7, save_as: 8]
+      assert writes == [autosave: 7, autosave: 8, save_as: 8]
     end
   end
 

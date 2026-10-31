@@ -12,6 +12,8 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
     * `source_layout_id` — the live Layout it edits, or `nil` for a brand-new draft-only layout.
     * `preview_token` — an unguessable token for the shareable `/_preview/layout/:token` URL.
     * `status` (`:draft` / `:published`) and `applied_at` — set when the draft is published.
+    * `element_css` — the Custom CSS applied to its elements in the editor's Draft stage, as on
+      `PageDraft`.
 
   Publishing is explicit (`:publish` / `:master_publish`): it writes the draft's fields to the live
   Layout (creating it when `source_layout_id` is `nil`, otherwise updating all but its `helpers`),
@@ -54,7 +56,8 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
     :precompile,
     :permissions,
     :example,
-    :source_layout_id
+    :source_layout_id,
+    :element_css
   ]
 
   @admin_fields @editable_fields ++ [:site_id]
@@ -555,6 +558,11 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
     publish :master_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  validations do
+    validate {MishkaCmsCore.Runtime.Resources.Validations.ElementCssRules, []},
+      on: [:create, :update]
+  end
+
   multitenancy do
     strategy :attribute
     attribute :site_id
@@ -662,6 +670,17 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
       allow_nil? false
       public? true
       description "Unguessable token for the shareable preview URL"
+    end
+
+    # THE CUSTOM CSS APPLIED TO THIS DRAFT'S ELEMENTS while the editor's stage said Draft, as
+    # `%{scope => body}`, a blank body for a rule the author cleared. It is the draft's own, beside
+    # the markup that carries those scope classes: the draft preview compiles it, the editor's publish
+    # writes it into the site's stylesheet row, and it goes when the draft goes. See
+    # `MishkaCmsCore.Runtime.Authoring.ElementCss`.
+    attribute :element_css, :map do
+      default %{}
+      public? true
+      description "Custom CSS applied to this draft's elements, by scope class"
     end
 
     # THE DOCUMENT AS IT WAS WHEN THIS DRAFT WAS MADE, as `MishkaCmsCore.Runtime.Authoring.Drafts.hash/2`
