@@ -594,7 +594,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   defp valid_body(body), do: body |> String.trim() |> checked()
 
   defp checked(""), do: {:ok, ""}
-  defp checked(body), do: body |> structure() |> verdict(body)
+  defp checked(body), do: body |> structure() |> shaped(body) |> verdict(body)
+
+  # The declarations are read only once the brackets match: they are read block by block, and
+  # `block_end/4` has nowhere to stop in a body whose braces do not.
+  defp shaped(:ok, body), do: shape(body)
+  defp shaped(unbalanced, _body), do: unbalanced
 
   # Each closing bracket and the one it closes.
   @opening %{?} => ?{, ?) => ?(, ?] => ?[}
@@ -616,6 +621,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
 
   defp verdict(:open_comment, _body),
     do: {:error, gettext("That CSS has a /* that is never closed.")}
+
+  defp verdict({:open_string, string}, _body),
+    do:
+      {:error,
+       gettext("That CSS has a string with no closing quote on its line: `%{string}`.",
+         string: string
+       )}
+
+  defp verdict({:no_colon, declaration}, _body),
+    do:
+      {:error,
+       gettext("That CSS has a declaration with no colon: `%{declaration}`.",
+         declaration: declaration
+       )}
 
   # `open` is the stack of brackets not yet closed, innermost first.
   defp structure(body), do: structure(body, 0, byte_size(body), [])
@@ -660,6 +679,127 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   end
 
   defp unmatched(opener, []), do: opener
+
+  # WHAT TAILWIND CANNOT PARSE, WITH EVERY BRACKET MATCHED. Tailwind parses a whole stylesheet before
+  # it builds any of it, and a declaration with no colon (`color crimson`, `--brand;`) or a string
+  # whose line ends before its closing quote is a syntax error there. The site's CSS build fails and
+  # keeps the last good bundle, the draft preview cannot build its styles, and the canvas's
+  # in-browser build stops for every element on the page until the frame reloads.
+  #
+  # So the body is read as that parser reads it: a declaration ends at a `;` or at the end of its
+  # block, a block's prelude (`&:hover`, `a:not(.x)`, `@media (…)`) is a selector rather than a
+  # declaration, and an at-rule statement (`@apply p-4`) needs no colon. A `;` or a `:` inside a
+  # string, a comment, a bracket or an escape is part of the value, so `url(data:image/png;base64,…)`
+  # is one declaration. `scan/6` cannot answer this: it reads half-typed text for the panel and
+  # splits on a `;` inside `url(…)`.
+  #
+  # `colons` holds where the declaration being read has a `:` outside all of those, latest first. An
+  # escaped brace is still a brace, as `block_end/4` counts it.
+  defp shape(body), do: shape(body, 0, 0, byte_size(body), 0, [])
+
+  defp shape(body, pos, start, stop, _depth, colons) when pos >= stop,
+    do: segment(body, start, stop, colons)
+
+  defp shape(body, pos, start, stop, depth, colons) do
+    case binary_part(body, pos, min(2, stop - pos)) do
+      "/*" ->
+        shape(
+          body,
+          past_comment(comment_end(body, pos + 2, stop), stop),
+          start,
+          stop,
+          depth,
+          colons
+        )
+
+      <<?\\, escaped>> when escaped not in ~c"{}" ->
+        shape(body, pos + 2, start, stop, depth, colons)
+
+      _other ->
+        shape_step(body, :binary.at(body, pos), pos, start, stop, depth, colons)
+    end
+  end
+
+  defp shape_step(body, quote_char, pos, start, stop, depth, colons)
+       when quote_char in [?", ?'] do
+    case string_end(body, pos + 1, stop, quote_char) do
+      :open -> {:open_string, body |> line_from(pos, stop) |> excerpt()}
+      at -> shape(body, at, start, stop, depth, colons)
+    end
+  end
+
+  defp shape_step(body, char, pos, start, stop, depth, colons) when char in ~c"([",
+    do: shape(body, pos + 1, start, stop, depth + 1, colons)
+
+  defp shape_step(body, char, pos, start, stop, depth, colons) when char in ~c")]",
+    do: shape(body, pos + 1, start, stop, max(depth - 1, 0), colons)
+
+  defp shape_step(body, ?:, pos, start, stop, 0, colons),
+    do: shape(body, pos + 1, start, stop, 0, [pos | colons])
+
+  defp shape_step(body, ?;, pos, start, stop, 0, colons) do
+    with :ok <- segment(body, start, pos, colons),
+         do: shape(body, pos + 1, pos + 1, stop, 0, [])
+  end
+
+  # What came before the `{` was the block's selector, and what is inside it is read on its own.
+  defp shape_step(body, ?{, pos, _start, stop, 0, _colons) do
+    close = block_end(body, pos + 1, stop, 1)
+
+    with :ok <- shape(body, pos + 1, pos + 1, close, 0, []),
+         do: shape(body, close + 1, close + 1, stop, 0, [])
+  end
+
+  defp shape_step(body, _char, pos, start, stop, depth, colons),
+    do: shape(body, pos + 1, start, stop, depth, colons)
+
+  # One declaration, from just after the `;` in front of it, read from its first word: the blank
+  # lines and comments before it are skipped as `lead/1` skips them for the panel.
+  defp segment(_body, start, stop, _colons) when start >= stop, do: :ok
+
+  defp segment(body, start, stop, colons) do
+    at = start + lead(binary_part(body, start, stop - start))
+
+    case binary_part(body, at, stop - at) do
+      "" -> :ok
+      "@" <> _statement -> :ok
+      text -> declared(text, colons)
+    end
+  end
+
+  defp declared(text, []), do: {:no_colon, text |> strip_comments() |> excerpt()}
+  defp declared(_text, _colons), do: :ok
+
+  # Where a string ends, or `:open` when its line ends first, because a CSS string cannot run onto
+  # the next line. `quoted_end/4` runs on to the next quote however far away it is, which suits the
+  # scanners that read half-typed text and would pass `content: "abc` here.
+  defp string_end(_body, pos, stop, _quote_char) when pos >= stop, do: :open
+
+  defp string_end(body, pos, stop, quote_char) do
+    case :binary.at(body, pos) do
+      ?\\ -> string_end(body, pos + 2, stop, quote_char)
+      ^quote_char -> pos + 1
+      char when char in ~c"\n\r\f" -> :open
+      _other -> string_end(body, pos + 1, stop, quote_char)
+    end
+  end
+
+  defp line_from(body, pos, stop) do
+    case :binary.match(body, "\n", scope: {pos, stop - pos}) do
+      {at, _length} -> binary_part(body, pos, at - pos)
+      :nomatch -> binary_part(body, pos, stop - pos)
+    end
+  end
+
+  # What a refusal quotes back to the author: one line, short enough to sit in a sentence.
+  defp excerpt(text) do
+    line = text |> String.split() |> Enum.join(" ")
+
+    case String.length(line) > 60 do
+      true -> String.slice(line, 0, 60) <> "…"
+      false -> line
+    end
+  end
 
   defp indent(body) do
     body

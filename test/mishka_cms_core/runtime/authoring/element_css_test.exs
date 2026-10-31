@@ -304,6 +304,67 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
       assert {:error, _message} = ElementCss.put(nil, nil, "page-x", scope, "&:hover { gap: 1px;")
     end
 
+    # A BODY TAILWIND CANNOT PARSE STOPS EVERY STYLESHEET IT IS IN, not just its own rule: the site's
+    # CSS build fails and keeps its last good bundle, the draft preview cannot build its styles, and
+    # the canvas stops generating for the whole page. Its braces all match, so the brace check let
+    # each of these through.
+    test "a declaration with no colon is refused, and quoted back" do
+      for {body, declaration} <- [
+            {"color crimson", "color crimson"},
+            {"color crimson;", "color crimson"},
+            {"gap: 1px;\n/* note */ color crimson;\nmargin: 0;", "color crimson"},
+            {"color: red; background", "background"},
+            {"--brand;", "--brand"},
+            {"&:hover { color navy }", "color navy"},
+            {"@media (max-width: 600px) { color red }", "color red"}
+          ] do
+        assert refused(body) == "That CSS has a declaration with no colon: `#{declaration}`.",
+               body
+      end
+    end
+
+    # A CSS string cannot run onto the next line: the newline ends it unclosed, and Tailwind refuses
+    # the stylesheet over it however far away the closing quote is.
+    test "a string whose line ends before its closing quote is refused" do
+      for {body, string} <- [
+            {~s|content: "abc\ncolor: red;|, ~s|"abc|},
+            {"content: 'abc", "'abc"},
+            {~s|&:hover { content: "a\nb" }|, ~s|"a|},
+            {~s|&[data-x="a\nb"] { gap: 1px; }|, ~s|"a|}
+          ] do
+        assert refused(body) ==
+                 "That CSS has a string with no closing quote on its line: `#{string}`.",
+               body
+      end
+    end
+
+    test "a `;` or a `:` inside a value, a selector or an at-rule's prelude ends nothing" do
+      for body <- [
+            ~s|content: "a:b";|,
+            ~s|font-family: "A:B", serif;|,
+            ~s|content: "a;b"; gap: 1px;|,
+            ~s|content: "a\\\nb";|,
+            "background: url(http://x.test/y.png);",
+            "background: url(data:image/png;base64,AAA);\ngap: 1px;",
+            "color: var(--x);",
+            "color: color-mix(in srgb, red 50%, blue);",
+            ~s|grid-template-areas: "a b" "c d";|,
+            "grid-area: a\\:b;",
+            "&:hover { color: navy }",
+            "& > a:hover { color: navy; }",
+            "a:not(.x) { color: navy; }",
+            "@media (min-width: 600px) { padding: 1px; }",
+            "@supports (display: grid) { display: grid; }",
+            "@container card (min-width: 400px) { gap: 1px; }",
+            "@layer x { gap: 1px; }",
+            "@apply p-4;",
+            "gap: 1px;;\n/* a:b; c */"
+          ] do
+        refute refused(body), body
+        assert kept_body(body) == body, body
+      end
+    end
+
     # THE ONE WAY OUT OF THE WRAPPER is a `}` typed at the top level, which closes it early and
     # leaves everything after it loose on the whole site. A nested selector cannot escape: under CSS
     # nesting `body { … }` inside the braces means `.pb-xxxxxxxx body { … }`.

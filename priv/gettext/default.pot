@@ -5315,12 +5315,12 @@ msgstr ""
 msgid "Thanks — we'll be in touch."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:618
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:623
 #, elixir-autogen, elixir-format
 msgid "That CSS has a /* that is never closed."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:609
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:614
 #, elixir-autogen, elixir-format
 msgid "That CSS has an unmatched { or }."
 msgstr ""
@@ -18553,12 +18553,22 @@ msgstr ""
 msgid "%{label} holds text only."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:612
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:617
 #, elixir-autogen, elixir-format
 msgid "That CSS has an unmatched ( or )."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:615
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:620
 #, elixir-autogen, elixir-format
 msgid "That CSS has an unmatched [ or ]."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:635
+#, elixir-autogen, elixir-format
+msgid "That CSS has a declaration with no colon: `%{declaration}`."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:628
+#, elixir-autogen, elixir-format
+msgid "That CSS has a string with no closing quote on its line: `%{string}`."
 msgstr ""
