@@ -1542,8 +1542,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
 
   ## The two answers that are not about a template
 
-  `nil` is a page with no layout of its own, which `MishkaCmsWeb.RuntimeLive` renders inside
-  `Layouts.app` — and that carries a `<.flash_group>`, so it counts as a layout that shows messages.
+  `nil` is a page with no layout of its own, which `MishkaCmsWeb.RuntimeLive` draws bare: its
+  `default_layout/1` renders the page's content and a `<.flash_group>` only, so it shows messages.
 
   Anything unreadable counts as one that does not, so the page keeps its own region: being told twice
   is a blemish, being told nothing is the bug.

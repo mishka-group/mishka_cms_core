@@ -6,6 +6,7 @@
 - `Tree.set_text/3` sets a text node's `whitespace?` flag from the new text, as a parse does. Writing a node's own text back returns an equal tree, so an editor's history no longer records "Edited text" for a change that changed nothing, and text emptied to spaces counts as blank
 - An element's own CSS refuses a `(` or a `[` nobody closed, or a `)` or a `]` with nothing open, with "That CSS has an unmatched ( or )." or "That CSS has an unmatched [ or ].". CSS reads everything up to the match as part of the bracket, so `calc(1px` took the wrapper's closing brace and the rules after it in the stylesheet. Brackets in strings and comments are text, as braces are, and `url(…)`, `[attr]` selectors and escaped brackets such as `.w-\[10px\]` are kept
 - An emptied page, layout, component or error page status saves. `Section.save_fields/3`, which a draft's autosave and a publish both write through, saves markup that is empty or only whitespace as the document a blank create starts with (`PageStarter.blank/1`: the layout's container around `@inner_content` for a layout, the empty container for the rest), and the editor reopens it on the starter. A template is never empty in the database, so an author who deleted everything had every autosave refused and a publish that failed
+- The doc of `LiveViewCompiler.shows_messages?/1` says a page with no layout of its own is drawn bare by the host's `RuntimeLive.default_layout/1`, with its content and a flash group, no longer inside `Layouts.app`
 
 # Changelog for MishkaCmsCore 0.0.4
 

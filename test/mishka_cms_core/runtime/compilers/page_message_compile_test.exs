@@ -168,7 +168,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageMessageCompileTest do
       end
     end
 
-    # NO LAYOUT IS `Layouts.app`, which carries a flash group of its own.
+    # NO LAYOUT IS `RuntimeLive.default_layout/1`, which draws the page bare beside a flash group.
     test "a page with no layout of its own is inside one that shows them" do
       assert LiveViewCompiler.shows_messages?(nil)
     end
