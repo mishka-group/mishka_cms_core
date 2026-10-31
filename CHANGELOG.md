@@ -1,3 +1,7 @@
+# Changelog for MishkaCmsCore 0.0.5
+
+- Placement reads the CMS's own function components as the element they render: a `<.form>` is a `<form>`, an `<.input>` the `<div>` around its control, a `<.link>` an `<a>`, a `<.button>` a `<button>` and an `<.icon>` a `<span>`. A form or a field dropped in a `<p>`, a heading or an inline tag is refused, so the editor places it beside them; it used to go inside, and the browser closed the paragraph in front of it
+
 # Changelog for MishkaCmsCore 0.0.4
 
 - The release runs on Erlang 29.1.2 and Elixir 1.20.5. The temporary OTP 29.0.5 pin is gone, and every workflow reads `.tool-versions` again

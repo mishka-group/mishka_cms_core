@@ -37,9 +37,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       dotted tag the kit catalog has never heard of is asked of the compiled module instead, so the
       CMS's own `<.form>` and `<.input>` are containers here the same way they are on the page.
     * **A component is the element its own markup opens with** for the phrasing and landmark
-      rules: a kit navbar whose markup is one `<nav>` is a `<nav>`, a kit heading is a heading. A
-      component whose markup opens with something else, or that has no markup to read, stays
-      opaque and is let through as before.
+      rules: a kit navbar whose markup is one `<nav>` is a `<nav>`, a kit heading is a heading. The
+      CMS's own function components have no markup in the catalog and are the element they render:
+      a `<.form>` is a `<form>`, an `<.input>` the `<div>` around its control, a `<.link>` an `<a>`,
+      so neither a form nor a field goes inside a `<p>`. A component whose markup opens with
+      something else, or that has no markup to read, stays opaque and is let through as before.
     * **A form may not go inside a form**, and nothing HTML forbids at silently. What counts as a
       form is `MishkaCmsCore.Runtime.Authoring.Fields.form_node?/2`, the same answer the insert
       funnel and the audit rail take, so a kit's own form wrapper is one here too. The thing being
@@ -106,6 +108,30 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   }
 
   @landmarks @landmark_bars |> Map.values() |> List.flatten() |> Enum.uniq()
+
+  # The element each of the CMS's own function components renders first, by name: Phoenix's
+  # `<.form>`, `<.link>` and `<.focus_wrap>` and `MishkaCmsCore.CoreComponents`' components. Their
+  # rows (`MishkaCmsCore.Runtime.Authoring.Fields.entry/2`) carry no markup to read, so without this
+  # a `<.form>` or an `<.input>` was opaque and went inside a `<p>`, where the browser closes the
+  # paragraph in front of it. An `<.input>` is the `<div>` around its label and control.
+  @local_roots %{
+    "form" => "form",
+    "link" => "a",
+    "focus_wrap" => "div",
+    "input" => "div",
+    "button" => "button",
+    "icon" => "span",
+    "select_chevron" => "span",
+    "header" => "header",
+    "table" => "table",
+    "list" => "ul",
+    "flash" => "div",
+    "tip" => "div",
+    "roadmap_notice" => "div",
+    "modal" => "div",
+    "create_menu" => "div",
+    "site_cell" => "div"
+  }
 
   @interactive ~w(a button input select textarea details label)
 
@@ -215,7 +241,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   @doc """
   The element `node` puts on the page, lowercased: a tag is itself, and a component is the one
-  element its own markup opens with (`"td"` for a kit cell). `nil` when that cannot be read.
+  element its own markup opens with (`"td"` for a kit cell), or for one of the CMS's own function
+  components the element it renders (`"form"` for `<.form>`). `nil` when that cannot be read.
 
   `node` is a `Tree.Node` or a palette entry carrying `:tag`; `opts` takes `:components`.
   """
@@ -786,9 +813,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   # THE ELEMENT A NODE PUTS ON THE PAGE, lowercased: a tag is itself, and a component is the one
   # element its own markup opens with (a kit navbar's `<nav>`), read off the palette entry's
-  # template. `nil` for anything else — a slot, text, a component with no markup, one whose markup
-  # opens with another component or with several elements — which every rule here reads as
-  # "nothing to check", the way a component always used to be read.
+  # template, or the CMS's own function component's known element (`@local_roots`). `nil` for
+  # anything else — a slot, text, a component with no markup, one whose markup opens with another
+  # component or with several elements — which every rule here reads as "nothing to check", the way
+  # a component always used to be read.
   defp rendered(%Node{kind: :component} = node, opts),
     do: node |> Node.component_name() |> outer_tag(opts)
 
@@ -815,9 +843,17 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     end
   end
 
+  # A kit component is read off its own markup. A name the catalog does not have is one of the CMS's
+  # own function components, whose row carries no markup, so it is the element it is known to render.
   defp read_outer_tag(name, components) do
-    with %{} = entry <- Fields.entry(name, components),
-         {:ok, tree} <- entry |> Inspector.template() |> Tree.parse(),
+    case Enum.find(components, &(component_meta_name(&1) == name)) do
+      nil -> Map.get(@local_roots, name)
+      entry -> template_root(entry)
+    end
+  end
+
+  defp template_root(entry) do
+    with {:ok, tree} <- entry |> Inspector.template() |> Tree.parse(),
          [%Node{kind: :tag, tag: tag}] when is_binary(tag) <- outer_elements(tree) do
       String.downcase(tag)
     else
