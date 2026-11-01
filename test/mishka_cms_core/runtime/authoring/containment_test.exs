@@ -1016,6 +1016,53 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
+  # A kit component whose markup opens with another component is the element that one renders:
+  # Chelekom's Form Wrapper opens with `<.form>` and its Simple Form with a call to the Form Wrapper,
+  # so both are the `<form>` the browser takes out of a `<p>`, as a `<.form>` on its own is.
+  describe "can_drop?/4 — a kit component whose markup opens with another component" do
+    defp kit_node(name),
+      do: Node.new(:component, tag: ".component", attrs: [{"component_name", {:string, name}}])
+
+    test "a kit form is refused in a paragraph and welcome in a box", %{kit: kit} do
+      tree = tree_of("<div><p>Words</p></div>")
+
+      for name <- ~w(chelekom-form-wrapper chelekom-simple-form acme-wrapper acme-simple) do
+        form = kit_node(name)
+
+        assert Containment.element(form, components: kit) == "form", name
+
+        assert {:error, message} =
+                 Containment.can_drop?(tree, form, find(tree, "p").id, components: kit)
+
+        assert message =~ "`<p>` can only hold text and inline elements", name
+        assert Containment.can_drop?(tree, form, find(tree, "div").id, components: kit) == :ok
+      end
+    end
+
+    test "accepts_map/3 gives the same answers", %{kit: kit} do
+      tree = tree_of("<section><div><p>Words</p></div></section>")
+      accepts = Containment.accepts_map(tree, kit_node("chelekom-simple-form"), components: kit)
+
+      refute accepts[find(tree, "p").id]
+      assert accepts[find(tree, "div").id]
+      assert accepts[find(tree, "section").id]
+    end
+
+    test "components that open with each other are let through, not looped on" do
+      kit = [
+        %{name: "ping", template: ~s(<.component component_name="pong" />)},
+        %{name: "pong", template: ~s(<.component component_name="ping" />)}
+      ]
+
+      tree = tree_of("<p>Words</p>")
+
+      assert Containment.element(kit_node("ping"), components: kit) == nil
+
+      assert Containment.can_drop?(tree, kit_node("ping"), find(tree, "p").id, components: kit) ==
+               :ok
+    end
+  end
+
   describe "can_drop?/4 — forms" do
     test "a form refuses to go inside a form" do
       tree = tree_of(~s(<.form :let={f} as={:q} for={assigns[:q_form]}></.form>))

@@ -42,8 +42,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       rules: a kit navbar whose markup is one `<nav>` is a `<nav>`, a kit heading is a heading. The
       CMS's own function components have no markup in the catalog and are the element they render:
       a `<.form>` is a `<form>`, an `<.input>` the `<div>` around its control, a `<.link>` an `<a>`,
-      so neither a form nor a field goes inside a `<p>`. A component whose markup opens with
-      something else, or that has no markup to read, stays opaque and is let through as before.
+      so neither a form nor a field goes inside a `<p>`. A kit component whose markup opens with
+      another component is the element that one renders: a kit form wrapper opening with `<.form>`
+      is a `<form>`. A component whose markup opens with something else, or that has no markup to
+      read, stays opaque and is let through as before.
     * **A form may not go inside a form**, and nothing HTML forbids at silently. What counts as a
       form is `MishkaCmsCore.Runtime.Authoring.Fields.form_node?/2`, the same answer the insert
       funnel and the audit rail take, so a kit's own form wrapper is one here too. The thing being
@@ -840,10 +842,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   # THE ELEMENT A NODE PUTS ON THE PAGE, lowercased: a tag is itself, and a component is the one
   # element its own markup opens with (a kit navbar's `<nav>`), read off the palette entry's
-  # template, or the CMS's own function component's known element (`@local_roots`). `nil` for
-  # anything else — a slot, text, a component with no markup, one whose markup opens with another
-  # component or with several elements — which every rule here reads as "nothing to check", the way
-  # a component always used to be read.
+  # template, or the CMS's own function component's known element (`@local_roots`); a component
+  # whose markup opens with another component is the element that one is. `nil` for anything else —
+  # a slot, text, a component with no markup, one whose markup opens with several elements — which
+  # every rule here reads as "nothing to check", the way a component always used to be read.
   defp rendered(%Node{kind: :component} = node, opts),
     do: node |> Node.component_name() |> outer_tag(opts)
 
@@ -872,21 +874,40 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   # A kit component is read off its own markup. A name the catalog does not have is one of the CMS's
   # own function components, whose row carries no markup, so it is the element it is known to render.
-  defp read_outer_tag(name, components) do
+  # `seen` holds the kit components already being read, so two that open with each other end in
+  # `nil` instead of looping.
+  defp read_outer_tag(name, components, seen \\ MapSet.new()) do
     case Enum.find(components, &(component_meta_name(&1) == name)) do
       nil -> Map.get(@local_roots, name)
-      entry -> template_root(entry)
+      entry -> template_root(entry, components, MapSet.put(seen, name))
     end
   end
 
-  defp template_root(entry) do
+  # The one element a kit component's markup opens with. When that is another component, it is the
+  # element that component renders: a kit form wrapper opening with `<.form>` is a `<form>`, and a
+  # kit form calling the wrapper by `component_name` is one too.
+  defp template_root(entry, components, seen) do
     with {:ok, tree} <- entry |> Inspector.template() |> Tree.parse(),
-         [%Node{kind: :tag, tag: tag}] when is_binary(tag) <- outer_elements(tree) do
-      String.downcase(tag)
+         [%Node{} = root] <- outer_elements(tree) do
+      root_element(root, components, seen)
     else
       _unreadable -> nil
     end
   end
+
+  defp root_element(%Node{kind: :tag, tag: tag}, _components, _seen) when is_binary(tag),
+    do: String.downcase(tag)
+
+  defp root_element(%Node{kind: :component} = root, components, seen) do
+    name = Node.component_name(root)
+
+    case is_binary(name) and not MapSet.member?(seen, name) do
+      true -> read_outer_tag(name, components, seen)
+      false -> nil
+    end
+  end
+
+  defp root_element(%Node{}, _components, _seen), do: nil
 
   defp outer_elements(tree) do
     tree.roots
