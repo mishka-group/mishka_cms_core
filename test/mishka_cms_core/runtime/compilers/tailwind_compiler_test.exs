@@ -156,6 +156,61 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       assert px_4 < sm_px_6 and sm_px_6 < lg_px_8
     end
 
+    # A RELEASE SHIPS NO `.ex` FILES. The shell is the class list Tailwind's scanner wrote at build
+    # time, read in the same run, where it was a stylesheet compiled at build time and glued in front.
+    test "reads the shell's class list where its sources are absent, in the same one run" do
+      site = "release-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), site)
+      list = TailwindCompiler.shell_classes_path()
+      File.mkdir_p!(root)
+      File.mkdir_p!(Path.dirname(list))
+      File.write!(list, "px-4\npy-20\nsm:px-6\nlg:px-8\n")
+
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<div class="px-4"></div>)
+      )
+
+      on_exit(fn ->
+        File.rm(list)
+        File.rm_rf(root)
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+      end)
+
+      assert {:ok, css} = in_project(root, fn -> quiet_compile(site) end)
+      assert [_one_run] = :binary.matches(css, "/*! tailwindcss v")
+      assert [{px_4, _}] = :binary.matches(css, ".px-4{")
+      assert {sm_px_6, _} = :binary.match(css, ~S(.sm\:px-6{))
+      assert {lg_px_8, _} = :binary.match(css, ~S(.lg\:px-8{))
+      assert px_4 < sm_px_6 and sm_px_6 < lg_px_8
+    end
+
+    test "builds with neither the shell's sources nor its class list" do
+      site = "no-shell-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), site)
+      File.mkdir_p!(root)
+      refute File.exists?(TailwindCompiler.shell_classes_path())
+
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<div class="px-4"></div>)
+      )
+
+      on_exit(fn ->
+        File.rm_rf(root)
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+      end)
+
+      assert {:ok, css} = in_project(root, fn -> quiet_compile(site) end)
+      assert [_one_run] = :binary.matches(css, "/*! tailwindcss v")
+      assert css =~ ".px-4{"
+      refute css =~ ~S(.sm\:px-6{)
+    end
+
     # A GLOBAL KIT THEME ROW, ONCE. It was pasted into both runs, the second for its `@theme` tokens,
     # so every plain rule in it was served twice.
     test "holds a global theme row once, and builds the site's classes from its tokens" do
