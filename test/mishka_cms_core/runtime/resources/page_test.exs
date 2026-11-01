@@ -453,6 +453,37 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       end
     end
 
+    # Before the UPDATE as well, where the index refused a rename with a query error in the log. The
+    # check's refusal carries `:answered_at`, which the index's does not. The page keeps its own path.
+    for action <- [:update, :master_update] do
+      test "another page of the site already has is refused on #{action}, before the write" do
+        site = create_site!()
+        create_page!(site_id: site.id, path: "/taken", active: false)
+        page = create!(site, "/mine")
+        tenant = if unquote(action) == :update, do: site.id
+
+        rename = fn path ->
+          page
+          |> Ash.Changeset.for_update(unquote(action), %{path: path},
+            tenant: tenant,
+            authorize?: false
+          )
+          |> Ash.update(authorize?: false)
+        end
+
+        for path <- ["/taken", "/taken/"] do
+          assert {:error, %Ash.Error.Invalid{errors: [error]}} = rename.(path)
+
+          assert %{field: :path, message: "Page path must be unique within a site.", vars: vars} =
+                   error
+
+          assert vars[:answered_at] == "/taken"
+        end
+
+        assert {:ok, %{path: "/mine"}} = rename.("/mine/")
+      end
+    end
+
     test "with no leading slash, a query or a fragment is refused on its field" do
       site = create_site!()
 

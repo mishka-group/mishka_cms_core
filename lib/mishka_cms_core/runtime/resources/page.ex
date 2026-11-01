@@ -2248,12 +2248,12 @@ defmodule MishkaCmsCore.Runtime.Page do
     change {Changes.PurgePreviewAssets, []}, on: [:update, :destroy]
   end
 
-  # A path another page of the site has is refused before the INSERT, where the
+  # A path another page of the site has is refused before the INSERT or the UPDATE, where the
   # `unique_path_per_site` index would refuse it. At the write only, so a form's every keystroke
   # does not read the table.
   validations do
     validate {MishkaCmsCore.Runtime.Resources.Validations.PagePathUnique, []},
-      on: [:create],
+      on: [:create, :update],
       before_action?: true
   end
 
