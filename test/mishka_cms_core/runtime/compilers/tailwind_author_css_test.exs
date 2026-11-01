@@ -263,5 +263,19 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindAuthorCssTest do
              ) ==
                :ok
     end
+
+    # Tailwind's parser splits an unquoted `url()` at its `;`, and a build never hands it the
+    # `@import`, so neither does the check.
+    test "takes a font @import whose unquoted address holds a ;" do
+      TailwindCompiler.ensure_installed()
+      site = create_site!()
+
+      css =
+        ".a { color: red }\n" <>
+          "@import url(https://fonts.googleapis.com/css2?family=Inter:wght@400;700&display=swap);"
+
+      assert TailwindCompiler.verify_css(css, site.id) == :ok
+      assert TailwindCompiler.verify_css(css, nil) == :ok
+    end
   end
 end

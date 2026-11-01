@@ -651,10 +651,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   def verify_css(css, site_id) do
     ensure_installed()
     {global_pre, _global_post} = read_global_stylesheets()
-
     {css, _removed} = author_css(css)
 
-    case ran_tailwind(build_css_content_verify(global_pre, site_pre(site_id), css), "verify") do
+    # As a build reads them: a remote `@import` never reaches Tailwind, whose parser refuses one
+    # whose unquoted `url()` holds a `;`, as Google Fonts' `wght@400;700` does.
+    {[global_pre, site_pre, css], _imports} =
+      lift_remote_imports([global_pre, site_pre(site_id), css])
+
+    case ran_tailwind(build_css_content_verify(global_pre, site_pre, css), "verify") do
       {0, _css, _output} -> :ok
       {_status, _css, output} -> {:error, tailwind_message(output)}
     end
@@ -1824,7 +1828,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   Left out, wherever they are written — at the top, inside `@media`, `@layer` or a rule, or inside a
   `@font-face` or a keyframe, where CSS has no at-rule but Tailwind still follows one:
 
-    * `@import`, unless it names an `http://` or `https://` address (a font stylesheet);
+    * `@import`, unless it names an `http://` or `https://` address (a font stylesheet), which a
+      build then puts ahead of everything else, where CSS obeys it;
     * `@source`, unless it is `@source inline(…)`, which only lists class names;
     * `@plugin`, `@config` and `@reference`;
     * any at-rule whose name is written with a backslash escape.
@@ -2023,11 +2028,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # `build_css_content_static_base/0`), and it is prepended only where the shell cannot be scanned
   # live: a release ships no `.ex` sources, so there the precompiled artifact is the only copy.
   defp execute_tailwind_shared_base do
-    shell_prefix() <> run_tailwind(build_css_content_shared_base(), "shared_base")
+    {input, imports} = build_css_content_shared_base()
+    leading(imports) <> shell_prefix() <> run_tailwind(input, "shared_base")
   end
 
   defp execute_tailwind_site(site_name, identifier, opts) do
-    shell_prefix() <> run_tailwind(build_css_content_site(site_name, opts), identifier)
+    {input, imports} = build_css_content_site(site_name, opts)
+    leading(imports) <> shell_prefix() <> run_tailwind(input, identifier)
   end
 
   defp shell_prefix, do: if(host_app_web_sources() == "", do: static_base_prefix(), else: "")
@@ -2046,8 +2053,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   defp build_css_content_shared_base do
     temp_dir = get_temp_dir()
     {pre_tailwind, post_tailwind} = read_global_stylesheets()
+    {[pre_tailwind, post_tailwind], imports} = lift_remote_imports([pre_tailwind, post_tailwind])
 
-    """
+    input = """
     /* === pre-Tailwind: kit themes (@theme blocks must precede class generation) === */
     #{pre_tailwind}
 
@@ -2080,6 +2088,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     /* === post-Tailwind: global :base layers + :custom overrides === */
     #{post_tailwind}
     """
+
+    {input, imports}
   end
 
   # A SITE'S WHOLE STYLESHEET IN ONE INPUT: everything the shared base scans and holds, and the
@@ -2104,7 +2114,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     {site_pre, site_post} = read_site_stylesheets(site_name, Keyword.get(opts, :rows, %{}))
     global_post = if Keyword.get(opts, :global_rows, true), do: global_post, else: ""
 
-    """
+    {[global_pre, global_post, site_pre, site_post], imports} =
+      lift_remote_imports([global_pre, global_post, site_pre, site_post])
+
+    input = """
     #{layer_order()}
     #{global_pre}
     #{site_pre}
@@ -2151,5 +2164,33 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     #{global_post}
     #{site_post}
     """
+
+    {input, imports}
   end
+
+  # THE ROWS' REMOTE `@import`s, LIFTED OUT TO LEAD THE STYLESHEET. CSS obeys an `@import` only ahead
+  # of every rule, and a row is pasted after other rows and Tailwind's own CSS, so Tailwind dropped
+  # it ("@import rules must precede all rules") wherever an author wrote it, and a Google font a kit
+  # theme imports never loaded. The top-level ones `author_css/1` lets through are taken out of each
+  # piece of rows, in the order given, and put back first by `leading/1`. Text the parser refuses
+  # keeps them where they are.
+  defp lift_remote_imports(pieces) do
+    Enum.map_reduce(pieces, [], fn css, lifted ->
+      {rest, imports} = remote_imports(css)
+      {rest, lifted ++ imports}
+    end)
+  end
+
+  defp remote_imports(css) do
+    with {:ok, imports} <- IgniterCss.get_at_rules(css, "import", nil, @tailwind_reading),
+         [_ | _] = remote <- Enum.filter(imports, &remote_import?(&1.target)),
+         {:ok, %{source: rest}} <- IgniterCss.remove_at_rules(css, remote, @tailwind_reading) do
+      {rest, Enum.map(remote, & &1.text)}
+    else
+      _none_or_refused -> {css, []}
+    end
+  end
+
+  # Each once, ahead of everything, the precompiled shell included.
+  defp leading(imports), do: imports |> Enum.uniq() |> Enum.map_join(&(&1 <> "\n"))
 end

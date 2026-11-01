@@ -215,6 +215,85 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     end
   end
 
+  # CSS OBEYS AN `@import` ONLY AHEAD OF EVERY RULE, and a row is pasted after other rows and
+  # Tailwind's own CSS, so Tailwind dropped a kit theme's font import wherever it was written.
+  describe "a remote @import in a stylesheet row" do
+    setup do
+      n = System.unique_integer([:positive])
+      TailwindCompiler.ensure_installed()
+
+      site =
+        MishkaCmsCore.Test.Factory.create_site!(
+          name: "fonts-#{n}",
+          host: "fonts-#{n}.test",
+          active: true
+        )
+
+      :ok =
+        MishkaCmsCore.Runtime.States.SiteState.save(%{
+          id: site.id,
+          name: site.name,
+          host: site.host,
+          priority: 0,
+          active: true
+        })
+
+      global = "@import url(https://fonts.googleapis.com/css2?family=Global#{n}:wght@400;700);"
+      own = ~s(@import "https://fonts.googleapis.com/css2?family=Own#{n}";)
+
+      row!(nil, :theme, ".font-g-#{n} { color: #111111; }\n" <> global)
+      row!(nil, :custom, global <> "\n.font-c-#{n} { color: #222222; }")
+      row!(site.id, :custom, ".font-s-#{n} { color: #333333; }\n" <> own)
+
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.delete(site.id) end)
+
+      %{site: site, n: n, imports: global <> "\n" <> own <> "\n"}
+    end
+
+    test "leads the site's stylesheet, each once, the global rows' first", ctx do
+      assert {:ok, css} = quiet_compile(ctx.site.name)
+
+      assert String.starts_with?(css, ctx.imports)
+      assert [_once] = :binary.matches(css, "family=Global#{ctx.n}")
+      assert [_once] = :binary.matches(css, "family=Own#{ctx.n}")
+
+      for {class, color} <- [{"g", "#111"}, {"c", "#222"}, {"s", "#333"}],
+          do: assert(css =~ ".font-#{class}-#{ctx.n}{color:#{color}}")
+    end
+
+    test "leads a draft preview's stylesheet and the shared base", ctx do
+      assert {:ok, preview} =
+               TailwindCompiler.compile_preview(
+                 ctx.site.name,
+                 "fonts-preview-#{ctx.n}",
+                 "draft",
+                 ~s(<p class="p-1"></p>)
+               )
+
+      assert String.starts_with?(preview, ctx.imports)
+
+      assert {:ok, base} = TailwindCompiler.compile_shared_base()
+
+      assert String.starts_with?(
+               base,
+               "@import url(https://fonts.googleapis.com/css2?family=Global"
+             )
+
+      assert [_once] = :binary.matches(base, "family=Global#{ctx.n}")
+      refute base =~ "family=Own#{ctx.n}"
+    end
+  end
+
+  defp row!(site_id, kind, content) do
+    Ash.Seed.seed!(MishkaCmsCore.Runtime.Stylesheet, %{
+      name: "row-#{System.unique_integer([:positive])}",
+      kind: kind,
+      content: content,
+      site_id: site_id,
+      active: true
+    })
+  end
+
   describe "compile_and_store/1" do
     test "compiles and stores CSS with all compression formats" do
       site_name = "test_compile_store_#{System.unique_integer([:positive])}"
