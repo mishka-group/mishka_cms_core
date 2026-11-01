@@ -1853,7 +1853,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
       {css, removed} ->
         Logger.warning(
           "[TailwindCompiler] stylesheet #{inspect(name)}: left out #{Enum.join(removed, ", ")}, " <>
-            "which read a file or run code when Tailwind builds the page's CSS"
+            "so Tailwind reads no file and runs no code the stylesheet names"
         )
 
         css
@@ -1862,6 +1862,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   @unsafe_rules ~w(plugin config reference)
 
+  # Tailwind reads no `//` comment, so neither does the parser here: a `//` that hid an `@import`
+  # from it would not hide it from Tailwind.
+  @tailwind_reading [allow_wrong_line_comments: false]
+
   @doc """
   The CSS an author wrote, without the at-rules that make the Tailwind binary read a file or run
   code on the server, and the names of the ones left out: `{css, ["@import", …]}`.
@@ -1869,7 +1873,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   A stylesheet row is pasted into the file Tailwind reads. There `@import "../x.css"` copies any
   local CSS file into the page's public CSS, `@source "../x"` scans any local file for class names,
   and `@plugin`, `@config` and `@reference` load a local file — a plugin is JavaScript Tailwind runs.
-  Left out:
+  Left out, wherever they are written — at the top, inside `@media`, `@layer` or a rule, or inside a
+  `@font-face` or a keyframe, where CSS has no at-rule but Tailwind still follows one:
 
     * `@import`, unless it names an `http://` or `https://` address (a font stylesheet);
     * `@source`, unless it is `@source inline(…)`, which only lists class names;
@@ -1877,38 +1882,47 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     * any at-rule whose name is written with a backslash escape.
 
   Everything else — `@theme`, `@apply`, `@media`, `@layer`, `@custom-variant`, `@utility` — is kept
-  as it was written.
+  as it was written, and so is an `@` in a comment, a string or a `url()`. The at-rules are found
+  and removed by igniter_css's parser (`IgniterCss.list_at_rules/2`,
+  `IgniterCss.remove_at_rules/3`). Text it refuses to edit, such as braces that do not balance, is
+  left out whole when it holds one of those at-rules: `{"", [reason]}`.
   """
   @spec author_css(String.t()) :: {String.t(), [String.t()]}
   def author_css(css) when is_binary(css) do
-    at_rule = ~r/@((?:[\w-]|\\.)+)([^;{}]*)(?:;|\{[^{}]*\})?/u
-
-    removed =
-      for [_whole, name, rest] <- Regex.scan(at_rule, css),
-          unsafe_rule?(name, rest),
-          do: "@" <> String.downcase(name)
-
-    cleaned =
-      Regex.replace(at_rule, css, fn whole, name, rest ->
-        if unsafe_rule?(name, rest), do: "", else: whole
-      end)
-
-    {cleaned, removed}
+    with {:ok, at_rules} <- IgniterCss.list_at_rules(css, @tailwind_reading),
+         {:ok, cleaned, removed} <- without_unsafe(css, Enum.filter(at_rules, &unsafe_rule?/1)) do
+      {cleaned, removed}
+    else
+      {:error, reason} -> {"", ["the whole stylesheet, which the CSS parser refused: #{reason}"]}
+    end
   end
 
-  defp unsafe_rule?(name, rest) do
+  defp without_unsafe(css, []), do: {:ok, css, []}
+
+  defp without_unsafe(css, unsafe) do
+    with {:ok, %{source: cleaned}} <- IgniterCss.remove_at_rules(css, unsafe, @tailwind_reading),
+         do: {:ok, cleaned, Enum.map(unsafe, &("@" <> &1.name))}
+  end
+
+  defp unsafe_rule?(%IgniterCss.AtRule{name: name, prelude: prelude, target: target}) do
     cond do
       String.contains?(name, "\\") -> true
-      String.downcase(name) in @unsafe_rules -> true
-      String.downcase(name) == "source" -> not inline_source?(rest)
-      String.downcase(name) == "import" -> not remote_import?(rest)
+      name in @unsafe_rules -> true
+      name == "source" -> not inline_source?(prelude)
+      name == "import" -> not remote_import?(target)
       true -> false
     end
   end
 
-  defp inline_source?(rest), do: Regex.match?(~r/\A\s*(?:not\s+)?inline\s*\(/i, rest)
+  # As Tailwind reads `@source`: its prelude starts with `inline(`, after an optional `not `.
+  defp inline_source?(prelude),
+    do: String.starts_with?(prelude, ["inline(", "not inline("])
 
-  defp remote_import?(rest), do: Regex.match?(~r/\A\s*(?:url\(\s*)?["']?https?:\/\//i, rest)
+  # As Tailwind reads `@import`: the address the parser read out of the string or `url()`.
+  defp remote_import?(target) when is_binary(target),
+    do: String.starts_with?(target, ["http://", "https://"])
+
+  defp remote_import?(_target), do: false
 
   # Resolve site name → site_id via SiteState (cached at boot). Falls back
   # to nil if the name isn't known — caller treats that as "no site rows".

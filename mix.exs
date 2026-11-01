@@ -142,7 +142,9 @@ defmodule MishkaCmsCore.MixProject do
       {:esbuild, "~> 0.10"},
       {:tailwind, "~> 0.5 and >= 0.5.2"},
       {:igniter_js, "~> 0.5 and >= 0.5.2"},
-      # An element's own CSS is checked with its parser (`MishkaCmsCore.Runtime.Authoring.ElementCss`).
+      # An element's own CSS is checked with its parser (`MishkaCmsCore.Runtime.Authoring.ElementCss`),
+      # and a stylesheet's unsafe at-rules are found and dropped with it
+      # (`MishkaCmsCore.Runtime.Compilers.TailwindCompiler.author_css/1`).
       {:igniter_css, "~> 1.1.2"},
       {:ex_brotli, "~> 0.6"},
       {:sitemapper, "~> 0.10"},

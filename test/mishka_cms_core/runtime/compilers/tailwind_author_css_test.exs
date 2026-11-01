@@ -93,6 +93,66 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindAuthorCssTest do
       assert cleaned =~ ".a { color: red }"
     end
 
+    test "leaves one out wherever it is written, nested or after the rules" do
+      css = """
+      .a { color: red }
+      @import "../after.css";
+      @media print { @import "../media.css"; .b { color: blue } }
+      @layer base { @plugin "../layer.js"; }
+      .c { &:hover { @source "../hover"; } }
+      @supports (display: grid) { @config "../supports.js"; }
+      """
+
+      assert {cleaned, removed} = TailwindCompiler.author_css(css)
+      assert removed == ~w(@import @import @plugin @source @config)
+
+      for name <- ~w(after.css media.css layer.js ../hover supports.js),
+          do: refute(cleaned =~ name, "#{name} was kept")
+
+      assert cleaned =~ ".a { color: red }"
+      assert cleaned =~ ".b { color: blue }"
+    end
+
+    # CSS has no at-rule inside `@font-face` or a keyframe, so a parser keeps these as text it could
+    # not place. Tailwind still imports the file.
+    test "leaves one out where CSS has no at-rule but Tailwind still follows it" do
+      css = """
+      @font-face { src: url(a.woff2); @import "../font.css"; font-family: a; }
+      @keyframes k { from { @plugin "../frame.js"; opacity: 0 } }
+      """
+
+      assert {cleaned, ["@import", "@plugin"]} = TailwindCompiler.author_css(css)
+      refute cleaned =~ "font.css"
+      refute cleaned =~ "frame.js"
+      assert cleaned =~ "font-family: a;"
+      assert cleaned =~ "opacity: 0"
+    end
+
+    test "keeps an @import in a comment, a string or a url(), which starts no at-rule" do
+      css = """
+      /* @import "../comment.css"; */
+      .a { content: "@import '../string.css';"; background: url(@import.png); }
+      """
+
+      assert TailwindCompiler.author_css(css) == {css, []}
+    end
+
+    # Tailwind reads no `//` comment: here `//` is part of a value and the `@import` after the `;` is
+    # a nested at-rule it imports.
+    test "does not read a // as a comment that hides one" do
+      assert {cleaned, ["@import"]} =
+               TailwindCompiler.author_css(~s(.a { b: c // ; @import "../x.css";\n}))
+
+      refute cleaned =~ "x.css"
+    end
+
+    test "leaves out the whole text when it holds one and its braces do not balance" do
+      assert {"", [reason]} = TailwindCompiler.author_css(~s(.a { @import "../x.css";))
+      assert reason =~ "the whole stylesheet"
+
+      assert TailwindCompiler.author_css(".a { color: red;") == {".a { color: red;", []}
+    end
+
     test "is the identity on text with no at-rule" do
       assert TailwindCompiler.author_css("") == {"", []}
       assert TailwindCompiler.author_css(".a { color: red }") == {".a { color: red }", []}
@@ -159,6 +219,20 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindAuthorCssTest do
       assert css =~ ".visible"
       refute css =~ "37px", "the file named by @source was scanned"
       assert log =~ "left out @source"
+    end
+
+    test "does not import a file named inside @font-face", %{dir: dir, site: site} do
+      secret = Path.join(dir, "secret.css")
+      File.write!(secret, ".secret-leak { color: red }")
+
+      write_stylesheet!(site, ~s(@font-face { @import "#{secret}"; }\n.visible { color: red }))
+
+      {result, log} = compile(site)
+
+      assert {:ok, css} = result
+      assert css =~ ".visible"
+      refute css =~ "secret-leak", "the file named inside @font-face was imported"
+      assert log =~ "left out @import"
     end
 
     test "scans it when the rule is written by the compiler itself", %{dir: dir, site: site} do
