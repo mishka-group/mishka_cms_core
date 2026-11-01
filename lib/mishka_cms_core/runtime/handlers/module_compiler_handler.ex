@@ -199,7 +199,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
      answered the moment it ends, whether or not the caller that started it is still there
 
   Waiting takes no gate slot: the slots are only ever held by compiles, so the pages of other sites
-  keep compiling while many callers wait for one page.
+  keep compiling while many callers wait for one page. Each caller that starts waiting for a worker
+  emits `[:mishka_cms, :runtime, :handlers, :module_compiler, :waiting]` from its own process, with
+  the `module` and the `worker` it waits for as metadata.
 
   An `:update` takes the answer of a compile that began after it was asked for. One already running
   may have read the record before it changed, so it is waited out and the next one started, and the
@@ -309,8 +311,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
   # `compile_or_return_module/5`. `{:started, result}` for the caller whose worker compiled it,
   # `{:waited, result}` for every other.
   defp compile(module_and_item, path, site, site_id, type) do
-    case Registry.lookup(@registry, get_module_name(module_and_item)) do
-      [{pid, _}] -> joined(await(pid), module_and_item, path, site, site_id, type)
+    module = get_module_name(module_and_item)
+
+    case Registry.lookup(@registry, module) do
+      [{pid, _}] -> joined(await(pid, module), module_and_item, path, site, site_id, type)
       [] -> start(module_and_item, path, site, site_id, type)
     end
   end
@@ -330,13 +334,13 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
     |> DynamicSupervisor.start_child(child_spec({module_and_item, path, site, site_id, type}))
     |> case do
       {:ok, pid} ->
-        result = pid |> await() |> answer(module, type)
+        result = pid |> await(module) |> answer(module, type)
         check_offline_page(result)
         {:started, result}
 
       # Started since this caller looked, so it began after this was asked for: its answer is ours.
       {:error, {:already_started, pid}} ->
-        {:waited, pid |> await() |> answer(module, type)}
+        {:waited, pid |> await(module) |> answer(module, type)}
 
       {:error, reason} ->
         {:started, {:error, reason}}
@@ -345,8 +349,16 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
 
   # No timeout here: the worker waits for its slot as long as the gate makes it, and once it has one
   # it ends within `@timeout` (see `in_time/1`), so it always ends and every waiter is answered.
-  defp await(pid) do
+  #
+  # The waiting event is emitted once the worker is watched, so its exit cannot pass this caller by.
+  defp await(pid, module) do
     ref = Process.monitor(pid)
+
+    :telemetry.execute(
+      [:mishka_cms, :runtime, :handlers, :module_compiler, :waiting],
+      %{system_time: System.system_time()},
+      %{module: module, worker: pid}
+    )
 
     receive do
       {:DOWN, ^ref, :process, ^pid, {:shutdown, {:compiled, result}}} -> {:compiled, result}

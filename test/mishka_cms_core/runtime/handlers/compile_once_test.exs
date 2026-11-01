@@ -15,6 +15,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
 
   @registry MishkaCms.ModuleCompilerHandlerRegistry
   @compiling [:mishka_cms, :runtime, :handlers, :database_to_ast, :page, :start]
+  @waiting [:mishka_cms, :runtime, :handlers, :module_compiler, :waiting]
+  @queued [:mishka_cms, :runtime, :compile_gate, :queued]
 
   # Every compile of a page reads its row first; the handler runs in the process that compiles.
   def compiling(_event, _measurements, %{path: path}, %{test: test, paths: paths, hold?: hold?}) do
@@ -24,17 +26,33 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
     end
   end
 
+  # A caller that waits for one of the pages' workers, from the caller; a compile queued for a slot,
+  # from the gate.
+  def waits(@waiting, _measurements, %{module: module, worker: worker}, %{test: test} = config) do
+    if module in config.modules, do: send(test, {:waiting, module, worker})
+  end
+
+  def waits(@queued, _measurements, %{pid: pid}, %{test: test}), do: send(test, {:queued, pid})
+
   test "a restart with every slot busy: 4,500 visitors on three sites' cold pages, one compile each" do
     pages = for _ <- 1..3, do: cold_page!()
     watch_compiles(pages, hold?: false)
 
     limit = :sys.get_state(CompileGate).limit
+    test = self()
 
     blockers =
-      for _ <- 1..limit, do: spawn(fn -> CompileGate.run(fn -> receive do: (:go -> :ok) end) end)
+      for _ <- 1..limit do
+        spawn(fn ->
+          CompileGate.run(fn ->
+            send(test, {:holding, self()})
+            receive do: (:go -> :ok)
+          end)
+        end)
+      end
 
     on_exit(fn -> Enum.each(blockers, &send(&1, :go)) end)
-    wait_until(fn -> Enum.all?(blockers, &holding?/1) end)
+    for blocker <- blockers, do: assert_receive({:holding, ^blocker})
 
     visitors =
       for page <- pages, _ <- 1..1_500 do
@@ -42,7 +60,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
       end
 
     workers = for page <- pages, do: worker_with_waiters!(page, 1_500)
-    wait_until(fn -> Enum.all?(workers, &(&1 in queued())) end)
+    for worker <- workers, do: assert_receive({:queued, ^worker})
 
     # One place in the gate's queue per page, and no visitor in the queue or holding a slot.
     visitor_pids = MapSet.new(visitors, fn {_page, task} -> task.pid end)
@@ -90,7 +108,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
     running = for _ <- 1..min(3, :sys.get_state(CompileGate).limit), do: next_compile!()
 
     late = for page <- pages, _ <- 1..20, do: {page, Task.async(fn -> visit(page) end)}
-    assert workers == for(page <- pages, do: worker_with_waiters!(page, 30))
+    assert workers == for(page <- pages, do: worker_with_waiters!(page, 20))
 
     Enum.each(running, &send(&1, :go))
     for _ <- 1..(3 - length(running))//1, do: send(next_compile!(), :go)
@@ -177,37 +195,49 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
 
   defp watch_compiles(pages, hold?: hold?) do
     id = "compile-once-#{System.unique_integer([:positive])}"
-    config = %{test: self(), paths: Enum.map(pages, & &1.path), hold?: hold?}
+
+    config = %{
+      test: self(),
+      paths: Enum.map(pages, & &1.path),
+      modules: Enum.map(pages, & &1.module),
+      hold?: hold?
+    }
+
     :ok = :telemetry.attach(id, @compiling, &__MODULE__.compiling/4, config)
-    on_exit(fn -> :telemetry.detach(id) end)
-  end
+    :ok = :telemetry.attach_many(id <> "-waits", [@waiting, @queued], &__MODULE__.waits/4, config)
 
-  # The page's worker, once `count` callers are waiting for it.
-  defp worker_with_waiters!(page, count) do
-    wait_until(fn ->
-      case Registry.lookup(@registry, page.module) do
-        [{pid, _}] -> waiters(pid) >= count
-        [] -> false
-      end
+    on_exit(fn ->
+      :telemetry.detach(id)
+      :telemetry.detach(id <> "-waits")
     end)
-
-    [{pid, _}] = Registry.lookup(@registry, page.module)
-    pid
   end
 
-  defp waiters(pid) do
-    case Process.info(pid, :monitored_by) do
-      {:monitored_by, by} -> Enum.count(by, &is_pid/1)
-      nil -> 0
-    end
+  # The page's worker, once `count` more callers have started waiting for it: each one says so as
+  # soon as it watches the worker, and they all wait for the same one. The registry can still name
+  # a worker for an instant after it ended; a caller that watched that one is told at once that it
+  # is gone and goes on to the live one, so its wait on the ended one is not counted. The worker
+  # under test cannot end while it is counted: it is held in its compile or queued at the gate.
+  defp worker_with_waiters!(page, count) do
+    module = page.module
+    assert [worker] = live_waits(module, count, [])
+    assert [{^worker, _value}] = Registry.lookup(@registry, module)
+    worker
+  end
+
+  defp live_waits(_module, 0, workers), do: Enum.uniq(workers)
+
+  defp live_waits(module, count, workers) do
+    assert_receive {:waiting, ^module, worker}
+
+    if Process.alive?(worker),
+      do: live_waits(module, count - 1, [worker | workers]),
+      else: live_waits(module, count, workers)
   end
 
   defp next_compile! do
     assert_receive {:compiling, _path, compile}
     compile
   end
-
-  defp holding?(pid), do: Map.has_key?(:sys.get_state(CompileGate).holders, pid)
 
   defp queued,
     do: for({pid, _tag} <- :queue.to_list(:sys.get_state(CompileGate).waiting), do: pid)
@@ -220,20 +250,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileOnceTest do
       {:compiling, ^path, _compile} -> compiles(page, count + 1)
     after
       0 -> count
-    end
-  end
-
-  defp wait_until(fun, tries \\ 1_000) do
-    cond do
-      fun.() ->
-        :ok
-
-      tries == 0 ->
-        flunk("the processes never reached that state")
-
-      true ->
-        Process.sleep(5)
-        wait_until(fun, tries - 1)
     end
   end
 end
