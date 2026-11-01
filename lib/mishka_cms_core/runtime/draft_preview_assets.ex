@@ -43,9 +43,10 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   @compiled [Page, PageDraft, Layout, LayoutDraft]
 
   @doc """
-  The preview's temporary CSS, compiled now from the record as it is: the shared base, the site's
-  saved stylesheets, Tailwind over the record's own markup, and a draft's own element CSS laid over
-  its document's element-CSS row (`element_css`, see `MishkaCmsCore.Runtime.Authoring.Drafts`).
+  The preview's temporary CSS, compiled now from the record as it is, as the site's own CSS is: the
+  host shell, the global and the site's saved stylesheets, the record's own markup, and a draft's
+  own element CSS laid over its document's element-CSS row (`element_css`, see
+  `MishkaCmsCore.Runtime.Authoring.Drafts`).
 
   `asset_site` is the site a record with none of its own — a global layout — is compiled against:
   the host the preview is opened on.

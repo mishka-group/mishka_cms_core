@@ -426,7 +426,7 @@ defmodule MishkaCmsCore.Runtime.RenderMetricsResourcesTest do
     test "a global stylesheet seen by a master is the shared base" do
       bundle = box(sheet_card(%{@built | bundle: "__shared_base__"}), "runtime-preview-bundle")
       assert bundle =~ "Shared CSS"
-      assert bundle =~ "the start of every site's CSS"
+      assert bundle =~ "also built into each site's CSS"
     end
 
     test "says when it is not built, or building" do

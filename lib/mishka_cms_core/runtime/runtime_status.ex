@@ -134,7 +134,7 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
 
   @doc """
   The `MishkaCmsCore.Runtime.States.AssetsState` id of the bundle a site's assets are built into:
-  the site's name, and for `"Global"` the shared base every site's CSS starts with.
+  the site's name, and for `"Global"` the shared base, built from the global rows alone.
   """
   @spec asset_bundle_id(String.t()) :: String.t()
   def asset_bundle_id("Global"), do: "__shared_base__"

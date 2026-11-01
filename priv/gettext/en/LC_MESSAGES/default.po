@@ -12395,11 +12395,6 @@ msgstr ""
 msgid "With every update of the page inside it, %{time} each"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:772
-#, elixir-autogen, elixir-format
-msgid "the start of every site's CSS"
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:637
 #, elixir-autogen, elixir-format
 msgid "this server"
@@ -18581,4 +18576,9 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/element_css.ex:651
 #, elixir-autogen, elixir-format
 msgid "`@apply` names no utility. Write one after it, like `@apply p-4`."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:772
+#, elixir-autogen, elixir-format
+msgid "also built into each site's CSS"
 msgstr ""

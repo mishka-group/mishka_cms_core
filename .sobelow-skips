@@ -8,7 +8,7 @@ Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compiler
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:525,4198EC1
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:903,3F00CC4
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/content_editor_styles.ex:103,767652A
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:240,450A748
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:241,11B553D
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/activity/sources/runtime_compile.ex:108,3E92A6F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:124,69BBDA4
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/authoring/code_check.ex:311,7929271
@@ -18,7 +18,7 @@ DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runt
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:306,701AF4
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:310,7D09F8B
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/sitemap_compiler.ex:462,4570480
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:241,5E93A67
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:242,5E7627F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1988,1635147
 RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/authoring/code_check.ex:387,3C0C15E
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:197,1CD06A0

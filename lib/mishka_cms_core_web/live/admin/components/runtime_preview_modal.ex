@@ -60,7 +60,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   import DetailModal, only: [detail: 1, status_row: 1, metric: 1, datetime: 1]
 
   @modal_id "runtime-preview-modal"
-  # The bundle every site's CSS starts with, which a global stylesheet is built into.
+  # The global bundle; a global stylesheet is built into it and into every site's CSS.
   @shared_base MishkaCmsCore.Runtime.RuntimeStatus.asset_bundle_id("Global")
   @tabs [
     {"overview", gettext_noop("Overview"), "M4 5h16v14H4z M4 10h16"},
@@ -769,7 +769,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     do: with_shared(metrics, gettext("Not compressed"))
 
   defp with_shared(%{bundle: @shared_base}, hint),
-    do: hint <> " · " <> gettext("the start of every site's CSS")
+    do: hint <> " · " <> gettext("also built into each site's CSS")
 
   defp with_shared(_site, hint), do: hint
 
