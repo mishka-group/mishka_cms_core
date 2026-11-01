@@ -406,6 +406,73 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
     end
   end
 
+  # ONE ADDRESS, ONE PAGE. The router serves `/about/` as `/about`, and the uniqueness checks compare
+  # the stored path, so a path is stored the way it is served.
+  describe "a page's path" do
+    defp create(site, path, action \\ :create) do
+      attrs = %{title: "Page at #{path}", path: path, template: "<div>x</div>"}
+
+      {attrs, opts} =
+        case action do
+          :master_create -> {Map.put(attrs, :site_id, site.id), []}
+          :create -> {attrs, [tenant: site.id]}
+        end
+
+      Page
+      |> Ash.Changeset.for_create(action, attrs, [authorize?: false] ++ opts)
+      |> Ash.create(authorize?: false)
+    end
+
+    test "is stored without its trailing slash, and / stays /" do
+      site = create_site!()
+
+      assert {:ok, %{path: "/about"}} = create(site, "/about/")
+      assert {:ok, %{path: "/docs/intro"}} = create(site, "  /docs/intro/  ")
+      assert {:ok, %{path: "/"}} = create(site, "/")
+
+      assert {:ok, %{path: "/renamed"}} =
+               site
+               |> create!("/before")
+               |> Ash.Changeset.for_update(:update, %{path: "/renamed/"}, tenant: site.id)
+               |> Ash.update(authorize?: false)
+    end
+
+    # Before the INSERT, where `unique_path_per_site` refused it with a query error in the log. A
+    # page that is not live is not one `PublicAddress` asks about, so this is the check that holds.
+    for action <- [:create, :master_create] do
+      test "another page of the site already has is refused on #{action}, with or without a slash" do
+        site = create_site!()
+        create_page!(site_id: site.id, path: "/taken", active: false)
+
+        for path <- ["/taken", "/taken/"] do
+          assert {:error, %Ash.Error.Invalid{errors: [error]}} =
+                   create(site, path, unquote(action))
+
+          assert %{field: :path, message: "Page path must be unique within a site."} = error
+        end
+      end
+    end
+
+    test "with no leading slash, a query or a fragment is refused on its field" do
+      site = create_site!()
+
+      for {path, message} <- [
+            {"about", "Path must start with '/'"},
+            {"/about?x=1",
+             "Path may only contain letters, digits, and the characters - _ / . : *"},
+            {"/about#a", "Path may only contain letters, digits, and the characters - _ / . : *"}
+          ] do
+        assert {:error, %Ash.Error.Invalid{errors: errors}} = create(site, path)
+        assert Enum.any?(errors, &match?(%{field: :path, message: ^message}, &1)), path
+      end
+    end
+
+    defp create!(site, path) do
+      {:ok, page} = create(site, path)
+      page
+    end
+  end
+
   describe "a page and what it is called" do
     test "the title is stored as it was typed, while the name beside it is slugified" do
       site = create_site!()

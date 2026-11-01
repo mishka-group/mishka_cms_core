@@ -117,6 +117,32 @@ defmodule MishkaCmsCoreWeb.Live.CreateForEditorTest do
     assert created!("live-now").active
   end
 
+  # A PATH THAT IS REFUSED SAYS WHY, under the Path box, and the form stays open on it. A taken one
+  # is refused before the INSERT, even when the page holding it is not live and the new one ends in
+  # a slash.
+  test "a refused path is said under the Path box", %{conn: conn, site: site} do
+    create_page!(site_id: site.id, path: "/taken", active: false)
+
+    for {path, message} <- [
+          {"about", "Path must start with &#39;/&#39;"},
+          {"/about?x=1", "Path may only contain letters, digits"},
+          {"/about#a", "Path may only contain letters, digits"},
+          {"/taken/", "Page path must be unique within a site."}
+        ] do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/runtime/pages")
+      view |> element("#pb-create-open-page") |> render_click()
+
+      html =
+        view
+        |> pick_site(site)
+        |> form(@form, %{"form" => %{"title" => "Refused", "path" => path}})
+        |> render_submit()
+
+      assert html =~ message, "no reason shown for #{path}"
+      assert has_element?(view, @form)
+    end
+  end
+
   # AND THE CHOICE IS FORGOTTEN WITH THE FORM. A cancelled editor-bound create must not leave the
   # next ordinary one without its switch.
   test "the next full form after a cancelled one offers the switch again", %{conn: conn} do

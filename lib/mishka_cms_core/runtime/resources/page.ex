@@ -2242,9 +2242,19 @@ defmodule MishkaCmsCore.Runtime.Page do
 
   # Background job triggers for page compilation
   changes do
+    change Changes.PagePath, on: [:create, :update]
     change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
     change Changes.RegisterTranslationKeys, on: [:create, :update]
     change {Changes.PurgePreviewAssets, []}, on: [:update, :destroy]
+  end
+
+  # A path another page of the site has is refused before the INSERT, where the
+  # `unique_path_per_site` index would refuse it. At the write only, so a form's every keystroke
+  # does not read the table.
+  validations do
+    validate {MishkaCmsCore.Runtime.Resources.Validations.PagePathUnique, []},
+      on: [:create],
+      before_action?: true
   end
 
   # Multi-tenancy configuration - pages are always site-specific

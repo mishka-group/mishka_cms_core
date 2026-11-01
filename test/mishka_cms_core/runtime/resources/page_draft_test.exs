@@ -191,6 +191,22 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
                |> Ash.update(authorize?: false)
     end
 
+    test "is refused with a trailing slash, which a draft's path is stored without", %{
+      site: site
+    } do
+      attrs = %{name: "Fresh", title: "Fresh", path: "/taken/", template: "<p>fresh</p>"}
+
+      assert {:error, %Ash.Error.Invalid{errors: [%{field: :path}]}} =
+               PageDraft
+               |> Ash.Changeset.for_create(:create, attrs,
+                 tenant: site.id,
+                 context: %{page_code: :package}
+               )
+               |> Ash.create(authorize?: false)
+
+      assert %{path: "/fresh"} = create_draft!(site.id, %{attrs | path: "/fresh/"})
+    end
+
     test "is kept by a draft of another site", %{taken: page} do
       other = create_site!()
       attrs = %{name: page.name, title: page.title, path: page.path, template: "<p>other</p>"}

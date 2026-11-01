@@ -803,6 +803,10 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     publish :master_destroy, [[nil, :site_id], "destroyed"]
   end
 
+  changes do
+    change Changes.PagePath, on: [:create, :update]
+  end
+
   validations do
     validate {MishkaCmsCore.Runtime.Resources.Validations.ElementCssRules, []},
       on: [:create, :update]

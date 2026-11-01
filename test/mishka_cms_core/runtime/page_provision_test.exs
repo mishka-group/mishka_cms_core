@@ -490,6 +490,27 @@ defmodule MishkaCmsCore.Runtime.PageProvisionTest do
       assert [%{path: ^first_path, fields: [name: "manual-home"]}] = report.skipped
     end
 
+    # A PATH THAT ARRIVED AFTER THE PLAN, on a page that is not live. `Validations.PagePathUnique`
+    # refuses it before the INSERT, where the index used to, and the page is still left alone.
+    test "is left alone when its path arrived after the plan", %{site: site} do
+      plan = PageProvision.missing(site.id, definitions(site.id))
+      [first_path | rest] = paths(site.id)
+
+      create_page!(
+        site_id: site.id,
+        name: "Arrived",
+        path: first_path,
+        active: false,
+        template: ~S(<div>mine</div>)
+      )
+
+      report = PageProvision.create(plan, &write!/1)
+
+      assert created(report) == rest
+      assert [%{path: ^first_path} = held] = report.skipped
+      assert PageProvision.answered?(held)
+    end
+
     # AN IDENTITY THE PLAN CANNOT ASK ABOUT AT ALL. `unique_preview_token` is keyed on a value the
     # create mints, so nothing can be looked for — and a page refused by it is still a page the site
     # cannot be given, not a run that should stop.
