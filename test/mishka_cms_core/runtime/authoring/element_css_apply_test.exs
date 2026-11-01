@@ -18,7 +18,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssApplyTest do
 
   alias MishkaCmsCore.Runtime.Authoring.Drafts
   alias MishkaCmsCore.Runtime.Authoring.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
+  alias MishkaCmsCore.Runtime.Handlers.BootHandler
+  alias MishkaCmsCore.Runtime.Helpers
+  alias MishkaCmsCore.Runtime.States.AssetsState
+  alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Stylesheet
 
   @moduletag :integration
@@ -94,5 +100,38 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssApplyTest do
              )
 
     assert Exception.message(error) =~ message
+  end
+
+  # A SCOPE CLASS IS NEVER A UTILITY. This id hashes to `29496066…`, and Tailwind reads a page that
+  # wears `pb-29496066` as asking for 29496066 spacing steps of padding-bottom, which made the
+  # element millions of pixels tall on the canvas, in the preview and on the live page.
+  test "the site's stylesheet holds the element's rule and no padding for its class", %{
+    site: site,
+    master: master
+  } do
+    id = "nh2wv4v6l"
+    {:ok, tree} = Tree.parse(~s(<p></p>))
+    [root] = tree.roots
+    tree = %Tree{nodes: %{id => %{Tree.get(tree, root) | id: id}}, roots: [id]}
+    {tree, scope} = Tree.ensure_scope(tree, id)
+
+    BootHandler.create_template_file(site.name, "page", "home", Serializer.serialize(tree))
+
+    :ok =
+      SiteState.save(%{id: site.id, name: site.name, host: site.host, priority: 0, active: true})
+
+    on_exit(fn ->
+      SiteState.delete(site.id)
+      AssetsState.delete("__shared_base__", "css")
+      File.rm_rf(Helpers.static_temp_dir(["runtime", site.name]))
+    end)
+
+    assert {:ok, _rules} =
+             ElementCss.put(master, site.id, "page-scope", scope, "&:hover { @apply p-4 }")
+
+    assert {:ok, css} = TailwindCompiler.compile(site.name)
+
+    assert css =~ ".#{scope}"
+    refute css =~ "padding-bottom:calc(var(--spacing)"
   end
 end

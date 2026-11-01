@@ -847,7 +847,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   # this element answers to, and handing it out anyway keys a CSS rule and an interaction's `to:` to
   # a class that is nowhere on the page.
   defp mint_scope(tree, node) do
-    scope = "pb-" <> (:erlang.md5(node.id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
+    scope = ElementScopes.scope_for(:erlang.md5(node.id))
     tree = put_node(tree, %{node | attrs: add_classes(node.attrs, [scope])})
 
     {tree, scope(tree, node.id)}

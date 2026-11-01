@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
 
   alias MishkaCmsCore.Runtime.Authoring.CodeCheck
   alias MishkaCmsCore.Runtime.Authoring.ElementCss
+  alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
   alias MishkaCmsCore.Runtime.Authoring.Tree.Styles
@@ -231,6 +232,31 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
       assert {:error, "That element has no style scope."} =
                ElementCss.put(nil, nil, @owner, nil, "color: red;")
     end
+
+    # EIGHT DIGITS ARE A TAILWIND UTILITY. This id hashes to `29496066…`, and `pb-29496066` is
+    # padding-bottom of 29496066 spacing steps to the run that builds the site's stylesheet.
+    test "a hash with no letter in it is given one" do
+      {_tree, scope} = "nh2wv4v6l" |> lone_p() |> Tree.ensure_scope("nh2wv4v6l")
+
+      assert scope == "pb-c9496066"
+      assert ElementScopes.scope?(scope)
+      assert ElementScopes.scope_for(<<0x29, 0x49, 0x60, 0x66>>) == scope
+    end
+
+    # Every element named before keeps the class its rule is filed under.
+    test "a hash with a letter in it is the class it always was" do
+      {_tree, scope} = "nabcdefgh" |> lone_p() |> Tree.ensure_scope("nabcdefgh")
+
+      assert scope == "pb-c0f920e3"
+      assert ElementScopes.scope_for(<<0x7F, 0x3A, 0x91, 0xB2>>) == "pb-7f3a91b2"
+    end
+  end
+
+  # One element under the id given, which is what its scope is hashed from.
+  defp lone_p(id) do
+    {:ok, tree} = Tree.parse(~s(<p class="lead"></p>))
+    [root] = tree.roots
+    %Tree{nodes: %{id => %{Tree.get(tree, root) | id: id}}, roots: [id]}
   end
 
   describe "css/1 and parse/1 are inverses" do
