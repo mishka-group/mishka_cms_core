@@ -170,7 +170,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssetsTest do
       assert_receive :holding
       unload = Task.async(fn -> DraftPreviewAssets.unload_module(record) end)
 
-      assert Task.yield(unload, 2_000) == {:ok, :ok}
+      # Answered while the lock is still held: an unload that waited for it would never return.
+      assert Task.await(unload, :infinity) == :ok
       assert AssetsState.get!(record.preview_token, "module") == nil
 
       send(compiling, :done)
