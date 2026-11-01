@@ -1246,8 +1246,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
 
     # The shipped templates keep applying. Asked with `can_drop?/4`'s block test, 24 of these are
     # refused, among them every kit field that wraps its `<input>` in a `<label>`.
+    # The committed export (`test/fixtures/cms_ui_kits_export/`, copied from mishka_chelekom), since
+    # `priv/cms_ui_kits/*.json` is downloaded at run time and not in the repository.
     test "refuses none of the Chelekom templates and examples the library ships" do
-      dir = Application.app_dir(:mishka_cms_core, "priv/cms_ui_kits")
+      dir = Path.expand("../../../fixtures/cms_ui_kits_export", __DIR__)
 
       for file <- ~w(chelekom.json chelekom_headless.json) do
         rows =
