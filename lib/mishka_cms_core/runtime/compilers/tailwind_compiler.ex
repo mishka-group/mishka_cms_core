@@ -656,7 +656,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     # As a build reads them: a remote `@import` never reaches Tailwind, whose parser refuses one
     # whose unquoted `url()` holds a `;`, as Google Fonts' `wght@400;700` does.
     {[global_pre, site_pre, css], _imports} =
-      lift_remote_imports([global_pre, site_pre(site_id), css])
+      lift_remote_imports([global_pre, site_pre(site_id), [css]])
 
     case ran_tailwind(build_css_content_verify(global_pre, site_pre, css), "verify") do
       {0, _css, _output} -> :ok
@@ -667,7 +667,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   end
 
   # A site inherits the globals, and for the globals themselves the two reads are the same row set.
-  defp site_pre(nil), do: ""
+  defp site_pre(nil), do: []
   defp site_pre(site_id), do: site_id |> read_stylesheets_for() |> elem(0)
 
   defp build_css_content_verify(global_pre, site_pre, css) do
@@ -1748,7 +1748,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   defp read_site_stylesheets(site_name, rows) do
     case site_id_for_name(site_name) do
-      nil -> {"", added_rows([], rows)}
+      nil -> {[], added_rows([], rows)}
       site_id -> read_stylesheets_for(site_id, rows)
     end
   end
@@ -1762,7 +1762,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
     {pre, post} = Enum.split_with(sheets, fn s -> s.kind in [:app_base, :theme] end)
 
-    {format_stylesheets(pre), format_stylesheets(post) <> added_rows(sheets, rows)}
+    {format_stylesheets(pre), format_stylesheets(post) ++ added_rows(sheets, rows)}
   end
 
   # A ROW AS A PREVIEW HOLDS IT, not as it is saved — see `compile_preview/5`. Only the content moves,
@@ -1782,17 +1782,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     rows
     |> Enum.reject(fn {name, _fun} -> MapSet.member?(saved, name) end)
     |> Enum.sort_by(fn {name, _fun} -> name end)
-    |> Enum.map_join(fn {name, fun} ->
-      "\n\n/* Preview row name=#{inspect(name)} */\n#{authored(%{content: fun.(nil), name: name})}"
+    |> Enum.map(fn {name, fun} ->
+      "/* Preview row name=#{inspect(name)} */\n#{authored(%{content: fun.(nil), name: name})}"
     end)
   end
 
-  defp format_stylesheets([]), do: ""
-
+  # One string per row, joined by `lift_remote_imports/1` once each row's imports are out of it.
   defp format_stylesheets(sheets) do
     sheets
     |> Enum.sort_by(&Stylesheet.load_order/1)
-    |> Enum.map_join("\n\n", fn s ->
+    |> Enum.map(fn s ->
       "/* Stylesheet##{s.id} kind=:#{s.kind} name=#{inspect(s.name)} */\n#{authored(s)}"
     end)
   end
@@ -2112,7 +2111,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
     {global_pre, global_post} = read_global_stylesheets()
     {site_pre, site_post} = read_site_stylesheets(site_name, Keyword.get(opts, :rows, %{}))
-    global_post = if Keyword.get(opts, :global_rows, true), do: global_post, else: ""
+    global_post = if Keyword.get(opts, :global_rows, true), do: global_post, else: []
 
     {[global_pre, global_post, site_pre, site_post], imports} =
       lift_remote_imports([global_pre, global_post, site_pre, site_post])
@@ -2171,25 +2170,36 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # THE ROWS' REMOTE `@import`s, LIFTED OUT TO LEAD THE STYLESHEET. CSS obeys an `@import` only ahead
   # of every rule, and a row is pasted after other rows and Tailwind's own CSS, so Tailwind dropped
   # it ("@import rules must precede all rules") wherever an author wrote it, and a Google font a kit
-  # theme imports never loaded. The top-level ones `author_css/1` lets through are taken out of each
-  # piece of rows, in the order given, and put back first by `leading/1`. Text the parser refuses
-  # keeps them where they are.
+  # theme imports never loaded. The ones `author_css/1` lets through are taken out of each row, in
+  # the order given, each piece of rows is joined, and they are put back first by `leading/1`.
+  #
+  # ONE ROW AT A TIME, read as `author_css/1` reads it. Read joined, a row the parser misreads hid
+  # every row after it: `@apply p-4 }`, with no `;` before the `}`, is CSS Tailwind builds, and an
+  # element's own CSS is written that way. A row the parser refuses keeps its imports where they are.
   defp lift_remote_imports(pieces) do
-    Enum.map_reduce(pieces, [], fn css, lifted ->
-      {rest, imports} = remote_imports(css)
-      {rest, lifted ++ imports}
+    Enum.map_reduce(pieces, [], fn rows, lifted ->
+      {rows, lifted} = Enum.map_reduce(rows, lifted, &lift_row/2)
+      {Enum.join(rows, "\n\n"), lifted}
     end)
   end
 
+  defp lift_row(row, lifted) do
+    {rest, imports} = remote_imports(row)
+    {rest, lifted ++ imports}
+  end
+
   defp remote_imports(css) do
-    with {:ok, imports} <- IgniterCss.get_at_rules(css, "import", nil, @tailwind_reading),
-         [_ | _] = remote <- Enum.filter(imports, &remote_import?(&1.target)),
+    with {:ok, at_rules} <- IgniterCss.list_at_rules(css, @tailwind_reading),
+         [_ | _] = remote <- Enum.filter(at_rules, &remote_import_rule?/1),
          {:ok, %{source: rest}} <- IgniterCss.remove_at_rules(css, remote, @tailwind_reading) do
       {rest, Enum.map(remote, & &1.text)}
     else
       _none_or_refused -> {css, []}
     end
   end
+
+  defp remote_import_rule?(%IgniterCss.AtRule{name: name, target: target}),
+    do: name == "import" and remote_import?(target)
 
   # Each once, ahead of everything, the precompiled shell included.
   defp leading(imports), do: imports |> Enum.uniq() |> Enum.map_join(&(&1 <> "\n"))

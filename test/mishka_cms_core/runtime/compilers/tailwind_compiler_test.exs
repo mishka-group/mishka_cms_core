@@ -282,6 +282,27 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       assert [_once] = :binary.matches(base, "family=Global#{ctx.n}")
       refute base =~ "family=Own#{ctx.n}"
     end
+
+    # `@apply p-4 }` with no `;` before the `}` is CSS Tailwind builds and the parser misreads: what
+    # follows it, in its row and in every row after it, was read wrong, and no import there was found.
+    test "leads it past a row whose @apply ends without a semicolon", ctx do
+      inter = "@import url(https://fonts.googleapis.com/css2?family=Inter#{ctx.n}:wght@400;700);"
+
+      row!(nil, :base, ".a-#{ctx.n} { &:hover { @apply p-4 } }")
+
+      row!(
+        ctx.site.id,
+        :base,
+        ".b-#{ctx.n} { &:hover { @apply p-2 } }\n.c { color: red; }\n" <> inter
+      )
+
+      assert {:ok, css} = quiet_compile(ctx.site.name)
+
+      [global, own] = String.split(ctx.imports, "\n", trim: true)
+      assert String.starts_with?(css, Enum.join([global, inter, own, ""], "\n"))
+      assert [_once] = :binary.matches(css, "family=Global#{ctx.n}")
+      assert [_once] = :binary.matches(css, "family=Inter#{ctx.n}")
+    end
   end
 
   defp row!(site_id, kind, content) do
