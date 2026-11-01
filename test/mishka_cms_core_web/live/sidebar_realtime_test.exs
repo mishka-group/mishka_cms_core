@@ -247,6 +247,19 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
   end
 
   describe "what is announced" do
+    # The write announces from inside `Settings.put/3`; the cache then handles the broadcast of the
+    # same row, and a call to it returns once it has.
+    test "a write on this node, once, though its broadcast comes back to the cache", %{site: site} do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "sidebar:#{site.id}")
+      site_id = site.id
+
+      {:ok, _} = Settings.put(@media_key, false, site_id: site.id)
+      assert_received {:sidebar_changed, ^site_id}
+
+      :sys.get_state(SettingsState)
+      refute_received {:sidebar_changed, _site_id}
+    end
+
     test "only a sidebar setting is, and once its value is in the cache", %{site: site} do
       :sys.get_state(SettingsState)
       Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "sidebar:#{site.id}")
