@@ -674,8 +674,9 @@ defmodule MishkaCmsCore.Runtime.LayoutDraft do
 
     # THE CUSTOM CSS APPLIED TO THIS DRAFT'S ELEMENTS while the editor's stage said Draft, as
     # `%{scope => body}`, a blank body for a rule the author cleared. It is the draft's own, beside
-    # the markup that carries those scope classes: the draft preview compiles it, the editor's publish
-    # writes it into the site's stylesheet row, and it goes when the draft goes. See
+    # the markup that carries those scope classes: the draft preview compiles it, a publish, the
+    # editor's or the draft's own, writes it into the site's stylesheet row, and it goes when the
+    # draft goes. See
     # `MishkaCmsCore.Runtime.Authoring.ElementCss`.
     attribute :element_css, :map do
       default %{}

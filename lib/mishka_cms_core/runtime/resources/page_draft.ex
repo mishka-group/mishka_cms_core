@@ -12,7 +12,8 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     * `preview_token` — an unguessable token for the shareable `/_preview/:token` URL.
     * `status` (`:draft` / `:published`) and `applied_at` — set when the draft is published.
     * `element_css` — the Custom CSS applied to its elements in the editor's Draft stage, which the
-      draft preview compiles and the editor's publish writes into the site's stylesheet row.
+      draft preview compiles and a publish, the editor's or the draft's own, writes into the site's
+      stylesheet row.
 
   Publishing is explicit (`:publish` / `:master_publish`): it writes the draft's fields to the
   live Page (creating it when `source_page_id` is `nil`, otherwise updating all but the page's
@@ -947,8 +948,9 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
 
     # THE CUSTOM CSS APPLIED TO THIS DRAFT'S ELEMENTS while the editor's stage said Draft, as
     # `%{scope => body}`, a blank body for a rule the author cleared. It is the draft's own, beside
-    # the markup that carries those scope classes: the draft preview compiles it, the editor's publish
-    # writes it into the site's stylesheet row, and it goes when the draft goes. See
+    # the markup that carries those scope classes: the draft preview compiles it, a publish, the
+    # editor's or the draft's own, writes it into the site's stylesheet row, and it goes when the
+    # draft goes. See
     # `MishkaCmsCore.Runtime.Authoring.ElementCss`.
     attribute :element_css, :map do
       default %{}

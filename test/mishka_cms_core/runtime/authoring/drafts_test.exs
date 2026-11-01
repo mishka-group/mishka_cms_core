@@ -17,10 +17,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
   @moduletag :integration
 
   alias MishkaCmsCore.Runtime.Authoring.Drafts
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.PageDraft
+
+  require Ash.Query
 
   setup do
     site = create_site!()
@@ -138,19 +141,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
                )
     end
 
-    test "is not a field publishing writes over the page", %{
-      site: site,
-      page: page,
-      master: master
-    } do
+    test "is not a field publishing writes over the page", %{page: page, master: master} do
       {:ok, draft} =
         Drafts.autosave("page", page, "<p>one</p>", master, nil, nil, nil, element_css: @css)
 
       refute Map.has_key?(Drafts.carried("page", draft), :element_css)
 
       draft
-      |> Ash.Changeset.for_update(:publish, %{}, tenant: site.id)
-      |> Ash.update!(authorize?: false)
+      |> Ash.Changeset.for_update(:master_publish, %{}, actor: master)
+      |> Ash.update!(actor: master)
 
       published =
         Ash.get!(MishkaCmsCore.Runtime.Page, page.id, action: :master_get, authorize?: false)
@@ -188,6 +187,103 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
       assert error_draft.element_css == @css
       assert Drafts.element_owner(layout_draft) == "layout-#{layout.id}"
       assert Drafts.element_owner(error_draft) == "error-page-#{error_page.id}"
+    end
+
+    # THE ADMIN'S DRAFT LIST PUBLISHES THROUGH THE DRAFT'S OWN `:publish`, not the editor, and that
+    # wrote the markup with the scope classes and left their CSS behind in the draft it marked done.
+    test "is written into its page's element-CSS row when the draft is published", %{
+      site: site,
+      page: page,
+      master: master
+    } do
+      owner = "page-#{page.id}"
+      {:ok, _rules} = ElementCss.put(master, site.id, owner, "pb-1a2b3c4d", "color: blue;")
+      {:ok, _rules} = ElementCss.put(master, site.id, owner, "pb-5e6f7a8b", "margin: 1px;")
+      {:ok, _rules} = ElementCss.put(master, site.id, owner, "pb-9c0d1e2f", "padding: 4px;")
+      author = create_user_with_permissions!(["admin:dashboard:runtime:page"], site_id: site.id)
+
+      {:ok, draft} =
+        Drafts.autosave("page", page, ~s(<h1 class="pb-1a2b3c4d">Hi</h1>), master, nil, nil, nil,
+          element_css: %{"pb-1a2b3c4d" => "color: crimson;", "pb-5e6f7a8b" => ""}
+        )
+
+      draft
+      |> Ash.Changeset.for_update(:publish, %{}, actor: author, tenant: site.id)
+      |> Ash.update!(actor: author)
+
+      assert ElementCss.all(master, site.id, owner) == %{
+               "pb-1a2b3c4d" => "color: crimson;",
+               "pb-9c0d1e2f" => "padding: 4px;"
+             }
+    end
+
+    test "is written into the row of the page a draft-only draft's publish creates", %{
+      site: site,
+      master: master
+    } do
+      draft =
+        PageDraft
+        |> Ash.Changeset.for_create(
+          :create,
+          %{
+            name: "Fresh",
+            title: "Fresh",
+            path: "/fresh-css",
+            template: ~s(<h1 class="pb-1a2b3c4d">Hi</h1>),
+            element_css: @css
+          },
+          tenant: site.id,
+          context: %{page_code: :package}
+        )
+        |> Ash.create!(authorize?: false)
+
+      author = create_user_with_permissions!(["admin:dashboard:runtime:page"], site_id: site.id)
+
+      draft
+      |> Ash.Changeset.for_update(:publish, %{}, actor: author, tenant: site.id)
+      |> Ash.update!(actor: author)
+
+      page =
+        MishkaCmsCore.Runtime.Page
+        |> Ash.Query.for_read(:read_any)
+        |> Ash.Query.filter(path == "/fresh-css" and site_id == ^site.id)
+        |> Ash.read_one!(authorize?: false)
+
+      assert ElementCss.all(master, site.id, "page-#{page.id}") == @css
+    end
+
+    test "is written into a layout's row and an error page's row when their drafts are published",
+         %{site: site, master: master} do
+      layout =
+        create_layout!(
+          site_id: site.id,
+          path: "/layouts/css-#{System.unique_integer([:positive])}"
+        )
+
+      error_page =
+        create_error_page!(
+          site_id: site.id,
+          error_pages: [%{"status" => 404, "template" => "<p>Not found</p>", "layout" => %{}}]
+        )
+
+      {:ok, layout_draft} =
+        Drafts.autosave("layout", layout, layout.template, master, nil, nil, nil,
+          element_css: @css
+        )
+
+      {:ok, error_draft} =
+        Drafts.autosave("error-page", error_page, "<p>Gone</p>", master, nil, nil, 404,
+          element_css: @css
+        )
+
+      for draft <- [layout_draft, error_draft] do
+        draft
+        |> Ash.Changeset.for_update(:master_publish, %{}, actor: master)
+        |> Ash.update!(actor: master)
+      end
+
+      assert ElementCss.all(master, site.id, "layout-#{layout.id}") == @css
+      assert ElementCss.all(master, site.id, "error-page-#{error_page.id}") == @css
     end
 
     test "is filed under the row of the document the draft was made from", %{

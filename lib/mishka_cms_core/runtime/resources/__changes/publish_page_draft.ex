@@ -16,11 +16,16 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
 
   An existing page keeps its own code — `MishkaCmsCore.Runtime.Authoring.CodeAccess.fields/0`. The
   builder's code drawer writes it to the page directly, so a draft only holds the copy it forked.
+
+  The draft's `element_css` then goes into the page's element-CSS row, written as the publishing
+  actor, in the same transaction (`MishkaCmsCore.Runtime.Authoring.Drafts.publish_element_css/3`).
+  The layout and error-page publishes do the same.
   """
   use Ash.Resource.Change
 
   alias MishkaCmsCore.Runtime.Page
   alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
 
   # A PUBLISH COPIES WHAT THE DRAFT HOLDS, templates included, and checks no code: the check ran
   # when a person wrote the draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.
@@ -53,11 +58,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishPageDraft do
   ]
 
   @impl true
-  def change(changeset, _opts, _context) do
+  def change(changeset, _opts, context) do
     Ash.Changeset.after_action(changeset, fn _changeset, draft ->
-      case apply_to_live(draft) do
-        {:ok, _page} -> {:ok, draft}
-        {:error, error} -> {:error, error}
+      with {:ok, page} <- apply_to_live(draft),
+           {:ok, _rules} <- Drafts.publish_element_css(draft, page, context.actor) do
+        {:ok, draft}
       end
     end)
   end

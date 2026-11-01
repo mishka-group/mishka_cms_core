@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishErrorPageDraft do
 
   alias MishkaCmsCore.Runtime.ErrorPage
   alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.Drafts
 
   # A PUBLISH COPIES WHAT THE DRAFT HOLDS, templates included, and checks no code: the check ran
   # when a person wrote the draft. See `MishkaCmsCore.Runtime.Resources.Validations.CodeChange`.
@@ -36,11 +37,11 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PublishErrorPageDraft do
   ]
 
   @impl true
-  def change(changeset, _opts, _context) do
+  def change(changeset, _opts, context) do
     Ash.Changeset.after_action(changeset, fn _changeset, draft ->
-      case apply_to_live(draft) do
-        {:ok, _error_page} -> {:ok, draft}
-        {:error, error} -> {:error, error}
+      with {:ok, error_page} <- apply_to_live(draft),
+           {:ok, _rules} <- Drafts.publish_element_css(draft, error_page, context.actor) do
+        {:ok, draft}
       end
     end)
   end

@@ -39,8 +39,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   next to the markup that carries the scope classes it is keyed on: `autosave/8` writes it with that
   markup when the editor hands it over as `element_css:`, and `save_as/8` takes it from the source it
   is given. The draft preview compiles it (`MishkaCmsCore.Runtime.DraftPreviewAssets.css/2`), and a
-  copy of a draft carries it like any other field. It goes when the draft goes, so nothing else has
-  to be cleaned up.
+  copy of a draft carries it like any other field. The draft's own `:publish` writes it into the
+  document's element-CSS row (`publish_element_css/3`). It goes when the draft goes, so nothing else
+  has to be cleaned up.
   """
 
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -48,6 +49,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   alias MishkaCmsCore.EveryPage
   alias MishkaCmsCore.Runtime.DraftPreviewAssets
   alias MishkaCmsCore.Runtime.Authoring.CodeAccess
+  alias MishkaCmsCore.Runtime.Authoring.ElementCss
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.Section
   alias MishkaCmsCore.Runtime.ErrorPageDraft
@@ -589,6 +591,25 @@ defmodule MishkaCmsCore.Runtime.Authoring.Drafts do
   end
 
   def element_owner(_draft), do: nil
+
+  @doc """
+  Writes `draft`'s `element_css` into the element-CSS row of `record`, the document the draft's
+  `:publish` has just written, as `actor`. It is laid over the row with
+  `MishkaCmsCore.Runtime.Authoring.ElementCss.merge/2`, as the editor's publish folds in the CSS it
+  holds and as the draft preview shows it: a rule the draft rewrote replaces the row's, a rule it
+  cleared goes, and the rest of the row stays. A draft that holds none writes nothing.
+  """
+  @spec publish_element_css(struct(), struct(), map() | nil) ::
+          {:ok, %{String.t() => String.t()}} | {:error, term()}
+  def publish_element_css(%module{element_css: edits}, record, actor)
+      when is_map(edits) and map_size(edits) > 0 do
+    {section, _drafted} = drafted(module)
+    owner = ElementScopes.owner(section, record.id)
+    rules = actor |> ElementCss.all(record.site_id, owner) |> ElementCss.merge(edits)
+    ElementCss.sync(actor, record.site_id, owner, rules)
+  end
+
+  def publish_element_css(_draft, _record, _actor), do: {:ok, %{}}
 
   defp drafted(module),
     do: Enum.find(@drafts, fn {_section, {draft_module, _, _}} -> draft_module == module end)
