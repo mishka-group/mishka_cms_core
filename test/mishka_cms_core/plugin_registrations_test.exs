@@ -55,21 +55,6 @@ defmodule MishkaCmsCore.PluginRegistrationsTest do
     Code.ensure_loaded?(module) and Enum.any?(module.initialize().plugins, &(&1.name == plugin))
   end
 
-  # The telemetry-driven reconcile queues its rebuilds, so the only signal to wait on is the chain.
-  defp wait_for_chain(event, plugin, remaining \\ 5_000) do
-    cond do
-      in_chain?(event, plugin) ->
-        :ok
-
-      remaining <= 0 ->
-        flunk("#{inspect(plugin)} never joined the #{event} chain")
-
-      true ->
-        Process.sleep(50)
-        wait_for_chain(event, plugin, remaining - 50)
-    end
-  end
-
   test "a plugin stored under an event it no longer declares moves and hears the declared one" do
     store(CorePageAfterCreate, :started)
     assert in_chain?(@stale, CorePageAfterCreate)
@@ -98,13 +83,17 @@ defmodule MishkaCmsCore.PluginRegistrationsTest do
     assert Event.get(:name, @uninstalled).event == @stale
   end
 
+  # The telemetry-driven reconcile queues its rebuilds; mishka_installer's event handler announces
+  # each chain on its "event" channel once it is rebuilt, so the test waits for the declared one's.
   test "the reconcile runs when mishka_installer finishes synchronizing its plugins" do
     store(CorePageAfterCreate, :started)
+    MishkaInstaller.subscribe("event")
 
     :telemetry.execute([:mishka_installer, :event, :synchronized], %{system_time: 0}, %{})
 
     assert Event.get(:name, CorePageAfterCreate).event == @declared
-    wait_for_chain(@declared, CorePageAfterCreate)
+    assert_receive %{channel: "event", status: :cluster_recompile, data: %{event: @declared}}
+    assert in_chain?(@declared, CorePageAfterCreate)
     create_page_and_await()
   end
 end
