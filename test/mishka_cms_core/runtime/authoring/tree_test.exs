@@ -542,6 +542,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
       assert is_binary(message)
     end
 
+    test "an EEx block with no end is named as it is written, at its line and column" do
+      assert Tree.parse("<% if true do %><p>a</p>") ==
+               {:error, %{line: 1, column: 1, message: "<% if true do %> has no <% end %>"}}
+
+      assert Tree.parse("<p>a</p>\n  <%= if @a do %>a<% else %>b") ==
+               {:error, %{line: 2, column: 3, message: "<%= if @a do %> has no <% end %>"}}
+    end
+
     test "nil and empty templates give an empty tree" do
       assert {:ok, %Tree{nodes: nodes, roots: []}} = Tree.parse(nil)
       assert nodes == %{}

@@ -134,8 +134,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
     :ok
   rescue
-    error ->
-      {:error, fault(:template, nil, nil, error_line(error), trim_file(Exception.message(error)))}
+    error -> {:error, fault(:template, nil, nil, error_line(error), describe(error))}
   end
 
   def template(_heex), do: :ok
@@ -207,7 +206,18 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
       entries |> Enum.with_index() |> Enum.flat_map(&body_fault(tab, &1))
     end) ++
       (params.state |> Enum.with_index() |> Enum.flat_map(&state_fault/1)) ++
-      (params.helpers |> Enum.with_index() |> Enum.flat_map(&helper_fault/1))
+      (params.helpers |> Enum.with_index() |> Enum.flat_map(&helper_fault/1)) ++
+      template_fault(params.template)
+  end
+
+  # The template is compiled on its own, as `template/1` compiles it, so a syntax error in it is
+  # reported at the author's line. In the page's module the confirmation region
+  # `LiveViewCompiler.confirmable/3` puts in front of it moves every line down.
+  defp template_fault(template) do
+    case template(template) do
+      :ok -> []
+      {:error, fault} -> [fault]
+    end
   end
 
   # AN EMPTY BODY IS NOT AN EMPTY HANDLER. It parses, it compiles, and the clause returns `nil` —
@@ -341,9 +351,16 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   defp stage(input, tab, fun) do
     fun.(input)
   rescue
-    error ->
-      {:error, fault(tab, nil, nil, error_line(error), trim_file(Exception.message(error)))}
+    error -> {:error, fault(tab, nil, nil, error_line(error), describe(error))}
   end
+
+  # Elixir's own syntax errors lead with "token missing on <file>:25:9:" and draw the line under
+  # it; the sentence an author needs is their description, "missing terminator: )".
+  defp describe(%error{description: description})
+       when error in [SyntaxError, TokenMissingError, MismatchedDelimiterError],
+       do: description
+
+  defp describe(error), do: trim_file(Exception.message(error))
 
   # The HEEx engine names the fake file it was handed, which is a compiler implementation detail
   # standing between the author and "unmatched closing tag". It appears leading — which is noise and

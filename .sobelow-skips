@@ -11,7 +11,7 @@ Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/content_
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:240,450A748
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/activity/sources/runtime_compile.ex:108,3E92A6F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:124,69BBDA4
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/authoring/code_check.ex:301,3ABB6FB
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/authoring/code_check.ex:311,7929271
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/_helpers.ex:58,2261ED1
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/component_compiler.ex:1742,36E6C05
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:302,20BDF42
@@ -20,7 +20,7 @@ DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runt
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/sitemap_compiler.ex:462,4570480
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:241,5E93A67
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1988,1635147
-RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/authoring/code_check.ex:370,3A0746E
+RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/authoring/code_check.ex:387,3C0C15E
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:197,1CD06A0
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:220,6CCAA4
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:258,B4D652

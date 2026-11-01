@@ -459,12 +459,12 @@ msgstr ""
 msgid "%{name} keeps state, so it needs an id — add one to its tag."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:162
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:161
 #, elixir-autogen, elixir-format
 msgid "%{name}, line %{line}: %{message}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:165
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:164
 #, elixir-autogen, elixir-format
 msgid "%{name}: %{message}"
 msgstr ""
@@ -3083,7 +3083,7 @@ msgstr ""
 msgid "Limit how often it checks"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:168
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:167
 #, elixir-autogen, elixir-format
 msgid "Line %{line}: %{message}"
 msgstr ""
@@ -5600,7 +5600,7 @@ msgstr ""
 msgid "This form is inside another form"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:224
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:234
 #, elixir-autogen, elixir-format
 msgid "This handler has no code. It must end in {:noreply, socket}."
 msgstr ""
@@ -5610,7 +5610,7 @@ msgstr ""
 msgid "This has not been set up on this site yet, and your account may not set it up. An administrator who may write this site's runtime can do it from here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:263
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:273
 #, elixir-autogen, elixir-format
 msgid "This helper has no code."
 msgstr ""
@@ -5640,7 +5640,7 @@ msgstr ""
 msgid "This page cannot be saved until it is back inside a form."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:321
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:331
 #, elixir-autogen, elixir-format
 msgid "This page took too long to compile. Something in it is probably looping."
 msgstr ""
@@ -6599,7 +6599,7 @@ msgstr ""
 msgid "en, fa, ar, ..."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:496
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:503
 #, elixir-autogen, elixir-format
 msgid "end of template reached without closing tag for <%{name}>"
 msgstr ""
@@ -6851,7 +6851,7 @@ msgstr ""
 msgid "the response was not valid JSON"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:354
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:371
 #, elixir-autogen, elixir-format
 msgid "the template"
 msgstr ""
@@ -6861,7 +6861,7 @@ msgstr ""
 msgid "there"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:399
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:416
 #, elixir-autogen, elixir-format
 msgid "this page"
 msgstr ""
@@ -8679,7 +8679,7 @@ msgstr ""
 msgid "That folder is no longer in the library."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:243
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:253
 #, elixir-autogen, elixir-format
 msgid "This value has no code. Write the expression the page starts with, like 0."
 msgstr ""
@@ -18583,12 +18583,17 @@ msgstr ""
 msgid "a tag is opened inside another tag; close the <%{tag}> with > first"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:607
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:614
 #, elixir-autogen, elixir-format
 msgid "unmatched closing tag </%{name}>"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:570
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:577
 #, elixir-autogen, elixir-format
 msgid "</%{name}> does not close <%{open}>"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:676
+#, elixir-autogen, elixir-format
+msgid "%{tag} has no <% end %>"
 msgstr ""

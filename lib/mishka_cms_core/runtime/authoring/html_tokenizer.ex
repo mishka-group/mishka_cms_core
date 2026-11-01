@@ -492,6 +492,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     {:ok, Enum.reverse(buffer)}
   end
 
+  # An EEx block left open is named as the author wrote its opening tag, `<% if true do %>`.
+  defp to_tree([], _buffer, [{:eex_block, expr, meta, _upper_buffer} | _], _opts),
+    do: open_block(expr, meta)
+
+  defp to_tree([], _buffer, [{:eex_block, expr, meta, _upper_buffer, _middle} | _], _opts),
+    do: open_block(expr, meta)
+
   defp to_tree([], _buffer, [{name, _, %{line: line, column: column}, _} | _], _opts) do
     message = gettext("end of template reached without closing tag for <%{name}>", name: name)
     {:error, line, column, message}
@@ -664,6 +671,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   end
 
   # -- HELPERS
+
+  defp open_block(expr, %{line: line, column: column, opt: opt}) do
+    message = gettext("%{tag} has no <% end %>", tag: "<%#{opt} #{expr} %>")
+    {:error, line, column, message}
+  end
 
   defp count_newlines_before_text(binary),
     do: count_newlines_until_text(binary, 0, 0, 1)
