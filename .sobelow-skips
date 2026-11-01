@@ -6,7 +6,7 @@ Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compiler
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:581,7E2E986
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:918,443FF69
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:528,6E36120
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:951,74896DA
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:951,359B568
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/content_editor_styles.ex:103,767652A
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:240,450A748
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/activity/sources/runtime_compile.ex:108,3E92A6F
@@ -50,7 +50,7 @@ Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:786,2C8ADB0
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:812,402E1A5
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1050,2D18B4A
-Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:763,F45B80
+Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:763,68E4EEB
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:701,8930A3
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mix/mishka_cms_core/gettext_templates.ex:85,7B98452
 Traversal.FileModule: Directory Traversal in `File.mkdir_p`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:325,47F5C3F
@@ -75,7 +75,7 @@ Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/ru
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:584,B7345
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/npm_packages.ex:271,3CFADB5
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/npm_packages.ex:280,3E1E0F3
-Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:768,730F97F
+Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:768,27DB78B
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/handlers/site_runtime.ex:64,6B619F1
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/mishka_cms_core/dev/seed_media.ex:281,69E5A7C
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:255,581D4EB
@@ -100,7 +100,7 @@ Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/r
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1085,4F58682
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1099,20ED4E6
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1272,3C59B39
-Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:764,A46A86
+Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:764,32285F1
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:702,2CFA321
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mix/mishka_cms_core/gettext_templates.ex:86,3AC9CC3
 Traversal.FileModule: Directory Traversal in `File.write`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:327,11A8D64
