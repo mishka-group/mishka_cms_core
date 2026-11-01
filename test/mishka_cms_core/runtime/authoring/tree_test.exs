@@ -468,12 +468,16 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
   describe "parse/1 — bad paths" do
     test "an unclosed tag reports line and column" do
-      assert {:error, %{line: line, column: column, message: message}} =
-               Tree.parse("<div><span></div>")
+      assert Tree.parse("<div><span></div>") ==
+               {:error, %{line: 1, column: 12, message: "</div> does not close <span>"}}
 
-      assert is_integer(line)
-      assert is_integer(column)
-      assert message =~ "closing tag"
+      assert Tree.parse("<div>\n  <span>") ==
+               {:error,
+                %{
+                  line: 2,
+                  column: 3,
+                  message: "end of template reached without closing tag for <span>"
+                }}
     end
 
     test "a < typed inside an opening tag is refused at that attribute" do
@@ -517,6 +521,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
       assert Tree.parse("<.button>Go</.button></.button>") ==
                {:error, %{line: 1, column: 22, message: "unmatched closing tag </.button>"}}
+    end
+
+    test "a closing tag that does not close the open element is refused where it is written" do
+      assert Tree.parse("<div></span></div>") ==
+               {:error, %{line: 1, column: 6, message: "</span> does not close <div>"}}
+
+      assert Tree.parse("<section>\n  <div>\n    <p>a</span>\n  </div>\n</section>") ==
+               {:error, %{line: 3, column: 9, message: "</span> does not close <p>"}}
+
+      assert Tree.parse("<div><p></div>") ==
+               {:error, %{line: 1, column: 9, message: "</div> does not close <p>"}}
+
+      assert Tree.parse("<.card><.button>Go</.card>") ==
+               {:error, %{line: 1, column: 19, message: "</.card> does not close <.button>"}}
     end
 
     test "malformed eex does not crash the caller" do

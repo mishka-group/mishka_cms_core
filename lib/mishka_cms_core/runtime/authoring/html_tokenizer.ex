@@ -557,6 +557,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     to_tree(tokens, [], [{meta.tag_name, attrs, meta, buffer} | stack], opts)
   end
 
+  # A closing tag that does not close the element open where it stands: the `</span>` in
+  # `<div></span></div>` is refused there, and is not taken as the `<div>`'s. A `</script>` and a
+  # `</style>` carry no `tag_name`: Phoenix's tokenizer reads their content up to their own one.
+  defp to_tree(
+         [{:close, _type, _name, %{tag_name: closing} = meta} | _tokens],
+         _buffer,
+         [{tag_name, _attrs, _open_meta, _upper_buffer} | _stack],
+         _opts
+       )
+       when is_binary(tag_name) and closing != tag_name do
+    message = gettext("</%{name}> does not close <%{open}>", name: closing, open: tag_name)
+    {:error, meta.line, meta.column, message}
+  end
+
   defp to_tree(
          [{:close, _type, _name, close_meta} | tokens],
          reversed_buffer,

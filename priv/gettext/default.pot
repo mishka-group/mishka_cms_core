@@ -1210,7 +1210,7 @@ msgstr ""
 msgid "Autofill"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/drafts.ex:69
+#: lib/mishka_cms_core/runtime/authoring/drafts.ex:71
 #, elixir-autogen, elixir-format
 msgid "Autosave"
 msgstr ""
@@ -18583,7 +18583,12 @@ msgstr ""
 msgid "a tag is opened inside another tag; close the <%{tag}> with > first"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:593
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:607
 #, elixir-autogen, elixir-format
 msgid "unmatched closing tag </%{name}>"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:570
+#, elixir-autogen, elixir-format
+msgid "</%{name}> does not close <%{open}>"
 msgstr ""
