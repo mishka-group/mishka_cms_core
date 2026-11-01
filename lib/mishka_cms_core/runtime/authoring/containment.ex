@@ -19,11 +19,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     * **Raw text elements** (`textarea`, `title`, `script`, `style`) take text and expressions
       only. A browser reads an element written inside one as text and shows its markup.
     * **Phrasing-only elements** (`span`, `p`, `h1`–`h6`, `button`, `pre`, …) take text and
-      other phrasing content, never a block element. This is deliberately stricter than the spec —
-      `<p>` may legally hold some things this rejects — because the stricter rule is the one that
-      matches what an author means to build. Ported from `containment.js`, with one correction: a
-      paragraph, a heading and the other text blocks hold phrasing content without BEING it, so
-      none of them goes inside another one.
+      other phrasing content, never a block element, and phrasing content is the HTML standard's
+      list of it: a `<br>`, an `<img>`, an `<input>`, an `<svg>`, a `<select>`, a `<del>`, a `<button>`,
+      a `<label>`, a link and a custom element (a name with a hyphen) belong in a `<p>`, a `<div>`, a
+      `<ul>`, a `<section>`, a form and a kit card do not. A paragraph, a heading and the other text
+      blocks hold phrasing content without BEING it, so none of them goes inside another one.
     * **A link is transparent**, as HTML's `<a>` is: it holds what its parent may hold. In a
       `<div>` or at the top of a page it takes a heading and a paragraph — a card that is one link —
       and in a `<p>`, a heading or a `<span>` it takes inline content only. The nearest ancestor
@@ -86,7 +86,20 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   # a `<script>`'s and a `<style>`'s content as text.
   @text_only ~w(script style textarea title)
 
-  @phrasing_only ~w(
+  # The standard lets `area` in only below a `map`, `link` in only where the body takes it, `meta`
+  # only with an `itemprop` and `selectedcontent` only in a `button` in a `select`; all four are read
+  # as phrasing here, since none of them is drawn and a drop has no attributes or ancestors to ask.
+  # Autonomous custom elements, the tags with a hyphen, are phrasing too (`phrasing?/1`).
+  # https://html.spec.whatwg.org/multipage/dom.html#phrasing-content
+  @phrasing ~w(
+    a abbr area audio b bdi bdo br button canvas cite code data datalist del dfn em embed i iframe
+    img input ins kbd label link map mark math meta meter noscript object output picture progress q
+    ruby s samp script select selectedcontent slot small span strong sub sup svg template textarea
+    time u var video wbr
+  )
+
+  # The elements that take phrasing content and nothing else, so a block may not go in them.
+  @phrasing_hosts ~w(
     span b i em strong small code label sub sup mark abbr cite q s u kbd samp var
     time bdi bdo p h1 h2 h3 h4 h5 h6 button summary legend dt figcaption pre
   )
@@ -98,11 +111,18 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   # take a `<section>` inside a heading.
   @transparent ~w(a)
 
-  # TAKING PHRASING CONTENT IS NOT BEING IT. These hold inline content only, which is why they are in
-  # the list above, and are blocks themselves, which the list above cannot say: reading it both ways
-  # let a paragraph clicked in while a heading was selected become the heading's child, and a `<p>`
-  # inside an `<h1>` (or another `<p>`, which the parser closes on the spot) is markup no page means.
-  @text_blocks ~w(p h1 h2 h3 h4 h5 h6 pre summary legend dt figcaption)
+  # The hosts a written document is held to phrasing content in. Four of the others take more than
+  # phrasing content in the standard (`summary` and `legend` also take headings, `dt` and
+  # `figcaption` take flow content), and two are broken by the Chelekom kit's own templates (a
+  # `<div>` in the `<button>` of its tabs, accordion and combobox, and in the `<label>` of its
+  # radio card, checkbox card and toggle field). A drop still keeps all of them to phrasing content.
+  @strict_hosts @phrasing_hosts -- ~w(button label summary legend dt figcaption)
+
+  # Taking phrasing content is not being it: a host that is not itself phrasing content is a block,
+  # so a paragraph clicked in while a heading was selected is refused as the heading's child, and a
+  # `<p>` inside an `<h1>` (or another `<p>`, which the parser closes on the spot) is markup no page
+  # means.
+  @text_blocks @phrasing_hosts -- @phrasing
 
   # WHAT A LANDMARK MAY NOT HOLD, by the landmark. `header`, `footer` and `main` are HTML's own:
   # header and footer take no header, footer or main, and main goes in no article, aside, header,
@@ -190,7 +210,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   @doc "Whether a tag holds phrasing content only, so no block element may be dropped into it."
   @spec phrasing_only?(String.t() | nil) :: boolean()
-  def phrasing_only?(tag) when is_binary(tag), do: String.downcase(tag) in @phrasing_only
+  def phrasing_only?(tag) when is_binary(tag), do: String.downcase(tag) in @phrasing_hosts
   def phrasing_only?(_tag), do: false
 
   @doc """
@@ -386,17 +406,19 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   answer for markup that was typed or pasted instead of dropped. It asks three of its rules, in the
   words a refused drop gives:
 
-    * a form, or a paragraph, heading or other text block, inside a phrasing-only element (a `<p>`,
-      a heading, a `<span>`, a `<label>`, a `<button>`): the browser closes a `<p>` in front of it,
-      so the page it draws is not the tree that was written;
+    * anything but phrasing content inside a `<p>`, a heading, a `<span>` or another element whose
+      content model is phrasing content, as the standard lists it (`@phrasing`): a `<div>`, a
+      `<ul>`, a kit card or a form there is refused, a `<br>`, an `<img>`, an `<input>` or a custom
+      element is not. The browser closes a `<p>` in front of a block, so the page it draws is not
+      the tree that was written;
     * a form inside a form, whose inner one a browser drops;
     * an element, a component or a comment inside a text-only element.
 
-  The first rule is narrower than the drop's. `can_drop?/4` reads every element that is not on its
-  phrasing-only list as a block, so a `<br>`, an `<img>`, an `<input>`, an `<svg>` and a `<del>` are
-  refused in a `<p>` or a `<label>`, and so are `<p>a<br>b</p>`, `<label><input></label>` and the
-  headless kit's `<span><img></span>`. A document is held only to the blocks this module can name
-  outright: the forms `Fields.form_node?/2` finds and the text blocks.
+  `button` and `label` also take phrasing content in the standard, but the Chelekom kit's own tabs,
+  accordion, combobox, radio card, checkbox card and toggle field put a `<div>` in one, and `summary`,
+  `legend`, `dt` and `figcaption` take more than phrasing content. A document is held in those only
+  to a form or a text block (a paragraph, a heading, a `<pre>`...); a drop keeps them to phrasing
+  content, as it does every host.
 
   The rest of what `can_drop?/4` asks, such as a slot to put content in, the only children of a list
   or a landmark inside a landmark, stays a rule about where something may be put.
@@ -423,7 +445,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
     with %Node{} = parent <- Tree.get(tree, parent_id),
          :ok <- check_text_only(node, parent),
-         :ok <- check_named_block(tree, node, parent, form?, opts),
+         :ok <- check_written_phrasing(tree, node, parent, form?, opts),
          :ok <- refuse_nested_form(form?, tree, parent, roles) do
       nil
     else
@@ -434,9 +456,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   defp misplacement(_tree, _node, _opts), do: nil
 
-  defp check_named_block(tree, node, parent, form?, opts) do
-    case form? or rendered(node, opts) in @text_blocks do
-      true -> check_phrasing(tree, node, [parent | Tree.ancestors(tree, parent.id)], opts)
+  # A strict host holds phrasing content and nothing else. The other hosts are held to the blocks
+  # this module can name outright: a form and the text blocks.
+  defp check_written_phrasing(tree, node, parent, form?, opts) do
+    chain = [parent | Tree.ancestors(tree, parent.id)]
+
+    case phrasing_host(chain, opts) in @strict_hosts or form? or
+           rendered(node, opts) in @text_blocks do
+      true -> check_phrasing(tree, node, chain, opts)
       false -> :ok
     end
   end
@@ -893,9 +920,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
         Enum.any?(children_of(dragged, tree, opts), &block?(&1, tree, opts))
 
       tag ->
-        tag in @text_blocks or tag not in @phrasing_only
+        not phrasing?(tag)
     end
   end
+
+  # An autonomous custom element has a hyphen in its name, and is phrasing content.
+  defp phrasing?(tag), do: tag in @phrasing or String.contains?(tag, "-")
 
   # Read where `dragged_descendants/3` reads, so an arriving link is read off its own template.
   defp children_of(%Node{children: ids}, tree, opts) do

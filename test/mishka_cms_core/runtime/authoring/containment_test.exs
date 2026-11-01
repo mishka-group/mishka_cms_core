@@ -1063,10 +1063,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
-  # A document that is already written is asked the way a drop is, for the nesting a browser repairs
-  # on its own: a form or a text block in a phrasing-only element, a form in a form, an element in a
-  # text-only one. `can_drop?/4` reads every tag outside its phrasing list as a block, which refuses
-  # `<p>a<br>b</p>`, so markup somebody wrote is held to the blocks it can name.
+  # A document that is already written is asked the way a drop is: what a `<p>`, a heading or another
+  # element that takes phrasing content may hold is the standard's list of phrasing content, a form
+  # does not go in a form, and a text-only element holds text. `button` and `label` are held to a
+  # form or a text block only, because the Chelekom kit's own templates put a `<div>` in them.
   describe "misplaced/2" do
     @doc_form ~s(<.form for={%{}} :let={_f}><.input name="email" value="" /></.form>)
 
@@ -1100,6 +1100,100 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
         assert {_node, message} = Containment.misplaced(tree_of(markup), components: kit), markup
         assert message =~ "can only hold text and inline elements", markup
       end
+    end
+
+    # What the standard lists as phrasing content (the standard's list, then a custom element).
+    @phrasing_tags ~w(a abbr area audio b bdi bdo br button canvas cite code data datalist del dfn em
+      embed i iframe img input ins kbd label link map mark math meta meter noscript object output
+      picture progress q ruby s samp script select selectedcontent slot small span strong sub sup svg
+      template textarea time u var video wbr my-el x-button)
+
+    @flow_tags ~w(address article aside blockquote details dialog div dl fieldset figcaption figure
+      footer form h1 h2 h3 h4 h5 h6 header hgroup hr main menu nav ol p pre search section table ul)
+
+    @phrasing_hosts ~w(p h1 h2 h3 h4 h5 h6 span em strong code pre)
+
+    test "a drop and a written document hold a phrasing host to the standard's list alike" do
+      for host <- @phrasing_hosts, tag <- @phrasing_tags ++ @flow_tags do
+        tree = tree_of("<#{host}>x<#{tag} /></#{host}>")
+        dropped = Containment.can_drop?(tree, Node.new(:tag, tag: tag), find(tree, host).id)
+        written = Containment.misplaced(tree)
+
+        case tag in @phrasing_tags do
+          true ->
+            assert {dropped, written} == {:ok, nil}, "<#{host}><#{tag}>"
+
+          false ->
+            assert {{:error, _refusal}, {%Node{}, _message}} = {dropped, written},
+                   "<#{host}><#{tag}>"
+        end
+      end
+    end
+
+    test "a div, a list, a section and a kit card are refused in a paragraph, at their own place",
+         %{
+           kit: kit
+         } do
+      for markup <- [
+            "<p>x<div>y</div></p>",
+            "<p>x<ul><li>y</li></ul></p>",
+            "<p>x<section>y</section></p>",
+            "<h3>x<div>y</div></h3>",
+            "<p>x#{component("chelekom-card")}</p>"
+          ] do
+        tree = tree_of(markup)
+        assert {node, message} = Containment.misplaced(tree, components: kit), markup
+
+        assert message ==
+                 "A `<#{(tree.roots |> hd() |> then(&Tree.get(tree, &1))).tag}>` can only hold text and inline elements.",
+               markup
+
+        assert Tree.get(tree, node.parent_id).tag in ~w(p h3), markup
+      end
+    end
+
+    test "a paragraph's br, img, input, svg, select, del, button, a, label and custom element stay" do
+      tree =
+        tree_of("""
+        <p>a<br />b <img src="a.png" /> <input name="q" /> <svg viewBox="0 0 1 1"><path d="M0 0" /></svg>
+        <select><option>a</option></select> <del>x</del> <button>go</button> <a href="/x">link</a>
+        <label>Name <input name="n" /></label> <my-el>custom</my-el> <span>s</span> {@name}
+        <%= @other %> <!-- note --></p>
+        """)
+
+      assert Containment.misplaced(tree) == nil
+    end
+
+    test "a link is read as what it holds, in a paragraph" do
+      assert {_node, _message} =
+               Containment.misplaced(tree_of(~s(<p><a href="/x"><div>y</div></a></p>)))
+
+      assert Containment.misplaced(tree_of(~s(<p><a href="/x"><img src="a.png" /></a></p>))) ==
+               nil
+    end
+
+    test "a component that cannot be read is let through, as it always was" do
+      tree = tree_of(~s(<p>x<.component component_name="nobody-knows-me" /></p>))
+
+      assert Containment.misplaced(tree) == nil
+      assert Containment.misplaced(tree, components: []) == nil
+    end
+
+    test "a button and a label are held to a form or a text block, which the kit's own templates need" do
+      assert Containment.misplaced(tree_of("<button><div>x</div></button>")) == nil
+      assert Containment.misplaced(tree_of("<label><div>x</div> <input /></label>")) == nil
+
+      assert {_node, _message} = Containment.misplaced(tree_of("<button><p>x</p></button>"))
+      assert {_node, _message} = Containment.misplaced(tree_of("<label>#{@doc_form}</label>"))
+
+      # A drop keeps them to phrasing content, as it always has.
+      tree = tree_of("<button>x</button>")
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, Node.new(:tag, tag: "div"), find(tree, "button").id)
+
+      assert Containment.can_drop?(tree, Node.new(:tag, tag: "img"), find(tree, "button").id) ==
+               :ok
     end
 
     test "names the inner form of a form in a form, not the box that holds it" do

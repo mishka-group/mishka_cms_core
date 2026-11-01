@@ -406,6 +406,21 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
       assert CodeCheck.placement(source) == :ok
     end
 
+    test "refuses a div, a list or a section in a paragraph, at the line and column it opens at" do
+      for tag <- ~w(div ul section) do
+        source = "<div>\n<p>x<#{tag}>y</#{tag}></p>\n</div>"
+
+        assert {:error,
+                %{
+                  tab: :template,
+                  line: 2,
+                  column: 5,
+                  message: "A `<p>` can only hold text and inline elements."
+                }} = CodeCheck.placement(source),
+               tag
+      end
+    end
+
     test "refuses a form in a form, at the inner one" do
       assert {:error, %{line: 2, column: 8, message: message}} =
                CodeCheck.placement("<form>\n  <div><form></form></div>\n</form>")
@@ -428,7 +443,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
     test "takes markup that nests only what HTML keeps nested", %{kit: kit} do
       source = """
       <div class="p-6">
-        <p>line<br>two <img src="a.png"> <a href="/x">link</a> <input name="q"></p>
+        <p>line<br>two <img src="a.png"> <a href="/x">link</a> <input name="q"> <my-el>x</my-el> <del>old</del></p>
+        <h3>Head <svg viewBox="0 0 1 1"></svg> <select><option>a</option></select> <button>go</button></h3>
         <h2>Head <small>sub</small></h2>
         <div><p>box</p>#{@form}</div>
         #{~s(<.component component_name="chelekom-form-wrapper" site="Global" for={%{}} />)}
