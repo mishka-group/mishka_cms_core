@@ -281,9 +281,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   def build_tokenize(source) do
     newlines = :binary.matches(source, ["\r\n", "\n"])
 
-    source
-    |> tokenize()
-    |> to_tree([], [], %{source: {source, newlines}})
+    case tokenize(source) do
+      {:error, _line, _column, _message} = error -> error
+      tokens -> to_tree(tokens, [], [], %{source: {source, newlines}})
+    end
   end
 
   # Tokenize contents using EEx.tokenize and Phoenix.Live.Tokenizer respectively.
@@ -314,17 +315,29 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   #
   @eex_expr [:start_expr, :expr, :end_expr, :middle_expr]
 
+  # An EEx tag left open is reported at its line and column, with the first line of EEx's message
+  # ("expected closing '%>' for EEx expression") and without the source excerpt under it.
   defp tokenize(source) do
-    {:ok, eex_nodes} = EEx.tokenize(source)
-    {tokens, cont} = Enum.reduce(eex_nodes, {[], {:text, :enabled}}, &do_tokenize(&1, &2, source))
-    Tokenizer.finalize(tokens, "nofile", cont, source)
+    case EEx.tokenize(source) do
+      {:ok, eex_nodes} ->
+        {tokens, cont} =
+          Enum.reduce(eex_nodes, {[], {:text, :enabled}}, &do_tokenize(&1, &2, source))
+
+        Tokenizer.finalize(tokens, "nofile", cont, source)
+
+      {:error, message, %{line: line, column: column}} ->
+        {:error, line, column, first_line(message)}
+    end
   end
+
+  defp first_line(message), do: message |> String.split("\n", parts: 2) |> hd()
 
   defp do_tokenize({:text, text, meta}, {tokens, cont}, source) do
     text = List.to_string(text)
     meta = [line: meta.line, column: meta.column]
     state = Tokenizer.init(0, "nofile", source, Phoenix.LiveView.HTMLEngine)
-    Tokenizer.tokenize(text, meta, tokens, cont, state)
+    {read, cont} = Tokenizer.tokenize(text, meta, [], cont, state)
+    {Enum.flat_map(read, &comment_tokens/1) ++ tokens, cont}
   end
 
   defp do_tokenize({:comment, text, meta}, {tokens, cont}, _contents) do
@@ -339,6 +352,56 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
 
   defp do_tokenize(_node, acc, _contents) do
     acc
+  end
+
+  # Phoenix's tokenizer reads an HTML comment in its text state and carries on, so the text written
+  # before a `<!--` and after its `-->` comes back in the same token as the comment, marked with a
+  # `:comment_start` / `:comment_end` context. `Phoenix.LiveView.HTMLFormatter` prints that run as
+  # it was written; a tree wraps a comment node in its own `<!--` … `-->`, and wrote the words beside
+  # it back inside the comment.
+  #
+  # So a token Phoenix marks as holding a comment is read again through the states it was read in:
+  # text, comment and doctype. `<!--` opens a comment, `-->` closes it, and each run of text and
+  # each comment becomes its own token, newest first like the rest. A comment keeps Phoenix's
+  # markers: `[:comment_start, :comment_end]` when it is whole, `[:comment_start]` up to an EEx tag
+  # written inside it, `[:comment_end]` from the last one on. Text beside it carries no context.
+  defp comment_tokens({:text, text, %{context: [:comment_end | _]}}),
+    do: in_comment(text, [], [], [])
+
+  defp comment_tokens({:text, text, %{context: [:comment_start | _]}}),
+    do: in_text(text, [], [])
+
+  defp comment_tokens(token), do: [token]
+
+  defp in_text("<!--" <> rest, buffer, acc),
+    do: in_comment(rest, ["<!--"], text_token(buffer, [], acc), [:comment_start])
+
+  defp in_text("<!doctype" <> rest, buffer, acc),
+    do: in_doctype(rest, ["<!doctype" | buffer], acc)
+
+  defp in_text("<!DOCTYPE" <> rest, buffer, acc),
+    do: in_doctype(rest, ["<!DOCTYPE" | buffer], acc)
+
+  defp in_text(<<c, rest::binary>>, buffer, acc), do: in_text(rest, [c | buffer], acc)
+  defp in_text(<<>>, buffer, acc), do: text_token(buffer, [], acc)
+
+  defp in_doctype(">" <> rest, buffer, acc), do: in_text(rest, [?> | buffer], acc)
+  defp in_doctype(<<c, rest::binary>>, buffer, acc), do: in_doctype(rest, [c | buffer], acc)
+  defp in_doctype(<<>>, buffer, acc), do: text_token(buffer, [], acc)
+
+  defp in_comment("-->" <> rest, buffer, acc, context),
+    do: in_text(rest, [], text_token(["-->" | buffer], context ++ [:comment_end], acc))
+
+  defp in_comment(<<c, rest::binary>>, buffer, acc, context),
+    do: in_comment(rest, [c | buffer], acc, context)
+
+  defp in_comment(<<>>, buffer, acc, context), do: text_token(buffer, context, acc)
+
+  defp text_token([], _context, acc), do: acc
+
+  defp text_token(buffer, context, acc) do
+    meta = if context == [], do: %{}, else: %{context: context}
+    [{:text, buffer |> Enum.reverse() |> IO.iodata_to_binary(), meta} | acc]
   end
 
   # Build an HTML Tree according to the tokens from the EEx and HTML tokenizers.
@@ -429,6 +492,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     {:ok, Enum.reverse(buffer)}
   end
 
+  # An EEx block left open is named as the author wrote its opening tag, `<% if true do %>`.
+  defp to_tree([], _buffer, [{:eex_block, expr, meta, _upper_buffer} | _], _opts),
+    do: open_block(expr, meta)
+
+  defp to_tree([], _buffer, [{:eex_block, expr, meta, _upper_buffer, _middle} | _], _opts),
+    do: open_block(expr, meta)
+
   defp to_tree([], _buffer, [{name, _, %{line: line, column: column}, _} | _], _opts) do
     message = gettext("end of template reached without closing tag for <%{name}>", name: name)
     {:error, line, column, message}
@@ -494,24 +564,62 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     to_tree(tokens, [], [{meta.tag_name, attrs, meta, buffer} | stack], opts)
   end
 
+  # A closing tag that does not close the element open where it stands: the `</span>` in
+  # `<div></span></div>` is refused there, and is not taken as the `<div>`'s. A `</script>` and a
+  # `</style>` carry no `tag_name`: Phoenix's tokenizer reads their content up to their own one.
+  defp to_tree(
+         [{:close, _type, _name, %{tag_name: closing} = meta} | _tokens],
+         _buffer,
+         [{tag_name, _attrs, _open_meta, _upper_buffer} | _stack],
+         _opts
+       )
+       when is_binary(tag_name) and closing != tag_name do
+    message = gettext("</%{name}> does not close <%{open}>", name: closing, open: tag_name)
+    {:error, meta.line, meta.column, message}
+  end
+
   defp to_tree(
          [{:close, _type, _name, close_meta} | tokens],
          reversed_buffer,
          [{tag_name, attrs, open_meta, upper_buffer} | stack],
          opts
-       ) do
+       )
+       when is_binary(tag_name) do
     {mode, block} =
-      if tag_name in ["pre", "textarea"] or contains_special_attrs?(attrs) do
-        content =
-          content_from_source(opts.source, open_meta.inner_location, close_meta.inner_location)
+      cond do
+        # A `<textarea>`'s and a `<title>`'s content is text: a browser reads everything up to the
+        # closing tag as it is written, a `<b>` included. Phoenix's tokenizer reads a `<script>` and
+        # a `<style>` that way itself, but these two as markup, so their content is taken from the
+        # source as one text token.
+        tag_name in ["textarea", "title"] or contains_special_attrs?(attrs) ->
+          {:preserve, [whole_text(opts, open_meta, close_meta)]}
 
-        {:preserve, [{:text, content, %{newlines_before_text: 0, newlines_after_text: 0}}]}
-      else
-        {:normal, Enum.reverse(reversed_buffer)}
+        # A `<pre>` keeps its whitespace and its elements: `<pre><code>…</code></pre>` is how a code
+        # block is written. Its text tokens already carry every space and newline as written, so its
+        # children are read like any other element's.
+        tag_name == "pre" ->
+          {:preserve, Enum.reverse(reversed_buffer)}
+
+        true ->
+          {:normal, Enum.reverse(reversed_buffer)}
       end
 
     tag_block = {:tag_block, tag_name, attrs, block, %{mode: mode}}
     to_tree(tokens, [tag_block | upper_buffer], stack, opts)
+  end
+
+  # A closing tag with no open tag to close, at the top of the template or directly inside an EEx
+  # block. One that closes the element the block was opened in, as the `</div>` of
+  # `<div><% if true do %><p>a</p></div>` does, means the block is the one left open.
+  defp to_tree([{:close, _type, _name, meta} | _tokens], _buffer, stack, _opts) do
+    case open_block_in(stack, meta.tag_name) do
+      {expr, block_meta} ->
+        open_block(expr, block_meta)
+
+      nil ->
+        message = gettext("unmatched closing tag </%{name}>", name: meta.tag_name)
+        {:error, meta.line, meta.column, message}
+    end
   end
 
   # handle eex
@@ -571,6 +679,26 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
 
   # -- HELPERS
 
+  defp open_block(expr, %{line: line, column: column, opt: opt}) do
+    message = gettext("%{tag} has no <% end %>", tag: "<%#{opt} #{expr} %>")
+    {:error, line, column, message}
+  end
+
+  # The EEx block on top of `stack`, when `name` is the element it was opened in: the first tag
+  # under the blocks open on top of the stack.
+  defp open_block_in([block | stack], name)
+       when elem(block, 0) == :eex_block and is_binary(name) do
+    if enclosing_tag(stack) == name, do: {elem(block, 1), elem(block, 2)}
+  end
+
+  defp open_block_in(_stack, _name), do: nil
+
+  defp enclosing_tag([{tag_name, _attrs, _meta, _buffer} | _stack]) when is_binary(tag_name),
+    do: tag_name
+
+  defp enclosing_tag([_eex_block | stack]), do: enclosing_tag(stack)
+  defp enclosing_tag([]), do: nil
+
   defp count_newlines_before_text(binary),
     do: count_newlines_until_text(binary, 0, 0, 1)
 
@@ -618,6 +746,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
       {"phx-no-format", _v, _} -> true
       _ -> false
     end)
+  end
+
+  # An element's content as it is written in the source, as one text token.
+  defp whole_text(opts, open_meta, close_meta) do
+    content =
+      content_from_source(opts.source, open_meta.inner_location, close_meta.inner_location)
+
+    {:text, content, %{newlines_before_text: 0, newlines_after_text: 0}}
   end
 
   defp content_from_source(

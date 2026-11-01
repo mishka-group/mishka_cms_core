@@ -55,6 +55,43 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreePropertyTest do
     Enum.at(candidates, rem(index, length(candidates)))
   end
 
+  # `{kind, source}`: a run of text, a comment, a braced expression or an element holding more of
+  # them. Text holds no `<` or `{`, which Phoenix reads as markup, and a comment no `-->` or `<%`.
+  defp piece do
+    tree(leaf(), fn child ->
+      map(list_of(child, max_length: 3), fn children ->
+        {{:span, children}, "<span>" <> Enum.map_join(children, &elem(&1, 1)) <> "</span>"}
+      end)
+    end)
+  end
+
+  defp leaf do
+    one_of([
+      map(string(~c"ab -!>\n", min_length: 1), &{:text, &1}),
+      map(string(~c"ab -!<>{}\n"), &{{:comment, &1}, "<!--" <> &1 <> "-->"}),
+      constant({:expr, "{@x}"})
+    ])
+    |> filter(fn
+      {{:comment, body}, _source} -> not String.contains?(body, "-->")
+      _other -> true
+    end)
+  end
+
+  defp comments(pieces) do
+    Enum.flat_map(pieces, fn
+      {{:comment, body}, _source} -> [body]
+      {{:span, children}, _source} -> comments(children)
+      _other -> []
+    end)
+  end
+
+  defp shape(tree), do: Enum.map(tree.roots, &shape(tree, &1))
+
+  defp shape(tree, id) do
+    node = Tree.get(tree, id)
+    {node.kind, node.tag, node.text, Enum.map(node.children, &shape(tree, &1))}
+  end
+
   describe "a document stays internally consistent" do
     property "after any single operation the model offers" do
       check all(tree <- document(), index <- integer(0..30), max_runs: 60) do
@@ -131,6 +168,29 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreePropertyTest do
         reparsed = tree |> Serializer.serialize() |> Tree.parse!()
 
         assert Enum.map(tags(tree), & &1.tag) == Enum.map(tags(reparsed), & &1.tag)
+      end
+    end
+  end
+
+  # The text before a `<!--` and after its `-->` came in the same token as the comment, and was
+  # written back inside it. Any run of text, comments, expressions and elements has to come back as
+  # the bytes it was, with each comment a comment node holding exactly what was written in it.
+  describe "an HTML comment" do
+    property "and the text beside it survive a parse and a serialize, byte for byte" do
+      check all(
+              container <- member_of(["div", "p", "pre"]),
+              pieces <- list_of(piece(), max_length: 8),
+              max_runs: 200
+            ) do
+        heex = "<#{container}>" <> Enum.map_join(pieces, &elem(&1, 1)) <> "</#{container}>"
+        tree = Tree.parse!(heex)
+        out = Serializer.serialize(tree)
+
+        assert out == heex
+        assert shape(Tree.parse!(out)) == shape(tree)
+
+        assert for(%{kind: :html_comment, text: text} <- Tree.walk(tree), do: text) ==
+                 comments(pieces)
       end
     end
   end

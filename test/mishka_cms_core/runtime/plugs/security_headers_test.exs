@@ -223,6 +223,22 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
       assert policy =~ "https://fonts.googleapis.com"
       assert policy =~ "font-src 'self' data: https://fonts.gstatic.com"
     end
+
+    # The canvas draws a site's page with the site's stylesheet, which may import a Google font.
+    test "the builder canvas allows the font stylesheet a site imports, and the rest of the admin not" do
+      for path <- [
+            "/admin/dashboard/runtime/builder-canvas/tok",
+            "/admin/dashboard/runtime/builder-canvas/tok/example/card/0"
+          ] do
+        policy = csp(run(path))
+
+        assert policy =~ "style-src-elem 'self' 'nonce-"
+        assert [_, _] = Regex.scan(~r/https:\/\/fonts\.googleapis\.com/, policy)
+        assert policy =~ "font-src 'self' data: https://fonts.gstatic.com"
+      end
+
+      refute csp(run("/admin/dashboard/runtime/builder/page/1")) =~ "fonts.googleapis.com"
+    end
   end
 
   describe "scripts" do

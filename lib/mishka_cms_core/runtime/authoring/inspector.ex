@@ -1699,7 +1699,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
   defp taken(nil, _minted), do: nil
 
   defp taken(_found, minted),
-    do: gettext("Another form on this page is already called \"%{name}\".", name: minted)
+    do: gettext("Another form here is already called \"%{name}\".", name: minted)
 
   @doc """
   What a rename would break, or `nil`.

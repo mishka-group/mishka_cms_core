@@ -38,11 +38,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   ## Error handling
 
-  `parse/1` is the one place in the editor that rescues. `EEx.tokenize/1` and the LiveView tokenizer
-  signal a malformed template by raising, there is no non-raising variant, and an admin pasting
-  broken HEEx into the code drawer must get an inline `{:error, %{line:, column:, message:}}`
-  instead of a 500. Every other function in this module is total.
+  `parse/1` is the one place in the editor that rescues. The LiveView tokenizer signals a malformed
+  template by raising, there is no non-raising variant, and an admin pasting broken HEEx into the
+  code drawer must get an inline `{:error, %{line:, column:, message:}}` instead of a 500. Every
+  other function in this module is total.
   """
+
+  use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
@@ -70,8 +72,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   def parse(""), do: {:ok, new()}
 
   def parse(source) when is_binary(source) do
-    case tokenize(source) do
-      {:ok, tokens} -> {:ok, from_tokens(tokens)}
+    with {:ok, tokens} <- tokenize(source),
+         nil <- tag_in_tag(tokens) do
+      {:ok, from_tokens(tokens)}
+    else
       {:error, _line, _column, _message} = error -> {:error, parse_error(error)}
       {:error, %{} = error} -> {:error, error}
     end
@@ -90,6 +94,33 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
     HtmlTokenizer.build_tokenize(source)
   rescue
     error -> {:error, parse_error(error)}
+  end
+
+  # Phoenix's tokenizer reads a `<` inside an opening tag as part of an attribute name, so
+  # `<.component compone<nt_name="x">` is valid HEEx: a `.component` with no `name`. No attribute
+  # an author means has a `<` in its name, so the first tag holding one is refused at that attribute.
+  defp tag_in_tag(tokens) do
+    Enum.find_value(tokens, fn
+      {:tag_block, tag, attrs, children, _meta} -> lt_attr(tag, attrs) || tag_in_tag(children)
+      {:tag_self_close, tag, attrs} -> lt_attr(tag, attrs)
+      {:eex_block, _expr, block, _meta} -> Enum.find_value(block, &tag_in_tag(elem(&1, 0)))
+      _other -> nil
+    end)
+  end
+
+  defp lt_attr(tag, attrs) do
+    Enum.find_value(attrs, fn
+      {name, _value, %{line: line, column: column}} when is_binary(name) ->
+        if String.contains?(name, "<"),
+          do:
+            {:error, line, column,
+             gettext("a tag is opened inside another tag; close the <%{tag}> with > first",
+               tag: tag
+             )}
+
+      _root_attr ->
+        nil
+    end)
   end
 
   defp parse_error({:error, line, column, message}),
@@ -685,14 +716,24 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   defp cleared_class(%Node{} = node, _held),
     do: Enum.reject(node.attrs, &match?({"class", _}, &1))
 
-  @doc "Replaces a node's text content."
+  @doc """
+  Replaces a node's text content.
+
+  A text node's `whitespace?` flag is set from the new text, as `parse/1` sets it, so writing a
+  node's own text back returns an equal tree.
+  """
   @spec set_text(t(), String.t(), String.t()) :: {:ok, t()} | error()
   def set_text(tree, id, text) when is_binary(text) do
     with :ok <- validate_present(tree, id) do
       node = get(tree, id)
-      {:ok, put_node(tree, %{node | text: text, meta: Map.delete(node.meta, :whitespace?)})}
+      {:ok, put_node(tree, %{node | text: text, meta: text_meta(node, text)})}
     end
   end
+
+  defp text_meta(%Node{kind: :text, meta: meta}, text),
+    do: Map.put(meta, :whitespace?, String.trim(text) == "")
+
+  defp text_meta(%Node{meta: meta}, _text), do: meta
 
   @doc """
   The class that names this element for its own CSS, or `nil` when it has none yet.
@@ -806,7 +847,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   # this element answers to, and handing it out anyway keys a CSS rule and an interaction's `to:` to
   # a class that is nowhere on the page.
   defp mint_scope(tree, node) do
-    scope = "pb-" <> (:erlang.md5(node.id) |> Base.encode16(case: :lower) |> binary_part(0, 8))
+    scope = ElementScopes.scope_for(:erlang.md5(node.id))
     tree = put_node(tree, %{node | attrs: add_classes(node.attrs, [scope])})
 
     {tree, scope(tree, node.id)}
@@ -1232,9 +1273,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
     {node, Map.put(nodes, node.id, node)}
   end
 
-  # The tokenizer hands an HTML comment back with its own `<!--` / `-->` still attached (it slices
-  # the raw run), so the delimiters are stripped here and re-added by the serializer. Keeping them
-  # in `text` would nest a fresh pair on every save.
   # Overrides live in `meta.styles` while editing and as Tailwind utilities in the template. Lifting
   # them out on parse is what lets the inspector show the real recorded state of a saved page rather
   # than an empty panel over classes it cannot read.
@@ -1339,12 +1377,14 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
     end
   end
 
+  # The tokenizer hands an HTML comment back with its own `<!--` / `-->` still attached, so the
+  # delimiters are stripped here and re-added by the serializer. Keeping them in `text` would nest a
+  # fresh pair on every save. An EEx tag written inside a comment arrives as its own token between
+  # the comment's two halves, and goes back as the source it was read from.
   defp comment_text(children) do
     children
-    |> Enum.map_join("", fn
-      {:text, text, _meta} -> text
-      other -> inspect(other)
-    end)
+    |> Enum.map(&token_source/1)
+    |> IO.iodata_to_binary()
     |> String.replace_prefix("<!--", "")
     |> String.replace_suffix("-->", "")
   end

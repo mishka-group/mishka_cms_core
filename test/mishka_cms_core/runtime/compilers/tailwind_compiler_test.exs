@@ -67,6 +67,21 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     end
   end
 
+  # The host shell `host_app_web_sources/0` scans is the project in the working directory. Tailwind
+  # finds its binary from there too, so its path is pinned before moving.
+  defp in_project(root, fun) do
+    previous = Application.get_env(:tailwind, :path)
+    Application.put_env(:tailwind, :path, Tailwind.bin_path())
+
+    try do
+      File.cd!(root, fun)
+    after
+      if previous,
+        do: Application.put_env(:tailwind, :path, previous),
+        else: Application.delete_env(:tailwind, :path)
+    end
+  end
+
   describe "ensure_installed/0" do
     test "ensures Tailwind binary is installed and returns :ok" do
       result = TailwindCompiler.ensure_installed()
@@ -102,55 +117,135 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
     end
   end
 
-  describe "get_or_compile_shared_base/0" do
-    test "returns cached shared base if exists" do
-      test_css = "/* Cached shared base */"
-
-      AssetsState.save(%{
-        id: "__shared_base__",
-        type: "css",
-        value: test_css,
-        hash: "test",
-        updated_at: DateTime.utc_now()
-      })
-
-      result = TailwindCompiler.get_or_compile_shared_base()
-      assert result == test_css
-
-      AssetsState.delete("__shared_base__", "css")
-    end
-
-    test "compiles shared base if not cached" do
-      AssetsState.delete("__shared_base__", "css")
-      TailwindCompiler.ensure_installed()
-
-      result = TailwindCompiler.get_or_compile_shared_base()
-      assert is_binary(result)
-    end
-  end
-
   describe "compile/1 and compile/2" do
     test "returns compiled CSS for a site" do
       assert {:ok, css} = quiet_compile("test_site")
-      assert css =~ "/* Site: test_site */"
+      assert css =~ "/*! tailwindcss v"
     end
 
-    # There is ONE way to assemble a site's stylesheet: the cached shared base plus the site's own
-    # delta. The `use_shared_base: false` mode that used to sit beside it restated every decision
-    # about what gets scanned, was called by nothing but its own tests, and drifted each time that
-    # answer changed.
-    test "the site's delta is appended to the shared base, under its own marker" do
-      TailwindCompiler.ensure_installed()
+    # ONE TAILWIND RUN. The site's stylesheet was the shared base with a second run over the site's
+    # own templates joined after it, and Tailwind ranks utilities only within a run: the site's
+    # `px-4` came again after the host shell's `sm:px-6`, which then never applied.
+    test "is one Tailwind run, so the host shell's responsive classes outrank the site's own" do
+      site = "one-run-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), site)
+      shell = Path.join([root, "lib", "mishka_cms_web", "components"])
+      File.mkdir_p!(shell)
+      File.write!(Path.join(shell, "layouts.ex"), ~s(<main class="px-4 py-20 sm:px-6 lg:px-8">))
 
-      assert {:ok, css} = TailwindCompiler.compile("test_shared_site")
-      assert css =~ "/* Site: test_shared_site */"
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<div class="px-4"></div>)
+      )
+
+      on_exit(fn ->
+        File.rm_rf(root)
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+        AssetsState.delete(site, "css")
+      end)
+
+      assert {:ok, _css} = in_project(root, fn -> quiet_compile_and_store(site) end)
+      css = AssetsState.get_value(site, "css")
+
+      assert [_one_run] = :binary.matches(css, "/*! tailwindcss v")
+      assert [{px_4, _}] = :binary.matches(css, ".px-4{")
+      assert {sm_px_6, _} = :binary.match(css, ~S(.sm\:px-6{))
+      assert {lg_px_8, _} = :binary.match(css, ~S(.lg\:px-8{))
+      assert px_4 < sm_px_6 and sm_px_6 < lg_px_8
+    end
+
+    # A RELEASE SHIPS NO `.ex` FILES. The shell is the class list Tailwind's scanner wrote at build
+    # time, read in the same run, where it was a stylesheet compiled at build time and glued in front.
+    test "reads the shell's class list where its sources are absent, in the same one run" do
+      site = "release-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), site)
+      list = TailwindCompiler.shell_classes_path()
+      File.mkdir_p!(root)
+      File.mkdir_p!(Path.dirname(list))
+      File.write!(list, "px-4\npy-20\nsm:px-6\nlg:px-8\n")
+
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<div class="px-4"></div>)
+      )
+
+      on_exit(fn ->
+        File.rm(list)
+        File.rm_rf(root)
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+      end)
+
+      assert {:ok, css} = in_project(root, fn -> quiet_compile(site) end)
+      assert [_one_run] = :binary.matches(css, "/*! tailwindcss v")
+      assert [{px_4, _}] = :binary.matches(css, ".px-4{")
+      assert {sm_px_6, _} = :binary.match(css, ~S(.sm\:px-6{))
+      assert {lg_px_8, _} = :binary.match(css, ~S(.lg\:px-8{))
+      assert px_4 < sm_px_6 and sm_px_6 < lg_px_8
+    end
+
+    test "builds with neither the shell's sources nor its class list" do
+      site = "no-shell-#{System.unique_integer([:positive])}"
+      root = Path.join(System.tmp_dir!(), site)
+      File.mkdir_p!(root)
+      refute File.exists?(TailwindCompiler.shell_classes_path())
+
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<div class="px-4"></div>)
+      )
+
+      on_exit(fn ->
+        File.rm_rf(root)
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+      end)
+
+      assert {:ok, css} = in_project(root, fn -> quiet_compile(site) end)
+      assert [_one_run] = :binary.matches(css, "/*! tailwindcss v")
+      assert css =~ ".px-4{"
+      refute css =~ ~S(.sm\:px-6{)
+    end
+
+    # A GLOBAL KIT THEME ROW, ONCE. It was pasted into both runs, the second for its `@theme` tokens,
+    # so every plain rule in it was served twice.
+    test "holds a global theme row once, and builds the site's classes from its tokens" do
+      n = System.unique_integer([:positive])
+      site = "kit-theme-#{n}"
+
+      Ash.Seed.seed!(MishkaCmsCore.Runtime.Stylesheet, %{
+        name: "kit-theme-#{n}",
+        kind: :theme,
+        content: "@theme { --color-kitx#{n}: #123456; }\n.kit-plain-#{n} { color: #654321; }",
+        site_id: nil,
+        active: true
+      })
+
+      MishkaCmsCore.Runtime.Handlers.BootHandler.create_template_file(
+        site,
+        "page",
+        "home",
+        ~s(<p class="bg-kitx#{n}"></p>)
+      )
+
+      on_exit(fn ->
+        File.rm_rf(MishkaCmsCore.Runtime.Helpers.static_temp_dir(["runtime", site]))
+      end)
+
+      assert {:ok, css} = quiet_compile(site)
+      assert [_once] = :binary.matches(css, ".kit-plain-#{n}{")
+      assert css =~ ".bg-kitx#{n}{background-color:var(--color-kitx#{n})}"
     end
 
     test "a site with nothing of its own still compiles, and logs no error" do
       log =
         capture_log([level: :error], fn ->
           assert {:ok, css} = quiet_compile("test_error_site")
-          assert css =~ "/* Site: test_error_site */"
+          assert css =~ "/*! tailwindcss v"
         end)
 
       assert log == ""
@@ -161,7 +256,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
 
       for site <- sites do
         assert {:ok, css} = quiet_compile(site)
-        assert css =~ "/* Site: #{site} */"
+        assert css =~ "/*! tailwindcss v"
       end
     end
 
@@ -173,6 +268,106 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
 
       assert css1 == css2
     end
+  end
+
+  # CSS OBEYS AN `@import` ONLY AHEAD OF EVERY RULE, and a row is pasted after other rows and
+  # Tailwind's own CSS, so Tailwind dropped a kit theme's font import wherever it was written.
+  describe "a remote @import in a stylesheet row" do
+    setup do
+      n = System.unique_integer([:positive])
+      TailwindCompiler.ensure_installed()
+
+      site =
+        MishkaCmsCore.Test.Factory.create_site!(
+          name: "fonts-#{n}",
+          host: "fonts-#{n}.test",
+          active: true
+        )
+
+      :ok =
+        MishkaCmsCore.Runtime.States.SiteState.save(%{
+          id: site.id,
+          name: site.name,
+          host: site.host,
+          priority: 0,
+          active: true
+        })
+
+      global = "@import url(https://fonts.googleapis.com/css2?family=Global#{n}:wght@400;700);"
+      own = ~s(@import "https://fonts.googleapis.com/css2?family=Own#{n}";)
+
+      row!(nil, :theme, ".font-g-#{n} { color: #111111; }\n" <> global)
+      row!(nil, :custom, global <> "\n.font-c-#{n} { color: #222222; }")
+      row!(site.id, :custom, ".font-s-#{n} { color: #333333; }\n" <> own)
+
+      on_exit(fn -> MishkaCmsCore.Runtime.States.SiteState.delete(site.id) end)
+
+      %{site: site, n: n, imports: global <> "\n" <> own <> "\n"}
+    end
+
+    test "leads the site's stylesheet, each once, the global rows' first", ctx do
+      assert {:ok, css} = quiet_compile(ctx.site.name)
+
+      assert String.starts_with?(css, ctx.imports)
+      assert [_once] = :binary.matches(css, "family=Global#{ctx.n}")
+      assert [_once] = :binary.matches(css, "family=Own#{ctx.n}")
+
+      for {class, color} <- [{"g", "#111"}, {"c", "#222"}, {"s", "#333"}],
+          do: assert(css =~ ".font-#{class}-#{ctx.n}{color:#{color}}")
+    end
+
+    test "leads a draft preview's stylesheet and the shared base", ctx do
+      assert {:ok, preview} =
+               TailwindCompiler.compile_preview(
+                 ctx.site.name,
+                 "fonts-preview-#{ctx.n}",
+                 "draft",
+                 ~s(<p class="p-1"></p>)
+               )
+
+      assert String.starts_with?(preview, ctx.imports)
+
+      assert {:ok, base} = TailwindCompiler.compile_shared_base()
+
+      assert String.starts_with?(
+               base,
+               "@import url(https://fonts.googleapis.com/css2?family=Global"
+             )
+
+      assert [_once] = :binary.matches(base, "family=Global#{ctx.n}")
+      refute base =~ "family=Own#{ctx.n}"
+    end
+
+    # `@apply p-4 }` with no `;` before the `}` is CSS Tailwind builds and the parser misreads: what
+    # follows it, in its row and in every row after it, was read wrong, and no import there was found.
+    test "leads it past a row whose @apply ends without a semicolon", ctx do
+      inter = "@import url(https://fonts.googleapis.com/css2?family=Inter#{ctx.n}:wght@400;700);"
+
+      row!(nil, :base, ".a-#{ctx.n} { &:hover { @apply p-4 } }")
+
+      row!(
+        ctx.site.id,
+        :base,
+        ".b-#{ctx.n} { &:hover { @apply p-2 } }\n.c { color: red; }\n" <> inter
+      )
+
+      assert {:ok, css} = quiet_compile(ctx.site.name)
+
+      [global, own] = String.split(ctx.imports, "\n", trim: true)
+      assert String.starts_with?(css, Enum.join([global, inter, own, ""], "\n"))
+      assert [_once] = :binary.matches(css, "family=Global#{ctx.n}")
+      assert [_once] = :binary.matches(css, "family=Inter#{ctx.n}")
+    end
+  end
+
+  defp row!(site_id, kind, content) do
+    Ash.Seed.seed!(MishkaCmsCore.Runtime.Stylesheet, %{
+      name: "row-#{System.unique_integer([:positive])}",
+      kind: kind,
+      content: content,
+      site_id: site_id,
+      active: true
+    })
   end
 
   describe "compile_and_store/1" do
@@ -652,15 +847,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompilerTest do
       site: site
     } do
       assert {:ok, css} = TailwindCompiler.compile(site)
-      [_shared, own] = String.split(css, "/* Site: #{site} */", parts: 2)
 
-      # The site's chunk orders its layers itself, not only through the shared base before it.
-      for stylesheet <- [css, own] do
-        assert ranked_layers(stylesheet) == ~w(theme base components utilities)
-      end
-
-      assert layers_around(own, ".hero-bell{") == ["components"]
-      assert layers_around(own, ".size-3{") == ["utilities"]
+      assert ranked_layers(css) == ~w(theme base components utilities)
+      assert layers_around(css, ".hero-bell{") == ["components"]
+      assert layers_around(css, ".size-3{") == ["utilities"]
     end
   end
 

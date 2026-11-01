@@ -210,7 +210,7 @@ msgstr ""
 msgid "%{first} and %{second} on the Handlers tab will stop being called."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:902
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:965
 #, elixir-autogen, elixir-format
 msgid "%{front} or `<%{last}>` elements"
 msgstr ""
@@ -330,32 +330,32 @@ msgstr ""
 msgid "%{label} archived"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:552
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:606
 #, elixir-autogen, elixir-format
 msgid "%{label} can only contain %{list}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:613
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:667
 #, elixir-autogen, elixir-format
 msgid "%{label} can only hold text and inline elements."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:617
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:671
 #, elixir-autogen, elixir-format
 msgid "%{label} sits in a `<%{host}>` here, so it can only hold text and inline elements."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:727
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:781
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot contain another clickable element."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:659
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:713
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot hold a `<%{tag}>`. Put it next to it instead."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:389
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:425
 #, elixir-autogen, elixir-format
 msgid "%{label} cannot contain other elements."
 msgstr ""
@@ -376,12 +376,12 @@ msgstr ""
 msgid "%{label} discarded"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:430
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:484
 #, elixir-autogen, elixir-format
 msgid "%{label} does not declare a slot to put content in."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:411
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:465
 #, elixir-autogen, elixir-format
 msgid "%{label} is set by its properties — it does not draw content."
 msgstr ""
@@ -459,12 +459,12 @@ msgstr ""
 msgid "%{name} keeps state, so it needs an id — add one to its tag."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:162
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:161
 #, elixir-autogen, elixir-format
 msgid "%{name}, line %{line}: %{message}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:165
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:164
 #, elixir-autogen, elixir-format
 msgid "%{name}: %{message}"
 msgstr ""
@@ -496,7 +496,7 @@ msgstr ""
 msgid "%{removed} unused translation(s) removed"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:570
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:574
 #, elixir-autogen, elixir-format
 msgid "%{selectors} style elements INSIDE this one. For the element itself write the declarations on their own, or start the selector with `&`."
 msgstr ""
@@ -738,7 +738,7 @@ msgstr ""
 msgid "4 columns"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:895
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:958
 #, elixir-autogen, elixir-format
 msgid "A `<%{tag}>`"
 msgstr ""
@@ -746,11 +746,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/elements.ex:84
 #, elixir-autogen, elixir-format
 msgid "A band across the page. The usual outermost wrapper."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:139
-#, elixir-autogen, elixir-format
-msgid "A band across the top, then the page."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:1227
@@ -763,7 +758,7 @@ msgstr ""
 msgid "A copy of this page — its template, layout, code and permissions — that stays inactive until you activate it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:689
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:743
 #, elixir-autogen, elixir-format
 msgid "A field cannot go inside another field. Put it next to it."
 msgstr ""
@@ -773,7 +768,7 @@ msgstr ""
 msgid "A fifth-level heading."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:638
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:692
 #, elixir-autogen, elixir-format
 msgid "A form cannot go inside another form — browsers drop the inner one."
 msgstr ""
@@ -1105,7 +1100,7 @@ msgstr ""
 msgid "An anchor. Set where it goes in the Inspector."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:376
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:412
 #, elixir-autogen, elixir-format
 msgid "An element cannot be moved inside itself."
 msgstr ""
@@ -1128,11 +1123,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/kit_upgrade_panel.ex:353
 #, elixir-autogen, elixir-format
 msgid "An update never installs a component a site does not have — Repair, below, does."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/inspector.ex:1702
-#, elixir-autogen, elixir-format
-msgid "Another form on this page is already called \"%{name}\"."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/authoring/elements.ex:409
@@ -1210,7 +1200,7 @@ msgstr ""
 msgid "Autofill"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/drafts.ex:58
+#: lib/mishka_cms_core/runtime/authoring/drafts.ex:71
 #, elixir-autogen, elixir-format
 msgid "Autosave"
 msgstr ""
@@ -1661,7 +1651,7 @@ msgstr ""
 msgid "Compiling…"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/section.ex:51
+#: lib/mishka_cms_core/runtime/authoring/section.ex:52
 #: lib/mishka_cms_core/runtime/resources/__mixins/component_paper_trail_mixin.ex:33
 #: lib/mishka_cms_core/runtime/runtime_status.ex:46
 #: lib/mishka_cms_core/runtime/site_health.ex:47
@@ -2266,7 +2256,7 @@ msgstr ""
 msgid "Error code"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/section.ex:45
+#: lib/mishka_cms_core/runtime/authoring/section.ex:46
 #, elixir-autogen, elixir-format
 msgid "Error page"
 msgstr ""
@@ -3002,7 +2992,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/elements.ex:189
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:143
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:161
-#: lib/mishka_cms_core/runtime/authoring/section.ex:39
+#: lib/mishka_cms_core/runtime/authoring/section.ex:40
 #: lib/mishka_cms_core/runtime/content_components.ex:1129
 #: lib/mishka_cms_core/runtime/resources/__mixins/layout_paper_trail_mixin.ex:33
 #: lib/mishka_cms_core/runtime/runtime_preview.ex:696
@@ -3083,7 +3073,7 @@ msgstr ""
 msgid "Limit how often it checks"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:168
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:167
 #, elixir-autogen, elixir-format
 msgid "Line %{line}: %{message}"
 msgstr ""
@@ -3875,11 +3865,6 @@ msgstr ""
 msgid "One of this component's own declared attributes. Rename it in the inspector."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:105
-#, elixir-autogen, elixir-format
-msgid "One wide band down the page."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1425
 #, elixir-autogen, elixir-format
 msgid "Only a field can move to another form."
@@ -3994,7 +3979,7 @@ msgstr ""
 msgid "Pack to the start"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/section.ex:33
+#: lib/mishka_cms_core/runtime/authoring/section.ex:34
 #: lib/mishka_cms_core/runtime/resources/__mixins/page_paper_trail_mixin.ex:33
 #: lib/mishka_cms_core/runtime/runtime_status.ex:73
 #: lib/mishka_cms_core/runtime/site_health.ex:45
@@ -5315,32 +5300,22 @@ msgstr ""
 msgid "Thanks — we'll be in touch."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:599
-#, elixir-autogen, elixir-format
-msgid "That CSS has a /* that is never closed."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:596
-#, elixir-autogen, elixir-format
-msgid "That CSS has an unmatched { or }."
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1111
 #, elixir-autogen, elixir-format
 msgid "That draft is no longer there."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:304
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:338
 #, elixir-autogen, elixir-format
 msgid "That drop target no longer exists."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:522
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:542
 #, elixir-autogen, elixir-format
 msgid "That element has no style scope."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:384
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:420
 #, elixir-autogen, elixir-format
 msgid "That element holds text only — drop next to it instead of inside it."
 msgstr ""
@@ -5353,13 +5328,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1584
 #, elixir-autogen, elixir-format
 msgid "That form has no fields to move."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:205
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1435
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1575
-#, elixir-autogen, elixir-format
-msgid "That form is no longer on the page."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex:173
@@ -5514,11 +5482,6 @@ msgstr ""
 msgid "There is no Send button. What they type is checked as they type. Pressing Enter never reloads the page, and in a form with a single box it still sends."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:390
-#, elixir-autogen, elixir-format
-msgid "There is no form on this page to put it in yet."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:1164
 #, elixir-autogen, elixir-format
 msgid "They can see what is in it but not change it."
@@ -5544,7 +5507,7 @@ msgstr ""
 msgid "This component needs attributes — add an example to preview it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:894
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:957
 #, elixir-autogen, elixir-format
 msgid "This element"
 msgstr ""
@@ -5600,7 +5563,7 @@ msgstr ""
 msgid "This form is inside another form"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:224
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:234
 #, elixir-autogen, elixir-format
 msgid "This handler has no code. It must end in {:noreply, socket}."
 msgstr ""
@@ -5610,7 +5573,7 @@ msgstr ""
 msgid "This has not been set up on this site yet, and your account may not set it up. An administrator who may write this site's runtime can do it from here."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:263
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:273
 #, elixir-autogen, elixir-format
 msgid "This helper has no code."
 msgstr ""
@@ -5633,16 +5596,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:96
 #, elixir-autogen, elixir-format
 msgid "This page already has an edition in every language this site and its pages use. Type another code to start one."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:635
-#, elixir-autogen, elixir-format
-msgid "This page cannot be saved until it is back inside a form."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:321
-#, elixir-autogen, elixir-format
-msgid "This page took too long to compile. Something in it is probably looping."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:127
@@ -5881,11 +5834,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:783
 #, elixir-autogen, elixir-format
 msgid "Two forms keep what is typed in the same place"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:504
-#, elixir-autogen, elixir-format
-msgid "Two forms on this page would mix up each other's answers."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:848
@@ -6442,11 +6390,6 @@ msgstr ""
 msgid "You cannot scan the templates."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_access.ex:52
-#, elixir-autogen, elixir-format
-msgid "You do not have permission to change page code."
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:141
 #, elixir-autogen, elixir-format
 msgid "You do not have permission to change this."
@@ -6504,12 +6447,12 @@ msgstr ""
 msgid "Your personal settings — only you see these"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:564
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:568
 #, elixir-autogen, elixir-format
 msgid "`%{selector}` styles a %{selector} INSIDE this element. For the element itself write the declarations on their own, or start the selector with `&`."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:897
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:960
 #, elixir-autogen, elixir-format
 msgid "`<%{tag}>` elements"
 msgstr ""
@@ -6599,7 +6542,7 @@ msgstr ""
 msgid "en, fa, ar, ..."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:433
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:503
 #, elixir-autogen, elixir-format
 msgid "end of template reached without closing tag for <%{name}>"
 msgstr ""
@@ -6851,7 +6794,7 @@ msgstr ""
 msgid "the response was not valid JSON"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:354
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:371
 #, elixir-autogen, elixir-format
 msgid "the template"
 msgstr ""
@@ -6859,11 +6802,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/home/index.ex:216
 #, elixir-autogen, elixir-format
 msgid "there"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:399
-#, elixir-autogen, elixir-format
-msgid "this page"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:663
@@ -8677,11 +8615,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:55
 #, elixir-autogen, elixir-format
 msgid "That folder is no longer in the library."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:243
-#, elixir-autogen, elixir-format
-msgid "This value has no code. Write the expression the page starts with, like 0."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:154
@@ -12460,11 +12393,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:1480
 #, elixir-autogen, elixir-format
 msgid "With every update of the page inside it, %{time} each"
-msgstr ""
-
-#: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:772
-#, elixir-autogen, elixir-format
-msgid "the start of every site's CSS"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:637
@@ -18357,7 +18285,7 @@ msgstr ""
 msgid "✕ whole document"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/containment.ex:586
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:640
 #, elixir-autogen, elixir-format
 msgid "%{label} goes only inside %{list}."
 msgstr ""
@@ -18546,4 +18474,111 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/panels.ex:15968
 #, elixir-autogen, elixir-format
 msgid "not live until you press Publish"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/containment.ex:437
+#, elixir-autogen, elixir-format
+msgid "%{label} holds text only."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:625
+#, elixir-autogen, elixir-format
+msgid "That CSS could not be read."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:663
+#, elixir-autogen, elixir-format
+msgid "That CSS has an error on line %{line}, column %{column}: %{reason}"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:670
+#, elixir-autogen, elixir-format
+msgid "That CSS has an error on line %{line}, column %{column}, at `%{text}`: %{reason}"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/tree.ex:117
+#, elixir-autogen, elixir-format
+msgid "a tag is opened inside another tag; close the <%{tag}> with > first"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:620
+#, elixir-autogen, elixir-format
+msgid "unmatched closing tag </%{name}>"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:577
+#, elixir-autogen, elixir-format
+msgid "</%{name}> does not close <%{open}>"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:683
+#, elixir-autogen, elixir-format
+msgid "%{tag} has no <% end %>"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:139
+#, elixir-autogen, elixir-format, fuzzy
+msgid "A band across the top, then the content."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:1702
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Another form here is already called \"%{name}\"."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:105
+#, elixir-autogen, elixir-format
+msgid "One wide band, top to bottom."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:635
+#, elixir-autogen, elixir-format
+msgid "Saving is refused until it is back inside a form."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:205
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1435
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1575
+#, elixir-autogen, elixir-format, fuzzy
+msgid "That form is no longer here."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:390
+#, elixir-autogen, elixir-format, fuzzy
+msgid "There is no form to put it in yet."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:331
+#, elixir-autogen, elixir-format, fuzzy
+msgid "This took too long to compile. Something in it is probably looping."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:253
+#, elixir-autogen, elixir-format, fuzzy
+msgid "This value has no code. Write the expression it starts with, like 0."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:504
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Two forms on one page would mix up each other's answers."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_access.ex:52
+#, elixir-autogen, elixir-format, fuzzy
+msgid "You do not have permission to change author-written Elixir."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:416
+#, elixir-autogen, elixir-format, fuzzy
+msgid "this code"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:651
+#, elixir-autogen, elixir-format
+msgid "`@apply` names no utility. Write one after it, like `@apply p-4`."
+msgstr ""
+
+#: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:772
+#, elixir-autogen, elixir-format
+msgid "also built into each site's CSS"
 msgstr ""

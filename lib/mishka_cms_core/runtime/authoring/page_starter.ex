@@ -102,7 +102,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
     %{
       id: "single",
       title: gettext_noop("Single column"),
-      description: gettext_noop("One wide band down the page."),
+      description: gettext_noop("One wide band, top to bottom."),
       columns: 1,
       template: ~s(<div class="mx-auto w-full max-w-6xl px-6 py-12">
   <div class="min-h-[160px] rounded-lg border border-dashed border-slate-300 p-6"></div>
@@ -136,7 +136,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageStarter do
     %{
       id: "hero",
       title: gettext_noop("Hero + content"),
-      description: gettext_noop("A band across the top, then the page."),
+      description: gettext_noop("A band across the top, then the content."),
       columns: 1,
       template: ~s(<div class="w-full">
   <div class="w-full bg-slate-50 px-6 py-20">

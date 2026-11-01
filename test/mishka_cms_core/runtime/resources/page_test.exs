@@ -406,6 +406,104 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
     end
   end
 
+  # ONE ADDRESS, ONE PAGE. The router serves `/about/` as `/about`, and the uniqueness checks compare
+  # the stored path, so a path is stored the way it is served.
+  describe "a page's path" do
+    defp create(site, path, action \\ :create) do
+      attrs = %{title: "Page at #{path}", path: path, template: "<div>x</div>"}
+
+      {attrs, opts} =
+        case action do
+          :master_create -> {Map.put(attrs, :site_id, site.id), []}
+          :create -> {attrs, [tenant: site.id]}
+        end
+
+      Page
+      |> Ash.Changeset.for_create(action, attrs, [authorize?: false] ++ opts)
+      |> Ash.create(authorize?: false)
+    end
+
+    test "is stored without its trailing slash, and / stays /" do
+      site = create_site!()
+
+      assert {:ok, %{path: "/about"}} = create(site, "/about/")
+      assert {:ok, %{path: "/docs/intro"}} = create(site, "  /docs/intro/  ")
+      assert {:ok, %{path: "/"}} = create(site, "/")
+
+      assert {:ok, %{path: "/renamed"}} =
+               site
+               |> create!("/before")
+               |> Ash.Changeset.for_update(:update, %{path: "/renamed/"}, tenant: site.id)
+               |> Ash.update(authorize?: false)
+    end
+
+    # Before the INSERT, where `unique_path_per_site` refused it with a query error in the log. A
+    # page that is not live is not one `PublicAddress` asks about, so this is the check that holds.
+    for action <- [:create, :master_create] do
+      test "another page of the site already has is refused on #{action}, with or without a slash" do
+        site = create_site!()
+        create_page!(site_id: site.id, path: "/taken", active: false)
+
+        for path <- ["/taken", "/taken/"] do
+          assert {:error, %Ash.Error.Invalid{errors: [error]}} =
+                   create(site, path, unquote(action))
+
+          assert %{field: :path, message: "Page path must be unique within a site."} = error
+        end
+      end
+    end
+
+    # Before the UPDATE as well, where the index refused a rename with a query error in the log. The
+    # check's refusal carries `:answered_at`, which the index's does not. The page keeps its own path.
+    for action <- [:update, :master_update] do
+      test "another page of the site already has is refused on #{action}, before the write" do
+        site = create_site!()
+        create_page!(site_id: site.id, path: "/taken", active: false)
+        page = create!(site, "/mine")
+        tenant = if unquote(action) == :update, do: site.id
+
+        rename = fn path ->
+          page
+          |> Ash.Changeset.for_update(unquote(action), %{path: path},
+            tenant: tenant,
+            authorize?: false
+          )
+          |> Ash.update(authorize?: false)
+        end
+
+        for path <- ["/taken", "/taken/"] do
+          assert {:error, %Ash.Error.Invalid{errors: [error]}} = rename.(path)
+
+          assert %{field: :path, message: "Page path must be unique within a site.", vars: vars} =
+                   error
+
+          assert vars[:answered_at] == "/taken"
+        end
+
+        assert {:ok, %{path: "/mine"}} = rename.("/mine/")
+      end
+    end
+
+    test "with no leading slash, a query or a fragment is refused on its field" do
+      site = create_site!()
+
+      for {path, message} <- [
+            {"about", "Path must start with '/'"},
+            {"/about?x=1",
+             "Path may only contain letters, digits, and the characters - _ / . : *"},
+            {"/about#a", "Path may only contain letters, digits, and the characters - _ / . : *"}
+          ] do
+        assert {:error, %Ash.Error.Invalid{errors: errors}} = create(site, path)
+        assert Enum.any?(errors, &match?(%{field: :path, message: ^message}, &1)), path
+      end
+    end
+
+    defp create!(site, path) do
+      {:ok, page} = create(site, path)
+      page
+    end
+  end
+
   describe "a page and what it is called" do
     test "the title is stored as it was typed, while the name beside it is slugified" do
       site = create_site!()
@@ -1913,25 +2011,24 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
     end
   end
 
-  defp seed_css!(record) do
+  defp seed_site!(record) do
     AssetsState.save(%{
       id: record.preview_token,
-      type: "css",
-      value: ".stale{}",
-      hash: "deadbeef",
+      type: "site",
+      value: record.site_id,
+      hash: nil,
       updated_at: DateTime.utc_now()
     })
 
-    assert AssetsState.exists?(record.preview_token, "css")
+    assert AssetsState.exists?(record.preview_token, "site")
     record
   end
 
-  # THE PREVIEW'S STYLESHEET IS CACHED UNDER THE RECORD'S TOKEN and compiled only when that key is
-  # absent, so a write that leaves the key behind serves the CSS of the version before it for the
-  # life of the node: the utility classes that write introduced have no rules, and the reviewer sent
-  # `/_preview/page/<token>` reads the markup as broken rather than the stylesheet as old. The
-  # builder's own save purged the key; these three write the same row and did not.
-  describe "the live page's preview stylesheet" do
+  # WHAT A PREVIEW KEEPS UNDER THE RECORD'S TOKEN — the site its JS bundle is served for, beside the
+  # compiled module — is dropped by every write of the row, so the next preview starts from the
+  # record as it is now. The preview's CSS is compiled on every open and kept nowhere. The builder's
+  # own save purged the keys; these three write the same row and did not.
+  describe "the live page's preview keys" do
     import MishkaCmsCore.Test.VersionHelpers
     alias MishkaCmsCore.Runtime.PageDraft
 
@@ -1939,7 +2036,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       site = create_site!()
       page = create_page!(site_id: site.id)
 
-      %{site: site, page: seed_css!(page)}
+      %{site: site, page: seed_site!(page)}
     end
 
     test "is dropped when a draft is published over it", %{site: site, page: page} do
@@ -1962,8 +2059,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       |> Ash.Changeset.for_update(:publish, %{}, tenant: site.id)
       |> Ash.update!(authorize?: false)
 
-      refute AssetsState.exists?(page.preview_token, "css"),
-             "the shareable preview kept the stylesheet from before the publish"
+      refute AssetsState.exists?(page.preview_token, "site"),
+             "the shareable preview kept its keys from before the publish"
     end
 
     test "and when a version is restored over it", %{site: site, page: page} do
@@ -1974,8 +2071,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       version = first_version(MishkaCmsCore.Runtime.Page.Version, page.id)
 
       # That update is itself a write, so it took the key the setup seeded with it — the restore has
-      # to be given its own stale stylesheet to drop.
-      seed_css!(page)
+      # to be given its own to drop.
+      seed_site!(page)
 
       {:ok, _restored} =
         Page
@@ -1989,8 +2086,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         )
         |> Ash.run_action(authorize?: false)
 
-      refute AssetsState.exists?(page.preview_token, "css"),
-             "the shareable preview kept the stylesheet from before the restore"
+      refute AssetsState.exists?(page.preview_token, "site"),
+             "the shareable preview kept its keys from before the restore"
     end
 
     # The inspector's Configuration tab is an `AshPhoenix.Form` over this very action.
@@ -2002,8 +2099,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       )
       |> Ash.update!(authorize?: false)
 
-      refute AssetsState.exists?(page.preview_token, "css"),
-             "the shareable preview kept the stylesheet from before the save"
+      refute AssetsState.exists?(page.preview_token, "site"),
+             "the shareable preview kept its keys from before the save"
     end
 
     # Archiving is a soft DESTROY, not an update: the row is unreachable afterwards, so a key left
@@ -2011,26 +2108,26 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
     test "and when the page is archived", %{page: page} do
       Ash.destroy!(page, authorize?: false)
 
-      refute AssetsState.exists?(page.preview_token, "css"),
-             "an archived page left its preview stylesheet in the cache for good"
+      refute AssetsState.exists?(page.preview_token, "site"),
+             "an archived page left its preview keys in the cache for good"
     end
 
-    # A PURGE THAT RUNS BEFORE THE COMMIT PUTS THE STALE SHEET BACK: in the window between it and
-    # the commit, a reader of `/_preview/page/<token>` finds the key missing, compiles the row as it
-    # still is — the version before the save — and stores it under the token nobody will drop again.
+    # A PURGE THAT RUNS BEFORE THE COMMIT PUTS A STALE KEY BACK: in the window between it and the
+    # commit, a reader of `/_preview/page/<token>` finds the key missing, compiles the row as it
+    # still is — the version before the save — and keeps it under the token nobody will drop again.
     test "and not before the row it invalidates is committed", %{site: site, page: page} do
       test_pid = self()
 
       page
       |> Ash.Changeset.for_update(:update, %{description: "Committed"}, tenant: site.id)
       |> Ash.Changeset.after_action(fn _changeset, record ->
-        send(test_pid, {:mid_transaction, AssetsState.exists?(page.preview_token, "css")})
+        send(test_pid, {:mid_transaction, AssetsState.exists?(page.preview_token, "site")})
         {:ok, record}
       end)
       |> Ash.update!(authorize?: false)
 
       assert_receive {:mid_transaction, true}
-      refute AssetsState.exists?(page.preview_token, "css")
+      refute AssetsState.exists?(page.preview_token, "site")
     end
 
     # THE CACHE IS NOT A DEPENDENCY OF WRITING A PAGE. `AssetsState` owns its ETS table, the host

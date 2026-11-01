@@ -42,7 +42,7 @@ defmodule MishkaCmsCoreWeb.AssetsController do
       a preview link of that site (`?preview=<token>`), by the same rule as its own address;
     * the content editor's stylesheet for a site (`MishkaCmsCore.Runtime.ContentEditorStyles`): a
       master, and an admin of that site;
-    * `__shared_base__`, the base every site's bundle starts with: anyone.
+    * `__shared_base__`, the global bundle, built from the global rows and hooks alone: anyone.
 
   A lazy JS hook's module (`MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler.lazy_type/1`) is
   answered at `/assets/js/<site>/<hash>.js` too, by its own hash, to whom may see that site's script,

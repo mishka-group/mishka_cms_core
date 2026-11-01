@@ -1056,7 +1056,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacementTest do
       assert {:error, "This form does not work yet."} =
                FormPlacement.how_ops(%{session | tree: tree}, idle.id, :typing)
 
-      assert {:error, "That form is no longer on the page."} =
+      assert {:error, "That form is no longer here."} =
                FormPlacement.how_ops(session, "gone", :typing)
     end
   end

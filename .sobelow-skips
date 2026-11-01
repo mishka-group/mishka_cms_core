@@ -1,27 +1,26 @@
 CI.System: Command Injection via `System` function,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1209,3E21AA0
-CI.System: Command Injection via `System` function,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:388,2848528
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/authoring/tree.ex:809,6EA56E8
+CI.System: Command Injection via `System` function,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:338,8E1051
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/authoring/tree.ex:850,6CB7563
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/_helpers.ex:56,6168F81
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:548,667E8DF
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:581,7E2E986
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:918,443FF69
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:528,6E36120
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:928,3857122
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:475,19BE443
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:853,3459FE7
 Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/content_editor_styles.ex:103,767652A
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:233,4B66FE0
-Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:263,42B5786
+Crypto.WeakHash: Weak or Inappropriate Hash,lib/mishka_cms_core/runtime/draft_preview_assets.ex:241,11B553D
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/activity/sources/runtime_compile.ex:108,3E92A6F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:124,69BBDA4
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/authoring/code_check.ex:301,3ABB6FB
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/authoring/code_check.ex:311,7929271
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/_helpers.ex:58,2261ED1
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/component_compiler.ex:1742,36E6C05
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:302,20BDF42
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:306,701AF4
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/module_compiler.ex:310,7D09F8B
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/compilers/sitemap_compiler.ex:462,4570480
-DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:234,71D8E6C
+DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core/runtime/draft_preview_assets.ex:242,5E7627F
 DOS.ModuleConcat: Atom Creation in Dynamic Module Names,lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1988,1635147
-RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/authoring/code_check.ex:370,3A0746E
+RCE.Compile: Code Execution in Compilation or Loading,lib/mishka_cms_core/runtime/authoring/code_check.ex:387,3C0C15E
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:197,1CD06A0
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:220,6CCAA4
 SQL.Query: SQL injection,lib/mishka_cms_core/activity/query.ex:258,B4D652
@@ -51,7 +50,7 @@ Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:786,2C8ADB0
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:812,402E1A5
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1050,2D18B4A
-Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:740,291F55D
+Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:705,3052F9A
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:701,8930A3
 Traversal.FileModule: Directory Traversal in `File.mkdir_p!`,lib/mix/mishka_cms_core/gettext_templates.ex:85,7B98452
 Traversal.FileModule: Directory Traversal in `File.mkdir_p`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:325,47F5C3F
@@ -76,7 +75,7 @@ Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/ru
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:584,B7345
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/npm_packages.ex:271,3CFADB5
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/npm_packages.ex:280,3E1E0F3
-Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:745,4EAE251
+Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:710,5905BA1
 Traversal.FileModule: Directory Traversal in `File.rm_rf`,lib/mishka_cms_core/runtime/handlers/site_runtime.ex:64,6B619F1
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/mishka_cms_core/dev/seed_media.ex:281,69E5A7C
 Traversal.FileModule: Directory Traversal in `File.rm`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:255,581D4EB
@@ -101,7 +100,7 @@ Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/r
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1085,4F58682
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1099,20ED4E6
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/java_script_compiler.ex:1272,3C59B39
-Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:741,269D145
+Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex:706,1A0E307
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex:702,2CFA321
 Traversal.FileModule: Directory Traversal in `File.write!`,lib/mix/mishka_cms_core/gettext_templates.ex:86,3AC9CC3
 Traversal.FileModule: Directory Traversal in `File.write`,lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex:327,11A8D64

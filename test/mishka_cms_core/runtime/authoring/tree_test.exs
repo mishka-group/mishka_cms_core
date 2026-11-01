@@ -15,6 +15,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
   use ExUnit.Case, async: true
 
   alias MishkaCmsCore.Runtime.Authoring.CodeCheck
+  alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
@@ -45,6 +46,25 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
     out
   end
+
+  # Serializes back to the very bytes it was read from, and those bytes parse to the same tree.
+  defp assert_exact_round_trip(heex) do
+    tree = Tree.parse!(heex)
+    out = Serializer.serialize(tree)
+
+    assert out == heex
+    assert shape(Tree.parse!(out)) == shape(tree)
+    tree
+  end
+
+  defp shape(tree), do: Enum.map(tree.roots, &shape(tree, &1))
+
+  defp shape(tree, id) do
+    node = Tree.get(tree, id)
+    {node.kind, node.tag, node.attrs, node.text, Enum.map(node.children, &shape(tree, &1))}
+  end
+
+  defp kinds(tree), do: tree |> Tree.walk() |> Enum.map(&{&1.kind, &1.tag || &1.text})
 
   describe "parse/1 — the corpus round-trips" do
     test "plain nested HTML" do
@@ -108,6 +128,56 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
       assert_round_trip(~s(<pre>  keep   me  </pre>), ["  keep   me  "])
     end
 
+    # `<pre><code>…</code></pre>` is how a code block is written. Read as one run of source, the
+    # `<code>` came back as text in the tree, nothing an editor could select or style.
+    test "a pre keeps the elements in it through parse, serialize and parse" do
+      heex = ~s(<pre><code>x</code></pre>)
+      {:ok, saved} = heex |> Tree.parse!() |> Serializer.to_heex()
+
+      assert String.trim(saved) == heex
+
+      assert [{:tag, "pre"}, {:tag, "code"}, {:text, "x"}] =
+               saved |> Tree.parse!() |> Tree.walk() |> Enum.map(&{&1.kind, &1.tag || &1.text})
+    end
+
+    test "with every space and newline where it was written" do
+      heex = "<pre>  line one\n\n    <code class=\"x\">{@two}</code>  \n<b> three </b></pre>"
+      tree = Tree.parse!(heex)
+
+      assert Serializer.serialize(tree) == heex
+      assert {:ok, ^heex <> "\n"} = Serializer.to_heex(tree)
+      assert assert_fixed_point(heex) == heex
+
+      assert Enum.map(Tree.walk(tree), &{&1.kind, &1.tag}) == [
+               {:tag, "pre"},
+               {:text, nil},
+               {:tag, "code"},
+               {:eex, nil},
+               {:text, nil},
+               {:tag, "b"},
+               {:text, nil}
+             ]
+    end
+
+    # A `<pre>` that held a comment used to be read whole, as one run of text, because the comment
+    # came in one token with the words beside it. It reads its children like any other `<pre>`.
+    test "a pre that holds a comment reads its children, every space where it was written" do
+      heex = "<pre>  a <!-- note -->\n  <code>b</code>  </pre>"
+      tree = assert_exact_round_trip(heex)
+
+      assert {:ok, ^heex <> "\n"} = Serializer.to_heex(tree)
+
+      assert kinds(tree) == [
+               {:tag, "pre"},
+               {:text, "  a "},
+               {:html_comment, " note "},
+               {:text, "\n  "},
+               {:tag, "code"},
+               {:text, "b"},
+               {:text, "  "}
+             ]
+    end
+
     test "phx-no-format is preserved" do
       assert_round_trip(~s(<div phx-no-format>a   b</div>), ["phx-no-format", "a   b"])
     end
@@ -123,6 +193,212 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
     test "an unknown component is kept, not dropped" do
       assert_round_trip(~s(<.totally_unknown_thing x="1" />), ["<.totally_unknown_thing"])
+    end
+  end
+
+  # Phoenix's tokenizer hands the text before a `<!--` and after its `-->` over in the same token as
+  # the comment, and the tree wrote that text back inside the comment: `<div>a <!-- c --></div>`
+  # came back as `<div><!--a <!-- c --></div>`, and `<div><!-- c --> b</div>` as
+  # `<div><!-- c --> b--></div>`, which showed "b-->" on the page.
+  describe "parse/1 — an HTML comment and the text beside it" do
+    test "the tokenizer gives the text and the comment a token each" do
+      assert {:ok,
+              [{:text, "a ", _}, {:html_comment, [{:text, "<!-- c -->", _}]}, {:text, " b", _}]} =
+               HtmlTokenizer.build_tokenize("a <!-- c --> b")
+    end
+
+    test "text before a comment" do
+      tree = assert_exact_round_trip("<div>a <!-- c --></div>")
+      assert kinds(tree) == [{:tag, "div"}, {:text, "a "}, {:html_comment, " c "}]
+    end
+
+    test "text after a comment" do
+      tree = assert_exact_round_trip("<div><!-- c --> b</div>")
+      assert kinds(tree) == [{:tag, "div"}, {:html_comment, " c "}, {:text, " b"}]
+    end
+
+    test "text on both sides" do
+      tree = assert_exact_round_trip("<div>a <!-- c --> b</div>")
+      assert kinds(tree) == [{:tag, "div"}, {:text, "a "}, {:html_comment, " c "}, {:text, " b"}]
+    end
+
+    test "a comment alone" do
+      assert kinds(assert_exact_round_trip("<!-- c -->")) == [{:html_comment, " c "}]
+
+      assert kinds(assert_exact_round_trip("<div><!-- c --></div>")) ==
+               [{:tag, "div"}, {:html_comment, " c "}]
+    end
+
+    test "two comments in a row" do
+      tree = assert_exact_round_trip("<div><!-- a --><!-- b --></div>")
+      assert kinds(tree) == [{:tag, "div"}, {:html_comment, " a "}, {:html_comment, " b "}]
+    end
+
+    test "a comment with -- or < inside" do
+      tree = assert_exact_round_trip("<div>x <!-- a -- b < c <!-- d --> y</div>")
+
+      assert kinds(tree) == [
+               {:tag, "div"},
+               {:text, "x "},
+               {:html_comment, " a -- b < c <!-- d "},
+               {:text, " y"}
+             ]
+    end
+
+    test "an empty comment and a blank one" do
+      assert kinds(assert_exact_round_trip("<!---->")) == [{:html_comment, ""}]
+      assert kinds(assert_exact_round_trip("<!-- -->")) == [{:html_comment, " "}]
+
+      assert kinds(assert_exact_round_trip("a<!---->b")) == [
+               {:text, "a"},
+               {:html_comment, ""},
+               {:text, "b"}
+             ]
+    end
+
+    test "a comment at the start and at the end of the document" do
+      tree = assert_exact_round_trip("<!-- top --><div>a</div><!-- bottom -->")
+
+      assert kinds(tree) == [
+               {:html_comment, " top "},
+               {:tag, "div"},
+               {:text, "a"},
+               {:html_comment, " bottom "}
+             ]
+    end
+
+    test "a comment in a p beside inline elements" do
+      tree = assert_exact_round_trip("<p>a <b>b</b> <!-- c --> <i>d</i> e</p>")
+
+      assert kinds(tree) == [
+               {:tag, "p"},
+               {:text, "a "},
+               {:tag, "b"},
+               {:text, "b"},
+               {:text, " "},
+               {:html_comment, " c "},
+               {:text, " "},
+               {:tag, "i"},
+               {:text, "d"},
+               {:text, " e"}
+             ]
+    end
+
+    test "a comment over several lines keeps the lines around it" do
+      heex = "<div>\n  <!--\n    one\n    two\n  -->\n  <p>x</p>\n</div>"
+      tree = assert_exact_round_trip(heex)
+
+      assert {:ok, ^heex <> "\n"} = Serializer.to_heex(tree)
+
+      assert [{:tag, "div"}, {:text, "\n  "}, {:html_comment, "\n    one\n    two\n  "} | _] =
+               kinds(tree)
+    end
+
+    test "a comment beside an expression in either form" do
+      tree = assert_exact_round_trip("<p>{@x} <!-- c --> {@y}</p>")
+
+      assert kinds(tree) == [
+               {:tag, "p"},
+               {:eex, "@x"},
+               {:text, " "},
+               {:html_comment, " c "},
+               {:text, " "},
+               {:eex, "@y"}
+             ]
+
+      tree = assert_exact_round_trip("<p><%= @x %><!-- c --><%= @y %></p>")
+      assert kinds(tree) == [{:tag, "p"}, {:eex, "@x"}, {:html_comment, " c "}, {:eex, "@y"}]
+    end
+
+    # EEx cuts the source at its tag, so a comment with one inside arrives in two halves. Each half
+    # is still parted from the text beside it, and the tag goes back as written.
+    test "a comment with an EEx tag inside" do
+      tree = assert_exact_round_trip("<p>a <!-- <%= @x %> --> b <!-- c --> d</p>")
+
+      assert kinds(tree) == [
+               {:tag, "p"},
+               {:text, "a "},
+               {:html_comment, " <%= @x %> "},
+               {:text, " b "},
+               {:html_comment, " c "},
+               {:text, " d"}
+             ]
+    end
+
+    test "a braced expression inside a comment is part of the comment" do
+      tree = assert_exact_round_trip("<p>a <!-- {@x} --> b</p>")
+      assert kinds(tree) == [{:tag, "p"}, {:text, "a "}, {:html_comment, " {@x} "}, {:text, " b"}]
+    end
+
+    test "<!-- in an attribute, a script or after a doctype is read as Phoenix reads it" do
+      tree =
+        assert_exact_round_trip(~s(<div title="<!-- x -->">a</div><script><!-- y --></script>))
+
+      assert kinds(tree) == [{:tag, "div"}, {:text, "a"}, {:tag, "script"}, {:text, "<!-- y -->"}]
+
+      tree = assert_exact_round_trip("<!DOCTYPE html><!-- c --><p>a</p>")
+
+      assert kinds(tree) == [
+               {:text, "<!DOCTYPE html>"},
+               {:html_comment, " c "},
+               {:tag, "p"},
+               {:text, "a"}
+             ]
+    end
+
+    # What the editor holds: the comment is a comment node it folds, and the words beside it are a
+    # text node it selects and edits on their own.
+    test "the text beside a comment is edited without touching the comment" do
+      tree = Tree.parse!("<div>a <!-- c --> b</div>")
+      [_div, text, comment, _after] = Tree.walk(tree)
+
+      assert Node.comment?(comment)
+      refute Node.comment?(text)
+
+      assert {:ok, edited} = Tree.set_text(tree, text.id, "changed ")
+      assert Serializer.serialize(edited) == "<div>changed <!-- c --> b</div>"
+    end
+  end
+
+  # A browser reads a `<title>`'s, a `<textarea>`'s, a `<script>`'s and a `<style>`'s content up to
+  # the closing tag as text. The tokenizer read a `<title>`'s as markup, so `<title>Bad <b>title</b>
+  # end</title>` held a `<b>` the canvas does not draw in a title: it showed "Bad  end", where the
+  # published page shows the words and the tags as written.
+  describe "parse/1 — a title, a textarea, a script and a style hold text" do
+    test "a title holds one text node, its tags included" do
+      tree = assert_exact_round_trip("<title>a <b>x</b> c</title>")
+      assert kinds(tree) == [{:tag, "title"}, {:text, "a <b>x</b> c"}]
+    end
+
+    test "and so does a title with a comment or an expression in it" do
+      assert kinds(assert_exact_round_trip("<title>a <!-- c --> b</title>")) ==
+               [{:tag, "title"}, {:text, "a <!-- c --> b"}]
+
+      assert kinds(assert_exact_round_trip("<title>{@page_title} - Site</title>")) ==
+               [{:tag, "title"}, {:text, "{@page_title} - Site"}]
+    end
+
+    test "a textarea holds one text node" do
+      tree = assert_exact_round_trip("<textarea>a <b>x</b> c</textarea>")
+      assert kinds(tree) == [{:tag, "textarea"}, {:text, "a <b>x</b> c"}]
+    end
+
+    test "a script holds one text node" do
+      tree = assert_exact_round_trip("<script>if (a < b) {}</script>")
+      assert kinds(tree) == [{:tag, "script"}, {:text, "if (a < b) {}"}]
+    end
+
+    # The serializer gives a `<style>` the response's nonce unless it names one, so the one written
+    # with its nonce comes back byte for byte.
+    test "a style holds one text node" do
+      tree = assert_exact_round_trip("<style nonce={@csp_nonce}>a > b { color: red }</style>")
+      assert kinds(tree) == [{:tag, "style"}, {:text, "a > b { color: red }"}]
+
+      tree = Tree.parse!("<style>a > b { color: red }</style>")
+      assert kinds(tree) == [{:tag, "style"}, {:text, "a > b { color: red }"}]
+
+      assert Serializer.serialize(tree) ==
+               "<style nonce={csp_nonce()}>a > b { color: red }</style>"
     end
   end
 
@@ -192,17 +468,95 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
 
   describe "parse/1 — bad paths" do
     test "an unclosed tag reports line and column" do
-      assert {:error, %{line: line, column: column, message: message}} =
-               Tree.parse("<div><span></div>")
+      assert Tree.parse("<div><span></div>") ==
+               {:error, %{line: 1, column: 12, message: "</div> does not close <span>"}}
 
-      assert is_integer(line)
-      assert is_integer(column)
-      assert message =~ "closing tag"
+      assert Tree.parse("<div>\n  <span>") ==
+               {:error,
+                %{
+                  line: 2,
+                  column: 3,
+                  message: "end of template reached without closing tag for <span>"
+                }}
+    end
+
+    test "a < typed inside an opening tag is refused at that attribute" do
+      assert {:error, %{line: 1, column: 13, message: message}} =
+               Tree.parse(~s(<.component compone<nt_name="chelekom-navbar"></.component>))
+
+      assert message == "a tag is opened inside another tag; close the <.component> with > first"
+
+      assert {:error, %{line: 2, column: 20, message: "a tag is opened" <> _}} =
+               Tree.parse(~s(<div>\n  <img src="a.png" <br/>\n</div>))
+
+      assert {:error, %{line: 1, column: 26}} =
+               Tree.parse(~s(<%= if @x do %><p id="a" <b="1">x</p><% end %>))
+    end
+
+    test "a < in an attribute's value or expression still parses" do
+      for heex <- [
+            ~s(<.component name="chelekom-navbar" title="a < b"></.component>),
+            ~s(<div :if={@a < 1} class={["x", @y < 2 && "z"]}></div>),
+            ~s(<div {@rest} data-x="a<b"><input value={@v < 1} /></div>)
+          ] do
+        assert {:ok, %Tree{}} = Tree.parse(heex)
+      end
+    end
+
+    test "an EEx tag left open reports its line, its column and EEx's own sentence" do
+      assert Tree.parse("<p>\n  hi <%= @x </p>") ==
+               {:error,
+                %{line: 2, column: 6, message: "expected closing '%>' for EEx expression"}}
+    end
+
+    test "a closing tag with nothing to close reports its line and column" do
+      assert Tree.parse("<div></div>\n</div>") ==
+               {:error, %{line: 2, column: 1, message: "unmatched closing tag </div>"}}
+
+      assert Tree.parse("</p>") ==
+               {:error, %{line: 1, column: 1, message: "unmatched closing tag </p>"}}
+
+      assert Tree.parse("<%= if @x do %></div><% end %>") ==
+               {:error, %{line: 1, column: 16, message: "unmatched closing tag </div>"}}
+
+      assert Tree.parse("<.button>Go</.button></.button>") ==
+               {:error, %{line: 1, column: 22, message: "unmatched closing tag </.button>"}}
+    end
+
+    test "a closing tag that does not close the open element is refused where it is written" do
+      assert Tree.parse("<div></span></div>") ==
+               {:error, %{line: 1, column: 6, message: "</span> does not close <div>"}}
+
+      assert Tree.parse("<section>\n  <div>\n    <p>a</span>\n  </div>\n</section>") ==
+               {:error, %{line: 3, column: 9, message: "</span> does not close <p>"}}
+
+      assert Tree.parse("<div><p></div>") ==
+               {:error, %{line: 1, column: 9, message: "</div> does not close <p>"}}
+
+      assert Tree.parse("<.card><.button>Go</.card>") ==
+               {:error, %{line: 1, column: 19, message: "</.card> does not close <.button>"}}
     end
 
     test "malformed eex does not crash the caller" do
       assert {:error, %{message: message}} = Tree.parse("<%= if true do %>")
       assert is_binary(message)
+    end
+
+    test "an EEx block with no end is named as it is written, at its line and column" do
+      assert Tree.parse("<% if true do %><p>a</p>") ==
+               {:error, %{line: 1, column: 1, message: "<% if true do %> has no <% end %>"}}
+
+      assert Tree.parse("<p>a</p>\n  <%= if @a do %>a<% else %>b") ==
+               {:error, %{line: 2, column: 3, message: "<%= if @a do %> has no <% end %>"}}
+    end
+
+    # The `</div>` closes the element the block was opened in, so the block is the one left open.
+    test "an EEx block left open inside an element is named, not the element's closing tag" do
+      assert Tree.parse("<div>\n<% if true do %>\n<p>a</p>\n</div>") ==
+               {:error, %{line: 2, column: 1, message: "<% if true do %> has no <% end %>"}}
+
+      assert Tree.parse("<section><div><%= if @a do %>a<% else %>b</div></section>") ==
+               {:error, %{line: 1, column: 15, message: "<%= if @a do %> has no <% end %>"}}
     end
 
     test "nil and empty templates give an empty tree" do

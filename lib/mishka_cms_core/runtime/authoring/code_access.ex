@@ -49,7 +49,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeAccess do
   def refusal do
     case enabled?() do
       false -> gettext("Author-written Elixir is turned off on this deployment (:page_code).")
-      true -> gettext("You do not have permission to change page code.")
+      true -> gettext("You do not have permission to change author-written Elixir.")
     end
   end
 end

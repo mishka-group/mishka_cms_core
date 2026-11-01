@@ -13,6 +13,26 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
   """
   use ExUnit.Case, async: true
 
+  import Phoenix.Component, only: [sigil_H: 2, form: 1, link: 1, focus_wrap: 1]
+  import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
+
+  import MishkaCmsCore.CoreComponents,
+    only: [
+      input: 1,
+      button: 1,
+      icon: 1,
+      select_chevron: 1,
+      header: 1,
+      table: 1,
+      list: 1,
+      flash: 1,
+      tip: 1,
+      roadmap_notice: 1,
+      modal: 1,
+      create_menu: 1,
+      site_cell: 1
+    ]
+
   alias MishkaCmsCore.Runtime.Authoring.Containment
   alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Authoring.Tree.Node
@@ -470,6 +490,65 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
+  # A browser reads everything up to `</textarea>` as text, so a heading dropped in one is shown as
+  # `<h1>…</h1>` on the published page, and the next parse folds it into the textarea's text.
+  describe "can_drop?/4 — a raw text element holds text only" do
+    @raw_text ~w(textarea title script style)
+
+    test "it refuses an element, and says why" do
+      for tag <- @raw_text, arriving <- ~w(h1 span div) do
+        tree = tree_of("<div><#{tag}>x</#{tag}></div>")
+
+        assert {:error, message} =
+                 Containment.can_drop?(tree, Node.new(:tag, tag: arriving), find(tree, tag).id)
+
+        assert message == "A `<#{tag}>` holds text only.", "#{arriving} in #{tag}"
+      end
+    end
+
+    test "and a component, a slot and a comment, which a structural gate lets through" do
+      tree = tree_of(~s(<form><textarea name="note"></textarea></form>))
+      textarea = find(tree, "textarea")
+
+      for arriving <- [
+            Node.new(:component, tag: ".row"),
+            Node.new(:component, tag: ".input"),
+            Node.new(:slot, tag: ":item"),
+            Node.new(:html_comment, text: " note ")
+          ] do
+        assert {:error, "A `<textarea>` holds text only."} =
+                 Containment.can_drop?(tree, arriving, textarea.id, components: []),
+               inspect(arriving)
+      end
+    end
+
+    test "while it takes text and expressions" do
+      for tag <- @raw_text do
+        tree = tree_of("<div><#{tag}></#{tag}></div>")
+        target = find(tree, tag).id
+
+        assert Containment.can_drop?(tree, text(), target) == :ok
+        assert Containment.can_drop?(tree, Node.new(:eex, text: "@value"), target) == :ok
+        assert Containment.can_drop?(tree, Node.new(:eex_comment, text: " x "), target) == :ok
+      end
+    end
+
+    test "a wrapper of one takes the same" do
+      for tag <- @raw_text do
+        assert {:error, "A `<" <> _rest} = Containment.can_hold?(Node.new(:tag, tag: "b"), tag)
+        assert Containment.can_hold?(text(), tag) == :ok
+      end
+    end
+
+    test "accepts_map/3 gives the same answers" do
+      tree = tree_of("<div><textarea></textarea></div>")
+      accepts = Containment.accepts_map(tree, inline())
+
+      refute accepts[find(tree, "textarea").id]
+      assert accepts[find(tree, "div").id]
+    end
+  end
+
   # A parser IGNORES a `<td>` outside a table: the words stay, the cell and everything the editor put
   # on it are gone. Dropped on a page, a kit cell left a layers row with nothing on the canvas to
   # select and a raw `<td>` on the published page.
@@ -782,6 +861,158 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
       mystery = find(tree, ".mystery")
 
       assert {:error, _message} = Containment.can_drop?(tree, block(), mystery.id, components: [])
+    end
+  end
+
+  # A `<.form>` or an `<.input>` dropped in a `<p>` is the form the browser takes out of the
+  # paragraph: it closes the `<p>` in front of the block and leaves the words after it loose. Their
+  # catalog rows carry no markup, so they were opaque and let in.
+  describe "can_drop?/4 — the CMS's own function components are the element they render" do
+    @form ~s(<.form :let={f} as={:q} for={assigns[:q_form]}><.input field={f[:email]} /></.form>)
+
+    defp arriving(source) do
+      tree = tree_of(source)
+      {tree, Tree.get(tree, hd(tree.roots))}
+    end
+
+    test "a Form refuses a paragraph, and the box around the paragraph takes it" do
+      tree = tree_of("<div><p>Words</p></div>")
+      {template, form} = arriving(@form)
+      opts = [components: [], dragged_tree: template]
+
+      assert {:error, message} = Containment.can_drop?(tree, form, find(tree, "p").id, opts)
+      assert message =~ "`<p>` can only hold text and inline elements"
+      assert Containment.can_drop?(tree, form, find(tree, "div").id, opts) == :ok
+    end
+
+    test "so does an Input, however deep in the paragraph" do
+      tree = tree_of("<div><p>Words <b>bold</b></p></div>")
+      {_template, input} = arriving(~s(<.input name="email" />))
+
+      for host <- ~w(p b) do
+        assert {:error, _message} =
+                 Containment.can_drop?(tree, input, find(tree, host).id, components: [])
+      end
+
+      assert Containment.can_drop?(tree, input, find(tree, "div").id, components: []) == :ok
+    end
+
+    test "a Form refuses a heading and an inline tag too" do
+      tree = tree_of("<div><h2>Title</h2><span>x</span></div>")
+      {template, form} = arriving(@form)
+
+      for host <- ~w(h2 span) do
+        assert {:error, _message} =
+                 Containment.can_drop?(tree, form, find(tree, host).id,
+                   components: [],
+                   dragged_tree: template
+                 )
+      end
+    end
+
+    test "a <.link> is a link, a <.button> a button and an <.icon> inline" do
+      tree = tree_of(~s(<div><p>Words</p><.button>Send</.button></div>))
+      {boxed, link} = arriving(~s(<.link href="/"><div>Card</div></.link>))
+      {_words, inline_link} = arriving(~s(<.link href="/">Read</.link>))
+      {_icon, icon} = arriving(~s(<.icon name="hero-x-mark" />))
+      p = find(tree, "p").id
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, link, p, components: [], dragged_tree: boxed)
+
+      assert Containment.can_drop?(tree, inline_link, p, components: []) == :ok
+      assert Containment.can_drop?(tree, icon, p, components: []) == :ok
+
+      assert {:error, message} =
+               Containment.can_drop?(tree, block(), find(tree, ".button").id, components: [])
+
+      assert message =~ "`<button>` can only hold text and inline elements"
+    end
+
+    test "a kit row by the same name is still read off its own markup" do
+      kit = [%{"name" => "input", "template" => ~s|<span>{render_slot(@inner_block)}</span>|}]
+      tree = tree_of("<p>Words</p>")
+      {_template, input} = arriving(~s(<.input name="email" />))
+
+      assert Containment.can_drop?(tree, input, find(tree, "p").id, components: kit) == :ok
+      assert Containment.element(input, components: kit) == "span"
+    end
+
+    test "accepts_map/3 gives the same answers" do
+      tree = tree_of("<section><div><p>Words</p></div></section>")
+      {template, form} = arriving(@form)
+      opts = [components: [], dragged_tree: template]
+      accepts = Containment.accepts_map(tree, form, opts)
+
+      refute accepts[find(tree, "p").id]
+      assert accepts[find(tree, "div").id]
+      assert accepts[find(tree, "section").id]
+    end
+
+    # The element each one is read as is the one it puts on the page.
+    test "each is read as the element it renders" do
+      assigns = %{}
+
+      rendered = %{
+        "form" => ~H"""
+        <.form for={%{}} as={:q}></.form>
+        """,
+        "link" => ~H"""
+        <.link href="/">x</.link>
+        """,
+        "focus_wrap" => ~H"""
+        <.focus_wrap id="wrap">x</.focus_wrap>
+        """,
+        "input" => ~H"""
+        <.input name="email" value="" />
+        """,
+        "button" => ~H"""
+        <.button>Send</.button>
+        """,
+        "icon" => ~H"""
+        <.icon name="hero-x-mark" />
+        """,
+        "select_chevron" => ~H"""
+        <.select_chevron />
+        """,
+        "header" => ~H"""
+        <.header>Title</.header>
+        """,
+        "table" => ~H"""
+        <.table id="rows" rows={[]}>
+          <:col>x</:col>
+        </.table>
+        """,
+        "list" => ~H"""
+        <.list>
+          <:item title="Title">x</:item>
+        </.list>
+        """,
+        "flash" => ~H"""
+        <.flash kind={:info}>Saved</.flash>
+        """,
+        "tip" => ~H"""
+        <.tip>x</.tip>
+        """,
+        "roadmap_notice" => ~H"""
+        <.roadmap_notice id="soon" title="Soon">x</.roadmap_notice>
+        """,
+        "modal" => ~H"""
+        <.modal id="dialog">x</.modal>
+        """,
+        "create_menu" => ~H"""
+        <.create_menu id="add" label="Add" modal="dialog" />
+        """,
+        "site_cell" => ~H"""
+        <.site_cell global?={true} />
+        """
+      }
+
+      for {name, html} <- rendered do
+        [_whole, root] = Regex.run(~r/^\s*<([a-z][a-z0-9-]*)/, rendered_to_string(html))
+
+        assert Containment.element(Node.new(:component, tag: "." <> name)) == root, name
+      end
     end
   end
 

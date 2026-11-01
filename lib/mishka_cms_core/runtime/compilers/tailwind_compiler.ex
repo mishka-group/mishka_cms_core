@@ -22,67 +22,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   * **Dark Mode Support**: Custom dark mode variant using data attributes
   * **Custom Variants**: Pre-configured Phoenix-specific loading state variants
 
-  ## Static base (compile time) vs runtime DB content
+  ## The host shell in a site's one Tailwind run
 
-  Tailwind classes reach this CMS from two timelines:
+  A site's stylesheet is one Tailwind run over the host's runtime shell (the code that renders
+  around a database page, see `host_app_web_sources/0`), `app.css`, `js_assets` and the site's
+  `Component`, `Page`, `Layout` and `Stylesheet` rows. Tailwind ranks every utility once, and a shell
+  class is built from the same `@theme` tokens as the site's own, a DB `:theme` row's included.
 
-    * **Compile time** — the host app's `lib/**`, the extensions
-      (`__extensions/**`, later `deps/mishka_*`), and `assets/css/app.css`.
-      These don't change after a release is built, so Tailwind's own
-      scanner reads them ONCE via `mix mishka.compile_static_css`, which
-      writes `priv/static/temp/static_base.css`. That file ships in the
-      release and is prepended verbatim to every site's CSS. No regex — the
-      scanner reads every `class={[...]}` list, `&&` conditional, macro and
-      sigil shape natively.
-
-    * **Runtime** — DB-stored `Component` / `Page` / `Layout` / `Stylesheet`
-      rows. These change when an admin saves, so they're scanned by Tailwind
-      at boot and on each per-resource Oban job, then concatenated on top of
-      the static base.
-
-  In **development** the `static_base.css` file is absent, so the compiler
-  scans the live source tree directly (see `host_app_web_sources/0`).
-  Tailwind has the real files, so nothing is missed. The precompiled file
-  exists only for **releases**, where the source tree isn't on disk.
-
-  ## Theme tokens (`@theme`) — the one trade-off to know
-
-  A custom utility such as `bg-brand-500` only generates CSS if its token
-  (`--color-brand-500`) is defined in an `@theme {}` block present in the
-  SAME Tailwind compile. Tokens can live in two places:
-
-    * `assets/css/app.css` (or a kit theme file) — present at **compile** time.
-    * A `Stylesheet` DB row of `kind: :theme` — present only at **runtime**.
-
-  This produces one rule you must respect:
-
-  | Where the class is used | Where its token lives | Result |
-  |-------------------------|-----------------------|--------|
-  | DB content (component/page) | DB `:theme` row       | ✅ both meet at runtime |
-  | DB content                  | `app.css`             | ✅ token present at runtime too |
-  | **Static code** (`lib/`, ext) | `app.css`           | ✅ token present at compile time |
-  | **Static code**             | **DB `:theme` only**  | ❌ dropped — see below |
-
-  The failure case: a custom color used in **static code** whose token lives
-  **only in the DB**. At compile time the token doesn't exist, so the static
-  base never gets the rule; at runtime the class isn't in DB content, so it's
-  never generated. It silently produces no CSS.
-
-  ### Rule: custom color in a static file ⇒ define its token in a static file
-
-  To use `bg-brand-500` in a LiveView/component under `lib/` or an extension,
-  declare the token in `assets/css/app.css`:
-
-      /* assets/css/app.css */
-      @theme {
-        --color-brand-500: oklch(0.62 0.21 12);
-      }
-
-  Now the token is present at compile time, `static_base.css` resolves
-  `bg-brand-500`, and it ships in the release. A per-site DB theme can still
-  override the *visual value* at runtime through the `:custom`/`:theme`
-  stylesheet layers — it just can't introduce a brand-new token that static
-  code depends on.
+  In development the run scans the shell's `.ex` files. A release ships none, so there it reads
+  `priv/static/temp/shell_classes.txt` instead: the classes Tailwind's own scanner found in those
+  files when the release was built (`mix compile_static_css` in the host).
 
   ## Basic Usage
 
@@ -144,7 +93,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   The compiler automatically configures Tailwind CSS v4 with comprehensive source scanning:
 
-      # static_base.css (compile-time) prepended verbatim — host app + extensions
+      # The host shell; a release reads priv/static/temp/shell_classes.txt in its place
+      @source "lib/mishka_cms_web/components/**/*.{ex,heex,eex}"
       @source "runtime/my_site/js_hook/**/*.template"     # Reachable by no walk, so globbed
       @source "runtime/my_site/stylesheet/**/*.template"
       @source "runtime/__global__/js_hook/**/*.template"
@@ -437,16 +387,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   Compiles ONLY the CSS every site shares: the host shell, `app.css`, `js_assets`, and the global
   templates no reachability walk can reach (JS hooks and stylesheet rows).
 
-  This should be called ONCE during boot. The result is cached in AssetsState
-  with id "__shared_base__" and reused by all site compilations.
+  This should be called ONCE during boot. The result is cached in AssetsState with id
+  "__shared_base__": it is the stylesheet of a document no site owns, and of a site with no bundle
+  yet. A site's own stylesheet is not built on top of it — `compile/1` scans all of this again in
+  the site's one Tailwind run, because utilities are ranked only within a run.
 
   Global LAYOUTS, ERROR PAGES and COMPONENTS are deliberately absent — a site's stylesheet carries
   what that site renders, so those are reached per site in `compile/1`.
-
-  ## Performance Benefit
-  - static_base.css prepended once instead of re-scanned N times
-  - the shared global templates scanned once instead of N times
-  - js_assets/js/** scanned once instead of N times
 
   ## Why `js_assets/js/**` and not `js_assets/**`
 
@@ -571,22 +518,18 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   end
 
   @doc """
-  Gets the cached shared base CSS, or compiles it if not available.
-  """
-  def get_or_compile_shared_base do
-    case shared_base() do
-      {:ok, css} -> css
-      {:error, _reason} -> ""
-    end
-  end
-
-  @doc """
   Compiles Tailwind CSS from dynamic templates and assets for a specific site.
 
-  This optimized version:
-  1. Uses cached shared base CSS (global templates, js_assets) - avoids rescanning N times
-  2. Only compiles site-specific templates
-  3. Combines shared base + site-specific CSS
+  ONE Tailwind run over everything the site's pages can render: the host shell, `app.css`,
+  `js_assets`, the globally-installed JS hooks and stylesheet rows, the global UI-kit theme rows,
+  and the site's own reachable templates and rows (`build_css_content_site/2`).
+
+  It used to be two runs joined end to end — the cached shared base, then a run over the site's own
+  templates. Tailwind ranks utilities only within a run, so a utility both runs emitted came again
+  after every responsive variant of the first: the host shell's `px-4 sm:px-6 lg:px-8` stayed at
+  `px-4` on every screen once a page of the site used `px-4` too. And the global theme rows were
+  pasted into both runs, so each of their plain rules, `@font-face` and `@import` was in the
+  stylesheet twice. One run ranks every utility once and holds every row once.
 
   ## Parameters
 
@@ -597,26 +540,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   * `{:ok, css}` - Successfully compiled CSS as a minified string
   * `{:error, reason}` - Compilation failed
 
-  ## Performance Optimization
-
-  With 20 sites, instead of scanning global templates 20 times:
-  - Shared base compiled ONCE (~225ms)
-  - Each site only scans its own templates (~50-100ms)
-  - Total: ~225ms + 20×75ms = ~1.7s instead of 20×225ms = ~4.5s
-
-  There used to be a second way to answer this — `compile_full/1`, a `use_shared_base: false` mode
-  that assembled the whole stylesheet in one Tailwind run. Nothing called it outside its own tests,
-  and it restated every decision made here, so the two drifted apart with each change to what gets
-  scanned. A global writer rebuilds the shared base in place (`compile_and_store_shared_base/0`);
-  the dev watcher drops it with `delete_shared_base_css/0` and the next compile builds it.
+  A global writer rebuilds the shared base in place (`compile_and_store_shared_base/0`) and then
+  every site; the dev watcher drops the base with `delete_shared_base_css/0`.
   """
   def compile(site_name) do
     with {:ok, css, _shared_base} <- build(site_name), do: {:ok, css}
   end
 
   # The site's CSS and how its shared base went: `:ok`, or `{:error, reason}` when the base did not
-  # build and the site's part was put on `""`. Answered by the build itself rather than read back
-  # from `AssetsState` afterwards, where another job may have stored or dropped the base meanwhile.
+  # build and the site's CSS was built without the global rows that broke it (`global_rows/0`).
+  # Answered by the build itself rather than read back from `AssetsState` afterwards, where another
+  # job may have stored or dropped the base meanwhile.
   defp build(site_name) do
     :telemetry.span(
       [:mishka_cms, :runtime, :compilers, :tailwind],
@@ -625,15 +559,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         result =
           try do
             ensure_installed()
-
-            {shared_css, shared_base} =
-              case shared_base() do
-                {:ok, css} -> {css, :ok}
-                {:error, _reason} = error -> {"", error}
-              end
-
-            site_css = execute_tailwind_site_only(site_name)
-            {:ok, shared_css <> "\n/* Site: #{site_name} */\n" <> site_css, shared_base}
+            {global_rows?, shared_base} = global_rows()
+            css = execute_tailwind_site(site_name, site_name, global_rows: global_rows?)
+            {:ok, css, shared_base}
           rescue
             e -> {:error, Exception.message(e)}
           end
@@ -641,6 +569,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         {result, %{}}
       end
     )
+  end
+
+  # WHETHER THE GLOBAL `:base` AND `:custom` ROWS GO IN, read off the shared base, which is built
+  # from them. A row there that does not compile fails every run it is in, so while the base fails a
+  # site is built without them: partial, which `site_build/1` stores only where there is no last
+  # good bundle to keep.
+  defp global_rows do
+    case shared_base() do
+      {:ok, _css} -> {true, :ok}
+      {:error, _reason} = error -> {false, error}
+    end
   end
 
   @doc """
@@ -662,10 +601,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   def verify_css(css, site_id) do
     ensure_installed()
     {global_pre, _global_post} = read_global_stylesheets()
-
     {css, _removed} = author_css(css)
 
-    case ran_tailwind(build_css_content_verify(global_pre, site_pre(site_id), css), "verify") do
+    # As a build reads them: a remote `@import` never reaches Tailwind, whose parser refuses one
+    # whose unquoted `url()` holds a `;`, as Google Fonts' `wght@400;700` does.
+    {[global_pre, site_pre, css], _imports} =
+      lift_remote_imports([global_pre, site_pre(site_id), [css]])
+
+    case ran_tailwind(build_css_content_verify(global_pre, site_pre, css), "verify") do
       {0, _css, _output} -> :ok
       {_status, _css, output} -> {:error, tailwind_message(output)}
     end
@@ -674,7 +617,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   end
 
   # A site inherits the globals, and for the globals themselves the two reads are the same row set.
-  defp site_pre(nil), do: ""
+  defp site_pre(nil), do: []
   defp site_pre(site_id), do: site_id |> read_stylesheets_for() |> elem(0)
 
   defp build_css_content_verify(global_pre, site_pre, css) do
@@ -699,35 +642,57 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   #     ┌
   #     │ Error: Cannot apply unknown utility class `rounde-xl`
   #     └
+  #
+  # A syntax error comes as `CssSyntaxError: /tmp/tw_in_….css:18:1: Missing closing } at .b`: the
+  # file and line are the input this module assembled, which the author never saw, so the sentence
+  # after them is what is kept.
   defp tailwind_message(output) do
     output
     |> String.split("\n")
     |> Enum.map(&(&1 |> String.trim() |> String.trim_leading("│") |> String.trim()))
-    |> Enum.filter(&String.starts_with?(&1, "Error: "))
+    |> Enum.flat_map(&said/1)
     |> List.last()
     |> case do
       nil -> "Tailwind refused that CSS: #{String.trim(output)}"
-      line -> String.replace_prefix(line, "Error: ", "")
+      sentence -> sentence
     end
   end
 
+  defp said("Error: " <> sentence), do: [sentence]
+
+  defp said("CssSyntaxError: " <> located),
+    do: [located |> String.split(": ", parts: 2) |> List.last()]
+
+  defp said(_line), do: []
+
   @doc """
-  Compile a ONE-OFF CSS bundle for a draft/preview: the shared base + the site's classes + the
-  draft's OWN template (so brand-new classes in an unpublished draft are styled). Writes the draft
-  template into an isolated temp namespace, scans it alongside the site, and removes it after — it
-  NEVER touches the live site bundle. Returns `{:ok, css}` | `{:error, reason}`.
+  Compile a ONE-OFF CSS bundle for a draft/preview: the site's stylesheet, built as `compile/1`
+  builds it in one Tailwind run, with the draft's OWN template scanned too (so brand-new classes in
+  an unpublished draft are styled). Writes the draft template into an isolated temp namespace, scans
+  it alongside the site, and removes it after — it NEVER touches the live site bundle. Returns
+  `{:ok, css}` | `{:error, reason}`.
+
+  `opts` takes `rows:`, `%{name => fun}`: the site's stylesheet row called `name` is compiled as
+  `fun.(content)` instead of its saved content, and a name the site has no row for is added after its
+  rows as `fun.(nil)`. Both pass through Tailwind like a saved row, so `@apply` and nesting resolve.
+  This is how a draft's own element CSS reaches its preview — see
+  `MishkaCmsCore.Runtime.DraftPreviewAssets.css/2`.
   """
-  def compile_preview(site_name, preview_ns, template_name, template_content) do
+  @spec compile_preview(String.t(), String.t(), String.t(), String.t(), keyword()) ::
+          {:ok, String.t()} | {:error, String.t()}
+  def compile_preview(site_name, preview_ns, template_name, template_content, opts \\ []) do
     ensure_installed()
     write_preview_template(preview_ns, template_name, template_content)
 
     try do
-      shared = get_or_compile_shared_base()
+      {global_rows?, _shared_base} = global_rows()
 
-      delta =
-        run_tailwind(build_css_content_preview(site_name, preview_ns), "preview_#{preview_ns}")
-
-      {:ok, shared <> "\n/* Preview: #{preview_ns} */\n" <> delta}
+      {:ok,
+       execute_tailwind_site(site_name, "preview_#{preview_ns}",
+         extra_scopes: [preview_ns],
+         rows: Keyword.get(opts, :rows, %{}),
+         global_rows: global_rows?
+       )}
     rescue
       e -> {:error, Exception.message(e)}
     after
@@ -753,46 +718,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
       "" -> "draft"
       slug -> slug
     end
-  end
-
-  defp build_css_content_preview(site_name, preview_ns) do
-    content = content_named(site_name)
-    closure = closure_for(site_name, content.components, [preview_ns])
-
-    {global_pre, _global_post} = read_global_stylesheets()
-    {site_pre, post_tailwind} = read_site_stylesheets(site_name)
-
-    """
-    #{layer_order()}
-    #{global_pre}
-    #{site_pre}
-
-    @import "tailwindcss/theme.css" layer(theme);
-    @import "tailwindcss/utilities.css" layer(utilities) source(none);
-
-    /* SITE: #{site_name} + DRAFT PREVIEW: #{preview_ns} */
-    #{site_unwalkable_sources([site_name])}
-
-    /* Walked over the draft TOO. The draft is usually the only thing referencing the component
-       being previewed — that is what makes it a draft — so a walk over the saved site alone would
-       leave the previewed component unstyled. */
-    #{reachable_sources(closure, site_name, [preview_ns])}
-    #{class_sources(content.classes)}
-
-    /* The box a component that could not be drawn is drawn as. */
-    @source inline("#{ComponentBoundary.box_class()}");
-
-    /* The sign-in pages' provider buttons, drawn by the core rather than written in a page. */
-    @source inline("#{MishkaCmsCore.Accounts.SignInProvider.Widget.classes()}");
-
-    /* The bar under the `site-main` header, drawn by the core from what a page hands it. */
-    @source inline("#{MishkaCmsCore.Runtime.SiteLayout.classes()}");
-
-    #{tailwind_preamble()}
-    #{icon_css(closure, site_name, content.icons)}
-
-    #{post_tailwind}
-    """
   end
 
   @doc """
@@ -951,8 +876,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
-  # A BROKEN BUILD NEVER REPLACES ONE THAT WORKED. A site's CSS is built on `""` when the shared
-  # base does not compile, and storing that would take the theme and every global component's rules
+  # A BROKEN BUILD NEVER REPLACES ONE THAT WORKED. A site's CSS is built without the global `:base`
+  # and `:custom` rows when the shared base does not compile, and storing that would take their rules
   # off a site that had them, so with a last good bundle to keep the build fails instead. A site with
   # none — after a restart `AssetsState` starts empty — or with only the partial one from before gets
   # the partial one, which is more than nothing, and it is recorded either way.
@@ -975,7 +900,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   end
 
   # What visitors get while the bundle's last build failed: the last one that built, a partial one
-  # (stored without the shared base), or nothing.
+  # (stored without the global `:base` and `:custom` rows), or nothing.
   defp served(bundle) do
     cond do
       not AssetsState.exists?(bundle, "css") -> :nothing
@@ -1176,11 +1101,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   from scratch.
 
   Why this exists: `compile/1` reuses the cached `__shared_base__` row in
-  `AssetsState` rather than rebuilding it per site. The shared base prepends
-  the precompiled `static_base.css`
-  (release) or live-scans the host app's `lib/**` + `__extensions/**` (dev,
-  via `host_app_web_sources/0`), so any class added to a LiveView will only
-  show up after this cache is cleared.
+  `AssetsState` rather than rebuilding it per site. The shared base scans
+  the host shell (`host_app_web_sources/0`), so any class added to a
+  LiveView will only show up after this cache is cleared.
 
   The dev `AssetsWatcher` calls this on every host-app file event so a
   `<div class="grid-cols-3">` you just typed makes it into the next CSS
@@ -1385,16 +1308,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
-  # Tailwind v4 only generates utility classes for selectors it actually
-  # finds in the configured @source globs. The runtime CMS scans DB
-  # templates and JS — but the host project also has hand-written
-  # `.ex`/`.heex` files (LiveViews, controllers, layouts, components)
-  # whose Tailwind classes would otherwise be invisible to the JIT.
-  #
-  # Resolve the project source tree from `File.cwd!/0` (where the
-  # server was launched) and emit absolute @source globs for it. In a
-  # release where `cwd` doesn't point at source, we silently emit
-  # nothing — the precompiled CSS already accounts for those classes.
   @doc false
   # The globally-installed templates NO WALK CAN REACH: JS hooks and stylesheet rows.
   #
@@ -1516,7 +1429,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   # ONE WALK PER COMPILE, shared by the `@source` list and the icon sweep below — they are the same
   # question asked twice, and answering it reads every reachable template off disk.
-  defp closure_for(site_name, components, extra_scopes \\ []) do
+  defp closure_for(site_name, components, extra_scopes) do
     runtime = Path.join(get_temp_dir(), "runtime")
 
     CssClosure.for_site(site_name,
@@ -1665,99 +1578,39 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # document. A shell is defined by what it can transitively render, and hand-listing files means
   # re-deriving that closure by eye every time someone adds a component. `components/` is the whole
   # shell and holds nothing else; the marketing LiveViews live in `live/` and are served `public.css`.
+  #
+  # A RELEASE SHIPS NO `.ex` FILES, so there the shell is the list of classes Tailwind's own scanner
+  # found in these sources when the release was built (`shell_classes_path/0`), read in the same run.
   def host_app_web_sources do
+    case shell_sources() do
+      [] -> ~s|@source "#{shell_classes_path()}";|
+      sources -> Enum.map_join(sources, "\n", &~s|@source "#{&1}";|)
+    end
+  end
+
+  @doc false
+  # The shell's sources on disk, each as an `@source` line takes it. The host's
+  # `mix compile_static_css` hands the same list to Tailwind's scanner at build time.
+  def shell_sources do
     project_root = File.cwd!()
 
     [
       Path.join([project_root, "lib", "mishka_cms_web", "components"]),
       Path.join([project_root, "lib", "mishka_cms_web", "live", "runtime_live.ex"])
     ]
-    |> Enum.filter(&(File.exists?(&1) or File.dir?(&1)))
-    |> Enum.map_join("\n", fn path ->
+    |> Enum.filter(&File.exists?/1)
+    |> Enum.map(fn path ->
       case File.dir?(path) do
-        true -> ~s|@source "#{path}/**/*.{ex,heex,eex}";|
-        false -> ~s|@source "#{path}";|
+        true -> "#{path}/**/*.{ex,heex,eex}"
+        false -> path
       end
     end)
   end
 
   @doc false
-  # Absolute path of the compile-time static base artifact. Lives in the
-  # shipped `priv/static/temp` dir so it travels with releases.
-  def static_base_path, do: Path.join(get_temp_dir(), "static_base.css")
-
-  @doc false
-  # The precompiled runtime shell, prepended verbatim to shared-base output in releases. Not used in
-  # development even when the file is present: there the sources are on disk and scanned live, so an
-  # edit to a layout produces CSS immediately instead of waiting for someone to re-run a mix task.
-  # sobelow_skip ["Traversal.FileModule"]
-  # Reads `static_base_path/0`, a constant file in the host app's priv dir.
-  def static_base_prefix do
-    case File.read(static_base_path()) do
-      {:ok, css} -> "/* === precompiled static base (compile time) === */\n" <> css <> "\n"
-      {:error, _} -> ""
-    end
-  end
-
-  @doc """
-  Compiles the **static base** CSS at compile/release time and writes it to
-  `static_base_path/0`.
-
-  Scans the RUNTIME SHELL — the layouts module, its templates and `RuntimeLive` — plus the JS assets
-  and `app.css` (for `@theme` tokens), with Tailwind's own scanner. The result ships in the release
-  and is prepended to every site's CSS at runtime, because a release has no `.ex` files to scan.
-
-  Run from `mix mishka.compile_static_css` (wired into the release build).
-  See the moduledoc "Static base" and "Theme tokens" sections.
-  """
-  # sobelow_skip ["Traversal.FileModule"]
-  # Writes `static_base_path/0`, a constant file in the host app's priv dir, from a build-time mix task.
-  def compile_static_base do
-    ensure_installed()
-    css = run_tailwind(build_css_content_static_base(), "static_base")
-    path = static_base_path()
-    File.mkdir_p!(Path.dirname(path))
-    File.write!(path, css)
-    {:ok, path}
-  end
-
-  @doc false
-  # Public for testing. Builds the input CSS handed to the Tailwind binary
-  # at compile time — pure string assembly, no binary invocation.
-  # sobelow_skip ["Traversal.FileModule"]
-  # Reads the host app's own `priv/static/assets/css/app.css`, a constant path under its app dir.
-  def build_css_content_static_base do
-    temp_dir = get_temp_dir()
-    app_root = Application.app_dir(@host_app)
-
-    app_css_path = Path.expand("priv/static/assets/css/app.css", app_root)
-
-    app_css_content =
-      case File.read(app_css_path) do
-        {:ok, content} -> content
-        {:error, _reason} -> ""
-      end
-
-    """
-    @import "tailwindcss" source(none);
-
-    /* STATIC BASE — the RUNTIME SHELL, scanned at compile time because a release ships no sources.
-       The same three paths `host_app_web_sources/0` scans live in development, and nothing more:
-       this artifact is prepended to every SITE's stylesheet, so anything else in it is weight a
-       visitor to a database page downloads and cannot render. The admin ships `admin.css` and the
-       host's marketing pages ship `public.css`; both are built by `mix admin_css`. */
-    #{host_app_web_sources()}
-    @source "#{temp_dir}/js_assets/js/**/*.js";
-    @source "#{temp_dir}/js_assets/js/**/*.ts";
-
-    #{tailwind_preamble()}
-
-    [data-phx-session], [data-phx-teleported-src] { display: contents }
-
-    /* app.css carries @theme tokens that static classes resolve against */
-    #{app_css_content}
-    """
-  end
+  # The shell's classes, one per line, written by the host's `mix compile_static_css` into the
+  # `priv/static/temp` a release ships.
+  def shell_classes_path, do: Path.join(get_temp_dir(), "shell_classes.txt")
 
   # Read all globally-scoped (site_id IS NULL) Stylesheet rows and split
   # them into the two CSS-pipeline halves Tailwind v4 cares about:
@@ -1771,30 +1624,52 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # Its duplicated just is for documenting and making understanding easy
   defp read_global_stylesheets, do: read_stylesheets_for(nil)
 
-  defp read_site_stylesheets(site_name) do
+  defp read_site_stylesheets(site_name, rows) do
     case site_id_for_name(site_name) do
-      nil -> {"", ""}
-      site_id -> read_stylesheets_for(site_id)
+      nil -> {[], added_rows([], rows)}
+      site_id -> read_stylesheets_for(site_id, rows)
     end
   end
 
-  defp read_stylesheets_for(site_id) do
+  defp read_stylesheets_for(site_id, rows \\ %{}) do
     sheets =
       Stylesheet
       |> Ash.Query.for_read(:for_compiler, %{site_id: site_id}, authorize?: false)
       |> Ash.read!(authorize?: false)
+      |> Enum.map(&laid_over(&1, rows))
 
     {pre, post} = Enum.split_with(sheets, fn s -> s.kind in [:app_base, :theme] end)
 
-    {format_stylesheets(pre), format_stylesheets(post)}
+    {format_stylesheets(pre), format_stylesheets(post) ++ added_rows(sheets, rows)}
   end
 
-  defp format_stylesheets([]), do: ""
+  # A ROW AS A PREVIEW HOLDS IT, not as it is saved — see `compile_preview/5`. Only the content moves,
+  # so the row keeps its place in the load order, and `authored/1` still strips what it strips.
+  defp laid_over(%{name: name} = sheet, rows) do
+    case Map.fetch(rows, name) do
+      {:ok, fun} -> %{sheet | content: fun.(sheet.content)}
+      :error -> sheet
+    end
+  end
 
+  # A row the preview holds and the site has none of yet comes last, after every saved row, as an
+  # element's own CSS does in the site's bundle.
+  defp added_rows(sheets, rows) do
+    saved = MapSet.new(sheets, & &1.name)
+
+    rows
+    |> Enum.reject(fn {name, _fun} -> MapSet.member?(saved, name) end)
+    |> Enum.sort_by(fn {name, _fun} -> name end)
+    |> Enum.map(fn {name, fun} ->
+      "/* Preview row name=#{inspect(name)} */\n#{authored(%{content: fun.(nil), name: name})}"
+    end)
+  end
+
+  # One string per row, joined by `lift_remote_imports/1` once each row's imports are out of it.
   defp format_stylesheets(sheets) do
     sheets
     |> Enum.sort_by(&Stylesheet.load_order/1)
-    |> Enum.map_join("\n\n", fn s ->
+    |> Enum.map(fn s ->
       "/* Stylesheet##{s.id} kind=:#{s.kind} name=#{inspect(s.name)} */\n#{authored(s)}"
     end)
   end
@@ -1807,7 +1682,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
       {css, removed} ->
         Logger.warning(
           "[TailwindCompiler] stylesheet #{inspect(name)}: left out #{Enum.join(removed, ", ")}, " <>
-            "which read a file or run code when Tailwind builds the page's CSS"
+            "so Tailwind reads no file and runs no code the stylesheet names"
         )
 
         css
@@ -1816,6 +1691,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   @unsafe_rules ~w(plugin config reference)
 
+  # Tailwind reads no `//` comment, so neither does the parser here: a `//` that hid an `@import`
+  # from it would not hide it from Tailwind.
+  @tailwind_reading [allow_wrong_line_comments: false]
+
   @doc """
   The CSS an author wrote, without the at-rules that make the Tailwind binary read a file or run
   code on the server, and the names of the ones left out: `{css, ["@import", …]}`.
@@ -1823,46 +1702,57 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   A stylesheet row is pasted into the file Tailwind reads. There `@import "../x.css"` copies any
   local CSS file into the page's public CSS, `@source "../x"` scans any local file for class names,
   and `@plugin`, `@config` and `@reference` load a local file — a plugin is JavaScript Tailwind runs.
-  Left out:
+  Left out, wherever they are written — at the top, inside `@media`, `@layer` or a rule, or inside a
+  `@font-face` or a keyframe, where CSS has no at-rule but Tailwind still follows one:
 
-    * `@import`, unless it names an `http://` or `https://` address (a font stylesheet);
+    * `@import`, unless it names an `http://` or `https://` address (a font stylesheet), which a
+      build then puts ahead of everything else, where CSS obeys it;
     * `@source`, unless it is `@source inline(…)`, which only lists class names;
     * `@plugin`, `@config` and `@reference`;
     * any at-rule whose name is written with a backslash escape.
 
   Everything else — `@theme`, `@apply`, `@media`, `@layer`, `@custom-variant`, `@utility` — is kept
-  as it was written.
+  as it was written, and so is an `@` in a comment, a string or a `url()`. The at-rules are found
+  and removed by igniter_css's parser (`IgniterCss.list_at_rules/2`,
+  `IgniterCss.remove_at_rules/3`). Text it refuses to edit, such as braces that do not balance, is
+  left out whole when it holds one of those at-rules: `{"", [reason]}`.
   """
   @spec author_css(String.t()) :: {String.t(), [String.t()]}
   def author_css(css) when is_binary(css) do
-    at_rule = ~r/@((?:[\w-]|\\.)+)([^;{}]*)(?:;|\{[^{}]*\})?/u
-
-    removed =
-      for [_whole, name, rest] <- Regex.scan(at_rule, css),
-          unsafe_rule?(name, rest),
-          do: "@" <> String.downcase(name)
-
-    cleaned =
-      Regex.replace(at_rule, css, fn whole, name, rest ->
-        if unsafe_rule?(name, rest), do: "", else: whole
-      end)
-
-    {cleaned, removed}
+    with {:ok, at_rules} <- IgniterCss.list_at_rules(css, @tailwind_reading),
+         {:ok, cleaned, removed} <- without_unsafe(css, Enum.filter(at_rules, &unsafe_rule?/1)) do
+      {cleaned, removed}
+    else
+      {:error, reason} -> {"", ["the whole stylesheet, which the CSS parser refused: #{reason}"]}
+    end
   end
 
-  defp unsafe_rule?(name, rest) do
+  defp without_unsafe(css, []), do: {:ok, css, []}
+
+  defp without_unsafe(css, unsafe) do
+    with {:ok, %{source: cleaned}} <- IgniterCss.remove_at_rules(css, unsafe, @tailwind_reading),
+         do: {:ok, cleaned, Enum.map(unsafe, &("@" <> &1.name))}
+  end
+
+  defp unsafe_rule?(%IgniterCss.AtRule{name: name, prelude: prelude, target: target}) do
     cond do
       String.contains?(name, "\\") -> true
-      String.downcase(name) in @unsafe_rules -> true
-      String.downcase(name) == "source" -> not inline_source?(rest)
-      String.downcase(name) == "import" -> not remote_import?(rest)
+      name in @unsafe_rules -> true
+      name == "source" -> not inline_source?(prelude)
+      name == "import" -> not remote_import?(target)
       true -> false
     end
   end
 
-  defp inline_source?(rest), do: Regex.match?(~r/\A\s*(?:not\s+)?inline\s*\(/i, rest)
+  # As Tailwind reads `@source`: its prelude starts with `inline(`, after an optional `not `.
+  defp inline_source?(prelude),
+    do: String.starts_with?(prelude, ["inline(", "not inline("])
 
-  defp remote_import?(rest), do: Regex.match?(~r/\A\s*(?:url\(\s*)?["']?https?:\/\//i, rest)
+  # As Tailwind reads `@import`: the address the parser read out of the string or `url()`.
+  defp remote_import?(target) when is_binary(target),
+    do: String.starts_with?(target, ["http://", "https://"])
+
+  defp remote_import?(_target), do: false
 
   # Resolve site name → site_id via SiteState (cached at boot). Falls back
   # to nil if the name isn't known — caller treats that as "no site rows".
@@ -2009,55 +1899,42 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
-  # The static base used to be the whole host app plus every extension — the admin dashboard, the
-  # Gervaz table library, the marketing site — 514 KB prepended to every site's stylesheet that a
-  # visitor to a database page could never render. It is the RUNTIME SHELL now (see
-  # `build_css_content_static_base/0`), and it is prepended only where the shell cannot be scanned
-  # live: a release ships no `.ex` sources, so there the precompiled artifact is the only copy.
   defp execute_tailwind_shared_base do
-    prefix = if host_app_web_sources() == "", do: static_base_prefix(), else: ""
-
-    prefix <> run_tailwind(build_css_content_shared_base(), "shared_base")
+    {input, imports} = build_css_content_shared_base()
+    leading(imports) <> run_tailwind(input, "shared_base")
   end
 
-  defp execute_tailwind_site_only(site_name) do
-    run_tailwind(build_css_content_site_only(site_name), site_name)
+  defp execute_tailwind_site(site_name, identifier, opts) do
+    {input, imports} = build_css_content_site(site_name, opts)
+    leading(imports) <> run_tailwind(input, identifier)
   end
 
   # sobelow_skip ["Traversal.FileModule"]
   # Reads the host app's own `priv/static/assets/css/app.css`, a constant path under its app dir.
+  defp app_css do
+    path = Path.expand("priv/static/assets/css/app.css", Application.app_dir(@host_app))
+
+    case File.read(path) do
+      {:ok, content} -> content
+      {:error, _reason} -> ""
+    end
+  end
+
   defp build_css_content_shared_base do
     temp_dir = get_temp_dir()
-    app_root = Application.app_dir(@host_app)
-
-    app_css_path = Path.expand("priv/static/assets/css/app.css", app_root)
-
-    app_css_content =
-      case File.read(app_css_path) do
-        {:ok, content} ->
-          Logger.debug(
-            "[TailwindCompiler] Shared base: reading app.css, size: #{byte_size(content)} bytes"
-          )
-
-          content
-
-        {:error, _reason} ->
-          ""
-      end
-
     {pre_tailwind, post_tailwind} = read_global_stylesheets()
+    {[pre_tailwind, post_tailwind], imports} = lift_remote_imports([pre_tailwind, post_tailwind])
 
-    """
+    input = """
     /* === pre-Tailwind: kit themes (@theme blocks must precede class generation) === */
     #{pre_tailwind}
 
     @import "tailwindcss" source(none);
 
-    /* SHARED BASE - Scanned ONCE for all sites: the globally-installed JS hooks and stylesheet
-       rows, which are the only global templates no walk can reach. The globally-installed LAYOUTS,
-       ERROR PAGES and COMPONENTS are NOT here: being global says where a thing may be used, never
-       that every site pays for it, so each site scans the ones it reaches in
-       `build_css_content_site_only/1`. */
+    /* SHARED BASE: the globally-installed JS hooks and stylesheet rows, which are the only global
+       templates no walk can reach. The globally-installed LAYOUTS, ERROR PAGES and COMPONENTS are
+       NOT here: being global says where a thing may be used, never that every site pays for it, so
+       each site scans the ones it reaches in `build_css_content_site/2`. */
     #{global_unwalkable_sources()}
 
     /* Scan JS/TS assets - same for all sites */
@@ -2076,42 +1953,62 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     [data-phx-session], [data-phx-teleported-src] { display: contents }
 
     /* App CSS content directly embedded */
-    #{app_css_content}
+    #{app_css()}
 
     /* === post-Tailwind: global :base layers + :custom overrides === */
     #{post_tailwind}
     """
+
+    {input, imports}
   end
 
-  # Global :theme/:app_base tokens (e.g. the Chelekom `chelekom-theme`
-  # row, site_id == nil) MUST be present in this compile too. Site-scoped
-  # components scanned below use those tokens (`bg-primary-light` resolves
-  # `--color-primary-light`); without the tokens in THIS Tailwind run the
-  # utilities aren't generated, so site components render uncolored.
-  # Global theme first so a site :theme row can still override it.
-  defp build_css_content_site_only(site_name) do
+  # A SITE'S WHOLE STYLESHEET IN ONE INPUT: everything the shared base scans and holds, and the
+  # site's own templates and rows, so Tailwind ranks every utility once and every row is in it once.
+  #
+  # `opts`:
+  #   * `extra_scopes:` — a draft preview's namespace, walked too. The draft is usually the only
+  #     thing referencing the component being previewed — that is what makes it a draft — so a walk
+  #     over the saved site alone would leave the previewed component unstyled.
+  #   * `rows:` — the site's rows as a preview holds them (`compile_preview/5`).
+  #   * `global_rows: false` — the global `:base` and `:custom` rows left out (`global_rows/0`).
+  #
+  # The global theme rows come before the site's, so a site `:theme` row can override them, and both
+  # before Tailwind, because a utility is generated only from the `@theme` tokens of its own run.
+  defp build_css_content_site(site_name, opts) do
+    extra_scopes = Keyword.get(opts, :extra_scopes, [])
     content = content_named(site_name)
-    closure = closure_for(site_name, content.components)
+    closure = closure_for(site_name, content.components, extra_scopes)
+    temp_dir = get_temp_dir()
 
-    {global_pre, _global_post} = read_global_stylesheets()
-    {site_pre, post_tailwind} = read_site_stylesheets(site_name)
+    {global_pre, global_post} = read_global_stylesheets()
+    {site_pre, site_post} = read_site_stylesheets(site_name, Keyword.get(opts, :rows, %{}))
+    global_post = if Keyword.get(opts, :global_rows, true), do: global_post, else: []
 
-    """
+    {[global_pre, global_post, site_pre, site_post], imports} =
+      lift_remote_imports([global_pre, global_post, site_pre, site_post])
+
+    input = """
     #{layer_order()}
     #{global_pre}
     #{site_pre}
 
-    @import "tailwindcss/theme.css" layer(theme);
-    @import "tailwindcss/utilities.css" layer(utilities) source(none);
+    @import "tailwindcss" source(none);
 
-    /* SITE-SPECIFIC: #{site_name} */
+    /* The globally-installed JS hooks and stylesheet rows, and the site's own. */
+    #{global_unwalkable_sources()}
     #{site_unwalkable_sources([site_name])}
+
+    @source "#{temp_dir}/js_assets/js/**/*.js";
+    @source "#{temp_dir}/js_assets/js/**/*.ts";
+
+    /* The host's runtime shell, drawn around every page of the site. */
+    #{host_app_web_sources()}
 
     /* EVERY TEMPLATE THIS SITE CAN REACH, and nothing else: its pages and error pages, the layouts
        those pages use, and the components they name transitively — in whichever scope each lives.
        The directory globs this replaced charged every visitor for every layout the site had ever
        had and every component of every installed kit, to render the handful it renders. */
-    #{reachable_sources(closure, site_name, [])}
+    #{reachable_sources(closure, site_name, extra_scopes)}
 
     /* The box a component that could not be drawn is drawn as. */
     @source inline("#{ComponentBoundary.box_class()}");
@@ -2125,12 +2022,56 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     /* THE CLASSES THE SITE'S STORED CONTENT WRITES, which no template holds. */
     #{class_sources(content.classes)}
 
-    /* Plugin needed for icon classes in site templates */
     #{tailwind_preamble()}
+
+    /* Make LiveView wrapper divs transparent for layout */
+    [data-phx-session], [data-phx-teleported-src] { display: contents }
+
+    #{app_css()}
     #{icon_css(closure, site_name, content.icons)}
 
-    /* === post-Tailwind: site :base + :custom rows === */
-    #{post_tailwind}
+    /* === post-Tailwind: global, then site :base + :custom rows === */
+    #{global_post}
+    #{site_post}
     """
+
+    {input, imports}
   end
+
+  # THE ROWS' REMOTE `@import`s, LIFTED OUT TO LEAD THE STYLESHEET. CSS obeys an `@import` only ahead
+  # of every rule, and a row is pasted after other rows and Tailwind's own CSS, so Tailwind dropped
+  # it ("@import rules must precede all rules") wherever an author wrote it, and a Google font a kit
+  # theme imports never loaded. The ones `author_css/1` lets through are taken out of each row, in
+  # the order given, each piece of rows is joined, and they are put back first by `leading/1`.
+  #
+  # ONE ROW AT A TIME, read as `author_css/1` reads it. Read joined, a row the parser misreads hid
+  # every row after it: `@apply p-4 }`, with no `;` before the `}`, is CSS Tailwind builds, and an
+  # element's own CSS is written that way. A row the parser refuses keeps its imports where they are.
+  defp lift_remote_imports(pieces) do
+    Enum.map_reduce(pieces, [], fn rows, lifted ->
+      {rows, lifted} = Enum.map_reduce(rows, lifted, &lift_row/2)
+      {Enum.join(rows, "\n\n"), lifted}
+    end)
+  end
+
+  defp lift_row(row, lifted) do
+    {rest, imports} = remote_imports(row)
+    {rest, lifted ++ imports}
+  end
+
+  defp remote_imports(css) do
+    with {:ok, at_rules} <- IgniterCss.list_at_rules(css, @tailwind_reading),
+         [_ | _] = remote <- Enum.filter(at_rules, &remote_import_rule?/1),
+         {:ok, %{source: rest}} <- IgniterCss.remove_at_rules(css, remote, @tailwind_reading) do
+      {rest, Enum.map(remote, & &1.text)}
+    else
+      _none_or_refused -> {css, []}
+    end
+  end
+
+  defp remote_import_rule?(%IgniterCss.AtRule{name: name, target: target}),
+    do: name == "import" and remote_import?(target)
+
+  # Each once, ahead of everything.
+  defp leading(imports), do: imports |> Enum.uniq() |> Enum.map_join(&(&1 <> "\n"))
 end

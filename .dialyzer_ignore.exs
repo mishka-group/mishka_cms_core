@@ -34,9 +34,9 @@
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
   {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1831},
-  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1876},
+  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1766},
   {"lib/mishka_cms_core/runtime/handlers/ui_kit_handler.ex", :pattern_match_cov, 758},
-  {"lib/mishka_cms_core/runtime/authoring/code_check.ex", :pattern_match_cov, 281},
+  {"lib/mishka_cms_core/runtime/authoring/code_check.ex", :pattern_match_cov, 291},
   {"lib/mishka_cms_core/runtime/authoring/tree/styles.ex", :pattern_match_cov, 1252},
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov, 152},
   {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 368},

@@ -533,8 +533,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   defp load_metrics(socket), do: socket
 
-  # A SITE'S OWN STYLESHEET IS IN THAT SITE'S CSS; a global one is in the shared base every site's CSS
-  # starts with — so a site admin sees their own site's CSS, which is what their visitors download,
+  # A SITE'S OWN STYLESHEET IS IN THAT SITE'S CSS; a global one is in the shared base and in every
+  # site's CSS — so a site admin sees their own site's CSS, which is what their visitors download,
   # and a master the shared base.
   defp bundle_metrics(MishkaCmsCore.Runtime.Stylesheet, %{record: record} = source),
     do: bundle(source, css_bundle(record, source), "css")

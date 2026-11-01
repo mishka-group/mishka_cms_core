@@ -352,6 +352,18 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
 
       refute CodeCheck.message(fault) =~ "mishka_cms_runtime"
     end
+
+    test "Elixir that does not parse is reported at the author's line, in the parser's words" do
+      template = "<div>\n  <p>hi</p>\n  <%= foo( %>\n</div>"
+
+      assert {:error, %{tab: :template, line: 3, message: "missing terminator: )"}} =
+               CodeCheck.template(template)
+
+      assert [%{tab: :template, line: 3, message: "missing terminator: )"} = fault] =
+               faults(template: template)
+
+      assert CodeCheck.message(fault) == "Line 3: missing terminator: )"
+    end
   end
 
   describe "ok?/1 and message/1" do

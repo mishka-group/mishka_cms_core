@@ -14,7 +14,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.SectionTest do
   """
   use ExUnit.Case, async: true
 
+  alias MishkaCmsCore.Runtime.Authoring.PageStarter
   alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCore.Runtime.Authoring.Tree
 
   @moduletag :unit
 
@@ -131,6 +133,47 @@ defmodule MishkaCmsCore.Runtime.Authoring.SectionTest do
 
       assert Section.statuses("error-page", record) == [:offline]
       assert Section.template("error-page", record, status: "offline") == "<p>Soon</p>"
+    end
+  end
+
+  # A TEMPLATE IS NEVER EMPTY IN THE DATABASE, and an author who deletes everything has a tree that
+  # serializes to "". Saved as it was, every autosave was refused and so was the publish.
+  describe "an emptied document" do
+    test "is saved as the document a blank create starts with" do
+      for markup <- ["", "  \n  "] do
+        assert Section.save_fields("page", markup, []) == %{
+                 "template" => PageStarter.blank(:page)
+               }
+
+        assert Section.save_fields("layout", markup, []) == %{
+                 "template" => PageStarter.blank(:layout)
+               }
+
+        assert Section.save_fields("component", markup, []) ==
+                 %{"template" => PageStarter.blank(:page)}
+
+        record = %{error_pages: [%{status: 404, template: "<p>Not here</p>"}]}
+
+        assert %{"error_pages" => [%{"status" => 404, "template" => template}]} =
+                 "error-page"
+                 |> Section.save_fields(markup, status: "404")
+                 |> Section.apply_fields(record)
+
+        assert template == PageStarter.blank(:page)
+      end
+    end
+
+    test "which the editor reads as a document nobody has started" do
+      for section <- ~w(page component) do
+        %{"template" => template} = Section.save_fields(section, "", [])
+        assert template |> Tree.parse!() |> PageStarter.empty?(), section
+      end
+    end
+
+    test "while markup with anything in it is saved as it is" do
+      for markup <- ["Hi", "<p></p>", " <div>x</div> "] do
+        assert Section.save_fields("page", markup, []) == %{"template" => markup}
+      end
     end
   end
 

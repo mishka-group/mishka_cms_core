@@ -29,9 +29,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree.Node do
     * `text` — the content of `:text`, `:eex`, `:eex_comment` and `:html_comment` nodes, and the
       block argument (`"for post <- @posts"`) used as an `:eex_block` chip's label.
     * `meta` — parser and editor metadata: `:mode` (`:normal` | `:preserve` for `pre`/`textarea`/
-      `phx-no-format`), `:form` (`:body` for `{expr}` versus `:eex` for `<%= expr %>`), `:opt` (the
-      EEx marker), `:source` (an `:eex_block`'s verbatim source — see ADR-9) and `:styles` (the
-      responsive/pseudo cascade the inspector records).
+      `title`/`phx-no-format`), `:form` (`:body` for `{expr}` versus `:eex` for `<%= expr %>`),
+      `:opt` (the EEx marker), `:source` (an `:eex_block`'s verbatim source — see ADR-9) and
+      `:styles` (the responsive/pseudo cascade the inspector records).
 
   ## Construction
 

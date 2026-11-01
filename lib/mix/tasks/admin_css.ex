@@ -58,9 +58,9 @@ defmodule Mix.Tasks.AdminCss do
 
   ## Why neither sheet may go into the host's `app.css`
 
-  `TailwindCompiler.build_css_content_static_base/0` inlines that file wholesale into the base every
-  site's CSS is built on. Compiling the dashboard into it would ship the entire admin inside every
-  public page's stylesheet — which is the bug this whole split exists to undo.
+  `TailwindCompiler` inlines that file wholesale into every site's stylesheet. Compiling the dashboard
+  into it would ship the entire admin inside every public page's stylesheet — which is the bug this
+  whole split exists to undo.
 
   ## Usage
 

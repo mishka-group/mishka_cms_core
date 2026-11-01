@@ -144,6 +144,77 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
     end
   end
 
+  # A DRAFT'S PATH IS ASKED WHEN IT IS WRITTEN. Only `Page`'s identity refused one another page
+  # already has, at publish: the draft's settings said "Saved." and its Publish then failed.
+  describe "a path another page of the site has" do
+    setup do
+      site = create_site!()
+      %{site: site, taken: create_page!(site_id: site.id, path: "/taken")}
+    end
+
+    test "is refused on the draft's create and on its update", %{site: site} do
+      attrs = %{name: "Fresh", title: "Fresh", path: "/taken", template: "<p>fresh</p>"}
+
+      assert {:error, %Ash.Error.Invalid{errors: [error]}} =
+               PageDraft
+               |> Ash.Changeset.for_create(:create, attrs,
+                 tenant: site.id,
+                 context: %{page_code: :package}
+               )
+               |> Ash.create(authorize?: false)
+
+      assert %{field: :path, message: "Page path must be unique within a site."} = error
+
+      draft = create_draft!(site.id, %{attrs | path: "/fresh"})
+
+      assert {:error, %Ash.Error.Invalid{errors: [%{field: :path}]}} =
+               draft
+               |> Ash.Changeset.for_update(:update, %{path: "/taken"}, tenant: site.id)
+               |> Ash.update(authorize?: false)
+    end
+
+    test "is kept on a draft of that page", %{site: site, taken: page} do
+      draft =
+        create_draft!(site.id, %{
+          name: page.name,
+          title: page.title,
+          path: page.path,
+          template: "<p>edited</p>",
+          source_page_id: page.id
+        })
+
+      assert {:ok, %{path: "/taken"}} =
+               draft
+               |> Ash.Changeset.for_update(:update, %{path: "/elsewhere"}, tenant: site.id)
+               |> Ash.update!(authorize?: false)
+               |> Ash.Changeset.for_update(:update, %{path: "/taken"}, tenant: site.id)
+               |> Ash.update(authorize?: false)
+    end
+
+    test "is refused with a trailing slash, which a draft's path is stored without", %{
+      site: site
+    } do
+      attrs = %{name: "Fresh", title: "Fresh", path: "/taken/", template: "<p>fresh</p>"}
+
+      assert {:error, %Ash.Error.Invalid{errors: [%{field: :path}]}} =
+               PageDraft
+               |> Ash.Changeset.for_create(:create, attrs,
+                 tenant: site.id,
+                 context: %{page_code: :package}
+               )
+               |> Ash.create(authorize?: false)
+
+      assert %{path: "/fresh"} = create_draft!(site.id, %{attrs | path: "/fresh/"})
+    end
+
+    test "is kept by a draft of another site", %{taken: page} do
+      other = create_site!()
+      attrs = %{name: page.name, title: page.title, path: page.path, template: "<p>other</p>"}
+
+      assert %{path: "/taken"} = create_draft!(other.id, attrs)
+    end
+  end
+
   test "preview tokens are unique across drafts" do
     site = create_site!()
     d1 = create_draft!(site.id, %{name: "One", title: "One", path: "/one", template: "<i>1</i>"})

@@ -57,6 +57,12 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   @fonts_css "https://fonts.googleapis.com"
   @fonts_files "https://fonts.gstatic.com"
 
+  # THE PAGE BUILDER'S CANVAS draws a site's page with that site's stylesheet, at an admin path —
+  # and a site's stylesheet may `@import` a Google font, which the admin's `style-src` refused, so
+  # the canvas drew the page in the fallback font. Its frames (the canvas, and the examples' and the
+  # wizard's previews) get the font stylesheet origin a public page gets; the rest of the admin none.
+  @canvas "/admin/dashboard/runtime/builder-canvas/"
+
   # An origin a page may frame: https, a host of dot-separated labels, an optional port. No path, no
   # wildcard — a frame source names exactly the player it trusts.
   @frame_host ~r/\A[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+\z/
@@ -171,7 +177,10 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   defp frame_origin?(_origin), do: false
 
   defp policy(conn, admin?, nonce),
-    do: directives(admin?, nonce, captcha_sources(conn, admin?), frame_origins(conn))
+    do:
+      directives(fonts?(conn, admin?), nonce, captcha_sources(conn, admin?), frame_origins(conn))
+
+  defp fonts?(conn, admin?), do: not admin? or String.starts_with?(conn.request_path, @canvas)
 
   # ENFORCED WHERE IT HAS BEEN CHECKED, REPORTED WHERE IT HAS NOT — the two do not have to move
   # together, and a public page is the side facing the internet.
@@ -195,7 +204,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   # a site for both — so the pipeline cannot tell them apart and the path has to.
   defp admin?(conn), do: String.starts_with?(conn.request_path, "/admin")
 
-  defp directives(admin?, nonce, captcha, frames) do
+  defp directives(fonts?, nonce, captcha, frames) do
     [
       "default-src 'self'",
       "base-uri 'self'",
@@ -222,7 +231,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
       # anyway and naming it would only make the policy look more permissive than it is.
       "media-src 'self' data: blob: https:",
       "font-src 'self' data: #{@fonts_files}",
-      style_src(admin?, nonce, sources(captcha, :style_src)),
+      style_src(fonts?, nonce, sources(captcha, :style_src)),
       "script-src 'self' 'nonce-#{nonce}'#{dev_origins(:http)}#{sources(captcha, :script_src)}",
       # The LiveSocket connects to a relative "/live", which is same-origin — but 'self' does not
       # cover the ws:/wss: scheme in every browser, so both are named.
@@ -283,8 +292,8 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   #
   # `style-src` stays as the fallback for browsers that do not implement the split — Safari, at the
   # time of writing — where it is the permissive value or nothing.
-  defp style_src(admin?, nonce, captcha) do
-    fonts = if admin?, do: "", else: " #{@fonts_css}"
+  defp style_src(fonts?, nonce, captcha) do
+    fonts = if fonts?, do: " #{@fonts_css}", else: ""
     dev = dev_origins(:http)
     attr = attr_sources()
 

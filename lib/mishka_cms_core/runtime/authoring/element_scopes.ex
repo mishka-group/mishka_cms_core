@@ -69,6 +69,29 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementScopes do
   def scope?(_class), do: false
 
   @doc """
+  The minted class for the first four bytes of `bytes`: a node id's hash in
+  `MishkaCmsCore.Runtime.Authoring.Tree.ensure_scope/2`, a random draw in `rescope/1`.
+
+  EIGHT DIGITS AND NO LETTER IS A TAILWIND UTILITY. `pb-43544908` is 43544908 spacing steps of
+  padding-bottom to the run that builds the site's stylesheet, so the element wearing it was
+  millions of pixels tall. Such a hash has its first digit turned into a letter, the same one every
+  time; one that already holds a letter is used as it is, so an element named before keeps the
+  class its rule is filed under.
+  """
+  @spec scope_for(binary()) :: String.t()
+  def scope_for(<<named::binary-size(4), _rest::binary>>) do
+    hex = Base.encode16(named, case: :lower)
+
+    case String.match?(hex, ~r/\A[0-9]+\z/) do
+      true -> "pb-" <> lettered(hex)
+      false -> "pb-" <> hex
+    end
+  end
+
+  # The first digit as one of `a`–`f`, so the class keeps the hex shape `@scope` reads.
+  defp lettered(<<digit, rest::binary>>), do: <<?a + rem(digit - ?0, 6), rest::binary>>
+
+  @doc """
   `class` — a whole `class` attribute's text — with the minted classes taken out.
 
   A COPIED LOOK IS NOT THE ELEMENT IT WAS COPIED FROM. The minted class names one element to its own
@@ -191,7 +214,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementScopes do
   end
 
   defp mint(taken) do
-    scope = "pb-" <> Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
+    scope = scope_for(:crypto.strong_rand_bytes(4))
 
     case MapSet.member?(taken, scope) do
       true -> mint(taken)

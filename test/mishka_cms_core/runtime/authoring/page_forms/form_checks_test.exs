@@ -233,7 +233,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecksTest do
         one(~s(<section><.input field={f[:email]} type="text" /></section>), "field-no-form")
 
       assert finding.severity == :blocker
-      assert finding.detail == "This page cannot be saved until it is back inside a form."
+      assert finding.detail == "Saving is refused until it is back inside a form."
     end
 
     test "reads the binding off a name and value pair too" do
@@ -243,7 +243,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecksTest do
           "field-no-form"
         )
 
-      assert finding.detail == "This page cannot be saved until it is back inside a form."
+      assert finding.detail == "Saving is refused until it is back inside a form."
     end
 
     test "covers a kit component the palette says is a field" do
@@ -391,7 +391,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecksTest do
 
       assert finding.severity == :blocker
       assert finding.message == "This form has no name of its own"
-      assert finding.detail == "Two forms on this page would mix up each other's answers."
+      assert finding.detail == "Two forms on one page would mix up each other's answers."
     end
 
     test "Fix derives the name from the form's own id" do
@@ -1083,7 +1083,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecksTest do
       assert {:say, sentence} =
                FormChecks.repair(session, "submit-no-form", node_with(session, "button").id)
 
-      assert sentence =~ "no form on this page"
+      assert sentence =~ "no form to put it in"
     end
   end
 

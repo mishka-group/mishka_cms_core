@@ -77,9 +77,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias IgniterCss.Diagnostic
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.StylesheetRow
   alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.Stylesheet
 
   # WHAT THE BUILDER WRITES IT GENERATED: the stylesheet row is written by whoever may open a
@@ -112,7 +114,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   @spec put(map() | nil, String.t() | nil, String.t(), String.t(), String.t()) ::
           {:ok, %{String.t() => String.t()}} | {:error, term()}
   def put(actor, site_id, owner, scope, body) do
-    with {:ok, rules} <- place(all(actor, site_id, owner), scope, body) do
+    with {:ok, rules} <- place(all(actor, site_id, owner), scope, body, site_id) do
       write(rules, actor, site_id, owner)
     end
   end
@@ -122,7 +124,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
 
   The builder's draft stage holds its rules in the editing session instead of writing them — the row
   is the live site — and it has to refuse exactly what `put/5` refuses, or the box takes CSS in one
-  stage that the publish then throws out.
+  stage that the publish then throws out. That is `place/4`, given the site: `place/3` is the
+  parser's check alone, without the Tailwind build of a body that holds an `@apply`.
   """
   @spec place(%{String.t() => String.t()}, String.t() | nil, String.t() | nil) ::
           {:ok, %{String.t() => String.t()}} | {:error, term()}
@@ -130,6 +133,23 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     with :ok <- valid_scope(scope),
          {:ok, body} <- valid_body(body) do
       {:ok, placed(rules, scope, body)}
+    end
+  end
+
+  @doc """
+  `place/3`, and a body that holds an `@apply` is also built by Tailwind for the site `site_id`
+  (`nil` for the globals), as its row will be: `TailwindCompiler.verify_css/2` on the rule `css/1`
+  writes, refused in Tailwind's words, "Cannot apply unknown utility class `not-a-real-class`".
+
+  The site matters because an `@apply` may name a utility of the site's own theme, `bg-accent`. A
+  body with no `@apply` is not built: what Tailwind could refuse in it, the parser already has.
+  """
+  @spec place(%{String.t() => String.t()}, String.t() | nil, String.t() | nil, String.t() | nil) ::
+          {:ok, %{String.t() => String.t()}} | {:error, term()}
+  def place(rules, scope, body, site_id) do
+    with {:ok, placed} <- place(rules, scope, body),
+         :ok <- builds(scope, placed[scope], site_id) do
+      {:ok, placed}
     end
   end
 
@@ -470,8 +490,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   defp strip_comments(text), do: String.replace(text, ~r|/\*.*?\*/|s, "")
 
   # WHERE A COMMENT ENDS, and `:none` when nobody closed it. The scanners that read half-typed text
-  # take `:none` as running to the end of what there is; `structure/4` refuses it, because in a body
-  # about to be saved it swallows the `}` that closes the wrapper and eats the rest of the sheet.
+  # take `:none` as running to the end of what there is; a body about to be saved with one is refused
+  # by the parser, because it swallows the `}` that closes the wrapper and eats the rest of the sheet.
   defp comment_end(body, pos, stop) do
     case :binary.match(body, "*/", scope: {pos, stop - pos}) do
       {at, _length} -> at + 2
@@ -523,22 +543,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     end
   end
 
-  # THE ONE STRUCTURAL RULE, and it is about braces rather than selectors. Scoping works because the
-  # text is wrapped in `.pb-xxxxxxxx { … }`, so the only way out is to close that wrapper early with
-  # a `}` — after which everything is loose CSS on the whole site. A nested selector cannot escape:
-  # under CSS nesting `body { … }` inside the braces means `.pb-xxxxxxxx body { … }`, which is a
-  # descendant of this element and is a thing authors legitimately want.
-  #
-  # An earlier version also demanded that every nested selector start with `&`. It refused
-  # `body { … }` written first and allowed the same thing written after a declaration, because a
-  # pattern anchored on `^` or `}` cannot see the second one — inconsistent, and guarding against
-  # nothing.
-  #
-  # A BRACE THAT IS TEXT CLOSES NOTHING. `content: "}"`, `url("a}b.png")` and `/* } */` are all
-  # ordinary CSS, and a check that counted every brace in the body refused all three with a message
-  # about an unmatched brace — the author reads it, cannot find one, and the box has nothing more to
-  # say. The one thing that IS refused alongside them is a comment nobody closed: it swallows the
-  # `}` that ends the wrapper, so everything after it in the stylesheet is eaten until the next `*/`.
   @doc """
   What is worth telling an author about CSS that is valid and probably not what they meant.
 
@@ -586,40 +590,108 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     |> Enum.uniq()
   end
 
+  # WHAT A BODY IS CHECKED WITH: igniter_css's parser, reading the text as the contents of one rule,
+  # which is how `css/1` writes it into the row, with every error placed by line and column in the
+  # body itself. What it refuses is what a body here may not do:
+  #
+  #   * close the wrapper early. Scoping works because the text is wrapped in `.pb-xxxxxxxx { … }`,
+  #     so a `}` that closes it leaves everything after it loose on the whole site, and that is
+  #     refused even when what follows parses. A nested selector cannot escape: under CSS nesting
+  #     `body { … }` inside the braces means `.pb-xxxxxxxx body { … }`, a descendant of this element
+  #     and a thing authors legitimately want;
+  #   * leave a comment, a string, a `(` or a `[` open. CSS reads everything up to the match as part
+  #     of it, so the wrapper's `}` goes with it and the rest of the stylesheet after that;
+  #   * write a declaration Tailwind cannot parse, `color crimson` or `--brand;`. The site's CSS build
+  #     fails and keeps the last good bundle, the draft preview cannot build its styles, and the
+  #     canvas's in-browser build stops for every element on the page until the frame reloads;
+  #   * miss a `;`, as in `letter-spacing: 2pxcolor: teal`. That builds: the browser drops it as a
+  #     value no property takes while the box says the rule was applied;
+  #   * write an `@import`, which is valid only at the top of a stylesheet and stops Tailwind's build.
+  #
+  # A brace, a `;` or a `:` inside a string, a comment, brackets or an escape is text to a parser, so
+  # `content: "}"`, `url(data:image/png;base64,…)`, `--x: a:b` and `.w-\[10px\]` are all kept.
+  #
+  # `//` starts no comment in a browser or in Tailwind, so the parser is not asked to read one.
   defp valid_body(nil), do: {:ok, ""}
-  defp valid_body(body), do: body |> String.trim() |> checked()
+  defp valid_body(body), do: checked(String.trim(body), body)
 
-  defp checked(""), do: {:ok, ""}
-  defp checked(body), do: body |> structure() |> verdict(body)
+  # Read as it was typed, so a line and a column are where the author sees them; kept trimmed.
+  defp checked("", _typed), do: {:ok, ""}
 
-  defp verdict(:ok, body), do: {:ok, body}
-  defp verdict(:unbalanced, _body), do: {:error, gettext("That CSS has an unmatched { or }.")}
-
-  defp verdict(:open_comment, _body),
-    do: {:error, gettext("That CSS has a /* that is never closed.")}
-
-  defp structure(body), do: structure(body, 0, byte_size(body), 0)
-
-  defp structure(_body, pos, stop, 0) when pos >= stop, do: :ok
-  defp structure(_body, pos, stop, _depth) when pos >= stop, do: :unbalanced
-
-  defp structure(body, pos, stop, depth) do
-    case binary_part(body, pos, min(2, stop - pos)) do
-      "/*" -> commented(comment_end(body, pos + 2, stop), body, stop, depth)
-      _other -> structure_step(body, :binary.at(body, pos), pos, stop, depth)
+  defp checked(body, typed) do
+    case IgniterCss.validate_block(typed, allow_wrong_line_comments: false) do
+      {:ok, _validation} -> {:ok, body}
+      {:error, %{errors: [first | _rest]}} -> {:error, refusal(first)}
+      {:error, _validation} -> {:error, gettext("That CSS could not be read.")}
     end
   end
 
-  defp commented(:none, _body, _stop, _depth), do: :open_comment
-  defp commented(at, body, stop, depth), do: structure(body, at, stop, depth)
+  # AN `@apply` IS TAILWIND'S TO RESOLVE, and one it cannot (`@apply not-a-real-class`,
+  # `@apply p-4 !important`, or `@apply p-4` with its `;` missing before the next declaration, which
+  # applies `color:`) is valid CSS the parser takes. Tailwind then fails every stylesheet it is in: the
+  # canvas's in-browser build, the draft preview's styles, and the site's CSS build on publish. The
+  # at-rules are found by igniter_css's parser, so an `@apply` in a comment or a string is not one.
+  defp builds(_scope, nil, _site_id), do: :ok
 
-  defp structure_step(body, quote_char, pos, stop, depth) when quote_char in [?", ?'],
-    do: structure(body, quoted_end(body, pos + 1, stop, quote_char), stop, depth)
+  defp builds(scope, body, site_id) do
+    css = css(%{scope => body})
 
-  defp structure_step(body, ?{, pos, stop, depth), do: structure(body, pos + 1, stop, depth + 1)
-  defp structure_step(_body, ?}, _pos, _stop, 0), do: :unbalanced
-  defp structure_step(body, ?}, pos, stop, depth), do: structure(body, pos + 1, stop, depth - 1)
-  defp structure_step(body, _char, pos, stop, depth), do: structure(body, pos + 1, stop, depth)
+    case IgniterCss.list_at_rules(css) do
+      {:ok, at_rules} -> applied(Enum.filter(at_rules, &(&1.name == "apply")), css, site_id)
+      {:error, _reason} -> TailwindCompiler.verify_css(css, site_id)
+    end
+  end
+
+  defp applied([], _css, _site_id), do: :ok
+
+  # Tailwind's word for an empty one is "Cannot apply unknown utility class ``".
+  defp applied(applies, css, site_id) do
+    case Enum.any?(applies, &(String.trim(&1.prelude) == "")) do
+      true ->
+        {:error, gettext("`@apply` names no utility. Write one after it, like `@apply p-4`.")}
+
+      false ->
+        TailwindCompiler.verify_css(css, site_id)
+    end
+  end
+
+  # The first error, where it is, and what the parser said about it. `text` is the part of the body
+  # the error is about, and it is empty when the error is about the end of the body.
+  defp refusal(%Diagnostic{} = error) do
+    case excerpt(error.text) do
+      "" ->
+        gettext("That CSS has an error on line %{line}, column %{column}: %{reason}",
+          line: error.line,
+          column: error.column,
+          reason: sentence(error.message)
+        )
+
+      text ->
+        gettext(
+          "That CSS has an error on line %{line}, column %{column}, at `%{text}`: %{reason}",
+          line: error.line,
+          column: error.column,
+          text: text,
+          reason: sentence(error.message)
+        )
+    end
+  end
+
+  # The parser's own words, which start in either case and end with or without a full stop.
+  defp sentence(message) do
+    {first, rest} = message |> String.trim() |> String.trim_trailing(".") |> String.split_at(1)
+    String.upcase(first) <> rest <> "."
+  end
+
+  # What a refusal quotes back to the author: one line, short enough to sit in a sentence.
+  defp excerpt(text) do
+    line = text |> String.split() |> Enum.join(" ")
+
+    case String.length(line) > 60 do
+      true -> String.slice(line, 0, 60) <> "…"
+      false -> line
+    end
+  end
 
   defp indent(body) do
     body
