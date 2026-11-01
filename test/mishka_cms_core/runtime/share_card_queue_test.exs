@@ -40,6 +40,11 @@ defmodule MishkaCmsCore.Runtime.ShareCardQueueTest do
       id: @oban
     )
 
+    # The queue's producer subscribes to signals in its `handle_continue`, after it has started, so a
+    # signal sent first could find no listener and be lost. A call to the producer returns only once
+    # that has run.
+    _ = queue()
+
     :ok
   end
 
