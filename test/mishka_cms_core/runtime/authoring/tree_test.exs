@@ -550,6 +550,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
                {:error, %{line: 2, column: 3, message: "<%= if @a do %> has no <% end %>"}}
     end
 
+    # The `</div>` closes the element the block was opened in, so the block is the one left open.
+    test "an EEx block left open inside an element is named, not the element's closing tag" do
+      assert Tree.parse("<div>\n<% if true do %>\n<p>a</p>\n</div>") ==
+               {:error, %{line: 2, column: 1, message: "<% if true do %> has no <% end %>"}}
+
+      assert Tree.parse("<section><div><%= if @a do %>a<% else %>b</div></section>") ==
+               {:error, %{line: 1, column: 15, message: "<%= if @a do %> has no <% end %>"}}
+    end
+
     test "nil and empty templates give an empty tree" do
       assert {:ok, %Tree{nodes: nodes, roots: []}} = Tree.parse(nil)
       assert nodes == %{}

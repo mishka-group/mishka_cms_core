@@ -609,10 +609,17 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   end
 
   # A closing tag with no open tag to close, at the top of the template or directly inside an EEx
-  # block.
-  defp to_tree([{:close, _type, _name, meta} | _tokens], _buffer, _stack, _opts) do
-    message = gettext("unmatched closing tag </%{name}>", name: meta.tag_name)
-    {:error, meta.line, meta.column, message}
+  # block. One that closes the element the block was opened in, as the `</div>` of
+  # `<div><% if true do %><p>a</p></div>` does, means the block is the one left open.
+  defp to_tree([{:close, _type, _name, meta} | _tokens], _buffer, stack, _opts) do
+    case open_block_in(stack, meta.tag_name) do
+      {expr, block_meta} ->
+        open_block(expr, block_meta)
+
+      nil ->
+        message = gettext("unmatched closing tag </%{name}>", name: meta.tag_name)
+        {:error, meta.line, meta.column, message}
+    end
   end
 
   # handle eex
@@ -676,6 +683,21 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     message = gettext("%{tag} has no <% end %>", tag: "<%#{opt} #{expr} %>")
     {:error, line, column, message}
   end
+
+  # The EEx block on top of `stack`, when `name` is the element it was opened in: the first tag
+  # under the blocks open on top of the stack.
+  defp open_block_in([block | stack], name)
+       when elem(block, 0) == :eex_block and is_binary(name) do
+    if enclosing_tag(stack) == name, do: {elem(block, 1), elem(block, 2)}
+  end
+
+  defp open_block_in(_stack, _name), do: nil
+
+  defp enclosing_tag([{tag_name, _attrs, _meta, _buffer} | _stack]) when is_binary(tag_name),
+    do: tag_name
+
+  defp enclosing_tag([_eex_block | stack]), do: enclosing_tag(stack)
+  defp enclosing_tag([]), do: nil
 
   defp count_newlines_before_text(binary),
     do: count_newlines_until_text(binary, 0, 0, 1)

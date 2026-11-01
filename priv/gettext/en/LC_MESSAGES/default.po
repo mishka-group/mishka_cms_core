@@ -18526,7 +18526,7 @@ msgstr ""
 msgid "a tag is opened inside another tag; close the <%{tag}> with > first"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:614
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:620
 #, elixir-autogen, elixir-format
 msgid "unmatched closing tag </%{name}>"
 msgstr ""
@@ -18536,7 +18536,7 @@ msgstr ""
 msgid "</%{name}> does not close <%{open}>"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:676
+#: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:683
 #, elixir-autogen, elixir-format
 msgid "%{tag} has no <% end %>"
 msgstr ""
