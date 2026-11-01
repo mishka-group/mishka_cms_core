@@ -16,8 +16,6 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
         :ok
     end
 
-    Process.sleep(50)
-
     :ok
   end
 
@@ -764,9 +762,6 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
       original_time = ~U[2024-01-01 10:00:00Z]
       {:ok, original} = AssetsState.get("test_site", "config")
       assert original.updated_at == original_time
-
-      # Wait a bit to ensure timestamp changes
-      Process.sleep(10)
 
       assert :ok = AssetsState.touch("test_site", "config")
       {:ok, touched} = AssetsState.get("test_site", "config")

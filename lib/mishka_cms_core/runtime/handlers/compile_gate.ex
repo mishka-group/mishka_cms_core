@@ -19,6 +19,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileGate do
   Per-node by design: CPU is a per-node resource, so each node throttles its own compiles with
   zero cluster coordination. The limit is overridable via
   `config :mishka_cms_core, :compile_gate_limit`.
+
+  A compile that has to wait for a slot emits `[:mishka_cms, :runtime, :compile_gate, :queued]` from
+  the gate's process, with how many are `waiting` as its measurement and the waiting `pid` as its
+  metadata, once that compile has its place in the queue.
   """
   use GenServer
 
@@ -70,8 +74,16 @@ defmodule MishkaCmsCore.Runtime.Handlers.CompileGate do
     {:reply, :ok, hold(state, pid)}
   end
 
-  def handle_call(:acquire, from, %{waiting: q} = state) do
-    {:noreply, %{state | waiting: :queue.in(from, q)}}
+  def handle_call(:acquire, {pid, _tag} = from, %{waiting: q} = state) do
+    waiting = :queue.in(from, q)
+
+    :telemetry.execute(
+      [:mishka_cms, :runtime, :compile_gate, :queued],
+      %{waiting: :queue.len(waiting)},
+      %{pid: pid}
+    )
+
+    {:noreply, %{state | waiting: waiting}}
   end
 
   @impl true

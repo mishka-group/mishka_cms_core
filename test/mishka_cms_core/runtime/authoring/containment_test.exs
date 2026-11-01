@@ -1016,6 +1016,262 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
+  # A kit component whose markup opens with another component is the element that one renders:
+  # Chelekom's Form Wrapper opens with `<.form>` and its Simple Form with a call to the Form Wrapper,
+  # so both are the `<form>` the browser takes out of a `<p>`, as a `<.form>` on its own is.
+  describe "can_drop?/4 — a kit component whose markup opens with another component" do
+    defp kit_node(name),
+      do: Node.new(:component, tag: ".component", attrs: [{"component_name", {:string, name}}])
+
+    test "a kit form is refused in a paragraph and welcome in a box", %{kit: kit} do
+      tree = tree_of("<div><p>Words</p></div>")
+
+      for name <- ~w(chelekom-form-wrapper chelekom-simple-form acme-wrapper acme-simple) do
+        form = kit_node(name)
+
+        assert Containment.element(form, components: kit) == "form", name
+
+        assert {:error, message} =
+                 Containment.can_drop?(tree, form, find(tree, "p").id, components: kit)
+
+        assert message =~ "`<p>` can only hold text and inline elements", name
+        assert Containment.can_drop?(tree, form, find(tree, "div").id, components: kit) == :ok
+      end
+    end
+
+    test "accepts_map/3 gives the same answers", %{kit: kit} do
+      tree = tree_of("<section><div><p>Words</p></div></section>")
+      accepts = Containment.accepts_map(tree, kit_node("chelekom-simple-form"), components: kit)
+
+      refute accepts[find(tree, "p").id]
+      assert accepts[find(tree, "div").id]
+      assert accepts[find(tree, "section").id]
+    end
+
+    test "components that open with each other are let through, not looped on" do
+      kit = [
+        %{name: "ping", template: ~s(<.component component_name="pong" />)},
+        %{name: "pong", template: ~s(<.component component_name="ping" />)}
+      ]
+
+      tree = tree_of("<p>Words</p>")
+
+      assert Containment.element(kit_node("ping"), components: kit) == nil
+
+      assert Containment.can_drop?(tree, kit_node("ping"), find(tree, "p").id, components: kit) ==
+               :ok
+    end
+  end
+
+  # A document that is already written is asked the way a drop is: what a `<p>`, a heading or another
+  # element that takes phrasing content may hold is the standard's list of phrasing content, a form
+  # does not go in a form, and a text-only element holds text. `button` and `label` are held to a
+  # form or a text block only, because the Chelekom kit's own templates put a `<div>` in them.
+  describe "misplaced/2" do
+    @doc_form ~s(<.form for={%{}} :let={_f}><.input name="email" value="" /></.form>)
+
+    test "names a form in a paragraph, with the words a refused drop gives" do
+      tree = tree_of(~s(<div><p>words #{@doc_form}</p></div>))
+
+      assert {node, message} = Containment.misplaced(tree)
+      assert node.tag == ".form"
+      assert message == "A `<p>` can only hold text and inline elements."
+    end
+
+    test "names a kit form in a paragraph only where the kit's row is handed over", %{kit: kit} do
+      tree = tree_of(~s(<p>words #{component("chelekom-form-wrapper")}</p>))
+
+      assert {node, message} = Containment.misplaced(tree, components: kit)
+      assert Node.component_name(node) == "chelekom-form-wrapper"
+      assert message =~ "`<p>` can only hold text and inline elements"
+
+      assert Containment.misplaced(tree) == nil
+    end
+
+    test "names a form in a heading or an inline element, and a block that is a text block", %{
+      kit: kit
+    } do
+      for markup <- [
+            ~s(<h2>words #{@doc_form}</h2>),
+            ~s(<span>#{@doc_form}</span>),
+            ~s(<h2>words <p>more</p></h2>),
+            ~s(<p><a href="/x">#{component("acme-simple")}</a></p>)
+          ] do
+        assert {_node, message} = Containment.misplaced(tree_of(markup), components: kit), markup
+        assert message =~ "can only hold text and inline elements", markup
+      end
+    end
+
+    # What the standard lists as phrasing content (the standard's list, then a custom element).
+    @phrasing_tags ~w(a abbr area audio b bdi bdo br button canvas cite code data datalist del dfn em
+      embed i iframe img input ins kbd label link map mark math meta meter noscript object output
+      picture progress q ruby s samp script select selectedcontent slot small span strong sub sup svg
+      template textarea time u var video wbr my-el x-button)
+
+    @flow_tags ~w(address article aside blockquote details dialog div dl fieldset figcaption figure
+      footer form h1 h2 h3 h4 h5 h6 header hgroup hr main menu nav ol p pre search section table ul)
+
+    @phrasing_hosts ~w(p h1 h2 h3 h4 h5 h6 span em strong code pre)
+
+    test "a drop and a written document hold a phrasing host to the standard's list alike" do
+      for host <- @phrasing_hosts, tag <- @phrasing_tags ++ @flow_tags do
+        tree = tree_of("<#{host}>x<#{tag} /></#{host}>")
+        dropped = Containment.can_drop?(tree, Node.new(:tag, tag: tag), find(tree, host).id)
+        written = Containment.misplaced(tree)
+
+        case tag in @phrasing_tags do
+          true ->
+            assert {dropped, written} == {:ok, nil}, "<#{host}><#{tag}>"
+
+          false ->
+            assert {{:error, _refusal}, {%Node{}, _message}} = {dropped, written},
+                   "<#{host}><#{tag}>"
+        end
+      end
+    end
+
+    test "a div, a list, a section and a kit card are refused in a paragraph, at their own place",
+         %{
+           kit: kit
+         } do
+      for markup <- [
+            "<p>x<div>y</div></p>",
+            "<p>x<ul><li>y</li></ul></p>",
+            "<p>x<section>y</section></p>",
+            "<h3>x<div>y</div></h3>",
+            "<p>x#{component("chelekom-card")}</p>"
+          ] do
+        tree = tree_of(markup)
+        assert {node, message} = Containment.misplaced(tree, components: kit), markup
+
+        assert message ==
+                 "A `<#{(tree.roots |> hd() |> then(&Tree.get(tree, &1))).tag}>` can only hold text and inline elements.",
+               markup
+
+        assert Tree.get(tree, node.parent_id).tag in ~w(p h3), markup
+      end
+    end
+
+    test "a paragraph's br, img, input, svg, select, del, button, a, label and custom element stay" do
+      tree =
+        tree_of("""
+        <p>a<br />b <img src="a.png" /> <input name="q" /> <svg viewBox="0 0 1 1"><path d="M0 0" /></svg>
+        <select><option>a</option></select> <del>x</del> <button>go</button> <a href="/x">link</a>
+        <label>Name <input name="n" /></label> <my-el>custom</my-el> <span>s</span> {@name}
+        <%= @other %> <!-- note --></p>
+        """)
+
+      assert Containment.misplaced(tree) == nil
+    end
+
+    test "a link is read as what it holds, in a paragraph" do
+      assert {_node, _message} =
+               Containment.misplaced(tree_of(~s(<p><a href="/x"><div>y</div></a></p>)))
+
+      assert Containment.misplaced(tree_of(~s(<p><a href="/x"><img src="a.png" /></a></p>))) ==
+               nil
+    end
+
+    test "a component that cannot be read is let through, as it always was" do
+      tree = tree_of(~s(<p>x<.component component_name="nobody-knows-me" /></p>))
+
+      assert Containment.misplaced(tree) == nil
+      assert Containment.misplaced(tree, components: []) == nil
+    end
+
+    test "a button and a label are held to a form or a text block, which the kit's own templates need" do
+      assert Containment.misplaced(tree_of("<button><div>x</div></button>")) == nil
+      assert Containment.misplaced(tree_of("<label><div>x</div> <input /></label>")) == nil
+
+      assert {_node, _message} = Containment.misplaced(tree_of("<button><p>x</p></button>"))
+      assert {_node, _message} = Containment.misplaced(tree_of("<label>#{@doc_form}</label>"))
+
+      # A drop keeps them to phrasing content, as it always has.
+      tree = tree_of("<button>x</button>")
+
+      assert {:error, _message} =
+               Containment.can_drop?(tree, Node.new(:tag, tag: "div"), find(tree, "button").id)
+
+      assert Containment.can_drop?(tree, Node.new(:tag, tag: "img"), find(tree, "button").id) ==
+               :ok
+    end
+
+    test "names the inner form of a form in a form, not the box that holds it" do
+      tree = tree_of(~s(<form><div id="row"><form></form></div></form>))
+
+      assert {node, message} = Containment.misplaced(tree)
+      assert node.tag == "form"
+      assert node.parent_id == find(tree, "div").id
+      assert message =~ "inside another form"
+    end
+
+    test "names an element put into a text-only one" do
+      tree = tree_of("<div><textarea></textarea></div>")
+      assert {:ok, tree} = Tree.insert(tree, tree_of("<b>x</b>"), find(tree, "textarea").id, 0)
+
+      assert {node, "A `<textarea>` holds text only."} = Containment.misplaced(tree)
+      assert node.tag == "b"
+    end
+
+    test "names the first in document order", %{kit: kit} do
+      tree = tree_of(~s(<div><h2>a <p>b</p></h2><p>words #{@doc_form}</p></div>))
+
+      assert {node, _message} = Containment.misplaced(tree, components: kit)
+      assert node.tag == "p"
+    end
+
+    test "lets in what is ordinary markup", %{kit: kit} do
+      tree =
+        tree_of("""
+        <div>
+          <p>line<br>two <img src="a.png"> <a href="/x">link</a> <input name="q"> <del>old</del></p>
+          <h2>Head <small>sub</small> <svg viewBox="0 0 1 1"><path d="M0 0" /></svg></h2>
+          <label>Name <input name="n"></label>
+          <span><img src="a.png"></span>
+          <button><span>go</span></button>
+          <div><p>box</p>#{@doc_form}</div>
+          <form><label>Name <input name="n"></label></form>
+          #{component("chelekom-form-wrapper")}
+          <textarea>text <b>and</b> text</textarea>
+        </div>
+        """)
+
+      assert Containment.misplaced(tree, components: kit) == nil
+      assert Containment.misplaced(tree) == nil
+    end
+
+    test "has nothing to say about an empty document" do
+      assert Containment.misplaced(Tree.new()) == nil
+    end
+
+    # The shipped templates keep applying. Asked with `can_drop?/4`'s block test, 24 of these are
+    # refused, among them every kit field that wraps its `<input>` in a `<label>`.
+    # The committed export (`test/fixtures/cms_ui_kits_export/`, copied from mishka_chelekom), since
+    # `priv/cms_ui_kits/*.json` is downloaded at run time and not in the repository.
+    test "refuses none of the Chelekom templates and examples the library ships" do
+      dir = Path.expand("../../../fixtures/cms_ui_kits_export", __DIR__)
+
+      for file <- ~w(chelekom.json chelekom_headless.json) do
+        rows =
+          dir |> Path.join(file) |> File.read!() |> Jason.decode!() |> Map.fetch!("components")
+
+        palette =
+          for row <- rows,
+              do: %{
+                name: row["name"],
+                attrs: row["attrs"] || [],
+                slots: row["slots"] || [],
+                template: row["template"] || ""
+              }
+
+        for row <- rows, {source, at} <- Enum.with_index([row["template"] | row["examples"]]) do
+          assert Containment.misplaced(tree_of(source), components: palette) == nil,
+                 "#{file} #{row["name"]} #{at}"
+        end
+      end
+    end
+  end
+
   describe "can_drop?/4 — forms" do
     test "a form refuses to go inside a form" do
       tree = tree_of(~s(<.form :let={f} as={:q} for={assigns[:q_form]}></.form>))

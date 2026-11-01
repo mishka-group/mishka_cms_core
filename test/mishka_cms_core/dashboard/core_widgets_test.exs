@@ -35,27 +35,14 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
     {CmsStatus, "cms-status", "Public site"}
   ]
 
+  # Each widget registers from its own `handle_continue`. `MishkaCmsCore.Test.Installer.await/1`
+  # returns once mishka_installer has announced each one started and rebuilt the events it joined.
   test "every core widget plugin registers on the dashboard:widgets event" do
-    ids = wait_for_widgets(5_000)
+    :ok = MishkaCmsCore.Test.Installer.await(for {module, _id, _marker} <- @widgets, do: module)
+    ids = registered_ids()
 
     for {_module, id, _marker} <- @widgets do
       assert id in ids, "#{id} did not register on dashboard:widgets"
-    end
-  end
-
-  defp wait_for_widgets(remaining) do
-    ids = registered_ids()
-
-    cond do
-      length(ids) >= length(@widgets) ->
-        ids
-
-      remaining <= 0 ->
-        ids
-
-      true ->
-        Process.sleep(100)
-        wait_for_widgets(remaining - 100)
     end
   end
 

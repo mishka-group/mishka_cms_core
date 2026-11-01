@@ -20,7 +20,10 @@ defmodule MishkaCmsCore.Layouts.Nav do
 
   The sidebar follows its settings live: the hook subscribes to `MishkaCmsCore.Sidebar.changed/1` for
   the menu its viewer is shown and raises `@sidebar_version`, which `MishkaCmsCore.Layouts.sidebar/1`
-  redraws on. Changes that arrive together are drawn once.
+  redraws on. Changes that arrive together are drawn once. Each redraw emits
+  `[:mishka_cms, :sidebar, :redrawn]` from the page's own process as it raises `@sidebar_version`,
+  with the new `version` as its measurement and the page's `view` as its metadata, so whatever asks
+  the page after that event is answered with the redrawn sidebar.
 
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
@@ -35,6 +38,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   alias MishkaCmsCore.Sidebar
 
   @sidebar_refresh_ms 50
+  @redrawn [:mishka_cms, :sidebar, :redrawn]
 
   def on_mount(:default, _params, session, socket) do
     language = Languages.admin(session)
@@ -106,10 +110,13 @@ defmodule MishkaCmsCore.Layouts.Nav do
   end
 
   defp sidebar_message(:sidebar_refresh, socket) do
+    version = socket.assigns.sidebar_version + 1
+    :telemetry.execute(@redrawn, %{version: version}, %{view: socket.view})
+
     {:halt,
      socket
      |> put_private(:sidebar_refresh_pending, false)
-     |> assign(:sidebar_version, socket.assigns.sidebar_version + 1)}
+     |> assign(:sidebar_version, version)}
   end
 
   defp sidebar_message(_message, socket), do: {:cont, socket}

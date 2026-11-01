@@ -27,6 +27,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
   @moduletag :unit
 
   alias MishkaCmsCore.Runtime.Authoring.CodeCheck
+  alias MishkaCmsCore.Test.Factory
+
+  # The real Chelekom form rows, for the placement checks that read a kit component's own markup.
+  setup_all do
+    {:ok, kit: Factory.chelekom_rows(~w(chelekom-form-wrapper chelekom-simple-form))}
+  end
 
   defp page(attrs), do: Map.merge(%{template: "<div>hi</div>"}, Map.new(attrs))
 
@@ -363,6 +369,97 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
                faults(template: template)
 
       assert CodeCheck.message(fault) == "Line 3: missing terminator: )"
+    end
+  end
+
+  # Markup the tokenizer and the compiler take and a browser does not: `<p>words <.form>…</.form></p>`
+  # saves, then the browser closes the `<p>` in front of the form and the canvas disagrees with the
+  # Layers and Code views. The code drawer's Apply asks `placement/2` before it replaces the document.
+  describe "placement/2" do
+    @form ~s(<.form for={%{}} :let={_f}><.input name="email" value="" /></.form>)
+
+    test "refuses a form in a paragraph at the line and column the form opens at" do
+      source = ~s(<div>\n  <p class="p-6">words #{@form}</p>\n</div>)
+
+      assert {:error, fault} = CodeCheck.placement(source)
+
+      assert %{
+               tab: :template,
+               line: 2,
+               column: 24,
+               message: "A `<p>` can only hold text and inline elements."
+             } = fault
+
+      assert String.at(Enum.at(String.split(source, "\n"), 1), 23) == "<"
+    end
+
+    test "refuses a kit form in a paragraph once the kit's rows are handed over", %{kit: kit} do
+      source =
+        ~s(<p>words <.component component_name="chelekom-form-wrapper" site="Global" for={%{}} /></p>)
+
+      assert {:error, %{line: 1, column: 10, message: message}} =
+               CodeCheck.placement(source, components: kit)
+
+      assert message =~ "`<p>` can only hold text and inline elements"
+
+      # Without its row a kit component is opaque, as it always was.
+      assert CodeCheck.placement(source) == :ok
+    end
+
+    test "refuses a div, a list or a section in a paragraph, at the line and column it opens at" do
+      for tag <- ~w(div ul section) do
+        source = "<div>\n<p>x<#{tag}>y</#{tag}></p>\n</div>"
+
+        assert {:error,
+                %{
+                  tab: :template,
+                  line: 2,
+                  column: 5,
+                  message: "A `<p>` can only hold text and inline elements."
+                }} = CodeCheck.placement(source),
+               tag
+      end
+    end
+
+    test "refuses a form in a form, at the inner one" do
+      assert {:error, %{line: 2, column: 8, message: message}} =
+               CodeCheck.placement("<form>\n  <div><form></form></div>\n</form>")
+
+      assert message =~ "inside another form"
+    end
+
+    test "places the element after an EEx block and a textarea, whose insides are not nodes" do
+      source = """
+      <div>
+        <%= if @on do %><span>a</span><b>b</b><% end %>
+        <textarea><i>x</i><u>y</u></textarea>
+        <p>words #{@form}</p>
+      </div>
+      """
+
+      assert {:error, %{line: 4, column: 12}} = CodeCheck.placement(source)
+    end
+
+    test "takes markup that nests only what HTML keeps nested", %{kit: kit} do
+      source = """
+      <div class="p-6">
+        <p>line<br>two <img src="a.png"> <a href="/x">link</a> <input name="q"> <my-el>x</my-el> <del>old</del></p>
+        <h3>Head <svg viewBox="0 0 1 1"></svg> <select><option>a</option></select> <button>go</button></h3>
+        <h2>Head <small>sub</small></h2>
+        <div><p>box</p>#{@form}</div>
+        #{~s(<.component component_name="chelekom-form-wrapper" site="Global" for={%{}} />)}
+      </div>
+      """
+
+      assert CodeCheck.placement(source) == :ok
+      assert CodeCheck.placement(source, components: kit) == :ok
+    end
+
+    # The tokenizer's own refusal is `Tree.parse/1`'s to report, and it does so first.
+    test "leaves markup nobody can read, and nothing at all, to the other checks" do
+      assert CodeCheck.placement("<p>words <.form></p>") == :ok
+      assert CodeCheck.placement("") == :ok
+      assert CodeCheck.placement(nil) == :ok
     end
   end
 

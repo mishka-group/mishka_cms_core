@@ -160,6 +160,12 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   # notification already carries the row Ash just wrote, which is the value as of that write — the
   # only thing a re-read could add is a LATER write, and that one is arriving on this same topic
   # right behind it.
+  #
+  # A broadcast that changes nothing here is not announced. On the node that wrote the row,
+  # `MishkaCmsCore.Settings.put/3` has already refreshed the key through `refresh_key/2`, which
+  # announced it, before the broadcast reaches this process. Announcing it again would tell the open
+  # pages, a plugin on `runtime:state:sidebar:changed` and the sites' availability about one write
+  # twice, the second time after the writer had returned.
   @impl true
   def handle_info(
         %Phoenix.Socket.Broadcast{
@@ -168,8 +174,13 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
         },
         state
       ) do
-    :ets.insert(@table, {{Map.get(data, :site_id), key}, value})
-    written(Map.get(data, :site_id), key)
+    entry = {Map.get(data, :site_id), key}
+
+    if :ets.lookup(@table, entry) != [{entry, value}] do
+      :ets.insert(@table, {entry, value})
+      written(Map.get(data, :site_id), key)
+    end
+
     {:noreply, state}
   end
 
@@ -180,8 +191,13 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
         },
         state
       ) do
-    :ets.delete(@table, {Map.get(data, :site_id), key})
-    written(Map.get(data, :site_id), key)
+    entry = {Map.get(data, :site_id), key}
+
+    if :ets.member(@table, entry) do
+      :ets.delete(@table, entry)
+      written(Map.get(data, :site_id), key)
+    end
+
     {:noreply, state}
   end
 

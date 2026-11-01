@@ -196,6 +196,35 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
     end
   end
 
+  # The tree keeps no positions, so the tokenizer lists where each element opens, in the tree's order:
+  # a tag, a void or self-closing one and a component each count, and what the tree does not make a
+  # node of does not (an EEx block's inside, a `<textarea>`'s content).
+  describe "HtmlTokenizer.element_positions/1" do
+    test "lists the line and column of every element the tree has a node for" do
+      source = """
+      <div>
+        <br><.icon name="x" />
+        <%= if @on do %><i>a</i><% end %>
+        <textarea><b>x</b></textarea>
+        <.card><:item>b</:item></.card>
+      </div>
+      """
+
+      positions = HtmlTokenizer.element_positions(source)
+      tree = Tree.parse!(source)
+      elements = Enum.filter(Tree.walk(tree), &(&1.kind in [:tag, :component, :slot]))
+
+      assert Enum.map(elements, & &1.tag) ==
+               ["div", "br", ".icon", "textarea", ".card", ":item"]
+
+      assert positions == [{1, 1}, {2, 3}, {2, 7}, {4, 3}, {5, 3}, {5, 10}]
+    end
+
+    test "is empty for markup the tokenizer cannot read" do
+      assert HtmlTokenizer.element_positions("<div><%= foo") == []
+    end
+  end
+
   # Phoenix's tokenizer hands the text before a `<!--` and after its `-->` over in the same token as
   # the comment, and the tree wrote that text back inside the comment: `<div>a <!-- c --></div>`
   # came back as `<div><!--a <!-- c --></div>`, and `<div><!-- c --> b</div>` as

@@ -287,6 +287,51 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
     end
   end
 
+  @doc """
+  The line and column each element of `source` opens at, in the order `Tree.parse/1` makes nodes of
+  them.
+
+  An element inside an EEx block is not a node of its own, the block is read as one, and nor is one
+  inside an element that keeps its content as written (a `<textarea>`, a `<title>`). Those are left
+  out, so the list lines up one to one with the tag, component and slot nodes of the parsed tree.
+  The column is the one of the `<`, counted from 1, as the tokenizer's own errors count it.
+
+  An empty list for a source the tokenizer cannot read at all, such as an EEx tag left open.
+  """
+  @spec element_positions(String.t()) :: [{pos_integer(), pos_integer()}]
+  def element_positions(source) when is_binary(source) do
+    case tokenize(source) do
+      {:error, _line, _column, _message} ->
+        []
+
+      tokens ->
+        {_depth, _open, positions} = Enum.reduce(tokens, {0, [], []}, &position/2)
+        Enum.reverse(positions)
+    end
+  end
+
+  # `depth` counts the EEx blocks open, and `open` holds, for each element open, whether it keeps
+  # its content as written.
+  defp position({:eex, :start_expr, _expr, _meta}, {depth, open, found}),
+    do: {depth + 1, open, found}
+
+  defp position({:eex, :end_expr, _expr, _meta}, {depth, open, found}),
+    do: {depth - 1, open, found}
+
+  defp position({type, _name, attrs, meta}, {depth, open, found}) when is_tag_open(type) do
+    found = if depth > 0 or true in open, do: found, else: [{meta.line, meta.column} | found]
+
+    case meta do
+      %{closing: _} -> {depth, open, found}
+      _opening -> {depth, [keeps_content?(meta.tag_name, attrs) | open], found}
+    end
+  end
+
+  defp position({:close, _type, _name, _meta}, {depth, [_element | open], found}),
+    do: {depth, open, found}
+
+  defp position(_token, state), do: state
+
   # Tokenize contents using EEx.tokenize and Phoenix.Live.Tokenizer respectively.
   #
   # The following content:
@@ -591,7 +636,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
         # closing tag as it is written, a `<b>` included. Phoenix's tokenizer reads a `<script>` and
         # a `<style>` that way itself, but these two as markup, so their content is taken from the
         # source as one text token.
-        tag_name in ["textarea", "title"] or contains_special_attrs?(attrs) ->
+        keeps_content?(tag_name, attrs) ->
           {:preserve, [whole_text(opts, open_meta, close_meta)]}
 
         # A `<pre>` keeps its whitespace and its elements: `<pre><code>…</code></pre>` is how a code
@@ -738,6 +783,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.HtmlTokenizer do
   end
 
   defp set_preserve_on_block(buffer), do: buffer
+
+  defp keeps_content?(tag_name, attrs),
+    do: tag_name in ["textarea", "title"] or contains_special_attrs?(attrs)
 
   defp contains_special_attrs?(attrs) do
     Enum.any?(attrs, fn

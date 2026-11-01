@@ -31,6 +31,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
   @media_key "sidebar.runtime.medias.visible"
   @media_link "#admin-sidebar a[href='/admin/dashboard/runtime/medias']"
   @pages_link "#admin-sidebar a[href='/admin/dashboard/runtime/pages']"
+  @redrawn [:mishka_cms, :sidebar, :redrawn]
 
   setup do
     SiteState.clear()
@@ -52,8 +53,15 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
       SettingsState.restore(snapshot)
     end)
 
+    handler = "sidebar-redrawn-#{System.unique_integer([:positive])}"
+    :ok = :telemetry.attach(handler, @redrawn, &__MODULE__.redrawn/4, self())
+    on_exit(fn -> :telemetry.detach(handler) end)
+
     {:ok, site: site, other: other}
   end
+
+  # Runs in the page that redrew its sidebar.
+  def redrawn(@redrawn, _measurements, _metadata, test), do: send(test, {:redrawn, self()})
 
   defp cache_site(site) do
     SiteState.save(%{
@@ -117,22 +125,19 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
   defp shows?(view, selector), do: has_element?(view, selector)
 
-  defp until(view, check, tries \\ 200)
-  defp until(_view, _check, 0), do: flunk("the sidebar never reached the expected state")
-
-  defp until(view, check, tries) do
-    render(view)
-
-    if check.() do
-      :ok
-    else
-      Process.sleep(10)
-      until(view, check, tries - 1)
-    end
+  # A saved change is one announcement, which each open page draws once, 50ms after it hears it.
+  # `has_element?/2` asks the page itself, so after its redraw it reads the redrawn sidebar.
+  defp assert_gone(view, selector) do
+    redrawn(view)
+    refute shows?(view, selector)
   end
 
-  defp assert_gone(view, selector), do: until(view, fn -> not shows?(view, selector) end)
-  defp assert_back(view, selector), do: until(view, fn -> shows?(view, selector) end)
+  defp assert_back(view, selector) do
+    redrawn(view)
+    assert shows?(view, selector)
+  end
+
+  defp redrawn(%{pid: pid}), do: assert_receive({:redrawn, ^pid})
 
   describe "a site's admins" do
     test "every open page of the site loses a place switched off, and gets it back when on", %{
@@ -211,6 +216,12 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       :ok = EventHandler.do_compile("sidebar:menus", :start, false)
       on_exit(fn -> Event.unregister(:name, ExtensionMenu, false) end)
+
+      # The entry brings sidebar settings of its own, whose defaults the Settings page seeds when it
+      # opens, and each seeded one tells every open page to redraw. Seeded here, before any page is
+      # open, so the only redraw a page makes is for the change the test saves.
+      Settings.load_definitions()
+      :ok
     end
 
     test "draws and drops its entry on the open pages of its site only", %{
@@ -247,13 +258,29 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
   end
 
   describe "what is announced" do
+    # The write announces from inside `Settings.put/3`; the cache then handles the broadcast of the
+    # same row, and a call to it returns once it has.
+    test "a write on this node, once, though its broadcast comes back to the cache", %{site: site} do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "sidebar:#{site.id}")
+      site_id = site.id
+
+      {:ok, _} = Settings.put(@media_key, false, site_id: site.id)
+      assert_received {:sidebar_changed, ^site_id}
+
+      :sys.get_state(SettingsState)
+      refute_received {:sidebar_changed, _site_id}
+    end
+
     test "only a sidebar setting is, and once its value is in the cache", %{site: site} do
       :sys.get_state(SettingsState)
       Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "sidebar:#{site.id}")
       Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "sidebar:all")
 
+      # The cache applies the write from its own mailbox, and announces it from there: once it has
+      # answered a call, it has applied the write and announced whatever it would.
       {:ok, _} = Settings.put("site.title", "Unrelated", site_id: site.id)
-      refute_receive {:sidebar_changed, _site_id}, 100
+      :sys.get_state(SettingsState)
+      refute_received {:sidebar_changed, _site_id}
 
       {:ok, _} = Settings.put(@media_key, false, site_id: site.id)
       site_id = site.id
