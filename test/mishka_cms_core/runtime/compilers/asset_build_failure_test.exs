@@ -10,8 +10,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.AssetBuildFailureTest do
   The record lives in `CompileFailureState` beside the modules that did not compile
   (`Helpers.record_asset_build/3`). The Tailwind half breaks the shared base the way a real install
   can: a global `:custom` row whose `@apply` names a utility that does not exist. A save refuses such
-  a row (`Changes.StylesheetCompiles`), so it is seeded past the action here; it fails only the
-  shared base, which every site's CSS starts with.
+  a row (`Changes.StylesheetCompiles`), so it is seeded past the action here; it fails the shared
+  base, and a site's CSS is then built without the global `:base` and `:custom` rows.
 
   `async: false` — `AssetsState`, `SiteState` and `CompileFailureState` are process-global.
   """

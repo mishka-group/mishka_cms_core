@@ -41,11 +41,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewCssTest do
     draft
   end
 
-  # What the record's own pass added, after the shared base every preview starts with.
-  defp own({:ok, css}) do
-    [_shared, own] = String.split(css, "/* Preview: ", parts: 2)
-    own
-  end
+  # The preview's stylesheet, one Tailwind run over the site and the record.
+  defp built({:ok, css}), do: css
 
   test "lays the draft's element CSS over its page's row, as the publish will", %{
     site: site,
@@ -61,7 +58,7 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewCssTest do
         }
       )
 
-    css = draft |> DraftPreviewAssets.css(site) |> own()
+    css = draft |> DraftPreviewAssets.css(site) |> built()
 
     # Tailwind writes `crimson` as its hex.
     assert css =~ ".pb-aaaa1111{color:#dc143c}"
@@ -78,8 +75,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewCssTest do
   } do
     draft = draft!(page, master, ~s(<h1 class="pb-aaaa1111">Hi</h1>))
 
-    assert draft |> DraftPreviewAssets.css(site) |> own() =~ "color:red"
-    assert page |> DraftPreviewAssets.css(site) |> own() =~ "color:red"
+    assert draft |> DraftPreviewAssets.css(site) |> built() =~ "color:red"
+    assert page |> DraftPreviewAssets.css(site) |> built() =~ "color:red"
   end
 
   test "is compiled from the draft as it is now, every time, and kept nowhere", %{
@@ -88,14 +85,14 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewCssTest do
     master: master
   } do
     draft = draft!(page, master, ~s(<h1 class="mt-[31px]">Hi</h1>))
-    assert draft |> DraftPreviewAssets.css(site) |> own() =~ ~S(.mt-\[31px\])
+    assert draft |> DraftPreviewAssets.css(site) |> built() =~ ~S(.mt-\[31px\])
 
     {:ok, written} =
       Drafts.autosave("page", page, ~s(<h1 class="mt-[37px]">Hi</h1>), master, draft.id, nil, nil,
         element_css: %{"pb-dddd4444" => "outline: 1px solid teal;"}
       )
 
-    css = written |> DraftPreviewAssets.css(site) |> own()
+    css = written |> DraftPreviewAssets.css(site) |> built()
 
     assert css =~ ~S(.mt-\[37px\])
     assert css =~ ".pb-dddd4444{outline:1px solid teal}"
@@ -116,8 +113,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewCssTest do
       for _open <- 1..2,
           do: Task.async(fn -> DraftPreviewAssets.css(draft, site) end)
 
-    assert first |> Task.await(:timer.minutes(2)) |> own() =~ ~S(.mt-\[41px\])
-    assert second |> Task.await(:timer.minutes(2)) |> own() =~ ~S(.mt-\[41px\])
+    assert first |> Task.await(:timer.minutes(2)) |> built() =~ ~S(.mt-\[41px\])
+    assert second |> Task.await(:timer.minutes(2)) |> built() =~ ~S(.mt-\[41px\])
   end
 
   test "answers :error for anything with no preview token" do

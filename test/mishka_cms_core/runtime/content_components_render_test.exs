@@ -1091,16 +1091,15 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       on_exit(fn -> MishkaCmsCore.Runtime.States.AssetsState.delete("__shared_base__", "css") end)
 
       assert {:ok, unnamed} = TailwindCompiler.compile(site.name)
-      refute site_part(unnamed, site) =~ ".hero-inbox-arrow-down{"
-      refute site_part(unnamed, site) =~ ".fake-star{"
+      refute unnamed =~ ".hero-inbox-arrow-down{"
+      refute unnamed =~ ".fake-star{"
 
       register_plugin(
         MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
         "runtime:compile:content_components"
       )
 
-      assert {:ok, named} = TailwindCompiler.compile(site.name)
-      css = site_part(named, site)
+      assert {:ok, css} = TailwindCompiler.compile(site.name)
 
       assert css =~ ".hero-inbox-arrow-down{"
       assert css =~ "mask"
@@ -1139,15 +1138,14 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
       on_exit(fn -> MishkaCmsCore.Runtime.States.AssetsState.delete("__shared_base__", "css") end)
 
       assert {:ok, unnamed} = TailwindCompiler.compile(site.name)
-      refute site_part(unnamed, site) =~ "#282828"
+      refute unnamed =~ "#282828"
 
       register_plugin(
         MishkaCmsCore.Test.Plugins.ContentComponentsNamed,
         "runtime:compile:content_components"
       )
 
-      assert {:ok, named} = TailwindCompiler.compile(site.name)
-      css = site_part(named, site)
+      assert {:ok, css} = TailwindCompiler.compile(site.name)
 
       assert css =~ ~S(.bg-\[\#282828\]{background-color:#282828})
       assert css =~ ~S(.data-\[orientation\=vertical\]\:h-32[data-orientation=vertical]{height:)
@@ -1171,9 +1169,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
                  ~s(<div class="p-1"></div>)
                )
 
-      [_shared, own] = String.split(css, "/* Preview: ", parts: 2)
-
-      assert own =~ ~S(.bg-\[\#282828\])
+      assert css =~ ~S(.bg-\[\#282828\])
     end
   end
 
@@ -1236,11 +1232,6 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsRenderTest do
 
       assert ContentComponents.site_classes(nil, site.id) == []
     end
-  end
-
-  defp site_part(css, site) do
-    [_shared, own] = String.split(css, "/* Site: #{site.name} */", parts: 2)
-    own
   end
 
   describe "embeddable/2 — what the editor offers" do
