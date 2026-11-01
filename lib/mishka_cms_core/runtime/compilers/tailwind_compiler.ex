@@ -699,17 +699,28 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   #     ┌
   #     │ Error: Cannot apply unknown utility class `rounde-xl`
   #     └
+  #
+  # A syntax error comes as `CssSyntaxError: /tmp/tw_in_….css:18:1: Missing closing } at .b`: the
+  # file and line are the input this module assembled, which the author never saw, so the sentence
+  # after them is what is kept.
   defp tailwind_message(output) do
     output
     |> String.split("\n")
     |> Enum.map(&(&1 |> String.trim() |> String.trim_leading("│") |> String.trim()))
-    |> Enum.filter(&String.starts_with?(&1, "Error: "))
+    |> Enum.flat_map(&said/1)
     |> List.last()
     |> case do
       nil -> "Tailwind refused that CSS: #{String.trim(output)}"
-      line -> String.replace_prefix(line, "Error: ", "")
+      sentence -> sentence
     end
   end
+
+  defp said("Error: " <> sentence), do: [sentence]
+
+  defp said("CssSyntaxError: " <> located),
+    do: [located |> String.split(": ", parts: 2) |> List.last()]
+
+  defp said(_line), do: []
 
   @doc """
   Compile a ONE-OFF CSS bundle for a draft/preview: the shared base + the site's classes + the

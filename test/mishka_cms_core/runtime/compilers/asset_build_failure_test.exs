@@ -9,9 +9,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.AssetBuildFailureTest do
 
   The record lives in `CompileFailureState` beside the modules that did not compile
   (`Helpers.record_asset_build/3`). The Tailwind half breaks the shared base the way a real install
-  can: a global `:custom` row whose `@apply` names a utility that does not exist. Saves do not run
-  Tailwind, so such a row can be written, and it fails only the shared base, which every site's CSS
-  starts with.
+  can: a global `:custom` row whose `@apply` names a utility that does not exist. A save refuses such
+  a row (`Validations.StylesheetCompiles`), so it is seeded past the action here; it fails only the
+  shared base, which every site's CSS starts with.
 
   `async: false` — `AssetsState`, `SiteState` and `CompileFailureState` are process-global.
   """
@@ -121,19 +121,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.AssetBuildFailureTest do
     end
 
     defp break_the_shared_base! do
-      Stylesheet
-      |> Ash.Changeset.for_create(
-        :master_create,
-        %{
-          name: "abf-broken-#{System.unique_integer([:positive])}",
-          kind: :custom,
-          content: ".abf-broken { @apply rounde-xl; }",
-          site_id: nil,
-          active: true
-        },
-        authorize?: false
-      )
-      |> Ash.create!()
+      Ash.Seed.seed!(Stylesheet, %{
+        name: "abf-broken-#{System.unique_integer([:positive])}",
+        kind: :custom,
+        content: ".abf-broken { @apply rounde-xl; }",
+        site_id: nil,
+        active: true
+      })
     end
 
     test "a broken shared base is rebuilt in place, so every site keeps the last one that built" do

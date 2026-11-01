@@ -1154,6 +1154,14 @@ defmodule MishkaCmsCore.Runtime.Stylesheet do
     change {Changes.SendToOban, []}, on: [:create, :update, :destroy]
   end
 
+  # CSS Tailwind will not build is refused before it is stored, where it would fail every later build
+  # of the site's CSS. At the write only, so a form's every keystroke does not run Tailwind.
+  validations do
+    validate {MishkaCmsCore.Runtime.Resources.Validations.StylesheetCompiles, []},
+      on: [:create, :update],
+      before_action?: true
+  end
+
   multitenancy do
     strategy :attribute
     attribute :site_id

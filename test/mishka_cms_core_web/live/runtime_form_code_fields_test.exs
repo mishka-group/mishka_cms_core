@@ -232,4 +232,26 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeFormCodeFieldsTest do
       end
     end
   end
+
+  # Stored, a row Tailwind will not build failed the whole site's CSS build, after a flash that said
+  # the stylesheet was updated.
+  test "a stylesheet Tailwind will not build is refused under its box and kept as it was", %{
+    conn: conn,
+    site: site,
+    lists: lists
+  } do
+    list = Enum.find(lists, &(&1.resource == Stylesheet))
+    view = conn |> log_in(site, [list.area]) |> edit(list)
+
+    html =
+      view
+      |> form(form_selector(Stylesheet), %{
+        "form" => %{"content" => ".a{color:red;}\n.b { color: red;"}
+      })
+      |> render_submit()
+
+    assert html =~ "Missing closing } at .b"
+    refute render(view) =~ "Stylesheet updated successfully"
+    assert stored(list).content == ".a { color: red; }"
+  end
 end
