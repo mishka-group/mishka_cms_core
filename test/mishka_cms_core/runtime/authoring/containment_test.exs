@@ -1063,6 +1063,119 @@ defmodule MishkaCmsCore.Runtime.Authoring.ContainmentTest do
     end
   end
 
+  # A document that is already written is asked the way a drop is, for the nesting a browser repairs
+  # on its own: a form or a text block in a phrasing-only element, a form in a form, an element in a
+  # text-only one. `can_drop?/4` reads every tag outside its phrasing list as a block, which refuses
+  # `<p>a<br>b</p>`, so markup somebody wrote is held to the blocks it can name.
+  describe "misplaced/2" do
+    @doc_form ~s(<.form for={%{}} :let={_f}><.input name="email" value="" /></.form>)
+
+    test "names a form in a paragraph, with the words a refused drop gives" do
+      tree = tree_of(~s(<div><p>words #{@doc_form}</p></div>))
+
+      assert {node, message} = Containment.misplaced(tree)
+      assert node.tag == ".form"
+      assert message == "A `<p>` can only hold text and inline elements."
+    end
+
+    test "names a kit form in a paragraph only where the kit's row is handed over", %{kit: kit} do
+      tree = tree_of(~s(<p>words #{component("chelekom-form-wrapper")}</p>))
+
+      assert {node, message} = Containment.misplaced(tree, components: kit)
+      assert Node.component_name(node) == "chelekom-form-wrapper"
+      assert message =~ "`<p>` can only hold text and inline elements"
+
+      assert Containment.misplaced(tree) == nil
+    end
+
+    test "names a form in a heading or an inline element, and a block that is a text block", %{
+      kit: kit
+    } do
+      for markup <- [
+            ~s(<h2>words #{@doc_form}</h2>),
+            ~s(<span>#{@doc_form}</span>),
+            ~s(<h2>words <p>more</p></h2>),
+            ~s(<p><a href="/x">#{component("acme-simple")}</a></p>)
+          ] do
+        assert {_node, message} = Containment.misplaced(tree_of(markup), components: kit), markup
+        assert message =~ "can only hold text and inline elements", markup
+      end
+    end
+
+    test "names the inner form of a form in a form, not the box that holds it" do
+      tree = tree_of(~s(<form><div id="row"><form></form></div></form>))
+
+      assert {node, message} = Containment.misplaced(tree)
+      assert node.tag == "form"
+      assert node.parent_id == find(tree, "div").id
+      assert message =~ "inside another form"
+    end
+
+    test "names an element put into a text-only one" do
+      tree = tree_of("<div><textarea></textarea></div>")
+      assert {:ok, tree} = Tree.insert(tree, tree_of("<b>x</b>"), find(tree, "textarea").id, 0)
+
+      assert {node, "A `<textarea>` holds text only."} = Containment.misplaced(tree)
+      assert node.tag == "b"
+    end
+
+    test "names the first in document order", %{kit: kit} do
+      tree = tree_of(~s(<div><h2>a <p>b</p></h2><p>words #{@doc_form}</p></div>))
+
+      assert {node, _message} = Containment.misplaced(tree, components: kit)
+      assert node.tag == "p"
+    end
+
+    test "lets in what is ordinary markup", %{kit: kit} do
+      tree =
+        tree_of("""
+        <div>
+          <p>line<br>two <img src="a.png"> <a href="/x">link</a> <input name="q"> <del>old</del></p>
+          <h2>Head <small>sub</small> <svg viewBox="0 0 1 1"><path d="M0 0" /></svg></h2>
+          <label>Name <input name="n"></label>
+          <span><img src="a.png"></span>
+          <button><span>go</span></button>
+          <div><p>box</p>#{@doc_form}</div>
+          <form><label>Name <input name="n"></label></form>
+          #{component("chelekom-form-wrapper")}
+          <textarea>text <b>and</b> text</textarea>
+        </div>
+        """)
+
+      assert Containment.misplaced(tree, components: kit) == nil
+      assert Containment.misplaced(tree) == nil
+    end
+
+    test "has nothing to say about an empty document" do
+      assert Containment.misplaced(Tree.new()) == nil
+    end
+
+    # The shipped templates keep applying. Asked with `can_drop?/4`'s block test, 24 of these are
+    # refused, among them every kit field that wraps its `<input>` in a `<label>`.
+    test "refuses none of the Chelekom templates and examples the library ships" do
+      dir = Application.app_dir(:mishka_cms_core, "priv/cms_ui_kits")
+
+      for file <- ~w(chelekom.json chelekom_headless.json) do
+        rows =
+          dir |> Path.join(file) |> File.read!() |> Jason.decode!() |> Map.fetch!("components")
+
+        palette =
+          for row <- rows,
+              do: %{
+                name: row["name"],
+                attrs: row["attrs"] || [],
+                slots: row["slots"] || [],
+                template: row["template"] || ""
+              }
+
+        for row <- rows, {source, at} <- Enum.with_index([row["template"] | row["examples"]]) do
+          assert Containment.misplaced(tree_of(source), components: palette) == nil,
+                 "#{file} #{row["name"]} #{at}"
+        end
+      end
+    end
+  end
+
   describe "can_drop?/4 — forms" do
     test "a form refuses to go inside a form" do
       tree = tree_of(~s(<.form :let={f} as={:q} for={assigns[:q_form]}></.form>))

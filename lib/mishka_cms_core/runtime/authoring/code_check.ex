@@ -55,6 +55,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.Authoring.Containment
+  alias MishkaCmsCore.Runtime.Authoring.HtmlTokenizer
+  alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Authoring.Tree.Node
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
 
   # GENEROUS ON PURPOSE. Compiling a page means expanding `use MishkaCmsWeb, :live_view`, which is
@@ -70,14 +74,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   @typedoc """
   One thing wrong. `tab` is the group it belongs to, `index` and `name` locate it within that group,
   and `line` is a line in the author's own box — each fragment is authored standalone, so there is no
-  offset to apply.
+  offset to apply. `column` comes with it when the fault is an element of the template.
   """
   @type fault :: %{
-          tab: :template | :events | :infos | :helpers | :page,
-          index: non_neg_integer() | nil,
-          name: String.t() | nil,
-          line: pos_integer() | nil,
-          message: String.t()
+          required(:tab) => :template | :events | :infos | :helpers | :page,
+          required(:index) => non_neg_integer() | nil,
+          required(:name) => String.t() | nil,
+          required(:line) => pos_integer() | nil,
+          optional(:column) => pos_integer() | nil,
+          required(:message) => String.t()
         }
 
   @doc """
@@ -138,6 +143,55 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   end
 
   def template(_heex), do: :ok
+
+  @doc """
+  Whether a template nests only what the placement rules allow, asked of the markup an author typed
+  or pasted before it replaces the document.
+
+  `<p>words <.form>…</.form></p>` tokenizes and compiles, and a browser closes the `<p>` in front of
+  the form, so the canvas draws the form beside the paragraph while the Layers and Code views keep it
+  inside. `Containment.misplaced/2` asks the placement rules of a whole tree; this reads the markup
+  into one and returns the first element they refuse, at the line and column it opens at, with the
+  words a refused drop gives.
+
+  `opts` takes `:components`, the kit catalog the editor places with. A kit component is the element
+  its own markup opens with, so Chelekom's Form Wrapper is a `<form>` only when its row is handed
+  over; without it the CMS's own `<.form>` and `<.input>` are still read.
+
+  This is separate from `check/1`, which a page's save asks of markup that is already stored: a
+  stored page that nests wrongly must still save.
+
+  Markup the tokenizer cannot read is `:ok` here, because `Tree.parse/1` reports it.
+  """
+  @spec placement(String.t() | nil, keyword()) :: :ok | {:error, fault()}
+  def placement(heex, opts \\ [])
+
+  def placement(heex, opts) when is_binary(heex) do
+    with {:ok, tree} <- Tree.parse(heex),
+         {node, message} <- Containment.misplaced(tree, Keyword.take(opts, [:components])) do
+      {line, column} = opens_at(tree, heex, node)
+      {:error, :template |> fault(nil, nil, line, message) |> Map.put(:column, column)}
+    else
+      _readable_and_in_place -> :ok
+    end
+  end
+
+  def placement(_heex, _opts), do: :ok
+
+  # The tree keeps no positions, so the element is placed by its index among the tree's elements in
+  # the tokenizer's list. When the two lists differ in length the element has no place rather than a
+  # wrong one.
+  defp opens_at(tree, heex, %Node{id: id}) do
+    elements = tree |> Tree.walk() |> Enum.filter(&(&1.kind in Node.container_kinds()))
+    positions = HtmlTokenizer.element_positions(heex)
+
+    with true <- length(elements) == length(positions),
+         index when is_integer(index) <- Enum.find_index(elements, &(&1.id == id)) do
+      Enum.at(positions, index)
+    else
+      _unplaced -> {nil, nil}
+    end
+  end
 
   # `Phoenix.Component` imported, because a template may call `render_slot/1` or one of the function
   # components the runtime's own modules import — the engine resolves `<.foo>` against the caller.

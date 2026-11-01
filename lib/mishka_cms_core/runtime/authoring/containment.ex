@@ -64,7 +64,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
       markup may open with one (`fragment?: true`).
 
   Every refusal carries a sentence written for the person dragging, which the canvas shows as the
-  demo's danger toast near the drop point.
+  demo's danger toast near the drop point. Markup that was typed rather than dropped is asked with
+  `misplaced/2`, which reuses three of these rules for a whole document.
 
   A field that lands with no form around it is not refused: see
   `MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement`, which wraps it instead. Building a
@@ -377,6 +378,69 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
 
   defp landing(_tree, _child), do: []
 
+  @doc """
+  The first node of `tree`, in document order, that sits where the placement rules would have
+  refused it, as `{node, message}`; `nil` when every node is where they allow it.
+
+  This is `can_drop?/4` asked of a document that is already written, which is what an editor has to
+  answer for markup that was typed or pasted instead of dropped. It asks three of its rules, in the
+  words a refused drop gives:
+
+    * a form, or a paragraph, heading or other text block, inside a phrasing-only element (a `<p>`,
+      a heading, a `<span>`, a `<label>`, a `<button>`): the browser closes a `<p>` in front of it,
+      so the page it draws is not the tree that was written;
+    * a form inside a form, whose inner one a browser drops;
+    * an element, a component or a comment inside a text-only element.
+
+  The first rule is narrower than the drop's. `can_drop?/4` reads every element that is not on its
+  phrasing-only list as a block, so a `<br>`, an `<img>`, an `<input>`, an `<svg>` and a `<del>` are
+  refused in a `<p>` or a `<label>`, and so are `<p>a<br>b</p>`, `<label><input></label>` and the
+  headless kit's `<span><img></span>`. A document is held only to the blocks this module can name
+  outright: the forms `Fields.form_node?/2` finds and the text blocks.
+
+  The rest of what `can_drop?/4` asks, such as a slot to put content in, the only children of a list
+  or a landmark inside a landmark, stays a rule about where something may be put.
+
+  Every node is asked about on its own, so a form inside a form is reported at the inner form and
+  not at the `<div>` that holds it. `opts` takes `:components`, as `can_drop?/4` does.
+  """
+  @spec misplaced(Tree.t(), keyword()) :: {Node.t(), String.t()} | nil
+  def misplaced(tree, opts \\ []) do
+    nodes = Tree.walk(tree)
+    components = Keyword.get(opts, :components, [])
+
+    opts =
+      opts
+      |> Keyword.put_new_lazy(:roles, fn -> Fields.roles(nodes, components) end)
+      |> Keyword.put_new_lazy(:outer_tags, fn -> outer_tags_of(nodes, components) end)
+
+    Enum.find_value(nodes, &misplacement(tree, &1, opts))
+  end
+
+  defp misplacement(tree, %Node{parent_id: parent_id} = node, opts) when is_binary(parent_id) do
+    roles = Keyword.fetch!(opts, :roles)
+    form? = Fields.form_node?(node, roles)
+
+    with %Node{} = parent <- Tree.get(tree, parent_id),
+         :ok <- check_text_only(node, parent),
+         :ok <- check_named_block(tree, node, parent, form?, opts),
+         :ok <- refuse_nested_form(form?, tree, parent, roles) do
+      nil
+    else
+      {:error, message} -> {node, message}
+      _no_parent -> nil
+    end
+  end
+
+  defp misplacement(_tree, _node, _opts), do: nil
+
+  defp check_named_block(tree, node, parent, form?, opts) do
+    case form? or rendered(node, opts) in @text_blocks do
+      true -> check_phrasing(tree, node, [parent | Tree.ancestors(tree, parent.id)], opts)
+      false -> :ok
+    end
+  end
+
   defp check(tree, dragged, target, opts) do
     with :ok <- check_cycle(tree, dragged, target),
          :ok <- check_container(target),
@@ -687,8 +751,11 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   # went through and was reported by the audit rail afterwards instead.
   defp check_form_nesting(tree, dragged, target, opts) do
     roles = Keyword.fetch!(opts, :roles)
+    refuse_nested_form(brings_form?(dragged, tree, roles, opts), tree, target, roles)
+  end
 
-    case brings_form?(dragged, tree, roles, opts) and
+  defp refuse_nested_form(brings_form?, tree, target, roles) do
+    case brings_form? and
            Enum.any?([target | Tree.ancestors(tree, target.id)], &Fields.form_node?(&1, roles)) do
       true ->
         {:error, gettext("A form cannot go inside another form — browsers drop the inner one.")}
@@ -952,9 +1019,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
   end
 
   defp outer_tags(tree, dragged, opts) do
-    components = Keyword.get(opts, :components, [])
-
     (Tree.walk(tree) ++ [dragged | dragged_descendants(dragged, tree, opts)])
+    |> outer_tags_of(Keyword.get(opts, :components, []))
+  end
+
+  defp outer_tags_of(nodes, components) do
+    nodes
     |> Enum.flat_map(&component_names/1)
     |> Enum.uniq()
     |> Map.new(&{&1, read_outer_tag(&1, components)})
