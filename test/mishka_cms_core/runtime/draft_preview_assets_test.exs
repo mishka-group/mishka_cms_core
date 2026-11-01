@@ -133,11 +133,13 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssetsTest do
       {:ok, module} = DraftPreviewAssets.ensure_module(older, nil)
       lock = {{DraftPreviewAssets, module}, self()}
       true = :global.set_lock(lock, [node()])
+      watch_compiles(module)
 
       previews =
         for _ <- 1..5, do: Task.async(fn -> DraftPreviewAssets.ensure_module(record, nil) end)
 
-      wait_until(fn -> Enum.all?(previews, &waiting_for_lock?/1) end)
+      # Each found the module older than the record and goes for the lock held here.
+      for %Task{pid: pid} <- previews, do: assert_receive({:compiling, ^pid})
 
       # Compiled here, under the lock they wait on; it is let go once this compile is done.
       {:ok, ^module} = DraftPreviewAssets.ensure_module(record, nil)
@@ -176,29 +178,19 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssetsTest do
     end
   end
 
-  defp waiting_for_lock?(%Task{pid: pid}) do
-    case Process.info(pid, :current_stacktrace) do
-      {:current_stacktrace, frames} ->
-        Enum.any?(frames, &match?({:global, _fun, _arity, _at}, &1))
-
-      nil ->
-        false
-    end
+  # Every compile of `module` that starts from here on is told to the test, by the process that
+  # compiles. Other tests running beside this one compile modules of their own.
+  defp watch_compiles(module) do
+    id = "draft-preview-compiles-#{System.unique_integer([:positive])}"
+    event = [:mishka_cms, :runtime, :draft_preview, :compile, :start]
+    :ok = :telemetry.attach(id, event, &__MODULE__.compiling/4, %{test: self(), module: module})
+    on_exit(fn -> :telemetry.detach(id) end)
   end
 
-  defp wait_until(fun, tries \\ 1_000) do
-    cond do
-      fun.() ->
-        :ok
+  def compiling(_event, _measurements, %{module: module}, %{test: test, module: module}),
+    do: send(test, {:compiling, self()})
 
-      tries == 0 ->
-        flunk("the previews never reached the lock")
-
-      true ->
-        Process.sleep(5)
-        wait_until(fun, tries - 1)
-    end
-  end
+  def compiling(_event, _measurements, _metadata, _config), do: :ok
 
   describe "unload_module/1 and purge/1" do
     test "unload the compiled module" do

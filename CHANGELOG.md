@@ -31,6 +31,7 @@
 - The settings cache announces a setting written on this node once. `SettingsState` applies and announces a broadcast only when it changes what the cache holds, so the broadcast of a write `Settings.put/3` has already refreshed no longer tells the open admin pages, a plugin on `runtime:state:sidebar:changed` and the sites' availability about it a second time, after the writer has returned
 - An open admin page emits `[:mishka_cms, :sidebar, :redrawn]` from its own process each time it redraws its sidebar for a settings change (`MishkaCmsCore.Layouts.Nav`), with the new `version` as the measurement and the page's `view` as the metadata. Whatever asks the page after the event reads the redrawn sidebar, so a test waits for it instead of polling the page
 - A caller that starts waiting for a module's compile worker emits `[:mishka_cms, :runtime, :handlers, :module_compiler, :waiting]` from its own process, with the `module` and the `worker` as metadata, and a compile that has to wait for a `CompileGate` slot emits `[:mishka_cms, :runtime, :compile_gate, :queued]` from the gate, with how many are `waiting` as the measurement and its `pid` as the metadata
+- `DraftPreviewAssets.ensure_module/2` runs a compile inside the `[:mishka_cms, :runtime, :draft_preview, :compile]` span, with the `module` as the metadata. Its start is emitted from the calling process before it asks for the module's lock
 
 # Changelog for MishkaCmsCore 0.0.4
 

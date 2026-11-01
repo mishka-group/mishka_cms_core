@@ -133,6 +133,10 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   The module a Page, Layout or one of their drafts is previewed with, compiled if missing or older
   than the record, against `asset_site`'s hooks. `{:ok, module}`, or `{:error, message}` when it
   does not compile.
+
+  A compile is the `[:mishka_cms, :runtime, :draft_preview, :compile]` span, with the `module` as its
+  metadata: it starts in the calling process before it asks for the module's lock, and stops with
+  the answer.
   """
   def ensure_module(%resource{preview_token: token} = record, asset_site)
       when resource in @compiled and is_binary(token) do
@@ -183,11 +187,16 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   # Asked again inside the lock: whoever held it was most likely compiling this very revision, and
   # every preview that waited would otherwise compile it again in turn.
   defp compile_module(%{preview_token: token} = record, module, revision, asset_site) do
-    alone(module, fn ->
-      case current?(token, module, revision) do
-        true -> {:ok, module}
-        false -> compile_module_alone(record, module, revision, asset_site)
-      end
+    :telemetry.span([:mishka_cms, :runtime, :draft_preview, :compile], %{module: module}, fn ->
+      result =
+        alone(module, fn ->
+          case current?(token, module, revision) do
+            true -> {:ok, module}
+            false -> compile_module_alone(record, module, revision, asset_site)
+          end
+        end)
+
+      {result, %{module: module}}
     end)
   end
 
