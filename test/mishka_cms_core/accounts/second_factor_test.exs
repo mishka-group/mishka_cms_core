@@ -85,10 +85,12 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
       assert subject == "user?id=#{user.id}"
     end
 
+    # The confirming code itself, not a new one made now: a new one made after the period turned is
+    # the next period's code, which is not spent and would sign in.
     test "does not take the code that confirmed the setup again", %{user: user} do
-      secret = enable!(user).__metadata__.secret
+      confirming = enable!(user).__metadata__.code
 
-      assert SecondFactor.refusal(sign_in_error(user, code(secret))) == :invalid
+      assert SecondFactor.refusal(sign_in_error(user, confirming)) == :invalid
     end
 
     test "answers a wrong password the old way, saying nothing of a code", %{user: user} do
@@ -450,13 +452,16 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
   end
 
   # Sets an authenticator up, and hands back the account with its secret in the metadata, for the
-  # test to compute codes from.
+  # test to compute codes from, and the code that confirmed it.
   defp enable!(user) do
     started = setup!(user)
     secret = secret(started)
-    {:ok, confirmed} = confirm(user, started, code(secret))
+    code = code(secret)
+    {:ok, confirmed} = confirm(user, started, code)
     # The confirming code is spent, as a sign-in's would be: the next code is the next period's.
-    Ash.Resource.put_metadata(confirmed, :secret, secret)
+    confirmed
+    |> Ash.Resource.put_metadata(:secret, secret)
+    |> Ash.Resource.put_metadata(:code, code)
   end
 
   defp secret(started) do
