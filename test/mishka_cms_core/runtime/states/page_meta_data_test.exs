@@ -16,7 +16,8 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataStateTest do
         :ok
     end
 
-    Process.sleep(50)
+    # Answers once its `init` and `handle_continue` have run.
+    _ = :sys.get_state(WebRunTimeMetaDataState)
 
     :ok
   end

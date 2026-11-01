@@ -28,7 +28,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateAllowedOriginsTest do
         :ok
     end
 
-    Process.sleep(50)
+    # Answers once its `init` and `handle_continue` have run.
+    _ = :sys.get_state(SiteState)
     :ok
   end
 
