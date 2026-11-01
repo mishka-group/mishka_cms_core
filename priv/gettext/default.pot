@@ -5310,7 +5310,7 @@ msgstr ""
 msgid "That drop target no longer exists."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:522
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:542
 #, elixir-autogen, elixir-format
 msgid "That element has no style scope."
 msgstr ""
@@ -18486,17 +18486,17 @@ msgstr ""
 msgid "%{label} holds text only."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:606
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:625
 #, elixir-autogen, elixir-format
 msgid "That CSS could not be read."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:615
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:663
 #, elixir-autogen, elixir-format
 msgid "That CSS has an error on line %{line}, column %{column}: %{reason}"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/element_css.ex:622
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:670
 #, elixir-autogen, elixir-format
 msgid "That CSS has an error on line %{line}, column %{column}, at `%{text}`: %{reason}"
 msgstr ""
@@ -18576,4 +18576,9 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/code_check.ex:416
 #, elixir-autogen, elixir-format
 msgid "this code"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/element_css.ex:651
+#, elixir-autogen, elixir-format
+msgid "`@apply` names no utility. Write one after it, like `@apply p-4`."
 msgstr ""

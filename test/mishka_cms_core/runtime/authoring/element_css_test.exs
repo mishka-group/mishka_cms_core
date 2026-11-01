@@ -36,12 +36,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCssTest do
 
   defp kept_body(body), do: kept(%{@scope => body})[@scope]
 
-  # `put/5` validates before it writes, so a refusal is reachable with no row to write into. The
-  # message, not the tuple: a body that is taken goes on to the database, which this test has none of.
+  # The parser's verdict, `place/3`: `put/5` also builds a body holding an `@apply` with Tailwind,
+  # which reads the site's stylesheets from the database this test has none of. That build is
+  # `element_css_apply_test.exs`.
   defp refused(body) do
-    case ElementCss.put(nil, nil, @owner, @scope, body) do
+    case ElementCss.place(%{}, @scope, body) do
       {:error, message} when is_binary(message) -> message
-      _taken -> nil
+      {:ok, _rules} -> nil
     end
   end
 

@@ -2449,7 +2449,7 @@ msgstr ""
 msgid "resolver"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/element_css_rules.ex:48
+#: lib/mishka_cms_core/runtime/resources/__validations/element_css_rules.ex:61
 #, elixir-autogen, elixir-format
 msgid "Element CSS must map each element's scope to its CSS."
 msgstr ""

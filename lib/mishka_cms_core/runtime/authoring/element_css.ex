@@ -81,6 +81,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
   alias MishkaCmsCore.Runtime.Authoring.StylesheetRow
   alias MishkaCmsCore.Runtime.Authoring.Tree
+  alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
   alias MishkaCmsCore.Runtime.Stylesheet
 
   # WHAT THE BUILDER WRITES IT GENERATED: the stylesheet row is written by whoever may open a
@@ -113,7 +114,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
   @spec put(map() | nil, String.t() | nil, String.t(), String.t(), String.t()) ::
           {:ok, %{String.t() => String.t()}} | {:error, term()}
   def put(actor, site_id, owner, scope, body) do
-    with {:ok, rules} <- place(all(actor, site_id, owner), scope, body) do
+    with {:ok, rules} <- place(all(actor, site_id, owner), scope, body, site_id) do
       write(rules, actor, site_id, owner)
     end
   end
@@ -123,7 +124,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
 
   The builder's draft stage holds its rules in the editing session instead of writing them — the row
   is the live site — and it has to refuse exactly what `put/5` refuses, or the box takes CSS in one
-  stage that the publish then throws out.
+  stage that the publish then throws out. That is `place/4`, given the site: `place/3` is the
+  parser's check alone, without the Tailwind build of a body that holds an `@apply`.
   """
   @spec place(%{String.t() => String.t()}, String.t() | nil, String.t() | nil) ::
           {:ok, %{String.t() => String.t()}} | {:error, term()}
@@ -131,6 +133,23 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
     with :ok <- valid_scope(scope),
          {:ok, body} <- valid_body(body) do
       {:ok, placed(rules, scope, body)}
+    end
+  end
+
+  @doc """
+  `place/3`, and a body that holds an `@apply` is also built by Tailwind for the site `site_id`
+  (`nil` for the globals), as its row will be: `TailwindCompiler.verify_css/2` on the rule `css/1`
+  writes, refused in Tailwind's words, "Cannot apply unknown utility class `not-a-real-class`".
+
+  The site matters because an `@apply` may name a utility of the site's own theme, `bg-accent`. A
+  body with no `@apply` is not built: what Tailwind could refuse in it, the parser already has.
+  """
+  @spec place(%{String.t() => String.t()}, String.t() | nil, String.t() | nil, String.t() | nil) ::
+          {:ok, %{String.t() => String.t()}} | {:error, term()}
+  def place(rules, scope, body, site_id) do
+    with {:ok, placed} <- place(rules, scope, body),
+         :ok <- builds(scope, placed[scope], site_id) do
+      {:ok, placed}
     end
   end
 
@@ -604,6 +623,35 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementCss do
       {:ok, _validation} -> {:ok, body}
       {:error, %{errors: [first | _rest]}} -> {:error, refusal(first)}
       {:error, _validation} -> {:error, gettext("That CSS could not be read.")}
+    end
+  end
+
+  # AN `@apply` IS TAILWIND'S TO RESOLVE, and one it cannot (`@apply not-a-real-class`,
+  # `@apply p-4 !important`, or `@apply p-4` with its `;` missing before the next declaration, which
+  # applies `color:`) is valid CSS the parser takes. Tailwind then fails every stylesheet it is in: the
+  # canvas's in-browser build, the draft preview's styles, and the site's CSS build on publish. The
+  # at-rules are found by igniter_css's parser, so an `@apply` in a comment or a string is not one.
+  defp builds(_scope, nil, _site_id), do: :ok
+
+  defp builds(scope, body, site_id) do
+    css = css(%{scope => body})
+
+    case IgniterCss.list_at_rules(css) do
+      {:ok, at_rules} -> applied(Enum.filter(at_rules, &(&1.name == "apply")), css, site_id)
+      {:error, _reason} -> TailwindCompiler.verify_css(css, site_id)
+    end
+  end
+
+  defp applied([], _css, _site_id), do: :ok
+
+  # Tailwind's word for an empty one is "Cannot apply unknown utility class ``".
+  defp applied(applies, css, site_id) do
+    case Enum.any?(applies, &(String.trim(&1.prelude) == "")) do
+      true ->
+        {:error, gettext("`@apply` names no utility. Write one after it, like `@apply p-4`.")}
+
+      false ->
+        TailwindCompiler.verify_css(css, site_id)
     end
   end
 
