@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.Runtime.Resources.StylesheetCompilesTest do
   @moduledoc """
   A stylesheet whose CSS Tailwind will not build is refused on its `content` field, by every write
-  that changes it (`Validations.StylesheetCompiles`). Stored, one such row failed the whole build of
+  that changes it (`Changes.StylesheetCompiles`). Stored, one such row failed the whole build of
   the site's CSS, after a save that said it was updated.
 
   `async: false`: it runs the Tailwind binary.
@@ -46,6 +46,14 @@ defmodule MishkaCmsCore.Runtime.Resources.StylesheetCompilesTest do
     |> Ash.update(authorize?: false)
   end
 
+  defp changing(row, attrs, context \\ %{}) do
+    Ash.Changeset.for_update(row, :update, attrs,
+      tenant: row.site_id,
+      authorize?: false,
+      context: context
+    )
+  end
+
   defp stored(row), do: Ash.get!(Stylesheet, row.id, action: :get_any, authorize?: false)
 
   for action <- [:create, :master_create] do
@@ -74,5 +82,42 @@ defmodule MishkaCmsCore.Runtime.Resources.StylesheetCompilesTest do
       assert %{field: :content, message: "Missing closing } at .b"} = error
       assert stored(row).content == ".a { color: red; }"
     end
+  end
+
+  # TAILWIND TAKES ABOUT 1.5 S, and run as a validation inside the write's transaction it held a
+  # database connection that long on every save. A form's validate builds the changeset and runs no
+  # Tailwind; the refusal comes from the hooks Ash runs before it opens the transaction.
+  test "the check runs before the write's transaction opens, not when the changeset is built", %{
+    site: site
+  } do
+    {:ok, row} = create(site, :create, ".a { color: red; }")
+
+    changeset = changing(row, %{content: @unclosed})
+    assert changeset.valid?
+
+    checked = Ash.Changeset.run_before_transaction_hooks(changeset)
+    refute checked.valid?
+    assert [%{field: :content, message: "Missing closing } at .b"}] = checked.errors
+  end
+
+  # A row stored before the check, or seeded past it, still takes an edit to its other fields, and the
+  # builder checks its own rows before it writes them.
+  test "a write that leaves the CSS as it is, and the builder's own write, are not built", %{
+    site: site
+  } do
+    row =
+      Ash.Seed.seed!(Stylesheet, %{
+        name: "sc-seeded-#{System.unique_integer([:positive])}",
+        content: @unclosed,
+        site_id: site.id
+      })
+
+    assert {:ok, %{description: "kept"}} =
+             row |> changing(%{description: "kept"}) |> Ash.update(authorize?: false)
+
+    assert {:ok, %{content: ".b { color: red;"}} =
+             row
+             |> changing(%{content: ".b { color: red;"}, %{page_code: :builder})
+             |> Ash.update(authorize?: false)
   end
 end

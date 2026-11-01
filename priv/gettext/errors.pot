@@ -1201,7 +1201,7 @@ msgstr ""
 msgid "Site name must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/stylesheet.ex:1297
+#: lib/mishka_cms_core/runtime/resources/stylesheet.ex:1294
 #, elixir-autogen, elixir-format
 msgid "Stylesheet name must be unique within a site."
 msgstr ""

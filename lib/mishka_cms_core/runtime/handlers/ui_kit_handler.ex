@@ -2107,7 +2107,10 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     end
   end
 
-  @package %{defer_runtime: true, page_code: :package}
+  # IN THE INSTALL'S OWN TRANSACTION, on purpose: an install that fails rolls back whole. A
+  # stylesheet's Tailwind check (`Changes.StylesheetCompiles`) is a `before_transaction` hook, so
+  # inside it Ash would warn, row by row, that a transaction is already open.
+  @package %{defer_runtime: true, page_code: :package, warn_on_transaction_hooks?: false}
 
   # NOBODY, A MASTER, OR THE SITE'S OWN ADMIN — the three answers every runtime write in this CMS
   # gives, and the reason the middle one cannot simply keep its tenant: `TenantContext` refuses a
