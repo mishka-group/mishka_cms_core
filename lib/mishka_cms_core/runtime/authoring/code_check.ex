@@ -250,7 +250,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
             index,
             entry.name,
             nil,
-            gettext("This value has no code. Write the expression the page starts with, like 0.")
+            gettext("This value has no code. Write the expression it starts with, like 0.")
           )
         ]
 
@@ -328,7 +328,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
              nil,
              nil,
              nil,
-             gettext("This page took too long to compile. Something in it is probably looping.")
+             gettext("This took too long to compile. Something in it is probably looping.")
            )
          ]}
     end
@@ -413,7 +413,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # turns up in the middle of otherwise readable sentences — "expected …CodeCheck.C80201 to define
   # such a function" — so it is spelled the way the author thinks of it.
   defp unname(message, module) when is_binary(message),
-    do: String.replace(message, inspect(module), gettext("this page"))
+    do: String.replace(message, inspect(module), gettext("this code"))
 
   defp unname(message, _module), do: message
 

@@ -387,7 +387,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks do
   end
 
   defp destination_form([], _session, _node),
-    do: {:say, gettext("There is no form on this page to put it in yet.")}
+    do: {:say, gettext("There is no form to put it in yet.")}
 
   defp destination_form([form], session, node), do: {:op, move_into(session, form, node)}
 
@@ -501,7 +501,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks do
         :blocker,
         "form-no-as",
         gettext("This form has no name of its own"),
-        gettext("Two forms on this page would mix up each other's answers.")
+        gettext("Two forms on one page would mix up each other's answers.")
       )
 
   defp named(_as, _node), do: nil
@@ -632,7 +632,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecks do
         :blocker,
         "field-no-form",
         gettext("This field is not inside a form"),
-        gettext("This page cannot be saved until it is back inside a form.")
+        gettext("Saving is refused until it is back inside a form.")
       )
 
   defp bound(node, var),

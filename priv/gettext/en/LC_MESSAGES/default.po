@@ -748,11 +748,6 @@ msgstr ""
 msgid "A band across the page. The usual outermost wrapper."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:139
-#, elixir-autogen, elixir-format
-msgid "A band across the top, then the page."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:1227
 #, elixir-autogen, elixir-format
 msgid "A button that does not send is for something else on the page."
@@ -1128,11 +1123,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/kit_upgrade_panel.ex:353
 #, elixir-autogen, elixir-format
 msgid "An update never installs a component a site does not have — Repair, below, does."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/inspector.ex:1702
-#, elixir-autogen, elixir-format
-msgid "Another form on this page is already called \"%{name}\"."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/authoring/elements.ex:409
@@ -3875,11 +3865,6 @@ msgstr ""
 msgid "One of this component's own declared attributes. Rename it in the inspector."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:105
-#, elixir-autogen, elixir-format
-msgid "One wide band down the page."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1425
 #, elixir-autogen, elixir-format
 msgid "Only a field can move to another form."
@@ -5355,13 +5340,6 @@ msgstr ""
 msgid "That form has no fields to move."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:205
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1435
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1575
-#, elixir-autogen, elixir-format
-msgid "That form is no longer on the page."
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/components/extension_installer_panel.ex:173
 #, elixir-autogen, elixir-format
 msgid "That is not a site this page can set up."
@@ -5514,11 +5492,6 @@ msgstr ""
 msgid "There is no Send button. What they type is checked as they type. Pressing Enter never reloads the page, and in a form with a single box it still sends."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:390
-#, elixir-autogen, elixir-format
-msgid "There is no form on this page to put it in yet."
-msgstr ""
-
 #: lib/mishka_cms_core/runtime/authoring/inspector.ex:1164
 #, elixir-autogen, elixir-format
 msgid "They can see what is in it but not change it."
@@ -5633,16 +5606,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:96
 #, elixir-autogen, elixir-format
 msgid "This page already has an edition in every language this site and its pages use. Type another code to start one."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:635
-#, elixir-autogen, elixir-format
-msgid "This page cannot be saved until it is back inside a form."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:331
-#, elixir-autogen, elixir-format
-msgid "This page took too long to compile. Something in it is probably looping."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:127
@@ -5881,11 +5844,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:783
 #, elixir-autogen, elixir-format
 msgid "Two forms keep what is typed in the same place"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:504
-#, elixir-autogen, elixir-format
-msgid "Two forms on this page would mix up each other's answers."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:848
@@ -6442,11 +6400,6 @@ msgstr ""
 msgid "You cannot scan the templates."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/authoring/code_access.ex:52
-#, elixir-autogen, elixir-format
-msgid "You do not have permission to change page code."
-msgstr ""
-
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:141
 #, elixir-autogen, elixir-format
 msgid "You do not have permission to change this."
@@ -6859,11 +6812,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/home/index.ex:216
 #, elixir-autogen, elixir-format
 msgid "there"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:416
-#, elixir-autogen, elixir-format
-msgid "this page"
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:663
@@ -8677,11 +8625,6 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:55
 #, elixir-autogen, elixir-format
 msgid "That folder is no longer in the library."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/authoring/code_check.ex:253
-#, elixir-autogen, elixir-format
-msgid "This value has no code. Write the expression the page starts with, like 0."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/media/index.html.heex:154
@@ -18596,4 +18539,61 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/html_tokenizer.ex:676
 #, elixir-autogen, elixir-format
 msgid "%{tag} has no <% end %>"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:139
+#, elixir-autogen, elixir-format, fuzzy
+msgid "A band across the top, then the content."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/inspector.ex:1702
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Another form here is already called \"%{name}\"."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_starter.ex:105
+#, elixir-autogen, elixir-format
+msgid "One wide band, top to bottom."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:635
+#, elixir-autogen, elixir-format
+msgid "Saving is refused until it is back inside a form."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:205
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1435
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex:1575
+#, elixir-autogen, elixir-format, fuzzy
+msgid "That form is no longer here."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:390
+#, elixir-autogen, elixir-format, fuzzy
+msgid "There is no form to put it in yet."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:331
+#, elixir-autogen, elixir-format, fuzzy
+msgid "This took too long to compile. Something in it is probably looping."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:253
+#, elixir-autogen, elixir-format, fuzzy
+msgid "This value has no code. Write the expression it starts with, like 0."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/page_forms/_form_checks.ex:504
+#, elixir-autogen, elixir-format, fuzzy
+msgid "Two forms on one page would mix up each other's answers."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_access.ex:52
+#, elixir-autogen, elixir-format, fuzzy
+msgid "You do not have permission to change author-written Elixir."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/authoring/code_check.ex:416
+#, elixir-autogen, elixir-format, fuzzy
+msgid "this code"
 msgstr ""

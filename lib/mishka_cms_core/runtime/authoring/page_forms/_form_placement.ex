@@ -202,7 +202,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement do
   def how_ops(session, form_id, how) when how in [:typing, :send] do
     case Tree.get(session.tree, form_id) do
       %Node{} = form -> form |> PageForms.form?() |> how_for(session, form, how)
-      nil -> {:error, gettext("That form is no longer on the page.")}
+      nil -> {:error, gettext("That form is no longer here.")}
     end
   end
 
@@ -1432,7 +1432,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement do
     cond do
       old && old.id == target -> {:error, gettext("It is already in that form.")}
       List.keymember?(forms(session.tree), target, 0) -> {:ok, Tree.get(session.tree, target)}
-      true -> {:error, gettext("That form is no longer on the page.")}
+      true -> {:error, gettext("That form is no longer here.")}
     end
   end
 
@@ -1572,7 +1572,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormPlacement do
              {:error, gettext("That form does not work yet.")},
          true <-
            List.keymember?(working, into_id, 0) ||
-             {:error, gettext("That form is no longer on the page.")},
+             {:error, gettext("That form is no longer here.")},
          from = Tree.get(session.tree, from_id),
          into = Tree.get(session.tree, into_id),
          [_first | _rest] = units <- units(session.tree, from, session.components) || [] do
