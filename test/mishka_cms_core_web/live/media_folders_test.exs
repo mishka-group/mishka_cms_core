@@ -6,7 +6,8 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
   @moduledoc """
   The media library's folders, through the controls a site's admin and a master press: opening a
   folder from the rail and the breadcrumb, making a folder inside the one open, uploading into it,
-  moving a file or a folder with the move dialog, and archiving one that is not empty.
+  moving a file or a folder with the move dialog, archiving one that is not empty, and switching
+  the library between its grid and its table.
 
   `:media_static_dir` points the files at the test's own folder; this case is not async.
 
@@ -521,6 +522,41 @@ defmodule MishkaCmsCoreWeb.Test.MediaFoldersTest do
 
       render(view)
       assert in_rail?(view, videos)
+    end
+  end
+
+  describe "the grid and table switch" do
+    defp showing?(view, template),
+      do:
+        has_element?(
+          view,
+          "button[phx-click='switch_template'][phx-value-template='#{template}'][aria-pressed='true']"
+        )
+
+    defp template_in(url), do: URI.decode_query(URI.parse(url).query || "")["template"]
+
+    test "is kept in the URL, and opening that URL shows the table", %{conn: conn, site: site} do
+      create_media!(site_id: site.id, name: "listed")
+      conn = tenant_conn(conn, site)
+      view = open(conn)
+
+      assert showing?(view, :media_gallery)
+      assert view |> assert_patch() |> template_in() == "media_gallery"
+
+      view
+      |> element("button[phx-click='switch_template'][phx-value-template='table']")
+      |> render_click()
+
+      render_async(view)
+      assert showing?(view, :table)
+
+      url = assert_patch(view)
+      assert template_in(url) == "table"
+
+      {:ok, reopened, _html} = live(conn, url)
+      render_async(reopened)
+      assert showing?(reopened, :table)
+      refute showing?(reopened, :media_gallery)
     end
   end
 end
