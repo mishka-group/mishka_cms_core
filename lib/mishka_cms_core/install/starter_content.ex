@@ -1475,9 +1475,22 @@ defmodule MishkaCmsCore.Install.StarterContent do
   defp section_bar_call(site_name),
     do: ~s(<#{@section_bar} bar={assigns[:page_section_bar]} site="#{site_name}" />)
 
-  # A PLAIN LINK IS ONE `navigate` LINK THROUGH `site_path/2`; a group (`nav_group/3`) is written
-  # beside it.
-  defp nav_links(nav) do
+  @doc """
+  The header's links for `nav`, in the markup the starter layout writes between the tags of its
+  `site-header` component: `nav` is `[t:nav_entry/0]`, as the `:nav` option takes it. An extension
+  uses it to write a site's header links in core's own markup, as a migration that brings a site's
+  menus over does, so they look and behave as the starter's.
+
+  A plain link is one `<.link navigate>` through
+  `MishkaCmsCore.Runtime.LiveViewHelpers.site_path/2`, in the page's language. A group is drawn
+  twice (the module's "Grouped links"): a dropdown from `lg` up, and a labelled list in the phone's
+  menu panel; a group with no link is not drawn. The markup is a layout template's HEEx: it reads
+  the language from the layout's `lang/1` helper, which the starter layout defines.
+
+      StarterContent.nav_links([{"Pricing", "/pricing"}, %{label: "Docs", children: [{"API", "/api"}]}])
+  """
+  @spec nav_links([nav_entry()]) :: String.t()
+  def nav_links(nav) when is_list(nav) do
     nav
     |> Enum.with_index()
     |> Enum.map_join("", fn
