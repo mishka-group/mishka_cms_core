@@ -56,6 +56,36 @@ defmodule MishkaCmsCore.Accounts.SecondFactorTest do
                |> Ash.update()
     end
 
+    # A setup token names the account it was made for (ash_authentication 5.0.0-rc.16): another
+    # account holding it, and its code, enables nothing, and an admin confirms nobody's.
+    test "is confirmed by the account that started it, and by no one else", %{
+      site: site,
+      user: user
+    } do
+      started = setup!(user)
+      code = code(secret(started))
+      other = register!("other@example.com", site.id)
+      admin = create_user_with_permissions!(["*"], site_id: site.id)
+
+      assert {:error, %Ash.Error.Forbidden{}} = confirm(other, started, code)
+
+      assert {:error, %Ash.Error.Forbidden{}} =
+               user
+               |> Ash.Changeset.for_update(
+                 :confirm_setup_with_totp,
+                 %{setup_token: started.__metadata__.setup_token, code: code},
+                 actor: admin,
+                 tenant: site.id
+               )
+               |> Ash.update()
+
+      refute SecondFactor.enabled?(reload(other))
+      refute SecondFactor.enabled?(reload(user))
+
+      assert {:ok, _confirmed} = confirm(user, started, code)
+      assert SecondFactor.enabled?(reload(user))
+    end
+
     test "is refused while one is set up already", %{user: user} do
       enabled = enable!(user)
 

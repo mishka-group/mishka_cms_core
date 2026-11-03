@@ -9,10 +9,11 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
   (`MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange`); a password reset still
   succeeds, and a link sent before the change dies with the rest.
 
-  AshAuthentication's own `apply_on_password_change?` revokes the tokens inside the write. The reset
-  token is stored like a session's, so it goes with them, and the reset's own single-use revocation
-  then fails with "token has already been revoked" (ash_authentication 5.0.0-rc.15). That option
-  stays off; these tests hold both halves: the reset works, and every session is signed out.
+  AshAuthentication's own `apply_on_password_change?` revokes the tokens inside the write and hands
+  the device that made the change no new one. It stays off, so its change is not attached beside
+  this one and no token is revoked twice. Since ash_authentication 5.0.0-rc.16 a reset spends its
+  link before the write, inside the write's transaction; these tests hold both halves: the reset
+  works once, and every other session is signed out.
   """
   use MishkaCmsCore.DataCase, async: false
 
@@ -32,7 +33,13 @@ defmodule MishkaCmsCore.Accounts.PasswordChangeLogOutTest do
 
   test "the library's own log-out on a password change stays off" do
     refute Info.strategy!(User, :log_out_everywhere).apply_on_password_change?,
-           "with it on, every password reset fails: the reset token is revoked inside the write"
+           "with it on, every token is revoked inside the write as well, and the device that made the change gets no new one"
+
+    refute Enum.any?(
+             Ash.Resource.Info.changes(User),
+             &match?({AshAuthentication.AddOn.LogOutEverywhere.OnPasswordChange, _}, &1.change)
+           ),
+           "the library's own revocation is attached beside this one"
   end
 
   describe "a password reset" do
