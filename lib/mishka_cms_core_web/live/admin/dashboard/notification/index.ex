@@ -10,7 +10,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Notification.Index do
   the card template) is declared on the `MishkaCmsCore.Notify.Notification` resource, so the inbox
   gets Ash-backed filtering/sorting/pagination for free and the per-user policy keeps a user to their
   own rows. Mark-read/unread and delete run as the resource's Ash actions through Gervaz — no
-  per-action wiring here; reading a row decrements the topbar bell's unread badge.
+  per-action wiring here; reading a row decrements the topbar bell's unread badge. The table is named
+  in `:notification_table`, so `MishkaCmsCore.Notify.LiveHooks` hands it the account's broadcasts:
+  a notification arriving, read or removed in another tab, and "Mark all read".
 
   See `MishkaCmsCore.Notify.Notification` (the `mishka_gervaz` block) and
   `MishkaCmsCoreWeb.Templates.NotificationCard` (the card layout).
@@ -23,7 +25,12 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Notification.Index do
 
   @impl true
   def mount(_params, _session, socket) do
-    {:ok, socket |> assign(:page_title, gettext("Notifications")) |> assign(:url_state, nil)}
+    {:ok,
+     assign(socket,
+       page_title: gettext("Notifications"),
+       url_state: nil,
+       notification_table: "notifications-table"
+     )}
   end
 
   @impl true
@@ -64,7 +71,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Notification.Index do
 
         <.live_component
           module={MishkaGervaz.Table.Web.Live}
-          id="notifications-table"
+          id={@notification_table}
           resource={MishkaCmsCore.Notify.Notification}
           current_user={@current_user}
           url_state={@url_state}

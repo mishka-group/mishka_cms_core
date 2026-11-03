@@ -137,6 +137,50 @@ defmodule MishkaCmsCoreWeb.Test.NotifyUITest do
     assert render_async(view) =~ "Hello there"
   end
 
+  # ONE UPDATE AND ONE BROADCAST FOR ALL OF THEM: the inbox loads its first page again, and every
+  # page the account has open, another tab's inbox and bell included, follows without a reload.
+  test "'Mark all read' on the inbox shows every notification read, here and in another tab", %{
+    conn: conn
+  } do
+    admin = create_admin("boss@example.com")
+
+    for title <- ["Ping A", "Ping B"],
+        do: Notify.deliver({:user, admin.id}, %{type: "test:x", title: title})
+
+    conn = log_in(conn, admin)
+    {:ok, inbox, _html} = live(conn, "/admin/dashboard/notifications")
+    {:ok, other, _html} = live(conn, "/admin/dashboard/notifications")
+
+    for view <- [inbox, other] do
+      render_async(view)
+      assert rows(view, "Mark read") == 2
+    end
+
+    inbox |> element("#notifs-mark-all-read") |> render_click()
+
+    for view <- [inbox, other] do
+      settle(view)
+      assert rows(view, "Mark read") == 0
+      assert rows(view, "Read") == 2
+      refute has_element?(view, "#topbar-notifs button", "Mark all read")
+    end
+  end
+
+  test "'Mark all read' sends one broadcast for all the notifications it reads" do
+    admin = create_admin("boss@example.com")
+
+    for title <- ["Ping A", "Ping B", "Ping C"],
+        do: Notify.deliver({:user, admin.id}, %{type: "test:x", title: title})
+
+    Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, "notification:#{admin.id}:updated")
+
+    assert :ok = Notify.mark_all_read(admin)
+
+    assert_receive %Phoenix.Socket.Broadcast{topic: "notification:" <> _}
+    refute_received %Phoenix.Socket.Broadcast{topic: "notification:" <> _}
+    assert unread(admin) == []
+  end
+
   # A NOTIFICATION CAN POINT OUTSIDE THE PAGE'S LIVE_SESSION — a mention in the visual editor points
   # into the editor's own — and LiveView refuses a live navigation across that boundary, logs
   # "unauthorized live_redirect" and falls back to a page load. `/probe-editor/…` is routed in no
@@ -210,6 +254,24 @@ defmodule MishkaCmsCoreWeb.Test.NotifyUITest do
   end
 
   # ── helpers (mirrors dashboard_home_test) ───────────────────────────────────
+
+  # The inbox rows offering the row action titled `title`: "Mark read" on an unread one, "Read" on
+  # a read one.
+  defp rows(view, title) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s([data-role="nrow"] button[title="#{title}"]))
+    |> Enum.count()
+  end
+
+  # The broadcast reaches the page, which hands it to its table with `send_update/3`, a message of
+  # its own: a round trip for each, then the load the table starts.
+  defp settle(view) do
+    render(view)
+    render(view)
+    render_async(view)
+  end
 
   defp unread(user) do
     Notification
