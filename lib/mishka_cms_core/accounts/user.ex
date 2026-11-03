@@ -1665,7 +1665,15 @@ defmodule MishkaCmsCore.Accounts.User do
     end
 
     update :reset_password_with_token do
-      description "Resets user password using a valid reset token"
+      description """
+      Resets user password using a valid reset token. Not atomic: AshAuthentication's reset
+      (`Strategy.action(strategy, :reset, ...)`, which the reset form posts to) spends the token in a
+      `before_action` hook, inside the write's transaction and under a lock on the token, so a
+      failed reset leaves the link usable and of two resets with one link only the first gets
+      through.
+      """
+
+      require_atomic? false
 
       argument :reset_token, :string do
         allow_nil? false
