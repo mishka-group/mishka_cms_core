@@ -1441,6 +1441,24 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       end
     end
 
+    # AN EXTENSION WRITES A SITE'S HEADER LINKS WITH `nav_links/1`, so they are the starter's own.
+    test "nav_links/1 is what the starter layout writes between the header's tags", %{site: site} do
+      nav = [{"Home", "/home"}, %{label: "Dev", children: @dev}, %{label: "Last", path: "/last"}]
+
+      [slot] =
+        Regex.run(
+          ~r/<\.component\s+component_name="site-header".*?\n\s*>(.*?)<\/\.component>/s,
+          one(Layout, site).template,
+          capture: :all_but_first
+        )
+
+      links = StarterContent.nav_links(nav)
+
+      assert String.trim(slot) == String.trim(links)
+      assert links =~ ~s|navigate={site_path("/:lang/home", lang(assigns))}|
+      assert links =~ ~s(id="site-nav-dev-button")
+    end
+
     test "is a button on the bar from lg up, and is not drawn below it", %{site: site} do
       html = header_with_nav(site, "en")
       wrapper = html |> wrapper_attribute("site-nav-dev-button", "class") |> String.split()

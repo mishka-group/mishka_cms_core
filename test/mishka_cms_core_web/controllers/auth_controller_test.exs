@@ -310,17 +310,21 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
   end
 
   describe "signing out" do
+    # The token is revoked through the token resource's own policies, which AshAuthentication
+    # 5.0.0-rc.16 asks for the lookup it makes first.
     test "the DELETE the sign-out page posts to ends a real session", %{conn: conn, site: site} do
       user = register_user("leaving@example.com", site.id)
 
       signed_in = get(conn, handoff(user))
-      assert Plug.Conn.get_session(signed_in, "user_token")
+      assert token = Plug.Conn.get_session(signed_in, "user_token")
+      assert {:ok, false} = MishkaCmsCore.Accounts.Token.revoked(token)
 
       signed_out =
         signed_in |> Phoenix.ConnTest.recycle() |> with_host() |> delete("/auth/sign-out")
 
       assert redirected_to(signed_out) == "/"
       refute Plug.Conn.get_session(signed_out, "user_token")
+      assert {:ok, true} = MishkaCmsCore.Accounts.Token.revoked(token)
     end
   end
 

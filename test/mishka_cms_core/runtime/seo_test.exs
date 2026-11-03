@@ -374,6 +374,37 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert value(head, "meta", "name", "twitter:title") == "OTP trees | Blog"
     end
 
+    # A record's own SEO title, which a plugin hands over in its tags, is the record's title: the
+    # layout's `{{page.title}} · {{site.name}}` dresses only a page that stores none.
+    test "a record's own title wins over the layout's, which titles only a page with none", %{
+      site: site
+    } do
+      layout = [%{tag: "title", attrs: %{}, content: "{{page.title}} · {{site.name}}"}]
+      own = [%{tag: "title", attrs: %{}, content: "Phoenix LiveView tips for real projects"}]
+      seo = seo(site, title: "Phoenix LiveView tips", tags: own)
+
+      head = Seo.head(seo, base: @base, layers: [layout, []])
+
+      assert head.title == "Phoenix LiveView tips for real projects"
+
+      for {key, name} <- [{"property", "og:title"}, {"name", "twitter:title"}] do
+        assert values(head, "meta", key, name) == ["Phoenix LiveView tips for real projects"]
+      end
+
+      shared = own ++ [meta("property", "og:title", "Shared")]
+      head = Seo.head(%{seo | tags: shared}, base: @base, layers: [layout, []])
+      assert value(head, "meta", "property", "og:title") == "Shared"
+
+      head = Seo.head(%{seo | tags: []}, base: @base, layers: [layout, []])
+      assert head.title == "Phoenix LiveView tips · Acme Studio"
+      assert value(head, "meta", "property", "og:title") == "Phoenix LiveView tips · Acme Studio"
+
+      page = [%{tag: "title", attrs: %{}, content: "The page's"}]
+      head = Seo.head(seo, base: @base, layers: [layout, page])
+      assert head.title == "The page's"
+      assert value(head, "meta", "property", "og:title") == "The page's"
+    end
+
     test "a plugin's tag never undoes what the page set itself", %{site: site} do
       plugin = [
         meta("property", "og:title", "Post's own"),

@@ -37,8 +37,11 @@ defmodule MishkaCmsCore.Notify do
                          )
 
   @doc """
-  Marks every one of `user`'s unread notifications read, in one bulk update. No-op when signed out.
-  Backs both the topbar bell's "Mark all read" and the inbox page's.
+  Marks every one of `user`'s unread notifications read, in one `UPDATE`, then says so in one
+  broadcast on the account's `notification:<user_id>:updated` topic, whatever the number of rows:
+  the bell of every page the account has open counts again, and an open inbox loads its first page
+  again (`MishkaCmsCore.Notify.LiveHooks`). No-op when signed out. Backs both the topbar bell's
+  "Mark all read" and the inbox page's.
   """
   @spec mark_all_read(map() | nil) :: :ok
   def mark_all_read(nil), do: :ok
@@ -47,7 +50,25 @@ defmodule MishkaCmsCore.Notify do
     MishkaCmsCore.Notify.Notification
     |> Ash.Query.for_read(:feed)
     |> Ash.Query.filter(is_nil(read_at))
-    |> Ash.bulk_update(:mark_read, %{}, actor: user, tenant: user.site_id, return_errors?: true)
+    |> Ash.bulk_update(:mark_read, %{},
+      actor: user,
+      tenant: user.site_id,
+      strategy: :atomic,
+      return_errors?: true
+    )
+    |> announce_all_read(user)
+  end
+
+  defp announce_all_read(%Ash.BulkResult{status: :error}, _user), do: :ok
+
+  defp announce_all_read(_read, user) do
+    topic = "notification:#{user.id}:updated"
+
+    Phoenix.PubSub.broadcast(MishkaCmsCore.PubSub, topic, %Phoenix.Socket.Broadcast{
+      topic: topic,
+      event: "mark_all_read",
+      payload: %{user_id: user.id}
+    })
 
     :ok
   end

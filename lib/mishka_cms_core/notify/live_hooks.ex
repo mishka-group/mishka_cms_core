@@ -13,13 +13,28 @@ defmodule MishkaCmsCore.Notify.LiveHooks do
   — open a notification, mark one read, mark all read — work on every admin page.
 
   The badge counts **unread** notifications (`read_at IS NULL`); reading (per row, all, or by opening)
-  decrements it live. Attached right after `MishkaCmsCore.Layouts.Nav` in
+  decrements it live.
+
+  The hook halts the account's broadcasts, so a page that shows its notifications in a gervaz table
+  names that table in the `:notification_table` assign, and the hook hands each broadcast on to it:
+  a row's change as the table's `pubsub_notification`, and "mark all read"
+  (`MishkaCmsCore.Notify.mark_all_read/1`, one broadcast for all its rows) as one reload of its first
+  page.
+
+  Attached right after `MishkaCmsCore.Layouts.Nav` in
   `MishkaCmsCore.ExtensionLiveView`, so it overrides Nav's placeholder count. Subscribes on
   `MishkaCmsCore.PubSub`, matching the resource's `Ash.Notifier.PubSub` topics.
   """
 
   import Phoenix.LiveView,
-    only: [connected?: 1, attach_hook: 4, navigation_type: 2, push_navigate: 2, redirect: 2]
+    only: [
+      connected?: 1,
+      attach_hook: 4,
+      navigation_type: 2,
+      push_navigate: 2,
+      redirect: 2,
+      send_update: 2
+    ]
 
   import Phoenix.Component, only: [assign: 2]
 
@@ -54,14 +69,28 @@ defmodule MishkaCmsCore.Notify.LiveHooks do
   # clause never sees them.
   defp handle_message(:notify_refresh_count, socket), do: {:halt, refresh(socket)}
 
-  defp handle_message(%Phoenix.Socket.Broadcast{topic: "notification:" <> _}, socket),
-    do: {:halt, refresh(socket)}
+  defp handle_message(%Phoenix.Socket.Broadcast{topic: "notification:" <> _} = broadcast, socket),
+    do: {:halt, socket |> refresh() |> forward(broadcast)}
 
   defp handle_message(_msg, socket), do: {:cont, socket}
 
+  defp forward(%{assigns: %{notification_table: id}} = socket, %{
+         payload: %Ash.Notifier.Notification{} = notification
+       }) do
+    send_update(MishkaGervaz.Table.Web.Live, id: id, pubsub_notification: notification)
+    socket
+  end
+
+  defp forward(%{assigns: %{notification_table: id}} = socket, %{event: "mark_all_read"}) do
+    send_update(MishkaGervaz.Table.Web.Live, id: id, gervaz_refresh: true)
+    socket
+  end
+
+  defp forward(socket, _broadcast), do: socket
+
   # Bell-dropdown actions, available on every admin page. Opening a notification reads it then
   # navigates to its link; the per-row check reads it in place (no redirect); "mark all read" clears
-  # every unread row. Non-bell events fall through untouched.
+  # every unread row, and its broadcast counts the bell again. Non-bell events fall through untouched.
   defp handle_action("notify_open", %{"id" => id} = params, socket) do
     read_one(socket.assigns[:current_user], id)
     {:halt, socket |> refresh() |> open_link(params["link"])}
@@ -73,8 +102,8 @@ defmodule MishkaCmsCore.Notify.LiveHooks do
   end
 
   defp handle_action("notify_read_all", _params, socket) do
-    Notify.mark_all_read(socket.assigns[:current_user])
-    {:halt, refresh(socket)}
+    :ok = Notify.mark_all_read(socket.assigns[:current_user])
+    {:halt, socket}
   end
 
   defp handle_action(_event, _params, socket), do: {:cont, socket}

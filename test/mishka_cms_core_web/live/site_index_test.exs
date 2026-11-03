@@ -227,6 +227,38 @@ defmodule MishkaCmsCoreWeb.Test.SiteIndexTest do
              "Masters sign in on the master site&#39;s web pages, so it must be switched on and take web visits."
   end
 
+  # Activate and Archive draw the table's own glyph; Deactivate has none, so it shows the icon its
+  # `ui` names.
+  test "each bulk button for the sites picked shows an icon beside its label", %{
+    conn: conn,
+    other_site: other_site
+  } do
+    view = open(conn)
+    view |> element(~s(#{row(other_site)} input[phx-click="toggle_select"])) |> render_click()
+
+    for action <- ["activate", "deactivate", "archive"] do
+      button = ~s(button[phx-click="bulk_action"][phx-value-action="#{action}"])
+
+      assert has_element?(view, button), "no #{action} button"
+
+      assert has_element?(view, ~s(#{button} svg, #{button} span[class*="hero-"])),
+             "the #{action} button shows no icon"
+    end
+  end
+
+  test "Deactivate switches the sites picked off", %{conn: conn, other_site: other_site} do
+    view = open(conn)
+    view |> element(~s(#{row(other_site)} input[phx-click="toggle_select"])) |> render_click()
+
+    view
+    |> element(~s(button[phx-click="bulk_action"][phx-value-action="deactivate"]))
+    |> render_click()
+
+    render_async(view)
+
+    refute Ash.get!(MishkaCmsCore.Runtime.Site, other_site.id, authorize?: false).active
+  end
+
   describe "a site taken offline" do
     setup %{other_site: other_site} do
       snapshot = SettingsState.snapshot()

@@ -17,10 +17,11 @@ defmodule MishkaCmsCore.Accounts.Changes.LogOutEverywhereOnPasswordChange do
   before the change no longer works. The device that did it is the one the write signed in (a reset)
   or the account changing its own password; an admin's edit gives the account no token.
 
-  AshAuthentication's `apply_on_password_change?` does the same inside the write. A password reset
-  then fails: the reset token is stored like any other token, the add-on revokes it with the rest,
-  and the reset's own single-use revocation of that token finds it revoked already ("token has
-  already been revoked"). After the commit, the reset has spent its token first.
+  AshAuthentication's `apply_on_password_change?` revokes the tokens inside the write and hands the
+  device that made the change no new one, so it stays off and only this revocation runs. A reset
+  spends its own link before the write, inside the write's transaction
+  (`AshAuthentication.Strategy.Password.Actions.reset/3`), so by the commit that link is revoked
+  already.
 
   **Whether the password changed is decided after the commit, not when the change is attached.**
   `AshAuthentication.Strategy.Password.HashPasswordChange` writes the hash in a `before_action` hook,
