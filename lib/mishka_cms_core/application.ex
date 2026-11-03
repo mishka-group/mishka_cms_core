@@ -51,10 +51,12 @@ defmodule MishkaCmsCore.Application do
 
   # What is kept of a site's icons dropped when its App icon or Favicon setting is saved, on
   # `cms_core:setting:after_save`, and when the media file either names is replaced, on
-  # `cms_core:media:after_save` (`MishkaCmsCore.Runtime.SiteIcon`).
+  # `cms_core:media:after_save` (`MishkaCmsCore.Runtime.SiteIcon`). And the icons named in the head of
+  # every admin page, on `RootHtml.MetaTags` (`MishkaCmsCore.Runtime.AdminSiteIcons`).
   @site_icon_plugins [
     MishkaCmsCore.Runtime.SettingSiteIcons,
-    MishkaCmsCore.Runtime.MediaSiteIcons
+    MishkaCmsCore.Runtime.MediaSiteIcons,
+    MishkaCmsCore.Runtime.AdminSiteIcons
   ]
 
   # `settings:register` plugins — the core widgets' settings under the General tab, and every

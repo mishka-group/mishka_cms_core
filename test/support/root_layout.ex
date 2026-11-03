@@ -8,7 +8,9 @@ defmodule MishkaCmsCore.TestLayouts do
 
   A host supplies this — the CMS renders admin pages inside its own root layout, with its asset
   tags and theme attributes. None of that is this library's to own, so the harness provides the
-  minimum a LiveView needs to mount: a document, a csrf token, and somewhere to put the page.
+  minimum a LiveView needs to mount: a document, a csrf token, and somewhere to put the page. Its
+  head also fires `RootHtml.MetaTags` as a host's does, so a plugin that adds to the head of a page
+  shows in the page a test gets.
 
   `MishkaCmsCore.Layouts` (in `lib/`) is the *app* layout, which is this library's and is used as-is.
   """
@@ -23,6 +25,9 @@ defmodule MishkaCmsCore.TestLayouts do
         <meta charset="utf-8" />
         <meta name="csrf-token" content={Phoenix.Controller.get_csrf_token()} />
         <title>MishkaCmsCore test</title>
+        {Phoenix.HTML.raw(
+          MishkaInstaller.Event.Hook.call("RootHtml.MetaTags", %{html: "", assigns: assigns}).html
+        )}
       </head>
       <body>
         {@inner_content}
