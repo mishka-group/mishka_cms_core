@@ -21,7 +21,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
   import Phoenix.LiveViewTest
 
-  alias MishkaCmsCore.Runtime.{ContentComponents, Translations}
+  alias MishkaCmsCore.Runtime.{ContentComponents, ContentEditorStyles, Translations}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Test.Plugins.{ContentEditorBlocks, ContentEditorPalette}
   alias MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker
@@ -144,10 +144,21 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     view
   end
 
-  defp open_palette(view) do
+  # The palette's first open also starts the site's preview stylesheet, a Tailwind run of seconds
+  # that `render_async/2` waits for beside the palette's read. It is built here first, so the
+  # picker finds it ready and the wait is for the read alone.
+  defp open_palette(view, ctx) do
+    {:ok, _href} = editor_styles(ctx)
     view |> element(@components <> "-toggle") |> render_click()
     render_async(view, @await)
     view
+  end
+
+  # The stylesheet `ContentComponentPicker` builds for the user's site and the components its
+  # palette offers them.
+  defp editor_styles(%{user: user}) do
+    {:ok, entries} = ContentComponents.palette(user, user.site_id)
+    ContentEditorStyles.ensure(user.site_id, Enum.map(entries, & &1.name))
   end
 
   # What the hook's `pushEventTo(data-components, …)` sends.
@@ -288,7 +299,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
   describe "the palette" do
     test "offers the site's own components and the shared ones, never another site's", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       assert has_element?(
                view,
@@ -301,7 +312,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "searching narrows the list", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       view |> element("#{@components}-query") |> render_keyup(%{"value" => "shared"})
 
@@ -314,7 +325,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       Process.register(self(), :__content_editor_palette_probe__)
 
       hidden = callout!(ctx.site, "kept-unlisted-#{ctx.n}")
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       site_id = ctx.site.id
       user_id = ctx.user.id
@@ -408,7 +419,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       ask(view, "segments", %{"html" => "<p>[[component #{ctx.own.name} /]]</p>"})
       assert_reply(view, %{styles: nil})
 
-      key = MishkaCmsCore.Runtime.ContentEditorStyles.key(ctx.site.id)
+      key = ContentEditorStyles.key(ctx.site.id)
       assert_push_event(view, "mishka:content_editor", %{id: @editor, styles: href}, 30_000)
       assert href == "/assets/css/#{key}/#{AssetsState.hash(key, "css")}"
 
@@ -421,7 +432,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view = open(ctx, %{"user" => master})
       ask(view, "segments", %{"html" => "<p>x</p>"})
 
-      key = MishkaCmsCore.Runtime.ContentEditorStyles.key(nil)
+      key = ContentEditorStyles.key(nil)
       assert_push_event(view, "mishka:content_editor", %{id: @editor, styles: href}, 30_000)
       assert href == "/assets/css/#{key}/#{AssetsState.hash(key, "css")}"
       on_exit(fn -> AssetsState.delete(key, "css") end)
@@ -545,7 +556,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
   describe "building a component" do
     test "a palette component is written by the server, with only what it declares", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "build", %{
         "name" => ctx.own.name,
@@ -569,7 +580,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
       name = "furnished-#{ctx.n}"
       arrives = ~s([[component #{name} tone="warn"]]Sample[[/component]])
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "build", %{"name" => name})
       assert_reply(view, %{marker: ^arrives})
@@ -588,7 +599,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a component placed closes the palette, off the text", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       assert has_element?(view, "#{@components}-panel")
 
       ask(view, "build", %{"name" => ctx.shared.name, "attrs" => %{}, "inner" => ""})
@@ -598,7 +609,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "and so does opening a placed component's settings", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       ask(view, "edit", %{"marker" => "[[component #{ctx.own.name} /]]"})
 
       refute has_element?(view, "#{@components}-panel")
@@ -607,7 +618,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "a component that requires a slot is written with an empty entry for it", ctx do
       player = player!(ctx.site, "player-#{ctx.n}")
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "build", %{"name" => player.name, "attrs" => %{}, "inner" => ""})
 
@@ -616,7 +627,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a refusal keeps the palette open, and says why", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "build", %{"name" => ctx.theirs.name, "attrs" => %{}, "inner" => ""})
       assert_reply(view, %{error: _message})
@@ -626,7 +637,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "nothing filled in is the self-closing marker", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       ask(view, "build", %{"name" => ctx.shared.name, "attrs" => %{}, "inner" => ""})
 
       expected = "[[component #{ctx.shared.name} /]]"
@@ -634,7 +645,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "another site's component, or one no site has, is refused", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       for name <- [ctx.theirs.name, "nobody-has-#{ctx.n}", "bad name!"] do
         ask(view, "build", %{"name" => name, "attrs" => %{}, "inner" => ""})
@@ -651,7 +662,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "no name a request carries becomes an atom", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       names = for _ <- 1..200, do: "ghost-#{System.unique_integer([:positive])}"
 
       before = :erlang.system_info(:atom_count)
@@ -673,7 +684,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       callout!(ctx.site, "words-#{ctx.n}", type: "typography")
       callout!(ctx.site, "hero-#{ctx.n}", type: "marketing")
 
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       assert category_ids(view) ==
                Enum.map(~w(all text marketing other), &"#{@picker}-category-#{&1}")
@@ -683,7 +694,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "narrow the list to one heading", ctx do
       callout!(ctx.site, "words-#{ctx.n}", type: "typography")
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       view |> element("#{@components}-category-text") |> render_click()
 
@@ -693,7 +704,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "are searched by their name", ctx do
       callout!(ctx.site, "words-#{ctx.n}", type: "typography")
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       view |> element("#{@components}-query") |> render_keyup(%{"value" => "text"})
 
@@ -702,7 +713,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "the search box is cleared by its own button", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       view |> element("#{@components}-query") |> render_keyup(%{"value" => "zzz-nothing"})
       refute has_element?(view, "#{@components}-pick-#{ctx.own.name}")
 
@@ -754,7 +765,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "open first, offering the blocks whose components the site may place", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       assert has_element?(view, "#{@components}-tab-blocks[aria-selected=true]")
       assert has_element?(view, "#{@components}-block-note-#{ctx.n}[data-block-card][draggable]")
@@ -762,7 +773,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a block is written by the server, components inside it", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "block", %{"id" => "note-#{ctx.n}"})
 
@@ -782,7 +793,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
         ]
       )
 
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       assert has_element?(view, "#{@components}-block-framed-#{ctx.n}-example-1", "Welcome")
       refute has_element?(view, "#{@components}-block-framed-#{ctx.n}-example-2")
@@ -797,7 +808,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "a component's plain drop is a block, named after the component", ctx do
       callout!(ctx.site, "plain-#{ctx.n}", extra: %{"furnishing" => %{"body" => "Fill me in"}})
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       assert has_element?(view, "#{@components}-block-plain-#{ctx.n}-plain", "Plain, to fill in")
 
@@ -807,7 +818,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a block dropped on a placed component goes inside it", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "nest", %{
         "marker" => ~s([[component #{ctx.own.name}]]Text[[/component]]),
@@ -824,14 +835,14 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a block nobody offers is refused", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "block", %{"id" => "theirs-#{ctx.n}"})
       assert_reply(view, %{error: _message})
     end
 
     test "the Components tab lists the components, and its search searches them", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       view |> element("#{@components}-tab-components") |> render_click()
 
@@ -843,7 +854,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
   describe "dropping a component on a placed one" do
     test "puts it inside, at the end", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "nest", %{
         "marker" => ~s([[component #{ctx.own.name}]]Text[[/component]]),
@@ -857,7 +868,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "puts it before or after the part it was dropped beside", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       marker =
         ~s([[component #{ctx.own.name}]]Text[[component #{ctx.shared.name} /]][[/component]])
@@ -885,7 +896,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "with the component's settings open, the settings take it", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       marker = ~s([[component #{ctx.own.name}]]Text[[/component]])
 
       ask(view, "edit", %{"marker" => marker, "serial" => 7})
@@ -909,7 +920,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "the editor is told which components take others, once the palette is read", ctx do
       flat = callout!(ctx.site, "flat-#{ctx.n}", slots: [])
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       assert_push_event(view, "mishka:content_editor", %{holders: holders}, @await)
       assert ctx.own.name in holders
@@ -918,7 +929,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "is refused where the component holds nothing, or either is not listed", ctx do
       flat = callout!(ctx.site, "flat-#{ctx.n}", slots: [])
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       for {marker, name} <- [
             {"[[component #{flat.name} /]]", ctx.shared.name},
@@ -1039,7 +1050,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "with its settings open, the settings take it", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
 
       ask(view, "edit", %{"marker" => ctx.marker, "serial" => 4})
       assert_reply(view, %{ok: true})
@@ -1107,7 +1118,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(~s([[component #{ctx.own.name} title="Hi" tone="warn"]]Body[[/component]]))
 
       assert in_drawer?(view, "#{@components}-drawer[data-editor=#{@editor}]")
@@ -1126,6 +1137,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
 
     test "open once the palette is read, when it had not been", ctx do
       view = open(ctx)
+      {:ok, _href} = editor_styles(ctx)
 
       ask(view, "edit", %{"marker" => ~s([[component #{ctx.own.name} title="Late" /]])})
       assert_reply(view, %{ok: true})
@@ -1138,7 +1150,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(~s([[component #{ctx.own.name} title="Hi"]]Body[[/component]]))
 
       settings_change(view, %{
@@ -1156,7 +1168,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{ctx.own.name} /]]")
 
       settings_change(view, %{
@@ -1170,7 +1182,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(~s([[component #{ctx.own.name} title="Hi" /]]))
 
       settings_change(view, %{"a" => %{"r" => %{"title" => ""}}})
@@ -1184,7 +1196,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{player.name}]][[slot source src=\"/a.mp4\" /]][[/component]]")
 
       assert in_drawer?(view, "#{@components}-add-slot-r-source")
@@ -1225,7 +1237,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{player.name}]]#{entries}\n[[/component]]")
 
       assert in_drawer?(
@@ -1244,7 +1256,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "file the attributes under the page builder's headings, what is filled in open", ctx do
-      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+      view = ctx |> open() |> open_palette(ctx) |> edit("[[component #{ctx.own.name} /]]")
 
       assert in_drawer?(view, "#{@components}-f-r-title")
       refute in_drawer?(view, "details #{@components}-f-r-title")
@@ -1261,7 +1273,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(
           ~s([[component #{player.name}]][[component #{ctx.own.name} title="Inner" /]][[slot source src="/a.mp4" /]][[/component]])
         )
@@ -1284,7 +1296,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(~s([[component #{player.name}]][[slot source src="/a.mp4" /]][[/component]]))
 
       refute in_drawer?(view, "#{@components}-text-r-1")
@@ -1304,7 +1316,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(~s([[component #{ctx.own.name}]]Body[[/component]]))
 
       push(view, "part_add", %{"path" => "r", "kind" => "component", "name" => tabs.name})
@@ -1318,7 +1330,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit(~s([[component #{ctx.own.name}]]One[[/component]]))
 
       push(view, "part_add", %{"path" => "r", "kind" => "text"})
@@ -1374,7 +1386,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
           ]
         )
 
-      view = ctx |> open() |> open_palette() |> edit("[[component #{toned.name} /]]")
+      view = ctx |> open() |> open_palette(ctx) |> edit("[[component #{toned.name} /]]")
 
       assert drawer_html(view, "#{@components}-f-r-tone-inert") =~ "Variant is base"
       refute in_drawer?(view, "#{@components}-f-r-variant-inert")
@@ -1395,7 +1407,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
           slots: []
         )
 
-      view = ctx |> open() |> open_palette() |> edit("[[component #{quiet.name} /]]")
+      view = ctx |> open() |> open_palette(ctx) |> edit("[[component #{quiet.name} /]]")
       assert_push_event(view, "mishka:content_editor", %{previews: [_drawn]}, @await)
 
       settings_change(view, %{"a" => %{"r" => %{"mood" => "loud"}}})
@@ -1414,7 +1426,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a path that leads nowhere, or a component not listed, changes nothing", ctx do
-      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+      view = ctx |> open() |> open_palette(ctx) |> edit("[[component #{ctx.own.name} /]]")
 
       push(view, "part_remove", %{"path" => "r-9"})
       push(view, "part_remove", %{"path" => "r--1"})
@@ -1435,7 +1447,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{player.name}]][[slot source /]][[/component]]")
 
       assert in_drawer?(view, "[data-content-slot=r-0][data-name=source]")
@@ -1449,7 +1461,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "Done closes them and tells the editor", ctx do
-      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.own.name} /]]")
+      view = ctx |> open() |> open_palette(ctx) |> edit("[[component #{ctx.own.name} /]]")
 
       assert in_drawer?(view, "#{@components}-drawer-close[phx-click=settings_done]")
       push(view, "settings_done")
@@ -1459,7 +1471,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "say so for a component this site may not place", ctx do
-      view = ctx |> open() |> open_palette()
+      view = ctx |> open() |> open_palette(ctx)
       ask(view, "edit", %{"marker" => "[[component #{ctx.theirs.name} /]]"})
 
       assert_reply(view, %{error: _message})
@@ -1484,7 +1496,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{ctx.picture.name} /]]")
 
       assert in_drawer?(
@@ -1511,7 +1523,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{ctx.picture.name} /]]")
 
       push(view, "media_open", %{"path" => "r", "attr" => "src"})
@@ -1523,7 +1535,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
     end
 
     test "a pick that arrives after the library closed changes nothing", ctx do
-      view = ctx |> open() |> open_palette() |> edit("[[component #{ctx.picture.name} /]]")
+      view = ctx |> open() |> open_palette(ctx) |> edit("[[component #{ctx.picture.name} /]]")
 
       Phoenix.LiveView.send_update(view.pid, ContentComponentPicker,
         id: @picker,
@@ -1540,7 +1552,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{player.name}]][[slot source /]][[/component]]")
 
       for {file, kind} <- [{"/u/clip.webm", "video/webm"}, {"/u/clip.mp4", "video/mp4"}] do
@@ -1562,7 +1574,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       view =
         ctx
         |> open()
-        |> open_palette()
+        |> open_palette(ctx)
         |> edit("[[component #{player.name}]][[slot source /]][[/component]]")
 
       push(view, "media_open", %{"path" => "r-0", "attr" => "src"})
