@@ -16,8 +16,8 @@ defmodule MishkaCmsCore.Runtime.Seo do
   A plugin on `event/0` answers with a page's defaults — what it reads off the record the page
   serves. Whatever the page itself sets wins, and whatever it leaves empty is the plugin's:
 
-    * the title is a stored `title` tag, the page's over the layout's, else the plugin's `title`,
-      else the page's own;
+    * the title is a stored `title` tag, the page's over a plugin's (a record's own) over the
+      layout's, else the plugin's `title`, else the page's own;
     * the description is a stored `description` meta, the page's over the layout's, else the page's
       own, else a plugin's stored one, else the plugin's `description`;
     * the image is a stored `og:image`, else the page's share card, else the plugin's;
@@ -72,6 +72,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
     2. the `tags` a plugin on `event/0` returned;
     3. the layout's `seo_tags`;
     4. the page's `seo_tags`.
+
+  The layout's `title` is the one tag that does not replace a plugin's: it titles a page whose
+  plugin and page store none, so a record's own title, handed over in a plugin's `tags`, stays the
+  title, and `og:title` and `twitter:title` say it.
 
   What the page set itself is not undone by a plugin's tag: under a stored `title`, the plugin's
   `og:title` and `twitter:title` are left out; under the page's own description, its `description`,
@@ -1125,6 +1129,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
 
     vars = if description, do: Map.put(core, "page.description", description), else: core
     [plugin | own] = Enum.map(layers, &(&1 |> fill_tags(vars) |> tags()))
+    own = layout_title_for_none(own, plugin)
     owned = owned(stack(own), Keyword.get(opts, :page_description?, false))
     stored = stack([Enum.reject(plugin, &MapSet.member?(owned, identity(&1))) | own])
 
@@ -1674,6 +1679,17 @@ defmodule MishkaCmsCore.Runtime.Seo do
     |> Enum.flat_map(fn {set, attrs} -> if set, do: attrs, else: [] end)
     |> MapSet.new(&{"meta", [&1]})
   end
+
+  # The layout's `title` dresses the title of a page that stores none: a record's own, in a plugin's
+  # tags, keeps its place under it.
+  defp layout_title_for_none([layout | page], plugin) do
+    case title_value(plugin) do
+      nil -> [layout | page]
+      _own -> [Enum.reject(layout, &match?({"title", _attrs}, &1)) | page]
+    end
+  end
+
+  defp layout_title_for_none([], _plugin), do: []
 
   defp title_value(tags) do
     Enum.find_value(tags, fn
