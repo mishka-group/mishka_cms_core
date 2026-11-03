@@ -643,21 +643,21 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
       %{second: second}
     end
 
+    defp table_state(user, archive_status) do
+      %{MishkaGervaz.Table.Web.State.init("pages", Page, user) | archive_status: archive_status}
+    end
+
     test "hands the masters over first", %{
       master: master,
       second: second,
       master_user: master_user
     } do
-      state = %{
-        static: %{resource: Page},
-        archive_status: :archived,
-        master_user?: true,
-        current_user: master_user
-      }
-
       %{results: rows} =
         Page
-        |> MishkaCmsCore.LanguageEditions.BulkActionHandler.build_bulk_query(state, nil)
+        |> MishkaCmsCore.LanguageEditions.BulkActionHandler.build_bulk_query(
+          table_state(master_user, :archived),
+          nil
+        )
         |> Ash.read!(actor: master_user, page: [limit: 100])
 
       assert length(rows) == 5
@@ -669,14 +669,12 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
     end
 
     test "and leaves the active list's order alone", %{master_user: master_user} do
-      state = %{
-        static: %{resource: Page},
-        archive_status: :active,
-        master_user?: true,
-        current_user: master_user
-      }
-
-      query = MishkaCmsCore.LanguageEditions.BulkActionHandler.build_bulk_query(Page, state, nil)
+      query =
+        MishkaCmsCore.LanguageEditions.BulkActionHandler.build_bulk_query(
+          Page,
+          table_state(master_user, :active),
+          nil
+        )
 
       assert query.sort in [nil, []]
     end
