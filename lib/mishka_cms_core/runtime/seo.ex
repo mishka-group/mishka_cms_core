@@ -1312,8 +1312,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       meta("name", "twitter:description", description),
       meta("name", "twitter:image", image),
       meta("name", "twitter:image:alt", image && title),
-      link(%{"rel" => "icon"}, favicon(seo.site_id)),
-      link(%{"rel" => "apple-touch-icon", "sizes" => "180x180"}, SiteIcon.url(seo.site_id, 180)),
+      icon_links(seo.site_id),
       link(%{"rel" => "manifest"}, SiteIcon.manifest_url(seo.site_id)),
       meta("name", "theme-color", SiteIcon.theme_color(seo.site_id)),
       alternate_links(languages, base, seo.site_id)
@@ -1369,6 +1368,22 @@ defmodule MishkaCmsCore.Runtime.Seo do
   """
   @spec favicon(String.t() | nil) :: String.t() | nil
   def favicon(site_id), do: site_picture("site.favicon", site_id)
+
+  @doc """
+  The links that name a site's icons: `<link rel="icon">` at its favicon and
+  `<link rel="apple-touch-icon" sizes="180x180">` at its home-screen icon (`SiteIcon.url/2`), each
+  left out for a site with no picture for it. A page's head (`head/2`) and the admin's
+  (`MishkaCmsCore.Runtime.AdminSiteIcons`) both take them from here.
+
+      icon_links(site_id) #=> [%{tag: "link", attrs: %{"rel" => "icon", "href" => "/uploads/…"}}]
+  """
+  @spec icon_links(String.t() | nil) :: [%{tag: String.t(), attrs: %{String.t() => String.t()}}]
+  def icon_links(site_id) do
+    List.flatten([
+      link(%{"rel" => "icon"}, favicon(site_id)),
+      link(%{"rel" => "apple-touch-icon", "sizes" => "180x180"}, SiteIcon.url(site_id, 180))
+    ])
+  end
 
   @doc """
   The picture the setting `key` names for the site `site_id` — its own value else the global one —

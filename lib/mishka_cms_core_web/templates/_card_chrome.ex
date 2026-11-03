@@ -512,6 +512,9 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   The last page holds a remainder rather than a full page, so the upper bound is clamped by the total
   rather than by where the page would end.
+
+  A page outside the set, such as `?bloggers_page=2` over 14 bloggers, holds none of its rows and
+  reads `Showing 0 of 14`. The card's empty label is only for an empty set, and this one is not.
   """
   @spec range_label(map(), pos_integer(), String.t() | nil) :: String.t()
   def range_label(state, page_size, empty_label \\ nil)
@@ -520,13 +523,18 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
 
   def range_label(%{total_count: total, page: page}, page_size, _empty_label)
-      when is_integer(total) and is_integer(page) do
+      when is_integer(total) and is_integer(page) and page >= 1 and
+             (page - 1) * page_size < total do
     dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
       first: (page - 1) * page_size + 1,
       last: min(page * page_size, total),
       total: total
     )
   end
+
+  def range_label(%{total_count: total, page: page}, page_size, _empty_label)
+      when is_integer(total) and is_integer(page) and is_integer(page_size),
+      do: dgettext("mishka_gervaz", "Showing 0 of %{total}", total: total)
 
   def range_label(_state, _page_size, empty_label),
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
