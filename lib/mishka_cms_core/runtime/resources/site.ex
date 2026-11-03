@@ -563,20 +563,38 @@ defmodule MishkaCmsCore.Runtime.Site do
       end
 
       bulk_actions do
-        action :activate,
-          handler: :activate,
-          confirm: dgettext_noop("mishka_gervaz", "Activate selected sites?"),
-          restricted: true
+        action :activate do
+          handler :activate
+          confirm dgettext_noop("mishka_gervaz", "Activate selected sites?")
+          restricted true
 
-        action :deactivate,
-          handler: :deactivate,
-          confirm: dgettext_noop("mishka_gervaz", "Deactivate selected sites?"),
-          restricted: true
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Activate") end
+            icon "hero-check"
+          end
+        end
 
-        action :archive,
-          handler: :destroy,
-          confirm: dgettext_noop("mishka_gervaz", "Archive selected sites?"),
-          restricted: true
+        action :deactivate do
+          handler :deactivate
+          confirm dgettext_noop("mishka_gervaz", "Deactivate selected sites?")
+          restricted true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Deactivate") end
+            icon "hero-pause-circle"
+          end
+        end
+
+        action :archive do
+          handler :destroy
+          confirm dgettext_noop("mishka_gervaz", "Archive selected sites?")
+          restricted true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Archive") end
+            icon "hero-archive-box"
+          end
+        end
 
         action :unarchive,
           handler: :unarchive,
