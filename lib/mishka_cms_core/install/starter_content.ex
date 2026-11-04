@@ -390,9 +390,29 @@ defmodule MishkaCmsCore.Install.StarterContent do
   `%{label:, path:}`), the path being what follows the language, or a group of them,
   `%{label:, children:}`, which the header draws as a dropdown (see "Grouped links" above). A
   group's children are links; a group does not hold another group.
+
+  `nav_links/1` takes two more kinds of link, for an address that is ready and so is not put behind
+  the page's language: `%{label:, to:}`, a live navigation to a path on the site, and
+  `%{label:, href:}`, a plain link to any address, an outside one included, which opens in a new tab
+  with `target: "_blank"`. A group may carry an `id:`, the part of its elements' ids after
+  `site-nav-`, in place of the label's.
   """
-  @type nav_link :: {String.t(), String.t()} | %{label: String.t(), path: String.t()}
-  @type nav_entry :: nav_link() | %{label: String.t(), children: [nav_link()]}
+  @type nav_link ::
+          {String.t(), String.t()}
+          | %{label: String.t(), path: String.t()}
+          | %{label: String.t(), to: String.t()}
+          | %{
+              required(:label) => String.t(),
+              required(:href) => String.t(),
+              optional(:target) => String.t()
+            }
+  @type nav_entry ::
+          nav_link()
+          | %{
+              required(:label) => String.t(),
+              required(:children) => [nav_link()],
+              optional(:id) => String.t()
+            }
 
   @type auth_report :: %{
           layout_id: String.t(),
@@ -1482,34 +1502,79 @@ defmodule MishkaCmsCore.Install.StarterContent do
   menus over does, so they look and behave as the starter's.
 
   A plain link is one `<.link navigate>` through
-  `MishkaCmsCore.Runtime.LiveViewHelpers.site_path/2`, in the page's language. A group is drawn
-  twice (the module's "Grouped links"): a dropdown from `lg` up, and a labelled list in the phone's
-  menu panel; a group with no link is not drawn. The markup is a layout template's HEEx: it reads
-  the language from the layout's `lang/1` helper, which the starter layout defines.
+  `MishkaCmsCore.Runtime.LiveViewHelpers.site_path/2`, in the page's language. A `to:` link is a
+  `<.link navigate="/blog/news">` to that path as it is, and an `href:` link a
+  `<.link href="https://elixir-lang.org/">`, with `target="_blank" rel="noopener noreferrer"` when
+  the entry says `target: "_blank"`; an address is percent-encoded so it cannot leave its attribute.
+  A group is drawn twice (the module's "Grouped links"): a dropdown from `lg` up, and a labelled
+  list in the phone's menu panel; a group with no link is not drawn, and its ids are `site-nav-`
+  and the label's slug, or its `id:`. Every label is escaped, the braces of HEEx included, so text
+  from outside is text and never code. The markup is a layout template's HEEx: it reads the
+  language from the layout's `lang/1` helper, which the starter layout defines.
 
-      StarterContent.nav_links([{"Pricing", "/pricing"}, %{label: "Docs", children: [{"API", "/api"}]}])
+      StarterContent.nav_links([
+        {"Pricing", "/pricing"},
+        %{label: "Docs", children: [{"API", "/api"}]},
+        %{label: "News", to: "/en/blog/category/news"},
+        %{label: "Elixir", href: "https://elixir-lang.org/", target: "_blank"}
+      ])
   """
   @spec nav_links([nav_entry()]) :: String.t()
   def nav_links(nav) when is_list(nav) do
     nav
     |> Enum.with_index()
     |> Enum.map_join("", fn
-      {%{label: label, children: children}, index} ->
-        nav_group(label, Enum.map(children, &nav_target/1), index)
+      {%{label: label, children: children} = group, index} ->
+        nav_group(
+          label,
+          Enum.map(children, &nav_target/1),
+          group[:id] || group_slug(label, index)
+        )
 
       {entry, _index} ->
         entry |> nav_target() |> nav_link()
     end)
   end
 
-  defp nav_target({label, path}), do: {label, path}
-  defp nav_target(%{label: label, path: path}), do: {label, path}
+  defp nav_target({label, path}), do: {label, {:lang, path}}
+  defp nav_target(%{label: label, path: path}), do: {label, {:lang, path}}
+  defp nav_target(%{label: label, to: path}), do: {label, {:navigate, path}}
+  defp nav_target(%{label: label, href: url, target: "_blank"}), do: {label, {:blank, url}}
+  defp nav_target(%{label: label, href: url}), do: {label, {:href, url}}
 
-  defp nav_link({label, path}) do
+  defp nav_link({label, target}) do
     ~s"""
 
-        <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="text-dim dark:text-dim-dark">#{label}</.link>\
+        <.link #{link_attrs(target)} class="text-dim dark:text-dim-dark">#{text(label)}</.link>\
     """
+  end
+
+  # THE ATTRIBUTES THAT SAY WHERE A LINK GOES. A path behind the language is the starter's own
+  # expression; a ready address is a string, percent-encoded so it cannot end its attribute early.
+  defp link_attrs({:lang, path}), do: ~s|navigate={site_path("/:lang#{path}", lang(assigns))}|
+  defp link_attrs({:navigate, path}), do: ~s|navigate="#{address(path)}"|
+  defp link_attrs({:href, url}), do: ~s|href="#{address(url)}"|
+
+  defp link_attrs({:blank, url}),
+    do: ~s|href="#{address(url)}" target="_blank" rel="noopener noreferrer"|
+
+  # The dropdown's items carry their role: before the destination for a path behind the language,
+  # as the starter has always written it, and after it for a ready address.
+  defp menu_attrs({:lang, _path} = target), do: ~s|role="menuitem" | <> link_attrs(target)
+  defp menu_attrs(target), do: link_attrs(target) <> ~s| role="menuitem"|
+
+  defp address(address),
+    do: URI.encode(address, &(URI.char_reserved?(&1) or URI.char_unreserved?(&1) or &1 == ?%))
+
+  # A LABEL IS TEXT: HTML-escaped, and its braces too, which HEEx would read as code.
+  defp text(label) do
+    label
+    |> Phoenix.HTML.html_escape()
+    |> Phoenix.HTML.safe_to_string()
+    |> String.replace(["{", "}"], fn
+      "{" -> "&lbrace;"
+      "}" -> "&rbrace;"
+    end)
   end
 
   # A GROUP OF LINKS, TWICE: the header's language dropdown from `lg` up, and a labelled list in
@@ -1525,22 +1590,22 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # THE IDS ARE THE LABEL'S, `site-nav-dev-button` for "Dev", or the group's position when the label
   # has no letter or digit in it; two groups with one label are one id twice, which is the
   # caller's to avoid. A group with no link is not drawn: a button that opens nothing.
-  defp nav_group(_label, [], _index), do: ""
+  defp nav_group(_label, [], _slug), do: ""
 
-  defp nav_group(label, links, index) do
-    base = "site-nav-" <> group_slug(label, index)
+  defp nav_group(label, links, slug) do
+    base = "site-nav-" <> slug
     button = base <> "-button"
     menu = base <> "-menu"
     caption = base <> "-label"
 
     menu_items =
-      Enum.map_join(links, "\n", fn {text, path} ->
-        ~s|        <.link role="menuitem" navigate={site_path("/:lang#{path}", lang(assigns))} class="flex items-center rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark">#{text}</.link>|
+      Enum.map_join(links, "\n", fn {title, target} ->
+        ~s|        <.link #{menu_attrs(target)} class="flex items-center rounded-[9px] px-[11px] py-[9px] text-[13px] font-medium text-fg hover:bg-wash dark:text-fg-dark dark:hover:bg-wash-dark">#{text(title)}</.link>|
       end)
 
     panel_items =
-      Enum.map_join(links, "\n", fn {text, path} ->
-        ~s|      <.link navigate={site_path("/:lang#{path}", lang(assigns))} class="rounded-[9px] px-[11px] py-[9px] text-dim hover:bg-wash dark:text-dim-dark dark:hover:bg-wash-dark">#{text}</.link>|
+      Enum.map_join(links, "\n", fn {title, target} ->
+        ~s|      <.link #{link_attrs(target)} class="rounded-[9px] px-[11px] py-[9px] text-dim hover:bg-wash dark:text-dim-dark dark:hover:bg-wash-dark">#{text(title)}</.link>|
       end)
 
     ~s"""
@@ -1568,7 +1633,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
             }
             class="flex h-[38px] cursor-pointer items-center gap-1.5 rounded-[11px] border border-edge bg-surface px-2.5 text-[13px] font-medium text-fg dark:border-edge-dark dark:bg-surface-dark dark:text-fg-dark"
           >
-            <span>#{label}</span>
+            <span>#{text(label)}</span>
             <svg
               width="14"
               height="14"
@@ -1596,7 +1661,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
             id="#{caption}"
             class="px-[11px] pt-2 pb-1 text-[11.5px] font-semibold tracking-wide text-subtle uppercase dark:text-subtle-dark"
           >
-            #{label}
+            #{text(label)}
           </span>
     #{panel_items}
         </div>\
