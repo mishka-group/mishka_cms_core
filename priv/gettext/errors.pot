@@ -146,8 +146,8 @@ msgstr ""
 msgid "JS hook"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1492
-#: lib/mishka_cms_core/accounts/user.ex:1521
+#: lib/mishka_cms_core/accounts/user.ex:1523
+#: lib/mishka_cms_core/accounts/user.ex:1552
 #, elixir-autogen
 msgid "account"
 msgstr ""
@@ -371,7 +371,7 @@ msgstr ""
 msgid "workspace"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:939
+#: lib/mishka_cms_core/runtime/resources/site.ex:957
 #, elixir-autogen, elixir-format
 msgid "Cannot activate archived site. Please unarchive it first."
 msgstr ""
@@ -416,14 +416,14 @@ msgstr ""
 msgid "Cannot archive stylesheet from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1422
+#: lib/mishka_cms_core/accounts/user.ex:1453
 #, elixir-autogen, elixir-format
 msgid "Cannot delete users from other sites."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1425
-#: lib/mishka_cms_core/accounts/user.ex:1457
-#: lib/mishka_cms_core/accounts/user.ex:1584
+#: lib/mishka_cms_core/accounts/user.ex:1456
+#: lib/mishka_cms_core/accounts/user.ex:1488
+#: lib/mishka_cms_core/accounts/user.ex:1615
 #, elixir-autogen, elixir-format
 msgid "Cannot delete yourself."
 msgstr ""
@@ -464,7 +464,7 @@ msgstr ""
 msgid "Cannot edit archived page. Please unarchive it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:920
+#: lib/mishka_cms_core/runtime/resources/site.ex:938
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived site. Please unarchive it first."
 msgstr ""
@@ -612,12 +612,12 @@ msgstr ""
 msgid "Cannot restore version of global layout. Global layouts can only be modified by master users."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:1006
+#: lib/mishka_cms_core/runtime/resources/site.ex:1024
 #, elixir-autogen, elixir-format
 msgid "Cannot set archived site as master."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1282
+#: lib/mishka_cms_core/accounts/user.ex:1313
 #, elixir-autogen, elixir-format
 msgid "Cannot update users from other sites."
 msgstr ""
@@ -905,13 +905,13 @@ msgstr ""
 msgid "cannot grant permissions you do not hold yourself: %{over}"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1266
-#: lib/mishka_cms_core/accounts/user.ex:1353
+#: lib/mishka_cms_core/accounts/user.ex:1297
+#: lib/mishka_cms_core/accounts/user.ex:1384
 #, elixir-autogen, elixir-format
 msgid "does not match password"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1661
+#: lib/mishka_cms_core/accounts/user.ex:1692
 #, elixir-autogen, elixir-format
 msgid "is invalid or expired"
 msgstr ""
@@ -1100,7 +1100,7 @@ msgstr ""
 msgid "Host must be a valid domain format\n\nLike:\n  mishka.tools without scheme!, not http://mishka.tools or https://mishka.tools\n"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:1226
+#: lib/mishka_cms_core/runtime/resources/site.ex:1244
 #, elixir-autogen, elixir-format
 msgid "Host must be unique."
 msgstr ""
@@ -1196,7 +1196,7 @@ msgstr ""
 msgid "Preview token collision."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:1221
+#: lib/mishka_cms_core/runtime/resources/site.ex:1239
 #, elixir-autogen, elixir-format
 msgid "Site name must be unique."
 msgstr ""
@@ -1271,7 +1271,7 @@ msgstr ""
 msgid "This site already has an error page — open that one instead of making another."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1987
+#: lib/mishka_cms_core/accounts/user.ex:2022
 #, elixir-autogen, elixir-format
 msgid "This site is offline and is not taking new accounts. Sign in if you have one."
 msgstr ""
@@ -1331,7 +1331,7 @@ msgstr ""
 msgid "Tenant required"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1824
+#: lib/mishka_cms_core/accounts/user.ex:1863
 #, elixir-autogen, elixir-format
 msgid "is already confirmed"
 msgstr ""
@@ -2285,12 +2285,12 @@ msgstr ""
 msgid "The second step's token is invalid or expired."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:1022
+#: lib/mishka_cms_core/accounts/user.ex:1053
 #, elixir-autogen, elixir-format
 msgid "is already set"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:709
+#: lib/mishka_cms_core/accounts/user.ex:740
 #, elixir-autogen, elixir-format
 msgid "is not set yet: set a first password instead"
 msgstr ""

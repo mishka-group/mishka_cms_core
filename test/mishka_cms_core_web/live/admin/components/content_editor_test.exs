@@ -204,7 +204,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentEditorTest do
       assert has_element?(view, "##{@editor}-surface [data-role=content-editor-loading]")
 
       for command <-
-            ~w(paragraph h2 h3 h4 bold italic link bullet_list ordered_list blockquote code_block horizontal_rule undo redo) do
+            ~w(paragraph h2 h3 h4 bold italic link table bullet_list ordered_list blockquote code_block horizontal_rule undo redo) do
         assert has_element?(view, "##{@editor} button[data-editor-command=#{command}]")
       end
 
