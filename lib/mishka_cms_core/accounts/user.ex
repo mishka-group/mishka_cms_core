@@ -456,6 +456,21 @@ defmodule MishkaCmsCore.Accounts.User do
       end
 
       bulk_actions do
+        action :confirm_email do
+          type :update
+          action :confirm_pending
+
+          confirm dgettext_noop(
+                    "mishka_gervaz",
+                    "Confirm the email address of the selected users without the confirmation email?"
+                  )
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Confirm email") end
+            icon "hero-check-badge"
+          end
+        end
+
         action :delete,
           type: :destroy,
           confirm:
@@ -463,6 +478,22 @@ defmodule MishkaCmsCore.Accounts.User do
               "mishka_gervaz",
               "Delete the selected users? This action cannot be undone."
             )
+      end
+
+      hooks do
+        on_bulk_action_success :confirm_email, fn summary, _state, socket ->
+          message =
+            dngettext(
+              "mishka_gervaz",
+              "The email of %{count} user is confirmed.",
+              "The email of %{count} users is confirmed.",
+              summary.succeeded_count
+            )
+
+          socket
+          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:info, message)
+          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.silence()
+        end
       end
 
       row do
@@ -1831,21 +1862,17 @@ defmodule MishkaCmsCore.Accounts.User do
       validate absent(:confirmed_at),
         message: dgettext_noop("errors", "is already confirmed")
 
-      change set_attribute(:confirmed_at, &DateTime.utc_now/0)
+      change MishkaCmsCore.Accounts.Changes.ConfirmEmail
+    end
 
-      change after_action(fn _changeset, user, context ->
-               MishkaInstaller.Event.Hook.call(
-                 "auth:account:confirmed",
-                 %{
-                   user_id: user.id,
-                   site_id: user.site_id,
-                   by: context.actor && context.actor.id
-                 },
-                 return: false
-               )
+    # For a set of accounts picked in the Users table: the same as `:confirm_by_admin`, but one
+    # confirmed already is left as it is instead of refused, so it cannot undo the batch.
+    update :confirm_pending do
+      description "Confirms an account without its confirmation mail, if it is not confirmed yet."
+      accept []
+      require_atomic? false
 
-               {:ok, user}
-             end)
+      change MishkaCmsCore.Accounts.Changes.ConfirmEmail
     end
 
     read :sign_in_with_magic_link do
@@ -2148,7 +2175,7 @@ defmodule MishkaCmsCore.Accounts.User do
 
     # Confirming vouches for an account's email address, so it takes the user area, within the
     # actor's own site. It gives the actor no way in as the account, so no ceiling is asked.
-    policy action(:confirm_by_admin) do
+    policy action([:confirm_by_admin, :confirm_pending]) do
       description "A holder of the user area confirms its own site's accounts"
 
       forbid_unless {MishkaCmsCore.Accounts.Checks.AccessPermissions,
@@ -2271,6 +2298,7 @@ defmodule MishkaCmsCore.Accounts.User do
     publish :master_form_update, [[nil, :site_id], "updated"]
     publish :turn_off_totp, [[nil, :site_id], "updated"]
     publish :confirm_by_admin, [[nil, :site_id], "updated"]
+    publish :confirm_pending, [[nil, :site_id], "updated"]
     publish :tenant_destroy, [[nil, :site_id], "destroyed"]
     publish :destroy, [[nil, :site_id], "destroyed"]
     publish :table_destroy, [[nil, :site_id], "destroyed"]
