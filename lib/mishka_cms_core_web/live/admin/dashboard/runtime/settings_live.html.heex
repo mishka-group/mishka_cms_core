@@ -51,6 +51,7 @@ SPDX-License-Identifier: Apache-2.0
         </span>
 
         <button
+          :if={is_nil(@active_panel)}
           type="button"
           phx-click="reset"
           class="flex h-10 items-center gap-[7px] rounded-[11px] border border-[#ecebe6] bg-white px-[15px] text-[12.5px] font-semibold text-[#5c5a54] transition-colors hover:bg-[#f7f6f3]"
@@ -59,6 +60,7 @@ SPDX-License-Identifier: Apache-2.0
         </button>
 
         <button
+          :if={is_nil(@active_panel)}
           id="settings-save"
           type="submit"
           form="settings-form"
@@ -117,6 +119,43 @@ SPDX-License-Identifier: Apache-2.0
           ></span>
         </.link>
 
+        <.link
+          :for={panel <- @panels}
+          id={"tab-#{panel.id}"}
+          patch={"/admin/dashboard/settings?tab=#{panel.id}"}
+          class={[
+            "flex items-center gap-[13px] rounded-[15px] border px-[15px] py-[14px] text-start transition-all max-[980px]:flex-none max-[980px]:rounded-xl! max-[980px]:px-[14px]! max-[980px]:py-2.5!",
+            (@active_tab == panel.id &&
+               "border-[#dcdbf5] bg-[#f2f1fc] shadow-[0_6px_18px_rgba(79,75,204,0.12)]") ||
+              "border-[#ecebe6] bg-white shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+          ]}
+        >
+          <span class={[
+            "flex size-10 shrink-0 items-center justify-center rounded-xl",
+            (@active_tab == panel.id && "bg-[#e4e2f7] text-[#4f4bcc]") ||
+              "bg-[#f5f4f0] text-[#8a877f]"
+          ]}>
+            <.icon name={panel.icon} class="size-[19px]" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class={[
+              "block text-[13.5px] font-bold",
+              (@active_tab == panel.id && "text-[#2e2b6b]") || "text-[#3a382f]"
+            ]}>
+              {panel.label}
+            </span>
+            <span
+              :if={panel[:description]}
+              class={[
+                "mt-0.5 block truncate text-[11.5px] font-medium max-[980px]:hidden!",
+                (@active_tab == panel.id && "text-[#7d79c4]") || "text-[#9a978f]"
+              ]}
+            >
+              {panel.description}
+            </span>
+          </span>
+        </.link>
+
         <div class="mt-1.5 rounded-[15px] border border-[#e2ece5] bg-[#f3f8f4] px-4 py-[14px] max-[980px]:hidden!">
           <div class="flex items-center gap-2">
             <span class="size-2 shrink-0 animate-pulse rounded-full bg-[#1f9d6b]"></span>
@@ -132,6 +171,7 @@ SPDX-License-Identifier: Apache-2.0
 
       <div class="flex min-w-0 flex-col gap-[22px]">
         <.form
+          :if={is_nil(@active_panel)}
           for={@form}
           id="settings-form"
           phx-change="validate"
@@ -297,6 +337,23 @@ SPDX-License-Identifier: Apache-2.0
             </div>
           </div>
         </.form>
+
+        <%!-- AN EXTENSION'S TAB (`SettingsPanels`): its LiveComponent or function component, drawn
+              in place of the settings form. --%>
+        <div
+          :if={@active_panel}
+          id={"panel-#{@active_panel.id}"}
+          class="flex min-w-0 flex-col gap-[22px]"
+        >
+          <.live_component
+            :if={@active_panel[:module]}
+            module={@active_panel.module}
+            id={@active_panel.id}
+            current_user={@current_user}
+          />
+          {if render = @active_panel[:render],
+            do: render.(%{id: @active_panel.id, current_user: @current_user})}
+        </div>
 
         <%!-- THE EMAIL TAB'S OWN: a test email through the scope's provider, and what was sent. Outside
               the settings form, which a form inside it would break. --%>

@@ -63,7 +63,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   alias MishkaCmsCore.Runtime.ShareCard
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Settings
-  alias MishkaCmsCoreWeb.Live.Admin.Components.{MediaField, SecurityCards, ShareCardRedraw}
+
+  alias MishkaCmsCoreWeb.Live.Admin.Components.{
+    MediaField,
+    SecurityCards,
+    SettingsPanels,
+    ShareCardRedraw
+  }
+
   alias Phoenix.LiveView.JS
 
   @badge_class "rounded-md border px-[7px] py-0.5 text-[9px] font-bold uppercase tracking-[0.08em]"
@@ -108,11 +115,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     Settings.load_definitions()
     user = socket.assigns[:current_user]
     master? = master?(user)
+    categories = categories(user)
 
     {:ok,
      socket
      |> assign(page_title: gettext("Settings"))
-     |> assign(master?: master?, categories: categories(user), active_tab: nil)
+     |> assign(master?: master?, categories: categories, active_tab: nil, active_panel: nil)
+     |> assign(panels: SettingsPanels.collect(user, categories))
      |> assign(security_cards: SecurityCards.collect())
      |> assign(scopes: scope_options(master?))
      |> assign(active_scope: if(master?, do: nil, else: user.site_id))
@@ -158,8 +167,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   # back button works. An unknown/absent tab falls back to the first category.
   @impl true
   def handle_params(params, _uri, socket) do
-    categories = socket.assigns.categories
-    tab = if params["tab"] in categories, do: params["tab"], else: List.first(categories)
+    tabs = socket.assigns.categories ++ Enum.map(socket.assigns.panels, & &1.id)
+    tab = if params["tab"] in tabs, do: params["tab"], else: List.first(tabs)
     {:noreply, select_tab(socket, tab)}
   end
 
@@ -282,6 +291,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   defp select_tab(socket, nil) do
     assign(socket,
       active_tab: nil,
+      active_panel: nil,
       fields: [],
       form: to_form(%{}, as: :settings),
       field_errors: %{},
@@ -303,6 +313,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
 
     assign(socket,
       active_tab: tab,
+      active_panel: Enum.find(socket.assigns.panels, &(&1.id == tab)),
       fields: fields,
       field_groups: group_fields(fields),
       form: to_form(values, as: :settings),
