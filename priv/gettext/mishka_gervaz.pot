@@ -163,7 +163,7 @@ msgstr ""
 msgid "Accepted Types"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:605
+#: lib/mishka_cms_core/accounts/user.ex:636
 #, elixir-autogen, elixir-format
 msgid "Access Control"
 msgstr ""
@@ -186,7 +186,7 @@ msgstr ""
 msgid "Actor"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:693
+#: lib/mishka_cms_core/runtime/resources/site.ex:711
 #, elixir-autogen, elixir-format
 msgid "Add Origin"
 msgstr ""
@@ -229,7 +229,7 @@ msgstr ""
 msgid "All types"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:696
+#: lib/mishka_cms_core/runtime/resources/site.ex:714
 #, elixir-autogen, elixir-format
 msgid "Allowed Origins"
 msgstr ""
@@ -241,6 +241,7 @@ msgid "App base"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/media.ex:651
+#: lib/mishka_cms_core/runtime/resources/site.ex:594
 #, elixir-autogen, elixir-format
 msgid "Archive"
 msgstr ""
@@ -293,7 +294,7 @@ msgstr ""
 msgid "Base"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:587
+#: lib/mishka_cms_core/accounts/user.ex:618
 #, elixir-autogen, elixir-format
 msgid "Basic Information"
 msgstr ""
@@ -330,7 +331,7 @@ msgstr ""
 msgid "Component"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:547
+#: lib/mishka_cms_core/accounts/user.ex:578
 #, elixir-autogen, elixir-format
 msgid "Confirm Password"
 msgstr ""
@@ -475,7 +476,7 @@ msgstr ""
 msgid "Edit"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:527
+#: lib/mishka_cms_core/accounts/user.ex:558
 #, elixir-autogen, elixir-format
 msgid "Email"
 msgstr ""
@@ -541,7 +542,7 @@ msgstr ""
 msgid "Format"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:687
+#: lib/mishka_cms_core/runtime/resources/site.ex:705
 #, elixir-autogen, elixir-format
 msgid "Frontend Domain"
 msgstr ""
@@ -597,7 +598,7 @@ msgstr ""
 msgid "Helper Functions"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:647
+#: lib/mishka_cms_core/runtime/resources/site.ex:665
 #, elixir-autogen, elixir-format
 msgid "Host"
 msgstr ""
@@ -729,7 +730,7 @@ msgstr ""
 msgid "Markdown"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:705
+#: lib/mishka_cms_core/runtime/resources/site.ex:723
 #, elixir-autogen, elixir-format
 msgid "Master Site"
 msgstr ""
@@ -760,7 +761,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:236
 #: lib/mishka_cms_core/runtime/resources/media.ex:350
 #: lib/mishka_cms_core/runtime/resources/media_category.ex:138
-#: lib/mishka_cms_core/runtime/resources/site.ex:638
+#: lib/mishka_cms_core/runtime/resources/site.ex:656
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:551
 #, elixir-autogen, elixir-format
 msgid "Name"
@@ -817,7 +818,7 @@ msgstr ""
 msgid "Page"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:537
+#: lib/mishka_cms_core/accounts/user.ex:568
 #, elixir-autogen, elixir-format
 msgid "Password"
 msgstr ""
@@ -976,7 +977,7 @@ msgstr ""
 msgid "Section"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:596
+#: lib/mishka_cms_core/accounts/user.ex:627
 #, elixir-autogen, elixir-format
 msgid "Security"
 msgstr ""
@@ -1417,7 +1418,7 @@ msgstr ""
 msgid "Archive selected pages?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:578
+#: lib/mishka_cms_core/runtime/resources/site.ex:590
 #, elixir-autogen, elixir-format
 msgid "Archive selected sites?"
 msgstr ""
@@ -1487,7 +1488,7 @@ msgstr ""
 msgid "Choose a status"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:548
+#: lib/mishka_cms_core/accounts/user.ex:579
 #, elixir-autogen, elixir-format
 msgid "Confirm password"
 msgstr ""
@@ -1542,7 +1543,7 @@ msgstr ""
 msgid "Created at"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:573
+#: lib/mishka_cms_core/runtime/resources/site.ex:579
 #, elixir-autogen, elixir-format
 msgid "Deactivate selected sites?"
 msgstr ""
@@ -1589,7 +1590,7 @@ msgstr ""
 msgid "Delete the selected permissions? This action cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:462
+#: lib/mishka_cms_core/accounts/user.ex:477
 #, elixir-autogen, elixir-format
 msgid "Delete the selected users? This action cannot be undone."
 msgstr ""
@@ -1712,7 +1713,7 @@ msgstr ""
 msgid "Leave empty for every site"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:518
+#: lib/mishka_cms_core/accounts/user.ex:549
 #, elixir-autogen, elixir-format
 msgid "Leave empty for global (master) user"
 msgstr ""
@@ -1753,7 +1754,7 @@ msgstr ""
 msgid "Message"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:538
+#: lib/mishka_cms_core/accounts/user.ex:569
 #, elixir-autogen, elixir-format
 msgid "Minimum 8 characters"
 msgstr ""
@@ -1805,7 +1806,7 @@ msgstr ""
 msgid "No permissions found"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:613
+#: lib/mishka_cms_core/runtime/resources/site.ex:631
 #, elixir-autogen, elixir-format
 msgid "No sites found"
 msgstr ""
@@ -1820,7 +1821,7 @@ msgstr ""
 msgid "No translations yet — write t(\"…\") in a template and save it."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:487
+#: lib/mishka_cms_core/accounts/user.ex:518
 #, elixir-autogen, elixir-format
 msgid "No users found"
 msgstr ""
@@ -1889,7 +1890,7 @@ msgstr ""
 msgid "Permanently delete selected pages? This cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:590
+#: lib/mishka_cms_core/runtime/resources/site.ex:608
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected sites? This cannot be undone."
 msgstr ""
@@ -2001,7 +2002,7 @@ msgstr ""
 msgid "Restore selected pages?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/site.ex:583
+#: lib/mishka_cms_core/runtime/resources/site.ex:601
 #, elixir-autogen, elixir-format
 msgid "Restore selected sites?"
 msgstr ""
@@ -2146,7 +2147,7 @@ msgstr ""
 msgid "Select mode..."
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:574
+#: lib/mishka_cms_core/accounts/user.ex:605
 #, elixir-autogen, elixir-format
 msgid "Select permissions to assign to this user"
 msgstr ""
@@ -2254,7 +2255,7 @@ msgstr ""
 msgid "e.g., admin:dashboard:runtime:page, *"
 msgstr ""
 
-#: lib/mishka_cms_core/accounts/user.ex:528
+#: lib/mishka_cms_core/accounts/user.ex:559
 #, elixir-autogen, elixir-format
 msgid "user@example.com"
 msgstr ""
@@ -3271,7 +3272,7 @@ msgstr ""
 msgid "0 teams"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:415
+#: lib/mishka_cms_core/runtime/resources/site.ex:572
 #, elixir-autogen, elixir-format
 msgid "Activate"
 msgstr ""
@@ -3580,7 +3581,7 @@ msgstr ""
 msgid "Danger Zone"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/auto_posting.ex:427
+#: lib/mishka_cms_core/runtime/resources/site.ex:583
 #, elixir-autogen, elixir-format
 msgid "Deactivate"
 msgstr ""
@@ -5597,3 +5598,20 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "This publish kept no copy of the page it published."
 msgstr ""
+
+#: lib/mishka_cms_core/accounts/user.ex:469
+#, elixir-autogen, elixir-format
+msgid "Confirm email"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/user.ex:463
+#, elixir-autogen, elixir-format
+msgid "Confirm the email address of the selected users without the confirmation email?"
+msgstr ""
+
+#: lib/mishka_cms_core/accounts/user.ex:486
+#, elixir-autogen, elixir-format
+msgid "The email of %{count} user is confirmed."
+msgid_plural "The email of %{count} users is confirmed."
+msgstr[0] ""
+msgstr[1] ""

@@ -1459,6 +1459,90 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert links =~ ~s(id="site-nav-dev-button")
     end
 
+    test "nav_links/1 draws a ready address as a plain navigation, and an outside one as a link" do
+      links =
+        [
+          %{label: "News", to: "/blog/category/news"},
+          %{label: "Feed", href: "/feed/"},
+          %{label: "Elixir", href: "https://elixir-lang.org/", target: "_blank"}
+        ]
+        |> StarterContent.nav_links()
+        |> link_attributes()
+
+      assert [
+               {"News", [{"navigate", {:string, "/blog/category/news"}}, {"class", _}]},
+               {"Feed", [{"href", {:string, "/feed/"}}, {"class", _}]},
+               {"Elixir",
+                [
+                  {"href", {:string, "https://elixir-lang.org/"}},
+                  {"target", {:string, "_blank"}},
+                  {"rel", {:string, "noopener noreferrer"}},
+                  {"class", _}
+                ]}
+             ] = links
+    end
+
+    test "nav_links/1 draws a group's ready addresses in the dropdown and the phone's list, under its id" do
+      nav = [
+        %{
+          label: "Docs",
+          id: "2",
+          children: [
+            {"API", "/api"},
+            %{label: "Guide", to: "/docs/guide"},
+            %{label: "Elixir", href: "https://elixir-lang.org/", target: "_blank"}
+          ]
+        }
+      ]
+
+      html = StarterContent.nav_links(nav)
+      links = link_attributes(html)
+
+      assert html =~ ~s(id="site-nav-2-button")
+      assert html =~ ~s(id="site-nav-2-menu")
+      refute html =~ "site-nav-docs"
+
+      for list <- [Enum.take(links, 3), Enum.drop(links, 3)] do
+        assert [
+                 {"API", _},
+                 {"Guide", guide},
+                 {"Elixir", elixir}
+               ] = list
+
+        assert {"navigate", {:string, "/docs/guide"}} in guide
+        assert {"target", {:string, "_blank"}} in elixir
+      end
+
+      assert [{"API", api} | _] = links
+      assert {"role", {:string, "menuitem"}} in api
+      assert Enum.any?(api, &match?({"navigate", {:expr, _}}, &1))
+    end
+
+    test "nav_links/1 escapes every label and keeps an address inside its attribute" do
+      nav = [
+        %{label: "A {@x} & <b>", to: "/p\"q"},
+        %{label: "{label}", children: [%{label: "{{a}}", href: "https://e.com/?q=\"1\""}]},
+        {"{path}", "/p"}
+      ]
+
+      html = StarterContent.nav_links(nav)
+
+      refute html =~ "{@x}"
+      refute html =~ "<b>"
+      refute html =~ "{label}"
+      refute html =~ "{{a}}"
+      assert html =~ "A &lbrace;@x&rbrace; &amp; &lt;b&gt;"
+
+      assert [{"A &lbrace;@x&rbrace; &amp; &lt;b&gt;", attrs} | _] = link_attributes(html)
+      assert {"navigate", {:string, "/p%22q"}} in attrs
+
+      assert {_label, [{"href", {:string, "https://e.com/?q=%221%22"}} | _]} =
+               Enum.find(
+                 link_attributes(html),
+                 &(elem(&1, 0) == "&lbrace;&lbrace;a&rbrace;&rbrace;")
+               )
+    end
+
     test "is a button on the bar from lg up, and is not drawn below it", %{site: site} do
       html = header_with_nav(site, "en")
       wrapper = html |> wrapper_attribute("site-nav-dev-button", "class") |> String.split()
@@ -1787,5 +1871,19 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
              )
 
     module
+  end
+
+  # The `<.link>`s of `html`, read as the editor reads them: their text and their attributes.
+  defp link_attributes(html) do
+    alias MishkaCmsCore.Runtime.Authoring.Tree
+
+    {:ok, tree} = Tree.parse(html)
+
+    for %{tag: ".link"} = node <- Tree.walk(tree) do
+      text =
+        for child <- Tree.children(tree, node.id), child.kind == :text, into: "", do: child.text
+
+      {text, node.attrs}
+    end
   end
 end

@@ -80,10 +80,10 @@ defmodule MishkaCmsCore.Install.Extensions do
 
   @event "installer:extension:install"
 
-  # A plugin the operator has switched off, or one the installer is holding because something it
-  # depends on is not running, is not offered — `Hook.call/2` would not reach it either, and a row in
+  # A plugin that is only registered, one the operator has switched off, or one the installer is
+  # holding because something it depends on is not running, is not offered — `Hook.call/2` would not reach it either, and a row in
   # a picker that does nothing when ticked is worse than no row.
-  @offerable [:registered, :started, :restarted]
+  @offerable [:started, :restarted]
 
   @typedoc """
   One extension that can install itself. `key` is the OTP app as a string, which is what

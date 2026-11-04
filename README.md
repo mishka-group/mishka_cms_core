@@ -54,7 +54,7 @@ use MishkaInstaller.Event.Hook,
   event: MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook.event_name(MishkaBlog.BlogPost, :publish)
 ```
 
-An extension adds routes with the `MishkaCmsCore.ExtensionRouter` behaviour, adds sidebar entries on the `sidebar:menus` event, and appears in the install wizard by subscribing to `installer:extension:install`.
+An extension adds routes with the `MishkaCmsCore.ExtensionRouter` behaviour, adds sidebar entries on the `sidebar:menus` event, adds a tab to the Settings page on the `settings:panels` event (a plugin answers `%{panels: [...]}` with an `id`, `label`, `icon`, `priority` and a LiveComponent `module:` or a `render:` function; see `MishkaCmsCoreWeb.Live.Admin.Components.SettingsPanels`), and appears in the install wizard by subscribing to `installer:extension:install`.
 
 An editor is an extension too. [mishka_cms_builder](https://github.com/mishka-group/mishka_cms_builder) adds its pages that way, answers `runtime:document:editor_url` with the address of its editor (the admin shows an editor button only when one answers), writes the snippets of an extension's setup on `runtime:provision:snippets`, adds its history to the activity log on `activity:sources` and registers its settings on `settings:register`. A plugin for the editor listens on the `builder:*` events of `MishkaCmsCore.Builder.Events`, which stay in the core so an extension can ship one without depending on the editor.
 
