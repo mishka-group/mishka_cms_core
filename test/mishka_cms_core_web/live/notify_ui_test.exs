@@ -253,6 +253,44 @@ defmodule MishkaCmsCoreWeb.Test.NotifyUITest do
     end
   end
 
+  describe "the inbox's Status filter in the URL" do
+    setup %{conn: conn} do
+      admin = create_admin("boss@example.com")
+      Notify.deliver({:user, admin.id}, %{type: "test:x", title: "Ping A"})
+      :ok = Notify.mark_all_read(admin)
+      Notify.deliver({:user, admin.id}, %{type: "test:y", title: "Ping B"})
+
+      %{conn: log_in(conn, admin)}
+    end
+
+    test "is written under a plain key, and a reload keeps the filter", %{conn: conn} do
+      {:ok, view, _html} = live(conn, "/admin/dashboard/notifications")
+      render_async(view)
+      assert_patch(view)
+
+      view
+      |> form("#notifications-table_notifications-filter", %{"read" => "true"})
+      |> render_change()
+
+      render_async(view)
+
+      query = view |> assert_patch() |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
+      assert query["notifs_filter_read"] == "true"
+      refute Enum.any?(Map.keys(query), &String.contains?(&1, "?")), "a `?` in a URL key"
+      assert rows(view, "Read") == 1
+      assert rows(view, "Mark read") == 0
+
+      {:ok, reloaded, _html} =
+        live(conn, "/admin/dashboard/notifications?notifs_filter_read=true")
+
+      render_async(reloaded)
+
+      assert rows(reloaded, "Read") == 1
+      assert rows(reloaded, "Mark read") == 0
+    end
+  end
+
   # ── helpers (mirrors dashboard_home_test) ───────────────────────────────────
 
   # The inbox rows offering the row action titled `title`: "Mark read" on an unread one, "Read" on
