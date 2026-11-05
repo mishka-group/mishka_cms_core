@@ -421,7 +421,7 @@ defmodule MishkaCmsCore.LanguageEditions do
         site_id: original.site_id,
         title: title(original),
         kind: kind,
-        message: refusal_message(original, languages),
+        message: refusal_message(original, languages, kind),
         translations: translations,
         allowed?: Enum.all?(translations, &may_take?(&1, destroy_action(kind, scope), scope))
       }
@@ -430,12 +430,12 @@ defmodule MishkaCmsCore.LanguageEditions do
     end
   end
 
-  defp refusal_message(_original, []),
+  defp refusal_message(_original, [], _kind),
     do:
       dgettext("mishka_gervaz", "Its translations are no longer live, so it can be deleted now.")
 
-  defp refusal_message(original, languages),
-    do: PreventMasterLanguageDeletion.message(original.language, languages)
+  defp refusal_message(original, languages, kind),
+    do: PreventMasterLanguageDeletion.message(original.language, languages, kind)
 
   # THE ORIGINAL IS LIVE FOR AN ARCHIVE AND ARCHIVED FOR A DELETE FOR GOOD, and the table reads each
   # through its own action.

@@ -42,7 +42,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDelet
 
   ## The refusal
 
-  An `Ash.Error.Changes.InvalidAttribute` on `:language_group_id` whose message is `message/2`: the
+  An `Ash.Error.Changes.InvalidAttribute` on `:language_group_id` whose message is `message/3`: the
   original's language, the languages still live, and what to do. The API returns that message as it
   is.
 
@@ -79,49 +79,81 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PreventMasterLanguageDelet
       {:ok, translations} ->
         language = Map.get(changeset.data, :language)
         languages = Enum.map(translations, & &1.language)
-        message = message(language, languages)
+        message = message(language, languages, kind(changeset))
         announce(changeset, languages, message)
         {:error, refusal(id, message)}
 
       {:error, _reason} ->
-        {:error, refusal(id, unchecked(Map.get(changeset.data, :language)))}
+        {:error, refusal(id, unchecked(Map.get(changeset.data, :language), kind(changeset)))}
     end
   end
 
   def validate(_changeset, _opts, _context), do: :ok
 
+  defp kind(%{action: %{soft?: true}}), do: :archive
+  defp kind(_changeset), do: :destroy
+
   @doc """
-  What refusing an original says: its own language, the languages of its live translations, and
-  what to do.
+  What refusing an original says: its own language, the languages of its live translations, the
+  action refused (`:archive` or `:destroy`), and what to do.
 
-      message("en", ["fr", "fa"])
+      message("en", ["fr", "fa"], :archive)
       #=> "This is the original English version. Its translations in French and Persian are still
-      #    live, so it can't be deleted yet. Archive or delete those translations first, then this one."
+      #    live, so it can't be archived yet. Archive or delete those translations first, then this one."
   """
-  @spec message(String.t() | atom() | nil, [String.t() | atom() | nil]) :: String.t()
-  def message(language, [_one] = translations) do
+  @spec message(String.t() | atom() | nil, [String.t() | atom() | nil], :archive | :destroy) ::
+          String.t()
+  def message(language, [_one] = translations, kind) do
+    sentences(original(language), one_translation(kind, Languages.names(translations)))
+  end
+
+  def message(language, translations, kind) when is_list(translations) do
+    sentences(original(language), many_translations(kind, Languages.names(translations)))
+  end
+
+  defp one_translation(:archive, languages) do
+    dgettext(
+      "errors",
+      "Its %{languages} translation is still live, so it can't be archived yet. Archive or delete that translation first, then this one.",
+      languages: languages
+    )
+  end
+
+  defp one_translation(:destroy, languages) do
+    dgettext(
+      "errors",
+      "Its %{languages} translation is still live, so it can't be deleted yet. Archive or delete that translation first, then this one.",
+      languages: languages
+    )
+  end
+
+  defp many_translations(:archive, languages) do
+    dgettext(
+      "errors",
+      "Its translations in %{languages} are still live, so it can't be archived yet. Archive or delete those translations first, then this one.",
+      languages: languages
+    )
+  end
+
+  defp many_translations(:destroy, languages) do
+    dgettext(
+      "errors",
+      "Its translations in %{languages} are still live, so it can't be deleted yet. Archive or delete those translations first, then this one.",
+      languages: languages
+    )
+  end
+
+  defp unchecked(language, :archive) do
     sentences(
       original(language),
       dgettext(
         "errors",
-        "Its %{languages} translation is still live, so it can't be deleted yet. Archive or delete that translation first, then this one.",
-        languages: Languages.names(translations)
+        "Its translations could not be checked just now, so it can't be archived yet. Try again in a moment."
       )
     )
   end
 
-  def message(language, translations) when is_list(translations) do
-    sentences(
-      original(language),
-      dgettext(
-        "errors",
-        "Its translations in %{languages} are still live, so it can't be deleted yet. Archive or delete those translations first, then this one.",
-        languages: Languages.names(translations)
-      )
-    )
-  end
-
-  defp unchecked(language) do
+  defp unchecked(language, :destroy) do
     sentences(
       original(language),
       dgettext(

@@ -232,8 +232,10 @@ defmodule MishkaCmsCoreWeb.Test.PageTranslationsTest do
     |> log_in(create_admin("site-#{System.unique_integer([:positive])}@example.com", site.id))
   end
 
+  @refused_delete "This is the original English version. Its Persian translation is still live, so it " <>
+                    "can't be deleted yet. Archive or delete that translation first, then this one."
   @refused "This is the original English version. Its Persian translation is still live, so it " <>
-             "can't be deleted yet. Archive or delete that translation first, then this one."
+             "can't be archived yet. Archive or delete that translation first, then this one."
   @restore_refused "This is the Persian translation. Its original English version is archived, so " <>
                      "it can't be restored yet. Restore the original first, then this one."
 
@@ -458,7 +460,7 @@ defmodule MishkaCmsCoreWeb.Test.PageTranslationsTest do
                view,
                @alert,
                "This is the original English version. Its translations in Arabic and Persian are " <>
-                 "still live, so it can't be deleted yet. Archive or delete those translations " <>
+                 "still live, so it can't be archived yet. Archive or delete those translations " <>
                  "first, then this one."
              )
 
@@ -525,7 +527,7 @@ defmodule MishkaCmsCoreWeb.Test.PageTranslationsTest do
 
       assert stored?(master), "the master was deleted for good under its live translation"
       assert live?(fa)
-      assert has_element?(view, @alert, @refused)
+      assert has_element?(view, @alert, @refused_delete)
       refute has_element?(view, "#flash-error")
       assert has_element?(view, @act, "Delete the translations for good")
 
@@ -564,7 +566,7 @@ defmodule MishkaCmsCoreWeb.Test.PageTranslationsTest do
       refused(view)
 
       assert stored?(master)
-      assert has_element?(view, @alert, @refused)
+      assert has_element?(view, @alert, @refused_delete)
       assert has_element?(view, @act, "Delete the translations for good")
 
       act(view)
@@ -604,7 +606,7 @@ defmodule MishkaCmsCoreWeb.Test.PageTranslationsTest do
                view,
                "#translations-refusal-message",
                "This is the original English version. Its Arabic translation is still live, so " <>
-                 "it can't be deleted yet. Archive or delete that translation first, then this one."
+                 "it can't be archived yet. Archive or delete that translation first, then this one."
              )
 
       assert has_element?(
