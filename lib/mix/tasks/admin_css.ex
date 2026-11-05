@@ -150,7 +150,7 @@ defmodule Mix.Tasks.AdminCss do
   defp build(:admin, root, args) do
     input = Path.join(root, @input)
     File.mkdir_p!(Path.dirname(input))
-    File.write!(input, admin_input(root))
+    File.write!(input, css(root))
 
     tailwind(:admin_chrome, ["--input=#{input}", "--output=#{Path.join(root, @css)}" | args])
 
@@ -199,21 +199,13 @@ defmodule Mix.Tasks.AdminCss do
     end
   end
 
-  @doc """
-  The stylesheet handed to Tailwind for the admin: the sources it scans, the sources it skips, the
-  host's theme tokens and the admin's own rules.
-
-  Two files that only quote a class in a comment are left out of the scan.
-  """
-  @spec admin_input(Path.t()) :: String.t()
-  def admin_input(root) do
+  defp css(root) do
     """
     @import "tailwindcss" source(none);
 
     @source "#{root}/lib/**/*.{ex,heex,eex}";
     #{extension_sources(root)}
     @source "#{root}/assets/js/**/*.{js,ts}";
-    #{excluded_sources(root)}
 
     #{heroicons_plugin(root)}
 
@@ -591,18 +583,6 @@ defmodule Mix.Tasks.AdminCss do
         ""
     end
   end
-
-  # The scanner reads comments as markup. These two files quote `bg-[url('/a.png')]` and
-  # `bg-[url(/hero.jpg)]` to explain how a class is read back, and no admin screen renders either, so
-  # keeping them out stops the stylesheet from carrying a rule for a picture that does not exist.
-  # Matched by tail, because the same file lives under `lib/`, `__extensions/` or `deps/`.
-  @quoting_only [
-    "authoring/tree/styles.ex",
-    "mishka_cms_builder/classes.ex"
-  ]
-
-  defp excluded_sources(root),
-    do: Enum.map_join(@quoting_only, "\n", &~s|@source not "#{root}/**/#{&1}";|)
 
   # ONE GLOB PER EXTENSION, for the gitignore reason in the moduledoc. Both locations, because the
   # same package lives in either depending on how it was installed: `__extensions/` while it is

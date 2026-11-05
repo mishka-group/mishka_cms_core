@@ -8,18 +8,15 @@ defmodule Mix.Tasks.AdminCssTest do
   @moduletag :integration
   @moduletag :tmp_dir
 
-  alias Mix.Tasks.AdminCss
+  test "the core's own sources compile no rule for a picture they only mention", %{tmp_dir: dir} do
+    input = Path.join(dir, "in.css")
+    output = Path.join(dir, "out.css")
+    lib = Path.expand("../../../lib", __DIR__)
 
-  defp write!(root, path, content) do
-    full = Path.join(root, path)
-    File.mkdir_p!(Path.dirname(full))
-    File.write!(full, content)
-  end
-
-  defp build(root) do
-    input = Path.join(root, "in.css")
-    output = Path.join(root, "out.css")
-    File.write!(input, AdminCss.admin_input(root))
+    File.write!(input, """
+    @import "tailwindcss" source(none);
+    @source "#{lib}/**/*.{ex,heex,eex}";
+    """)
 
     assert 0 =
              Tailwind.install_and_run(:mishka_cms_core_css, [
@@ -27,31 +24,10 @@ defmodule Mix.Tasks.AdminCssTest do
                "--output=#{output}"
              ])
 
-    File.read!(output)
-  end
+    css = File.read!(output)
 
-  test "a class a source only quotes in a comment gets no rule, a class it renders still does", %{
-    tmp_dir: root
-  } do
-    write!(root, "lib/screen.ex", ~S|def render, do: ~s(<div class="bg-red-500 p-4"></div>)|)
-
-    write!(
-      root,
-      "lib/mishka_cms_core/runtime/authoring/tree/styles.ex",
-      "# `bg-[url(/hero.jpg)]` is read back as a background and `bg-red-700` is not a class\n"
-    )
-
-    write!(
-      root,
-      "__extensions/mishka_cms_builder/lib/mishka_cms_builder/classes.ex",
-      "# an arbitrary value carries brackets and parens, `bg-[url('/a.png')]`\n"
-    )
-
-    css = build(root)
-
-    assert css =~ "bg-red-500"
-    refute css =~ "hero"
+    assert css =~ "flex"
+    refute css =~ "hero.jpg"
     refute css =~ "a\\.png"
-    refute css =~ "bg-red-700"
   end
 end
