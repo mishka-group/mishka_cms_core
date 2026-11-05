@@ -2589,7 +2589,7 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:841
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:629
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:617
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:541
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:586
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:471
 #: ../mishka_blog/lib/mishka_blog/resources/team.ex:557
 #: ../mishka_document/lib/mishka_document_web/templates/issue_card.ex:410
@@ -2985,7 +2985,7 @@ msgstr ""
 msgid "Traditional table layout with rows and columns"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:287
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:297
 #: ../mishka_gervaz/lib/mishka_gervaz/table/templates/media_gallery.ex:597
 #, elixir-autogen, elixir-format
 msgid "Untitled"
@@ -3278,7 +3278,7 @@ msgstr ""
 msgid "Activate"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1018
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1063
 #, elixir-autogen, elixir-format
 msgid "Advanced"
 msgstr ""
@@ -3295,7 +3295,7 @@ msgstr ""
 
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:602
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:517
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:417
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:462
 #: ../mishka_blog/lib/mishka_blog/resources/team.ex:479
 #: ../mishka_document/lib/mishka_document/resources/issue.ex:246
 #: ../mishka_document/lib/mishka_document/resources/workspace.ex:474
@@ -3304,13 +3304,13 @@ msgstr ""
 msgid "All Statuses"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:497
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:542
 #, elixir-autogen, elixir-format
 msgid "Approve"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:335
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:410
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:380
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:455
 #: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:45
 #: ../mishka_document/lib/mishka_document/resources/note.ex:217
 #: ../mishka_document/lib/mishka_document/resources/note_draft.ex:434
@@ -3329,7 +3329,7 @@ msgstr ""
 msgid "Archive selected collections?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:817
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:862
 #, elixir-autogen, elixir-format
 msgid "Archive selected comments?"
 msgstr ""
@@ -3367,8 +3367,8 @@ msgstr ""
 msgid "Are you sure you want to PERMANENTLY delete this collection? This action cannot be undone!"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:629
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:793
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:674
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:838
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to PERMANENTLY delete this comment? This action cannot be undone!"
 msgstr ""
@@ -3410,7 +3410,7 @@ msgstr ""
 msgid "Are you sure you want to archive this collection?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:507
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:552
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to archive this comment?"
 msgstr ""
@@ -3445,7 +3445,7 @@ msgstr ""
 msgid "Are you sure you want to restore this collection?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:525
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:570
 #, elixir-autogen, elixir-format
 msgid "Are you sure you want to restore this comment?"
 msgstr ""
@@ -3465,7 +3465,7 @@ msgstr ""
 msgid "Are you sure you want to restore this team?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:234
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:269
 #, elixir-autogen, elixir-format
 msgid "Author"
 msgstr ""
@@ -3542,8 +3542,8 @@ msgstr ""
 msgid "Collections"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1704
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:476
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1840
 #, elixir-autogen, elixir-format
 msgid "Comments"
 msgstr ""
@@ -3591,7 +3591,7 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:833
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:569
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:651
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:639
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:684
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:566
 #: ../mishka_blog/lib/mishka_blog/resources/team.ex:606
 #, elixir-autogen, elixir-format
@@ -3666,13 +3666,13 @@ msgstr ""
 msgid "Featured only"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:603
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:648
 #, elixir-autogen, elixir-format
 msgid "Flag"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:337
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:411
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:382
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:456
 #: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:57
 #, elixir-autogen, elixir-format
 msgid "Flagged"
@@ -3688,7 +3688,7 @@ msgstr ""
 msgid "Members"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:592
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:637
 #, elixir-autogen, elixir-format
 msgid "Moderation"
 msgstr ""
@@ -3718,7 +3718,7 @@ msgstr ""
 msgid "No collections found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:849
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:894
 #, elixir-autogen, elixir-format
 msgid "No comments found"
 msgstr ""
@@ -3734,7 +3734,7 @@ msgstr ""
 msgid "No teams found"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:237
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:246
 #, elixir-autogen, elixir-format
 msgid "On:"
 msgstr ""
@@ -3759,7 +3759,7 @@ msgstr ""
 msgid "Parent Collection"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:990
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1035
 #, elixir-autogen, elixir-format
 msgid "Parent Comment"
 msgstr ""
@@ -3772,7 +3772,7 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:905
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:648
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:636
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:624
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:669
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:553
 #: ../mishka_blog/lib/mishka_blog/resources/team.ex:591
 #, elixir-autogen, elixir-format
@@ -3784,7 +3784,7 @@ msgstr ""
 msgid "Permanently delete selected collections? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:827
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:872
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected comments? This cannot be undone."
 msgstr ""
@@ -3809,13 +3809,13 @@ msgstr ""
 msgid "Permanently delete selected teams? This cannot be undone."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:570
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:615
 #, elixir-autogen, elixir-format
 msgid "Pin"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:444
-#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:227
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:489
+#: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:236
 #, elixir-autogen, elixir-format
 msgid "Pinned"
 msgstr ""
@@ -3825,7 +3825,7 @@ msgstr ""
 msgid "Platform"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:298
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:343
 #, elixir-autogen, elixir-format
 msgid "Post"
 msgstr ""
@@ -3835,8 +3835,8 @@ msgstr ""
 msgid "Post title"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1703
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:405
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1839
 #, elixir-autogen, elixir-format
 msgid "Posts"
 msgstr ""
@@ -3855,7 +3855,7 @@ msgstr ""
 msgid "Publisher"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:554
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:599
 #, elixir-autogen, elixir-format
 msgid "Reply"
 msgstr ""
@@ -3865,7 +3865,7 @@ msgstr ""
 msgid "Restore selected collections?"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:821
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:866
 #, elixir-autogen, elixir-format
 msgid "Restore selected comments?"
 msgstr ""
@@ -3928,7 +3928,7 @@ msgstr ""
 msgid "Search collections…"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:438
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:483
 #, elixir-autogen, elixir-format
 msgid "Search posts..."
 msgstr ""
@@ -3991,9 +3991,9 @@ msgstr ""
 msgid "Social Links"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:338
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:412
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:618
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:383
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:457
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:663
 #: ../mishka_blog/lib/mishka_blog_web/templates/comment_card.ex:63
 #, elixir-autogen, elixir-format
 msgid "Spam"
@@ -4002,7 +4002,7 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:454
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:389
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:404
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:350
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:395
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:323
 #: ../mishka_blog/lib/mishka_blog/resources/team.ex:385
 #: ../mishka_document/lib/mishka_document/resources/section.ex:410
@@ -4017,9 +4017,9 @@ msgstr ""
 msgid "Subtitle"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1699
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:487
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1236
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1835
 #: ../mishka_document/lib/mishka_document/resources/section.ex:1209
 #, elixir-autogen, elixir-format
 msgid "Tags"
@@ -4035,7 +4035,7 @@ msgstr ""
 msgid "URL"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:586
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:631
 #, elixir-autogen, elixir-format
 msgid "Unpin"
 msgstr ""
@@ -4183,8 +4183,8 @@ msgstr ""
 msgid "Add Section"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/source.ex:131
-#: ../mishka_cms_migration/lib/mishka_cms_migration/sources/wordpress.ex:247
+#: ../mishka_cms_migration/lib/mishka_cms_migration/source.ex:137
+#: ../mishka_cms_migration/lib/mishka_cms_migration/sources/wordpress.ex:256
 #: ../mishka_document/lib/mishka_document/resources/workspace.ex:788
 #, elixir-autogen, elixir-format
 msgid "Address"
@@ -5037,7 +5037,7 @@ msgstr ""
 msgid "Sections"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1701
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1837
 #: ../mishka_document/lib/mishka_document/resources/workspace.ex:998
 #: ../mishka_document/lib/mishka_document/resources/workspace_version.ex:533
 #, elixir-autogen, elixir-format
@@ -5411,11 +5411,6 @@ msgstr ""
 msgid "No design tokens found"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:215
-#, elixir-autogen, elixir-format
-msgid "No notes on this page yet"
-msgstr ""
-
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:136
 #, elixir-autogen, elixir-format
 msgid "No snippets saved yet"
@@ -5439,11 +5434,6 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder/design_token.ex:104
 #, elixir-autogen, elixir-format
 msgid "Radius"
-msgstr ""
-
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:207
-#, elixir-autogen, elixir-format
-msgid "Restores the document in the editor. The live page does not change until you publish."
 msgstr ""
 
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:214
@@ -5526,11 +5516,6 @@ msgstr ""
 msgid "The visual editor's recorded changes, newest first"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:118
-#, elixir-autogen, elixir-format
-msgid "This page"
-msgstr ""
-
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:345
 #, elixir-autogen, elixir-format
 msgid "Too large to restore"
@@ -5601,11 +5586,6 @@ msgstr ""
 msgid "No restore point"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:359
-#, elixir-autogen, elixir-format
-msgid "This publish kept no copy of the page it published."
-msgstr ""
-
 #: lib/mishka_cms_core/accounts/user.ex:469
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Confirm email"
@@ -5623,1122 +5603,1192 @@ msgid_plural "The email of %{count} users is confirmed."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1205
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1290
 #, elixir-autogen, elixir-format
 msgid "%{choice} (current)"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1329
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1414
 #, elixir-autogen, elixir-format
 msgid "%{count} item brought back."
 msgid_plural "%{count} items brought back."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1337
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1422
 #, elixir-autogen, elixir-format
 msgid "%{count} item decided."
 msgid_plural "%{count} items decided."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1325
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1410
 #, elixir-autogen, elixir-format
 msgid "%{count} item left out."
 msgid_plural "%{count} items left out."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1343
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1428
 #, elixir-autogen, elixir-format
 msgid "%{count} left as it was: nothing on it takes this choice."
 msgid_plural "%{count} left as they were: nothing on them takes this choice."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1577
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1713
 #, elixir-autogen, elixir-format
 msgid "%{count}: %{reason}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1638
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1774
 #, elixir-autogen, elixir-format
 msgid "%{done} items so far"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1644
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1780
 #, elixir-autogen, elixir-format
 msgid "%{done} of %{total} items"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1563
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1699
 #, elixir-autogen, elixir-format
 msgid "%{kind}: %{count} found"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2111
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2256
 #, elixir-autogen, elixir-format
 msgid "%{language} is not one of the site's languages"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1377
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1513
 #, elixir-autogen, elixir-format
 msgid "%{number} needs your decision"
 msgid_plural "%{number} need your decision"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:247
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:278
 #, elixir-autogen, elixir-format
 msgid "/blog/<slug> + 301 redirect"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:248
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:279
 #, elixir-autogen, elixir-format
 msgid "/blog/<slug>, no redirect"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:727
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:757
 #, elixir-autogen, elixir-format
 msgid "A WordPress application password is made under Users, Profile, Application Passwords. The password is kept sealed until the run ends."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1955
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2100
 #, elixir-autogen, elixir-format
 msgid "A comment on a page, which Blog cannot keep"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1404
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1489
 #, elixir-autogen, elixir-format
 msgid "A component: it can be placed on any page or layout with its component name"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1971
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2116
 #, elixir-autogen, elixir-format
 msgid "A file in an image's srcset was not imported, so it keeps its old address"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1942
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2094
 #, elixir-autogen, elixir-format
 msgid "A guest comment by %{name}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1958
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2103
 #, elixir-autogen, elixir-format
 msgid "A pingback or trackback, which Blog does not keep"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1989
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2134
 #, elixir-autogen, elixir-format
 msgid "A plugin failed on it"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1987
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2132
 #, elixir-autogen, elixir-format
 msgid "A plugin it needs is not loaded"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1978
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2123
 #, elixir-autogen, elixir-format
 msgid "A user was created for the author, who signs in with Forgot password or a social sign-in"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1352
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1437
 #, elixir-autogen, elixir-format
 msgid "Add %{language} to the site"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1359
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1444
 #, elixir-autogen, elixir-format
 msgid "Add its language to the site"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2117
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2262
 #, elixir-autogen, elixir-format
 msgid "Adds %{language} to the site's languages, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2024
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2169
 #, elixir-autogen, elixir-format
 msgid "Allowed its video player on the site: %{origins}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1934
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2086
 #, elixir-autogen, elixir-format
 msgid "Already at its old address"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1984
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2129
 #, elixir-autogen, elixir-format
 msgid "Already in the CMS, so linked and kept as it is"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:395
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:405
 #, elixir-autogen, elixir-format
 msgid "Any kind"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:413
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:423
 #, elixir-autogen, elixir-format
 msgid "Any outcome"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:404
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:414
 #, elixir-autogen, elixir-format
 msgid "Any plan"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:577
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:608
 #, elixir-autogen, elixir-format
 msgid "Any source"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/sources/wordpress.ex:261
+#: ../mishka_cms_migration/lib/mishka_cms_migration/sources/wordpress.ex:270
 #, elixir-autogen, elixir-format
 msgid "Application password"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:227
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:258
 #, elixir-autogen, elixir-format
 msgid "Authors"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:497
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:542
 #, elixir-autogen, elixir-format
 msgid "Bring back"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:259
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:290
 #, elixir-autogen, elixir-format
 msgid "Bring the comments too"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1531
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1616
 #, elixir-autogen, elixir-format
 msgid "Brought back"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:338
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:348
 #, elixir-autogen, elixir-format
 msgid "CMS record"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:657
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:689
 #, elixir-autogen, elixir-format
 msgid "Cancel this run? It cannot be started again."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1308
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1444
 #, elixir-autogen, elixir-format
 msgid "Cancelled"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1698
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1834
 #, elixir-autogen, elixir-format
 msgid "Categories"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:797
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:827
 #, elixir-autogen, elixir-format
 msgid "Check and save"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2078
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2223
 #, elixir-autogen, elixir-format
 msgid "Checked for an identical file when it is downloaded"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:757
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:787
 #, elixir-autogen, elixir-format
 msgid "Choices for this run"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2050
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2195
 #, elixir-autogen, elixir-format
 msgid "Choose where this menu goes"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2054
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2199
 #, elixir-autogen, elixir-format
 msgid "Choose where this menu goes. Same links as %{menu}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:254
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:285
 #, elixir-autogen, elixir-format
 msgid "Confirm imported users' email"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1424
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1509
 #, elixir-autogen, elixir-format
 msgid "Connect to the existing record"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1478
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1542
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1302
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1563
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1627
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1438
 #, elixir-autogen, elixir-format
 msgid "Connected"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:724
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:754
 #, elixir-autogen, elixir-format
 msgid "Connection"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2159
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2304
 #, elixir-autogen, elixir-format
 msgid "Contains scripts or inline event handlers: %{found}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:419
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:450
 #, elixir-autogen, elixir-format
 msgid "Copy run ID"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1495
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1580
 #, elixir-autogen, elixir-format
 msgid "Decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:475
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:520
 #, elixir-autogen, elixir-format
 msgid "Decide…"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1927
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2063
 #, elixir-autogen, elixir-format
 msgid "Deleted in the CMS, so left out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:617
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:645
 #, elixir-autogen, elixir-format
 msgid "Dry run"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1304
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1440
 #, elixir-autogen, elixir-format
 msgid "Dry run ready"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1303
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1439
 #, elixir-autogen, elixir-format
 msgid "Dry run running"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1926
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2062
 #, elixir-autogen, elixir-format
 msgid "Edited in the CMS, so kept"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:740
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:770
 #, elixir-autogen, elixir-format
 msgid "Export file"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1307
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1744
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1443
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1880
 #, elixir-autogen, elixir-format
 msgid "Failed"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1397
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1482
 #, elixir-autogen, elixir-format
 msgid "Footer links: they show beside the footer's links, a nested menu listed flat in order"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1393
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1478
 #, elixir-autogen, elixir-format
 msgid "Header links: they show in the top bar"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:647
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:679
 #, elixir-autogen, elixir-format
 msgid "Import"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:549
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:609
 #, elixir-autogen, elixir-format
 msgid "Import anyway"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1222
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1225
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1307
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1310
 #, elixir-autogen, elixir-format
 msgid "Import as its own"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1427
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1512
 #, elixir-autogen, elixir-format
 msgid "Import as new with another slug"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1365
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1450
 #, elixir-autogen, elixir-format
 msgid "Import it in the site's main language"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:638
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:670
 #, elixir-autogen, elixir-format
 msgid "Import now? It writes what the dry run found into the CMS."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1376
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1461
 #, elixir-autogen, elixir-format
 msgid "Import with the fallback HTML for those parts"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1439
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1524
 #, elixir-autogen, elixir-format
 msgid "Import without the player"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:543
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:603
 #, elixir-autogen, elixir-format
 msgid "Import {count} items anyway? Each is written the import's way."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1306
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1442
 #, elixir-autogen, elixir-format
 msgid "Imported"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2145
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2290
 #, elixir-autogen, elixir-format
 msgid "Imported as new beside the site's own, with another slug"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:427
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:437
 #, elixir-autogen, elixir-format
 msgid "Imported by this run"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2190
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2335
 #, elixir-autogen, elixir-format
 msgid "Imported with the fallback HTML for %{names}, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2039
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2184
 #, elixir-autogen, elixir-format
 msgid "Imported without its YouTube or Vimeo player, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1305
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1441
 #, elixir-autogen, elixir-format
 msgid "Importing"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1629
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1765
 #, elixir-autogen, elixir-format
 msgid "Importing %{kind}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:606
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:634
 #, elixir-autogen, elixir-format
 msgid "Items"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2030
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2175
 #, elixir-autogen, elixir-format
 msgid "Its YouTube or Vimeo player needs Sites pages may embed, which you may not change"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2004
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2149
 #, elixir-autogen, elixir-format
 msgid "Its address was made ASCII, so the old address is not served"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1964
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2109
 #, elixir-autogen, elixir-format
 msgid "Its author was not imported, so it has none"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1967
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2112
 #, elixir-autogen, elixir-format
 msgid "Its featured image was not imported, so it has none"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2007
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2152
 #, elixir-autogen, elixir-format
 msgid "Its file is not on the source's own site, so it is left there"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2155
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2300
 #, elixir-autogen, elixir-format
 msgid "Its file was not imported"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2102
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2247
 #, elixir-autogen, elixir-format
 msgid "Its links depend on how addresses name the language: %{cause}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1936
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2088
 #, elixir-autogen, elixir-format
 msgid "Its parent is left out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1929
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2065
 #, elixir-autogen, elixir-format
 msgid "Its parent was not imported"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1933
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2085
 #, elixir-autogen, elixir-format
 msgid "Its post was not imported"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2173
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2318
 #, elixir-autogen, elixir-format
 msgid "Its scripts and inline event handlers kept, as you decided: %{found}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2165
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2310
 #, elixir-autogen, elixir-format
 msgid "Its scripts and inline event handlers removed, as you decided: %{found}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1429
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1514
 #, elixir-autogen, elixir-format
 msgid "Keep both"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:534
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:594
 #, elixir-autogen, elixir-format
 msgid "Keep the site as it is"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1381
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1387
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1418
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1466
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1472
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1503
 #, elixir-autogen, elixir-format
 msgid "Keep the site's own"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1373
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1458
 #, elixir-autogen, elixir-format
 msgid "Keep them (I trust this content)"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2195
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2340
 #, elixir-autogen, elixir-format
 msgid "Kept as text: %{names}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2015
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2160
 #, elixir-autogen, elixir-format
 msgid "Larger than Media takes"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:326
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:336
 #, elixir-autogen, elixir-format
 msgid "Last import"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:486
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1413
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1415
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1433
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:531
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1498
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1500
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1518
 #, elixir-autogen, elixir-format
 msgid "Leave out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:508
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:568
 #, elixir-autogen, elixir-format
 msgid "Leave out {count} items? Import will not write them."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1379
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1464
 #, elixir-autogen, elixir-format
 msgid "Leave the page out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1362
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1447
 #, elixir-autogen, elixir-format
 msgid "Leave this translation out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1447
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1532
 #, elixir-autogen, elixir-format
 msgid "Leave those links out of the menu"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1931
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2083
 #, elixir-autogen, elixir-format
 msgid "Left out by this run's choices"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1469
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1935
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1554
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2087
 #, elixir-autogen, elixir-format
 msgid "Left out by you"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2098
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2243
 #, elixir-autogen, elixir-format
 msgid "Links to pages that are not live: %{labels}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1928
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2064
 #, elixir-autogen, elixir-format
 msgid "Listed twice by the source"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:239
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:270
 #, elixir-autogen, elixir-format
 msgid "Live at their old addresses"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:602
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:662
 #, elixir-autogen, elixir-format
 msgid "Map to"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:464
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:509
 #, elixir-autogen, elixir-format
 msgid "Map to…"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1481
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1566
 #, elixir-autogen, elixir-format
 msgid "Mapped by you to %{name}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:230
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:261
 #, elixir-autogen, elixir-format
 msgid "Match by email, create the rest"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:229
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:260
 #, elixir-autogen, elixir-format
 msgid "Match by email, skip the rest"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2010
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2155
 #, elixir-autogen, elixir-format
 msgid "Media cannot keep this type of file"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1706
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1842
 #, elixir-autogen, elixir-format
 msgid "Menus"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2072
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2217
 #, elixir-autogen, elixir-format
 msgid "Mishka Blog is not installed"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:760
-#, elixir-autogen, elixir-format
-msgid "Mishka Blog serves each post at /blog/<slug>. Keeping a post's WordPress address, such as /2025/12/hello/, needs the Blog to serve posts there first, so a 301 redirect from it is offered instead. Pages arrive at their old paths, as drafts or live. A comment comes only if its author has a user on the site: a guest's is left out."
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1569
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1745
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1654
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1881
 #, elixir-autogen, elixir-format
 msgid "Needs your decision"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1537
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1622
 #, elixir-autogen, elixir-format
 msgid "No dry run yet"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2184
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2329
 #, elixir-autogen, elixir-format
 msgid "No fallback available for %{names}, so they are left out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:577
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:637
 #, elixir-autogen, elixir-format
 msgid "No items found"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1932
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2084
 #, elixir-autogen, elixir-format
 msgid "No public address at the source"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:686
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:716
 #, elixir-autogen, elixir-format
 msgid "No runs found"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1930
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2082
 #, elixir-autogen, elixir-format
 msgid "No user with this email on the site"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1550
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1635
 #, elixir-autogen, elixir-format
 msgid "Not imported"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1924
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2060
 #, elixir-autogen, elixir-format
 msgid "Nothing imports these yet"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1570
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1706
 #, elixir-autogen, elixir-format
 msgid "Nothing to move"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1879
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1880
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2015
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2016
 #, elixir-autogen, elixir-format
 msgid "Open in the admin"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:236
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1702
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:267
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1838
 #, elixir-autogen, elixir-format
 msgid "Pages"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/source.ex:138
+#: ../mishka_cms_migration/lib/mishka_cms_migration/source.ex:144
 #, elixir-autogen, elixir-format
 msgid "Password or key"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1998
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2143
 #, elixir-autogen, elixir-format
 msgid "Password-protected at the source, so a draft"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1992
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2137
 #, elixir-autogen, elixir-format
 msgid "Pending review at the source, so a draft"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:605
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:665
 #, elixir-autogen, elixir-format
 msgid "Pick a record the site already has, in the language it leads with, and the import links to it and writes nothing; what sits under the item goes under it. Import as its own writes the item as the source has it."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:314
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:324
 #, elixir-autogen, elixir-format
 msgid "Plan"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:245
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:276
 #, elixir-autogen, elixir-format
 msgid "Post addresses"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1995
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2140
 #, elixir-autogen, elixir-format
 msgid "Private at the source, so a draft"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1450
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1535
 #, elixir-autogen, elixir-format
 msgid "Publish the linked pages"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1626
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1762
 #, elixir-autogen, elixir-format
 msgid "Reading %{kind}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1705
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1841
 #, elixir-autogen, elixir-format
 msgid "Redirects"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1370
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1455
 #, elixir-autogen, elixir-format
 msgid "Remove them"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1390
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1421
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1475
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1506
 #, elixir-autogen, elixir-format
 msgid "Replace with the imported menu"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2148
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2293
 #, elixir-autogen, elixir-format
 msgid "Replaces the site's own, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:494
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:525
 #, elixir-autogen, elixir-format
 msgid "Result"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1534
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1619
 #, elixir-autogen, elixir-format
 msgid "Run a dry run again to see its plan"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:628
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:660
 #, elixir-autogen, elixir-format
 msgid "Run again"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2075
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2220
 #, elixir-autogen, elixir-format
 msgid "Same file as %{title}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2095
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2240
 #, elixir-autogen, elixir-format
 msgid "Same file as another, kept as its own, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2082
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2227
 #, elixir-autogen, elixir-format
 msgid "Same file as another: the original is used, and the old address redirects to it, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2089
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2234
 #, elixir-autogen, elixir-format
 msgid "Same file as another: the original is used, with no redirect from the old address, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:633
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:693
 #, elixir-autogen, elixir-format
 msgid "Save"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2001
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2146
 #, elixir-autogen, elixir-format
 msgid "Scheduled at the source, so a draft"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:387
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:397
 #, elixir-autogen, elixir-format
 msgid "Search titles..."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1743
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1879
 #, elixir-autogen, elixir-format
 msgid "Skipped"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1961
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2106
 #, elixir-autogen, elixir-format
 msgid "Spam or in the trash at the source, so left out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:525
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:556
 #, elixir-autogen, elixir-format
 msgid "Started"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1616
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1752
 #, elixir-autogen, elixir-format
 msgid "Starting"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2198
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2343
 #, elixir-autogen, elixir-format
 msgid "Still at its old address: %{titles}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:743
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:773
 #, elixir-autogen, elixir-format
 msgid "The .xml file WordPress makes under Tools, Export, with All content chosen. It is kept privately until the run ends, then deleted."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2150
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2295
 #, elixir-autogen, elixir-format
 msgid "The CMS has no setting for it yet"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2018
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2163
 #, elixir-autogen, elixir-format
 msgid "The file is not the type its name says, so it is left out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1945
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2097
 #, elixir-autogen, elixir-format
 msgid "The guest's email is not valid, so it is left out"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1949
-#, elixir-autogen, elixir-format
-msgid "The guest's website is not an http or https address, so it is left out"
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:623
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:683
 #, elixir-autogen, elixir-format
 msgid "The import cannot place this item on its own: the site already has something in its place. What you pick holds for every later dry run and import."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2133
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2278
 #, elixir-autogen, elixir-format
 msgid "The original of its translations: %{languages}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1939
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2091
 #, elixir-autogen, elixir-format
 msgid "The record it was mapped to is gone"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2064
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2209
 #, elixir-autogen, elixir-format
 msgid "The site already has a component with this name"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2044
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2189
 #, elixir-autogen, elixir-format
 msgid "The site already has its own"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2042
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2187
 #, elixir-autogen, elixir-format
 msgid "The site already has its own, so it is kept"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2070
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2215
 #, elixir-autogen, elixir-format
 msgid "The site already has one at this address"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:714
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:744
 #, elixir-autogen, elixir-format
 msgid "The site the content moves to."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2067
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2212
 #, elixir-autogen, elixir-format
 msgid "The site's footer already has its own links"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2047
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2192
 #, elixir-autogen, elixir-format
 msgid "The site's header already has its own links"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2153
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2298
 #, elixir-autogen, elixir-format
 msgid "The site's layout has no header or footer to put it in"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2020
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2165
 #, elixir-autogen, elixir-format
 msgid "The source did not send the file"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2123
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2268
 #, elixir-autogen, elixir-format
 msgid "The source does not say its language: the site's export file carries it"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2013
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2158
 #, elixir-autogen, elixir-format
 msgid "The source says this file is another type than its name"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2139
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2284
 #, elixir-autogen, elixir-format
 msgid "Translation of %{original}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1925
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2061
 #, elixir-autogen, elixir-format
 msgid "Unchanged"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1384
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1469
 #, elixir-autogen, elixir-format
 msgid "Use the WordPress one"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1410
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1495
 #, elixir-autogen, elixir-format
 msgid "Use the existing component"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1430
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1515
 #, elixir-autogen, elixir-format
 msgid "Use the original"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1697
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1833
 #, elixir-autogen, elixir-format
 msgid "Users"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1891
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1892
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2027
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2028
 #, elixir-autogen, elixir-format
 msgid "View on the site"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1441
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1526
 #, elixir-autogen, elixir-format
 msgid "Wait"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1436
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1521
 #, elixir-autogen, elixir-format
 msgid "Wait for an admin"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1432
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1517
 #, elixir-autogen, elixir-format
 msgid "Wait for the Blog"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1368
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1453
 #, elixir-autogen, elixir-format
 msgid "Wait, to import the site's export file instead"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2142
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2287
 #, elixir-autogen, elixir-format
 msgid "Waits for Mishka Blog, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2036
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2181
 #, elixir-autogen, elixir-format
 msgid "Waits for an admin who may allow its player, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2058
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2203
 #, elixir-autogen, elixir-format
 msgid "Waits for the component of the menu with the same name, written first, then connects to it"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2129
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2274
 #, elixir-autogen, elixir-format
 msgid "Waits for the site's export file, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2107
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2252
 #, elixir-autogen, elixir-format
 msgid "Waits for the site's language addresses, as you decided"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2180
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2325
 #, elixir-autogen, elixir-format
 msgid "Widgets the CMS has no equivalent for: %{names}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1565
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1650
 #, elixir-autogen, elixir-format
 msgid "Would create"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1568
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1653
 #, elixir-autogen, elixir-format
 msgid "Would fail"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1567
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1652
 #, elixir-autogen, elixir-format
 msgid "Would skip"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1566
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1651
 #, elixir-autogen, elixir-format
 msgid "Would update"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1444
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:1529
 #, elixir-autogen, elixir-format
 msgid "Write links for the site's current mode"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:620
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:680
 #, elixir-autogen, elixir-format
 msgid "Your decision"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1676
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1812
 #, elixir-autogen, elixir-format
 msgid "categories"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1682
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1818
 #, elixir-autogen, elixir-format
 msgid "comments"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1669
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1805
 #, elixir-autogen, elixir-format
 msgid "created"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/sources/wordpress.ex:255
+#: ../mishka_cms_migration/lib/mishka_cms_migration/sources/wordpress.ex:264
 #, elixir-autogen, elixir-format
 msgid "e.g. admin"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1672
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1808
 #, elixir-autogen, elixir-format
 msgid "failed"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1678
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1814
 #, elixir-autogen, elixir-format
 msgid "files"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1684
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1820
 #, elixir-autogen, elixir-format
 msgid "menus"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1673
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1809
 #, elixir-autogen, elixir-format
 msgid "need your decision"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1680
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1816
 #, elixir-autogen, elixir-format
 msgid "pages"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1681
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1817
 #, elixir-autogen, elixir-format
 msgid "posts"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1683
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1819
 #, elixir-autogen, elixir-format
 msgid "redirects"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1679
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1815
 #, elixir-autogen, elixir-format
 msgid "settings"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1671
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1807
 #, elixir-autogen, elixir-format
 msgid "skipped"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1677
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1813
 #, elixir-autogen, elixir-format
 msgid "tags"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1922
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2058
 #, elixir-autogen, elixir-format
 msgid "the site gives every language a prefix"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1918
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2054
 #, elixir-autogen, elixir-format
 msgid "the source runs Polylang"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1919
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2055
 #, elixir-autogen, elixir-format
 msgid "the source runs WPML"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1670
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1806
 #, elixir-autogen, elixir-format
 msgid "updated"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1675
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:1811
 #, elixir-autogen, elixir-format
 msgid "users"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:473
+#, elixir-autogen, elixir-format
+msgid "Dry run this item"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:559
+#, elixir-autogen, elixir-format
+msgid "Import the picked items"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:494
+#, elixir-autogen, elixir-format
+msgid "Import this item"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:483
+#, elixir-autogen, elixir-format
+msgid "Import this item now? It writes this item alone into the CMS."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_item.ex:553
+#, elixir-autogen, elixir-format
+msgid "Import {count} items now? Each is written alone, the rest left as they are."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:790
+#, elixir-autogen, elixir-format
+msgid "Mishka Blog serves each post at /blog/<slug>. Keeping a post's WordPress address, such as /2025/12/hello/, needs the Blog to serve posts there first, so a 301 redirect from it is offered instead. Pages arrive at their old paths, as drafts or live. Comments come only with Bring the comments too, which is off by default: a comment by a user of the site is written as theirs, and a guest's with the name and email the guest gave."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2077
+#, elixir-autogen, elixir-format
+msgid "The source answered, but not as the site it was"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2074
+#, elixir-autogen, elixir-format
+msgid "The source did not answer"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2080
+#, elixir-autogen, elixir-format
+msgid "The source refused the user or the password"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2068
+#, elixir-autogen, elixir-format
+msgid "Waits until its %{kinds} are imported"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2071
+#, elixir-autogen, elixir-format
+msgid "You may not change %{kinds} on this site"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:2073
+#, elixir-autogen, elixir-format
+msgid "You may not change this on this site"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:215
+#, elixir-autogen, elixir-format
+msgid "No notes here yet"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:207
+#, elixir-autogen, elixir-format
+msgid "Restores the document in the editor. What is live does not change until you publish."
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder/resources/snippet.ex:118
+#, elixir-autogen, elixir-format
+msgid "This document"
+msgstr ""
+
+#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/history_timeline.ex:359
+#, elixir-autogen, elixir-format
+msgid "This publish kept no copy of what it published."
 msgstr ""
