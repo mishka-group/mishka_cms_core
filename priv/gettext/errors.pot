@@ -2453,3 +2453,89 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "Element CSS must map each element's scope to its CSS."
 msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:56
+#, elixir-autogen, elixir-format
+msgid "%{source} did not accept this user and application password. If both are right, ask your host to let the Authorization header through."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/site_idle.ex:30
+#, elixir-autogen, elixir-format
+msgid "A dry run or an import of this site is running. Change its items once it is done."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:273
+#, elixir-autogen, elixir-format
+msgid "Another migration of this site is still waiting or running. Try again once it is done."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:60
+#, elixir-autogen, elixir-format
+msgid "Choose the %{source} to read."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:68
+#, elixir-autogen, elixir-format
+msgid "Could not connect to %{source}: %{reason}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:54
+#, elixir-autogen, elixir-format
+msgid "No %{source} site answers at this address."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/source_installed.ex:24
+#, elixir-autogen, elixir-format
+msgid "No source called %{source} is installed."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:53
+#, elixir-autogen, elixir-format
+msgid "Nothing answered at this address."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:40
+#, elixir-autogen, elixir-format
+msgid "Nothing on this item waits for your decision."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/mapped_record.ex:33
+#, elixir-autogen, elixir-format
+msgid "Pick a record of this site to map it to."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:46
+#, elixir-autogen, elixir-format
+msgid "Pick one of the choices this item offers."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:271
+#, elixir-autogen, elixir-format
+msgid "Pick the site the content moves to."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/source_file.ex:42
+#, elixir-autogen, elixir-format
+msgid "The file could not be kept on the server: %{reason}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:26
+#, elixir-autogen, elixir-format
+msgid "The run cannot do that while it is %{status}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:62
+#, elixir-autogen, elixir-format
+msgid "This is not a %{source}, or it is damaged. Make the export again and choose its .xml file."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:52
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:272
+#, elixir-autogen, elixir-format
+msgid "Type the site's address, such as https://example.com."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:42
+#, elixir-autogen, elixir-format
+msgid "Your decision already took effect: the import wrote or connected this item by it, so it stays."
+msgstr ""
