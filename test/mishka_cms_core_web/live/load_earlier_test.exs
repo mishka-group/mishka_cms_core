@@ -8,8 +8,8 @@ defmodule MishkaCmsCoreWeb.Live.LoadEarlierTest do
   and a page past the last (`?notifs_page=999`) says so and offers a way back to page 1, as the
   notification inbox and the activity page draw them.
 
-  Both need the table state of mishka_gervaz after the `load_earlier` event landed, so they are tagged
-  `:gervaz_load_earlier` and skipped against a gervaz without it.
+  Both need the Load earlier of a mishka_gervaz after 0.0.4, so they are tagged `:gervaz_load_earlier`
+  and `test_helper.exs` leaves them out against a gervaz without it.
   """
   use MishkaCmsCore.ConnCase
 
