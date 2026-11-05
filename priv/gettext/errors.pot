@@ -165,10 +165,10 @@ msgstr ""
 msgid "auto-posting configuration"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2383
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2459
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2531
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2548
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2384
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2460
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2532
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2549
 #, elixir-autogen, elixir-format
 msgid "blog post"
 msgstr ""
@@ -267,8 +267,8 @@ msgstr ""
 msgid "parent collection"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1594
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1619
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1663
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1688
 #, elixir-autogen, elixir-format
 msgid "parent comment"
 msgstr ""
@@ -278,8 +278,8 @@ msgstr ""
 msgid "parent tag"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1587
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1611
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1656
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1680
 #, elixir-autogen, elixir-format
 msgid "post"
 msgstr ""
@@ -1548,7 +1548,7 @@ msgstr ""
 msgid "is required"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3164
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3165
 #, elixir-autogen, elixir-format
 msgid "A blog post with this language already exists in this language group."
 msgstr ""
@@ -1573,17 +1573,17 @@ msgstr ""
 msgid "Auto-posting configuration is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2154
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2155
 #, elixir-autogen, elixir-format
 msgid "Blog post is already archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2215
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2216
 #, elixir-autogen, elixir-format
 msgid "Blog post is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3156
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3157
 #, elixir-autogen, elixir-format
 msgid "Blog post slug must be unique within a site."
 msgstr ""
@@ -1616,8 +1616,8 @@ msgstr ""
 msgid "Cannot edit archived auto-posting configuration. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1656
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1721
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1657
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1722
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived blog post. Please unarchive it first."
 msgstr ""
@@ -1634,8 +1634,8 @@ msgstr ""
 msgid "Cannot edit archived collection. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1193
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1393
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1262
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1462
 #: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:365
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived comment. Please unarchive it first."
@@ -1666,10 +1666,10 @@ msgstr ""
 msgid "Cannot restore version of archived auto-posting. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2374
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2424
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2450
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2502
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2375
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2425
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2451
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2503
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived blog post. Please unarchive it first."
 msgstr ""
@@ -1721,24 +1721,24 @@ msgstr ""
 msgid "Collection slug must be unique within a site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1201
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1401
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1270
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1470
 #, elixir-autogen, elixir-format
 msgid "Comment cannot be its own parent."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:124
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:146
 #, elixir-autogen, elixir-format
 msgid "Comment content cannot be empty."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1356
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1425
 #: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:473
 #, elixir-autogen, elixir-format
 msgid "Comment is already archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1430
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1499
 #: ../mishka_document/lib/mishka_document/resources/issue_comment.ex:547
 #, elixir-autogen, elixir-format
 msgid "Comment is not archived."
@@ -1762,8 +1762,8 @@ msgstr ""
 msgid "Display order must be non-negative."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1526
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1649
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1527
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1650
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1199
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1253
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:967
@@ -1778,18 +1778,18 @@ msgstr ""
 msgid "Parent collection not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1154
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1223
 #, elixir-autogen, elixir-format
 msgid "Parent comment must belong to the same post."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1083
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1186
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1136
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1255
 #, elixir-autogen, elixir-format
 msgid "Parent comment not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1159
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1228
 #, elixir-autogen, elixir-format
 msgid "Parent comment not found."
 msgstr ""
@@ -1805,10 +1805,10 @@ msgstr ""
 msgid "Plugin must be between 1 and 255 characters."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1077
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1124
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1132
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1179
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1130
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1193
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1201
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1248
 #: ../mishka_blog/lib/mishka_blog/resources/post_blogger.ex:105
 #: ../mishka_blog/lib/mishka_blog/resources/post_bookmark.ex:71
 #: ../mishka_blog/lib/mishka_blog/resources/post_bookmark.ex:79
@@ -2340,8 +2340,8 @@ msgstr ""
 msgid "This version is not cloned from another."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1601
-#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1627
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1670
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1696
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/history_event.ex:353
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:319
 #: ../mishka_cms_builder/lib/mishka_cms_builder/resources/page_comment.ex:361
@@ -2464,7 +2464,7 @@ msgstr ""
 msgid "A dry run or an import of this site is running. Change its items once it is done."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:273
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:304
 #, elixir-autogen, elixir-format
 msgid "Another migration of this site is still waiting or running. Try again once it is done."
 msgstr ""
@@ -2509,7 +2509,7 @@ msgstr ""
 msgid "Pick one of the choices this item offers."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:271
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:302
 #, elixir-autogen, elixir-format
 msgid "Pick the site the content moves to."
 msgstr ""
@@ -2519,7 +2519,7 @@ msgstr ""
 msgid "The file could not be kept on the server: %{reason}."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:26
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:33
 #, elixir-autogen, elixir-format
 msgid "The run cannot do that while it is %{status}."
 msgstr ""
@@ -2530,7 +2530,7 @@ msgid "This is not a %{source}, or it is damaged. Make the export again and choo
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:52
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:272
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:303
 #, elixir-autogen, elixir-format
 msgid "Type the site's address, such as https://example.com."
 msgstr ""
@@ -2538,4 +2538,34 @@ msgstr ""
 #: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:42
 #, elixir-autogen, elixir-format
 msgid "Your decision already took effect: the import wrote or connected this item by it, so it stays."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/picked_items.ex:38
+#, elixir-autogen, elixir-format
+msgid "Pick items of this run's source."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/connectable.ex:29
+#, elixir-autogen, elixir-format
+msgid "This run no longer holds its %{source} password. Start a New import."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/connectable.ex:33
+#, elixir-autogen, elixir-format
+msgid "This run no longer holds its %{source}. Start a New import."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1705
+#, elixir-autogen, elixir-format
+msgid "A comment is a user's or a guest's, not both."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1150
+#, elixir-autogen, elixir-format
+msgid "A comment needs its author or the guest's name."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1155
+#, elixir-autogen, elixir-format
+msgid "A guest's email needs the guest's name."
 msgstr ""
