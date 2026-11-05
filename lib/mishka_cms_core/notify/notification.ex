@@ -266,7 +266,7 @@ defmodule MishkaCmsCore.Notify.Notification do
 
         ui do
           show_total true
-          load_more_label dgettext_noop("mishka_gervaz", "Load more")
+          load_more_label dgettext_noop("mishka_gervaz", "Load More")
           page_info_format dgettext_noop("mishka_gervaz", "Showing {count} notifications")
         end
       end

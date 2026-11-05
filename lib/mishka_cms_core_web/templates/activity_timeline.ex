@@ -48,6 +48,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   import MishkaGervaz.Helpers,
     only: [dynamic_component: 1, get_visible_columns: 2, translate_options: 1]
 
+  alias MishkaCmsCoreWeb.Templates.CardChrome
   alias MishkaGervaz.Table.Templates.Shared
 
   # A select short enough to read at a glance becomes a segmented switch; anything longer stays a
@@ -61,6 +62,8 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   @date_class "h-[30px] w-[122px] cursor-pointer bg-transparent text-[12px] font-semibold text-[#3a382f] outline-none"
 
   @default_options [timestamp: :inserted_at, max_cap: nil]
+
+  @button_class "inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-xl border border-[#ecebe6] bg-white px-[22px] text-[13px] font-semibold text-[#4f4bcc] transition-colors hover:border-[#dcdbf5] hover:bg-[#eeedfb]"
 
   @impl true
   def name, do: :activity_timeline
@@ -88,11 +91,21 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
       assigns
       |> assign(:show_filters, static.filters != [] and :filter in static.features)
       |> assign(:show_pagination, :paginate in static.features)
+      |> assign(:past_last?, CardChrome.past_last_page?(assigns.state, page_size(assigns.state)))
+      |> assign(:button_class, @button_class)
 
     ~H"""
     <div class="mishka-gervaz-activity-timeline">
       <div :if={@state.has_initial_data? or @state.loading == :loaded}>
         <.render_filters :if={@show_filters} static={@static} state={@state} myself={@myself} />
+
+        <CardChrome.load_earlier
+          :if={@show_pagination}
+          static={@static}
+          state={@state}
+          myself={@myself}
+          class={@button_class}
+        />
 
         <div class="relative rounded-[18px] border border-[#ecebe6] bg-white px-5 pb-3 pt-1.5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
           <.render_loading_overlay
@@ -120,7 +133,8 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
                     class="size-6"
                   />
                 </span>
-                <span>
+                <CardChrome.page_past_last :if={@past_last?} myself={@myself} class={@button_class} />
+                <span :if={!@past_last?}>
                   <span class="block font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
                     {dsl_text(
                       get_in(@static.config, [:empty_state, :message]),
@@ -522,6 +536,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
           dgettext("mishka_gervaz", "Load more events")
         )
       )
+      |> assign(:button_class, @button_class)
       |> assign(
         :load_more?,
         get_in(assigns.static.config, [:pagination, :type]) == :load_more and
@@ -534,7 +549,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
         type="button"
         phx-click="load_more"
         phx-target={@myself}
-        class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-xl border border-[#ecebe6] bg-white px-[22px] text-[13px] font-semibold text-[#4f4bcc] transition-colors hover:border-[#dcdbf5] hover:bg-[#eeedfb]"
+        class={@button_class}
       >
         <.dynamic_component
           module={@static.ui_adapter}
@@ -580,7 +595,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   # line for `:load_more`, so the window is named here; the total comes from the read's count.
   # A total at the read's scan cap is only a floor and says so.
   defp range_label(%{total_count: total} = state, max_cap) when is_integer(total) and total > 0 do
-    shown = min((state.page || 1) * page_size(state), total)
+    shown = CardChrome.shown_rows(state, page_size(state), total)
 
     dgettext("mishka_gervaz", "%{shown} of %{total} shown",
       shown: shown,

@@ -38,6 +38,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   alias MishkaGervaz.Table.Templates.Shared, as: Gervaz
   alias Phoenix.LiveView.JS
 
+  @button_class "h-[42px] rounded-xl border border-[#dcdbf5] bg-[#f2f1fc] px-[22px] text-[12.5px] font-bold text-[#4f4bcc] transition-colors hover:bg-[#e9e7fb] disabled:opacity-60"
+
   @doc """
   The control row — search, the archive switch, an Advanced panel holding every other filter — plus
   whatever the page wants on either side of it.
@@ -516,8 +518,11 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   A page outside the set, such as `?bloggers_page=2` over 14 bloggers, holds none of its rows and
   reads `Showing 0 of 14`. The card's empty label is only for an empty set, and this one is not.
 
-  A `:load_more` list keeps every page it has loaded on screen, so its range starts at the first row:
-  after two Load mores of 20 it reads `Showing 1–60 of 136`, never `41–60`.
+  A `:load_more` list keeps every page it has loaded on screen, so its range starts at the first row
+  shown: `1` after two Load mores of 20 (`Showing 1–60 of 136`), and `41` for a list opened at
+  `?page=3` (`Showing 41–60 of 136`) until Load earlier brings the pages before it. Its upper bound is
+  the state's `next_offset`, the rows the view really shows, when the table keeps one, and the page
+  slots otherwise, so rows another tab removed are not counted.
   """
   @spec range_label(map(), pos_integer(), String.t() | nil, atom()) :: String.t()
   def range_label(state, page_size, empty_label \\ nil, pagination_type \\ :numbered)
@@ -525,13 +530,22 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   def range_label(%{total_count: total}, _page_size, empty_label, _type) when total in [nil, 0],
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
 
-  def range_label(%{total_count: total, page: page}, page_size, _empty_label, :load_more)
+  def range_label(%{total_count: total, page: page} = state, page_size, _empty_label, :load_more)
       when is_integer(total) and is_integer(page) and page >= 1 do
-    dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
-      first: 1,
-      last: min(page * page_size, total),
-      total: total
-    )
+    first = (Map.get(state, :first_page, 1) - 1) * page_size + 1
+    last = min(loaded_end(state, page, page_size), total)
+
+    case first <= last and not past_last_page?(state, page_size) do
+      true ->
+        dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
+          first: first,
+          last: last,
+          total: total
+        )
+
+      false ->
+        dgettext("mishka_gervaz", "Showing 0 of %{total}", total: total)
+    end
   end
 
   def range_label(%{total_count: total, page: page}, page_size, _empty_label, _type)
@@ -550,6 +564,116 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   def range_label(_state, _page_size, empty_label, _type),
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
+
+  @doc """
+  How many rows a `:load_more` list shows of its `total`: from the first row shown to the last, so a
+  list opened at page 3 counts its own page and not the two before it.
+  """
+  @spec shown_rows(map(), pos_integer(), non_neg_integer()) :: non_neg_integer()
+  def shown_rows(state, page_size, total) do
+    page = Map.get(state, :page) || 1
+    skipped = (Map.get(state, :first_page, 1) - 1) * page_size
+    max(min(loaded_end(state, page, page_size), total) - skipped, 0)
+  end
+
+  defp loaded_end(%{next_offset: offset}, _page, _page_size)
+       when is_integer(offset) and offset > 0,
+       do: offset
+
+  defp loaded_end(_state, page, page_size), do: page * page_size
+
+  @doc """
+  Whether the view is a page past the list's last one: `?posts_page=999`, or a stale link to a page
+  that has since emptied. A load finished and the page, past the first, holds no row.
+
+  A gervaz that records what its last load read (`records_result` carrying `empty?`) says so itself.
+  Without it the page is past the last when the `total_count` ends before it starts.
+  """
+  @spec past_last_page?(map(), pos_integer()) :: boolean()
+  def past_last_page?(
+        %{
+          loading: :loaded,
+          page: page,
+          records_result: %{ok?: true, result: %{empty?: empty?}}
+        },
+        _page_size
+      )
+      when is_integer(page) and page > 1,
+      do: empty?
+
+  def past_last_page?(%{loading: :loaded, page: page, total_count: total}, page_size)
+      when is_integer(page) and page > 1 and is_integer(total) and is_integer(page_size),
+      do: (page - 1) * page_size >= total
+
+  def past_last_page?(_state, _page_size), do: false
+
+  @doc """
+  Whether a Load earlier button belongs above the rows: a `:load_more` or `:infinite` list opened past
+  its first page, with no load running. It reads the state's `first_page` with `Map.get/3`, so with a
+  gervaz that has none the button never shows.
+  """
+  @spec earlier?(map(), atom()) :: boolean()
+  def earlier?(%{loading: loading} = state, type)
+      when type in [:load_more, :infinite] and loading != :loading,
+      do: Map.get(state, :first_page, 1) > 1
+
+  def earlier?(_state, _type), do: false
+
+  @doc """
+  The Load earlier button above the rows of a list opened past its first page. A click sends gervaz's
+  `"load_earlier"` event, which reads the page before the first one shown and puts its rows above
+  them, one page a click, until the first page.
+
+  Nothing is drawn when `earlier?/2` is false. A template with its own look for the button passes
+  `class`.
+  """
+  attr :static, :map, required: true
+  attr :state, :map, required: true
+  attr :myself, :any, required: true
+  attr :class, :string, default: nil, doc: "the button's classes, in place of the shared look"
+
+  def load_earlier(assigns) do
+    assigns =
+      assigns
+      |> assign(:earlier?, earlier?(assigns.state, pagination_type(assigns)))
+      |> assign(:class, assigns.class || @button_class)
+
+    ~H"""
+    <div :if={@earlier?} class="mb-[14px] flex items-center justify-center">
+      <button type="button" phx-click="load_earlier" phx-target={@myself} class={@class}>
+        {dgettext("mishka_gervaz", "Load earlier")}
+      </button>
+    </div>
+    """
+  end
+
+  @doc """
+  The words and the way back for a page past the list's last: `No rows on this page` and a
+  `Go to page 1` button that sends gervaz's `"go_to_page"` event.
+
+  A template puts it where its empty message goes when `past_last_page?/2` is true.
+  """
+  attr :myself, :any, required: true
+  attr :class, :string, default: nil, doc: "the button's classes, in place of the shared look"
+
+  def page_past_last(assigns) do
+    assigns = assign(assigns, :class, assigns.class || @button_class)
+
+    ~H"""
+    <div class="flex flex-col items-center gap-3">
+      <div class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+        {dgettext("mishka_gervaz", "No rows on this page")}
+      </div>
+      <button
+        type="button"
+        phx-click={JS.push("go_to_page", value: %{page: 1}, target: @myself)}
+        class={@class}
+      >
+        {dgettext("mishka_gervaz", "Go to page 1")}
+      </button>
+    </div>
+    """
+  end
 
   @doc """
   What sits under the list: numbered pages, or a Load More button over the page-size picker.
@@ -807,7 +931,15 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   attr :icon, :string, default: "hero-document"
   attr :class, :string, default: nil
 
+  attr :state, :map,
+    default: nil,
+    doc: "with `myself`, lets a page past the last say so and offer page 1"
+
+  attr :myself, :any, default: nil
+
   def empty_state(assigns) do
+    assigns = assign(assigns, :past_last?, past_last?(assigns))
+
     ~H"""
     <div
       id={@id}
@@ -824,13 +956,22 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
           class="size-6"
         />
       </span>
-      <div class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+      <.page_past_last :if={@past_last?} myself={@myself} />
+      <div
+        :if={!@past_last?}
+        class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]"
+      >
         {translate_dsl(get_in(@static.config, [:empty_state, :message])) ||
           dgettext("mishka_gervaz", "No records found")}
       </div>
     </div>
     """
   end
+
+  defp past_last?(%{state: %{} = state, myself: myself} = assigns) when not is_nil(myself),
+    do: past_last_page?(state, page_size(assigns))
+
+  defp past_last?(_assigns), do: false
 
   defp translate_dsl(text) when is_binary(text),
     do: Gettext.dgettext(MishkaCmsCore.Gettext, "mishka_gervaz", text)
@@ -928,6 +1069,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
           myself={@myself}
         />
 
+        <.load_earlier :if={@show_pagination} static={@static} state={@state} myself={@myself} />
+
         <div class="relative isolate">
           <.loading_overlay :if={
             @state.has_initial_data? and @state.loading == :loading and
@@ -943,6 +1086,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
             <.empty_state
               id={"#{@static.stream_name}-empty-state"}
               static={@static}
+              state={@state}
+              myself={@myself}
               icon={@empty_icon}
               class={@empty_class}
             />
