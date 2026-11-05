@@ -150,7 +150,7 @@ defmodule MishkaCmsCore.MixProject do
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
       mishka_dep(:mishka_installer, "~> 0.1.16"),
-      {:guarded_struct, "~> 0.1.4"},
+      {:guarded_struct, "~> 0.1.6"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
       # Share images (`MishkaCmsCore.Runtime.ShareCard`), drawn with libvips in a separate OS process
