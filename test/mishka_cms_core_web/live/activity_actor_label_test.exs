@@ -109,7 +109,8 @@ defmodule MishkaCmsCoreWeb.Test.ActivityActorLabelTest do
 
       render(view)
 
-      assert feed_actor(view, live_edit) == "Master"
+      assert feed_actors(view, live_edit) != []
+      assert Enum.uniq(feed_actors(view, live_edit)) == ["Master"]
       refute_master_email(view, newcomer)
     end
   end
@@ -144,6 +145,16 @@ defmodule MishkaCmsCoreWeb.Test.ActivityActorLabelTest do
 
   defp feed_actor(view, layout),
     do: text(view, ~s([id^="activity-pt-#{layout.id}-update-"][id$="-actor"]))
+
+  # Every feed row of the layout's updates: the layout's creation and its edit are separate rows when
+  # they fall in different seconds, so a live test reads them all instead of guessing which one.
+  defp feed_actors(view, layout) do
+    view
+    |> render()
+    |> LazyHTML.from_fragment()
+    |> LazyHTML.query(~s([id^="activity-pt-#{layout.id}-update-"][id$="-actor"]))
+    |> Enum.map(&(&1 |> LazyHTML.text() |> String.trim()))
+  end
 
   defp text(view, selector) do
     view

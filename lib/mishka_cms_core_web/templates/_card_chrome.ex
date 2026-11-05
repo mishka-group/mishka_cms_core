@@ -311,7 +311,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       |> assign(:switches, switches)
       |> assign(:fields, fields)
       |> assign(:active_filters?, map_size(assigns.state.filter_values || %{}) > 0)
-      |> assign(:count, range_label(assigns.state, page_size(assigns), assigns.empty_label))
+      |> assign(:count, count_label(assigns))
 
     ~H"""
     <div :if={@state.supports_archive} class="mb-3.5 flex">
@@ -407,7 +407,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   def select_row(assigns) do
     assigns =
-      assign(assigns, :count, range_label(assigns.state, page_size(assigns), assigns.empty_label))
+      assign(assigns, :count, count_label(assigns))
 
     ~H"""
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3 px-0.5">
@@ -515,14 +515,26 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   A page outside the set, such as `?bloggers_page=2` over 14 bloggers, holds none of its rows and
   reads `Showing 0 of 14`. The card's empty label is only for an empty set, and this one is not.
-  """
-  @spec range_label(map(), pos_integer(), String.t() | nil) :: String.t()
-  def range_label(state, page_size, empty_label \\ nil)
 
-  def range_label(%{total_count: total}, _page_size, empty_label) when total in [nil, 0],
+  A `:load_more` list keeps every page it has loaded on screen, so its range starts at the first row:
+  after two Load mores of 20 it reads `Showing 1–60 of 136`, never `41–60`.
+  """
+  @spec range_label(map(), pos_integer(), String.t() | nil, atom()) :: String.t()
+  def range_label(state, page_size, empty_label \\ nil, pagination_type \\ :numbered)
+
+  def range_label(%{total_count: total}, _page_size, empty_label, _type) when total in [nil, 0],
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
 
-  def range_label(%{total_count: total, page: page}, page_size, _empty_label)
+  def range_label(%{total_count: total, page: page}, page_size, _empty_label, :load_more)
+      when is_integer(total) and is_integer(page) and page >= 1 do
+    dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
+      first: 1,
+      last: min(page * page_size, total),
+      total: total
+    )
+  end
+
+  def range_label(%{total_count: total, page: page}, page_size, _empty_label, _type)
       when is_integer(total) and is_integer(page) and page >= 1 and
              (page - 1) * page_size < total do
     dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
@@ -532,11 +544,11 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     )
   end
 
-  def range_label(%{total_count: total, page: page}, page_size, _empty_label)
+  def range_label(%{total_count: total, page: page}, page_size, _empty_label, _type)
       when is_integer(total) and is_integer(page) and is_integer(page_size),
       do: dgettext("mishka_gervaz", "Showing 0 of %{total}", total: total)
 
-  def range_label(_state, _page_size, empty_label),
+  def range_label(_state, _page_size, empty_label, _type),
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
 
   @doc """
@@ -550,7 +562,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   attr :myself, :any, required: true
 
   def pagination(assigns) do
-    pagination_type = get_in(assigns.static.config, [:pagination, :type]) || :numbered
+    pagination_type = pagination_type(assigns)
 
     cond do
       pagination_type == :numbered and is_integer(assigns.state.total_pages) ->
@@ -740,6 +752,12 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     end)
     |> Kernel.++([total])
   end
+
+  defp count_label(%{state: state, empty_label: empty_label} = assigns),
+    do: range_label(state, page_size(assigns), empty_label, pagination_type(assigns))
+
+  defp pagination_type(%{static: static}),
+    do: get_in(static.config, [:pagination, :type]) || :numbered
 
   defp page_size(%{state: state, static: static}), do: state.current_page_size || static.page_size
 

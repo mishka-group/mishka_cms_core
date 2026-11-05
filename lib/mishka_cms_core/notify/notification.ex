@@ -188,7 +188,9 @@ defmodule MishkaCmsCore.Notify.Notification do
         # "Read" = read? == true. String option values (HEEx would drop a `value={false}` attr);
         # Gervaz submits the string and `filter_input` casts it to the boolean calc, so the
         # filtering runs entirely through Ash.
-        filter :read?, :select do
+        filter :read, :select do
+          source :read?
+
           options fn ->
             [
               {dgettext("mishka_gervaz", "Unread"), "false"},

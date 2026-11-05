@@ -56,6 +56,17 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
       assert range(%{total_count: 0, page: 2}) == "0 bloggers"
     end
 
+    test "a Load more list counts from its first row, as every loaded page is on screen" do
+      assert CardChrome.range_label(%{total_count: 136, page: 2}, 20, nil, :load_more) ==
+               "Showing 1–40 of 136"
+
+      assert CardChrome.range_label(%{total_count: 48, page: 3}, 20, nil, :load_more) ==
+               "Showing 1–48 of 48"
+
+      assert CardChrome.range_label(%{total_count: 136, page: 2}, 20, nil, :numbered) ==
+               "Showing 21–40 of 136"
+    end
+
     test "falls back to its own words when the card gives no empty label" do
       assert CardChrome.range_label(%{total_count: 0, page: 1}, 20) == "Nothing found"
     end
