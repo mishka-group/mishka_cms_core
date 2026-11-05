@@ -166,6 +166,12 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
       assert CardChrome.shown_rows(%{page: 3, first_page: 1}, 20, 136) == 60
       assert CardChrome.shown_rows(%{page: 999, first_page: 999}, 20, 136) == 0
     end
+
+    test "counts none on a page past the last, however far the capped total reaches" do
+      state = %{loading: :loaded, page: 999, first_page: 1, total_count: 10_000}
+
+      assert CardChrome.shown_rows(state, 20, 10_000) == 0
+    end
   end
 
   describe "load_earlier/1 and empty_state/1" do

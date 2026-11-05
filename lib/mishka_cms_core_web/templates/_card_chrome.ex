@@ -567,13 +567,18 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   @doc """
   How many rows a `:load_more` list shows of its `total`: from the first row shown to the last, so a
-  list opened at page 3 counts its own page and not the two before it.
+  list opened at page 3 counts its own page and not the two before it. A page past the last shows
+  none.
   """
   @spec shown_rows(map(), pos_integer(), non_neg_integer()) :: non_neg_integer()
   def shown_rows(state, page_size, total) do
     page = Map.get(state, :page) || 1
     skipped = (Map.get(state, :first_page, 1) - 1) * page_size
-    max(min(loaded_end(state, page, page_size), total) - skipped, 0)
+
+    case past_last_page?(state, page_size) do
+      true -> 0
+      false -> max(min(loaded_end(state, page, page_size), total) - skipped, 0)
+    end
   end
 
   defp loaded_end(%{next_offset: offset}, _page, _page_size)

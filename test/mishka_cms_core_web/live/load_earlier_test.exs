@@ -124,6 +124,7 @@ defmodule MishkaCmsCoreWeb.Live.LoadEarlierTest do
 
       assert render(view) =~ "No rows on this page"
       refute render(view) =~ "No matching events"
+      assert shown(view) == 0
 
       view |> element("button", "Go to page 1") |> render_click()
       render_async(view)
