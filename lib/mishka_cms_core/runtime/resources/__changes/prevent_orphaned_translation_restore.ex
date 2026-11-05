@@ -47,7 +47,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PreventOrphanedTranslationRest
 
   ## The refusal
 
-  An `Ash.Error.Changes.InvalidAttribute` on `:language_group_id` whose message is `message/2`: the
+  An `Ash.Error.Changes.InvalidAttribute` on `:language_group_id` whose message is `message/3`: the
   translation's language, its original's, and what to do. The API returns that message as it is.
   It is written in the Gettext locale of the process the action runs in, `errors` domain, since the
   language names inside it are translated too; a request with no locale reads it in English.

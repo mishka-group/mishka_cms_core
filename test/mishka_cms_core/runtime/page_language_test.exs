@@ -41,8 +41,10 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
 
   @repo Application.compile_env!(:mishka_cms_core, :repo)
 
+  @refused_delete "This is the original English version. Its Persian translation is still live, so it " <>
+                    "can't be deleted yet. Archive or delete that translation first, then this one."
   @refused "This is the original English version. Its Persian translation is still live, so it " <>
-             "can't be deleted yet. Archive or delete that translation first, then this one."
+             "can't be archived yet. Archive or delete that translation first, then this one."
   @restore_refused "This is the Persian translation. Its original English version is archived, so " <>
                      "it can't be restored yet. Restore the original first, then this one."
   @restore_gone "This is the Persian translation. Its original version has been deleted for good, " <>
@@ -287,7 +289,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
 
       assert error.message ==
                "This is the original English version. Its translations in French and Persian " <>
-                 "are still live, so it can't be deleted yet. Archive or delete those " <>
+                 "are still live, so it can't be archived yet. Archive or delete those " <>
                  "translations first, then this one."
 
       refute error.message =~ ~r/master/i
@@ -316,7 +318,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
 
       error = refusal(master, action: :permanent_destroy, tenant: site.id, actor: tenant_user)
 
-      assert error.message == @refused
+      assert error.message == @refused_delete
     end
 
     test "reads in the language of the process that deletes", %{
@@ -333,7 +335,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
       assert error.message ==
                "[fa] This is the original انگلیسی version. " <>
                  "[fa] Its translations in فارسی و فرانسوی are still live, so it " <>
-                 "can't be deleted yet. Archive or delete those translations first, then this one."
+                 "can't be archived yet. Archive or delete those translations first, then this one."
     end
 
     test "names the original the admin can act on, out of the API's sight", %{
@@ -400,10 +402,24 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
     end
 
     test "reads a language it has no name for as its code, and an original with none as unnamed" do
-      assert PreventMasterLanguageDeletion.message(nil, ["xx", "fa-IR"]) ==
+      assert PreventMasterLanguageDeletion.message(nil, ["xx", "fa-IR"], :destroy) ==
                "This is the original version. Its translations in Persian (Iran) and XX are still " <>
                  "live, so it can't be deleted yet. Archive or delete those translations first, " <>
                  "then this one."
+    end
+
+    test "names the action it refuses, archived for an archive and deleted for a delete" do
+      assert PreventMasterLanguageDeletion.message("en", ["fa"], :archive) =~
+               "can't be archived yet"
+
+      assert PreventMasterLanguageDeletion.message("en", ["fa"], :destroy) =~
+               "can't be deleted yet"
+
+      assert PreventMasterLanguageDeletion.message("en", ["fa", "fr"], :archive) =~
+               "can't be archived yet"
+
+      assert PreventMasterLanguageDeletion.message("en", ["fa", "fr"], :destroy) =~
+               "can't be deleted yet"
     end
   end
 
@@ -466,7 +482,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
                  actor: tenant_user
                )
 
-      assert Exception.message(error) =~ @refused
+      assert Exception.message(error) =~ @refused_delete
     end
 
     test "and for a master", %{site: site, master: master, master_user: master_user} do
@@ -476,7 +492,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
       assert {:error, %Ash.Error.Invalid{} = error} =
                Ash.destroy(page, action: :master_permanent_destroy, actor: master_user)
 
-      assert Exception.message(error) =~ @refused
+      assert Exception.message(error) =~ @refused_delete
     end
 
     # AN ARCHIVED TRANSLATION IS IN NOBODY'S WAY: the archive lists a master beside its archived

@@ -123,6 +123,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
     |> Ash.create!(authorize?: false)
   end
 
+  @refused_archive "This is the original English version. Its Persian translation is still live, so it " <>
+                     "can't be archived yet. Archive or delete that translation first, then this one."
   @refused "This is the original English version. Its Persian translation is still live, so it " <>
              "can't be deleted yet. Archive or delete that translation first, then this one."
 
@@ -436,7 +438,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
         )
 
       assert response.status == 400
-      assert refusal(response) == @refused
+      assert refusal(response) == @refused_archive
       assert Ash.get!(Page, page.id, action: :master_get, authorize?: false).archived_at == nil
     end
   end
@@ -882,7 +884,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
         )
 
       assert response.status == 400
-      assert refusal(response) == @refused
+      assert refusal(response) == @refused_archive
       assert Ash.get!(Page, page.id, action: :master_get, authorize?: false).archived_at == nil
     end
 

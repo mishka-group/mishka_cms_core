@@ -925,8 +925,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree.Styles do
   # Only where the writer uses the bang. On a plain tag `p-[8px]!` is the author's own text and
   # lifting it would re-emit it without the bang, which changes what it means.
   #
-  # AND ONLY WHAT IS WRITTEN BACK THE SAME. `bg-[url(/hero.jpg)]` read as a background came back as
-  # `[background:url(/hero.jpg)]` — the shorthand, which Tailwind sorts after `bg-cover` and so
+  # AND ONLY WHAT IS WRITTEN BACK THE SAME. A `bg-` arbitrary url value read as a background came back
+  # as a bracketed `background:` property — the shorthand, which Tailwind sorts after `bg-cover` and so
   # resets the size — and `p-[8]`, which paints nothing, came back as eight pixels of padding.
   #
   # Bang included. On a component a class WITHOUT one is the author's, not this writer's: read, it

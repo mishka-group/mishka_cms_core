@@ -31,7 +31,7 @@ msgstr ""
 msgid "Cannot restore version of layout from another site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:105
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:123
 #, elixir-autogen, elixir-format
 msgid "Its %{languages} translation is still live, so it can't be deleted yet. Archive or delete that translation first, then this one."
 msgstr ""
@@ -56,12 +56,12 @@ msgstr ""
 msgid "Its original version is archived, so it can't be restored yet. Restore the original first, then this one."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:127
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:159
 #, elixir-autogen, elixir-format
 msgid "Its translations could not be checked just now, so it can't be deleted yet. Try again in a moment."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:116
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:139
 #, elixir-autogen, elixir-format
 msgid "Its translations in %{languages} are still live, so it can't be deleted yet. Archive or delete those translations first, then this one."
 msgstr ""
@@ -131,12 +131,12 @@ msgstr ""
 msgid "This is the master site. Make another site master first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:137
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:169
 #, elixir-autogen, elixir-format
 msgid "This is the original %{language} version."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:136
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:168
 #, elixir-autogen, elixir-format
 msgid "This is the original version."
 msgstr ""
@@ -152,7 +152,7 @@ msgstr ""
 msgid "account"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:332
+#: lib/mishka_cms_core/notify/notification.ex:334
 #, elixir-autogen
 msgid "actor"
 msgstr ""
@@ -284,7 +284,7 @@ msgstr ""
 msgid "post"
 msgstr ""
 
-#: lib/mishka_cms_core/notify/notification.ex:325
+#: lib/mishka_cms_core/notify/notification.ex:327
 #, elixir-autogen
 msgid "recipient"
 msgstr ""
@@ -2568,4 +2568,19 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/comment.ex:1155
 #, elixir-autogen, elixir-format
 msgid "A guest's email needs the guest's name."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:115
+#, elixir-autogen, elixir-format
+msgid "Its %{languages} translation is still live, so it can't be archived yet. Archive or delete that translation first, then this one."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:149
+#, elixir-autogen, elixir-format
+msgid "Its translations could not be checked just now, so it can't be archived yet. Try again in a moment."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:131
+#, elixir-autogen, elixir-format
+msgid "Its translations in %{languages} are still live, so it can't be archived yet. Archive or delete those translations first, then this one."
 msgstr ""
