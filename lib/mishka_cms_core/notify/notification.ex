@@ -273,7 +273,7 @@ defmodule MishkaCmsCore.Notify.Notification do
 
       url_sync do
         mode :bidirectional
-        params [:filters, :sort, :page, :search]
+        params [:filters, :sort, :page, :search, :page_size]
         prefix "notifs"
       end
 

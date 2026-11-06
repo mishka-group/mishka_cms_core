@@ -251,6 +251,44 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
     end
   end
 
+  describe "the rows-per-page choice in the address" do
+    setup :create_events
+
+    test "the notification inbox puts the chosen size in the URL and opens at it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @inbox)
+      render_async(view)
+      assert count_rows(view) == 20
+      assert %{"notifs_sort" => _} = view |> assert_patch() |> query_of()
+
+      view |> element("form[phx-change='change_page_size']") |> render_change(%{"size" => "50"})
+      render_async(view)
+
+      assert %{"notifs_page_size" => "50"} = view |> assert_patch() |> query_of()
+
+      {:ok, reloaded, _html} = live(conn, @inbox <> "?notifs_page_size=50")
+      render_async(reloaded)
+      assert count_rows(reloaded) == 45
+    end
+
+    test "the activity page puts the chosen size in the URL and opens at it", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @activity)
+      render_async(view)
+      assert {1, 20} = shown(view)
+
+      view |> element("form[phx-change='change_page_size']") |> render_change(%{"size" => "50"})
+      render_async(view)
+
+      assert %{"activity_page_size" => "50"} = view |> assert_patch() |> query_of()
+
+      {:ok, reloaded, _html} = live(conn, @activity <> "?activity_page_size=50")
+      render_async(reloaded)
+      assert {1, last} = shown(reloaded)
+      assert last > 20 and last <= 50
+    end
+  end
+
+  defp query_of(path), do: path |> URI.parse() |> Map.fetch!(:query) |> URI.decode_query()
+
   defp create_events(%{site: site}) do
     for _n <- 1..25, do: create_media!(site_id: site.id)
     :ok

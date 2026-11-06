@@ -228,7 +228,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
 
       url_sync do
         mode :bidirectional
-        params [:filters, :page]
+        params [:filters, :page, :page_size]
         prefix "activity"
         max_filter_length 500
       end
