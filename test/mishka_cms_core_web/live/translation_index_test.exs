@@ -203,6 +203,29 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
     end
   end
 
+  describe "paging" do
+    test "shows Load More instead of a numbered pager, and Load More brings the next rows", %{
+      conn: conn
+    } do
+      rows = for n <- 1..55, do: orphan!("Paged #{n}", nil)
+
+      view = conn |> as_master() |> open()
+
+      assert has_element?(view, "button[phx-click='load_more']", "Load More")
+      refute render(view) =~ ~r/Page \d+ of \d+/
+      refute has_element?(view, "button[phx-click='goto_page']")
+
+      shown = fn -> Enum.count(rows, fn {_key, t} -> has_element?(view, row(t)) end) end
+      before_more = shown.()
+      assert before_more < length(rows)
+
+      view |> element("button[phx-click='load_more']") |> render_click()
+      render_async(view, @await)
+
+      assert shown.() > before_more
+    end
+  end
+
   describe "whose rows an admin is shown" do
     test "a master is shown every site's rows and the global ones", %{
       conn: conn,
