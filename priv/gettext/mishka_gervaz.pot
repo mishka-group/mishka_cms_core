@@ -6792,3 +6792,8 @@ msgstr ""
 #, elixir-autogen, elixir-format
 msgid "This publish kept no copy of what it published."
 msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/web/events/step_handler.ex:1
+#, elixir-autogen, elixir-format
+msgid "%{message} Check it on step %{number}, %{step}."
+msgstr ""

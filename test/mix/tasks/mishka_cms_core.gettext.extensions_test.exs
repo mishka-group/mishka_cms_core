@@ -162,6 +162,24 @@ defmodule Mix.Tasks.MishkaCmsCore.Gettext.ExtensionsTest do
     assert templates(core) == before
   end
 
+  test "a reference without a line is written with line 1 so mix gettext.extract can read it", %{
+    core: core
+  } do
+    source = Path.join(Path.dirname(core), "linewise_source")
+
+    in_shell(fn ->
+      GettextTemplates.merge(core, source, %{
+        "default.pot" => %Expo.Messages{
+          messages: [%Expo.Message.Singular{msgid: ["No line"], references: [["lib/no_line.ex"]]}]
+        }
+      })
+    end)
+
+    message = core |> templates() |> Map.fetch!("default.pot") |> parse() |> find("No line")
+
+    assert List.flatten(message.references) == [{"../linewise_source/lib/no_line.ex", 1}]
+  end
+
   defp write_core_templates(core) do
     write_template(core, "default.pot", [
       %Expo.Message.Singular{
