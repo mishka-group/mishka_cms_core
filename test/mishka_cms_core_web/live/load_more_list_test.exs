@@ -12,9 +12,7 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   the last page shown last, which the footer reads from the table's state alone.
 
   A list opened past its first page (`?notifs_page=3`) offers Load earlier above its rows, and a
-  page past the last (`?notifs_page=999`) says so and offers a way back to page 1. Both need the Load
-  earlier of a mishka_gervaz after 0.0.4, so those tests are tagged `:gervaz_load_earlier` and
-  `test_helper.exs` leaves them out against a gervaz without it.
+  page past the last (`?notifs_page=999`) says so and offers a way back to page 1.
   """
   use MishkaCmsCore.ConnCase
 
@@ -25,6 +23,7 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Notify
+  alias MishkaCmsCore.Notify.Notification
   alias MishkaCmsCore.Runtime.States.SiteState
 
   @password "Password123!"
@@ -65,8 +64,6 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   end
 
   describe "the notification inbox" do
-    @describetag :gervaz_load_earlier
-
     test "opened at page 3 offers Load earlier, which brings the page before it", %{conn: conn} do
       {:ok, view, _html} = live(conn, @inbox <> "?notifs_page=3")
       render_async(view)
@@ -108,8 +105,6 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   end
 
   describe "the activity page" do
-    @describetag :gervaz_load_earlier
-
     setup :create_events
 
     test "opened at page 2 offers Load earlier, which brings the page before it", %{conn: conn} do
@@ -170,6 +165,34 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
              |> LazyHTML.query("select[name='size'] option")
              |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
              |> Enum.sort() == ["100", "20", "50"]
+    end
+
+    test "counts the rows it shows when another tab removes some", %{conn: conn, admin: admin} do
+      {:ok, view, _html} = live(conn, @inbox)
+      render_async(view)
+      view |> element("button[phx-click='load_more']") |> render_click()
+      render_async(view)
+
+      assert [_leading, _center, {"trailing", trailing}] = footer(view)
+      assert text(trailing) == "Showing 1–40 of 45"
+
+      html = render(view)
+
+      removed =
+        Notification
+        |> Ash.read!(actor: admin)
+        |> Enum.filter(&String.contains?(html, &1.id))
+        |> Enum.take(2)
+
+      assert length(removed) == 2
+      for notification <- removed, do: Ash.destroy!(notification, actor: admin)
+
+      :sys.get_state(view.pid)
+      render_async(view)
+
+      assert [_leading, _center, {"trailing", trailing}] = footer(view)
+      assert text(trailing) == "Showing 1–38 of 43"
+      assert count_rows(view) == 38
     end
 
     test "draws no Load More once every row is shown", %{conn: conn} do

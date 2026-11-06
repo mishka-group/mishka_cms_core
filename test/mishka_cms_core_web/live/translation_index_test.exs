@@ -225,7 +225,6 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       assert shown.() > before_more
     end
 
-    @tag :gervaz_pagination_row
     test "ends with the page-size picker, Load More and the rows shown, in order", %{conn: conn} do
       for n <- 1..55, do: orphan!("Footer #{n}", nil)
 
