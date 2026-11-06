@@ -184,7 +184,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
             report: report,
             message: message(report, state.noun)
         })
-        |> put_flash(:info, message(report, state.noun))
+        |> put_flash(:success, message(report, state.noun))
 
       {:error, reason} ->
         # AND WHAT THE SITE DID GET STAYS ON THE SCREEN. A run that fails has usually written

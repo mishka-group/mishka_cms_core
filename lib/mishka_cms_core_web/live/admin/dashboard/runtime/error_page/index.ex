@@ -79,7 +79,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
     {:noreply,
      socket
      |> PreviewHelpers.dismiss()
-     |> put_flash(:info, gettext("Error page updated successfully"))}
+     |> put_flash(:success, gettext("Error page updated successfully"))}
   end
 
   @impl true
@@ -238,5 +238,5 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.ErrorPage.Index do
     do:
       socket
       |> PreviewHelpers.dismiss()
-      |> put_flash(:info, gettext("Error page created successfully"))
+      |> put_flash(:success, gettext("Error page created successfully"))
 end

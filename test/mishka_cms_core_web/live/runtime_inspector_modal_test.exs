@@ -971,7 +971,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       assert copy.site_id == nil
 
       refute has_element?(view, @duplicate), "the modal stayed open on the source"
-      assert flash(view, "info") == "Duplicated as “#{copy.name}”"
+      assert flash(view, "success") == "Duplicated as “#{copy.name}”"
     end
 
     test "is offered on no other runtime table's modal", %{conn: conn, site: site} do
@@ -1260,7 +1260,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
         |> element("#preview-code-form")
         |> render_submit(%{"op" => "save", "source" => "<p>typed</p>", "label" => "Typed"})
 
-        assert flash(view, "info") =~ "Saved as draft"
+        assert flash(view, "success") =~ "Saved as draft"
         refute has_element?(view, "#preview-code-form")
         assert length(drafts_of(page, site)) == 2
       end

@@ -27,7 +27,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaMove do
   folders, and the folder being moved is never listed, so nothing under it can be opened. A refusal
   is shown in the dialog, and it stays open.
 
-  A move that lands sends `{:put_flash, :info, message}` to the page and closes. The page hears the
+  A move that lands sends `{:put_flash, :success, message}` to the page and closes. The page hears the
   write itself the way it hears anybody's — the row's own broadcast.
   """
   use Phoenix.LiveComponent
@@ -85,7 +85,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.MediaMove do
 
     case move(item, socket.assigns.browse, user) do
       {:ok, _moved} ->
-        send(self(), {:put_flash, :info, moved_message(item, socket.assigns.listing)})
+        send(self(), {:put_flash, :success, moved_message(item, socket.assigns.listing)})
         {:noreply, assign(socket, :item, nil)}
 
       {:error, error} ->

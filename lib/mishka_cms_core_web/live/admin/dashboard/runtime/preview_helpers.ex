@@ -836,7 +836,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
       {:ok, saved} ->
         socket
         |> open(saved.id, "code")
-        |> put_flash(:info, gettext("Saved."))
+        |> put_flash(:success, gettext("Saved."))
 
       {:error, error} ->
         socket
@@ -1061,7 +1061,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
         socket
         |> reload_drafts(page_num, draft.id)
-        |> put_flash(:info, gettext("Saved as draft — preview or publish it from the bar above."))
+        |> put_flash(
+          :success,
+          gettext("Saved as draft — preview or publish it from the bar above.")
+        )
 
       {:error, _error} ->
         put_flash(socket, :error, gettext("Could not save the draft."))
@@ -1079,7 +1082,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
       {:ok, _record} ->
         socket
         |> reload_drafts(1, nil)
-        |> put_flash(:info, published_message(preview.resource))
+        |> put_flash(:success, published_message(preview.resource))
 
       {:error, error} ->
         put_flash(socket, :error, publish_error(error))
@@ -1137,7 +1140,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         false -> {surviving_page(p), chosen}
       end
 
-    socket |> reload_drafts(page, select) |> put_flash(:info, gettext("Draft discarded."))
+    socket |> reload_drafts(page, select) |> put_flash(:success, gettext("Draft discarded."))
   end
 
   defp surviving_page(%{drafts: [_last_one], drafts_page: page}), do: max(page - 1, 1)
@@ -1823,7 +1826,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   def compiled(socket, {:ok, {:compiled, {:ok, _module}}}) do
     socket
     |> refresh_after_compile()
-    |> put_flash(:info, compiled_message(socket.assigns.preview))
+    |> put_flash(:success, compiled_message(socket.assigns.preview))
   end
 
   def compiled(socket, {:ok, {:compiled, {:error, reason}}}) do
@@ -1937,7 +1940,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   end
 
   defp announce_copy(socket, copy),
-    do: put_flash(socket, :info, gettext("Duplicated as “%{name}”", name: copy.name))
+    do: put_flash(socket, :success, gettext("Duplicated as “%{name}”", name: copy.name))
 
   # OFFERED ONLY WHERE THE WRITE WOULD LAND, because a button that leads to a refusal is worse than
   # no button. `can_edit?/3` keeps a site to its own rows, which is also what keeps a copy in its

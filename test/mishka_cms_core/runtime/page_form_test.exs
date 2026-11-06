@@ -312,7 +312,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
         end)
 
       assert_received {:updated, updated}
-      assert flash(updated, :info) == @contact.success
+      assert flash(updated, :success) == @contact.success
       assert logged =~ "page form contact was sent, and nothing receives it"
       assert logged =~ "fields: name, email"
       refute logged =~ "a@b.co"
@@ -344,7 +344,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
           "contact" => %{"name" => "Shahryar", "email" => "a@b.co"}
         })
 
-      assert flash(updated, :info) == @contact.success
+      assert flash(updated, :success) == @contact.success
       refute flash(updated, :error)
     end
 
@@ -431,7 +431,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
         end)
 
       assert_received {:updated, updated}
-      assert flash(updated, :info) == @contact.success
+      assert flash(updated, :success) == @contact.success
       assert logged =~ "this plugin is broken"
     end
 
@@ -465,7 +465,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
         )
 
       assert_received {:stored, %{name: "Shahryar", email: "a@b.co"}}
-      assert flash(updated, :info) == @contact.success
+      assert flash(updated, :success) == @contact.success
     end
 
     test "a function returning nil is still a success, rather than a 500 on the next line" do
@@ -478,7 +478,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
           fn _values -> nil end
         )
 
-      assert flash(updated, :info) == @contact.success
+      assert flash(updated, :success) == @contact.success
       assert form(updated, :contact_form)[:email].value == nil
     end
 
@@ -492,7 +492,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
           fn _values -> {:error, :database_is_on_fire} end
         )
 
-      refute flash(updated, :info)
+      refute flash(updated, :success)
       assert flash(updated, :error)
       assert form(updated, :contact_form)[:email].value == "a@b.co"
     end
@@ -560,7 +560,7 @@ defmodule MishkaCmsCore.Runtime.PageFormTest do
           fn _values -> :ok end
         )
 
-      assert PageForm.announcements(updated.assigns.flash) == [{:info, @contact.success}]
+      assert PageForm.announcements(updated.assigns.flash) == [{:success, @contact.success}]
     end
 
     test "and the refusal, which is the half the region had no way to show" do

@@ -76,7 +76,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
     {:noreply,
      socket
      |> PreviewHelpers.dismiss()
-     |> put_flash(:info, gettext("Layout updated successfully"))}
+     |> put_flash(:success, gettext("Layout updated successfully"))}
   end
 
   @impl true
@@ -230,5 +230,5 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Layout.Index do
     do:
       socket
       |> PreviewHelpers.dismiss()
-      |> put_flash(:info, gettext("Layout created successfully"))
+      |> put_flash(:success, gettext("Layout created successfully"))
 end

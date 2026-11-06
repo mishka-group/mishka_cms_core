@@ -621,7 +621,7 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       assert [_] = stored(used, site.id)
       refute has_element?(view, row(gone)), "the deleted row is still in the table"
       assert has_element?(view, row(kept))
-      assert has_element?(view, "#flash-info", "unused translation(s) removed")
+      assert has_element?(view, "#flash-success", "unused translation(s) removed")
     end
 
     test "says so when every word is still asked for", %{conn: conn, site: site} do
@@ -672,7 +672,7 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       click(view, "#translations-sync")
 
       assert has_element?(view, chips(en), "FA"), "the new FA row did not reach the table"
-      assert has_element?(view, "#flash-info", "Templates scanned")
+      assert has_element?(view, "#flash-success", "Templates scanned")
       assert languages(key, site.id) == ["en", "fa"]
     end
 

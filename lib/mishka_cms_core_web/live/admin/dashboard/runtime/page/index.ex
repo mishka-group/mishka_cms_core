@@ -107,7 +107,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   @impl true
   def handle_info({:form_saved, :update, _result}, socket) do
     {:noreply,
-     socket |> PreviewHelpers.dismiss() |> put_flash(:info, gettext("Page updated successfully"))}
+     socket
+     |> PreviewHelpers.dismiss()
+     |> put_flash(:success, gettext("Page updated successfully"))}
   end
 
   @impl true
@@ -365,7 +367,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
         socket
         |> assign(:translation, nil)
         |> put_flash(
-          :info,
+          :success,
           gettext("Translation created as inactive — translate it, then activate it to go live.")
         )
         |> PreviewHelpers.open_configuration(created.id)
@@ -396,5 +398,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
 
   defp created(socket),
     do:
-      socket |> PreviewHelpers.dismiss() |> put_flash(:info, gettext("Page created successfully"))
+      socket
+      |> PreviewHelpers.dismiss()
+      |> put_flash(:success, gettext("Page created successfully"))
 end

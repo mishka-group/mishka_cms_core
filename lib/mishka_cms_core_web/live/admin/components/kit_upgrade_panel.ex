@@ -595,7 +595,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.KitUpgradePanel do
   defp announce(socket, key, message) do
     socket
     |> assign(:kit_upgrade, Map.put(socket.assigns.kit_upgrade, key, message))
-    |> Phoenix.LiveView.put_flash(:info, message)
+    |> Phoenix.LiveView.put_flash(:success, message)
   end
 
   # THE ACTOR IS ALREADY ON THE SOCKET. A dashboard is a session and `:current_user` is who it is

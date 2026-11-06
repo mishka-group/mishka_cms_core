@@ -388,7 +388,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
         )
 
       assert_received {:stored, %{name: "Ada"}}
-      assert socket.assigns.flash["info"] == "Sent. Thank you."
+      assert socket.assigns.flash["success"] == "Sent. Thank you."
       refute Map.has_key?(socket.assigns, :news_form)
     end
   end
@@ -411,7 +411,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
             printed =
               ExUnit.CaptureIO.capture_io(fn ->
                 assert {:noreply, socket} = module.handle_event(event, params, flashing())
-                assert socket.assigns.flash["info"] == "Sent. Thank you."
+                assert socket.assigns.flash["success"] == "Sent. Thank you."
               end)
 
             assert printed == ""
@@ -437,7 +437,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
                        flashing()
                      )
 
-            assert socket.assigns.flash["info"] == "Sent. Thank you."
+            assert socket.assigns.flash["success"] == "Sent. Thank you."
           end)
         end)
 
@@ -509,7 +509,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
   # message. Measured across a stock install, not one layout rendered a flash region — so the promise
   # was kept nowhere and sending an enquiry answered with nothing at all. The page carries the region
   # itself now, and only when it has a form to need one. Both halves of it: a submission the author's
-  # own handler refuses is announced under `:error`, and a region that reads only `:info` leaves the
+  # own handler refuses is announced under `:error`, and a region that reads only `:success` leaves the
   # visitor with a button press that did nothing.
   describe "the confirmation a page shows for its own forms" do
     defp rendered(module, flash) do
@@ -521,10 +521,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
     test "carries the region when the page has a form" do
       {module, _ast} = compiled([])
 
-      refute rendered(module, %{}) =~ ~s(id="page-form-info")
-      assert rendered(module, %{"info" => "Sent."}) =~ ~s(id="page-form-info")
-      assert rendered(module, %{"info" => "Sent."}) =~ "Sent."
-      assert rendered(module, %{"info" => "Sent."}) =~ "bg-emerald-50"
+      refute rendered(module, %{}) =~ ~s(id="page-form-success")
+      assert rendered(module, %{"success" => "Sent."}) =~ ~s(id="page-form-success")
+      assert rendered(module, %{"success" => "Sent."}) =~ "Sent."
+      assert rendered(module, %{"success" => "Sent."}) =~ "bg-emerald-50"
     end
 
     test "and shows a refusal, which is the half no layout renders either" do
@@ -542,9 +542,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
     test "each under its own id, so two forms can have said one of each" do
       {module, _ast} = compiled([])
 
-      shown = rendered(module, %{"info" => "Sent.", "error" => "Not sent."})
+      shown = rendered(module, %{"success" => "Sent.", "error" => "Not sent."})
 
-      assert shown =~ ~s(id="page-form-info")
+      assert shown =~ ~s(id="page-form-success")
       assert shown =~ ~s(id="page-form-error")
       assert shown =~ "Sent."
       assert shown =~ "Not sent."
@@ -573,7 +573,9 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
       # EVERY PAGE CARRIES THE REGION NOW, because a message can come from a button in a component
       # and the page's own markup shows no sign of it — see `LiveViewCompiler.confirmable/3`. What a
       # page with nothing to say renders is still nothing; this one is given a flash on purpose.
-      assert rendered(module, %{"info" => "Sent.", "error" => "Not sent."}) =~ "page-form-info"
+      assert rendered(module, %{"success" => "Sent.", "error" => "Not sent."}) =~
+               "page-form-success"
+
       refute rendered(module, %{}) =~ "page-form-"
     end
 
@@ -584,10 +586,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
     test "can be dismissed, so a success does not sit there for the rest of the session" do
       {module, _ast} = compiled([])
 
-      shown = rendered(module, %{"info" => "Sent."})
+      shown = rendered(module, %{"success" => "Sent."})
 
       assert shown =~ ~s(phx-click="lv:clear-flash")
-      assert shown =~ ~s(phx-value-key="info")
+      assert shown =~ ~s(phx-value-key="success")
     end
 
     test "and the refusal carries its own key, so dismissing one leaves the other" do
@@ -602,7 +604,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
     test "floats where the visitor is rather than at the top of the document" do
       {module, _ast} = compiled([])
 
-      assert rendered(module, %{"info" => "Sent."}) =~ "fixed"
+      assert rendered(module, %{"success" => "Sent."}) =~ "fixed"
     end
 
     # ONE PLACEMENT, TWO MESSAGES. With `fixed inset-x-4 top-4` on each `<p>`, an accepted form and a
@@ -612,10 +614,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
     test "and the two stack rather than land on each other" do
       {module, _ast} = compiled([])
 
-      shown = rendered(module, %{"info" => "Sent.", "error" => "Not sent."})
+      shown = rendered(module, %{"success" => "Sent.", "error" => "Not sent."})
 
       assert shown =~ ~s(id="page-form-announcements")
-      assert shown =~ ~s(id="page-form-info")
+      assert shown =~ ~s(id="page-form-success")
       assert shown =~ ~s(id="page-form-error")
 
       assert shown |> String.split("fixed") |> length() == 2,
@@ -705,7 +707,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
 
       assert sent.assigns.contact_send == true
       assert sent.assigns.contact_form.params["email"] == "sara@example.com"
-      refute Phoenix.Flash.get(sent.assigns.flash, :info)
+      refute Phoenix.Flash.get(sent.assigns.flash, :success)
     end
 
     test "renders its address, post and no token, and the trigger only once it is set" do
@@ -758,7 +760,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.PageFormCompileTest do
 
       refute sent.assigns[:contact_send]
       assert sent.assigns.contact_form.params == %{}
-      assert Phoenix.Flash.get(sent.assigns.flash, :info)
+      assert Phoenix.Flash.get(sent.assigns.flash, :success)
     end
 
     test "a form that does not send elsewhere is thanked and cleared as before" do

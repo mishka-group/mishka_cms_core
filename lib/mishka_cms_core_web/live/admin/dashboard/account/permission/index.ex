@@ -90,7 +90,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.Permission.Index do
     {:noreply,
      socket
      |> close_permission_modal()
-     |> put_flash(:info, gettext("Permission saved successfully"))}
+     |> put_flash(:success, gettext("Permission saved successfully"))}
   end
 
   # Cancel closes the modal, as on every other page — opened from a row's Edit or from the details.

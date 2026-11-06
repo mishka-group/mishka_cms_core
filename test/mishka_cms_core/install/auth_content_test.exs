@@ -127,13 +127,14 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
       layout_module = compiled!(layout, site, "Layout")
 
       html =
-        %{flash: %{"info" => "Saved"}, page: %{language: "en"}}
+        %{flash: %{"info" => "Heads up", "success" => "Saved"}, page: %{language: "en"}}
         |> layout_module.render({:safe, ~s(<p id="inner">card</p>)})
         |> rendered_to_string()
 
       assert html =~ ~s(id="inner")
       assert html =~ ~s(id="auth-theme-dark")
       assert html =~ ~s(id="flash-info")
+      assert html =~ ~s(id="flash-success")
       assert html =~ ~s(id="auth-quote-0")
       assert html =~ ~s(id="auth-quote-2")
 

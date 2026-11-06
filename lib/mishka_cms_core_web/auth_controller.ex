@@ -335,7 +335,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
             |> store_in_session(user)
             |> put_session(:live_socket_id, LiveSockets.live_socket_id(user))
             |> assign(:current_user, user)
-            |> put_flash(:info, data.message)
+            |> put_flash(:success, data.message)
             |> redirect(to: data.return_to)
           end)
 
@@ -592,7 +592,7 @@ defmodule MishkaCmsCoreWeb.AuthController do
             |> clear_session(@host_app)
             |> delete_session(:live_socket_id)
             |> disconnect_live_sockets(data.user_id)
-            |> put_flash(:info, data.message)
+            |> put_flash(:success, data.message)
             |> redirect(to: data.return_to)
           end)
 

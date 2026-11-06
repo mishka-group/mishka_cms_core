@@ -150,7 +150,7 @@ defmodule MishkaCmsCore.Runtime.Translations do
 
       Translations.source_keys(%{
         template: ~s|<h2>{t("Categories")}</h2>|,
-        events: [%{name: "save", code: ~s|{:noreply, put_flash(socket, :info, t("Saved"))}|}]
+        events: [%{name: "save", code: ~s|{:noreply, put_flash(socket, :success, t("Saved"))}|}]
       })
       #=> ["Categories", "Saved"]
   """

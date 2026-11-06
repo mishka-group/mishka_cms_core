@@ -83,7 +83,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
         {:noreply,
          put_flash(
            socket,
-           :info,
+           :success,
            gettext("Deleted in every language (%{removed})", removed: removed)
          )}
 
@@ -95,13 +95,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
   # A NEW WORD OPENS IN EVERY LANGUAGE. "Add translation" wrote one; the rest are what comes next.
   def handle_info({:form_saved, :create, %Translation{id: id}}, socket) do
     {:noreply,
-     socket |> TranslationGroup.open(id) |> put_flash(:info, gettext("Translation saved"))}
+     socket |> TranslationGroup.open(id) |> put_flash(:success, gettext("Translation saved"))}
   end
 
   def handle_info({:form_saved, _mode, _result}, socket),
     do:
       {:noreply,
-       socket |> TranslationGroup.saved() |> put_flash(:info, gettext("Translation saved"))}
+       socket |> TranslationGroup.saved() |> put_flash(:success, gettext("Translation saved"))}
 
   def handle_info({:form_cancelled, _resource}, socket), do: {:noreply, close_modal(socket)}
 
@@ -138,7 +138,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
         {:noreply,
          put_flash(
            socket,
-           :info,
+           :success,
            gettext("Templates scanned — every key they ask for has a row now")
          )}
 
@@ -161,7 +161,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
      socket
      |> close_unused()
      |> put_flash(
-       :info,
+       :success,
        gettext("%{removed} unused translation(s) removed", removed: removed)
      )}
   end
