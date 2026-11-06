@@ -1723,7 +1723,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
            resource
            |> Ash.ActionInput.for_action(action, %{id: record.id, version_id: version_id}, opts)
            |> Ash.run_action(opts) do
-      {:info, gettext("Version restored.")}
+      {:success, gettext("Version restored.")}
     else
       {:error, _reason} -> {:error, gettext("Could not restore the version.")}
     end

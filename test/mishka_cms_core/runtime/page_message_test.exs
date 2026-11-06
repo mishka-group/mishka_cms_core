@@ -42,7 +42,11 @@ defmodule MishkaCmsCore.Runtime.PageMessageTest do
     end
 
     test "the offered kinds are the ones a flash has" do
-      assert PageMessage.kinds() == [{"info", "Success"}, {"error", "Problem"}]
+      assert PageMessage.kinds() == [
+               {"success", "Success"},
+               {"info", "Notice"},
+               {"error", "Problem"}
+             ]
     end
 
     # CLEARING IS A CHOICE; FAILING TO BUILD ONE IS NOT — the same contract the class actions keep.

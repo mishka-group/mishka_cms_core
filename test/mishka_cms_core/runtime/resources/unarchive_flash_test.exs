@@ -35,7 +35,7 @@ defmodule MishkaCmsCore.Runtime.Resources.UnarchiveFlashTest do
 
   describe "row unarchive success flash — every runtime resource" do
     for {resource, label} <- @resources do
-      test "#{label} sets an info flash that says the record is restored inactive" do
+      test "#{label} sets a success flash that says the record is restored inactive" do
         state = state_for(unquote(resource))
 
         # The hook must actually be registered on the table DSL.
@@ -51,8 +51,8 @@ defmodule MishkaCmsCore.Runtime.Resources.UnarchiveFlashTest do
             socket()
           )
 
-        assert result.assigns.flash["info"] =~ "inactive"
-        assert result.assigns.flash["info"] =~ "activate"
+        assert result.assigns.flash["success"] =~ "inactive"
+        assert result.assigns.flash["success"] =~ "activate"
       end
     end
   end
@@ -76,7 +76,7 @@ defmodule MishkaCmsCore.Runtime.Resources.UnarchiveFlashTest do
         )
 
         # The bulk hook defers the flash via a message to the LiveView process.
-        assert_received {:put_flash, :info, msg}
+        assert_received {:put_flash, :success, msg}
         assert msg =~ "2"
         assert msg =~ "inactive"
       end
