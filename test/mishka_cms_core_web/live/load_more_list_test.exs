@@ -12,9 +12,7 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   the last page shown last, which the footer reads from the table's state alone.
 
   A list opened past its first page (`?notifs_page=3`) offers Load earlier above its rows, and a
-  page past the last (`?notifs_page=999`) says so and offers a way back to page 1. Both need the Load
-  earlier of a mishka_gervaz after 0.0.4, so those tests are tagged `:gervaz_load_earlier` and
-  `test_helper.exs` leaves them out against a gervaz without it.
+  page past the last (`?notifs_page=999`) says so and offers a way back to page 1.
   """
   use MishkaCmsCore.ConnCase
 
@@ -65,8 +63,6 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   end
 
   describe "the notification inbox" do
-    @describetag :gervaz_load_earlier
-
     test "opened at page 3 offers Load earlier, which brings the page before it", %{conn: conn} do
       {:ok, view, _html} = live(conn, @inbox <> "?notifs_page=3")
       render_async(view)
@@ -108,8 +104,6 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   end
 
   describe "the activity page" do
-    @describetag :gervaz_load_earlier
-
     setup :create_events
 
     test "opened at page 2 offers Load earlier, which brings the page before it", %{conn: conn} do
