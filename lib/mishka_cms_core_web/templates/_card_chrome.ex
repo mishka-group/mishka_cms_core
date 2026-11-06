@@ -521,8 +521,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   A `:load_more` list keeps every page it has loaded on screen, so its range starts at the first row
   shown: `1` after two Load mores of 20 (`Showing 1–60 of 136`), and `41` for a list opened at
   `?page=3` (`Showing 41–60 of 136`) until Load earlier brings the pages before it. Its upper bound is
-  the state's `next_offset`, the rows the view really shows, so rows another tab removed are not
-  counted.
+  the rows the view really shows, not the page slots, so rows another tab removed are not counted:
+  `Showing 1–38 of 73` when two of 40 are gone. See `shown_range/3`.
   """
   @spec range_label(map(), pos_integer(), String.t() | nil, atom()) :: String.t()
   def range_label(state, page_size, empty_label \\ nil, pagination_type \\ :numbered)
@@ -565,8 +565,10 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   @doc """
   The first and the last row a `:load_more` list shows of its `total`, `{41, 60}` for a list opened at
   page 3 of 20-row pages, or `nil` when it shows none, as on a page past the last. The range starts at
-  the first row shown and ends at the state's `next_offset`, clamped by the total. A template that
-  words its range its own way, as the activity log does with a capped total, reads the numbers here.
+  the first row shown, `(first_page - 1) * page_size + 1`, and ends at the last row the view shows:
+  the state's `next_offset`, or the length of `loaded_records` on a table that keeps its rows
+  (`keep_loaded_records`), clamped by the total. A template that words its range its own way, as the activity
+  log does with a capped total, reads the numbers here.
   """
   @spec shown_range(map(), pos_integer(), non_neg_integer()) ::
           {pos_integer(), pos_integer()} | nil
@@ -579,6 +581,9 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       false -> nil
     end
   end
+
+  defp shown_end(%{static: %{keep_loaded_records: true}, loaded_records: rows}),
+    do: length(rows)
 
   defp shown_end(%{next_offset: offset}), do: offset
 

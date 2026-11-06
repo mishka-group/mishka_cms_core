@@ -100,6 +100,19 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
       assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 1–38 of 73"
     end
 
+    test "counts the rows loaded on a table that keeps them, not next_offset" do
+      state = %{
+        total_count: 73,
+        page: 2,
+        first_page: 1,
+        next_offset: 40,
+        static: %{keep_loaded_records: true},
+        loaded_records: Enum.to_list(1..38)
+      }
+
+      assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 1–38 of 73"
+    end
+
     test "counts no rows of a page past the last" do
       state = %{loading: :loaded, total_count: 136, page: 999, first_page: 1, next_offset: 0}
 
