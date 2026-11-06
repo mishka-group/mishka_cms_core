@@ -59,11 +59,13 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
     end
 
     test "a Load more list counts from its first row, as every loaded page is on screen" do
-      assert CardChrome.range_label(%{total_count: 136, page: 2}, 20, nil, :load_more) ==
-               "Showing 1–40 of 136"
+      state = %{total_count: 136, page: 2, first_page: 1, next_offset: 40}
 
-      assert CardChrome.range_label(%{total_count: 48, page: 3}, 20, nil, :load_more) ==
-               "Showing 1–48 of 48"
+      assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 1–40 of 136"
+
+      state = %{total_count: 48, page: 3, first_page: 1, next_offset: 48}
+
+      assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 1–48 of 48"
 
       assert CardChrome.range_label(%{total_count: 136, page: 2}, 20, nil, :numbered) ==
                "Showing 21–40 of 136"
@@ -81,13 +83,13 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
 
   describe "range_label/4 for a list opened past its first page" do
     test "starts at the first row shown, not at 1" do
-      state = %{total_count: 136, page: 3, first_page: 3}
+      state = %{total_count: 136, page: 3, first_page: 3, next_offset: 60}
 
       assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 41–60 of 136"
     end
 
     test "grows upward as Load earlier brings the pages before it" do
-      state = %{total_count: 136, page: 3, first_page: 2}
+      state = %{total_count: 136, page: 3, first_page: 2, next_offset: 60}
 
       assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 21–60 of 136"
     end
@@ -98,21 +100,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
       assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 1–38 of 73"
     end
 
-    test "falls back to the page slots when next_offset is missing or empty" do
-      assert CardChrome.range_label(%{total_count: 73, page: 2}, 20, nil, :load_more) ==
-               "Showing 1–40 of 73"
-
-      assert CardChrome.range_label(
-               %{total_count: 73, page: 2, next_offset: 0},
-               20,
-               nil,
-               :load_more
-             ) ==
-               "Showing 1–40 of 73"
-    end
-
     test "counts no rows of a page past the last" do
-      state = %{loading: :loaded, total_count: 136, page: 999, first_page: 1}
+      state = %{loading: :loaded, total_count: 136, page: 999, first_page: 1, next_offset: 0}
 
       assert CardChrome.range_label(state, 20, nil, :load_more) == "Showing 0 of 136"
     end
@@ -152,28 +141,30 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
       assert CardChrome.earlier?(%{loading: :loaded, first_page: 2}, :infinite)
     end
 
-    test "is false on the first page, while loading, on a numbered list and without first_page" do
+    test "is false on the first page, while loading, and on a numbered list" do
       refute CardChrome.earlier?(%{loading: :loaded, first_page: 1}, :load_more)
       refute CardChrome.earlier?(%{loading: :loading, first_page: 3}, :load_more)
       refute CardChrome.earlier?(%{loading: :loaded, first_page: 3}, :numbered)
-      refute CardChrome.earlier?(%{loading: :loaded, page: 3}, :load_more)
     end
   end
 
   describe "shown_range/3" do
     test "runs from the first row shown to the last" do
-      assert CardChrome.shown_range(%{page: 3, first_page: 3}, 20, 136) == {41, 60}
-      assert CardChrome.shown_range(%{page: 3, first_page: 1}, 20, 136) == {1, 60}
+      assert CardChrome.shown_range(%{page: 3, first_page: 3, next_offset: 60}, 20, 136) ==
+               {41, 60}
+
+      assert CardChrome.shown_range(%{page: 3, first_page: 1, next_offset: 60}, 20, 136) ==
+               {1, 60}
 
       assert CardChrome.shown_range(%{page: 3, first_page: 1, next_offset: 57}, 20, 136) ==
                {1, 57}
 
-      assert CardChrome.shown_range(%{page: 3, first_page: 1}, 20, 48) == {1, 48}
-      assert CardChrome.shown_range(%{page: 999, first_page: 999}, 20, 136) == nil
+      assert CardChrome.shown_range(%{page: 3, first_page: 1, next_offset: 60}, 20, 48) == {1, 48}
+      assert CardChrome.shown_range(%{page: 999, first_page: 999, next_offset: 0}, 20, 136) == nil
     end
 
     test "is nil on a page past the last, however far the capped total reaches" do
-      state = %{loading: :loaded, page: 999, first_page: 1, total_count: 10_000}
+      state = %{loading: :loaded, page: 999, first_page: 1, next_offset: 0, total_count: 10_000}
 
       assert CardChrome.shown_range(state, 20, 10_000) == nil
     end
@@ -220,7 +211,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
     defp has?(part, selector), do: part |> LazyHTML.query(selector) |> Enum.count() > 0
 
     test "a Load more list puts the page-size picker, Load More and the rows shown in order" do
-      html = render_footer(:load_more, %{page: 2, has_more?: true, total_count: 46})
+      html =
+        render_footer(:load_more, %{page: 2, has_more?: true, total_count: 46, next_offset: 40})
 
       assert [{"leading", leading}, {"center", center}, {"trailing", trailing}] = parts(html)
       assert has?(leading, "form[phx-change='change_page_size'] select[name='size']")
@@ -244,7 +236,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
 
       [_leading, {"center", center}, {"trailing", trailing}] =
         :load_more
-        |> render_footer(%{page: 3, has_more?: false, total_count: 46})
+        |> render_footer(%{page: 3, has_more?: false, total_count: 46, next_offset: 46})
         |> parts()
 
       refute has?(center, "button")
@@ -297,9 +289,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
       assert html =~ "Load earlier"
     end
 
-    test "Load earlier is not drawn on the first page or by a gervaz without first_page" do
+    test "Load earlier is not drawn on the first page" do
       refute render_earlier(%{loading: :loaded, first_page: 1}) =~ "load_earlier"
-      refute render_earlier(%{loading: :loaded, page: 3}) =~ "load_earlier"
     end
 
     test "a page past the last offers the way back to page 1 in place of the empty message" do

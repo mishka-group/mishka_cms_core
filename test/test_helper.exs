@@ -46,30 +46,6 @@ if Mix.Project.config()[:app] == :mishka_cms_core do
     ExUnit.configure(exclude: [:node | ExUnit.configuration()[:exclude] || []])
   end
 
-  # The `:gervaz_load_earlier` tests open a list past its first page and click Load earlier, a button
-  # of the mishka_gervaz after the 0.0.4 release (`Shared.render_load_earlier/1`). Against a gervaz
-  # without it they are left out, and the run says so.
-  unless Code.ensure_loaded?(MishkaGervaz.Table.Templates.Shared) and
-           function_exported?(MishkaGervaz.Table.Templates.Shared, :render_load_earlier, 1) do
-    IO.puts(
-      "This mishka_gervaz has no Load earlier: the :gervaz_load_earlier tests are excluded."
-    )
-
-    ExUnit.configure(exclude: [:gervaz_load_earlier | ExUnit.configuration()[:exclude] || []])
-  end
-
-  # The `:gervaz_pagination_row` tests read the one pager row a gervaz table draws under its rows,
-  # `Shared.render_pagination_row/1`, of the mishka_gervaz after the 0.0.4 release. Against a gervaz
-  # without it they are left out, and the run says so.
-  unless Code.ensure_loaded?(MishkaGervaz.Table.Templates.Shared) and
-           function_exported?(MishkaGervaz.Table.Templates.Shared, :render_pagination_row, 1) do
-    IO.puts(
-      "This mishka_gervaz has no pagination row: the :gervaz_pagination_row tests are excluded."
-    )
-
-    ExUnit.configure(exclude: [:gervaz_pagination_row | ExUnit.configuration()[:exclude] || []])
-  end
-
   # The `:performance` tests time the ETS states against a wall-clock limit, which a shared CI
   # machine misses now and then. They run on demand: `mix test --include performance`.
   ExUnit.configure(exclude: [:performance | ExUnit.configuration()[:exclude] || []])

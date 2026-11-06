@@ -521,8 +521,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   A `:load_more` list keeps every page it has loaded on screen, so its range starts at the first row
   shown: `1` after two Load mores of 20 (`Showing 1–60 of 136`), and `41` for a list opened at
   `?page=3` (`Showing 41–60 of 136`) until Load earlier brings the pages before it. Its upper bound is
-  the state's `next_offset`, the rows the view really shows, when the table keeps one, and the page
-  slots otherwise, so rows another tab removed are not counted.
+  the state's `next_offset`, the rows the view really shows, so rows another tab removed are not
+  counted.
   """
   @spec range_label(map(), pos_integer(), String.t() | nil, atom()) :: String.t()
   def range_label(state, page_size, empty_label \\ nil, pagination_type \\ :numbered)
@@ -565,15 +565,14 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   @doc """
   The first and the last row a `:load_more` list shows of its `total`, `{41, 60}` for a list opened at
   page 3 of 20-row pages, or `nil` when it shows none, as on a page past the last. The range starts at
-  the first row shown and ends at the state's `next_offset` when the table keeps one, and at the page
-  slots otherwise, clamped by the total. A template that words its range its own way, as the activity
-  log does with a capped total, reads the numbers here.
+  the first row shown and ends at the state's `next_offset`, clamped by the total. A template that
+  words its range its own way, as the activity log does with a capped total, reads the numbers here.
   """
   @spec shown_range(map(), pos_integer(), non_neg_integer()) ::
           {pos_integer(), pos_integer()} | nil
   def shown_range(state, page_size, total) do
-    first = (Map.get(state, :first_page, 1) - 1) * page_size + 1
-    last = min(loaded_end(state, Map.get(state, :page) || 1, page_size), total)
+    first = (state.first_page - 1) * page_size + 1
+    last = min(shown_end(state), total)
 
     case first <= last and not past_last_page?(state, page_size) do
       true -> {first, last}
@@ -581,11 +580,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     end
   end
 
-  defp loaded_end(%{next_offset: offset}, _page, _page_size)
-       when is_integer(offset) and offset > 0,
-       do: offset
-
-  defp loaded_end(_state, page, page_size), do: page * page_size
+  defp shown_end(%{next_offset: offset}), do: offset
 
   @doc """
   Whether the view is a page past the list's last one: `?posts_page=999`, or a stale link to a page
@@ -614,13 +609,12 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   @doc """
   Whether a Load earlier button belongs above the rows: a `:load_more` or `:infinite` list opened past
-  its first page, with no load running. It reads the state's `first_page` with `Map.get/3`, so with a
-  gervaz that has none the button never shows.
+  its first page, with no load running.
   """
   @spec earlier?(map(), atom()) :: boolean()
   def earlier?(%{loading: loading} = state, type)
       when type in [:load_more, :infinite] and loading != :loading,
-      do: Map.get(state, :first_page, 1) > 1
+      do: state.first_page > 1
 
   def earlier?(_state, _type), do: false
 
