@@ -862,7 +862,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
             {:ok, result} ->
               {:noreply,
                socket
-               |> put_flash(:info, "Saved successfully!")
+               |> put_flash(:success, "Saved successfully!")
                |> assign(:data, result)}
 
             {:error, changeset} ->
@@ -1492,7 +1492,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       title="Dismiss"
       class={[
         "cursor-pointer rounded-lg shadow-lg px-4 py-3 text-sm font-medium",
-        kind == :info && "bg-emerald-50 text-emerald-800",
+        kind == :success && "bg-emerald-50 text-emerald-800",
+        kind == :info && "bg-sky-50 text-sky-800",
         kind == :error && "bg-rose-50 text-rose-800"
       ]}
     >{message}</p>

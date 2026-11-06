@@ -621,7 +621,7 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
       assert redirected_to(conn) == "/"
       assert get_session(conn, "user_token")
       assert get_session(conn, :live_socket_id)
-      assert Phoenix.Flash.get(conn.assigns.flash, :info) == "You are now signed in"
+      assert Phoenix.Flash.get(conn.assigns.flash, :success) == "You are now signed in"
     end
 
     test "signing out still ends the session", %{conn: conn, site: site} do
@@ -638,7 +638,7 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
 
       assert redirected_to(signed_out) == "/"
       refute get_session(signed_out, "user_token")
-      assert Phoenix.Flash.get(signed_out.assigns.flash, :info) == "You are now signed out"
+      assert Phoenix.Flash.get(signed_out.assigns.flash, :success) == "You are now signed out"
     end
 
     test "a sign-in token that does not verify still goes back to sign-in", %{conn: conn} do

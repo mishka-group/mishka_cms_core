@@ -314,7 +314,7 @@ defmodule MishkaCmsCore.Runtime.PageFiveFormsTest do
         |> then(&change(module, &1, "contact", %{"email" => "a@b.co"}))
         |> then(&send_it(module, &1, "feedback", %{"score" => "4", "comment" => "good"}))
 
-      assert socket.assigns.flash == %{"info" => "Noted, thank you."}
+      assert socket.assigns.flash == %{"success" => "Noted, thank you."}
       assert value_of(module, socket, "feedback", "score") in [nil, ""]
       assert value_of(module, socket, "contact", "email") == "a@b.co"
     end
@@ -361,7 +361,7 @@ defmodule MishkaCmsCore.Runtime.PageFiveFormsTest do
           socket
         )
 
-      assert socket.assigns.flash == %{"info" => "Noted, thank you."}
+      assert socket.assigns.flash == %{"success" => "Noted, thank you."}
       assert value_of(module, socket, "contact", "email") == "a@b.co"
     end
   end

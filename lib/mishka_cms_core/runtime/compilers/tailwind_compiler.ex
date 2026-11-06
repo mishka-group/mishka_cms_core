@@ -141,7 +141,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         def handle_event("refresh_css", %{"site" => site}, socket) do
           case TailwindCompiler.refresh_css(site) do
             {:ok, _css} ->
-              {:noreply, put_flash(socket, :info, "CSS refreshed successfully")}
+              {:noreply, put_flash(socket, :success, "CSS refreshed successfully")}
 
             {:error, reason} ->
               {:noreply, put_flash(socket, :error, "Failed to refresh CSS: \#{reason}")}
@@ -1149,7 +1149,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
         def handle_event("refresh_css", %{"site" => site}, socket) do
           case TailwindCompiler.refresh_css(site) do
             {:ok, _css} ->
-              {:noreply, put_flash(socket, :info, "CSS refreshed for \#{site}")}
+              {:noreply, put_flash(socket, :success, "CSS refreshed for \#{site}")}
 
             {:error, reason} ->
               {:noreply, put_flash(socket, :error, "Refresh failed: \#{reason}")}

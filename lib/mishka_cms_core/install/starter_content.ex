@@ -2479,6 +2479,18 @@ defmodule MishkaCmsCore.Install.StarterContent do
         class="pointer-events-none fixed right-4 top-4 z-[9999] flex flex-col items-end gap-2"
       >
         <div
+          :if={msg = Phoenix.Flash.get(@flash, :success)}
+          id="flash-success"
+          phx-hook="FlashAutoDismiss"
+          data-kind="success"
+          data-dismiss-after="4000"
+          phx-click={JS.push("lv:clear-flash", value: %{key: :success}) |> JS.hide(to: "#flash-success")}
+          role="alert"
+          class="pointer-events-auto max-w-[32rem] cursor-pointer rounded-lg px-4 py-3 font-[system-ui,sans-serif] text-white [background:#16a34a] [box-shadow:0_4px_12px_rgba(0,0,0,0.15)]"
+        >
+          {msg}
+        </div>
+        <div
           :if={msg = Phoenix.Flash.get(@flash, :info)}
           id="flash-info"
           phx-hook="FlashAutoDismiss"
@@ -2486,7 +2498,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
           data-dismiss-after="4000"
           phx-click={JS.push("lv:clear-flash", value: %{key: :info}) |> JS.hide(to: "#flash-info")}
           role="alert"
-          class="pointer-events-auto max-w-[32rem] cursor-pointer rounded-lg px-4 py-3 font-[system-ui,sans-serif] text-white [background:#16a34a] [box-shadow:0_4px_12px_rgba(0,0,0,0.15)]"
+          class="pointer-events-auto max-w-[32rem] cursor-pointer rounded-lg px-4 py-3 font-[system-ui,sans-serif] text-white [background:#2563eb] [box-shadow:0_4px_12px_rgba(0,0,0,0.15)]"
         >
           {msg}
         </div>

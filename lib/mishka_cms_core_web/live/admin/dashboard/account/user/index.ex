@@ -99,7 +99,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
     {:noreply,
      socket
      |> close_user_modal()
-     |> put_flash(:info, dgettext("mishka_gervaz", "User created successfully"))}
+     |> put_flash(:success, dgettext("mishka_gervaz", "User created successfully"))}
   end
 
   @impl true
@@ -107,7 +107,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
     {:noreply,
      socket
      |> close_user_modal()
-     |> put_flash(:info, dgettext("mishka_gervaz", "User updated successfully"))}
+     |> put_flash(:success, dgettext("mishka_gervaz", "User updated successfully"))}
   end
 
   # Cancel closes the modal, as on every other page — opened from a row's Edit or from the details.
@@ -258,7 +258,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Account.User.Index do
         {:ok, _user} ->
           socket
           |> turn_off_step(false, nil)
-          |> put_flash(:info, done)
+          |> put_flash(:success, done)
           |> load_user_modal(user.id)
 
         {:error, error} when action == :turn_off_totp ->

@@ -215,7 +215,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
          {:ok, _cleared} <- write_setting(socket, definition, "", write_scope(socket)) do
       {:noreply,
        socket
-       |> put_flash(:info, gettext("The key was removed."))
+       |> put_flash(:success, gettext("The key was removed."))
        |> select_tab(socket.assigns.active_tab)}
     else
       _refused -> {:noreply, put_flash(socket, :error, gettext("The key could not be removed."))}
@@ -226,7 +226,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     case can_mail?(socket) && Mail.send_test(write_scope(socket), to) do
       {:ok, _message_id} ->
         send_update(MishkaGervaz.Table.Web.Live, id: "mail-deliveries", gervaz_refresh: true)
-        {:noreply, put_flash(socket, :info, gettext("Test email sent to %{to}.", to: to))}
+        {:noreply, put_flash(socket, :success, gettext("Test email sent to %{to}.", to: to))}
 
       {:error, why} ->
         send_update(MishkaGervaz.Table.Web.Live, id: "mail-deliveries", gervaz_refresh: true)
@@ -243,7 +243,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     socket = push_event(socket, "mishka:captcha:reset", %{})
 
     case can_test_captcha?(socket) && Captcha.test(write_scope(socket), token, %{remote_ip: nil}) do
-      {:ok, text} -> {:noreply, put_flash(socket, :info, text)}
+      {:ok, text} -> {:noreply, put_flash(socket, :success, text)}
       {:error, text} -> {:noreply, put_flash(socket, :error, text)}
       false -> {:noreply, socket}
     end
@@ -590,7 +590,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     if Enum.all?(results, &match?({:ok, _}, &1)) do
       {:noreply,
        socket
-       |> put_flash(:info, gettext("Settings saved."))
+       |> put_flash(:success, gettext("Settings saved."))
        |> select_tab(socket.assigns.active_tab)}
     else
       {:noreply,

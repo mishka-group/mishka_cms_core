@@ -113,7 +113,7 @@ defmodule MishkaCmsCore.Runtime.PageForm do
   alias MishkaCmsCore.Runtime.PageForm.Rules
   alias MishkaCmsCore.Runtime.PageUpload
 
-  @kinds [:info, :error]
+  @kinds [:success, :info, :error]
 
   @doc """
   A pristine form for one spec — what an accepted submission leaves behind. Carries no errors,
@@ -188,13 +188,13 @@ defmodule MishkaCmsCore.Runtime.PageForm do
   def destination?, do: Events.form_destination?()
 
   @doc """
-  What a page has to say about the forms on it: `[{kind, message}]`, in `:info`, `:error` order.
+  What a page has to say about the forms on it: `[{kind, message}]`, in `:success`, `:info`, `:error` order.
 
   `[]` while nothing has been submitted, one entry after a submission, and two where a page carries
   several forms and one was accepted while another was refused. Read by the region a compiled page
   renders for itself, which is the only reader that has to agree with both `put_flash/3` calls here.
   """
-  @spec announcements(map()) :: [{:info | :error, String.t()}]
+  @spec announcements(map()) :: [{:success | :info | :error, String.t()}]
   def announcements(flash),
     do: Enum.flat_map(@kinds, &announcement(&1, Phoenix.Flash.get(flash, &1)))
 
@@ -249,7 +249,7 @@ defmodule MishkaCmsCore.Runtime.PageForm do
   defp cleared(socket, spec) do
     socket
     |> Phoenix.Component.assign(spec.assign, seed(spec))
-    |> Phoenix.LiveView.put_flash(:info, Gettext.gettext(MishkaCmsCore.Gettext, spec.success))
+    |> Phoenix.LiveView.put_flash(:success, Gettext.gettext(MishkaCmsCore.Gettext, spec.success))
   end
 
   defp refused(socket, spec, form, message) do

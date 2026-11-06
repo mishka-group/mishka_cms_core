@@ -179,10 +179,10 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewStateTest do
         %{versions_loading?: true}
         |> socket()
         |> PreviewHelpers.versions_loaded(
-          {:ok, {:versions, [], 0, MapSet.new(), 1, {:info, "Version restored."}}}
+          {:ok, {:versions, [], 0, MapSet.new(), 1, {:success, "Version restored."}}}
         )
 
-      assert restored.assigns.flash == %{"info" => "Version restored."}
+      assert restored.assigns.flash == %{"success" => "Version restored."}
     end
 
     test "and a crashed read says so instead of leaving a spinner forever" do
@@ -228,8 +228,8 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewStateTest do
         |> PreviewHelpers.compiled({:ok, {:compiled, {:ok, SomeRuntime.Module}}})
 
       refute done.assigns.preview.compiling?
-      assert done.assigns.flash["info"] =~ "loaded in RAM"
-      refute done.assigns.flash["info"] =~ "Elixir."
+      assert done.assigns.flash["success"] =~ "loaded in RAM"
+      refute done.assigns.flash["success"] =~ "Elixir."
     end
 
     # A COMPILE FAILURE IS THE POINT, NOT AN ACCIDENT. The reason the button exists is to find out
@@ -265,7 +265,7 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewStateTest do
       done = waiting() |> socket() |> PreviewHelpers.duplicated({:ok, {:ok, @copy}})
 
       assert done.assigns.preview == PreviewHelpers.empty()
-      assert done.assigns.flash["info"] == "Duplicated as “chelekom-badge-copy-abcd”"
+      assert done.assigns.flash["success"] == "Duplicated as “chelekom-badge-copy-abcd”"
     end
 
     # THE COPY OUTLIVES THE MODAL. Closing it does not stop the write, so by the time the copy lands
@@ -281,7 +281,7 @@ defmodule MishkaCmsCoreWeb.Runtime.PreviewStateTest do
         done = opened |> socket() |> PreviewHelpers.duplicated({:ok, {:ok, @copy}})
 
         assert done.assigns.preview == preview(opened)
-        assert done.assigns.flash["info"] == "Duplicated as “chelekom-badge-copy-abcd”"
+        assert done.assigns.flash["success"] == "Duplicated as “chelekom-badge-copy-abcd”"
       end
     end
 

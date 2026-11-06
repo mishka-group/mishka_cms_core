@@ -60,10 +60,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Redirect.Index do
 
   @impl true
   def handle_info({:form_saved, :create, _result}, socket),
-    do: {:noreply, socket |> close_form() |> put_flash(:info, gettext("Redirect created"))}
+    do: {:noreply, socket |> close_form() |> put_flash(:success, gettext("Redirect created"))}
 
   def handle_info({:form_saved, :update, _result}, socket),
-    do: {:noreply, socket |> close_form() |> put_flash(:info, gettext("Redirect updated"))}
+    do: {:noreply, socket |> close_form() |> put_flash(:success, gettext("Redirect updated"))}
 
   def handle_info({:form_cancelled, _resource}, socket), do: {:noreply, close_form(socket)}
 

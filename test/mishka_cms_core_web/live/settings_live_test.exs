@@ -1606,7 +1606,7 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       )
       |> render_submit()
 
-      assert has_element?(view, "#flash-info")
+      assert has_element?(view, "#flash-success")
       assert Settings.get("site.app_short_name", nil, site.id) == "Mishka"
       assert Settings.get("site.theme_color", nil, site.id) == "#07070d"
       assert Settings.get("site.background_color", nil, site.id) == "#ABC"
@@ -1646,7 +1646,7 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       )
       |> render_submit()
 
-      assert has_element?(view, "#flash-info")
+      assert has_element?(view, "#flash-success")
       assert Settings.get("site.favicon", nil, site.id) == "/uploads/brand/favicon.svg"
       assert Settings.get("site.app_icon", nil, site.id) == "https://example.test/app-icon.png"
       refute has_element?(view, "#{section(site)}[open]")
@@ -1688,7 +1688,7 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       for key <- colors, accepted <- ["#abc", "#0b0a14"] do
         submit.(key, accepted)
 
-        assert has_element?(view, "#flash-info"), "#{key} #{accepted}"
+        assert has_element?(view, "#flash-success"), "#{key} #{accepted}"
         refute has_element?(view, "#error-#{String.replace(key, ".", "-")}")
         refute has_element?(view, "#{section(site)}[open]")
         assert Settings.get(key, nil, site.id) == accepted

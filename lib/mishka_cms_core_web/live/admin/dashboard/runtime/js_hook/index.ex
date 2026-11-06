@@ -50,7 +50,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.JsHook.Index do
       {:noreply,
        socket
        |> PreviewHelpers.dismiss()
-       |> put_flash(:info, gettext("JS hook created successfully"))}
+       |> put_flash(:success, gettext("JS hook created successfully"))}
 
   @impl true
   def handle_info({:form_saved, :update, _result}, socket),
@@ -58,7 +58,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.JsHook.Index do
       {:noreply,
        socket
        |> PreviewHelpers.dismiss()
-       |> put_flash(:info, gettext("JS hook updated successfully"))}
+       |> put_flash(:success, gettext("JS hook updated successfully"))}
 
   @impl true
   def handle_info({:form_cancelled, _resource}, socket),

@@ -83,7 +83,7 @@ defmodule MishkaCmsCore.Test.KitUpgradeHostLive do
     ~H"""
     <div>
       <div id="kit-flash-error">{Phoenix.Flash.get(@flash, :error)}</div>
-      <div id="kit-flash-info">{Phoenix.Flash.get(@flash, :info)}</div>
+      <div id="kit-flash-success">{Phoenix.Flash.get(@flash, :success)}</div>
 
       <ExtensionInstallerPanel.doctor_modal
         id="kit"

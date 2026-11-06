@@ -55,7 +55,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Stylesheet.Index do
       {:noreply,
        socket
        |> PreviewHelpers.dismiss()
-       |> put_flash(:info, gettext("Stylesheet created successfully"))}
+       |> put_flash(:success, gettext("Stylesheet created successfully"))}
 
   @impl true
   def handle_info({:form_saved, :update, _result}, socket),
@@ -63,7 +63,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Stylesheet.Index do
       {:noreply,
        socket
        |> PreviewHelpers.dismiss()
-       |> put_flash(:info, gettext("Stylesheet updated successfully"))}
+       |> put_flash(:success, gettext("Stylesheet updated successfully"))}
 
   @impl true
   def handle_info({:form_cancelled, _resource}, socket),

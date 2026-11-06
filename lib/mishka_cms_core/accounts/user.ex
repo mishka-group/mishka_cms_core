@@ -491,7 +491,7 @@ defmodule MishkaCmsCore.Accounts.User do
             )
 
           socket
-          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:info, message)
+          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:success, message)
           |> MishkaGervaz.Table.Web.Events.BulkActionHooks.silence()
         end
       end

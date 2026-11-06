@@ -103,7 +103,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
     {:noreply,
      socket
      |> PreviewHelpers.dismiss()
-     |> put_flash(:info, gettext("Component updated successfully"))}
+     |> put_flash(:success, gettext("Component updated successfully"))}
   end
 
   @impl true
@@ -226,5 +226,5 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Component.Index do
     do:
       socket
       |> PreviewHelpers.dismiss()
-      |> put_flash(:info, gettext("Component created successfully"))
+      |> put_flash(:success, gettext("Component created successfully"))
 end

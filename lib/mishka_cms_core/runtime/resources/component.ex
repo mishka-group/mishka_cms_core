@@ -709,7 +709,7 @@ defmodule MishkaCmsCore.Runtime.Component do
             end
 
           socket
-          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:info, msg)
+          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:success, msg)
           |> MishkaGervaz.Table.Web.Events.BulkActionHooks.silence()
         end
 
@@ -731,14 +731,14 @@ defmodule MishkaCmsCore.Runtime.Component do
             end
 
           socket
-          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:info, msg)
+          |> MishkaGervaz.Table.Web.Events.BulkActionHooks.put_flash(:success, msg)
           |> MishkaGervaz.Table.Web.Events.BulkActionHooks.silence()
         end
 
         on_row_action_success :unarchive, fn _record, _state, socket ->
           Phoenix.LiveView.put_flash(
             socket,
-            :info,
+            :success,
             dgettext("mishka_gervaz", "Restored as inactive — activate it to go live.")
           )
         end

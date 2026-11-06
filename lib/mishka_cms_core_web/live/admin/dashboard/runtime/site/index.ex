@@ -86,7 +86,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index do
     {:noreply,
      socket
      |> close_form_modal()
-     |> put_flash(:info, gettext("Site created successfully"))}
+     |> put_flash(:success, gettext("Site created successfully"))}
   end
 
   @impl true
@@ -94,7 +94,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index do
     {:noreply,
      socket
      |> close_form_modal()
-     |> put_flash(:info, gettext("Site updated successfully"))}
+     |> put_flash(:success, gettext("Site updated successfully"))}
   end
 
   @impl true
@@ -323,7 +323,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index do
           site = get_site(record.id, actor)
           %{site: site, health: SiteHealth.compute(site)}
         end)
-        |> put_flash(:info, flash)
+        |> put_flash(:success, flash)
 
       {:error, %Ash.Error.Invalid{errors: errors}} ->
         put_flash(socket, :error, Enum.map_join(errors, " ", &refusal(&1, record)))

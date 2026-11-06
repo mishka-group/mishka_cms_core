@@ -95,7 +95,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup do
       socket
       |> assign(:translation_group, Map.put(reread, :picked, (row && row.id) || group.picked))
       |> Phoenix.LiveView.put_flash(
-        :info,
+        :success,
         dgettext("mishka_gervaz", "%{language} added", language: String.upcase(code))
       )
     else

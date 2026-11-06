@@ -39,7 +39,13 @@ defmodule MishkaCmsCore.Layouts do
   embed_templates "layouts/*"
 
   @doc """
-  Renders both `:info` and `:error` flashes from the `@flash` map.
+  Renders the `:success`, `:info`, `:warning` and `:error` flashes from the `@flash` map.
+
+  Each kind has its own colour and icon: success green with a check, info blue with an "i",
+  warning amber with a triangle, error red with a cross. Errors and warnings are announced
+  assertively (`role="alert"`), success and info politely (`role="status"`). A notice goes away on
+  its own, after four seconds for success and info, six for warning and seven for error, or on a
+  click.
 
   Styled with classes rather than `style` attributes. Every surface that renders this — the admin
   chrome via `app.html.heex` and the page builder shell — sets `admin_css`, so the compiled admin
@@ -72,33 +78,60 @@ defmodule MishkaCmsCore.Layouts do
       class="pointer-events-none fixed end-4 top-4 z-[9999] flex flex-col items-end gap-2"
     >
       <div
-        :if={msg = Phoenix.Flash.get(@flash, :info)}
-        id="flash-info"
+        :for={{kind, notice} <- flash_notices()}
+        :if={msg = Phoenix.Flash.get(@flash, kind)}
+        id={"flash-#{kind}"}
         phx-hook="FlashAutoDismiss"
-        data-kind="info"
-        data-dismiss-after="4000"
-        phx-click={JS.push("lv:clear-flash", value: %{key: :info}) |> JS.hide(to: "#flash-info")}
-        role="alert"
-        class="pointer-events-auto max-w-[32rem] cursor-pointer rounded-lg px-4 py-3 font-[system-ui,sans-serif] text-white [background:#16a34a] [box-shadow:0_4px_12px_rgba(0,0,0,0.15)]"
+        data-kind={kind}
+        data-dismiss-after={notice.dismiss_after}
+        phx-click={JS.push("lv:clear-flash", value: %{key: kind}) |> JS.hide(to: "#flash-#{kind}")}
+        role={notice.role}
+        aria-live={notice.aria_live}
+        class={[
+          "pointer-events-auto flex max-w-[32rem] cursor-pointer items-start gap-2 rounded-lg px-4 py-3 font-[system-ui,sans-serif] text-white [box-shadow:0_4px_12px_rgba(0,0,0,0.15)]",
+          notice.color
+        ]}
       >
-        {msg}
-      </div>
-      <div
-        :if={msg = Phoenix.Flash.get(@flash, :error)}
-        id="flash-error"
-        phx-hook="FlashAutoDismiss"
-        data-kind="error"
-        data-dismiss-after="7000"
-        phx-click={JS.push("lv:clear-flash", value: %{key: :error}) |> JS.hide(to: "#flash-error")}
-        role="alert"
-        class="pointer-events-auto max-w-[32rem] cursor-pointer rounded-lg px-4 py-3 font-[system-ui,sans-serif] text-white [background:#dc2626] [box-shadow:0_4px_12px_rgba(0,0,0,0.15)]"
-      >
-        {msg}
+        <.icon name={notice.icon} class="mt-0.5 size-5 shrink-0" />
+        <span>{msg}</span>
       </div>
       {render_slot(@inner_block)}
     </div>
     """
   end
+
+  @flash_notices [
+    success: %{
+      color: "[background:#16a34a]",
+      icon: "hero-check-circle",
+      role: "status",
+      aria_live: "polite",
+      dismiss_after: 4000
+    },
+    info: %{
+      color: "[background:#2563eb]",
+      icon: "hero-information-circle",
+      role: "status",
+      aria_live: "polite",
+      dismiss_after: 4000
+    },
+    warning: %{
+      color: "[background:#b45309]",
+      icon: "hero-exclamation-triangle",
+      role: "alert",
+      aria_live: "assertive",
+      dismiss_after: 6000
+    },
+    error: %{
+      color: "[background:#dc2626]",
+      icon: "hero-x-circle",
+      role: "alert",
+      aria_live: "assertive",
+      dismiss_after: 7000
+    }
+  ]
+
+  defp flash_notices, do: @flash_notices
 
   @doc """
   The admin sidebar — logo, collapsible nav groups, and the active item highlighted from

@@ -32,17 +32,22 @@ defmodule MishkaCmsCore.CoreComponents do
   alias Phoenix.LiveView.JS
 
   @doc """
-  Renders flash notices.
+  Renders flash notices of kind `:success`, `:info`, `:warning` or `:error`, each with its own
+  colour and icon. Warnings and errors are announced assertively, the others politely.
 
   ## Examples
 
-      <.flash kind={:info} flash={@flash} />
+      <.flash kind={:success} flash={@flash} />
       <.flash kind={:info} phx-mounted={show("#flash")}>Welcome Back!</.flash>
   """
   attr :id, :string, doc: "the optional id of flash container"
   attr :flash, :map, default: %{}, doc: "the map of flash messages to display"
   attr :title, :string, default: nil
-  attr :kind, :atom, values: [:info, :error], doc: "used for styling and flash lookup"
+
+  attr :kind, :atom,
+    values: [:success, :info, :warning, :error],
+    doc: "used for styling and flash lookup"
+
   attr :rest, :global, doc: "the arbitrary HTML attributes to add to the flash container"
 
   slot :inner_block, doc: "the optional inner block that renders the flash message"
@@ -64,19 +69,23 @@ defmodule MishkaCmsCore.CoreComponents do
       id={@id}
       phx-click={JS.push("lv:clear-flash", value: %{key: @kind}) |> hide("##{@id}")}
       phx-hook="FlashAutoDismiss"
-      data-dismiss-after={(@kind == :error && 7000) || 4000}
+      data-dismiss-after={flash_dismiss_after(@kind)}
       data-kind={@kind}
-      role="alert"
+      role={(@kind in [:warning, :error] && "alert") || "status"}
       class="fixed end-4 top-4 z-50 w-80 sm:w-96"
       {@rest}
     >
       <div class={[
         "flex items-start gap-3 rounded-lg p-4 text-wrap shadow-lg ring-1",
-        @kind == :info && "bg-emerald-50 text-emerald-800 ring-emerald-200",
+        @kind == :success && "bg-emerald-50 text-emerald-800 ring-emerald-200",
+        @kind == :info && "bg-sky-50 text-sky-800 ring-sky-200",
+        @kind == :warning && "bg-amber-50 text-amber-800 ring-amber-200",
         @kind == :error && "bg-red-50 text-red-800 ring-red-200"
       ]}>
+        <.icon :if={@kind == :success} name="hero-check-circle" class="size-5 shrink-0" />
         <.icon :if={@kind == :info} name="hero-information-circle" class="size-5 shrink-0" />
-        <.icon :if={@kind == :error} name="hero-exclamation-circle" class="size-5 shrink-0" />
+        <.icon :if={@kind == :warning} name="hero-exclamation-triangle" class="size-5 shrink-0" />
+        <.icon :if={@kind == :error} name="hero-x-circle" class="size-5 shrink-0" />
         <div class="flex-1">
           <p :if={@title} class="font-semibold">{@title}</p>
           <p>{msg}</p>
@@ -92,6 +101,10 @@ defmodule MishkaCmsCore.CoreComponents do
     </div>
     """
   end
+
+  defp flash_dismiss_after(:warning), do: 6000
+  defp flash_dismiss_after(:error), do: 7000
+  defp flash_dismiss_after(_kind), do: 4000
 
   @doc """
   Renders a button with navigation support.

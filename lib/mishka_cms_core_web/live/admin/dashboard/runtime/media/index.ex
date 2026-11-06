@@ -179,7 +179,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
       :ok ->
         {:noreply,
          socket
-         |> put_flash(:info, gettext("Folder archived."))
+         |> put_flash(:success, gettext("Folder archived."))
          |> stream_delete(:categories, %{id: id})}
 
       {:error, error} ->
@@ -229,7 +229,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
       {:ok, _category} ->
         {:noreply,
          socket
-         |> put_flash(:info, gettext("Folder restored."))
+         |> put_flash(:success, gettext("Folder restored."))
          |> stream_delete(:archived_categories, %{id: id})}
 
       {:error, error} ->
@@ -250,7 +250,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
       :ok ->
         {:noreply,
          socket
-         |> put_flash(:info, gettext("Folder deleted for good."))
+         |> put_flash(:success, gettext("Folder deleted for good."))
          |> stream_delete(:archived_categories, %{id: id})}
 
       {:error, error} ->
@@ -341,7 +341,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
      socket
      |> assign(:editing_category, nil)
      |> close_modal(@category_form_modal)
-     |> put_flash(:info, gettext("Saved successfully"))}
+     |> put_flash(:success, gettext("Saved successfully"))}
   end
 
   def handle_info({:form_saved, :update, _result}, socket) do
@@ -349,7 +349,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index do
      socket
      |> assign(:editing_category, nil)
      |> close_modal(@category_form_modal)
-     |> put_flash(:info, gettext("Saved successfully"))}
+     |> put_flash(:success, gettext("Saved successfully"))}
   end
 
   def handle_info({:form_cancelled, _resource}, socket) do

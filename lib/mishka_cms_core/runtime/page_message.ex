@@ -20,12 +20,12 @@ defmodule MishkaCmsCore.Runtime.PageMessage do
       <button phx-click={JS.push("pb:say", value: %{"kind" => "info", "message" => "Saved!"})}>
 
   `MishkaCmsCore.Runtime.Compilers.LiveViewCompiler` gives a page that carries one of those the
-  matching `handle_event/3`, and nothing else changes: the same two flash kinds, read back by
+  matching `handle_event/3`, and nothing else changes: the same flash kinds, read back by
   `MishkaCmsCore.Runtime.PageForm.announcements/1`, rendered by the same region.
 
   ## What the params are trusted for
 
-  Nothing but the words. `kind` is matched against the two that exist and anything else is dropped;
+  Nothing but the words. `kind` is matched against the kinds that exist and anything else is dropped;
   the message is trimmed, capped, and rendered as text, which HEEx escapes.
 
   It is worth being plain about what that does and does not buy. A visitor with the console open can
@@ -39,7 +39,7 @@ defmodule MishkaCmsCore.Runtime.PageMessage do
 
   @event "pb:say"
 
-  @kinds %{"info" => :info, "error" => :error}
+  @kinds %{"success" => :success, "info" => :info, "error" => :error}
 
   @limit 240
 
@@ -49,7 +49,12 @@ defmodule MishkaCmsCore.Runtime.PageMessage do
 
   @doc "The kinds a message may be, as `{value, label}` in panel order."
   @spec kinds() :: [{String.t(), String.t()}]
-  def kinds, do: [{"info", gettext("Success")}, {"error", gettext("Problem")}]
+  def kinds,
+    do: [
+      {"success", gettext("Success")},
+      {"info", gettext("Notice")},
+      {"error", gettext("Problem")}
+    ]
 
   @doc """
   Puts one message on the socket, or leaves it exactly as it was.
