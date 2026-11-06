@@ -1105,7 +1105,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1272
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1275
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
@@ -2459,12 +2459,12 @@ msgstr ""
 msgid "%{source} did not accept this user and application password. If both are right, ask your host to let the Authorization header through."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/site_idle.ex:30
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/site_idle.ex:38
 #, elixir-autogen, elixir-format
 msgid "A dry run or an import of this site is running. Change its items once it is done."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:304
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:368
 #, elixir-autogen, elixir-format
 msgid "Another migration of this site is still waiting or running. Try again once it is done."
 msgstr ""
@@ -2494,7 +2494,7 @@ msgstr ""
 msgid "Nothing answered at this address."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:40
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:66
 #, elixir-autogen, elixir-format
 msgid "Nothing on this item waits for your decision."
 msgstr ""
@@ -2504,24 +2504,14 @@ msgstr ""
 msgid "Pick a record of this site to map it to."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:46
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:72
 #, elixir-autogen, elixir-format
 msgid "Pick one of the choices this item offers."
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:302
-#, elixir-autogen, elixir-format
-msgid "Pick the site the content moves to."
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/source_file.ex:42
 #, elixir-autogen, elixir-format
 msgid "The file could not be kept on the server: %{reason}."
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:33
-#, elixir-autogen, elixir-format
-msgid "The run cannot do that while it is %{status}."
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:62
@@ -2530,12 +2520,12 @@ msgid "This is not a %{source}, or it is damaged. Make the export again and choo
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/check_connection.ex:52
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:303
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:367
 #, elixir-autogen, elixir-format
 msgid "Type the site's address, such as https://example.com."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:42
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/decided.ex:68
 #, elixir-autogen, elixir-format
 msgid "Your decision already took effect: the import wrote or connected this item by it, so it stays."
 msgstr ""
@@ -2583,4 +2573,49 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/__validations/prevent_master_language_deletion.ex:131
 #, elixir-autogen, elixir-format
 msgid "Its translations in %{languages} are still live, so it can't be archived yet. Archive or delete those translations first, then this one."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:41
+#, elixir-autogen, elixir-format
+msgid "A dry run of this run is running. Wait until it finishes, then try again."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:47
+#, elixir-autogen, elixir-format
+msgid "An import of this run is running. Wait until it finishes, then try again."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/migration_run.ex:366
+#, elixir-autogen, elixir-format
+msgid "Pick a site."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__changes/choices.ex:28
+#, elixir-autogen, elixir-format
+msgid "Pick one of the site's languages."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:52
+#, elixir-autogen, elixir-format
+msgid "The run failed. Run it again to try once more."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:39
+#, elixir-autogen, elixir-format
+msgid "The run has no dry run yet. Run a dry run first."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:53
+#, elixir-autogen, elixir-format
+msgid "The run was cancelled. Start a New import."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:45
+#, elixir-autogen, elixir-format
+msgid "The run's dry run is ready and waits for its import."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__validations/status.ex:51
+#, elixir-autogen, elixir-format
+msgid "The run's import is done. Run it again to import once more."
 msgstr ""

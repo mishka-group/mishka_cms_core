@@ -11,13 +11,13 @@
 msgid ""
 msgstr ""
 
-#: lib/mishka_cms_core/core_components.ex:662
+#: lib/mishka_cms_core/core_components.ex:675
 #, elixir-autogen, elixir-format
 msgid "Actions"
 msgstr ""
 
-#: lib/mishka_cms_core/core_components.ex:87
-#: lib/mishka_cms_core/core_components.ex:911
+#: lib/mishka_cms_core/core_components.ex:96
+#: lib/mishka_cms_core/core_components.ex:924
 #: lib/mishka_cms_core_web/live/admin/components/detail_modal.ex:106
 #, elixir-autogen, elixir-format
 msgid "close"
@@ -173,7 +173,7 @@ msgstr ""
 msgid "%{count} total"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:328
+#: lib/mishka_cms_core/layouts.ex:361
 #, elixir-autogen, elixir-format
 msgid "%{count} unread"
 msgid_plural "%{count} unread"
@@ -914,7 +914,7 @@ msgstr ""
 msgid "Account"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:468
+#: lib/mishka_cms_core/layouts.ex:501
 #, elixir-autogen, elixir-format
 msgid "Account settings"
 msgstr ""
@@ -1038,12 +1038,12 @@ msgstr ""
 msgid "Adds its permission names, the components and the sample pages. Anything already there — including your own edits — is left alone, and you can press this again whenever you like."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:629
+#: lib/mishka_cms_core/layouts.ex:662
 #, elixir-autogen, elixir-format
 msgid "Admin"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:148
+#: lib/mishka_cms_core/layouts.ex:181
 #, elixir-autogen, elixir-format
 msgid "Admin console"
 msgstr ""
@@ -1085,7 +1085,7 @@ msgstr ""
 msgid "All live"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:185
+#: lib/mishka_cms_core/layouts.ex:218
 #, elixir-autogen, elixir-format
 msgid "All systems operational"
 msgstr ""
@@ -1474,7 +1474,7 @@ msgstr ""
 msgid "Children one under the next, evenly spaced."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:386
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:388
 #, elixir-autogen, elixir-format
 msgid "Choose a language and a path."
 msgstr ""
@@ -1584,7 +1584,7 @@ msgstr ""
 msgid "Compile failed"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1832
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1835
 #, elixir-autogen, elixir-format
 msgid "Compile failed: %{reason}"
 msgstr ""
@@ -1609,28 +1609,28 @@ msgstr ""
 msgid "Compiled on a previous request — module in RAM."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1849
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1852
 #, elixir-autogen, elixir-format
 msgid "Compiled — this component is now loaded in RAM."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1855
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1858
 #, elixir-autogen, elixir-format
 msgid "Compiled — this error page is now loaded in RAM."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1852
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1855
 #, elixir-autogen, elixir-format
 msgid "Compiled — this layout is now loaded in RAM."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1858
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1861
 #, elixir-autogen, elixir-format
 msgid "Compiled — this page is now loaded in RAM."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1843
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1860
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1846
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1863
 #, elixir-autogen, elixir-format
 msgid "Compiled — this record is now loaded in RAM."
 msgstr ""
@@ -1764,17 +1764,17 @@ msgstr ""
 msgid "Copy original link"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1115
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1118
 #, elixir-autogen, elixir-format
 msgid "Could not discard the draft."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1930
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1933
 #, elixir-autogen, elixir-format
 msgid "Could not duplicate this component."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1923
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1926
 #, elixir-autogen, elixir-format
 msgid "Could not duplicate: %{reason}"
 msgstr ""
@@ -1790,22 +1790,22 @@ msgstr ""
 msgid "Could not load folders"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1748
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1751
 #, elixir-autogen, elixir-format
 msgid "Could not load the version history."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1265
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1268
 #, elixir-autogen, elixir-format
 msgid "Could not publish the draft."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1725
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1728
 #, elixir-autogen, elixir-format
 msgid "Could not restore the version."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1067
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1070
 #, elixir-autogen, elixir-format
 msgid "Could not save the draft."
 msgstr ""
@@ -2096,7 +2096,7 @@ msgstr ""
 msgid "Draft"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1140
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1143
 #, elixir-autogen, elixir-format
 msgid "Draft discarded."
 msgstr ""
@@ -2125,7 +2125,7 @@ msgstr ""
 msgid "Duplicate"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1940
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1943
 #, elixir-autogen, elixir-format
 msgid "Duplicated as “%{name}”"
 msgstr ""
@@ -2504,7 +2504,7 @@ msgstr ""
 msgid "Give this one a name."
 msgstr ""
 
-#: lib/mishka_cms_core/core_components.ex:407
+#: lib/mishka_cms_core/core_components.ex:420
 #: lib/mishka_cms_core_web/live/admin/components/activity_feed.ex:575
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:1519
 #: lib/mishka_cms_core_web/live/admin/components/site_health_panel.ex:354
@@ -2941,7 +2941,7 @@ msgstr ""
 msgid "Label this new draft (e.g. Hero redesign)"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:482
+#: lib/mishka_cms_core/layouts.ex:515
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:73
 #, elixir-autogen, elixir-format
 msgid "Language"
@@ -3308,13 +3308,13 @@ msgstr ""
 msgid "Manage your site pages and their content."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:337
+#: lib/mishka_cms_core/layouts.ex:370
 #: lib/mishka_cms_core_web/live/admin/dashboard/notification/index.ex:68
 #, elixir-autogen, elixir-format
 msgid "Mark all read"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:412
+#: lib/mishka_cms_core/layouts.ex:445
 #, elixir-autogen, elixir-format
 msgid "Mark read"
 msgstr ""
@@ -3764,7 +3764,7 @@ msgid_plural "Nothing updated. %{count} components waiting on a choice."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core/layouts.ex:326
+#: lib/mishka_cms_core/layouts.ex:359
 #: lib/mishka_cms_core/notify.ex:136
 #: lib/mishka_cms_core/settings.ex:922
 #: lib/mishka_cms_core/sidebar.ex:475
@@ -3885,7 +3885,7 @@ msgstr ""
 msgid "Open issues"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:265
+#: lib/mishka_cms_core/layouts.ex:298
 #, elixir-autogen, elixir-format
 msgid "Open menu"
 msgstr ""
@@ -3926,7 +3926,7 @@ msgstr ""
 msgid "Other"
 msgstr ""
 
-#: lib/mishka_cms_core/core_components.ex:241
+#: lib/mishka_cms_core/core_components.ex:254
 #, elixir-autogen, elixir-format
 msgid "Other ways to create this"
 msgstr ""
@@ -4002,12 +4002,12 @@ msgstr ""
 msgid "Page content appears here"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:399
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:403
 #, elixir-autogen, elixir-format
 msgid "Page created successfully"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:110
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:112
 #, elixir-autogen, elixir-format
 msgid "Page updated successfully"
 msgstr ""
@@ -4169,7 +4169,7 @@ msgstr ""
 msgid "Plugins"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:595
+#: lib/mishka_cms_core/layouts.ex:628
 #, elixir-autogen, elixir-format
 msgid "Powered by"
 msgstr ""
@@ -4240,7 +4240,7 @@ msgstr ""
 msgid "Priority"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/page_message.ex:52
+#: lib/mishka_cms_core/runtime/page_message.ex:56
 #, elixir-autogen, elixir-format
 msgid "Problem"
 msgstr ""
@@ -4282,22 +4282,22 @@ msgstr ""
 msgid "Published"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1283
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1286
 #, elixir-autogen, elixir-format
 msgid "Published to the live error_page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1282
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1285
 #, elixir-autogen, elixir-format
 msgid "Published to the live layout."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1281
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1284
 #, elixir-autogen, elixir-format
 msgid "Published to the live page."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1284
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1287
 #, elixir-autogen, elixir-format
 msgid "Published to the live record."
 msgstr ""
@@ -4595,7 +4595,7 @@ msgstr ""
 msgid "Runtime parts"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:189
+#: lib/mishka_cms_core/layouts.ex:222
 #, elixir-autogen, elixir-format
 msgid "Runtime · %{uptime} uptime"
 msgstr ""
@@ -4641,7 +4641,7 @@ msgstr ""
 msgid "Saved"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1064
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1066
 #, elixir-autogen, elixir-format
 msgid "Saved as draft — preview or publish it from the bar above."
 msgstr ""
@@ -4677,7 +4677,7 @@ msgstr ""
 msgid "Search engines, robots.txt and the sitemap"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:278
+#: lib/mishka_cms_core/layouts.ex:311
 #, elixir-autogen, elixir-format
 msgid "Search pages, posts, people…"
 msgstr ""
@@ -4865,7 +4865,7 @@ msgstr ""
 msgid "Sidebar"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:515
+#: lib/mishka_cms_core/layouts.ex:548
 #, elixir-autogen, elixir-format
 msgid "Sign out"
 msgstr ""
@@ -5197,7 +5197,7 @@ msgstr ""
 msgid "Submit button"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/page_message.ex:52
+#: lib/mishka_cms_core/runtime/page_message.ex:54
 #, elixir-autogen, elixir-format
 msgid "Success"
 msgstr ""
@@ -5207,12 +5207,12 @@ msgstr ""
 msgid "Success message"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:290
+#: lib/mishka_cms_core/layouts.ex:323
 #, elixir-autogen, elixir-format
 msgid "Switch to dark"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:299
+#: lib/mishka_cms_core/layouts.ex:332
 #, elixir-autogen, elixir-format
 msgid "Switch to light"
 msgstr ""
@@ -5300,7 +5300,7 @@ msgstr ""
 msgid "Thanks — we'll be in touch."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1111
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1114
 #, elixir-autogen, elixir-format
 msgid "That draft is no longer there."
 msgstr ""
@@ -5346,7 +5346,7 @@ msgstr ""
 msgid "That is not an http:// or https:// address."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:136
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:138
 #, elixir-autogen, elixir-format
 msgid "That page is no longer there."
 msgstr ""
@@ -5385,7 +5385,7 @@ msgstr ""
 msgid "The class lands on this element, so a rule like &.is-open in Custom CSS is what styles it."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1838
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1841
 #, elixir-autogen, elixir-format
 msgid "The compile did not finish."
 msgstr ""
@@ -5404,7 +5404,7 @@ msgstr ""
 msgid "The cursor starts in this field when the page opens."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1936
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1939
 #, elixir-autogen, elixir-format
 msgid "The duplicate did not finish."
 msgstr ""
@@ -5467,7 +5467,7 @@ msgstr ""
 msgid "The text visitors read on the built-in holding page while the site is offline. A site whose Error Page has an Offline entry shows that page instead."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:380
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:382
 #, elixir-autogen, elixir-format
 msgid "The translation could not be created."
 msgstr ""
@@ -5492,7 +5492,7 @@ msgstr ""
 msgid "They send one value, so whatever the visitor types in the second one replaces the first."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1898
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1901
 #, elixir-autogen, elixir-format
 msgid "This component cannot be duplicated here."
 msgstr ""
@@ -5603,7 +5603,7 @@ msgstr ""
 msgid "This page's address takes its language from the site's list, so it will not answer %{language} until you add it under Settings, General, Languages."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1775
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1778
 #, elixir-autogen, elixir-format
 msgid "This record has nothing to compile."
 msgstr ""
@@ -5774,7 +5774,7 @@ msgstr ""
 msgid "Translate"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:369
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.ex:371
 #, elixir-autogen, elixir-format
 msgid "Translation created as inactive — translate it, then activate it to go live."
 msgstr ""
@@ -5887,7 +5887,7 @@ msgstr ""
 msgid "Undo"
 msgstr ""
 
-#: lib/mishka_cms_core/core_components.ex:407
+#: lib/mishka_cms_core/core_components.ex:420
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:159
 #, elixir-autogen, elixir-format
 msgid "Unknown"
@@ -6031,7 +6031,7 @@ msgstr ""
 msgid "Version changes"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1723
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1726
 #, elixir-autogen, elixir-format
 msgid "Version restored."
 msgstr ""
@@ -6057,7 +6057,7 @@ msgstr ""
 msgid "View all"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:425
+#: lib/mishka_cms_core/layouts.ex:458
 #, elixir-autogen, elixir-format
 msgid "View all activity"
 msgstr ""
@@ -6422,7 +6422,7 @@ msgstr ""
 msgid "You must log in to access this page."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:345
+#: lib/mishka_cms_core/layouts.ex:378
 #, elixir-autogen, elixir-format
 msgid "You're all caught up."
 msgstr ""
@@ -6597,7 +6597,7 @@ msgstr ""
 msgid "installed from %{version}, untouched — the kit's own copy has changed since"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1870
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1873
 #, elixir-autogen, elixir-format
 msgid "it took too long and was given up on"
 msgstr ""
@@ -6778,7 +6778,7 @@ msgstr ""
 msgid "the page this version ships"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1869
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1872
 #, elixir-autogen, elixir-format
 msgid "the record could not be read back for compilation"
 msgstr ""
@@ -7900,12 +7900,12 @@ msgstr ""
 msgid "Your authenticator is turned off. Sign-ins ask for the password alone."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:496
+#: lib/mishka_cms_core/layouts.ex:529
 #, elixir-autogen, elixir-format
 msgid "Show %{count} more"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:506
+#: lib/mishka_cms_core/layouts.ex:539
 #, elixir-autogen, elixir-format
 msgid "Show less"
 msgstr ""
@@ -11559,7 +11559,7 @@ msgstr ""
 msgid "Workspace updated successfully"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:221
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:223
 #, elixir-autogen, elixir-format
 msgid "Workspace version created successfully"
 msgstr ""
@@ -12062,7 +12062,7 @@ msgstr ""
 msgid "+%{count} this week"
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:217
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:219
 #, elixir-autogen, elixir-format
 msgid "1 note"
 msgid_plural "%{count} notes"
@@ -12116,7 +12116,7 @@ msgstr ""
 msgid "The group this page is filed under. Empty when it is under none."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:259
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:261
 #, elixir-autogen, elixir-format
 msgid "The version could not be copied. Nothing was written."
 msgstr ""
@@ -12131,7 +12131,7 @@ msgstr ""
 msgid "This version cannot be copied."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:213
+#: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/workspace_version/index.ex:215
 #, elixir-autogen, elixir-format
 msgid "Version %{version} created from %{source} — %{pages}, %{notes} copied"
 msgstr ""
@@ -12410,7 +12410,7 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog_web/live/admin/dashboard/home/index.ex:105
 #: ../mishka_blog/lib/mishka_blog_web/sidebar_menu.ex:92
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comments.ex:104
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:964
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:991
 #: ../mishka_document/lib/mishka_document_web/live/admin/dashboard/issue/issue_comments_live.ex:120
 #, elixir-autogen, elixir-format
 msgid "Comments"
@@ -13171,6 +13171,7 @@ msgstr ""
 
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/live/panels.ex:3932
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/seo_form.ex:1085
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:215
 #, elixir-autogen, elixir-format
 msgid "Advanced"
 msgstr ""
@@ -18231,22 +18232,22 @@ msgstr ""
 msgid "Table"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:746
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:773
 #, elixir-autogen, elixir-format
 msgid "%{count} failed, most often: %{reason}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:743
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:770
 #, elixir-autogen, elixir-format
 msgid "%{count} failed: %{reason}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:751
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:778
 #, elixir-autogen, elixir-format
 msgid "%{count} skipped, most often: %{reason}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:748
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:775
 #, elixir-autogen, elixir-format
 msgid "%{count} skipped: %{reason}"
 msgstr ""
@@ -18258,27 +18259,27 @@ msgid_plural "%{count} users were created. Their WordPress passwords can't be ca
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:881
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:908
 #, elixir-autogen, elixir-format
 msgid "%{host} answered, but not as a %{source} site."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:868
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:895
 #, elixir-autogen, elixir-format
 msgid "%{source} no longer accepts the user and password this run signed in with. They may have been changed or revoked: start a new run with the new ones."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:741
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:768
 #, elixir-autogen, elixir-format
 msgid "%{waiting}, most often: %{reason}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:738
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:765
 #, elixir-autogen, elixir-format
 msgid "%{waiting}: %{reason}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:632
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:654
 #, elixir-autogen, elixir-format
 msgid "(opens in a new tab)"
 msgstr ""
@@ -18288,27 +18289,27 @@ msgstr ""
 msgid "A site's admin sets the migration up on their own site only."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:611
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:633
 #, elixir-autogen, elixir-format
 msgid "About the source"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:945
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:972
 #, elixir-autogen, elixir-format
 msgid "Authors"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:977
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1004
 #, elixir-autogen, elixir-format
 msgid "Brought in as drafts"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:987
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1014
 #, elixir-autogen, elixir-format
 msgid "Brought in too"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:111
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:133
 #, elixir-autogen, elixir-format
 msgid "By kind"
 msgstr ""
@@ -18323,43 +18324,34 @@ msgstr ""
 msgid "CONNECTED"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:844
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:871
 #, elixir-autogen, elixir-format
 msgid "Cancelled %{when}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:641
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:663
 #, elixir-autogen, elixir-format
 msgid "Choices for this run"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:63
-#, elixir-autogen, elixir-format
-msgid "Choose the site's Language in addresses (Settings) before importing: links written under another choice stop matching, or break, when you switch it later."
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:829
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:856
 #, elixir-autogen, elixir-format
 msgid "Connected %{when}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:132
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:135
 #, elixir-autogen, elixir-format
 msgid "Connected to %{host}."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:98
-#, elixir-autogen, elixir-format
-msgid "Connected to %{site}."
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:244
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:588
 #, elixir-autogen, elixir-format
 msgid "Decided. The next dry run and import follow your decision."
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/activity.ex:183
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:109
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:115
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:208
 #, elixir-autogen, elixir-format
 msgid "Dry run"
 msgstr ""
@@ -18379,49 +18371,44 @@ msgstr ""
 msgid "Dry run finished"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:835
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:862
 #, elixir-autogen, elixir-format
 msgid "Dry run finished %{when}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:807
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:834
 #, elixir-autogen, elixir-format
 msgid "Dry run in progress"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:154
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:157
 #, elixir-autogen, elixir-format
 msgid "Dry run of %{host} failed."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:148
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:151
 #, elixir-autogen, elixir-format
 msgid "Dry run of %{host} failed: %{reason}."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:141
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:144
 #, elixir-autogen, elixir-format
 msgid "Dry run of %{host} finished: %{result}."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:135
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:138
 #, elixir-autogen, elixir-format
 msgid "Dry run of %{host} started."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:167
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:170
 #, elixir-autogen, elixir-format
 msgid "Dry run of %{host} was cancelled."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:110
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:116
 #, elixir-autogen, elixir-format
 msgid "Dry run started."
-msgstr ""
-
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:57
-#, elixir-autogen, elixir-format
-msgid "Each translation is imported in its own language and linked to its other editions. One in a language the site does not publish in, or whose language the source does not say (Polylang's free plugin says none over the REST API, and WPML's lists its default language alone), waits for your decision. The site's export file (Tools > Export) carries every translation and its language."
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.html.heex:29
@@ -18441,7 +18428,7 @@ msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/activity.ex:187
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/blog_action.ex:36
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:120
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:126
 #, elixir-autogen, elixir-format
 msgid "Import"
 msgstr ""
@@ -18461,79 +18448,79 @@ msgstr ""
 msgid "Import finished"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:838
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:865
 #, elixir-autogen, elixir-format
 msgid "Import finished %{when}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:808
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:835
 #, elixir-autogen, elixir-format
 msgid "Import in progress"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:164
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:167
 #, elixir-autogen, elixir-format
 msgid "Import of %{host} failed."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:158
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:161
 #, elixir-autogen, elixir-format
 msgid "Import of %{host} failed: %{reason}."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:144
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:147
 #, elixir-autogen, elixir-format
 msgid "Import of %{host} finished: %{result}."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:138
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:141
 #, elixir-autogen, elixir-format
 msgid "Import of %{host} started."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:170
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:173
 #, elixir-autogen, elixir-format
 msgid "Import of %{host} was cancelled."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:121
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:127
 #, elixir-autogen, elixir-format
 msgid "Import started."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:47
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:50
 #, elixir-autogen, elixir-format
 msgid "Imported links may not match the site's language addresses"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:958
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:985
 #, elixir-autogen, elixir-format
 msgid "Imported users' email"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:239
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:583
 #, elixir-autogen, elixir-format
 msgid "It will be imported as its own."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:126
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:197
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.html.heex:22
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/sidebar_menu.ex:46
 #, elixir-autogen, elixir-format
 msgid "Items"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:405
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:427
 #, elixir-autogen, elixir-format
 msgid "Latest items"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:988
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1015
 #, elixir-autogen, elixir-format
 msgid "Left behind"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:985
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1012
 #, elixir-autogen, elixir-format
 msgid "Left unconfirmed, to confirm from Users"
 msgstr ""
@@ -18543,29 +18530,29 @@ msgstr ""
 msgid "Map categories"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:241
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:585
 #, elixir-autogen, elixir-format
 msgid "Mapped. The import links it to that record."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:973
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1000
 #, elixir-autogen, elixir-format
 msgid "Matched to users by email, a new user for the rest"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:974
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1001
 #, elixir-autogen, elixir-format
 msgid "Matched to users by email, the rest skipped"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:51
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:54
 #, elixir-autogen, elixir-format
 msgid "Menu links, links inside posts and pages, and redirects are written as fixed addresses, in the way this site names the language now."
 msgstr ""
 
 #: ../mishka_cms_migration/lib/mishka_cms_migration/activity.ex:189
 #: ../mishka_cms_migration/lib/mishka_cms_migration/provision.ex:33
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:71
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:83
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:10
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.html.heex:13
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/sidebar_menu.ex:33
@@ -18583,52 +18570,52 @@ msgstr ""
 msgid "Move a site's posts, pages, authors and media here from another CMS."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:43
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:46
 #, elixir-autogen, elixir-format
 msgid "New import"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:548
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:570
 #, elixir-autogen, elixir-format
 msgid "No dry run yet"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:54
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:57
 #, elixir-autogen, elixir-format
 msgid "No source is installed."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:875
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:902
 #, elixir-autogen, elixir-format
 msgid "Nothing answered at %{host}. Once the site is up again, start a new run."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:952
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:979
 #, elixir-autogen, elixir-format
 msgid "Post addresses"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:571
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:593
 #, elixir-autogen, elixir-format
 msgid "Press Dry run in this row's actions to start one."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:976
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1003
 #, elixir-autogen, elixir-format
 msgid "Published at their old addresses"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:132
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:138
 #, elixir-autogen, elixir-format
 msgid "Run cancelled."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:551
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:573
 #, elixir-autogen, elixir-format
 msgid "Run one to see what this site holds. A dry run reads every item and writes nothing in the CMS."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:69
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.html.heex:72
 #, elixir-autogen, elixir-format
 msgid "Runs"
 msgstr ""
@@ -18643,7 +18630,7 @@ msgstr ""
 msgid "Setting the migration up needs these permissions: %{names}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:913
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:940
 #, elixir-autogen, elixir-format
 msgid "Signed in as"
 msgstr ""
@@ -18653,87 +18640,87 @@ msgstr ""
 msgid "Sources"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:815
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:842
 #, elixir-autogen, elixir-format
 msgid "Step %{step} of %{steps}: %{kind}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:841
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:868
 #, elixir-autogen, elixir-format
 msgid "Stopped %{when}"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:68
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:72
 #, elixir-autogen, elixir-format
 msgid "Suggestion:"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:135
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:210
 #, elixir-autogen, elixir-format
 msgid "That run is not there."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:903
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:930
 #, elixir-autogen, elixir-format
 msgid "The CMS refused what this run writes to the admin who started it."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:893
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:920
 #, elixir-autogen, elixir-format
 msgid "The file this run was given is no longer there. Start a new run with it."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:897
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:924
 #, elixir-autogen, elixir-format
 msgid "The file this run was given is not a %{source}, or it is damaged. Start a new run with the export made again."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:905
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:932
 #, elixir-autogen, elixir-format
 msgid "The job stopped without saying why."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:69
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:73
 #, elixir-autogen, elixir-format
 msgid "The main menu needs your decision on the Items page: Write links for the site's current mode, or Wait until the site's languages are set."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:173
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:176
 #, elixir-autogen, elixir-format
 msgid "The run of %{host} was cancelled."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:888
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:915
 #, elixir-autogen, elixir-format
 msgid "The saved password can no longer be opened, as this CMS's secret key has changed since. Start a new run and type it again."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:590
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:612
 #, elixir-autogen, elixir-format
 msgid "The source listed nothing to move."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:86
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:102
 #, elixir-autogen, elixir-format
 msgid "The source runs %{plugin}, so its addresses carry a language prefix, such as /fa/about."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:269
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:642
 #, elixir-autogen, elixir-format
 msgid "This is what the migration keeps of the item. Its content and its other fields, such as a post's slug, status and author, are read from the source again by each run."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:591
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:613
 #, elixir-autogen, elixir-format
 msgid "This run ended before a dry run reported what the site holds."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:82
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:98
 #, elixir-autogen, elixir-format
 msgid "This site gives every language a prefix in its addresses, such as /en/blog."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:165
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:171
 #, elixir-autogen, elixir-format
 msgid "This source is no longer installed."
 msgstr ""
@@ -18743,37 +18730,38 @@ msgstr ""
 msgid "This user was created. Their WordPress password can't be carried over: they sign in with Forgot password or a social sign-in."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:912
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:939
 #, elixir-autogen, elixir-format
 msgid "Timezone"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:62
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:66
 #, elixir-autogen, elixir-format
 msgid "Tip:"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:56
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:59
 #, elixir-autogen, elixir-format
 msgid "Translations:"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:982
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1009
 #, elixir-autogen, elixir-format
 msgid "Under /blog, with a redirect from each old address"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:980
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:1007
 #, elixir-autogen, elixir-format
 msgid "Under /blog, with no redirect from the old addresses"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:429
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:451
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:133
 #, elixir-autogen, elixir-format
 msgid "Untitled"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:832
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:859
 #, elixir-autogen, elixir-format
 msgid "Updated %{when}"
 msgstr ""
@@ -18788,83 +18776,83 @@ msgstr ""
 msgid "Users were created"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:811
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:838
 #, elixir-autogen, elixir-format
 msgid "Waiting for its job to start"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:856
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:883
 #, elixir-autogen, elixir-format
 msgid "What an import would do with the last items, newest first"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:853
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:880
 #, elixir-autogen, elixir-format
 msgid "What the import did with the last items, newest first"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:285
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:307
 #, elixir-autogen, elixir-format
 msgid "Why it stopped"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:461
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:483
 #, elixir-autogen, elixir-format
 msgid "and %{count} more"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:320
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:342
 #, elixir-autogen, elixir-format
 msgid "found"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:231
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:253
 #, elixir-autogen, elixir-format
 msgid "item found"
 msgid_plural "items found"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:517
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:539
 #, elixir-autogen, elixir-format
 msgid "item so far"
 msgid_plural "items so far"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:180
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:183
 #, elixir-autogen, elixir-format
 msgid "nothing to move"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:215
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:540
 #, elixir-autogen, elixir-format
 msgid "Dry run of the item started."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:232
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:574
 #, elixir-autogen, elixir-format
 msgid "Dry run this item"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:219
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:544
 #, elixir-autogen, elixir-format
 msgid "Import of the item started."
 msgid_plural "Import of %{count} items started."
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:234
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:576
 #, elixir-autogen, elixir-format
 msgid "Import the picked items"
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:193
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:285
 #, elixir-autogen, elixir-format
 msgid "Import the picked items takes the rows you pick, not every row the filters find."
 msgstr ""
 
-#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:233
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:575
 #, elixir-autogen, elixir-format
 msgid "Import this item"
 msgstr ""
@@ -19302,4 +19290,442 @@ msgstr ""
 #: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/snippet_form.ex:85
 #, elixir-autogen, elixir-format
 msgid "whole document"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/page_message.ex:55
+#, elixir-autogen, elixir-format
+msgid "Notice"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:536
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:406
+#, elixir-autogen, elixir-format
+msgid "%{count} item decided."
+msgid_plural "%{count} items decided."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:201
+#, elixir-autogen, elixir-format
+msgid "%{count} item needs your decision"
+msgid_plural "%{count} items need your decision"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:262
+#, elixir-autogen, elixir-format
+msgid "%{count} item: %{kinds}"
+msgid_plural "%{count} items: %{kinds}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:116
+#, elixir-autogen, elixir-format
+msgid "%{count} left as it was: the import did not reach it"
+msgid_plural "%{count} left as they were: the import did not reach them"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:133
+#, elixir-autogen, elixir-format
+msgid "%{count} more"
+msgid_plural "%{count} more"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration/resources/__notifiers/steps.ex:189
+#, elixir-autogen, elixir-format
+msgid "%{number} needed your decision"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:109
+#, elixir-autogen, elixir-format
+msgid "%{titles} created"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:83
+#, elixir-autogen, elixir-format
+msgid "%{titles} needs your decision: %{reason}"
+msgid_plural "%{titles} need your decision: %{reason}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:102
+#, elixir-autogen, elixir-format
+msgid "%{titles} skipped"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:106
+#, elixir-autogen, elixir-format
+msgid "%{titles} skipped: %{reason}"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:95
+#, elixir-autogen, elixir-format
+msgid "%{titles} skipped: its parent was not imported"
+msgid_plural "%{titles} skipped: their parent was not imported"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:110
+#, elixir-autogen, elixir-format
+msgid "%{titles} updated"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:75
+#, elixir-autogen, elixir-format
+msgid "%{title} failed"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:79
+#, elixir-autogen, elixir-format
+msgid "%{title} failed: %{reason}"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:163
+#, elixir-autogen, elixir-format
+msgid "(recommended)"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:141
+#, elixir-autogen, elixir-format
+msgid "(this item)"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:137
+#, elixir-autogen, elixir-format
+msgid "4 of 4: Review"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:247
+#, elixir-autogen, elixir-format
+msgid "A dry run or an import of this run is running. Decide once it is done."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:113
+#, elixir-autogen, elixir-format
+msgid "A dry run or an import of this run is running. Wait until it finishes, then act on this branch."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:517
+#, elixir-autogen, elixir-format
+msgid "Answer %{count} item with “%{choice}”? It holds for every later dry run and import, and nothing is imported until you import."
+msgid_plural "Answer %{count} items with “%{choice}”? It holds for every later dry run and import, and nothing is imported until you import."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:192
+#, elixir-autogen, elixir-format
+msgid "Answer this item with “%{choice}”? It holds for every later dry run and import."
+msgid_plural "Answer these %{count} items with “%{choice}”? It holds for every later dry run and import."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:393
+#, elixir-autogen, elixir-format
+msgid "Apply the rules"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:179
+#, elixir-autogen, elixir-format
+msgid "Bringing:"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:67
+#, elixir-autogen, elixir-format
+msgid "Choose the site's Language in addresses (Settings) before importing. If you change Language in addresses later, press Run again and Import to rewrite the links."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:206
+#, elixir-autogen, elixir-format
+msgid "Connected to %{site}, but the dry run did not start. %{reason}"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/index.ex:197
+#, elixir-autogen, elixir-format
+msgid "Connected to %{site}. The dry run started: it writes nothing to your site."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:556
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:578
+#, elixir-autogen, elixir-format
+msgid "Decide"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:208
+#, elixir-autogen, elixir-format
+msgid "Decide a whole group at once. A decision holds for every later dry run and import, and imports nothing by itself."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:208
+#, elixir-autogen, elixir-format
+msgid "Decide its parents first to import the whole branch."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:171
+#, elixir-autogen, elixir-format
+msgid "Decide the item that waits:"
+msgid_plural "Decide all %{count} that wait the same way:"
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:387
+#, elixir-autogen, elixir-format
+msgid "Decide the items of every rule that is on, each with its choice? It holds for every later dry run and import."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:240
+#, elixir-autogen, elixir-format
+msgid "Deciding… The rows are drawn again once every item is decided."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:525
+#, elixir-autogen, elixir-format
+msgid "Dry run of %{title}: %{plan}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/home/run_details.ex:115
+#, elixir-autogen, elixir-format
+msgid "Duplicate files are found only when importing. A file that is a copy of another then asks for your decision."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:60
+#, elixir-autogen, elixir-format
+msgid "Each translation is imported in its own language and linked to its other editions. One in a language the site does not publish in, or whose language the source does not say, waits for your decision."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:105
+#, elixir-autogen, elixir-format
+msgid "Enter the %{key}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:218
+#, elixir-autogen, elixir-format
+msgid "From: %{address}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:220
+#, elixir-autogen, elixir-format
+msgid "From: the export file you chose."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:221
+#, elixir-autogen, elixir-format
+msgid "From: the source you connected."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:238
+#, elixir-autogen, elixir-format
+msgid "Import %{title} now, without waiting for %{parent}? It is written at the top level, not under its parent (a page keeps its own address), and later imports keep it so until you choose Wait for its parent."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:336
+#, elixir-autogen, elixir-format
+msgid "Import %{title} now? It writes this item alone into the CMS."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:577
+#, elixir-autogen, elixir-format
+msgid "Import anyway"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:246
+#, elixir-autogen, elixir-format
+msgid "Import anyway, without its parent"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:342
+#, elixir-autogen, elixir-format
+msgid "Import it"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/summary.ex:58
+#, elixir-autogen, elixir-format
+msgid "Import of %{count} item: %{parts}."
+msgid_plural "Import of %{count} items: %{parts}."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:532
+#, elixir-autogen, elixir-format
+msgid "Import of %{title}: %{outcome}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:227
+#, elixir-autogen, elixir-format
+msgid "Import the branch, parents first"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:219
+#, elixir-autogen, elixir-format
+msgid "Import these %{count} items now, parents first: %{titles}?"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:358
+#, elixir-autogen, elixir-format
+msgid "It waits for its parent again. What the import wrote stays where it is until the source changes it; the next import then writes it under its parent, once its parent is imported."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:364
+#, elixir-autogen, elixir-format
+msgid "It waits for its parent again: the next import writes it once its parent is imported."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:160
+#, elixir-autogen, elixir-format
+msgid "Its last import failed: %{reason}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:262
+#, elixir-autogen, elixir-format
+msgid "Languages: everything the source gives without a language of your site goes in %{language}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:268
+#, elixir-autogen, elixir-format
+msgid "Languages: kept as the source gives them."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:256
+#, elixir-autogen, elixir-format
+msgid "Left out of the site's own settings: %{names}."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:180
+#, elixir-autogen, elixir-format
+msgid "Not bringing:"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:549
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:568
+#, elixir-autogen, elixir-format
+msgid "Not decided. %{why}"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:569
+#, elixir-autogen, elixir-format
+msgid "Not started. %{why}"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:186
+#, elixir-autogen, elixir-format
+msgid "Nothing needs your decision now."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:310
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:311
+#, elixir-autogen, elixir-format
+msgid "Only items whose title holds this, or with this id"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:84
+#, elixir-autogen, elixir-format
+msgid "Polylang Free doesn't share languages over REST: upload the WordPress export file to bring translations."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:377
+#, elixir-autogen, elixir-format
+msgid "Preview counts"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:351
+#, elixir-autogen, elixir-format
+msgid "Show in the list"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:291
+#, elixir-autogen, elixir-format
+msgid "Show them"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:215
+#, elixir-autogen, elixir-format
+msgid "Simple"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:158
+#, elixir-autogen, elixir-format
+msgid "Start over"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:185
+#, elixir-autogen, elixir-format
+msgid "Start the dry run: a test run that changes nothing on your site. You check what it would do in the list, then import."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:638
+#, elixir-autogen, elixir-format
+msgid "Technical details"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:399
+#, elixir-autogen, elixir-format
+msgid "The next import writes what you decide, parents before their children: on the Migration page press Run again, then Import. For a few items, pick them here and press Import the picked items."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/language_notice.ex:90
+#, elixir-autogen, elixir-format
+msgid "The site's export file (Tools > Export) carries every translation and its language."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:153
+#, elixir-autogen, elixir-format
+msgid "The source does not list it, such as a page in the trash."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:350
+#, elixir-autogen, elixir-format
+msgid "These rules decide %{count} item."
+msgid_plural "These rules decide %{count} items."
+msgstr[0] ""
+msgstr[1] ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:361
+#, elixir-autogen, elixir-format
+msgid "This %{kind} waits for its parent"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:431
+#, elixir-autogen, elixir-format
+msgid "Turn on a rule first."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:268
+#, elixir-autogen, elixir-format
+msgid "Wait for its parent instead"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:375
+#, elixir-autogen, elixir-format
+msgid "Wait for its parent instead? %{title} stays where the import wrote it until the source changes it; the next import then writes it under its parent, once its parent is imported."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:382
+#, elixir-autogen, elixir-format
+msgid "Wait for its parent instead? The next import writes %{title} once its parent is imported, not before."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:357
+#, elixir-autogen, elixir-format
+msgid "Where this %{kind} sits"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/branch.ex:253
+#, elixir-autogen, elixir-format
+msgid "You decided to import it without its parent."
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/import_steps.ex:245
+#, elixir-autogen, elixir-format
+msgid "off"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/decisions.ex:479
+#, elixir-autogen, elixir-format
+msgid "off, not counted"
+msgstr ""
+
+#: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:538
+#, elixir-autogen, elixir-format
+msgid "the item"
 msgstr ""
