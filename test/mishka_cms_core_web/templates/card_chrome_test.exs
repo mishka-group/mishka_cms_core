@@ -160,17 +160,113 @@ defmodule MishkaCmsCoreWeb.Templates.CardChromeTest do
     end
   end
 
-  describe "shown_rows/3" do
-    test "counts from the first row shown" do
-      assert CardChrome.shown_rows(%{page: 3, first_page: 3}, 20, 136) == 20
-      assert CardChrome.shown_rows(%{page: 3, first_page: 1}, 20, 136) == 60
-      assert CardChrome.shown_rows(%{page: 999, first_page: 999}, 20, 136) == 0
+  describe "shown_range/3" do
+    test "runs from the first row shown to the last" do
+      assert CardChrome.shown_range(%{page: 3, first_page: 3}, 20, 136) == {41, 60}
+      assert CardChrome.shown_range(%{page: 3, first_page: 1}, 20, 136) == {1, 60}
+
+      assert CardChrome.shown_range(%{page: 3, first_page: 1, next_offset: 57}, 20, 136) ==
+               {1, 57}
+
+      assert CardChrome.shown_range(%{page: 3, first_page: 1}, 20, 48) == {1, 48}
+      assert CardChrome.shown_range(%{page: 999, first_page: 999}, 20, 136) == nil
     end
 
-    test "counts none on a page past the last, however far the capped total reaches" do
+    test "is nil on a page past the last, however far the capped total reaches" do
       state = %{loading: :loaded, page: 999, first_page: 1, total_count: 10_000}
 
-      assert CardChrome.shown_rows(state, 20, 10_000) == 0
+      assert CardChrome.shown_range(state, 20, 10_000) == nil
+    end
+  end
+
+  describe "pagination/1" do
+    @footer_static %{
+      id: "posts",
+      stream_name: :posts,
+      ui_adapter: MishkaGervaz.UIAdapters.Tailwind,
+      page_size: 20,
+      page_size_options: [20, 50],
+      pagination_ui: %{
+        load_more_label: "Load More",
+        show_total: true,
+        prev_label: nil,
+        next_label: nil
+      }
+    }
+
+    defp render_footer(type, state) do
+      static = Map.put(@footer_static, :config, %{pagination: %{type: type}})
+
+      state =
+        Map.merge(
+          %{loading: :loaded, current_page_size: nil, first_page: 1, next_offset: 0},
+          state
+        )
+
+      render_component(&CardChrome.pagination/1, static: static, state: state, myself: 1)
+    end
+
+    defp parts(html) do
+      html
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-role='gervaz-pagination'] > [data-role]")
+      |> Enum.map(fn part ->
+        "gervaz-pagination-" <> name = part |> LazyHTML.attribute("data-role") |> hd()
+        {name, part}
+      end)
+    end
+
+    defp text(part), do: part |> LazyHTML.text() |> String.trim()
+    defp has?(part, selector), do: part |> LazyHTML.query(selector) |> Enum.count() > 0
+
+    test "a Load more list puts the page-size picker, Load More and the rows shown in order" do
+      html = render_footer(:load_more, %{page: 2, has_more?: true, total_count: 46})
+
+      assert [{"leading", leading}, {"center", center}, {"trailing", trailing}] = parts(html)
+      assert has?(leading, "form[phx-change='change_page_size'] select[name='size']")
+      assert has?(center, "button[phx-click='load_more']")
+      assert text(center) == "Load More"
+      assert text(trailing) == "Showing 1–40 of 46"
+    end
+
+    test "Load More is disabled while a load runs, and gone once every row is shown" do
+      [_leading, {"center", idle}, _trailing] =
+        :load_more |> render_footer(%{page: 2, has_more?: true, total_count: 46}) |> parts()
+
+      refute has?(idle, "button[disabled]")
+
+      [_leading, {"center", center}, _trailing] =
+        :load_more
+        |> render_footer(%{page: 2, has_more?: true, total_count: 46, loading: :loading})
+        |> parts()
+
+      assert has?(center, "button[phx-click='load_more'][disabled]")
+
+      [_leading, {"center", center}, {"trailing", trailing}] =
+        :load_more
+        |> render_footer(%{page: 3, has_more?: false, total_count: 46})
+        |> parts()
+
+      refute has?(center, "button")
+      assert text(trailing) == "Showing 1–46 of 46"
+    end
+
+    test "an empty Load more list says nothing under it" do
+      [_leading, _center, {"trailing", trailing}] =
+        :load_more |> render_footer(%{page: 1, has_more?: false, total_count: 0}) |> parts()
+
+      assert text(trailing) == ""
+    end
+
+    test "a numbered list puts the page-size picker, the pages and the page of how many in order" do
+      html = render_footer(:numbered, %{page: 2, total_pages: 3, total_count: 46})
+
+      assert [{"leading", leading}, {"center", center}, {"trailing", trailing}] = parts(html)
+      assert has?(leading, "select[name='size']")
+      assert has?(center, "button[phx-click='prev_page']")
+      assert has?(center, "button[phx-click='go_to_page'][aria-current='page']")
+      assert has?(center, "button[phx-click='next_page']")
+      assert text(trailing) == "Page 2 of 3"
     end
   end
 

@@ -224,6 +224,41 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
 
       assert shown.() > before_more
     end
+
+    @tag :gervaz_pagination_row
+    test "ends with the page-size picker, Load More and the rows shown, in order", %{conn: conn} do
+      for n <- 1..55, do: orphan!("Footer #{n}", nil)
+
+      view = conn |> as_master() |> open()
+
+      assert [{"leading", leading}, {"center", center}, {"trailing", trailing}] = footer(view)
+      assert has?(leading, "select[name='size']")
+      assert has?(center, "button[phx-click='load_more']")
+      assert text(trailing) =~ ~r/^Showing 1–50 of \d+$/
+
+      view |> element("button[phx-click='load_more']") |> render_click()
+      render_async(view, @await)
+
+      assert [_leading, _center, {"trailing", trailing}] = footer(view)
+      assert [_, last] = Regex.run(~r/^Showing 1–(\d+) of \d+$/, text(trailing))
+      assert String.to_integer(last) > 50
+    end
+
+    # The parts of the one pager row under the table, by name, in the order they are drawn.
+    defp footer(view) do
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query("[data-role='gervaz-pagination'] > [data-role]")
+      |> Enum.map(fn part ->
+        "gervaz-pagination-" <> name = part |> LazyHTML.attribute("data-role") |> hd()
+        {name, part}
+      end)
+    end
+
+    defp text(part), do: part |> LazyHTML.text() |> String.trim()
+
+    defp has?(part, selector), do: part |> LazyHTML.query(selector) |> Enum.count() > 0
   end
 
   describe "whose rows an admin is shown" do

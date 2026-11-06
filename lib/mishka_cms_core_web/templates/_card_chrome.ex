@@ -532,18 +532,15 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   def range_label(%{total_count: total, page: page} = state, page_size, _empty_label, :load_more)
       when is_integer(total) and is_integer(page) and page >= 1 do
-    first = (Map.get(state, :first_page, 1) - 1) * page_size + 1
-    last = min(loaded_end(state, page, page_size), total)
-
-    case first <= last and not past_last_page?(state, page_size) do
-      true ->
+    case shown_range(state, page_size, total) do
+      {first, last} ->
         dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
           first: first,
           last: last,
           total: total
         )
 
-      false ->
+      nil ->
         dgettext("mishka_gervaz", "Showing 0 of %{total}", total: total)
     end
   end
@@ -566,18 +563,21 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     do: empty_label || dgettext("mishka_gervaz", "Nothing found")
 
   @doc """
-  How many rows a `:load_more` list shows of its `total`: from the first row shown to the last, so a
-  list opened at page 3 counts its own page and not the two before it. A page past the last shows
-  none.
+  The first and the last row a `:load_more` list shows of its `total`, `{41, 60}` for a list opened at
+  page 3 of 20-row pages, or `nil` when it shows none, as on a page past the last. The range starts at
+  the first row shown and ends at the state's `next_offset` when the table keeps one, and at the page
+  slots otherwise, clamped by the total. A template that words its range its own way, as the activity
+  log does with a capped total, reads the numbers here.
   """
-  @spec shown_rows(map(), pos_integer(), non_neg_integer()) :: non_neg_integer()
-  def shown_rows(state, page_size, total) do
-    page = Map.get(state, :page) || 1
-    skipped = (Map.get(state, :first_page, 1) - 1) * page_size
+  @spec shown_range(map(), pos_integer(), non_neg_integer()) ::
+          {pos_integer(), pos_integer()} | nil
+  def shown_range(state, page_size, total) do
+    first = (Map.get(state, :first_page, 1) - 1) * page_size + 1
+    last = min(loaded_end(state, Map.get(state, :page) || 1, page_size), total)
 
-    case past_last_page?(state, page_size) do
-      true -> 0
-      false -> max(min(loaded_end(state, page, page_size), total) - skipped, 0)
+    case first <= last and not past_last_page?(state, page_size) do
+      true -> {first, last}
+      false -> nil
     end
   end
 
@@ -681,7 +681,8 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
   end
 
   @doc """
-  What sits under the list: numbered pages, or a Load More button over the page-size picker.
+  What sits under the list, on one `pagination_row/1`: the page-size picker first, then the numbered
+  pages and `Page 2 of 7`, or Load More and `Showing 1–40 of 136` (`load_more_footer/1`).
 
   Every event and figure here is Gervaz's — only the look is ours. A table that asked for `:infinite`
   keeps the shared pagination, which is the only thing that knows how to draw it.
@@ -698,7 +699,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
         numbered_pagination(assigns)
 
       pagination_type == :load_more ->
-        load_more_pagination(assigns)
+        load_more_footer(assigns)
 
       true ->
         assigns
@@ -709,12 +710,85 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
     end
   end
 
-  defp load_more_pagination(assigns) do
+  @doc """
+  The row under a list, in three parts on one line: `leading` at the start, `center` in the middle
+  and `trailing` at the end. The middle part stays in the middle of the row whatever the widths of
+  the other two, and wraps its buttons when the row is too narrow for them, while the last part
+  keeps its words on one line. Below 640px the parts stack, each centred, so the row never scrolls
+  sideways. A part left out keeps its place on a wide screen and takes no line on a narrow one.
+
+  It is the row of `MishkaGervaz.Table.Templates.Shared.render_pagination_row/1`, the one gervaz's
+  own tables draw after its 0.0.4 release, with the same markup, so every list in the admin ends the
+  same way; it is drawn here because this library builds against gervaz 0.0.4.
+  """
+  slot :leading, doc: "the first part, such as the page-size picker"
+  slot :center, doc: "the middle part, such as Load More or the page buttons"
+  slot :trailing, doc: "the last part, such as where the reader is in the list"
+
+  def pagination_row(assigns) do
+    ~H"""
+    <div
+      data-role="gervaz-pagination"
+      class="mt-[22px] grid grid-cols-[1fr_auto_1fr] items-center gap-3 text-[12px] font-semibold text-[#a8a5a0] max-[640px]:grid-cols-1 max-[640px]:justify-items-center"
+    >
+      <div
+        data-role="gervaz-pagination-leading"
+        class={["flex items-center", @leading == [] && "max-[640px]:hidden"]}
+      >
+        {render_slot(@leading)}
+      </div>
+      <div
+        data-role="gervaz-pagination-center"
+        class={[
+          "flex flex-wrap items-center justify-center gap-1.5",
+          @center == [] && "max-[640px]:hidden"
+        ]}
+      >
+        {render_slot(@center)}
+      </div>
+      <div
+        data-role="gervaz-pagination-trailing"
+        class={[
+          "flex items-center justify-end whitespace-nowrap text-end max-[640px]:justify-center max-[640px]:text-center",
+          @trailing == [] && "max-[640px]:hidden"
+        ]}
+      >
+        {render_slot(@trailing)}
+      </div>
+    </div>
+    """
+  end
+
+  @doc """
+  The footer of a Load more list, on one `pagination_row/1`: the page-size picker first, Load More
+  in the middle while a `:load_more` table has rows left to load, and where the reader is,
+  `Showing 1–40 of 136`, last. Load More is disabled while a load runs, so it keeps its place and
+  takes no second click.
+
+  The card pages, the notification inbox and the activity log all end with it. A template passes
+  `class` for its own button and `icon` for one before the label, and `leading` or `trailing` to say
+  something else in that place, as the activity log puts its count first and its page last.
+  """
+  attr :static, :map, required: true
+  attr :state, :map, required: true
+  attr :myself, :any, required: true
+  attr :class, :string, default: nil, doc: "the button's classes, in place of the shared look"
+  attr :icon, :string, default: nil, doc: "an icon before the button's label"
+
+  slot :leading, doc: "in place of the page-size picker"
+  slot :trailing, doc: "in place of the range label"
+
+  def load_more_footer(assigns) do
     assigns =
       assigns
       |> assign(:page_size, page_size(assigns))
       |> assign(:page_size_options, assigns.static.page_size_options || [])
-      |> assign(:more?, assigns.state.has_more?)
+      |> assign(
+        :more?,
+        pagination_type(assigns) == :load_more and assigns.state.has_more? == true
+      )
+      |> assign(:range, footer_range(assigns))
+      |> assign(:class, assigns.class || @button_class)
       |> assign(
         :label,
         translate_dsl(assigns.static.pagination_ui.load_more_label) ||
@@ -722,46 +796,51 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       )
 
     ~H"""
-    <div :if={@more?} class="mt-[22px] flex items-center justify-center">
-      <button
-        type="button"
-        phx-click="load_more"
-        phx-target={@myself}
-        disabled={@state.loading == :loading}
-        class="h-[42px] rounded-xl border border-[#dcdbf5] bg-[#f2f1fc] px-[22px] text-[12.5px] font-bold text-[#4f4bcc] transition-colors hover:bg-[#e9e7fb] disabled:opacity-60"
-      >
-        {@label}
-      </button>
-    </div>
-
-    <form
-      :if={@page_size_options != []}
-      id={"#{@static.stream_name}-page-size"}
-      phx-change="change_page_size"
-      phx-target={@myself}
-      class="mt-[22px] flex items-center gap-[9px]"
-    >
-      <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
-        {dgettext("mishka_gervaz", "Show")}
-      </span>
-      <div class="relative">
-        <select
-          name="size"
-          aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
-          class="h-9 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
+    <.pagination_row>
+      <:leading :if={@leading != []}>{render_slot(@leading)}</:leading>
+      <:leading :if={@leading == [] and @page_size_options != []}>
+        <.page_size_select
+          static={@static}
+          page_size={@page_size}
+          options={@page_size_options}
+          myself={@myself}
+        />
+      </:leading>
+      <:center :if={@more?}>
+        <button
+          type="button"
+          phx-click="load_more"
+          phx-target={@myself}
+          disabled={@state.loading == :loading}
+          class={@class}
         >
-          <option :for={option <- @page_size_options} value={option} selected={option == @page_size}>
-            {option}
-          </option>
-        </select>
-        <.select_chevron />
-      </div>
-      <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
-        {dgettext("mishka_gervaz", "per page")}
-      </span>
-    </form>
+          <.dynamic_component
+            :if={@icon}
+            module={@static.ui_adapter}
+            function={:icon}
+            name={@icon}
+            class="size-[15px]"
+          />
+          {@label}
+        </button>
+      </:center>
+      <:trailing :if={@trailing != []}>{render_slot(@trailing)}</:trailing>
+      <:trailing :if={@trailing == [] and @range}>{@range}</:trailing>
+    </.pagination_row>
     """
   end
+
+  # The range under a Load more list, for a table that counts its rows; an empty list says nothing
+  # here, as its empty state says it.
+  defp footer_range(%{state: %{total_count: total} = state, static: static} = assigns)
+       when is_integer(total) and total > 0 do
+    case static.pagination_ui.show_total do
+      true -> range_label(state, page_size(assigns), nil, :load_more)
+      _off -> nil
+    end
+  end
+
+  defp footer_range(_assigns), do: nil
 
   defp numbered_pagination(assigns) do
     %{page: page, total_pages: total_pages} = assigns.state
@@ -775,39 +854,17 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
       |> assign(:page_size_options, assigns.static.page_size_options || [])
 
     ~H"""
-    <div class="mt-5 flex flex-wrap items-center justify-between gap-4">
-      <form
-        :if={@page_size_options != []}
-        id={"#{@static.stream_name}-page-size"}
-        phx-change="change_page_size"
-        phx-target={@myself}
-        class="flex items-center gap-[9px]"
-      >
-        <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
-          {dgettext("mishka_gervaz", "Show")}
-        </span>
-        <div class="relative">
-          <select
-            name="size"
-            aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
-            class="h-9 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
-          >
-            <option
-              :for={option <- @page_size_options}
-              value={option}
-              selected={option == @page_size}
-            >
-              {option}
-            </option>
-          </select>
-          <.select_chevron />
-        </div>
-        <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
-          {dgettext("mishka_gervaz", "per page")}
-        </span>
-      </form>
+    <.pagination_row>
+      <:leading :if={@page_size_options != []}>
+        <.page_size_select
+          static={@static}
+          page_size={@page_size}
+          options={@page_size_options}
+          myself={@myself}
+        />
+      </:leading>
 
-      <div :if={@total_pages > 1} class="flex flex-wrap items-center gap-2">
+      <:center :if={@total_pages > 1}>
         <button
           type="button"
           phx-click="prev_page"
@@ -849,12 +906,48 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
         >
           {translate_dsl(@static.pagination_ui.next_label) || dgettext("mishka_gervaz", "Next")}
         </button>
-      </div>
+      </:center>
 
-      <span class="text-[12px] font-semibold text-[#a8a5a0]">
+      <:trailing>
         {dgettext("mishka_gervaz", "Page %{page} of %{total}", page: @page, total: @total_pages)}
+      </:trailing>
+    </.pagination_row>
+    """
+  end
+
+  attr :static, :map, required: true
+  attr :page_size, :integer, required: true
+  attr :options, :list, required: true
+  attr :myself, :any, required: true
+
+  # "Show [20] per page": gervaz's `change_page_size` form, with the `size` select it reads.
+  defp page_size_select(assigns) do
+    ~H"""
+    <form
+      id={"#{@static.stream_name}-page-size"}
+      phx-change="change_page_size"
+      phx-target={@myself}
+      class="flex items-center gap-[9px]"
+    >
+      <span id={"#{@static.id}-page-size-show"} class="text-[12px] font-semibold text-[#8a877f]">
+        {dgettext("mishka_gervaz", "Show")}
       </span>
-    </div>
+      <div class="relative">
+        <select
+          name="size"
+          aria-labelledby={"#{@static.id}-page-size-show #{@static.id}-page-size-unit"}
+          class="h-9 cursor-pointer appearance-none rounded-[9px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
+        >
+          <option :for={option <- @options} value={option} selected={option == @page_size}>
+            {option}
+          </option>
+        </select>
+        <.select_chevron />
+      </div>
+      <span id={"#{@static.id}-page-size-unit"} class="text-[12px] font-semibold text-[#8a877f]">
+        {dgettext("mishka_gervaz", "per page")}
+      </span>
+    </form>
     """
   end
 
