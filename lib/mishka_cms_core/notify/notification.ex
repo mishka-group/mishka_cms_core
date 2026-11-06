@@ -262,7 +262,7 @@ defmodule MishkaCmsCore.Notify.Notification do
       pagination do
         type :load_more
         page_size 20
-        page_size_options [20, 50, 150]
+        page_size_options [20, 50, 100]
 
         ui do
           show_total true

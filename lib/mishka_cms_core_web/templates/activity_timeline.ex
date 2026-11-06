@@ -523,8 +523,8 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
 
   @doc """
   The footer every Load more list in the admin ends with (`CardChrome.load_more_footer/1`), with the
-  timeline's own button: how many events are shown first, `Showing 1–40 of 10,000+`, then Load more
-  events, then the last page shown, `Page 2`. Both read the table's state, so the footer reads
+  timeline's own button: the page-size picker, Load more events, then `Showing 1–40 of 10,000+`
+  with the capped total. The count and the picker read the table's state, so the footer reads
   nothing more from the database.
   """
   @impl true
@@ -542,10 +542,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
       class={@button_class}
       icon="hero-arrow-down"
     >
-      <:leading :if={@range}>{@range}</:leading>
-      <:trailing :if={@range}>
-        {dgettext("mishka_gervaz", "Page %{page}", page: @state.page)}
-      </:trailing>
+      <:trailing :if={@range}>{@range}</:trailing>
     </CardChrome.load_more_footer>
     """
   end

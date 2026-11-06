@@ -767,7 +767,7 @@ defmodule MishkaCmsCoreWeb.Templates.CardChrome do
 
   The card pages, the notification inbox and the activity log all end with it. A template passes
   `class` for its own button and `icon` for one before the label, and `leading` or `trailing` to say
-  something else in that place, as the activity log puts its count first and its page last.
+  something else in that place, as the activity log says its capped total, `10,000+`.
   """
   attr :static, :map, required: true
   attr :state, :map, required: true

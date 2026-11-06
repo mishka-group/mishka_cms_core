@@ -160,6 +160,18 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
       assert text(trailing) == "Showing 1–40 of 45"
     end
 
+    test "offers 20, 50 and 100 per page", %{conn: conn} do
+      {:ok, view, _html} = live(conn, @inbox)
+      render_async(view)
+
+      assert [{"leading", leading} | _rest] = footer(view)
+
+      assert leading
+             |> LazyHTML.query("select[name='size'] option")
+             |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
+             |> Enum.sort() == ["100", "20", "50"]
+    end
+
     test "draws no Load More once every row is shown", %{conn: conn} do
       {:ok, view, _html} = live(conn, @inbox)
       render_async(view)
@@ -178,30 +190,27 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
   describe "the activity footer" do
     setup :create_events
 
-    test "counts the events shown, offers Load more events and names the last page shown", %{
-      conn: conn
-    } do
+    test "puts the page-size picker, Load more events and the rows shown in order", %{conn: conn} do
       {:ok, view, _html} = live(conn, @activity)
       render_async(view)
 
       assert [{"leading", leading}, {"center", center}, {"trailing", trailing}] = footer(view)
-      assert text(leading) =~ ~r/^Showing 1–20 of [\d,]+\+?$/
+      assert has?(leading, "select[name='size']")
       assert has?(center, "button[phx-click='load_more']")
       assert text(center) == "Load more events"
-      assert text(trailing) == "Page 1"
+      assert text(trailing) =~ ~r/^Showing 1–20 of [\d,]+\+?$/
+      refute render(view) =~ "Page 1"
 
       view |> element("button[phx-click='load_more']") |> render_click()
       render_async(view)
 
-      assert [{"leading", leading}, _center, {"trailing", trailing}] = footer(view)
-      assert text(leading) =~ ~r/^Showing 1–\d+ of [\d,]+\+?$/
-      refute text(leading) =~ "Showing 1–20 "
-      assert text(trailing) == "Page 2"
+      assert [_leading, _center, {"trailing", trailing}] = footer(view)
+      assert text(trailing) =~ ~r/^Showing 1–\d+ of [\d,]+\+?$/
+      refute text(trailing) =~ "Showing 1–20 "
+      refute render(view) =~ "Page 2"
     end
 
-    test "names the page from the state, so Load more makes the reads it made without it", %{
-      conn: conn
-    } do
+    test "a Load more reads what it read without the page label", %{conn: conn} do
       {:ok, view, _html} = live(conn, @activity)
       render_async(view)
 
@@ -211,9 +220,34 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
           render_async(view)
         end)
 
-      assert [_leading, _center, {"trailing", trailing}] = footer(view)
-      assert text(trailing) == "Page 2"
       assert length(more) == @load_more_reads
+    end
+
+    test "offers 20, 50 and 100 per page, and a change reloads with that many rows", %{
+      conn: conn
+    } do
+      {:ok, view, _html} = live(conn, @activity)
+      render_async(view)
+
+      assert [{"leading", leading} | _rest] = footer(view)
+
+      assert leading
+             |> LazyHTML.query("select[name='size'] option")
+             |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
+             |> Enum.sort() == ["100", "20", "50"]
+
+      {_html, reads} =
+        queries(view, fn ->
+          view
+          |> element("form[phx-change='change_page_size']")
+          |> render_change(%{"size" => "50"})
+
+          render_async(view)
+        end)
+
+      assert {1, last} = shown(view)
+      assert last > 20 and last <= 50
+      assert length(reads) == @load_more_reads
     end
   end
 
