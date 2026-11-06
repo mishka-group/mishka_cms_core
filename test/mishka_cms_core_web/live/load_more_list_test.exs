@@ -23,6 +23,7 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Notify
+  alias MishkaCmsCore.Notify.Notification
   alias MishkaCmsCore.Runtime.States.SiteState
 
   @password "Password123!"
@@ -164,6 +165,34 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
              |> LazyHTML.query("select[name='size'] option")
              |> Enum.map(&(&1 |> LazyHTML.attribute("value") |> hd()))
              |> Enum.sort() == ["100", "20", "50"]
+    end
+
+    test "counts the rows it shows when another tab removes some", %{conn: conn, admin: admin} do
+      {:ok, view, _html} = live(conn, @inbox)
+      render_async(view)
+      view |> element("button[phx-click='load_more']") |> render_click()
+      render_async(view)
+
+      assert [_leading, _center, {"trailing", trailing}] = footer(view)
+      assert text(trailing) == "Showing 1–40 of 45"
+
+      html = render(view)
+
+      removed =
+        Notification
+        |> Ash.read!(actor: admin)
+        |> Enum.filter(&String.contains?(html, &1.id))
+        |> Enum.take(2)
+
+      assert length(removed) == 2
+      for notification <- removed, do: Ash.destroy!(notification, actor: admin)
+
+      :sys.get_state(view.pid)
+      render_async(view)
+
+      assert [_leading, _center, {"trailing", trailing}] = footer(view)
+      assert text(trailing) == "Showing 1–38 of 43"
+      assert count_rows(view) == 38
     end
 
     test "draws no Load More once every row is shown", %{conn: conn} do
