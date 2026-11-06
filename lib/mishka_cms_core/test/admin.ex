@@ -143,14 +143,14 @@ defmodule MishkaCmsCore.Test.Admin do
     log_in(build_conn_for_host(), admin)
   end
 
-  # WHATEVER IS ON SCREEN, both notices at once: a flash is the only place a refused command speaks
-  # to the author, and which of the two it picks is not the point of the assertions that read it.
+  # WHATEVER IS ON SCREEN, every notice at once: a flash is the only place a refused command speaks
+  # to the author, and which kind it picks is not the point of the assertions that read it.
   # The tags come off first — Tailwind writes `hover:bg-white` into the class list, which reads
   # exactly like an inspected atom to anything looking for one.
-  @doc "The text of the info and error flashes `view` shows, tags removed."
+  @doc "The text of the success, info, warning and error flashes `view` shows, tags removed."
   @spec flashes(struct()) :: String.t()
   def flashes(view) do
-    ["#flash-info", "#flash-error"]
+    ["#flash-success", "#flash-info", "#flash-warning", "#flash-error"]
     |> Enum.filter(&has_element?(view, &1))
     |> Enum.map_join(" ", &(view |> element(&1) |> render() |> String.replace(~r/<[^>]*>/, "")))
     |> String.trim()
@@ -159,10 +159,12 @@ defmodule MishkaCmsCore.Test.Admin do
   # A flash is set, never unset: nothing on the server clears one, and the hook that pushes
   # `lv:clear-flash` after the fade does not run in a test — so a stale sentence would answer for
   # the next command and hide a handler that went silent.
-  @doc "Clears both flashes of `view`, and answers `view`."
+  @doc "Clears every flash of `view`, and answers `view`."
   @spec clear_flashes(struct()) :: struct()
   def clear_flashes(view) do
-    for key <- ~w(info error), do: render_click(view, "lv:clear-flash", %{"key" => key})
+    for key <- ~w(success info warning error),
+        do: render_click(view, "lv:clear-flash", %{"key" => key})
+
     view
   end
 
