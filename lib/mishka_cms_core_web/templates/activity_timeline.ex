@@ -48,6 +48,7 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   import MishkaGervaz.Helpers,
     only: [dynamic_component: 1, get_visible_columns: 2, translate_options: 1]
 
+  alias MishkaCmsCoreWeb.Templates.CardChrome
   alias MishkaGervaz.Table.Templates.Shared
 
   # A select short enough to read at a glance becomes a segmented switch; anything longer stays a
@@ -61,6 +62,8 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   @date_class "h-[30px] w-[122px] cursor-pointer bg-transparent text-[12px] font-semibold text-[#3a382f] outline-none"
 
   @default_options [timestamp: :inserted_at, max_cap: nil]
+
+  @button_class "inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-xl border border-[#ecebe6] bg-white px-[22px] text-[13px] font-semibold text-[#4f4bcc] transition-colors hover:border-[#dcdbf5] hover:bg-[#eeedfb] disabled:cursor-default disabled:opacity-60"
 
   @impl true
   def name, do: :activity_timeline
@@ -88,11 +91,21 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
       assigns
       |> assign(:show_filters, static.filters != [] and :filter in static.features)
       |> assign(:show_pagination, :paginate in static.features)
+      |> assign(:past_last?, CardChrome.past_last_page?(assigns.state, page_size(assigns.state)))
+      |> assign(:button_class, @button_class)
 
     ~H"""
     <div class="mishka-gervaz-activity-timeline">
       <div :if={@state.has_initial_data? or @state.loading == :loaded}>
         <.render_filters :if={@show_filters} static={@static} state={@state} myself={@myself} />
+
+        <CardChrome.load_earlier
+          :if={@show_pagination}
+          static={@static}
+          state={@state}
+          myself={@myself}
+          class={@button_class}
+        />
 
         <div class="relative rounded-[18px] border border-[#ecebe6] bg-white px-5 pb-3 pt-1.5 shadow-[0_1px_2px_rgba(30,28,24,0.04)]">
           <.render_loading_overlay
@@ -120,7 +133,8 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
                     class="size-6"
                   />
                 </span>
-                <span>
+                <CardChrome.page_past_last :if={@past_last?} myself={@myself} class={@button_class} />
+                <span :if={!@past_last?}>
                   <span class="block font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
                     {dsl_text(
                       get_in(@static.config, [:empty_state, :message]),
@@ -508,43 +522,28 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
   def avatar_tone_class(_value), do: "bg-[#e6f6ee] text-[#1f9d6b]"
 
   @doc """
-  The footer: a centred load-more, driven straight from the ui_adapter so it can carry the design's
-  classes (`Shared.render_pagination/1` hardcodes its own).
+  The footer every Load more list in the admin ends with (`CardChrome.load_more_footer/1`), with the
+  timeline's own button: the page-size picker, Load more events, then `Showing 1–40 of 10,000+`
+  with the capped total. The count and the picker read the table's state, so the footer reads
+  nothing more from the database.
   """
   @impl true
   def render_pagination(assigns) do
     assigns =
       assigns
-      |> assign(
-        :load_more_label,
-        dsl_text(
-          assigns.static.pagination_ui.load_more_label,
-          dgettext("mishka_gervaz", "Load more events")
-        )
-      )
-      |> assign(
-        :load_more?,
-        get_in(assigns.static.config, [:pagination, :type]) == :load_more and
-          assigns.state.has_more? and assigns.state.loading != :loading
-      )
+      |> assign(:button_class, @button_class)
+      |> assign(:range, range_label(assigns.state, options(assigns.static)[:max_cap]))
 
     ~H"""
-    <div :if={@load_more?} class="mt-[22px] flex justify-center">
-      <button
-        type="button"
-        phx-click="load_more"
-        phx-target={@myself}
-        class="inline-flex h-[42px] cursor-pointer items-center gap-2 rounded-xl border border-[#ecebe6] bg-white px-[22px] text-[13px] font-semibold text-[#4f4bcc] transition-colors hover:border-[#dcdbf5] hover:bg-[#eeedfb]"
-      >
-        <.dynamic_component
-          module={@static.ui_adapter}
-          function={:icon}
-          name="hero-arrow-down"
-          class="size-[15px]"
-        />
-        {@load_more_label}
-      </button>
-    </div>
+    <CardChrome.load_more_footer
+      static={@static}
+      state={@state}
+      myself={@myself}
+      class={@button_class}
+      icon="hero-arrow-down"
+    >
+      <:trailing :if={@range}>{@range}</:trailing>
+    </CardChrome.load_more_footer>
     """
   end
 
@@ -575,17 +574,23 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
     """
   end
 
-  # "20 of 10,000+ shown" — how much of what the filters match is on screen. Gervaz's own
-  # `page_info_format` speaks only `{page}`/`{total}`/`{count}` and its pagination renders no info
-  # line for `:load_more`, so the window is named here; the total comes from the read's count.
-  # A total at the read's scan cap is only a floor and says so.
+  # "Showing 1–40 of 10,000+": the events on screen of what the filters match, in the words of every
+  # other Load more list, over the filter row and in the footer. The total comes from the read's
+  # count; one at the read's scan cap is only a floor and says so.
   defp range_label(%{total_count: total} = state, max_cap) when is_integer(total) and total > 0 do
-    shown = min((state.page || 1) * page_size(state), total)
+    words = MishkaCmsCore.Localized.number(total) <> capped_suffix(total, max_cap)
 
-    dgettext("mishka_gervaz", "%{shown} of %{total} shown",
-      shown: shown,
-      total: MishkaCmsCore.Localized.number(total) <> capped_suffix(total, max_cap)
-    )
+    case CardChrome.shown_range(state, page_size(state), total) do
+      {first, last} ->
+        dgettext("mishka_gervaz", "Showing %{first}–%{last} of %{total}",
+          first: MishkaCmsCore.Localized.number(first),
+          last: MishkaCmsCore.Localized.number(last),
+          total: words
+        )
+
+      nil ->
+        dgettext("mishka_gervaz", "Showing 0 of %{total}", total: words)
+    end
   end
 
   defp range_label(_state, _max_cap), do: nil

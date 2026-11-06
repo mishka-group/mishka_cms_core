@@ -218,6 +218,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
       pagination do
         type :load_more
         page_size 20
+        page_size_options [20, 50, 100]
 
         ui do
           show_total true
@@ -227,7 +228,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
 
       url_sync do
         mode :bidirectional
-        params [:filters, :page]
+        params [:filters, :page, :page_size]
         prefix "activity"
         max_filter_length 500
       end

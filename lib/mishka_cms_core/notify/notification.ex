@@ -262,18 +262,18 @@ defmodule MishkaCmsCore.Notify.Notification do
       pagination do
         type :load_more
         page_size 20
-        page_size_options [20, 50, 150]
+        page_size_options [20, 50, 100]
 
         ui do
           show_total true
-          load_more_label dgettext_noop("mishka_gervaz", "Load more")
+          load_more_label dgettext_noop("mishka_gervaz", "Load More")
           page_info_format dgettext_noop("mishka_gervaz", "Showing {count} notifications")
         end
       end
 
       url_sync do
         mode :bidirectional
-        params [:filters, :sort, :page, :search]
+        params [:filters, :sort, :page, :search, :page_size]
         prefix "notifs"
       end
 

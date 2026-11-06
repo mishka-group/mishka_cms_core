@@ -317,7 +317,7 @@ defmodule MishkaCmsCore.Runtime.Translation do
       end
 
       pagination do
-        type :numbered
+        type :load_more
         page_size 50
         page_size_options [20, 50, 100]
       end

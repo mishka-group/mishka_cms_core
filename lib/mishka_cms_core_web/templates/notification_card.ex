@@ -28,9 +28,12 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
     only: [dynamic_component: 1, get_visible_columns: 2, translate_options: 1]
 
   alias MishkaGervaz.Table.Templates.Shared
+  alias MishkaCmsCoreWeb.Templates.CardChrome
   alias Phoenix.LiveView.JS
 
   @card_class "overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_1px_2px_rgba(30,28,24,0.04)]"
+
+  @button_class "h-[38px] cursor-pointer rounded-[11px] border border-[#dcdbf5] bg-[#f2f1fc] px-[18px] text-[12.5px] font-bold text-[#4f4bcc] transition-colors hover:bg-[#e9e7fb] disabled:cursor-default disabled:opacity-60"
 
   @input_class "h-[42px] w-full rounded-[11px] border border-[#ecebe6] bg-white text-[13px] font-medium text-[#1b1a18] outline-none transition focus:border-[#c3c1f0] focus:shadow-[0_0_0_3px_rgba(91,87,214,0.1)]"
 
@@ -69,6 +72,8 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
       |> assign(:show_checkboxes, show_checkboxes)
       |> assign(:show_filters, static.filters != [] and :filter in features)
       |> assign(:show_pagination, :paginate in features)
+      |> assign(:past_last?, CardChrome.past_last_page?(state, page_size(state)))
+      |> assign(:button_class, @button_class)
 
     ~H"""
     <div class="mishka-gervaz-notification-card">
@@ -80,6 +85,14 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
           static={@static}
           state={@state}
           myself={@myself}
+        />
+
+        <CardChrome.load_earlier
+          :if={@show_pagination}
+          static={@static}
+          state={@state}
+          myself={@myself}
+          class={@button_class}
         />
 
         <div class="relative isolate">
@@ -97,8 +110,15 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
               id={"#{@static.stream_name}-empty-state"}
               class="hidden only:block px-4 py-14 text-center text-[13px] font-medium text-[#a8a5a0]"
             >
-              {translate(get_in(@static.config, [:empty_state, :message])) ||
-                dgettext("mishka_gervaz", "No notifications match your filters.")}
+              <CardChrome.page_past_last
+                :if={@past_last?}
+                myself={@myself}
+                class={@button_class}
+              />
+              <span :if={!@past_last?}>
+                {translate(get_in(@static.config, [:empty_state, :message])) ||
+                  dgettext("mishka_gervaz", "No notifications match your filters.")}
+              </span>
             </div>
             <.render_item
               :for={{id, record} <- @stream}
@@ -296,77 +316,21 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
   end
 
   @doc """
-  The footer: how far into the feed we are on the left, load-more + per-page on the right.
-
-  Gervaz's own `Shared.render_pagination/1` hardcodes the button's look, so its two controls are
-  driven straight from here instead — same `load_more` / `change_page_size` events, our classes.
+  The footer every Load more list in the admin ends with (`CardChrome.load_more_footer/1`): the
+  page-size picker first, Load More in the middle and `Showing 1–20 of 42` last, with the inbox's own
+  button.
   """
   @impl true
   def render_pagination(assigns) do
-    assigns =
-      assigns
-      |> assign(
-        :load_more_label,
-        translate(assigns.static.pagination_ui.load_more_label) ||
-          dgettext("mishka_gervaz", "Load more")
-      )
-      |> assign(:page_size_options, assigns.static.page_size_options || [])
-      |> assign(
-        :load_more?,
-        get_in(assigns.static.config, [:pagination, :type]) == :load_more and
-          assigns.state.has_more? and assigns.state.loading != :loading
-      )
+    assigns = assign(assigns, :button_class, @button_class)
 
     ~H"""
-    <div class="mt-[18px] flex flex-wrap items-center justify-between gap-4">
-      <span class="text-[12px] font-semibold text-[#8a877f]">{range_label(@state)}</span>
-
-      <div class="flex items-center gap-[14px]">
-        <.dynamic_component
-          :if={@load_more?}
-          module={@static.ui_adapter}
-          function={:pagination_nav_button}
-          label={@load_more_label}
-          event="load_more"
-          myself={@myself}
-          disabled={false}
-          class="h-[38px] cursor-pointer rounded-[11px] border border-[#dcdbf5] bg-[#f2f1fc] px-[18px] text-[12.5px] font-bold text-[#4f4bcc] transition-colors hover:bg-[#e9e7fb]"
-        />
-
-        <form
-          :if={@page_size_options != []}
-          id={"#{@static.id}-page-size-selector-form"}
-          phx-change="change_page_size"
-          phx-target={@myself}
-          class="flex items-center gap-[9px]"
-        >
-          <span id={"#{@static.id}-page-size-label"} class="text-[12px] font-semibold text-[#8a877f]">
-            {dgettext("mishka_gervaz", "Per page")}
-          </span>
-          <div class="relative">
-            <select
-              name="size"
-              aria-labelledby={"#{@static.id}-page-size-label"}
-              class="h-[38px] cursor-pointer appearance-none rounded-[10px] border border-[#ecebe6] bg-white ps-3 pe-8 text-[12.5px] font-semibold text-[#3a382f] outline-none"
-            >
-              <option
-                :for={option <- @page_size_options}
-                value={option}
-                selected={option == @state.current_page_size}
-              >
-                {option}
-              </option>
-            </select>
-            <.dynamic_component
-              module={@static.ui_adapter}
-              function={:icon}
-              name="hero-chevron-down"
-              class="pointer-events-none absolute end-[11px] top-1/2 size-[13px] -translate-y-1/2 text-[#a8a5a0]"
-            />
-          </div>
-        </form>
-      </div>
-    </div>
+    <CardChrome.load_more_footer
+      static={@static}
+      state={@state}
+      myself={@myself}
+      class={@button_class}
+    />
     """
   end
 
@@ -418,17 +382,6 @@ defmodule MishkaCmsCoreWeb.Templates.NotificationCard do
   defp input_class, do: @input_class
 
   defp select_class, do: @select_class
-
-  # "Showing 1–20 of 42" — how far into the feed the loaded rows reach. Gervaz's `page_info_format`
-  # speaks only `{page}`/`{total}`/`{count}` and its pagination renders no info line for `:load_more`,
-  # so the window is named here; the totals come from the engine (`show_total true` makes the read
-  # countable). `:load_more` grows the window rather than paging, so it always starts at 1.
-  defp range_label(%{total_count: total} = state) when is_integer(total) and total > 0 do
-    shown = min((state.page || 1) * page_size(state), total)
-    dgettext("mishka_gervaz", "Showing 1–%{shown} of %{total}", shown: shown, total: total)
-  end
-
-  defp range_label(_state), do: nil
 
   # The window size lives on the state once the user picks one, and on the static config until then.
   defp page_size(%{current_page_size: size}) when is_integer(size) and size > 0, do: size
