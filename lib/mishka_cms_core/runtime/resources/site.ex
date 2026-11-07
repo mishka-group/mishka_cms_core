@@ -29,7 +29,6 @@ defmodule MishkaCmsCore.Runtime.Site do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
       GuardedStruct.AshResource
@@ -925,7 +924,7 @@ defmodule MishkaCmsCore.Runtime.Site do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.MasterSiteStays, on: :create}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates site with validated name and host domain, ensuring unique identification"
     end
@@ -944,7 +943,7 @@ defmodule MishkaCmsCore.Runtime.Site do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.MasterSiteStays, on: :update}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates active site configuration (master users only)"
     end

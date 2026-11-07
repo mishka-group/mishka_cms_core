@@ -9,12 +9,13 @@ defmodule MishkaCmsCore.Runtime.FollowSlugTest do
 
   Driven the way a Gervaz form drives it: each change hands the hook the form's params, and the form
   is then validated with what the hook returned, so the next change reads the title the form held.
-  Core's page form is the one used — its `:master_create` action slugifies `name`, which a page is
+  Core's page form is the one used — its `:master_create` action makes `name` an internal name, which a page is
   given from its title. The forms of the blog and the documents that call it are tested in their
   own repositories, a save included.
   """
   use MishkaCmsCore.DataCase
 
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.{Helpers, Page}
 
   setup do
@@ -68,11 +69,22 @@ defmodule MishkaCmsCore.Runtime.FollowSlugTest do
       assert {"own-name", _state} = change(creating(ctx), "A Title", "own-name")
     end
 
-    test "a Persian title is transliterated as the save does it", ctx do
-      {name, _state} = change(creating(ctx), "قیمت‌گذاری", "")
+    test "an accented title is shown as the ASCII name the save stores", ctx do
+      {name, _state} = change(creating(ctx), "Café Crème Brûlée", "")
+      assert name == "cafe-creme-brulee"
 
-      assert name == "qymtgdhry"
-      assert name == Slug.slugify("قیمت‌گذاری")
+      page = create_page!(title: "Café Crème Brûlée", name: "Café Crème Brûlée")
+      assert page.name == name
+    end
+
+    test "a Persian title keeps only its Latin words, and one with none leaves the name empty",
+         ctx do
+      {name, state} = change(creating(ctx), "آموزش React", "")
+      assert name == "react"
+      assert name == InternalName.slug("آموزش React")
+
+      {name, _state} = change(state, "قیمت‌گذاری", name)
+      assert name == ""
     end
 
     test "an emptied title, or one with nothing to spell, empties a following slug", ctx do
@@ -99,11 +111,12 @@ defmodule MishkaCmsCore.Runtime.FollowSlugTest do
     assert {"", _state} = change(state, "Another Title", "")
   end
 
-  test "the slugify changes are read off the action, with the options the save uses" do
+  test "the slug changes are read off the action, with the options the save uses" do
     assert [{:name, :name, options}] =
              Page |> Ash.Resource.Info.action(:master_create) |> Helpers.slugifiers()
 
-    assert options[:lowercase] == true
+    assert options[:locales] == InternalName.options()[:locales]
+    assert options[:keep] == InternalName.options()[:keep]
     assert Helpers.slugifiers(Ash.Resource.Info.action(Page, :read)) == []
   end
 
@@ -112,7 +125,7 @@ defmodule MishkaCmsCore.Runtime.FollowSlugTest do
       Page
       |> Ash.Resource.Info.action(:master_create)
       |> Map.fetch!(:changes)
-      |> Enum.filter(&match?(%{change: {AshSlug.Changes.Slugify, _opts}}, &1))
+      |> Enum.filter(&match?(%{change: {InternalName, _opts}}, &1))
 
     wrapped = %{slugify | change: {AshEvents.Events.ReplayChangeWrapper, [change: slugify]}}
 

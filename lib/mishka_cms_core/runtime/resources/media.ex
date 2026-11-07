@@ -33,7 +33,6 @@ defmodule MishkaCmsCore.Runtime.Media do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -979,7 +978,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change set_attribute(:relative_path, arg(:stored_path))
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates media for tenant users - requires tenant context, auto-assigns site_id"
     end
@@ -1004,7 +1003,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change set_attribute(:relative_path, arg(:stored_path))
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates media for master users - bypasses multi-tenancy, requires explicit site_id"
     end
@@ -1104,7 +1103,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
     end
 
     create :master_form_upload do
@@ -1127,7 +1126,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
     end
 
     update :update do
@@ -1150,7 +1149,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates media for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1175,7 +1174,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       change fn changeset, _context ->
         Ash.Changeset.set_tenant(changeset, changeset.data.site_id)
@@ -2184,7 +2183,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   @doc """
   The `name` an upload of `filename` carries into the create: its basename without the extension,
   stripped of everything but word characters, spaces and dashes, spaces turned to dashes, downcased
-  and cut to 200 characters. The action's own `slugify(:name, into: :name)` runs after this and has
+  and cut to 200 characters. The action's own `Changes.InternalName` runs after this and has
   the last word on what the row holds.
 
   Public because that name is the row's own key — `unique_name_per_site` — so anything asking whether

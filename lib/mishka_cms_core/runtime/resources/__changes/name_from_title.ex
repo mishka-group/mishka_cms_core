@@ -18,15 +18,16 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.NameFromTitle do
 
   ## What it derives from
 
-  `title` first, then `path` for a title that slugifies to nothing (a title of emoji, or of a script
-  `Slug` does not transliterate), then `"page"`. A Persian title lands on its
-  transliteration — `قیمت‌گذاری` becomes `qymtgdhry` — and that is fine for a key nobody sees.
+  `title` first, then `path` for a title that leaves too little as an internal name
+  (`MishkaCmsCore.Runtime.Resources.Changes.InternalName` keeps Latin letters and digits only, so a
+  title of emoji, or one written in Persian, leaves nothing), then `"page"`. A Persian page at
+  `/fa/pricing` is `fa-pricing`, and a Persian page at a Persian path is `page`.
 
   ## The suffix, and where it costs a query
 
   Two pages on one site may be called the same thing. The first free member of `base`, `base-2`,
   `base-3` … is taken, measured against the names the site already holds, so the second
-  `قیمت‌گذاری` is `qymtgdhry-2` rather than a constraint error naming a field the author never saw.
+  `Pricing` is `pricing-2` rather than a constraint error naming a field the author never saw.
 
   That measurement is the only part that reads the database, and it is deferred to a `before_action`
   so it runs once per WRITE rather than once per changeset. `AshPhoenix.Form` builds a changeset on
@@ -42,6 +43,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.NameFromTitle do
 
   require Ash.Query
 
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
+
   @fallback "page"
   @min_length 3
   @max_length 200
@@ -53,7 +56,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.NameFromTitle do
   def change(changeset, _opts, _context), do: named(changeset)
 
   # ALREADY NAMED IS LEFT ALONE. The seeds, the extension installs and the API name their pages, and
-  # the resource's own `slugify(:name, into: :name)` has already run on what they passed.
+  # the resource's own `Changes.InternalName` has already run on what they passed.
   #
   # The slug itself is set here, not in the hook: `allow_nil? false` on `:name` is checked while the
   # changeset is still being built, so a name that only appeared in a `before_action` would be
@@ -96,7 +99,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.NameFromTitle do
   end
 
   defp slug(text) when is_binary(text) do
-    case Slug.slugify(text) do
+    case InternalName.slug(text) do
       slug when is_binary(slug) and byte_size(slug) >= @min_length -> slug
       _too_little_survived_it -> nil
     end

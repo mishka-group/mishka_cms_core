@@ -206,6 +206,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
 
   require Logger
   require Ash.Query
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.States.AssetsState
   alias MishkaCmsCore.Runtime.Compilers.CssClosure
   alias MishkaCmsCore.Runtime.Compilers.Helpers
@@ -1376,7 +1377,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     case used_layouts(site_name) do
       {:ok, layouts} ->
         for {name, scope} <- layouts,
-            path = Path.join([runtime, scope, "layout", "#{Slug.slugify(name)}.template"]),
+            path = Path.join([runtime, scope, "layout", "#{InternalName.slug(name)}.template"]),
             File.exists?(path),
             do: path
 

@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorkerTest do
   use Oban.Testing, repo: @repo
 
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker, as: Worker
   alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
 
@@ -386,7 +387,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorkerTest do
   defp template_path(name, type, site_name \\ "__global__") do
     ["runtime", site_name, type]
     |> MishkaCmsCore.Runtime.Helpers.static_temp_dir()
-    |> Path.join("#{Slug.slugify(name)}.template")
+    |> Path.join("#{InternalName.slug(name)}.template")
   end
 
   describe "apply_module_lifecycle/5 — unarchiving an inactive record stays unrouted" do

@@ -299,6 +299,59 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
     end
   end
 
+  # THROUGH `MishkaSlug.Change`, the way a resource with a public slug (a blog post, a document)
+  # gives it: `locales: {Languages, :slug_locales, []}`, read against the changeset being saved.
+  describe "slug_locales/1 — the scripts a public slug keeps" do
+    setup do
+      forget_settings(~w(site.languages site.allowed_languages site.required_languages), [nil])
+      :ok
+    end
+
+    defp public_slug(title, changeset) do
+      {:ok, opts} =
+        MishkaSlug.Change.init(
+          from: :title,
+          into: :title,
+          locales: {Languages, :slug_locales, []}
+        )
+
+      MishkaSlug.slugify(title, MishkaSlug.Change.slug_options(opts, changeset))
+    end
+
+    defp for_site(site_id),
+      do: MishkaCmsCore.Runtime.Page |> Ash.Changeset.new() |> Ash.Changeset.set_tenant(site_id)
+
+    test "a site publishing in Persian and English keeps both scripts and drops others", %{
+      site: site
+    } do
+      {:ok, _} = Settings.put("site.languages", ["fa", "en"], site_id: site.id)
+
+      assert Languages.slug_locales(for_site(site.id)) == ["fa", "en"]
+
+      assert public_slug("آموزش React در ۱۰ دقیقه", for_site(site.id)) ==
+               {:ok, "آموزش-react-در-۱۰-دقیقه"}
+
+      assert public_slug("Привет React", for_site(site.id)) == {:ok, "react"}
+    end
+
+    test "the record's own site_id is read when the write names no tenant", %{site: site} do
+      {:ok, _} = Settings.put("site.languages", ["fa"], site_id: site.id)
+
+      changeset =
+        MishkaCmsCore.Runtime.Page
+        |> Ash.Changeset.new()
+        |> Ash.Changeset.force_change_attribute(:site_id, site.id)
+
+      assert public_slug("قیمت‌گذاری", changeset) == {:ok, "قیمتگذاری"}
+    end
+
+    test "a site with no languages set keeps Latin letters only", %{site: site} do
+      assert Languages.slug_locales(for_site(site.id)) == ["en"]
+      assert public_slug("Café آموزش", for_site(site.id)) == {:ok, "cafe"}
+      assert public_slug("قیمت‌گذاری", for_site(site.id)) == {:error, :empty}
+    end
+  end
+
   describe "site_named/1" do
     test "reads the list of the site the routing table names" do
       n = System.unique_integer([:positive])

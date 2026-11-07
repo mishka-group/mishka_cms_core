@@ -28,7 +28,6 @@ defmodule MishkaCmsCore.Runtime.JsHook do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -697,7 +696,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
 
       change MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates JS hook for tenant users - requires tenant context, auto-assigns site_id"
     end
@@ -709,7 +708,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
 
       change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates JS hook for master users - can create global (nil site_id) or site-specific hooks"
     end
@@ -737,7 +736,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
                   ),
                 foreign: dgettext_noop("errors", "Cannot modify JS hook from another site.")}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates JS hook for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -761,7 +760,7 @@ defmodule MishkaCmsCore.Runtime.JsHook do
                 )
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       # RECORDED AGAINST THE SITE IT WRITES. A master acts with no tenant, and the version row takes
       # its `site_id` from the tenant alone, so without this every master edit of a site's record

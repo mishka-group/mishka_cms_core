@@ -7,6 +7,7 @@ defmodule MishkaCmsCore.Runtime.Helpers do
   # The application this library is installed into: its priv holds the assets the compilers read,
   # and its esbuild profile is the one they run. Named by configuration, never hardcoded.
   @host_app Application.compile_env!(:mishka_cms_core, :host_app)
+  @slug_changes [MishkaSlug.Change, MishkaCmsCore.Runtime.Resources.Changes.InternalName]
 
   @doc """
   Returns the path to the static temporary directory.
@@ -157,22 +158,21 @@ defmodule MishkaCmsCore.Runtime.Helpers do
   def writes?(_state, _type), do: false
 
   @doc """
-  The slugify changes `action` runs, as `{from, into, options}`: each reads `from` and writes its slug
-  into `into`, made by `Slug.slugify/2` with `options`.
+  The slug changes `action` runs, as `{from, into, options}`: each reads `from` and writes its slug
+  into `into`. A slug change is `MishkaSlug.Change`, or
+  `MishkaCmsCore.Runtime.Resources.Changes.InternalName`, which is one with the internal-name options.
 
-  Read through the change's own `init/1`, because an action holds the options as they were written
-  (`lowercase?:`), and `init/1` turns them into the ones `Slug.slugify/2` takes (`lowercase:`). A
-  change wrapped in another that holds it as `change:` — AshEvents wraps every change of a resource
-  it records that way — is read as the change it holds. An action with no slugify change has none.
+  `options` are the change's own, read through its `init/1` as the action does, so `slug/3` makes
+  the slug the save stores. A change wrapped in another that holds it as `change:` — AshEvents wraps
+  every change of a resource it records that way — is read as the change it holds. An action with no
+  slug change has none.
   """
   @spec slugifiers(struct()) :: [{atom(), atom(), keyword()}]
   def slugifiers(%{changes: changes}) when is_list(changes) do
     for %{change: change} <- changes,
-        {AshSlug.Changes.Slugify = slugify, opts} <- [held_change(change)] do
-      {:ok, ready} = slugify.init(opts)
-
-      {ready[:attribute], ready[:into] || ready[:attribute],
-       Keyword.drop(ready, [:attribute, :into])}
+        {module, opts} when module in @slug_changes <- [held_change(change)] do
+      {:ok, ready} = module.init(opts)
+      {ready[:from], ready[:into] || ready[:from], ready}
     end
   end
 
@@ -196,9 +196,11 @@ defmodule MishkaCmsCore.Runtime.Helpers do
   typed themselves stops it following, until they empty it again. A record being updated keeps its
   slug whatever happens to the title: the slug is in the record's URL.
 
-  The slug is made by the slugify change the form's action runs on `into` (`slugifiers/1`), so what
-  the author sees is what the save stores — a Persian title is transliterated as the save does it,
-  `قیمت‌گذاری` becomes `qymtgdhry`. A form whose action does not slugify `into` is left alone.
+  The slug is made by the slug change the form's action runs on `into` (`slugifiers/1`, `slug/3`),
+  so what the author sees is what the save stores. A public slug keeps the scripts of the site's
+  languages (`قیمت‌گذاری` stays `قیمتگذاری` on a site that publishes in Persian); an internal name
+  keeps Latin letters only, so `Café قیمت` becomes `cafe`, and a title with nothing left leaves the
+  slug empty. A form whose action has no slug change on `into` is left alone.
 
   Returns the params, so it is the whole hook, or the first step of one:
 
@@ -231,8 +233,8 @@ defmodule MishkaCmsCore.Runtime.Helpers do
 
     with title when is_binary(title) and title != before <- Map.get(typed, to_string(from)),
          {_from, _into, options} <- Enum.find(slugifiers(action), &match?({_, ^into, _}, &1)),
-         true <- following?(Map.get(typed, to_string(into)), before, options) do
-      put_in(params, ["form", to_string(into)], slug(title, options))
+         true <- following?(Map.get(typed, to_string(into)), before, options, form.source) do
+      put_in(params, ["form", to_string(into)], slug(title, options, form.source) || "")
     else
       _unchanged_or_not_following -> params
     end
@@ -240,10 +242,23 @@ defmodule MishkaCmsCore.Runtime.Helpers do
 
   def follow_slug(params, _state, _from, _into), do: params
 
-  defp following?(slug, _before, _options) when slug in [nil, ""], do: true
-  defp following?(slug, before, options), do: slug == slug(before, options)
+  defp following?(slug, _before, _options, _changeset) when slug in [nil, ""], do: true
+  defp following?(slug, before, options, changeset), do: slug == slug(before, options, changeset)
 
-  # `Slug.slugify/2` answers nil for a title with nothing it can spell, an emoji's for one.
-  defp slug(text, options) when is_binary(text), do: Slug.slugify(text, options) || ""
-  defp slug(_no_title, _options), do: ""
+  @doc """
+  The slug a save of `changeset` stores for `text`, made with the `options` of one of its
+  `slugifiers/1`, or `nil` when the text gives none (the save refuses it).
+
+  The site's languages, the record's language and the column's length are read off `changeset`
+  through `MishkaSlug.Change.slug_options/2`, as the change itself reads them.
+  """
+  @spec slug(term(), keyword(), Ash.Changeset.t()) :: String.t() | nil
+  def slug(text, options, changeset) when is_binary(text) do
+    case MishkaSlug.slugify(text, MishkaSlug.Change.slug_options(options, changeset)) do
+      {:ok, slug} -> slug
+      {:error, _no_slug} -> nil
+    end
+  end
+
+  def slug(_no_text, _options, _changeset), do: nil
 end

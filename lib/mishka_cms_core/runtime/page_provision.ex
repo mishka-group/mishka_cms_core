@@ -68,7 +68,7 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
 
   A definition is the attribute map the create will take, which is what makes the comparison
   honest: the values looked for are the values that will be written, with the action's own
-  `slugify` changes applied the way the row will carry them. Attributes the caller leaves to the
+  slug changes applied the way the row will carry them. Attributes the caller leaves to the
   create are the ones this cannot ask about.
 
   Both calls report in the same shape. `note/1` turns one skipped page — or one written under
@@ -510,15 +510,23 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
   # What the row will carry
   # ---------------------------------------------------------------------------
 
-  # NOT THE VALUES HANDED OVER — the ones the write leaves behind. `slugify(:name, into: :name)`
-  # runs in a before-action hook, so "Blog post" reaches the table as `blog-post`, and a site whose
+  # NOT THE VALUES HANDED OVER — the ones the write leaves behind. The page's `name` is an internal
+  # name (`Changes.InternalName`), so "Blog post" reaches the table as `blog-post`, and a site whose
   # own page is called "BLOG" or "Blog Post" is already holding one of these names under a spelling
-  # no comparison of the literals would catch.
+  # no comparison of the literals would catch. Made by `Helpers.slug/3`, the way the save makes it.
   defp stored(values, slugifiers) do
+    changeset =
+      Page
+      |> Ash.Changeset.new()
+      |> Ash.Changeset.force_change_attribute(:site_id, values[:site_id])
+
     Enum.reduce(slugifiers, values, fn {from, into, opts}, stored ->
       case Map.fetch(stored, from) do
-        {:ok, text} when is_binary(text) -> Map.put(stored, into, Slug.slugify(text, opts))
-        _nothing_to_slugify -> stored
+        {:ok, text} when is_binary(text) ->
+          Map.put(stored, into, Helpers.slug(text, opts, changeset))
+
+        _nothing_to_slugify ->
+          stored
       end
     end)
   end

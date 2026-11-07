@@ -557,14 +557,28 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
     test "a page nobody named is named after its title" do
       site = create_site!()
 
-      attrs = %{title: "قیمت‌گذاری", path: "/pricing", template: "<div class='p'></div>"}
+      attrs = %{title: "Café Pricing", path: "/pricing", template: "<div class='p'></div>"}
 
       assert {:ok, page} =
                Page
                |> Ash.Changeset.for_create(:create, attrs, tenant: site.id)
                |> Ash.create(authorize?: false)
 
-      assert page.name == "qymtgdhry"
+      assert page.name == "cafe-pricing"
+      assert page.title == "Café Pricing"
+    end
+
+    test "a page with a Persian title is named after its path, the title kept as written" do
+      site = create_site!()
+
+      attrs = %{title: "قیمت‌گذاری", path: "/fa/pricing", template: "<div class='p'></div>"}
+
+      assert {:ok, page} =
+               Page
+               |> Ash.Changeset.for_create(:create, attrs, tenant: site.id)
+               |> Ash.create(authorize?: false)
+
+      assert page.name == "fa-pricing"
       assert page.title == "قیمت‌گذاری"
     end
 
@@ -575,7 +589,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         Page
         |> Ash.Changeset.for_create(
           :create,
-          %{title: "قیمت‌گذاری", path: path, template: "<div class='p'></div>"},
+          %{title: "Pricing", path: path, template: "<div class='p'></div>"},
           tenant: site.id
         )
         |> Ash.create(authorize?: false)
@@ -584,8 +598,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       assert {:ok, first} = create.("/pricing")
       assert {:ok, second} = create.("/plans")
 
-      assert first.name == "qymtgdhry"
-      assert second.name == "qymtgdhry-2"
+      assert first.name == "pricing"
+      assert second.name == "pricing-2"
     end
 
     test "a title that slugifies to nothing is named after its path" do
@@ -627,7 +641,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
     end
 
     # The reason there is a title at all: renaming re-slugifies the name on every save, and a title
-    # that went through the same change would come back transliterated the first time an author
+    # that went through the same change would lose its Persian letters the first time an author
     # touched anything else on the page.
     test "renaming the page re-slugifies the name and leaves the title alone" do
       site = create_site!()

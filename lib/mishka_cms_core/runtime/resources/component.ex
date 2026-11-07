@@ -26,7 +26,6 @@ defmodule MishkaCmsCore.Runtime.Component do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -1147,7 +1146,7 @@ defmodule MishkaCmsCore.Runtime.Component do
 
       change MishkaCmsCore.Runtime.Resources.Changes.SiteFromTenant
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates component for tenant users - requires tenant context, auto-assigns site_id"
     end
@@ -1177,7 +1176,7 @@ defmodule MishkaCmsCore.Runtime.Component do
 
       change MishkaCmsCore.Runtime.Resources.Changes.TenantFromSite
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates component for master users - can create global (nil site_id) or site-specific components"
     end
@@ -1218,7 +1217,7 @@ defmodule MishkaCmsCore.Runtime.Component do
                   ),
                 foreign: dgettext_noop("errors", "Cannot modify component from another site.")}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates component for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1254,7 +1253,7 @@ defmodule MishkaCmsCore.Runtime.Component do
                 )
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       # RECORDED AGAINST THE SITE IT WRITES. A master acts with no tenant, and the version row takes
       # its `site_id` from the tenant alone, so without this every master edit of a site's record

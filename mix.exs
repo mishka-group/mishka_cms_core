@@ -131,7 +131,6 @@ defmodule MishkaCmsCore.MixProject do
       {:swoosh, "~> 1.29"},
       # The captcha providers' verify requests — see `MishkaCmsCore.Captcha.Provider.siteverify/2`.
       {:req, "~> 0.7"},
-      {:ash_slug, "~> 0.2"},
 
       # Logger/Metrics Prod Stuff
       {:telemetry, "~> 1.4"},
@@ -161,6 +160,9 @@ defmodule MishkaCmsCore.MixProject do
       # is read.
       {:localize, "~> 1.4"},
       mishka_dep(:mishka_gervaz, "~> 0.0.5"),
+      # Names and slugs: `MishkaCmsCore.Runtime.Resources.Changes.InternalName` and
+      # `MishkaCmsCore.Runtime.Languages.slug_locales/1`.
+      mishka_dep(:mishka_slug, "~> 0.0.1"),
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:sobelow, "~> 0.16", only: [:dev, :test], runtime: false},
       {:mix_audit, "~> 2.1", only: [:dev, :test], runtime: false},

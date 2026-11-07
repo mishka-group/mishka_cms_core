@@ -71,6 +71,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
   use Ash.Resource.Validation
   use Gettext, backend: MishkaCmsCore.Gettext
 
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout}
   alias MishkaCmsCore.Runtime.Authoring.Markup
   alias MishkaCmsCore.Runtime.Authoring.Tree
@@ -224,12 +225,12 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement do
 
   defp site_of(changeset), do: Ash.Changeset.get_attribute(changeset, :site_id)
 
-  # THE NAME AS IT WILL BE STORED. `slugify(:name, into: :name)` runs in a before-action hook, after
+  # THE NAME AS IT WILL BE STORED. `Changes.InternalName` runs in a before-action hook, after
   # every validation, so what the changeset holds here is still what the author typed — and markup
   # can only ever name the slug.
   defp stored_name(changeset) do
     case Ash.Changeset.get_attribute(changeset, :name) do
-      name when is_binary(name) -> Slug.slugify(name)
+      name when is_binary(name) -> InternalName.slug(name)
       _no_name -> nil
     end
   end

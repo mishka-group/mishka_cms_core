@@ -328,7 +328,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   """
 
   # THE LOGO'S NAME IN THE MEDIA LIBRARY, which is what `Media.upload_name/1` makes of the file's
-  # name and what the row's own `slugify` leaves alone — so the name asked for before the file is
+  # name and what the row's own `Changes.InternalName` leaves alone — so the name asked for before the file is
   # stored is the name the row carries after.
   @logo_file "mishka-logo.png"
   @logo_name "mishka-logo"

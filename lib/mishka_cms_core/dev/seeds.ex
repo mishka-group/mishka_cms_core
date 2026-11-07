@@ -63,6 +63,8 @@ defmodule MishkaCmsCore.Dev.Seeds do
   alias MishkaCmsCore.Dev.{SeedMedia, StarterPages}
   alias MishkaCmsCore.Install.{Bootstrap, StarterContent}
 
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
+
   alias MishkaCmsCore.Runtime.{
     Component,
     JsHook,
@@ -1172,13 +1174,13 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # section exists to stop. `page: false` is not the shortcut: these actions require a page.
   #
   # ASKED UNDER THE NAME THE ROW IS STORED WITH, not the one the seed wrote. Every create action on
-  # these resources carries `slugify(:name, into: :name)`, so the name in the database is the slug of
+  # these resources carries `Changes.InternalName`, so the name in the database is the slug of
   # what was handed to it — the same correction
   # `MishkaCmsCore.Runtime.Resources.Validations.StatefulPlacement` makes when it asks about a
   # component. The answer comes back in the caller's spelling, because that is what the caller has to
   # compare against.
   defp held_names(resource, site_id, names) do
-    stored = Map.new(names, &{Slug.slugify(&1), &1})
+    stored = Map.new(names, &{InternalName.slug(&1), &1})
 
     [:read_any, :master_archived]
     |> Enum.flat_map(fn action ->

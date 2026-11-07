@@ -22,6 +22,7 @@ defmodule MishkaCmsCore.Runtime.ComponentLifecycleTest do
   alias MishkaCmsCore.Runtime.Compilers.Helpers
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
   alias MishkaCmsCore.Runtime.LiveViewHelpers
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.States.CompileFailureState
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Translations
@@ -85,7 +86,7 @@ defmodule MishkaCmsCore.Runtime.ComponentLifecycleTest do
       site_name(site_id) || "__global__",
       "component"
     ])
-    |> Path.join("#{Slug.slugify(name)}.template")
+    |> Path.join("#{InternalName.slug(name)}.template")
   end
 
   describe "boot: precompile decides whether a module is built, active decides whether CSS is" do

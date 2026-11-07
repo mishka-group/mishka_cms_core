@@ -95,6 +95,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   require Ash.Query
   require Logger
 
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
   alias MishkaCmsCore.Runtime.Helpers
@@ -1511,7 +1512,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
     _ = File.mkdir_p!(dir_path)
 
-    file_path = Path.join(dir_path, "#{Slug.slugify(name)}.template")
+    file_path = Path.join(dir_path, "#{InternalName.slug(name)}.template")
     File.write!(file_path, content)
   end
 
@@ -1546,7 +1547,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     site_name = if is_nil(site_name), do: "__global__", else: site_name
     dir_path = Helpers.static_temp_dir(["runtime", site_name, type])
 
-    file_path = Path.join(dir_path, "#{Slug.slugify(name)}.template")
+    file_path = Path.join(dir_path, "#{InternalName.slug(name)}.template")
     File.rm(file_path)
   end
 

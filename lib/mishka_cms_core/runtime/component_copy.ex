@@ -57,6 +57,7 @@ defmodule MishkaCmsCore.Runtime.ComponentCopy do
 
   alias MishkaCmsCore.Runtime.Component
   alias MishkaCmsCore.Runtime.Authoring.ElementScopes
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
 
   @marker "-copy-"
   @suffix_length 4
@@ -92,13 +93,13 @@ defmodule MishkaCmsCore.Runtime.ComponentCopy do
   `<name>-copy-<suffix>`: four lowercase base32 characters, the base cut so the whole stays within
   100 characters.
 
-  Already in the form the resource's `slugify(:name)` stores, so the name the self-references are
+  Already in the form the resource's `Changes.InternalName` stores, so the name the self-references are
   rewritten to is the name the row is saved under.
   """
   @spec copy_name(String.t()) :: String.t()
   def copy_name(name) do
-    base = name |> Slug.slugify() |> to_string() |> String.slice(0, @base_length)
-    Slug.slugify(base <> @marker <> suffix())
+    base = name |> InternalName.slug() |> to_string() |> String.slice(0, @base_length)
+    InternalName.slug(base <> @marker <> suffix())
   end
 
   defp suffix do
