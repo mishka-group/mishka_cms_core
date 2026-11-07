@@ -11,7 +11,8 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.InternalName do
   `0-9` only (Persian, Arabic-Indic and Devanagari digits become `0-9`, so `Header ۱۲۳` is `header-123`), accents removed (`Café Crème` is `cafe-creme`), and every other character a word
   break, `_` and `.` too, so a name is always lowercase `a-z`, `0-9` and single inner `-`. Letters
   of other scripts are dropped, so `Hello قیمت` is `hello`. A name with nothing Latin left is
-  refused with an error on the field the admin typed, never stored empty.
+  refused with this module's own message on the field the admin typed, whatever reason the slug
+  gives and whatever the site languages are, never stored empty.
 
       create :create do
         change MishkaCmsCore.Runtime.Resources.Changes.InternalName
@@ -53,7 +54,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.InternalName do
   def change(changeset, opts, context) do
     with {:ok, text} when is_binary(text) <-
            Changeset.fetch_argument_or_change(changeset, opts[:from]),
-         {:error, :empty} <-
+         {:error, _no_latin} <-
            MishkaSlug.slugify(text, MishkaSlug.Change.slug_options(opts, changeset)) do
       Changeset.add_error(changeset, field: opts[:from], message: latin_only())
     else
