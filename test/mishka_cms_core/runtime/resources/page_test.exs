@@ -498,6 +498,29 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       end
     end
 
+    test "in Persian or Arabic letters is stored decoded and in NFC, however it was written" do
+      site = create_site!()
+
+      assert {:ok, %{path: "/fa/وردپرس"}} =
+               create(site, "/fa/%D9%88%D8%B1%D8%AF%D9%BE%D8%B1%D8%B3")
+
+      assert {:ok, %{path: "/fa/می\u200Cخواهم"}} = create(site, "/fa/می\u200Cخواهم/")
+
+      # Alef with hamza above, written as alef and a combining hamza.
+      assert {:ok, %{path: path}} = create(site, "/ar/أخبار")
+      assert path == "/ar/أخبار"
+      assert {:ok, %{path: "/ar/٢٠٢٤/:slug"}} = create(site, "/ar/٢٠٢٤/:slug")
+    end
+
+    test "with a space or punctuation in any script is refused on its field" do
+      site = create_site!()
+
+      for path <- ["/fa/سلام دنیا", "/fa/سلام!", "/ar/مرحبا؟", "/fa/%D8%B3%20x"] do
+        assert {:error, %Ash.Error.Invalid{errors: errors}} = create(site, path)
+        assert Enum.any?(errors, &match?(%{field: :path}, &1)), path
+      end
+    end
+
     defp create!(site, path) do
       {:ok, page} = create(site, path)
       page

@@ -592,7 +592,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
             MishkaCmsCore.Runtime.PageProvision.routing_language(%{
               extra: data["extra"],
               language: data["language"]
-            })
+            }),
+          record: MishkaCmsCore.Runtime.Seo.record_of(data["extra"])
         })
     end
   end

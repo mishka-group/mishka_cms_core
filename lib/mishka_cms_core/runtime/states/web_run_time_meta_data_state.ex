@@ -113,12 +113,16 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   @section_index :mishka_web_run_time_meta_data_section_index
   @sort_index :mishka_web_run_time_meta_data_sort_index
 
+  # Pages that show a record, as `{{site, record}, id}`: `"blog:post"` names the page a post is shown
+  # on, which `path_for_record/3` answers from here.
+  @record_index :mishka_web_run_time_meta_data_record_index
+
   # WRITES WAIT THEIR TURN, READS NEVER DO. Every read is an ETS lookup in the caller; only `save/1`
   # and `delete/1` pass through this process — from boot, the compile jobs and site changes — and a
   # boot writing a very large pages table queues them past `GenServer.call/2`'s 5 s.
   @write_timeout :timer.seconds(30)
 
-  # Record structure: {id, site, path, title, created_at, section, priority, language}
+  # Record structure: {id, site, path, title, created_at, section, priority, language, record}
   # Sort key structure for ordered_set: {{site, section, -priority, created_at}, id}
 
   ####################################################################################
@@ -162,10 +166,11 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     # "this row is not an edition of anything", and `edition?/2` below lets such a row answer any
     # language — which is what a layout has always done.
     language = Map.get(attrs, :language)
+    record = Map.get(attrs, :record)
 
     case GenServer.call(
            __MODULE__,
-           {:save, {id, site, path, title, created_at, section, priority, language}},
+           {:save, {id, site, path, title, created_at, section, priority, language, record}},
            @write_timeout
          ) do
       :ok ->
@@ -190,7 +195,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     main_records =
       Enum.map(pages, fn attrs ->
         {attrs.id, attrs.site, attrs.path, attrs.title, attrs.created_at, attrs.section,
-         attrs.priority, Map.get(attrs, :language)}
+         attrs.priority, Map.get(attrs, :language), Map.get(attrs, :record)}
       end)
 
     path_records = Enum.map(pages, fn attrs -> {{attrs.path, attrs.site}, attrs.id} end)
@@ -206,7 +211,11 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     :ets.insert(@main_table, main_records)
     :ets.insert(@path_index, path_records)
 
-    Enum.each(pages, fn attrs -> maybe_index_dynamic(attrs.path, attrs.site, attrs.id) end)
+    Enum.each(pages, fn attrs ->
+      maybe_index_dynamic(attrs.path, attrs.site, attrs.id)
+      maybe_index_record(Map.get(attrs, :record), attrs.site, attrs.id)
+    end)
+
     :ets.insert(@site_index, site_records)
     :ets.insert(@section_index, section_records)
     :ets.insert(@sort_index, sort_records)
@@ -219,7 +228,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   """
   def get(id) do
     case :ets.lookup(@main_table, id) do
-      [{^id, site, path, title, created_at, section, priority, language}] ->
+      [{^id, site, path, title, created_at, section, priority, language, record}] ->
         {:ok,
          %{
            id: id,
@@ -229,7 +238,8 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
            created_at: created_at,
            section: section,
            priority: priority,
-           language: language
+           language: language,
+           record: record
          }}
 
       [] ->
@@ -242,7 +252,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   """
   def get!(id) do
     case :ets.lookup(@main_table, id) do
-      [{^id, site, path, title, created_at, section, priority, language}] ->
+      [{^id, site, path, title, created_at, section, priority, language, record}] ->
         %{
           id: id,
           site: site,
@@ -251,7 +261,8 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
           created_at: created_at,
           section: section,
           priority: priority,
-          language: language
+          language: language,
+          record: record
         }
 
       [] ->
@@ -361,9 +372,51 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   """
   @spec resolve(String.t(), String.t()) :: {:ok, map(), map()} | {:error, :not_found}
   def resolve(path, site) do
+    case resolve_all(path, site) do
+      [{record, captured} | _rest] -> {:ok, record, captured}
+      [] -> {:error, :not_found}
+    end
+  end
+
+  @doc """
+  Every page that answers a REQUEST path, best first, each with what its pattern captured.
+
+  A literal page is the only one: it always wins and nothing is ranked behind it. Otherwise every
+  pattern that matches, in the order `resolve/2` picks its first by. A caller that learns the first
+  has nothing to show for the address (`MishkaCmsCore.Runtime.PageSource.missing/0`) tries the next.
+
+  The path is read as `canonical_path/1` writes it, so `/fa/وردپرس` and its `%`-escaped form are one
+  request.
+  """
+  @spec resolve_all(String.t(), String.t()) :: [{map(), map()}]
+  def resolve_all(path, site) do
+    path = canonical_path(path)
+
     case dynamic_path?(path) do
-      true -> {:error, :not_found}
+      true -> []
       false -> requested(path, site)
+    end
+  end
+
+  @doc """
+  A path as pages are stored under it and requests are matched against it: every `%XX` escape
+  decoded and the text in Unicode NFC. `/fa/وردپرس` typed, pasted percent-escaped from WordPress, or
+  composed with other code points by another keyboard is one address. A `%` not followed by two hex
+  digits stays as it is, and a path whose escapes decode to bytes that are not UTF-8 is returned as
+  written, which no page is stored under.
+
+      canonical_path("/fa/%D9%88%D8%B1%D8%AF%D9%BE%D8%B1%D8%B3") #=> "/fa/وردپرس"
+  """
+  @spec canonical_path(String.t()) :: String.t()
+  def canonical_path(path) when is_binary(path) do
+    decoded =
+      Regex.replace(~r/%([0-9A-Fa-f]{2})/, path, fn _escape, hex ->
+        <<String.to_integer(hex, 16)>>
+      end)
+
+    case String.valid?(decoded) do
+      true -> String.normalize(decoded, :nfc)
+      false -> path
     end
   end
 
@@ -371,7 +424,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     segments = split(path)
 
     case implied(segments, site) do
-      nil -> stored_or_dynamic(path, site)
+      nil -> stored_or_ranked(path, site)
       primary -> unprefixed(path, segments, primary, site)
     end
   end
@@ -386,23 +439,30 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   defp unprefixed(path, segments, primary, site) do
     prefixed = [primary | segments]
 
-    with {:error, :not_found} <- stored(path, site),
-         {:error, :not_found} <- stored("/" <> Enum.join(prefixed, "/"), site) do
-      dynamic([prefixed, segments], site)
+    with [] <- stored(path, site),
+         [] <- stored("/" <> Enum.join(prefixed, "/"), site) do
+      ranked([prefixed, segments], site)
     end
   end
 
   defp stored(path, site) do
     with [{{^path, ^site}, id}] <- :ets.lookup(@path_index, {path, site}),
          {:ok, record} <- get(id) do
-      {:ok, record, %{}}
+      [{record, %{}}]
     else
-      _missing -> {:error, :not_found}
+      _missing -> []
     end
   end
 
+  defp stored_or_ranked(path, site) do
+    with [] <- stored(path, site), do: ranked([split(path)], site)
+  end
+
   defp stored_or_dynamic(path, site) do
-    with {:error, :not_found} <- stored(path, site), do: find_by_dynamic_path(path, site)
+    case stored_or_ranked(path, site) do
+      [{record, captured} | _rest] -> {:ok, record, captured}
+      [] -> {:error, :not_found}
+    end
   end
 
   @doc """
@@ -442,11 +502,16 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   """
   @spec find_by_dynamic_path(String.t(), String.t()) ::
           {:ok, map(), map()} | {:error, :not_found}
-  def find_by_dynamic_path(path, site), do: dynamic([split(path)], site)
+  def find_by_dynamic_path(path, site) do
+    case ranked([split(path)], site) do
+      [{record, captured} | _rest] -> {:ok, record, captured}
+      [] -> {:error, :not_found}
+    end
+  end
 
-  # Every form is matched against every pattern, and the best match wins as one list: an earlier
+  # Every form is matched against every pattern, and the matches are ranked as one list: an earlier
   # form wins only a tie.
-  defp dynamic(forms, site) do
+  defp ranked(forms, site) do
     patterns = :ets.lookup(@dynamic_index, site)
 
     languages =
@@ -468,16 +533,13 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
       end)
     end)
     |> Enum.sort_by(fn {score, form, id, _captured} -> {score, form, priority_of(id), id} end)
-    |> case do
-      [] ->
-        {:error, :not_found}
-
-      [{_score, _form, id, captured} | _rest] ->
-        case get(id) do
-          {:ok, found} -> {:ok, found, captured}
-          _gone -> {:error, :not_found}
-        end
-    end
+    |> Enum.uniq_by(fn {_score, _form, id, _captured} -> id end)
+    |> Enum.flat_map(fn {_score, _form, id, captured} ->
+      case get(id) do
+        {:ok, found} -> [{found, captured}]
+        _gone -> []
+      end
+    end)
   end
 
   @doc "Whether a stored path is a pattern rather than a literal."
@@ -547,19 +609,30 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
 
   defp language_of(id) do
     case :ets.lookup(@main_table, id) do
-      [{^id, _site, _path, _title, _created_at, _section, _priority, language}] -> language
-      [] -> nil
+      [{^id, _site, _path, _title, _created_at, _section, _priority, language, _record}] ->
+        language
+
+      [] ->
+        nil
     end
   end
 
   defp priority_of(id) do
     case :ets.lookup(@main_table, id) do
-      [{^id, _site, _path, _title, _created_at, _section, priority, _language}] -> -priority
-      [] -> 0
+      [{^id, _site, _path, _title, _created_at, _section, priority, _language, _record}] ->
+        -priority
+
+      [] ->
+        0
     end
   end
 
   defp split(path), do: path |> String.split("/", trim: true)
+
+  defp maybe_index_record(record, site, id) when is_binary(record),
+    do: :ets.insert(@record_index, {{site, record}, id})
+
+  defp maybe_index_record(_no_record, _site, _id), do: :ok
 
   # Only a pattern earns a row here. A literal page is found by the literal index and would only
   # make every miss slower.
@@ -586,9 +659,58 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     found!(resolve(path, site), section)
   end
 
-  defp found!({:ok, %{section: section} = result, captured}, section), do: {result, captured}
+  @doc """
+  `resolve_all/2`, the pages of `section` alone, best first. Raises the `NotFoundError`
+  `resolve!/3` raises when none is left, and so does `not_found!/0` for a caller that tried them all.
+  """
+  @spec resolve_all!(String.t(), String.t(), String.t()) :: [{map(), map()}, ...]
+  def resolve_all!(path, site, section \\ "Page") do
+    case Enum.filter(resolve_all(path, site), &match?({%{section: ^section}, _captured}, &1)) do
+      [] -> not_found!()
+      candidates -> candidates
+    end
+  end
 
-  defp found!(_missing, _section) do
+  defp found!({:ok, %{section: section} = result, captured}, section), do: {result, captured}
+  defp found!(_missing, _section), do: not_found!()
+
+  @doc """
+  The stored path of `site`'s page that shows `record`, the kind its `extra` names (`"blog:post"`,
+  `MishkaCmsCore.Runtime.Seo.record_of/1`), for a link to a record of that kind. Read from memory.
+
+  The path is the page's own, its captures unfilled: `"/:lang/blog/:slug"`. With a `language`, the
+  page written in it wins, then a page that answers every language; a page in another language is
+  not an answer. With none, a page that answers every language wins. Ties go to the higher
+  `priority`, then to the id.
+
+      path_for_record("mishka", "blog:post", "fa") #=> {:ok, "/:lang/blog/:slug"}
+  """
+  @spec path_for_record(String.t(), String.t(), String.t() | nil) ::
+          {:ok, String.t()} | {:error, :not_found}
+  def path_for_record(site, record, language \\ nil) do
+    @record_index
+    |> :ets.lookup({site, record})
+    |> Enum.flat_map(fn {_key, id} ->
+      case get(id) do
+        {:ok, %{section: "Page"} = page} -> [page]
+        _gone_or_not_a_page -> []
+      end
+    end)
+    |> Enum.filter(&(is_nil(language) or &1.language in [nil, language]))
+    |> Enum.sort_by(&{written_in(&1.language, language), -&1.priority, &1.id})
+    |> case do
+      [%{path: path} | _rest] -> {:ok, path}
+      [] -> {:error, :not_found}
+    end
+  end
+
+  defp written_in(language, language) when is_binary(language), do: 0
+  defp written_in(nil, _asked), do: 1
+  defp written_in(_another, _asked), do: 2
+
+  @doc "Raises the site's 404: the `NotFoundError` an address no page answers raises."
+  @spec not_found!() :: no_return()
+  def not_found! do
     raise MishkaCmsCore.ErrorsExceptions.NotFoundError,
       message: "Sorry, the page you are looking for does not exist or has been moved."
   end
@@ -648,7 +770,15 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   Clears all data from all tables.
   """
   def clear do
-    [@main_table, @path_index, @dynamic_index, @site_index, @section_index, @sort_index]
+    [
+      @main_table,
+      @path_index,
+      @dynamic_index,
+      @record_index,
+      @site_index,
+      @section_index,
+      @sort_index
+    ]
     |> Enum.each(fn table ->
       if :ets.whereis(table) != :undefined do
         :ets.delete_all_objects(table)
@@ -687,6 +817,14 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     # the literal index scans this one, so keeping the non-dynamic pages out of it is what makes the
     # scan a handful of comparisons rather than a walk of the whole site.
     :ets.new(@dynamic_index, [
+      :bag,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
+    :ets.new(@record_index, [
       :bag,
       :public,
       :named_table,
@@ -755,7 +893,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   # Serialized routing-write critical section: conflict check + cleanup + the five index writes run
   # atomically in the owner, so two concurrent same-id saves can't leave orphan sort-index rows.
   def handle_call(
-        {:save, {id, site, path, title, created_at, section, priority, language}},
+        {:save, {id, site, path, title, created_at, section, priority, language, record}},
         _from,
         state
       ) do
@@ -765,9 +903,15 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
 
       _ ->
         cleanup_old_indexes(id)
-        :ets.insert(@main_table, {id, site, path, title, created_at, section, priority, language})
+
+        :ets.insert(
+          @main_table,
+          {id, site, path, title, created_at, section, priority, language, record}
+        )
+
         :ets.insert(@path_index, {{path, site}, id})
         maybe_index_dynamic(path, site, id)
+        maybe_index_record(record, site, id)
         :ets.insert(@site_index, {site, id})
         :ets.insert(@section_index, {{site, section}, id})
         :ets.insert(@sort_index, {{site, section, -priority, created_at}, id})
@@ -788,9 +932,10 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
 
   defp cleanup_old_indexes(id) do
     case :ets.lookup(@main_table, id) do
-      [{^id, site, path, _title, created_at, section, priority, _language}] ->
+      [{^id, site, path, _title, created_at, section, priority, _language, record}] ->
         :ets.delete(@path_index, {path, site})
         :ets.delete_object(@dynamic_index, {site, {split(path), id}})
+        :ets.delete_object(@record_index, {{site, record}, id})
         :ets.delete_object(@site_index, {site, id})
         :ets.delete_object(@section_index, {{site, section}, id})
         :ets.delete(@sort_index, {site, section, -priority, created_at})
@@ -832,7 +977,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   defp get_many(ids) when is_list(ids) do
     Enum.reduce(ids, [], fn id, acc ->
       case :ets.lookup(@main_table, id) do
-        [{^id, site, path, title, created_at, section, priority, language}] ->
+        [{^id, site, path, title, created_at, section, priority, language, record}] ->
           [
             %{
               id: id,
@@ -842,7 +987,8 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
               created_at: created_at,
               section: section,
               priority: priority,
-              language: language
+              language: language,
+              record: record
             }
             | acc
           ]
@@ -885,12 +1031,14 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   Rebuilds all indexes from the main table (useful for maintenance).
   """
   def rebuild_indexes do
-    [@path_index, @dynamic_index, @site_index, @section_index, @sort_index]
+    [@path_index, @dynamic_index, @record_index, @site_index, @section_index, @sort_index]
     |> Enum.each(&:ets.delete_all_objects/1)
 
     :ets.foldl(
-      fn {id, site, path, _title, created_at, section, priority, _language}, acc ->
+      fn {id, site, path, _title, created_at, section, priority, _language, record}, acc ->
         :ets.insert(@path_index, {{path, site}, id})
+        maybe_index_dynamic(path, site, id)
+        maybe_index_record(record, site, id)
         :ets.insert(@site_index, {site, id})
         :ets.insert(@section_index, {{site, section}, id})
         :ets.insert(@sort_index, {{site, section, -priority, created_at}, id})

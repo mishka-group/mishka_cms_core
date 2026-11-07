@@ -1346,9 +1346,7 @@ defmodule MishkaCmsCore.Runtime.Page do
     field :title, :string,
       derives: "sanitize(trim) validate(string, not_empty, min_len=1, max_len=200)"
 
-    field :path, :string,
-      derives:
-        ~S|sanitize(trim) validate(string, not_empty, min_len=1, max_len=255, regex=^(?!.*\.\.)/[a-zA-Z0-9/_*.:-]*$)|
+    field :path, :string, derives: "sanitize(trim) validate(string, not_empty, min_len=1)"
 
     field :section, :string, derives: "sanitize(trim) validate(optional=[string])"
 
