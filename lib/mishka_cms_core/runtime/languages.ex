@@ -205,6 +205,26 @@ defmodule MishkaCmsCore.Runtime.Languages do
     |> site()
   end
 
+  @doc """
+  The `MishkaSlug.Change` options of a public slug: the `slugify` of what was typed in `slug`,
+  written back into `slug`, keeping the scripts of the site's languages (`slug_locales/1`).
+
+  `overrides` replace or add options. A resource with a language names the attribute holding it, so
+  Arabic `ي` and `ك` fold to Persian `ی` and `ک` on a Persian record:
+
+      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug(language: :language)}
+
+  It stays a plain `MishkaSlug.Change`, so the admin form preview reads the same options off the
+  action (`MishkaCmsCore.Runtime.Helpers.slugifiers/1`).
+  """
+  @spec public_slug(keyword()) :: keyword()
+  def public_slug(overrides \\ []) do
+    Keyword.merge(
+      [from: :slug, into: :slug, locales: {__MODULE__, :slug_locales, []}],
+      overrides
+    )
+  end
+
   defp site_id(site_id) when is_binary(site_id), do: site_id
   defp site_id(_no_site), do: nil
 

@@ -299,6 +299,21 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
     end
   end
 
+  describe "public_slug/1" do
+    test "slugs the slug field in place, with the site's locales" do
+      assert Languages.public_slug() ==
+               [from: :slug, into: :slug, locales: {Languages, :slug_locales, []}]
+    end
+
+    test "overrides replace or add options" do
+      options = Languages.public_slug(language: :language)
+
+      assert options[:language] == :language
+      assert options[:from] == :slug
+      assert options[:locales] == {Languages, :slug_locales, []}
+    end
+  end
+
   # THROUGH `MishkaSlug.Change`, the way a resource with a public slug (a blog post, a document)
   # gives it: `locales: {Languages, :slug_locales, []}`, read against the changeset being saved.
   describe "slug_locales/1 — the scripts a public slug keeps" do
