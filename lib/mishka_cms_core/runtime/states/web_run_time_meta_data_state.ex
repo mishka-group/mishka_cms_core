@@ -523,14 +523,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
     forms
     |> Enum.with_index()
     |> Enum.flat_map(fn {segments, form} ->
-      Enum.flat_map(patterns, fn {^site, {pattern, id}} ->
-        with {:ok, captured} <- match(pattern, segments, languages),
-             true <- edition?(id, captured) do
-          [{specificity(pattern), form, id, captured}]
-        else
-          _not_this_one -> []
-        end
-      end)
+      Enum.flat_map(patterns, &matched(&1, segments, form, languages))
     end)
     |> Enum.sort_by(fn {score, form, id, _captured} -> {score, form, priority_of(id), id} end)
     |> Enum.uniq_by(fn {_score, _form, id, _captured} -> id end)
@@ -540,6 +533,15 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
         _gone -> []
       end
     end)
+  end
+
+  defp matched({_site, {pattern, id}}, segments, form, languages) do
+    with {:ok, captured} <- match(pattern, segments, languages),
+         true <- edition?(id, captured) do
+      [{specificity(pattern), form, id, captured}]
+    else
+      _not_this_one -> []
+    end
   end
 
   @doc "Whether a stored path is a pattern rather than a literal."

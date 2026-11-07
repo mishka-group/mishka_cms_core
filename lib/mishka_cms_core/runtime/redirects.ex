@@ -253,8 +253,6 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     from = Ash.Changeset.get_attribute(changeset, :from_path)
     to = Ash.Changeset.get_attribute(changeset, :to)
 
-    query = Ash.Changeset.get_attribute(changeset, :from_query)
-
     if is_binary(from) and is_binary(to) and served?(changeset) and loop_question?(changeset) do
       site_id = Ash.Changeset.get_attribute(changeset, :site_id)
 
@@ -264,26 +262,33 @@ defmodule MishkaCmsCore.Runtime.Redirects do
         opts: Ash.Scope.to_opts(context, tenant: site_id)
       }
 
-      case {local_path(site_id, to), query} do
-        {{:ok, ^from}, nil} ->
-          itself()
-
-        {{:ok, ^from}, query} ->
-          if normalize_query(URI.parse(to).query) == query, do: itself(), else: :ok
-
-        {{:ok, _target}, query} when is_binary(query) ->
-          :ok
-
-        {{:ok, target}, nil} ->
-          follow(target, target, MapSet.new([from]), rule)
-
-        {:external, _query} ->
-          :ok
-      end
+      lands(
+        local_path(site_id, to),
+        from,
+        Ash.Changeset.get_attribute(changeset, :from_query),
+        to,
+        rule
+      )
     else
       :ok
     end
   end
+
+  # WHERE THE TARGET LANDS decides what is asked. A rule on a query sends its address on without that
+  # query, so it loops only on a target that carries the same query back; the rules on paths alone
+  # are never asked by the address it lands on.
+  defp lands({:ok, from}, from, nil, _to, _rule), do: itself()
+
+  defp lands({:ok, from}, from, query, to, _rule) do
+    if normalize_query(URI.parse(to).query) == query, do: itself(), else: :ok
+  end
+
+  defp lands({:ok, _target}, _from, query, _to, _rule) when is_binary(query), do: :ok
+
+  defp lands({:ok, target}, from, nil, _to, rule),
+    do: follow(target, target, MapSet.new([from]), rule)
+
+  defp lands(:external, _from, _query, _to, _rule), do: :ok
 
   defp itself,
     do:
@@ -427,9 +432,9 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   end
 
   # THE KEY A PATH IS STORED AND LOOKED UP UNDER, decoded and in NFC as a page's path is
-  # (`MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1`). Escapes are decoded with no raise: a `%` that is
-  # not followed by two hex digits stays as it is, and bytes that are not UTF-8 make a key no rule
-  # has.
+  # (`MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1`). Escapes are decoded
+  # with no raise: a `%` that is not followed by two hex digits stays as it is, and bytes that are
+  # not UTF-8 make a key no rule has.
   defp key(path) do
     path
     |> String.split("/", trim: true)
