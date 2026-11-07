@@ -81,6 +81,19 @@ defmodule MishkaCmsCore.Runtime.MediaUploadContentTest do
       assert media.name == "photo"
     end
 
+    test "keeps the Latin part of a mixed filename through the form", %{site: site, admin: admin} do
+      assert {:ok, media} = form_upload(site, admin, "photo عکس.png", Files.png())
+      assert media.name == "photo"
+    end
+
+    test "a dropped word leaves no stray dash wherever it stood" do
+      for filename <- ["photo عکس.png", "عکس photo.png", "my عکس photo.PNG", "  photo  .png"] do
+        name = Media.upload_name(filename)
+        assert name =~ ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/, filename
+        assert name == MishkaCmsCore.Runtime.Resources.Changes.InternalName.slug(name), filename
+      end
+    end
+
     test "two such uploads do not collide", %{site: site, admin: admin} do
       assert {:ok, first} = upload(site, admin, "تصویر کالا.png", Files.png())
       assert {:ok, second} = upload(site, admin, "تصویر کالا.png", Files.png())

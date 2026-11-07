@@ -2181,10 +2181,10 @@ defmodule MishkaCmsCore.Runtime.Media do
   end
 
   @doc """
-  The `name` an upload of `filename` carries into the create: its basename without the extension,
-  stripped of everything but word characters, spaces and dashes, spaces turned to dashes, downcased
-  and cut to 200 characters. The action's own `Changes.InternalName` runs after this and has
-  the last word on what the row holds.
+  The `name` an upload of `filename` carries into the create: the `Changes.InternalName` slug of its
+  basename without the extension, at most 200 characters, so it is lowercase `a-z`, `0-9` and single
+  inner `-`. `form_upload` sets the name in a `before_action`, after `Changes.InternalName` has run,
+  so this function, not that change, is what makes the stored name a slug there.
 
   A filename with no Latin letter or digit left (`عکس.jpg`) never fails the upload: it gets a
   generated name, `media-` and eight random hex characters, so two such files do not collide on
@@ -2199,24 +2199,15 @@ defmodule MishkaCmsCore.Runtime.Media do
   @spec upload_name(String.t()) :: String.t()
   def upload_name(filename) when is_binary(filename) do
     filename
-    |> Path.basename(filename |> Path.extname() |> String.downcase())
-    |> sanitize_filename()
-    |> generated_if_unnamed()
-  end
+    |> Path.basename(Path.extname(filename))
+    |> MishkaSlug.slugify([max_length: 200] ++ Changes.InternalName.options())
+    |> case do
+      {:ok, name} ->
+        name
 
-  defp generated_if_unnamed(name) do
-    case Changes.InternalName.slug(name) do
-      nil -> "media-" <> Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
-      _named -> name
+      {:error, _nothing_latin} ->
+        "media-" <> Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
     end
-  end
-
-  defp sanitize_filename(name) do
-    name
-    |> String.replace(~r/[^\w\s-]/, "")
-    |> String.replace(~r/\s+/, "-")
-    |> String.downcase()
-    |> String.slice(0, 200)
   end
 
   # EVERY MEDIA FILE LIVES IN ITS SITE'S OWN FOLDER, `uploads/<site_id>/media/`, and moves to
