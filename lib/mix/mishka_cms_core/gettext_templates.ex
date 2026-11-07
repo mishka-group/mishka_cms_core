@@ -139,9 +139,13 @@ defmodule Mix.MishkaCmsCore.GettextTemplates do
   defp references(message), do: List.flatten(message.references)
 
   defp relocate_reference({file, line}, source, core),
-    do: {relocate_reference(file, source, core), line}
+    do: {relocate_file(file, source, core), line}
 
-  defp relocate_reference(file, source, core),
+  # A reference without a line becomes line 1: `mix gettext.extract` reads every reference as a
+  # `{file, line}` pair and stops on a bare file name.
+  defp relocate_reference(file, source, core), do: {relocate_file(file, source, core), 1}
+
+  defp relocate_file(file, source, core),
     do: file |> Path.expand(source) |> Path.relative_to(core, force: true)
 
   defp lines(references), do: references |> Enum.uniq() |> Enum.sort() |> Enum.map(&[&1])
