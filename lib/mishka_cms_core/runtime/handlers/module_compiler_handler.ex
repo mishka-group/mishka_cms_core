@@ -828,8 +828,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
       id: page.id,
       page_module: page_module,
       # WHAT THE PAGE IS CALLED, NOT THE KEY IT IS FILED UNDER. This reaches `<title>` through
-      # `MishkaCmsWeb.RuntimeLive.assign_page_title/1`, and `name` is the slugified identifier — a
-      # Persian page's tab read `qymtgdhry` where its title says `قیمت‌گذاری`.
+      # `MishkaCmsWeb.RuntimeLive.assign_page_title/1`, and `name` is the internal key — a
+      # Persian page's tab would read `page` where its title says `قیمت‌گذاری`.
       title: page.title,
       path: page.path,
       section: page.section,

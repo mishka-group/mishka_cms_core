@@ -185,6 +185,77 @@ defmodule MishkaCmsCore.Runtime.Languages do
   end
 
   @doc """
+  The languages a public slug may be written in, for the site a changeset writes to: `site/1` of
+  the record's `site_id`, else of the action's tenant. A site with no list of its own reads the
+  global one, and then `default/0`, so its slugs keep Latin letters only.
+
+  Give it to `MishkaSlug.Change` as its `locales:`, so a slug keeps the scripts of the site's
+  languages and drops the rest. Read from the settings cache, no query:
+
+      change {MishkaSlug.Change,
+              from: :title,
+              into: :slug,
+              language: :language,
+              locales: {MishkaCmsCore.Runtime.Languages, :slug_locales, []}}
+  """
+  @spec slug_locales(Ash.Changeset.t()) :: [String.t()]
+  def slug_locales(%Ash.Changeset{} = changeset) do
+    (Ash.Changeset.get_attribute(changeset, :site_id) || changeset.to_tenant)
+    |> site_id()
+    |> site()
+  end
+
+  @doc """
+  The `MishkaSlug.Change` options of a public slug: the `slugify` of what was typed in `slug`,
+  written back into `slug`, keeping the scripts of the site's languages (`slug_locales/1`).
+
+  `overrides` replace or add options. A resource with a language names the attribute holding it, so
+  Arabic `ي` and `ك` fold to Persian `ی` and `ک` on a Persian record:
+
+      change {MishkaSlug.Change, MishkaCmsCore.Runtime.Languages.public_slug(language: :language)}
+
+  It stays a plain `MishkaSlug.Change`, so the admin form preview reads the same options off the
+  action (`MishkaCmsCore.Runtime.Helpers.slugifiers/1`).
+  """
+  @spec public_slug(keyword()) :: keyword()
+  def public_slug(overrides \\ []) do
+    Keyword.merge(
+      [
+        from: :slug,
+        into: :slug,
+        locales: {__MODULE__, :slug_locales, []},
+        script_resolver: {__MODULE__, :scripts, []}
+      ],
+      overrides
+    )
+  end
+
+  @doc """
+  The writing systems a language code is written in, for `MishkaSlug`'s `:script_resolver`: the
+  script CLDR gives the code, so `tt` is Cyrillic, `pa-Arab` Arabic and `sr-Latn` Latin.
+
+  A code CLDR does not know gives `:error`, which the slug reports as an unknown site language
+  instead of crashing the form.
+
+      Languages.scripts("fa") #=> {:ok, [:arabic]}
+      Languages.scripts("xx") #=> :error
+  """
+  @spec scripts(String.t()) :: {:ok, [atom()]} | :error
+  def scripts(code) when is_binary(code) do
+    with {:ok, tag} <- Localize.LanguageTag.parse(code),
+         {:ok, tag} <- Localize.LanguageTag.add_likely_subtags(tag) do
+      MishkaSlug.Scripts.from_iso15924(tag.script)
+    else
+      _unknown -> :error
+    end
+  end
+
+  def scripts(_code), do: :error
+
+  defp site_id(site_id) when is_binary(site_id), do: site_id
+  defp site_id(_no_site), do: nil
+
+  @doc """
   Whether `languages` may be stored as a site's list: at least one code, and each of them a language
   code, in any case.
 

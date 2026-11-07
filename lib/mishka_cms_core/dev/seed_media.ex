@@ -38,6 +38,7 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
 
   require Ash.Query
 
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.{Media, MediaCategory}
 
   @shapes %{"cover" => :cover, "card" => :card, "avatar" => :avatar, "doc" => :document}
@@ -219,7 +220,7 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
       name = @category_names[shape]
 
       category =
-        Map.get_lazy(held, Slug.slugify(name), fn ->
+        Map.get_lazy(held, InternalName.slug(name), fn ->
           [name: name, description: "Dev seed #{shape} files"]
           |> media_category(site_id)
           |> Ash.Generator.generate()
@@ -323,7 +324,7 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
   # would hide the picture rather than reuse the category. And TOP-LEVEL ONLY, where the seed makes
   # them: an admin's own "banners" folder inside another one is theirs, not the seed's.
   defp held_categories(site_id) do
-    names = @category_names |> Map.values() |> Enum.map(&Slug.slugify/1)
+    names = @category_names |> Map.values() |> Enum.map(&InternalName.slug/1)
 
     MediaCategory
     |> rows(:read, site_id, names)
@@ -333,11 +334,11 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
 
   # THE NAME THE ROW WILL CARRY. Two rules make it, and both have to be applied or the question is
   # asked about a row that is not there: `Media.upload_name/1` is what an upload derives from a
-  # filename, and `slugify(:name, into: :name)` on every one of that resource's create actions is
+  # filename, and `Changes.InternalName` on every one of that resource's create actions is
   # what stores it. "Banners" is the category that showed it — written by the seed, stored as
   # `banners`, and looked for under the name it was written with, so the second run never found the
   # category it had made and died creating it again.
-  defp stored_name(filename), do: filename |> Media.upload_name() |> Slug.slugify()
+  defp stored_name(filename), do: filename |> Media.upload_name() |> InternalName.slug()
 
   # A PAGE IS NOT THE WHOLE ANSWER, and sizing it by the names asked about was the trap. A file's
   # live rows are bounded by that list — its name is unique per site — but `unique_name_per_site` is

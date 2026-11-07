@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ClosureRootsTest do
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaCmsCore.Runtime.Compilers.TailwindCompiler
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.States.SiteState
 
   setup do
@@ -41,7 +42,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ClosureRootsTest do
   defp write_template(runtime, scope, kind, name) do
     dir = Path.join([runtime, scope, kind])
     File.mkdir_p!(dir)
-    path = Path.join(dir, "#{Slug.slugify(name)}.template")
+    path = Path.join(dir, "#{InternalName.slug(name)}.template")
     File.write!(path, "<div>#{name}</div>")
     path
   end

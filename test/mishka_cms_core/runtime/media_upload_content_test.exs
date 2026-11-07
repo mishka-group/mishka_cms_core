@@ -69,6 +69,38 @@ defmodule MishkaCmsCore.Runtime.MediaUploadContentTest do
 
   defp on_disk(dir), do: Path.wildcard(Path.join([dir, "**", "*"])) |> Enum.reject(&File.dir?/1)
 
+  describe "a filename with no Latin letters" do
+    test "uploads under a generated name, keeping the format", %{site: site, admin: admin} do
+      assert {:ok, media} = upload(site, admin, "عکس.jpg", Files.jpeg())
+      assert media.name =~ ~r/\Amedia-[0-9a-f]{8}\z/
+      assert media.format == "jpg"
+    end
+
+    test "keeps the Latin part of a mixed filename", %{site: site, admin: admin} do
+      assert {:ok, media} = upload(site, admin, "photo عکس.png", Files.png())
+      assert media.name == "photo"
+    end
+
+    test "keeps the Latin part of a mixed filename through the form", %{site: site, admin: admin} do
+      assert {:ok, media} = form_upload(site, admin, "photo عکس.png", Files.png())
+      assert media.name == "photo"
+    end
+
+    test "a dropped word leaves no stray dash wherever it stood" do
+      for filename <- ["photo عکس.png", "عکس photo.png", "my عکس photo.PNG", "  photo  .png"] do
+        name = Media.upload_name(filename)
+        assert name =~ ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/, filename
+        assert name == MishkaCmsCore.Runtime.Resources.Changes.InternalName.slug(name), filename
+      end
+    end
+
+    test "two such uploads do not collide", %{site: site, admin: admin} do
+      assert {:ok, first} = upload(site, admin, "تصویر کالا.png", Files.png())
+      assert {:ok, second} = upload(site, admin, "تصویر کالا.png", Files.png())
+      assert first.name != second.name
+    end
+  end
+
   describe "validate_and_process_file/1" do
     defp check(name, content) do
       Media.validate_and_process_file(%{

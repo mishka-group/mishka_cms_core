@@ -31,7 +31,6 @@ defmodule MishkaCmsCore.Runtime.Page do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -1465,7 +1464,7 @@ defmodule MishkaCmsCore.Runtime.Page do
         end
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
       change Changes.NameFromTitle
       change {Changes.SetLanguageGroupId, before_action?: true}
 
@@ -1530,7 +1529,7 @@ defmodule MishkaCmsCore.Runtime.Page do
         end
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
       change Changes.NameFromTitle
       change {Changes.SetLanguageGroupId, before_action?: true}
 
@@ -1593,7 +1592,7 @@ defmodule MishkaCmsCore.Runtime.Page do
         end
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
       change {Changes.SetLanguageGroupId, before_action?: true}
 
       description "Updates page for tenant users - requires tenant context, prevents site_id changes"
@@ -1651,7 +1650,7 @@ defmodule MishkaCmsCore.Runtime.Page do
         end
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
       change {Changes.SetLanguageGroupId, before_action?: true}
     end
 

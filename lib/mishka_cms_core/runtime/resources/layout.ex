@@ -29,7 +29,6 @@ defmodule MishkaCmsCore.Runtime.Layout do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -920,7 +919,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       change fn changeset, _context ->
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
@@ -951,7 +950,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       change fn changeset, _context ->
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
@@ -990,7 +989,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates layout for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1021,7 +1020,7 @@ defmodule MishkaCmsCore.Runtime.Layout do
       validate {MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference,
                 moves: true, label: dgettext_noop("errors", "layout")}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       # RECORDED AGAINST THE SITE IT WRITES. A master acts with no tenant, and the version row takes
       # its `site_id` from the tenant alone, so without this every master edit of a site's record

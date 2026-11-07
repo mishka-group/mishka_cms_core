@@ -25,6 +25,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   use Gettext, backend: MishkaCmsCore.Gettext
 
   alias MishkaCmsCore.Builder.FormRole
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.{Component, JsHook, Stylesheet}
   alias MishkaCmsCore.Runtime.Handlers.RuntimeOrchestrator
   alias MishkaCmsCore.Runtime.Handlers.UiKitUpgrade
@@ -2181,7 +2182,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   # bundle's spelling alone, a reinstall found nothing, created the row again and failed on the
   # unique index — every upgrade of a kit whose name has an underscore.
   defp scope_to_row(query, name, site_id) do
-    names = Enum.uniq([name, Slug.slugify(to_string(name)) || name])
+    names = Enum.uniq([name, InternalName.slug(to_string(name)) || name])
     query = Ash.Query.filter(query, name in ^names)
 
     if is_nil(site_id),

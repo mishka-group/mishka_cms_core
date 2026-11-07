@@ -21,6 +21,7 @@ defmodule MishkaCmsCore.Runtime.ComponentCopyTest do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.{Component, ComponentCopy, Stylesheet}
   alias MishkaCmsCore.Runtime.Authoring.ElementCss
 
@@ -54,7 +55,7 @@ defmodule MishkaCmsCore.Runtime.ComponentCopyTest do
       name =
         ComponentCopy.copy_name(String.duplicate("a", 89) <> "-" <> String.duplicate("b", 10))
 
-      assert Slug.slugify(name) == name
+      assert InternalName.slug(name) == name
       assert String.length(name) <= 100
     end
 

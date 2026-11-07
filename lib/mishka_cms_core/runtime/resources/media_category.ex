@@ -33,7 +33,6 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -244,7 +243,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
                 label: dgettext_noop("errors", "folder")}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
-      change slugify(:name, into: :name)
+      change MishkaCmsCore.Runtime.Resources.Changes.InternalName
 
       description "Creates media category for tenant users - requires tenant context, auto-assigns site_id"
     end
@@ -264,7 +263,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
         Ash.Changeset.set_tenant(changeset, site_id)
       end
 
-      change slugify(:name, into: :name)
+      change MishkaCmsCore.Runtime.Resources.Changes.InternalName
 
       description "Creates media category for master users - bypasses multi-tenancy, requires explicit site_id"
     end
@@ -291,7 +290,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.FolderParent, []}
 
-      change slugify(:name, into: :name)
+      change MishkaCmsCore.Runtime.Resources.Changes.InternalName
 
       description "Updates media category for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -318,7 +317,7 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.FolderParent, []}
 
-      change slugify(:name, into: :name)
+      change MishkaCmsCore.Runtime.Resources.Changes.InternalName
 
       # Set tenant from record's site_id for version tracking
       change fn changeset, _context ->

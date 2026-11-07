@@ -50,7 +50,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
     otp_app: :mishka_cms_core,
     domain: MishkaCmsCore.Runtime,
     data_layer: AshPostgres.DataLayer,
-    extensions: [AshSlug, MishkaGervaz.Resource],
+    extensions: [MishkaGervaz.Resource],
     notifiers: [Ash.Notifier.PubSub, MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook],
     authorizers: [Ash.Policy.Authorizer]
 
@@ -506,7 +506,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates a draft for tenant users - requires tenant context, auto-assigns site_id"
     end
@@ -550,7 +550,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates a draft for master users - bypasses multi-tenancy, requires explicit site_id"
     end
@@ -586,7 +586,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
     end
 
     update :master_update do
@@ -620,7 +620,7 @@ defmodule MishkaCmsCore.Runtime.PageDraft do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
     end
 
     update :publish do

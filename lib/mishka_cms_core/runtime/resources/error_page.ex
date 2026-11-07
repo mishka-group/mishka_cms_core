@@ -46,7 +46,6 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -951,7 +950,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       change fn changeset, _context ->
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
@@ -982,7 +981,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
         Ash.Changeset.set_tenant(changeset, site_id)
       end
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       change fn changeset, _context ->
         Ash.Changeset.change_new_attribute(changeset, :preview_token, generate_token())
@@ -1018,7 +1017,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates error page for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1050,7 +1049,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
 
       validate {MishkaCmsCore.Runtime.Resources.Validations.PathFormat, []}
 
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       # Set tenant from record's site_id for version tracking
       change fn changeset, _context ->

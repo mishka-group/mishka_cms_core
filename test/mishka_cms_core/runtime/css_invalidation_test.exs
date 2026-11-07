@@ -28,6 +28,7 @@ defmodule MishkaCmsCore.Runtime.CssInvalidationTest do
   @moduletag :integration
 
   alias MishkaCmsCore.Runtime.Handlers.BootHandler
+  alias MishkaCmsCore.Runtime.Resources.Changes.InternalName
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker
 
@@ -140,7 +141,7 @@ defmodule MishkaCmsCore.Runtime.CssInvalidationTest do
       path =
         ["runtime", site.name, "component"]
         |> MishkaCmsCore.Runtime.Helpers.static_temp_dir()
-        |> Path.join("#{Slug.slugify(com["name"])}.template")
+        |> Path.join("#{InternalName.slug(com["name"])}.template")
 
       assert File.read!(path) =~ "css-inv-class"
     end
@@ -154,7 +155,7 @@ defmodule MishkaCmsCore.Runtime.CssInvalidationTest do
       path =
         ["runtime", site.name, "component"]
         |> MishkaCmsCore.Runtime.Helpers.static_temp_dir()
-        |> Path.join("#{Slug.slugify(com["name"])}.template")
+        |> Path.join("#{InternalName.slug(com["name"])}.template")
 
       refute File.exists?(path)
     end
@@ -178,7 +179,7 @@ defmodule MishkaCmsCore.Runtime.CssInvalidationTest do
     defp template_of(site, com) do
       ["runtime", site.name, "component"]
       |> MishkaCmsCore.Runtime.Helpers.static_temp_dir()
-      |> Path.join("#{Slug.slugify(com.name)}.template")
+      |> Path.join("#{InternalName.slug(com.name)}.template")
     end
 
     # Rescued by `Oban.Lifeline` half an hour after a seed script left it executing, it wrote its old

@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaGuardedStructTest do
   @moduledoc """
   GuardedStruct.AshResource coverage for `MishkaCmsCore.Runtime.Media`.
 
-  Media's `:name` is user-supplied display text that AshSlug slugifies on
+  Media's `:name` is user-supplied display text that `Changes.InternalName` slugifies on
   insert, and `:relative_path` is set by the upload pipeline (server-side
   trusted code). Both are already laundered by code Ash doesn't see, so GS
   validation there would be either redundant (name) or overreach (path).

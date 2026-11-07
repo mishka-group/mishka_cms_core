@@ -33,7 +33,6 @@ defmodule MishkaCmsCore.Runtime.Media do
     data_layer: AshPostgres.DataLayer,
     extensions: [
       AshArchival.Resource,
-      AshSlug,
       AshPaperTrail.Resource,
       AshJsonApi.Resource,
       MishkaGervaz.Resource,
@@ -979,7 +978,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change set_attribute(:relative_path, arg(:stored_path))
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates media for tenant users - requires tenant context, auto-assigns site_id"
     end
@@ -1004,7 +1003,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change set_attribute(:relative_path, arg(:stored_path))
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Creates media for master users - bypasses multi-tenancy, requires explicit site_id"
     end
@@ -1104,7 +1103,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       change &Ash.Changeset.force_change_attribute(&1, :site_id, &2.tenant)
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
     end
 
     create :master_form_upload do
@@ -1127,7 +1126,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
     end
 
     update :update do
@@ -1150,7 +1149,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       description "Updates media for tenant users - requires tenant context, prevents site_id changes"
     end
@@ -1175,7 +1174,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       end
 
       change {MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload, []}
-      change slugify(:name, into: :name)
+      change Changes.InternalName
 
       change fn changeset, _context ->
         Ash.Changeset.set_tenant(changeset, changeset.data.site_id)
@@ -2182,10 +2181,15 @@ defmodule MishkaCmsCore.Runtime.Media do
   end
 
   @doc """
-  The `name` an upload of `filename` carries into the create: its basename without the extension,
-  stripped of everything but word characters, spaces and dashes, spaces turned to dashes, downcased
-  and cut to 200 characters. The action's own `slugify(:name, into: :name)` runs after this and has
-  the last word on what the row holds.
+  The `name` an upload of `filename` carries into the create: the `Changes.InternalName` slug of its
+  basename without the extension, at most 200 characters, so it is lowercase `a-z`, `0-9` and single
+  inner `-`. `form_upload` sets the name in a `before_action`, after `Changes.InternalName` has run,
+  so this function, not that change, is what makes the stored name a slug there.
+
+  A filename with no Latin letter or digit left (`عکس.jpg`) never fails the upload: it gets a
+  generated name, `media-` and eight random hex characters, so two such files do not collide on
+  `unique_name_per_site`. A name with a Latin part keeps it (`photo عکس.jpg` is `photo`). This is
+  the one place that rule lives; names typed by an admin keep `Changes.InternalName`'s refusal.
 
   Public because that name is the row's own key — `unique_name_per_site` — so anything asking whether
   a file is already in a site's library has to ask under the name an upload of it would produce.
@@ -2195,16 +2199,15 @@ defmodule MishkaCmsCore.Runtime.Media do
   @spec upload_name(String.t()) :: String.t()
   def upload_name(filename) when is_binary(filename) do
     filename
-    |> Path.basename(filename |> Path.extname() |> String.downcase())
-    |> sanitize_filename()
-  end
+    |> Path.basename(Path.extname(filename))
+    |> MishkaSlug.slugify([max_length: 200] ++ Changes.InternalName.options())
+    |> case do
+      {:ok, name} ->
+        name
 
-  defp sanitize_filename(name) do
-    name
-    |> String.replace(~r/[^\w\s-]/, "")
-    |> String.replace(~r/\s+/, "-")
-    |> String.downcase()
-    |> String.slice(0, 200)
+      {:error, _nothing_latin} ->
+        "media-" <> Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
+    end
   end
 
   # EVERY MEDIA FILE LIVES IN ITS SITE'S OWN FOLDER, `uploads/<site_id>/media/`, and moves to
