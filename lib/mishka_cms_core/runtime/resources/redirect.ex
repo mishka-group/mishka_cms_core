@@ -19,6 +19,11 @@ defmodule MishkaCmsCore.Runtime.Redirect do
   as written. A rule is refused when its target is its own source, and when following the site's
   active rules from its target comes back to an address already on the way.
 
+  `from_query` narrows a rule to a query string, as `MishkaCmsCore.Runtime.Redirects.normalize_query/1`
+  writes it: `p=123` on `/` answers WordPress's `/?p=123`, and `page_id=7` or `cat=3` the same. Such a
+  rule answers only a request that carries that query, alone or among other parameters, and sends
+  the visitor on without it. A rule with none answers its path whatever the query.
+
   ## Served from ETS
 
   Every rule that is active is held by `MishkaCmsCore.Runtime.States.RedirectsState`, loaded at boot
@@ -55,7 +60,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
-  @admin_fields [:from_path, :to, :status, :active, :description, :site_id]
+  @admin_fields [:from_path, :from_query, :to, :status, :active, :description, :site_id]
 
   @form_modal "redirect-form-modal"
 
@@ -134,7 +139,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
         column :rule do
           static true
-          requires [:from_path, :to]
+          requires [:from_path, :from_query, :to]
           label fn -> dgettext("mishka_gervaz", "Redirect") end
           position :first
 
@@ -143,7 +148,10 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
 
           render fn record ->
-            assigns = %{from: record.from_path, to: "→ " <> record.to}
+            assigns = %{
+              from: Enum.join([record.from_path | List.wrap(record.from_query)], "?"),
+              to: "→ " <> record.to
+            }
 
             ~H"""
             <.cell_stacked variant={:title} primary={@from} secondary={@to} />
@@ -218,7 +226,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
       filters do
         filter :search, :text do
-          fields [:from_path, :to, :description]
+          fields [:from_path, :from_query, :to, :description]
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Search") end
@@ -400,6 +408,21 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
         end
 
+        field :from_query, :text do
+          ui do
+            label fn -> dgettext("mishka_gervaz", "From query") end
+            placeholder "p=123"
+            extra %{dir: "ltr"}
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Only when the address is asked with this query, such as p=123 or page_id=7 from WordPress. Empty answers the address whatever its query."
+              )
+            end
+          end
+        end
+
         field :to, :text do
           required true
 
@@ -441,7 +464,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
       groups do
         group :addresses do
-          fields [:site_id, :from_path, :to]
+          fields [:site_id, :from_path, :from_query, :to]
 
           ui do
             columns 1
@@ -482,6 +505,9 @@ defmodule MishkaCmsCore.Runtime.Redirect do
     auto_wire true
 
     field :from_path, :string, derives: "sanitize(trim) validate(string, not_empty, max_len=2000)"
+
+    field :from_query, :string,
+      derives: "sanitize(trim) validate(optional=[string, max_len=2000])"
 
     field :to, :string, derives: "sanitize(trim) validate(string, not_empty, max_len=2000)"
 
@@ -760,6 +786,14 @@ defmodule MishkaCmsCore.Runtime.Redirect do
       description "The address the rule answers, as normalize_path/1 writes it"
     end
 
+    attribute :from_query, :string do
+      allow_nil? true
+      public? true
+      constraints max_length: 2000
+
+      description "The query string the rule answers alone, as normalize_query/1 writes it; nil for any"
+    end
+
     attribute :to, :string do
       allow_nil? false
       public? true
@@ -809,7 +843,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
   end
 
   identities do
-    identity :unique_from_path_per_site, [:site_id, :from_path] do
+    identity :unique_from_path_per_site, [:site_id, :from_path, :from_query] do
       description "One live rule per address on a site"
       message dgettext_noop("errors", "This site already redirects that address.")
       all_tenants? true

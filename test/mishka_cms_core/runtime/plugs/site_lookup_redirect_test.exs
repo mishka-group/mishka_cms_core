@@ -121,6 +121,37 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
     end
   end
 
+  describe "an address a rule names with a query" do
+    test "is answered only when the request carries the query, alone or among others", %{
+      site: site
+    } do
+      rule!(site, %{from_path: "/", from_query: "p=123", to: "/fa/وردپرس", status: 301})
+      rule!(site, %{from_path: "/index.php", from_query: "page_id=7", to: "/about"})
+
+      for path <- ["/?p=123", "/?utm_source=x&p=123"] do
+        conn = request(path, site.host)
+        assert conn.halted, path
+        assert conn.status == 301
+        assert location(conn) == "/fa/%D9%88%D8%B1%D8%AF%D9%BE%D8%B1%D8%B3"
+      end
+
+      assert location(request("/index.php?page_id=7", site.host)) == "/about"
+
+      for path <- ["/", "/?p=124", "/index.php"] do
+        refute request(path, site.host).halted, path
+      end
+    end
+
+    test "wins over the rule on the path alone, which keeps the visitor's query", %{site: site} do
+      rule!(site, %{from_path: "/old", to: "/new"})
+      rule!(site, %{from_path: "/old", from_query: "cat=3", to: "/category/three"})
+
+      assert location(request("/old?cat=3", site.host)) == "/category/three"
+      assert location(request("/old?cat=4", site.host)) == "/new?cat=4"
+      assert location(request("/old", site.host)) == "/new"
+    end
+  end
+
   describe "a request no rule answers" do
     test "goes on to its page, the session written as before", %{site: site} do
       rule!(site, %{from_path: "/old", to: "/new"})

@@ -196,10 +196,43 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
 
     _handled = :sys.get_state(RedirectsState)
 
-    assert RedirectsState.lookup(site.id, "/images/blog/old.jpg") ==
+    assert RedirectsState.lookup(site.id, "/images/blog/old.jpg", nil) ==
              {"/uploads/localhost/media/old.jpg", 308}
 
     assert has_element?(view, row(saved))
+  end
+
+  test "a rule on a WordPress query is added through the form and shown with it", %{
+    conn: conn,
+    site: site
+  } do
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form [name='form[from_query]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_submit(%{
+      "form" => %{
+        "from_path" => "/",
+        "from_query" => "?p=123",
+        "to" => "/fa/hello",
+        "status" => "301",
+        "active" => "true"
+      }
+    })
+
+    settle(view)
+
+    assert [saved] = stored(site)
+    assert saved.from_query == "p=123"
+
+    _handled = :sys.get_state(RedirectsState)
+    assert RedirectsState.lookup(site.id, "/", "p=123") == {"/fa/hello", 301}
+    assert view |> element(row(saved)) |> render() =~ "/?p=123"
   end
 
   test "Add redirect after a close that sent the form nothing opens it empty", %{
@@ -263,7 +296,7 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
     assert id == redirect.id
 
     _handled = :sys.get_state(RedirectsState)
-    assert RedirectsState.lookup(site.id, "/old") == {"/newer", 302}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {"/newer", 302}
   end
 
   test "a rule that would loop is refused on the form, and nothing is stored", %{

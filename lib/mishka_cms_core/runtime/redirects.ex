@@ -109,6 +109,39 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   end
 
   @doc """
+  The query string a rule answers, as it is stored and matched: a leading `?` dropped, every
+  parameter decoded, and the parameters in order, joined with `&`. `nil` for none.
+
+      normalize_query("?page_id=7")   #=> "page_id=7"
+      normalize_query("p=1&cat=%33")  #=> "cat=3&p=1"
+      normalize_query("")             #=> nil
+  """
+  @spec normalize_query(String.t() | nil) :: String.t() | nil
+  def normalize_query(nil), do: nil
+
+  def normalize_query(value) when is_binary(value) do
+    case value |> String.trim() |> String.trim_leading("?") |> query_pairs() do
+      [] -> nil
+      pairs -> joined(pairs)
+    end
+  end
+
+  # At most this many parameters of a request are each tried as a rule's query.
+  @query_pairs 20
+
+  defp query_pairs(query) do
+    query
+    |> URI.query_decoder()
+    |> Enum.take(@query_pairs)
+    |> Enum.reject(fn {key, _value} -> key == "" end)
+    |> Enum.sort()
+  rescue
+    _malformed -> []
+  end
+
+  defp joined(pairs), do: Enum.map_join(pairs, "&", fn {key, value} -> key <> "=" <> value end)
+
+  @doc """
   Where a rule may send a visitor, trimmed: a path on the site (`/x`, with a query or a fragment if
   it has one) or an absolute `http(s)` URL with a host. `:error` for anything else — `//host`
   included, which a browser reads as another host, and any `\\`, which a browser reads as `/`, so
@@ -138,12 +171,14 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   @doc """
   The change every create and update of `MishkaCmsCore.Runtime.Redirect` runs: `from_path` through
-  `normalize_path/1` and `to` through `normalize_target/1`, each only when it is being written. A
-  value neither accepts is refused on its field, and so is a `from_path` that `reserved?/1`.
+  `normalize_path/1`, `from_query` through `normalize_query/1` and `to` through
+  `normalize_target/1`, each only when it is being written. A value neither accepts is refused on
+  its field, and so is a `from_path` that `reserved?/1`.
   """
   @spec normalize(Ash.Changeset.t(), map()) :: Ash.Changeset.t()
   def normalize(changeset, _context) do
     changeset
+    |> normalize_query_field()
     |> normalize_field(
       :from_path,
       &normalize_path/1,
@@ -180,6 +215,16 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     end
   end
 
+  defp normalize_query_field(changeset) do
+    case Ash.Changeset.fetch_change(changeset, :from_query) do
+      {:ok, value} ->
+        Ash.Changeset.force_change_attribute(changeset, :from_query, normalize_query(value))
+
+      :error ->
+        changeset
+    end
+  end
+
   defp normalize_field(changeset, field, normalizer, message) do
     case Ash.Changeset.fetch_change(changeset, field) do
       {:ok, value} when is_binary(value) ->
@@ -208,6 +253,8 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     from = Ash.Changeset.get_attribute(changeset, :from_path)
     to = Ash.Changeset.get_attribute(changeset, :to)
 
+    query = Ash.Changeset.get_attribute(changeset, :from_query)
+
     if is_binary(from) and is_binary(to) and served?(changeset) and loop_question?(changeset) do
       site_id = Ash.Changeset.get_attribute(changeset, :site_id)
 
@@ -217,16 +264,20 @@ defmodule MishkaCmsCore.Runtime.Redirects do
         opts: Ash.Scope.to_opts(context, tenant: site_id)
       }
 
-      case local_path(site_id, to) do
-        {:ok, ^from} ->
-          {:error,
-           field: :to,
-           message: dgettext_noop("errors", "A redirect cannot send an address to itself.")}
+      case {local_path(site_id, to), query} do
+        {{:ok, ^from}, nil} ->
+          itself()
 
-        {:ok, target} ->
+        {{:ok, ^from}, query} ->
+          if normalize_query(URI.parse(to).query) == query, do: itself(), else: :ok
+
+        {{:ok, _target}, query} when is_binary(query) ->
+          :ok
+
+        {{:ok, target}, nil} ->
           follow(target, target, MapSet.new([from]), rule)
 
-        :external ->
+        {:external, _query} ->
           :ok
       end
     else
@@ -234,11 +285,20 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     end
   end
 
+  defp itself,
+    do:
+      {:error,
+       field: :to,
+       message: dgettext_noop("errors", "A redirect cannot send an address to itself.")}
+
   defp served?(changeset), do: Ash.Changeset.get_attribute(changeset, :active) == true
 
   defp loop_question?(changeset) do
     changeset.action.name in [:unarchive, :master_unarchive] or
-      Enum.any?([:from_path, :to, :active], &Ash.Changeset.changing_attribute?(changeset, &1))
+      Enum.any?(
+        [:from_path, :from_query, :to, :active],
+        &Ash.Changeset.changing_attribute?(changeset, &1)
+      )
   end
 
   # Walks the site's active rules from `target`, one read per step, until one leaves the site, none
@@ -270,7 +330,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   defp next(path, %{id: id, opts: opts}) do
     Redirect
     |> Ash.Query.for_read(:read, %{}, opts)
-    |> Ash.Query.filter(from_path == ^path and active == true)
+    |> Ash.Query.filter(from_path == ^path and is_nil(from_query) and active == true)
     |> other_than(id)
     |> Ash.read_one(opts)
   end
@@ -294,13 +354,37 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   end
 
   @doc """
-  The rule `site_id` serves for `request_path`, as `{location, status}` — the target with the
-  request's `query_string` added when it has none of its own — or `nil`. Read from
+  The rule `site_id` serves for `request_path`, as `{location, status}`, or `nil`. Read from
   `MishkaCmsCore.Runtime.States.RedirectsState`, with no query.
+
+  A request with a query string asks first for a rule on its whole query, then on each of its
+  parameters (`p=123` among `p=123&utm_source=x`), and is sent to that rule's target as written.
+  Otherwise the rule on the path alone answers, and its target takes the request's `query_string`
+  when it has none of its own. A request with no query string asks for the path alone.
   """
   @spec lookup(String.t(), String.t(), String.t()) :: {String.t(), pos_integer()} | nil
   def lookup(site_id, request_path, query_string) do
-    case RedirectsState.lookup(site_id, key(request_path)) do
+    path = key(request_path)
+
+    case by_query(site_id, path, query_string) do
+      {to, status} -> {location(to, ""), status}
+      nil -> by_path(site_id, path, query_string)
+    end
+  end
+
+  defp by_query(_site_id, _path, ""), do: nil
+
+  defp by_query(site_id, path, query_string) do
+    pairs = query_pairs(query_string)
+
+    [pairs | Enum.map(pairs, &[&1])]
+    |> Enum.reject(&(&1 == []))
+    |> Enum.uniq()
+    |> Enum.find_value(&RedirectsState.lookup(site_id, path, joined(&1)))
+  end
+
+  defp by_path(site_id, path, query_string) do
+    case RedirectsState.lookup(site_id, path, nil) do
       {to, status} -> {location(to, query_string), status}
       nil -> nil
     end
@@ -342,8 +426,10 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     end
   end
 
-  # THE KEY A PATH IS STORED AND LOOKED UP UNDER. Escapes are decoded with no raise: a `%` that is not
-  # followed by two hex digits stays as it is, and bytes that are not UTF-8 make a key no rule has.
+  # THE KEY A PATH IS STORED AND LOOKED UP UNDER, decoded and in NFC as a page's path is
+  # (`MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1`). Escapes are decoded with no raise: a `%` that is
+  # not followed by two hex digits stays as it is, and bytes that are not UTF-8 make a key no rule
+  # has.
   defp key(path) do
     path
     |> String.split("/", trim: true)
@@ -352,6 +438,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
       [] -> "/"
       segments -> "/" <> Enum.join(segments, "/")
     end
+    |> nfc()
   end
 
   defp decode(segment),
@@ -359,6 +446,13 @@ defmodule MishkaCmsCore.Runtime.Redirects do
       Regex.replace(~r/%([0-9A-Fa-f]{2})/, segment, fn _escape, hex ->
         <<String.to_integer(hex, 16)>>
       end)
+
+  defp nfc(key) do
+    case String.valid?(key) do
+      true -> String.normalize(key, :nfc)
+      false -> key
+    end
+  end
 
   # A LOCATION IS SENT AS ASCII. A path written with Persian letters is escaped byte by byte, and an
   # escape already in it is kept as it is.

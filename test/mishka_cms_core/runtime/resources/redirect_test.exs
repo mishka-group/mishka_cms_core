@@ -127,6 +127,23 @@ defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
       assert redirect.site_id == site.id
     end
 
+    test "stores a query as it is matched, and none as nil", %{site: site} do
+      assert create!(site, %{from_path: "/", from_query: "?p=123", to: "/fa/hello"}).from_query ==
+               "p=123"
+
+      assert create!(site, %{from_path: "/", from_query: "cat=%33&p=1", to: "/c"}).from_query ==
+               "cat=3&p=1"
+
+      assert create!(site, %{from_path: "/x", from_query: " ", to: "/y"}).from_query == nil
+    end
+
+    test "a site keeps one rule per address and query", %{site: site} do
+      create!(site, %{from_path: "/", from_query: "p=1", to: "/one"})
+      create!(site, %{from_path: "/", from_query: "p=2", to: "/two"})
+
+      assert {:error, _taken} = create(site, %{from_path: "/", from_query: "?p=1", to: "/three"})
+    end
+
     test "refuses a malformed address or target, each on its own field", %{site: site} do
       assert refused_on?(create(site, %{from_path: "/a b", to: "/new"}), :from_path)
       assert refused_on?(create(site, %{from_path: "/old", to: "new"}), :to)
@@ -203,6 +220,11 @@ defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
     test "a rule cannot send an address to itself", %{site: site} do
       assert refused_on?(create(site, %{from_path: "/a", to: "/a"}), :to)
       assert refused_on?(create(site, %{from_path: "/a", to: "/a/?utm=1"}), :to)
+    end
+
+    test "a rule on a query sends its address on, but not to the same query", %{site: site} do
+      assert {:ok, _redirect} = create(site, %{from_path: "/", from_query: "p=1", to: "/"})
+      assert refused_on?(create(site, %{from_path: "/", from_query: "p=2", to: "/?p=2"}), :to)
     end
 
     test "a rule that closes a chain is refused, and one that leaves it is not", %{site: site} do

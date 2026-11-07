@@ -52,33 +52,33 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsStateTest do
   test "a saved rule is served under its site and address", %{site: site} do
     create!(site, %{from_path: "/images/blog/a.jpg", to: "/uploads/a.jpg", status: 308})
 
-    assert RedirectsState.lookup(site.id, "/images/blog/a.jpg") == {"/uploads/a.jpg", 308}
-    assert RedirectsState.lookup(site.id, "/images/blog/b.jpg") == nil
+    assert RedirectsState.lookup(site.id, "/images/blog/a.jpg", nil) == {"/uploads/a.jpg", 308}
+    assert RedirectsState.lookup(site.id, "/images/blog/b.jpg", nil) == nil
   end
 
   test "another site's rule never answers", %{site: site, other: other} do
     create!(other, %{from_path: "/old", to: "/new"})
 
-    assert RedirectsState.lookup(site.id, "/old") == nil
-    assert RedirectsState.lookup(other.id, "/old") == {"/new", 301}
+    assert RedirectsState.lookup(site.id, "/old", nil) == nil
+    assert RedirectsState.lookup(other.id, "/old", nil) == {"/new", 301}
   end
 
   test "an update moves the rule: the old address is let go, the new one served", %{site: site} do
     redirect = create!(site, %{from_path: "/old", to: "/new"})
     edit!(redirect, %{from_path: "/older", to: "/newer", status: 302})
 
-    assert RedirectsState.lookup(site.id, "/old") == nil
-    assert RedirectsState.lookup(site.id, "/older") == {"/newer", 302}
+    assert RedirectsState.lookup(site.id, "/old", nil) == nil
+    assert RedirectsState.lookup(site.id, "/older", nil) == {"/newer", 302}
   end
 
   test "a rule switched off is let go, and served again when switched on", %{site: site} do
     redirect = create!(site, %{from_path: "/old", to: "/new"})
 
     redirect = edit!(redirect, %{active: false})
-    assert RedirectsState.lookup(site.id, "/old") == nil
+    assert RedirectsState.lookup(site.id, "/old", nil) == nil
 
     edit!(redirect, %{active: true})
-    assert RedirectsState.lookup(site.id, "/old") == {"/new", 301}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {"/new", 301}
   end
 
   test "an archived rule is let go, a restored one served, a deleted one gone", %{site: site} do
@@ -86,18 +86,18 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsStateTest do
 
     :ok = Ash.destroy(redirect, tenant: site.id, authorize?: false)
     settled()
-    assert RedirectsState.lookup(site.id, "/old") == nil
+    assert RedirectsState.lookup(site.id, "/old", nil) == nil
 
     {:ok, archived} =
       Ash.get(Redirect, redirect.id, action: :get_archived, tenant: site.id, authorize?: false)
 
     restored = Ash.update!(archived, %{}, action: :unarchive, authorize?: false)
     settled()
-    assert RedirectsState.lookup(site.id, "/old") == {"/new", 301}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {"/new", 301}
 
     :ok = Ash.destroy(restored, action: :permanent_destroy, authorize?: false)
     settled()
-    assert RedirectsState.lookup(site.id, "/old") == nil
+    assert RedirectsState.lookup(site.id, "/old", nil) == nil
   end
 
   # Broadcasts from two nodes can arrive in either order: here the new rule's create lands before
@@ -112,7 +112,7 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsStateTest do
       Ash.destroy(first, tenant: site.id, authorize?: false, return_notifications?: true)
 
     create!(site, %{from_path: "/old", to: "/second"})
-    assert RedirectsState.lookup(site.id, "/old") == {"/second", 301}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {"/second", 301}
 
     send(RedirectsState, %Phoenix.Socket.Broadcast{
       topic: "redirect:destroyed",
@@ -121,7 +121,7 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsStateTest do
     })
 
     settled()
-    assert RedirectsState.lookup(site.id, "/old") == {"/second", 301}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {"/second", 301}
   end
 
   test "the boot load reads the active, unarchived rules from the database", %{site: site} do
@@ -155,13 +155,13 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsStateTest do
     {:ok, _notifications} =
       Ash.destroy(archived, [tenant: site.id, authorize?: false] ++ quiet)
 
-    assert RedirectsState.lookup(site.id, "/served") == nil
+    assert RedirectsState.lookup(site.id, "/served", nil) == nil
 
     :ok = RedirectsState.refresh()
 
-    assert RedirectsState.lookup(site.id, "/served") == {"/new", 301}
-    assert RedirectsState.lookup(site.id, "/off") == nil
-    assert RedirectsState.lookup(site.id, "/archived") == nil
+    assert RedirectsState.lookup(site.id, "/served", nil) == {"/new", 301}
+    assert RedirectsState.lookup(site.id, "/off", nil) == nil
+    assert RedirectsState.lookup(site.id, "/archived", nil) == nil
   end
 
   describe "runtime:state:redirect:changed" do

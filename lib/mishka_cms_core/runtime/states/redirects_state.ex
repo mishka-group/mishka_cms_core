@@ -12,7 +12,8 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsState do
   a rule saved on one server is served by all of them without a restart. Nothing is read again until
   a rule changes.
 
-  Each entry is `{{site_id, from_path}, id, to, status}`; a second table maps a rule's id to its key,
+  Each entry is `{{site_id, from_path, from_query}, id, to, status}`, `from_query` `nil` for a rule
+  on the path alone; a second table maps a rule's id to its key,
   so a rule whose `from_path` changed, or that was archived, deactivated or deleted, leaves its old
   key behind it. Only active, unarchived rules are kept.
 
@@ -37,22 +38,22 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsState do
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
   @doc """
-  The rule `site_id` serves for `path` — a key `MishkaCmsCore.Runtime.Redirects` built — as
-  `{to, status}`, else `nil`.
+  The rule `site_id` serves for `path` and `query` — keys `MishkaCmsCore.Runtime.Redirects` built,
+  `query` `nil` for the rule on the path alone — as `{to, status}`, else `nil`.
 
   One lookup, no GenServer hop. Never raises: a table that is not there yet is the same as one with
   nothing in it, so a request answered before this process starts is served as if no rule existed.
   """
-  @spec lookup(String.t(), String.t()) :: {String.t(), pos_integer()} | nil
-  def lookup(site_id, path) do
+  @spec lookup(String.t(), String.t(), String.t() | nil) :: {String.t(), pos_integer()} | nil
+  def lookup(site_id, path, query) do
     case :ets.whereis(@table) do
       :undefined -> nil
-      table -> find(table, site_id, path)
+      table -> find(table, {site_id, path, query})
     end
   end
 
-  defp find(table, site_id, path) do
-    case :ets.lookup(table, {site_id, path}) do
+  defp find(table, key) do
+    case :ets.lookup(table, key) do
       [{_key, _id, to, status}] -> {to, status}
       [] -> nil
     end
@@ -108,7 +109,7 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsState do
 
   defp keep(%{active: true, archived_at: nil} = rule) do
     drop(rule.id)
-    key = {rule.site_id, rule.from_path}
+    key = {rule.site_id, rule.from_path, rule.from_query}
     :ets.insert(@table, {key, rule.id, rule.to, rule.status})
     :ets.insert(@ids, {rule.id, key})
     changed(:save, rule.id)
@@ -149,7 +150,7 @@ defmodule MishkaCmsCore.Runtime.States.RedirectsState do
     |> Ash.Query.filter(active == true)
     |> Ash.stream!(authorize?: false)
     |> Enum.each(fn rule ->
-      key = {rule.site_id, rule.from_path}
+      key = {rule.site_id, rule.from_path, rule.from_query}
       :ets.insert(@table, {key, rule.id, rule.to, rule.status})
       :ets.insert(@ids, {rule.id, key})
     end)
