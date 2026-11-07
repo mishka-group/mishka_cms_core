@@ -59,6 +59,16 @@ defmodule MishkaCmsCore.Dev.ShowcasePagesTest do
         end
       end
 
+      # A Persian name has no Latin letter for `Changes.InternalName` to keep, and the seed's update
+      # of the translation was refused with "must have Latin letters (a-z) or digits".
+      test "leaves every translation's name to the one its translation was given" do
+        for page <- unquote(module).pages(%{}),
+            {language, translation} <- Map.get(page, :translations, %{}) do
+          refute Map.has_key?(translation, :name),
+                 "#{page.path} in #{language} names itself #{inspect(translation[:name])}"
+        end
+      end
+
       test "links to it from the header, beside the demos it already linked to" do
         nav = unquote(module).nav()
 
