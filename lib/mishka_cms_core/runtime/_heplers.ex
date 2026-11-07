@@ -192,51 +192,60 @@ defmodule MishkaCmsCore.Runtime.Helpers do
   Fills the slug of a record being created from its title, for a Gervaz form's `on_validate` hook.
 
   While the slug follows — it is empty, or it is the slug of the title the form held before this
-  change — a change to the `from` field writes the new title's slug into `into`. A slug the author
+  change — a change to the `from` field writes the new title's slug into `into`. A change to a field
+  the slug is made with, such as the record's site or language, writes the title's slug for it too,
+  so a slug made before a site was picked is remade with that site's languages. A slug the author
   typed themselves stops it following, until they empty it again. A record being updated keeps its
   slug whatever happens to the title: the slug is in the record's URL.
 
   The slug is made by the slug change the form's action runs on `into` (`slugifiers/1`, `slug/3`),
-  so what the author sees is what the save stores. A public slug keeps the scripts of the site's
-  languages (`قیمت‌گذاری` stays `قیمتگذاری` on a site that publishes in Persian); an internal name
-  keeps Latin letters only, so `Café قیمت` becomes `cafe`, and a title with nothing left leaves the
-  slug empty. A form whose action has no slug change on `into` is left alone.
+  read off the form's values as they are after this change, so what the author sees is what the
+  save stores. A public slug keeps the scripts of the site's languages (`قیمت‌گذاری` stays
+  `قیمتگذاری` on a site that publishes in Persian); an internal name keeps Latin letters only, so
+  `Café قیمت` becomes `cafe`.
 
-  Returns the params, so it is the whole hook, or the first step of one:
+  A title that gives no slug leaves the slug empty and says why under the title, in the words
+  `MishkaSlug.Messages.error/1` has for the reason, such as "has no letters or digits to make a slug
+  from" for `😀`.
+
+  Returns the params, or `{params, errors}` while the title gives no slug: either is the whole hook.
 
       hooks do
         on_validate fn params, state ->
           MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :title)
         end
       end
-
-      hooks do
-        on_validate fn params, state ->
-          params = MishkaCmsCore.Runtime.Helpers.follow_slug(params, state, :name)
-          MishkaGervaz.Helpers.validate_field_errors(state.form.source, params, state.errors)
-        end
-      end
   """
-  @spec follow_slug(map(), map(), atom(), atom()) :: map()
+  @spec follow_slug(map(), map(), atom(), atom()) :: map() | {map(), map()}
   def follow_slug(params, state, from, into \\ :slug)
 
   def follow_slug(
         %{"form" => %{} = typed} = params,
         %{
           mode: :create,
-          form: %{source: %AshPhoenix.Form{source: %{action: %{} = action}} = form}
-        },
+          form: %{
+            source: %AshPhoenix.Form{source: %{action: %{} = action} = held} = form
+          }
+        } = state,
         from,
         into
       ) do
-    before = form |> AshPhoenix.Form.params() |> Map.get(to_string(from))
+    held_params = AshPhoenix.Form.params(form)
+    before = Map.get(held_params, to_string(from))
+    title = Map.get(typed, to_string(from), before)
+    shown = Map.get(typed, to_string(into), Map.get(held_params, to_string(into)))
 
-    with title when is_binary(title) and title != before <- Map.get(typed, to_string(from)),
+    with true <- is_binary(title),
          {_from, _into, options} <- Enum.find(slugifiers(action), &match?({_, ^into, _}, &1)),
-         true <- following?(Map.get(typed, to_string(into)), before, options, form.source) do
-      put_in(params, ["form", to_string(into)], slug(title, options, form.source) || "")
+         true <- following?(shown, before, options, held) do
+      typing = with_typed(held, typed, held_params)
+      made = slugify(title, options, typing)
+
+      params
+      |> remade(title != before or made != slugify(title, options, held), into, made)
+      |> with_reason(state, from, made)
     else
-      _unchanged_or_not_following -> params
+      _not_following -> params
     end
   end
 
@@ -244,6 +253,38 @@ defmodule MishkaCmsCore.Runtime.Helpers do
 
   defp following?(slug, _before, _options, _changeset) when slug in [nil, ""], do: true
   defp following?(slug, before, options, changeset), do: slug == slug(before, options, changeset)
+
+  # The changeset the form held, with the attributes this change gives a new value.
+  defp with_typed(changeset, typed, held_params) do
+    Enum.reduce(typed, changeset, fn {name, value}, changeset ->
+      case Map.get(held_params, name) != value and
+             Ash.Resource.Info.attribute(changeset.resource, name) do
+        %{name: attribute} -> Ash.Changeset.force_change_attribute(changeset, attribute, value)
+        _unchanged_or_not_an_attribute -> changeset
+      end
+    end)
+  end
+
+  defp slugify(text, options, changeset) do
+    case String.trim(text) do
+      "" -> {:ok, ""}
+      _text -> MishkaSlug.slugify(text, MishkaSlug.Change.slug_options(options, changeset))
+    end
+  end
+
+  defp remade(params, false, _into, _made), do: params
+
+  defp remade(params, true, into, {:ok, slug}),
+    do: put_in(params, ["form", to_string(into)], slug)
+
+  defp remade(params, true, into, {:error, _reason}),
+    do: put_in(params, ["form", to_string(into)], "")
+
+  defp with_reason(params, _state, _from, {:ok, _slug}), do: params
+
+  defp with_reason(params, state, from, {:error, reason}),
+    do:
+      {params, Map.put(Map.get(state, :errors) || %{}, from, [MishkaSlug.Messages.error(reason)])}
 
   @doc """
   The slug a save of `changeset` stores for `text`, made with the `options` of one of its

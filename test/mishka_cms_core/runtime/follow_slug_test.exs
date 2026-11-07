@@ -28,17 +28,23 @@ defmodule MishkaCmsCore.Runtime.FollowSlugTest do
   defp state(mode, form), do: %{mode: mode, form: Phoenix.Component.to_form(form)}
 
   # One `phx-change`: the browser sends every field the form shows, the hook runs, and the form is
-  # validated with the params it returned. Answers the name the form shows after it.
+  # validated with the params it returned, showing the errors it gave. Answers the name the form
+  # shows after it.
   defp change(state, title, name, into \\ :name) do
-    params =
-      Helpers.follow_slug(%{"form" => %{"title" => title, "name" => name}}, state, :title, into)
+    {params, errors} =
+      %{"form" => %{"title" => title, "name" => name}}
+      |> Helpers.follow_slug(state, :title, into)
+      |> case do
+        {params, errors} -> {params, errors}
+        params -> {params, %{}}
+      end
 
     form =
       state.form.source
       |> AshPhoenix.Form.validate(params["form"])
       |> Phoenix.Component.to_form()
 
-    {params["form"]["name"], %{state | form: form}}
+    {params["form"]["name"], %{state | form: form} |> Map.put(:errors, errors)}
   end
 
   describe "while a record is created" do
@@ -96,6 +102,22 @@ defmodule MishkaCmsCore.Runtime.FollowSlugTest do
 
       {name, _state} = change(state, "😀", name)
       assert name == ""
+    end
+
+    test "a title with nothing to spell says why under the title, until it spells something",
+         ctx do
+      {name, state} = change(creating(ctx), "😀", "")
+      assert name == ""
+      assert state.errors.title == [MishkaSlug.Messages.error(:empty)]
+
+      {name, state} = change(state, "Hello 😀", name)
+      assert name == "hello"
+      refute Map.has_key?(state.errors, :title)
+    end
+
+    test "an empty title says nothing about the slug", ctx do
+      {_name, state} = change(creating(ctx), "  ", "")
+      assert state.errors == %{}
     end
 
     test "a field the form's action does not slugify is left alone", ctx do
