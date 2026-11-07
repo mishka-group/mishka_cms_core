@@ -302,7 +302,12 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
   describe "public_slug/1" do
     test "slugs the slug field in place, with the site's locales" do
       assert Languages.public_slug() ==
-               [from: :slug, into: :slug, locales: {Languages, :slug_locales, []}]
+               [
+                 from: :slug,
+                 into: :slug,
+                 locales: {Languages, :slug_locales, []},
+                 script_resolver: {Languages, :scripts, []}
+               ]
     end
 
     test "overrides replace or add options" do
@@ -323,12 +328,7 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
     end
 
     defp public_slug(title, changeset) do
-      {:ok, opts} =
-        MishkaSlug.Change.init(
-          from: :title,
-          into: :title,
-          locales: {Languages, :slug_locales, []}
-        )
+      {:ok, opts} = MishkaSlug.Change.init(Languages.public_slug(from: :title, into: :title))
 
       MishkaSlug.slugify(title, MishkaSlug.Change.slug_options(opts, changeset))
     end
@@ -363,7 +363,51 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
     test "a site with no languages set keeps Latin letters only", %{site: site} do
       assert Languages.slug_locales(for_site(site.id)) == ["en"]
       assert public_slug("Café آموزش", for_site(site.id)) == {:ok, "cafe"}
-      assert public_slug("قیمت‌گذاری", for_site(site.id)) == {:error, :empty}
+      assert public_slug("قیمت‌گذاری", for_site(site.id)) == {:error, :no_allowed_script}
+    end
+  end
+
+  describe "scripts/1" do
+    test "gives the script CLDR writes a language in" do
+      assert Languages.scripts("en") == {:ok, [:latin]}
+      assert {:ok, [:arabic]} = Languages.scripts("fa")
+      assert {:ok, [:cyrillic]} = Languages.scripts("tt")
+      assert {:ok, [:latin]} = Languages.scripts("sr-Latn")
+      assert {:ok, [:arabic]} = Languages.scripts("pa-Arab")
+    end
+
+    test "a code CLDR does not know is :error, never a crash" do
+      assert Languages.scripts("not a code") == :error
+      assert Languages.scripts("") == :error
+      assert Languages.scripts(nil) == :error
+    end
+  end
+
+  describe "public slugs follow the site's scripts" do
+    setup do
+      n = System.unique_integer([:positive])
+      %{site: create_site!(name: "scripts-#{n}", host: "scripts-#{n}.test")}
+    end
+
+    defp slug_for(site, languages, title) do
+      forget_settings(~w(site.languages), [site.id])
+      {:ok, _} = Settings.put("site.languages", languages, site_id: site.id)
+      {:ok, opts} = MishkaSlug.Change.init(Languages.public_slug(from: :title, into: :title))
+
+      changeset =
+        MishkaCmsCore.Runtime.Page |> Ash.Changeset.new() |> Ash.Changeset.set_tenant(site.id)
+
+      MishkaSlug.slugify(title, MishkaSlug.Change.slug_options(opts, changeset))
+    end
+
+    test "tt allows Cyrillic, sr-Latn does not", %{site: site} do
+      assert {:ok, "сәлам"} = slug_for(site, ["tt"], "Сәлам")
+      assert {:error, :no_allowed_script} = slug_for(site, ["sr-Latn"], "Сәлам")
+      assert {:ok, "salam"} = slug_for(site, ["sr-Latn"], "Salam")
+    end
+
+    test "pa-Arab allows Arabic letters", %{site: site} do
+      assert {:ok, _} = slug_for(site, ["pa-Arab"], "قیمت")
     end
   end
 

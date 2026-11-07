@@ -220,10 +220,37 @@ defmodule MishkaCmsCore.Runtime.Languages do
   @spec public_slug(keyword()) :: keyword()
   def public_slug(overrides \\ []) do
     Keyword.merge(
-      [from: :slug, into: :slug, locales: {__MODULE__, :slug_locales, []}],
+      [
+        from: :slug,
+        into: :slug,
+        locales: {__MODULE__, :slug_locales, []},
+        script_resolver: {__MODULE__, :scripts, []}
+      ],
       overrides
     )
   end
+
+  @doc """
+  The writing systems a language code is written in, for `MishkaSlug`'s `:script_resolver`: the
+  script CLDR gives the code, so `tt` is Cyrillic, `pa-Arab` Arabic and `sr-Latn` Latin.
+
+  A code CLDR does not know gives `:error`, which the slug reports as an unknown site language
+  instead of crashing the form.
+
+      Languages.scripts("fa") #=> {:ok, [:arabic]}
+      Languages.scripts("xx") #=> :error
+  """
+  @spec scripts(String.t()) :: {:ok, [atom()]} | :error
+  def scripts(code) when is_binary(code) do
+    with {:ok, tag} <- Localize.LanguageTag.parse(code),
+         {:ok, tag} <- Localize.LanguageTag.add_likely_subtags(tag) do
+      MishkaSlug.Scripts.from_iso15924(tag.script)
+    else
+      _unknown -> :error
+    end
+  end
+
+  def scripts(_code), do: :error
 
   defp site_id(site_id) when is_binary(site_id), do: site_id
   defp site_id(_no_site), do: nil
