@@ -2186,6 +2186,11 @@ defmodule MishkaCmsCore.Runtime.Media do
   and cut to 200 characters. The action's own `Changes.InternalName` runs after this and has
   the last word on what the row holds.
 
+  A filename with no Latin letter or digit left (`عکس.jpg`) never fails the upload: it gets a
+  generated name, `media-` and eight random hex characters, so two such files do not collide on
+  `unique_name_per_site`. A name with a Latin part keeps it (`photo عکس.jpg` is `photo`). This is
+  the one place that rule lives; names typed by an admin keep `Changes.InternalName`'s refusal.
+
   Public because that name is the row's own key — `unique_name_per_site` — so anything asking whether
   a file is already in a site's library has to ask under the name an upload of it would produce.
   `MishkaCmsCore.Dev.SeedMedia` is the caller: working the rule out a second time over there would
@@ -2196,6 +2201,14 @@ defmodule MishkaCmsCore.Runtime.Media do
     filename
     |> Path.basename(filename |> Path.extname() |> String.downcase())
     |> sanitize_filename()
+    |> generated_if_unnamed()
+  end
+
+  defp generated_if_unnamed(name) do
+    case Changes.InternalName.slug(name) do
+      nil -> "media-" <> Base.encode16(:crypto.strong_rand_bytes(4), case: :lower)
+      _named -> name
+    end
   end
 
   defp sanitize_filename(name) do
