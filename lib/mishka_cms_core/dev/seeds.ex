@@ -799,10 +799,14 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # is what an unpublished page looks like — and an earlier version of this published its Persian
   # sibling regardless, so `/en/coming-soon` 404'd while `/fa/coming-soon` answered. The demo was
   # exactly inverted.
+  #
+  # THE NAME STAYS THE ONE `PageEditions.translate/4` GAVE IT (`localhost-showcase-fa`). A name is
+  # Latin only (`Changes.InternalName`), so a Persian page's name has nothing to be made from; what
+  # the language changes is the title, the description and the template.
   defp write!(page, translation, master, site_id, admin) do
     attrs =
       translation
-      |> Map.take([:name, :title, :description, :template])
+      |> Map.take([:title, :description, :template])
       |> Map.put(:active, master.active)
 
     page

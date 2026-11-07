@@ -255,7 +255,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp showcase_fa do
     %{
-      name: "ویترین",
       title: "ویترین",
       description: "هر آنچه یک صفحهٔ زمان‌اجرا می‌تواند، و راهی به هر صفحهٔ نمونه.",
       template: ~S"""
@@ -478,7 +477,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp pricing_fa do
     %{
-      name: "قیمت‌گذاری",
       title: "قیمت‌گذاری",
       description: "زبانه‌ها، جدول مقایسه و آکاردئون — سه مؤلفه از کیت روی یک صفحه.",
       template: ~S"""
@@ -792,7 +790,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp gallery_fa do
     %{
-      name: "گالری",
       title: "گالری",
       description: "هر بخش تعاملی کیت در یک‌جا، و راه رسیدن به باقی صفحه‌های توسعه.",
       template: ~S"""
@@ -1106,7 +1103,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp messages_fa do
     %{
-      name: "پیام‌ها",
       title: "پیام‌ها",
       description:
         "رویدادهای صفحه، اطلاعیه‌های صفحه، pb:say و نوتیفیکیشنی که خود صفحه باز و بسته می‌کند.",
@@ -1351,7 +1347,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp forms_fa do
     %{
-      name: "فرم‌ها",
       title: "فرم‌ها",
       description: "دو فرم مستقل، برای آزمودن سازوکار فرم در محیط توسعه.",
       template: ~S"""
@@ -1555,7 +1550,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp upload_fa do
     %{
-      name: "بارگذاری",
       title: "بارگذاری",
       description: "یک فیلد آپلود زنده، اعلام‌شده توسط خود صفحه و مصرف‌شده در فرمش.",
       template: ~S"""
@@ -1640,7 +1634,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp feature_fa do
     %{
-      name: "ویژگی",
       title: "ویژگی",
       description: "یک صفحه برای همهٔ ویژگی‌ها — گرفتن پارامتر :param مستقیماً از آدرس.",
       template: ~S"""
@@ -1702,7 +1695,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp handbook_fa do
     %{
-      name: "کتابچهٔ راهنما",
       title: "کتابچهٔ راهنما",
       description: "همه‌چیز زیر یک آدرس — یک گرفتنِ *rest، به هر عمقی که باشد.",
       template: ~S"""
@@ -1757,7 +1749,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp terms_fa do
     %{
-      name: "شرایط استفاده",
       title: "شرایط استفاده",
       description: "صفحهٔ حقوقیِ دیگر، در کنار صفحهٔ حریم خصوصیِ سایت آغازین.",
       template: ~S"""
@@ -1802,7 +1793,6 @@ defmodule MishkaCmsCore.Dev.LocalhostPages do
 
   defp coming_soon_fa do
     %{
-      name: "به‌زودی",
       title: "به‌زودی",
       description: "از عمد غیرفعال — باید ۴۰۴ همین سایت را نشان دهد.",
       template: ~S"""

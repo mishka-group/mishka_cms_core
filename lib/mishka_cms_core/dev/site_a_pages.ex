@@ -108,7 +108,6 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
 
   defp showcase_fr do
     %{
-      name: "Vitrine",
       title: "Vitrine",
       description: "Ce site en une page, et un accès à chacune de ses démos.",
       template: ~S"""
@@ -224,7 +223,6 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
 
   defp services_fr do
     %{
-      name: "Nos services",
       title: "Nos services",
       description: "Quatre choses que nous faisons, chacune reliée à sa propre page.",
       template: ~S"""
@@ -303,7 +301,6 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
 
   defp service_fr do
     %{
-      name: "Prestation",
       title: "Prestation",
       description: "Un service — le segment capturé, lu directement dans l'adresse.",
       template: ~S"""
@@ -383,7 +380,6 @@ defmodule MishkaCmsCore.Dev.SiteAPages do
 
   defp team_fr(faces) do
     %{
-      name: "L'équipe",
       title: "L'équipe",
       description: "Qui fait le travail, avec des photos tirées de la médiathèque de ce site.",
       template: ~s"""
