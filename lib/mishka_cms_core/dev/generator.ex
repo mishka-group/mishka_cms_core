@@ -316,6 +316,7 @@ defmodule MishkaCmsCore.Dev.Generator do
       authorize?: false,
       defaults: [
         from_path: sequence(:redirect_from, &"/old-#{&1}"),
+        from_query: nil,
         to: sequence(:redirect_to, &"/new-#{&1}"),
         status: 301,
         active: true,
