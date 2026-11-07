@@ -8,7 +8,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.InternalName do
   which becomes an Elixir module segment, a CSS or JS name and a file name.
 
   The name is the `MishkaSlug.slugify/2` slug of what was typed with `options/0`: Latin letters and
-  digits only, accents removed (`Café Crème` is `cafe-creme`), and every other character a word
+  `0-9` only (Persian, Arabic-Indic and Devanagari digits become `0-9`, so `Header ۱۲۳` is `header-123`), accents removed (`Café Crème` is `cafe-creme`), and every other character a word
   break, `_` and `.` too, so a name is always lowercase `a-z`, `0-9` and single inner `-`. Letters
   of other scripts are dropped, so `Hello قیمت` is `hello`. A name with nothing Latin left is
   refused with an error on the field the admin typed, never stored empty.
@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.InternalName do
 
   alias Ash.Changeset
 
-  @options [locales: ["en"], keep: []]
+  @options [locales: ["en"], keep: [], digits: :ascii]
 
   @doc "The `MishkaSlug.slugify/2` options every internal name is made with."
   @spec options() :: keyword()

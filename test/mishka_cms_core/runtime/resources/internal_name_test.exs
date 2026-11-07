@@ -44,6 +44,30 @@ defmodule MishkaCmsCore.Runtime.Resources.InternalNameTest do
     assert page.name == "react"
   end
 
+  test "Persian, Arabic-Indic and Devanagari digits are stored as 0-9" do
+    site = create_site!()
+
+    for {typed, stored} <- [
+          {"Header ۱۲۳", "header-123"},
+          {"Box ١٢ ४५", "box-12-45"},
+          {"Page ४५६", "page-456"}
+        ] do
+      assert {:ok, page} = create_page(site, typed)
+      assert page.name == stored
+      assert InternalName.slug(typed) == stored
+      assert page.name =~ ~r/\A[a-z0-9-]+\z/
+    end
+  end
+
+  test "a name of only non-ASCII digits is stored like the same Latin digits" do
+    for typed <- ["۱۲۳", "١٢٣", "१२३"] do
+      assert InternalName.slug(typed) == InternalName.slug("123")
+    end
+
+    assert {:ok, page} = create_page(create_site!(), "۱۲۳")
+    assert page.name == InternalName.slug("123")
+  end
+
   test "a Persian-only name is refused with an error on name, nothing stored" do
     assert {:error, %Ash.Error.Invalid{errors: errors}} = create_page(create_site!(), "قیمت‌گذاری")
 
