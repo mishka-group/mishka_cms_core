@@ -32,6 +32,50 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
     end
   end
 
+  describe "a status the site has no page for" do
+    defp compiled(error_pages) do
+      module = Module.concat(__MODULE__, "Fallback#{System.unique_integer([:positive])}")
+
+      {_result, _bindings} =
+        %{
+          title: "fallback_errors",
+          error_module: module,
+          site: "fallback-site-#{System.unique_integer([:positive])}",
+          error_pages: error_pages,
+          root_layout_template: nil
+        }
+        |> ErrorCompiler.build_module()
+        |> Code.eval_quoted()
+
+      module
+    end
+
+    defp drawn(module, status) do
+      conn = %Plug.Conn{
+        assigns: %{current_site: %{name: module.__error_information__([:private, :site])}}
+      }
+
+      module.render(conn, status) |> Phoenix.HTML.Safe.to_iodata() |> IO.iodata_to_binary()
+    end
+
+    test "draws the site's 404 page" do
+      module =
+        compiled([
+          %{status: 404, template: "<h1>Styled not found</h1>"},
+          %{status: 500, template: "<h1>Styled failure</h1>"}
+        ])
+
+      assert drawn(module, 410) =~ "Styled not found"
+      assert drawn(module, 500) =~ "Styled failure"
+    end
+
+    test "is answered with its reason phrase when the site has no 404 page either" do
+      module = compiled([%{status: 500, template: "<h1>Styled failure</h1>"}])
+
+      assert module.render(%Plug.Conn{}, 410) == "Gone"
+    end
+  end
+
   describe "build_module/1" do
     test "builds complete module AST with minimal params" do
       params = %{

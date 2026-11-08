@@ -303,8 +303,10 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
 
   Adds a fallback `render/2` function that:
   - Handles any unhandled status codes
-  - Logs a warning about the missing error page
-  - Returns a plain text status phrase using `Plug.Conn.Status.reason_phrase/1`
+  - Draws the site's 404 page for an integer status with no page of its own, when the site has a 404
+    page, so the response keeps its real status and the visitor still sees the site's styled page
+  - Otherwise logs a warning about the missing error page and returns a plain text status phrase
+    using `Plug.Conn.Status.reason_phrase/1`
 
   ## Rendering Flow
 
@@ -319,18 +321,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
         build_render_function(error_page, params[:site], params[:error_module])
       end)
 
-    # Add catch-all render function
+    not_found? = Enum.any?(params[:error_pages] || [], &(entry_status(&1) == 404))
+
     catch_all_render_ast =
       quote do
         def render(var!(conn), var!(status)) do
-          _ = var!(conn)
-          require Logger
+          if unquote(not_found?) and is_integer(var!(status)) and var!(status) != 404 do
+            render(var!(conn), 404)
+          else
+            require Logger
 
-          Logger.warning(
-            "missing error page for #{unquote(params[:site])} status #{var!(status)}"
-          )
+            Logger.warning(
+              "missing error page for #{unquote(params[:site])} status #{var!(status)}"
+            )
 
-          Plug.Conn.Status.reason_phrase(var!(status))
+            Plug.Conn.Status.reason_phrase(var!(status))
+          end
         end
       end
 
