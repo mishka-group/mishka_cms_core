@@ -377,6 +377,20 @@ defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
       assert {:ok, _redirect} = create(site, %{from_path: "/c", to: "/d"})
     end
 
+    test "a refused loop names the real addresses in the error the form reads", %{site: site} do
+      create!(site, %{from_path: "/a", to: "/b"})
+      create!(site, %{from_path: "/b", to: "/c"})
+
+      {:error, %Ash.Error.Invalid{errors: [%{message: message, vars: vars}]}} =
+        create(site, %{from_path: "/c", to: "/a"})
+
+      shown = MishkaGervaz.Errors.translate_error(message, vars)
+
+      assert shown =~ "/a"
+      assert shown =~ "/c"
+      refute shown =~ "%{"
+    end
+
     test "an inactive rule closes no loop until it is switched on", %{site: site} do
       create!(site, %{from_path: "/a", to: "/b"})
       back = create!(site, %{from_path: "/b", to: "/a", active: false})

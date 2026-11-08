@@ -541,9 +541,10 @@ defmodule MishkaCmsCore.Runtime.Redirects do
        message:
          dgettext_noop(
            "errors",
-           "This would make a loop: the redirects from %{target} come back to %{path}."
+           "This would make a loop: the redirects from %{target} come back to %{address}."
          ),
-       vars: [target: target, path: path]}
+       target: target,
+       address: path}
     else
       case next(path, rule) do
         {:ok, %Redirect{to: to}} -> step(target, local_path(rule.site_id, to), seen, path, rule)

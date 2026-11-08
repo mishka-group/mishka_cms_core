@@ -1409,7 +1409,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/runtime/redirects.ex:542
 #, elixir-autogen, elixir-format
-msgid "This would make a loop: the redirects from %{target} come back to %{path}."
+msgid "This would make a loop: the redirects from %{target} come back to %{address}."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/redirects.ex:382
