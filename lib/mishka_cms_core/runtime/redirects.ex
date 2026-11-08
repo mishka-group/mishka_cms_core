@@ -676,7 +676,7 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   A file, a 410 and a 404 are answered only while the site is open
   (`MishkaCmsCore.Runtime.SiteAvailability.state/1`); on an offline site the conn goes on, for the
   gate that answers an offline site to answer it. A `GET` or `HEAD` whose path has an empty segment,
-  `//about/`, is first sent with a 301 to the same path with each `//` made one `/`, `/about/`, its
+  `//about/`, and is none of the CMS's own addresses (`reserved?/1`), is first sent with a 301 to the same path with each `//` made one `/`, `/about/`, its
   query kept; the target always starts with a single `/`, so `//evil.com` is `/evil.com` on this
   site. A conn no rule matches is returned untouched.
   """
@@ -692,10 +692,11 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   # AN ADDRESS WITH AN EMPTY SEGMENT (`//about/`) is sent to the one with each `//` made `/`, its
   # trailing `/` and query kept: a path that starts with one `/`, with a backslash escaped, which a
-  # browser reads as `/`, so never another host.
+  # browser reads as `/`, so never another host. The CMS's own addresses (`reserved?/1`) are left to
+  # their own guards.
   defp single_slashed(%Plug.Conn{method: method, request_path: path} = conn)
        when method in ["GET", "HEAD"] do
-    if String.contains?(path, "//"),
+    if String.contains?(path, "//") and not reserved?(key(path)),
       do: {:redirect, (collapsed(path) <> queried(conn.query_string)) |> escaped(), 301}
   end
 

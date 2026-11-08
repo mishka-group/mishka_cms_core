@@ -191,6 +191,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
       assert {conn.halted, conn.status, location(conn)} == {true, 301, "/about/team/?x=1"}
       assert location(raw_request("//", "", site.host)) == "/"
       refute request("/about/team/", site.host).halted
+      refute raw_request("/admin/dashboard//account", "", site.host).halted
     end
 
     test "never names another host, whatever the path carries", %{site: site} do
