@@ -904,7 +904,7 @@ msgstr ""
 msgid "ARCHIVE"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:405
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:406
 #, elixir-autogen, elixir-format
 msgid "Access Not Allowed"
 msgstr ""
@@ -3607,7 +3607,7 @@ msgstr ""
 msgid "No recent activity."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:533
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:534
 #, elixir-autogen, elixir-format
 msgid "No server available for this domain."
 msgstr ""
@@ -4154,12 +4154,12 @@ msgstr ""
 msgid "Placeholder"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:595
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:596
 #, elixir-autogen, elixir-format
 msgid "Please check back later."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:534
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:535
 #, elixir-autogen, elixir-format
 msgid "Please check the domain name and try again."
 msgstr ""
@@ -4741,8 +4741,8 @@ msgid "Server errors"
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/error_status.ex:65
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:496
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:532
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:497
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:533
 #, elixir-autogen, elixir-format
 msgid "Service Unavailable"
 msgstr ""
@@ -4982,7 +4982,7 @@ msgstr ""
 msgid "Site Details"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:565
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:566
 #, elixir-autogen, elixir-format
 msgid "Site Not Available"
 msgstr ""
@@ -5649,12 +5649,12 @@ msgstr ""
 msgid "This site is API-only, so it answers 403 for every one of these pages until its mode changes. They are kept up to date all the same."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:442
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:443
 #, elixir-autogen, elixir-format
 msgid "This site is configured for API access only."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:594
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:595
 #, elixir-autogen, elixir-format
 msgid "This site is not available"
 msgstr ""
@@ -6146,12 +6146,12 @@ msgstr ""
 msgid "We are currently undergoing maintenance. Please check back soon."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:441
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:442
 #, elixir-autogen, elixir-format
 msgid "Web Access Not Allowed"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:443
+#: lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex:444
 #, elixir-autogen, elixir-format
 msgid "Web interface access is not permitted."
 msgstr ""
@@ -9168,14 +9168,14 @@ msgstr ""
 msgid "%{count} joined this month"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:637
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:682
 #, elixir-autogen, elixir-format
 msgid "%{count} member"
 msgid_plural "%{count} members"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:633
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:678
 #, elixir-autogen, elixir-format
 msgid "%{count} min read"
 msgid_plural "%{count} min read"
@@ -9376,12 +9376,12 @@ msgstr ""
 msgid "Blogger"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:970
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:992
 #, elixir-autogen, elixir-format
 msgid "Blogger address"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:964
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:986
 #, elixir-autogen, elixir-format
 msgid "Blogger bio"
 msgstr ""
@@ -9391,7 +9391,7 @@ msgstr ""
 msgid "Blogger created successfully"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:961
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:983
 #, elixir-autogen, elixir-format
 msgid "Blogger name"
 msgstr ""
@@ -9401,7 +9401,7 @@ msgstr ""
 msgid "Blogger not found or access denied"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:967
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:989
 #, elixir-autogen, elixir-format
 msgid "Blogger photo"
 msgstr ""
@@ -9431,17 +9431,17 @@ msgstr ""
 msgid "Calendar"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:951
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:973
 #, elixir-autogen, elixir-format
 msgid "Category address"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:946
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:968
 #, elixir-autogen, elixir-format
 msgid "Category description"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:941
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:963
 #, elixir-autogen, elixir-format
 msgid "Category name"
 msgstr ""
@@ -9668,7 +9668,7 @@ msgstr ""
 msgid "Guests"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:924
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:946
 #, elixir-autogen, elixir-format
 msgid "How many readers rated the post. Empty before the first rating."
 msgstr ""
@@ -9922,17 +9922,17 @@ msgstr ""
 msgid "Post"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:909
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:931
 #, elixir-autogen, elixir-format
 msgid "Post address"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:898
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:920
 #, elixir-autogen, elixir-format
 msgid "Post authors"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:912
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:934
 #, elixir-autogen, elixir-format
 msgid "Post category"
 msgstr ""
@@ -9942,17 +9942,17 @@ msgstr ""
 msgid "Post created successfully"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:892
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:914
 #, elixir-autogen, elixir-format
 msgid "Post excerpt"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:895
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:917
 #, elixir-autogen, elixir-format
 msgid "Post image"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:906
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:928
 #, elixir-autogen, elixir-format
 msgid "Post modified"
 msgstr ""
@@ -9962,27 +9962,27 @@ msgstr ""
 msgid "Post not found or access denied"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:901
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:923
 #, elixir-autogen, elixir-format
 msgid "Post published"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:918
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:940
 #, elixir-autogen, elixir-format
 msgid "Post rating"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:923
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:945
 #, elixir-autogen, elixir-format
 msgid "Post ratings"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:915
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:937
 #, elixir-autogen, elixir-format
 msgid "Post tags"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:889
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:911
 #, elixir-autogen, elixir-format
 msgid "Post title"
 msgstr ""
@@ -10159,12 +10159,12 @@ msgid "Steady vs prev. 30d"
 msgstr ""
 
 #: ../mishka_blog/lib/mishka_blog/plugins/page_records.ex:40
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:505
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:550
 #, elixir-autogen, elixir-format
 msgid "Tag"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:933
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:955
 #, elixir-autogen, elixir-format
 msgid "Tag address"
 msgstr ""
@@ -10175,12 +10175,12 @@ msgstr ""
 msgid "Tag created successfully"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:932
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:954
 #, elixir-autogen, elixir-format
 msgid "Tag description"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:931
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:953
 #, elixir-autogen, elixir-format
 msgid "Tag name"
 msgstr ""
@@ -10197,7 +10197,7 @@ msgid "Tag updated successfully"
 msgstr ""
 
 #: ../mishka_blog/lib/mishka_blog/plugins/page_records.ex:42
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:601
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:646
 #, elixir-autogen, elixir-format
 msgid "Team"
 msgstr ""
@@ -10207,7 +10207,7 @@ msgstr ""
 msgid "Team Members"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:978
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:1000
 #, elixir-autogen, elixir-format
 msgid "Team address"
 msgstr ""
@@ -10217,12 +10217,12 @@ msgstr ""
 msgid "Team created successfully"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:977
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:999
 #, elixir-autogen, elixir-format
 msgid "Team description"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:976
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:998
 #, elixir-autogen, elixir-format
 msgid "Team name"
 msgstr ""
@@ -10255,57 +10255,57 @@ msgstr ""
 msgid "The blog on this site"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:968
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:990
 #, elixir-autogen, elixir-format
 msgid "The blogger's avatar, as a full address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:964
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:986
 #, elixir-autogen, elixir-format
 msgid "The blogger's bio, as plain text."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:970
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:992
 #, elixir-autogen, elixir-format
 msgid "The blogger's canonical address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:952
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:974
 #, elixir-autogen, elixir-format
 msgid "The category's canonical address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:947
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:969
 #, elixir-autogen, elixir-format
 msgid "The category's description."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:913
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:935
 #, elixir-autogen, elixir-format
 msgid "The first category the post is filed under."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:962
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:984
 #, elixir-autogen, elixir-format
 msgid "The name of the blogger this address shows."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:942
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:964
 #, elixir-autogen, elixir-format
 msgid "The name of the category this address shows."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:931
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:953
 #, elixir-autogen, elixir-format
 msgid "The name of the tag this address shows."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:976
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:998
 #, elixir-autogen, elixir-format
 msgid "The name of the team this address shows."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:898
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:920
 #, elixir-autogen, elixir-format
 msgid "The names of the post's authors."
 msgstr ""
@@ -10315,52 +10315,52 @@ msgstr ""
 msgid "The page each reader arrived from"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:909
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:931
 #, elixir-autogen, elixir-format
 msgid "The post's canonical address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:896
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:918
 #, elixir-autogen, elixir-format
 msgid "The post's featured image, as a full address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:892
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:914
 #, elixir-autogen, elixir-format
 msgid "The post's summary."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:915
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:937
 #, elixir-autogen, elixir-format
 msgid "The post's tags, comma separated."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:919
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:941
 #, elixir-autogen, elixir-format
 msgid "The readers' average rating, out of 5. Empty before the first rating."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:933
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:955
 #, elixir-autogen, elixir-format
 msgid "The tag's canonical address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:932
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:954
 #, elixir-autogen, elixir-format
 msgid "The tag's description."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:978
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:1000
 #, elixir-autogen, elixir-format
 msgid "The team's canonical address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:977
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:999
 #, elixir-autogen, elixir-format
 msgid "The team's description."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:890
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:912
 #, elixir-autogen, elixir-format
 msgid "The title of the post this address shows."
 msgstr ""
@@ -10472,12 +10472,12 @@ msgstr ""
 msgid "Views in Period"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:907
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:929
 #, elixir-autogen, elixir-format
 msgid "When the post last changed, as an ISO 8601 date."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:902
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:924
 #, elixir-autogen, elixir-format
 msgid "When the post was published, as an ISO 8601 date."
 msgstr ""
@@ -12011,7 +12011,7 @@ msgstr ""
 msgid "Publishing at the scheduled time is on our roadmap."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:645
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:690
 #, elixir-autogen, elixir-format
 msgid "Reading time"
 msgstr ""
@@ -12037,7 +12037,7 @@ msgstr ""
 msgid "This section is not available yet. It is on our roadmap."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:644
+#: ../mishka_blog/lib/mishka_blog/plugins/page_seo.ex:689
 #, elixir-autogen, elixir-format
 msgid "Written by"
 msgstr ""
@@ -19728,4 +19728,14 @@ msgstr ""
 #: ../mishka_cms_migration/lib/mishka_cms_migration_web/live/admin/dashboard/item/index.ex:538
 #, elixir-autogen, elixir-format
 msgid "the item"
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/plugins/page_records.ex:43
+#, elixir-autogen, elixir-format
+msgid "Blog home"
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/plugins/page_records.ex:44
+#, elixir-autogen, elixir-format
+msgid "People"
 msgstr ""

@@ -165,10 +165,10 @@ msgstr ""
 msgid "auto-posting configuration"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2385
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2461
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2533
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2550
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2417
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2493
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2565
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2582
 #, elixir-autogen, elixir-format
 msgid "blog post"
 msgstr ""
@@ -1371,48 +1371,48 @@ msgstr ""
 msgid "The state names %{name} twice; each name is one assign."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:297
+#: lib/mishka_cms_core/runtime/redirects.ex:523
 #, elixir-autogen, elixir-format
 msgid "A redirect cannot send an address to itself."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:557
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:571
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:613
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:627
 #, elixir-autogen, elixir-format
 msgid "Cannot edit an archived redirect. Restore it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:190
+#: lib/mishka_cms_core/runtime/redirects.ex:339
 #, elixir-autogen, elixir-format
 msgid "Enter a path on this site starting with /, or a full http:// or https:// address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:185
+#: lib/mishka_cms_core/runtime/redirects.ex:328
 #, elixir-autogen, elixir-format
 msgid "Enter an address on this site, such as /old-page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:82
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:92
 #, elixir-autogen, elixir-format
 msgid "Status must be 301, 302, 307 or 308."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:694
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:750
 #, elixir-autogen, elixir-format
 msgid "This redirect is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:848
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:919
 #, elixir-autogen, elixir-format
 msgid "This site already redirects that address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:316
+#: lib/mishka_cms_core/runtime/redirects.ex:542
 #, elixir-autogen, elixir-format
 msgid "This would make a loop: the redirects from %{target} come back to %{path}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:206
+#: lib/mishka_cms_core/runtime/redirects.ex:382
 #, elixir-autogen, elixir-format
 msgid "This address belongs to the CMS itself (/admin, /api, /live) and cannot be redirected."
 msgstr ""
@@ -1548,12 +1548,12 @@ msgstr ""
 msgid "is required"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3166
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3219
 #, elixir-autogen, elixir-format
 msgid "A blog post with this language already exists in this language group."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2210
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2223
 #, elixir-autogen, elixir-format
 msgid "A collection with this language already exists in this language group."
 msgstr ""
@@ -1573,17 +1573,17 @@ msgstr ""
 msgid "Auto-posting configuration is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2156
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2188
 #, elixir-autogen, elixir-format
 msgid "Blog post is already archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2217
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2249
 #, elixir-autogen, elixir-format
 msgid "Blog post is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3158
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3211
 #, elixir-autogen, elixir-format
 msgid "Blog post slug must be unique within a site."
 msgstr ""
@@ -1616,8 +1616,8 @@ msgstr ""
 msgid "Cannot edit archived auto-posting configuration. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1658
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1723
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1676
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1748
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived blog post. Please unarchive it first."
 msgstr ""
@@ -1666,10 +1666,10 @@ msgstr ""
 msgid "Cannot restore version of archived auto-posting. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2376
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2426
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2452
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2504
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2408
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2458
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2484
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2536
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived blog post. Please unarchive it first."
 msgstr ""
@@ -1716,7 +1716,7 @@ msgstr ""
 msgid "Collection not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2202
+#: ../mishka_blog/lib/mishka_blog/resources/collection.ex:2215
 #, elixir-autogen, elixir-format
 msgid "Collection slug must be unique within a site."
 msgstr ""
@@ -1762,8 +1762,8 @@ msgstr ""
 msgid "Display order must be non-negative."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1528
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1651
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1530
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1669
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1200
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1254
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:968
@@ -1821,7 +1821,7 @@ msgstr ""
 msgid "Post not found or does not belong to your site."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:150
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:151
 #, elixir-autogen, elixir-format
 msgid "Published posts must have published_at, scheduled posts must have scheduled_publish_at."
 msgstr ""
@@ -1836,12 +1836,12 @@ msgstr ""
 msgid "Scheduled publish time is required for scheduled posts."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:142
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:143
 #, elixir-autogen, elixir-format
 msgid "Scheduled publish time must be in the future."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:138
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:139
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:123
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:131
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:113
@@ -1854,7 +1854,7 @@ msgstr ""
 msgid "Slug cannot be empty."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:134
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:135
 #: ../mishka_blog/lib/mishka_blog/resources/blogger.ex:119
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:127
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:109
@@ -2623,4 +2623,37 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/__changes/internal_name.ex:67
 #, elixir-autogen, elixir-format
 msgid "must have Latin letters (a-z) or digits: a name is used in code and file names, so other letters are removed"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:359
+#, elixir-autogen, elixir-format
+msgid "A rewrite serves a page or a media file of this site: enter its path, starting with /, with no query. The CMS's own addresses cannot be served."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:497
+#, elixir-autogen, elixir-format
+msgid "A rewritten file must be one of this site's media files, under /uploads/<site>/media/."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/redirects.ex:415
+#, elixir-autogen, elixir-format
+msgid "A wildcard such as p=* is a rule's whole query: write it alone."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:826
+#, elixir-autogen, elixir-format
+msgid "Enter where this rule sends or serves the address."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3205
+#, elixir-autogen, elixir-format
+msgid "Another post of this site already has this number."
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1563
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1631
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1707
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1779
+#, elixir-autogen, elixir-format
+msgid "This post's address, %{address}, is already a page of this site."
 msgstr ""
