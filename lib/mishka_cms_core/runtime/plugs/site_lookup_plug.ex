@@ -24,8 +24,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlug do
   1. **Host Extraction**: Extracts and normalizes host from request headers
   2. **Site Lookup**: Queries SiteState cache for host-to-site mapping
   3. **Site Validation**: Checks site active status
-  4. **Redirects**: An address one of the site's redirect rules names is answered with that redirect
-     and halted, before the session is touched — see `MishkaCmsCore.Runtime.Redirects`
+  4. **Redirects**: An address one of the site's redirect rules names is answered before the session
+     is touched — a redirect or a rewritten file halted, a 410 or 404 raised as the site's error
+     page, a rewritten page sent on with its target — see `MishkaCmsCore.Runtime.Redirects`
   5. **Sign-in Pool**: On the master site, `?master_user=` picks the accounts its sign-in page uses
   6. **Tenant Assignment**: Sets Ash tenant context from the session's token
   7. **State Storage**: Persists site data in assigns and session

@@ -10,6 +10,10 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PagePath do
   `/` stays `/`, and the attribute's `trim?` constraint has already dropped the spaces around the
   path.
 
+  It is stored as `MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1` writes it,
+  its `%XX` escapes decoded and in Unicode NFC, which is the form the resolver matches a request in:
+  a page pasted as `/fa/%D9%88...` is stored, and served, as `/fa/و...`.
+
   Any other mistake in a path, no leading `/` or a `?` or a `#` in it, is `Validations.PathFormat`'s
   to refuse on the `path` field.
 
@@ -19,11 +23,20 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.PagePath do
   """
   use Ash.Resource.Change
 
+  alias MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState
+
   @impl true
   def change(changeset, _opts, _context) do
     case Ash.Changeset.fetch_change(changeset, :path) do
-      {:ok, path} when is_binary(path) -> served(changeset, path, String.trim_trailing(path, "/"))
-      _not_written -> changeset
+      {:ok, path} when is_binary(path) ->
+        served(
+          changeset,
+          path,
+          path |> WebRunTimeMetaDataState.canonical_path() |> String.trim_trailing("/")
+        )
+
+      _not_written ->
+        changeset
     end
   end
 

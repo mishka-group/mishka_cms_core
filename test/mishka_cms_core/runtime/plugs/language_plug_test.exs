@@ -328,6 +328,20 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlugTest do
       assert get_session(conn, Languages.session()) == nil
     end
 
+    test "an address a rule rewrites stays where it is", %{site: site} do
+      prefix_all!(site)
+      route!(site, "/:lang/blog")
+
+      conn =
+        site
+        |> request("/blog?page=2")
+        |> put_private(:mishka_cms_rewrite, "/en/blog/hello")
+        |> LanguagePlug.call(opts())
+
+      refute conn.halted
+      assert get_resp_header(conn, "location") == []
+    end
+
     test "a request with no site is not this module's business" do
       conn =
         :get |> conn("/admin/dashboard") |> init_test_session(%{}) |> LanguagePlug.call(opts())

@@ -57,26 +57,9 @@ defmodule MishkaCmsCore.Runtime.Resources.PageGuardedStructTest do
                Page.__guarded_change__(%{path: "/users/:id/edit"})
     end
 
-    test "path: .. traversal rejected" do
-      assert {:error,
-              [
-                %{
-                  field: :path,
-                  action: :regex,
-                  message: "Invalid format in the path field"
-                }
-              ]} = Page.__guarded_change__(%{path: "/foo/../bar"})
-    end
-
-    test "path: must start with /" do
-      assert {:error,
-              [
-                %{
-                  field: :path,
-                  action: :regex,
-                  message: "Invalid format in the path field"
-                }
-              ]} = Page.__guarded_change__(%{path: "blog/posts"})
+    test "path: the format is checked by the Ash validation, not the guarded struct" do
+      assert {:ok, %{path: "/foo/../bar"}} = Page.__guarded_change__(%{path: "/foo/../bar"})
+      assert {:ok, %{path: "blog/posts"}} = Page.__guarded_change__(%{path: "blog/posts"})
     end
 
     test "template: zero-width unicode stripped; whitespace preserved" do
@@ -180,7 +163,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageGuardedStructTest do
                |> Ash.create()
 
       assert Enum.any?(errors, fn e ->
-               match?(%{field: :path}, e) and e.message =~ "Invalid format"
+               match?(%{field: :path}, e) and e.message =~ "directory traversal"
              end)
     end
   end

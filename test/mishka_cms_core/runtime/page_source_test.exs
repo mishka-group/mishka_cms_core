@@ -27,6 +27,9 @@ defmodule MishkaCmsCore.Runtime.PageSourceTest do
     use MishkaInstaller.Event.Hook, event: "runtime:page:source"
 
     @impl true
+    def call(%{record: "probe:post", params: %{"slug" => "gone"}} = given),
+      do: {:reply, :halt, %{given | source: PageSource.missing()}}
+
     def call(%{record: "probe:post", params: %{"slug" => slug}} = given) do
       source = %{
         slug: slug,
@@ -143,6 +146,18 @@ defmodule MishkaCmsCore.Runtime.PageSourceTest do
 
     test "is none for a page no plugin answers for" do
       assert PageSource.source(page("/:lang/about"), extra: %{}) == nil
+    end
+
+    test "is missing when the plugin that owns the page finds no record for the address" do
+      source =
+        PageSource.source(page("/:lang/probe/:slug"),
+          extra: %{"record" => "probe:post"},
+          params: %{"slug" => "gone"}
+        )
+
+      assert PageSource.missing?(source)
+      refute PageSource.missing?(nil)
+      refute PageSource.missing?(%{slug: "hello"})
     end
   end
 

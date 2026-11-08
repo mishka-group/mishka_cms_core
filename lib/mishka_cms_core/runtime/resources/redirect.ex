@@ -4,20 +4,35 @@
 
 defmodule MishkaCmsCore.Runtime.Redirect do
   @moduledoc """
-  One address of a site answered with a redirect to another — a page or a file that moved, and the
-  visitors, search engines and shared links that still ask for its old address.
+  One address of a site answered by a rule — a page or a file that moved, and the visitors, search
+  engines and shared links that still ask for its old address.
 
-  A rule is a site's own (`global? false`): `from_path` is the address asked for, `to` where the
-  visitor is sent — a path on the same site or a full `http(s)` address — with `status` 301, 302,
-  307 or 308. An inactive rule is kept and answers nothing.
+  A rule is a site's own (`global? false`): `from_path` is the address asked for, and `kind` what it
+  answers — see `MishkaCmsCore.Runtime.Redirects`:
+
+    * `:redirect` (the default) sends the visitor to `to` — a path on the same site or a full
+      `http(s)` address — with `status` 301, 302, 307 or 308;
+    * `:rewrite` serves `to`, a page or a media file of the same site, at the address asked for,
+      which stays in the browser;
+    * `:gone` and `:not_found` answer the site's error page with 410 or 404, and keep no `to`.
+
+  `status` is a redirect's alone. An inactive rule is kept and answers nothing.
 
   ## Addresses
 
   `from_path` is stored as `MishkaCmsCore.Runtime.Redirects.normalize_path/1` writes it: one leading
   `/`, no scheme or host, no query or fragment, no trailing `/` but the root's, and its
-  percent-escapes decoded, so a rule matches the address however a browser spelled it. `to` is stored
-  as written. A rule is refused when its target is its own source, and when following the site's
-  active rules from its target comes back to an address already on the way.
+  percent-escapes decoded, so a rule matches the address however a browser spelled it. A redirect's
+  `to` is stored as written, a rewrite's as `normalize_path/1` writes it. A rule is refused when its
+  target is its own source, a redirect when following the site's active redirects from its target
+  comes back to an address already on the way, and a rewrite whose target is on another host, one of
+  the CMS's own addresses, or a file outside its site's media folder.
+
+  `from_query` narrows a rule to a query string, as `MishkaCmsCore.Runtime.Redirects.normalize_query/1`
+  writes it: `p=123` on `/` answers WordPress's `/?p=123`, and `page_id=7` or `cat=3` the same. Such a
+  rule answers only a request that carries that query, alone or among other parameters, and sends
+  the visitor on without it. `p=*` answers `p` with any value, at its own path, when no rule on the
+  exact query does. A rule with none answers its path whatever the query.
 
   ## Served from ETS
 
@@ -55,7 +70,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
-  @admin_fields [:from_path, :to, :status, :active, :description, :site_id]
+  @admin_fields [:kind, :from_path, :from_query, :to, :status, :active, :description, :site_id]
 
   @form_modal "redirect-form-modal"
 
@@ -134,8 +149,8 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
         column :rule do
           static true
-          requires [:from_path, :to]
-          label fn -> dgettext("mishka_gervaz", "Redirect") end
+          requires [:from_path, :from_query, :to]
+          label fn -> dgettext("mishka_gervaz", "Rule") end
           position :first
 
           ui do
@@ -143,7 +158,10 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
 
           render fn record ->
-            assigns = %{from: record.from_path, to: "→ " <> record.to}
+            assigns = %{
+              from: Enum.join([record.from_path | List.wrap(record.from_query)], "?"),
+              to: record.to && "→ " <> record.to
+            }
 
             ~H"""
             <.cell_stacked variant={:title} primary={@from} secondary={@to} />
@@ -151,17 +169,35 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
         end
 
+        column :kind do
+          static true
+          requires [:kind]
+          label fn -> dgettext("mishka_gervaz", "Kind") end
+          sortable true
+          sort_field [:kind]
+
+          render fn record ->
+            assigns = %{label: Redirects.kind_label(record.kind)}
+
+            ~H"""
+            <.badge label={@label} class="bg-[#f2f1ec] text-[#5c5a55]" />
+            """
+          end
+        end
+
         # DRAWN HERE, NOT BY THE `:badge` TYPE, which reads a value as a string or an atom and a
-        # status is an integer. A permanent move is blue, a temporary one amber.
+        # status is an integer. A permanent move is blue, a temporary one amber; a rule that is not a
+        # redirect has no status of its own.
         column :status do
           static true
-          requires [:status]
+          requires [:kind, :status]
           label fn -> dgettext("mishka_gervaz", "Status") end
           sortable true
           sort_field [:status]
 
           render fn record ->
             assigns = %{
+              redirect?: record.kind == :redirect,
               label: Redirects.status_label(record.status),
               class:
                 if(Redirects.permanent?(record.status),
@@ -171,7 +207,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
             }
 
             ~H"""
-            <.badge label={@label} class={@class} />
+            <.badge :if={@redirect?} label={@label} class={@class} />
             """
           end
         end
@@ -218,7 +254,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
       filters do
         filter :search, :text do
-          fields [:from_path, :to, :description]
+          fields [:from_path, :from_query, :to, :description]
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Search") end
@@ -236,6 +272,15 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           ui do
             label fn -> dgettext("mishka_gervaz", "Site") end
             placeholder fn -> dgettext("mishka_gervaz", "Search sites...") end
+          end
+        end
+
+        filter :kind, :select do
+          options fn -> Redirects.kind_options() end
+
+          ui do
+            prompt dgettext_noop("mishka_gervaz", "Any kind")
+            label fn -> dgettext("mishka_gervaz", "Kind") end
           end
         end
 
@@ -383,6 +428,21 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           end
         end
 
+        field :kind, :select do
+          options fn -> Redirects.kind_options() end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Kind") end
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "What this address answers: send the visitor on, serve another page here, or show the error page."
+              )
+            end
+          end
+        end
+
         field :from_path, :text do
           required true
 
@@ -394,7 +454,36 @@ defmodule MishkaCmsCore.Runtime.Redirect do
             description fn ->
               dgettext(
                 "mishka_gervaz",
-                "The address still being asked for. A full address works too: only its path is kept."
+                "The old address still being asked for."
+              )
+            end
+          end
+        end
+
+        field :match_query, :checkbox do
+          virtual true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Match a query string") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "For links such as WordPress ?p= addresses.")
+            end
+          end
+        end
+
+        field :from_query, :text do
+          visible fn state -> Redirects.form_match_query?(state) end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "From query") end
+            placeholder "p=123"
+            extra %{dir: "ltr"}
+
+            description fn ->
+              dgettext(
+                "mishka_gervaz",
+                "Only when the address is asked with this query, such as p=123 or page_id=7 from WordPress. p=* answers p with any value when no rule names its exact value. Empty answers the address whatever its query."
               )
             end
           end
@@ -402,6 +491,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
         field :to, :text do
           required true
+          visible fn state -> Redirects.form_kind(state) in [:redirect, :rewrite] end
 
           ui do
             label fn -> dgettext("mishka_gervaz", "To") end
@@ -411,13 +501,14 @@ defmodule MishkaCmsCore.Runtime.Redirect do
             description fn ->
               dgettext(
                 "mishka_gervaz",
-                "A path on this site, or a full http(s) address. A visitor's query string is kept when this has none."
+                "A path on this site, or a full http(s) address."
               )
             end
           end
         end
 
         field :status, :select do
+          visible fn state -> Redirects.form_kind(state) == :redirect end
           options fn -> Redirects.status_options() end
 
           ui do
@@ -441,7 +532,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
       groups do
         group :addresses do
-          fields [:site_id, :from_path, :to]
+          fields [:site_id, :kind, :from_path, :match_query, :from_query, :to]
 
           ui do
             columns 1
@@ -460,8 +551,10 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
         group :details do
           fields [:description]
+          collapsed true
 
           ui do
+            label fn -> dgettext("mishka_gervaz", "Add a note") end
             columns 1
             class ""
           end
@@ -473,6 +566,8 @@ defmodule MishkaCmsCore.Runtime.Redirect do
       end
 
       hooks do
+        on_init &Redirects.tick_match_query/2
+        before_save fn params, _state -> Redirects.clear_unmatched_query(params) end
         on_cancel fn state -> state end
       end
     end
@@ -483,7 +578,12 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
     field :from_path, :string, derives: "sanitize(trim) validate(string, not_empty, max_len=2000)"
 
-    field :to, :string, derives: "sanitize(trim) validate(string, not_empty, max_len=2000)"
+    field :from_query, :string,
+      derives: "sanitize(trim) validate(optional=[string, max_len=2000])"
+
+    field :kind, :atom, derives: "validate(atom, enum=Atom[redirect::rewrite::gone::not_found])"
+
+    field :to, :string, derives: "sanitize(trim) validate(optional=[string, max_len=2000])"
 
     field :status, :integer, derives: "validate(integer, enum=Integer[301::302::307::308])"
     field :active, :boolean, derives: "validate(boolean)"
@@ -738,7 +838,12 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
   # Read as the action runs, so typing in the form costs no query.
   validations do
-    validate &Redirects.no_loop/2,
+    validate present(:to),
+      on: [:create, :update],
+      where: [attribute_in(:kind, [:redirect, :rewrite])],
+      message: dgettext_noop("errors", "Enter where this rule sends or serves the address.")
+
+    validate &Redirects.check_target/2,
       on: [:create, :update],
       only_when_valid?: true,
       before_action?: true
@@ -760,18 +865,36 @@ defmodule MishkaCmsCore.Runtime.Redirect do
       description "The address the rule answers, as normalize_path/1 writes it"
     end
 
-    attribute :to, :string do
-      allow_nil? false
+    attribute :from_query, :string do
+      allow_nil? true
       public? true
       constraints max_length: 2000
-      description "Where the visitor is sent: a path on the site, or an absolute http(s) URL"
+
+      description "The query string the rule answers alone, as normalize_query/1 writes it; nil for any"
+    end
+
+    attribute :kind, :atom do
+      allow_nil? false
+      public? true
+      default :redirect
+      constraints one_of: [:redirect, :rewrite, :gone, :not_found]
+
+      description "What the rule answers: a redirect, a rewrite served at the same address, a 410 or a 404"
+    end
+
+    attribute :to, :string do
+      allow_nil? true
+      public? true
+      constraints max_length: 2000
+
+      description "Where a redirect sends the visitor (a path on the site, or an absolute http(s) URL) or the path a rewrite serves; nil for a 410 or a 404"
     end
 
     attribute :status, :integer do
       allow_nil? false
       public? true
       default 301
-      description "The HTTP status the redirect is answered with: 301, 302, 307 or 308"
+      description "The HTTP status a redirect is answered with: 301, 302, 307 or 308"
     end
 
     attribute :active, :boolean do
@@ -809,7 +932,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
   end
 
   identities do
-    identity :unique_from_path_per_site, [:site_id, :from_path] do
+    identity :unique_from_path_per_site, [:site_id, :from_path, :from_query] do
       description "One live rule per address on a site"
       message dgettext_noop("errors", "This site already redirects that address.")
       all_tenants? true

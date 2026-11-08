@@ -48,6 +48,9 @@
 - Every Sites bulk button shows an icon beside its label: Deactivate declares a `ui` with a label and an icon, as Activate and Archive do
 - The content editor's toolbar has a Table button beside the link tool, and its surface scrolls a table that is wider than it sideways
 - An extension that is only registered, not started, is not offered to install: only a started or restarted plugin runs on its event
+- A page path may be in any script and every page an address matches is ranked, best first; a page source can answer `PageSource.missing/0` for a record it does not have, so the next matching page is tried.
+- A redirect rule can rewrite (serve the target's content at the address asked for, without changing the URL), answer 410 or 404, match a query string it names (`from_query`) and a query wildcard; a rule for a query sends no other parameter on.
+- An address with repeated slashes is sent to its single-slashed path; the CMS's own repeated-slash addresses are left to their guard. A status the site has no error page for draws the site's 404 page and keeps its status.
 
 # Changelog for MishkaCmsCore 0.0.4
 

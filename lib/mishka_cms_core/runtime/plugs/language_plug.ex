@@ -47,6 +47,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
       visitor reads pages in is the last page's, never the admin's or a stylesheet's. The admin keeps
       its own, `MishkaCmsCore.Runtime.Languages.admin_session/0`.
 
+  An address a redirect rule rewrites (`conn.private[:mishka_cms_rewrite]`) is neither moved nor
+  remembered either: it serves another address's page where it is.
+
   ## Why it is told which route the CMS answers
 
   `:router` and `:live_view` are required, and only a request the router would hand to that LiveView
@@ -199,6 +202,10 @@ defmodule MishkaCmsCore.Runtime.Plugs.LanguagePlug do
     Gettext.put_locale(language)
     assign(conn, :site_language, language)
   end
+
+  # A REWRITTEN ADDRESS STAYS WHERE IT IS: the page it serves is another address's, and sending the
+  # visitor under a language would leave the rule behind (`MishkaCmsCore.Runtime.Redirects`).
+  defp answered_by_the_cms?(%Plug.Conn{private: %{mishka_cms_rewrite: _target}}, _opts), do: false
 
   # A LIVE ROUTE KEEPS ITS VIEW IN THE METADATA, not in `:plug_opts` — that one holds the live
   # ACTION, which is `nil` for a route declared without one. Comparing against it matched nothing,

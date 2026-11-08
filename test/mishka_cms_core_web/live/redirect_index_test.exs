@@ -196,10 +196,159 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
 
     _handled = :sys.get_state(RedirectsState)
 
-    assert RedirectsState.lookup(site.id, "/images/blog/old.jpg") ==
-             {"/uploads/localhost/media/old.jpg", 308}
+    assert RedirectsState.lookup(site.id, "/images/blog/old.jpg", nil) ==
+             {:redirect, "/uploads/localhost/media/old.jpg", 308}
 
     assert has_element?(view, row(saved))
+  end
+
+  test "a rule on a WordPress query is added through the form and shown with it", %{
+    conn: conn,
+    site: site
+  } do
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    refute has_element?(view, "#redirect_form-form [name='form[from_query]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{
+      "form" => %{"match_query" => "true"},
+      "_target" => ["form", "match_query"]
+    })
+
+    assert has_element?(view, "#redirect_form-form [name='form[from_query]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_submit(%{
+      "form" => %{
+        "from_path" => "/",
+        "match_query" => "true",
+        "from_query" => "?p=123",
+        "to" => "/fa/hello",
+        "status" => "301",
+        "active" => "true"
+      }
+    })
+
+    settle(view)
+
+    assert [saved] = stored(site)
+    assert saved.from_query == "p=123"
+
+    _handled = :sys.get_state(RedirectsState)
+    assert RedirectsState.lookup(site.id, "/", "p=123") == {:redirect, "/fa/hello", 301}
+    assert view |> element(row(saved)) |> render() =~ "/?p=123"
+  end
+
+  test "the query field is hidden until Match a query string is ticked", %{
+    conn: conn,
+    site: site
+  } do
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form [name='form[match_query]'][type=checkbox]")
+    refute has_element?(view, "#redirect_form-form [name='form[from_query]']")
+
+    for {ticked, shown?} <- [{"true", true}, {"false", false}] do
+      view
+      |> element("#redirect_form-form")
+      |> render_change(%{
+        "form" => %{"match_query" => ticked},
+        "_target" => ["form", "match_query"]
+      })
+
+      assert has_element?(view, "#redirect_form-form [name='form[from_query]']") == shown?
+    end
+  end
+
+  test "editing a rule with a query opens it ticked and shows the query; unticking clears it", %{
+    conn: conn,
+    site: site
+  } do
+    redirect = rule!(site, %{from_path: "/", from_query: "p=7", to: "/fa/seven"})
+    plain = rule!(site, %{from_path: "/plain", to: "/there"})
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#{row(plain)} button[title='Edit']") |> render_click()
+    settle(view)
+    refute has_element?(view, "#redirect_form-form [name='form[from_query]']")
+
+    view |> element("#{row(redirect)} button[title='Edit']") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form [name='form[match_query]'][checked]")
+    assert has_element?(view, ~s(#redirect_form-form_from_query[value="p=7"]))
+
+    view
+    |> element("#redirect_form-form")
+    |> render_submit(%{"form" => %{"match_query" => "false"}})
+
+    settle(view)
+
+    assert %{from_query: nil, to: "/fa/seven"} = Enum.find(stored(site), &(&1.id == redirect.id))
+  end
+
+  test "the description is folded under Add a note", %{
+    conn: conn,
+    site: site
+  } do
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form [data-group=details] details:not([open])")
+    assert has_element?(view, "#redirect_form-form [data-group=details] summary", "Add a note")
+    assert has_element?(view, "#redirect_form-form [name='form[description]']")
+  end
+
+  test "the form shows a rule's target and status only for the kinds that use them", %{
+    conn: conn,
+    site: site
+  } do
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form [name='form[kind]']")
+    assert has_element?(view, "#redirect_form-form [name='form[to]']")
+    assert has_element?(view, "#redirect_form-form [name='form[status]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{"form" => %{"kind" => "rewrite"}, "_target" => ["form", "kind"]})
+
+    assert has_element?(view, "#redirect_form-form [name='form[to]']")
+    refute has_element?(view, "#redirect_form-form [name='form[status]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{"form" => %{"kind" => "gone"}, "_target" => ["form", "kind"]})
+
+    refute has_element?(view, "#redirect_form-form [name='form[to]']")
+    refute has_element?(view, "#redirect_form-form [name='form[status]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_submit(%{
+      "form" => %{"kind" => "gone", "from_path" => "/retired", "active" => "true"}
+    })
+
+    settle(view)
+
+    assert [%{kind: :gone, to: nil} = saved] = stored(site)
+    _handled = :sys.get_state(RedirectsState)
+    assert RedirectsState.lookup(site.id, "/retired", nil) == {:gone, nil, 301}
+    assert view |> element(row(saved)) |> render() =~ "Gone (410)"
   end
 
   test "Add redirect after a close that sent the form nothing opens it empty", %{
@@ -263,7 +412,7 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
     assert id == redirect.id
 
     _handled = :sys.get_state(RedirectsState)
-    assert RedirectsState.lookup(site.id, "/old") == {"/newer", 302}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {:redirect, "/newer", 302}
   end
 
   test "a rule that would loop is refused on the form, and nothing is stored", %{

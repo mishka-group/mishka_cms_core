@@ -11,9 +11,15 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
 
     * starts with `/`
     * contains no `..` (directory traversal) and no `//` (empty segment)
-    * uses only URL-path-safe characters — letters, digits, and `- _ / . : *`
-      (covering nested paths, route params like `:id`, and wildcards like `*rest`)
+    * uses only letters, marks and digits of any script, and `- _ / . : *` (covering nested
+      paths, route params like `:id`, and wildcards like `*rest`): `/fa/وردپرس` is a path, and so
+      is the zero-width non-joiner a Persian word is written with. No space and no other
+      punctuation.
     * is at most 255 characters
+
+  It is checked as `MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1` reads
+  it, so a path pasted with its `%XX` escapes is checked as the letters they stand for, which is
+  what `MishkaCmsCore.Runtime.Resources.Changes.PagePath` stores.
 
   This runs at the action boundary in every environment, so no page can be created
   or edited with a path that is traversal-prone, ambiguous (`//`), or unroutable. It
@@ -26,8 +32,10 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
   use Gettext, backend: MishkaCmsCore.Gettext
   use Ash.Resource.Validation
 
+  alias MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState
+
   @max_length 255
-  @allowed_chars ~r|\A[a-zA-Z0-9/_.:*-]+\z|
+  @allowed_chars ~r|\A[\p{L}\p{M}\p{N}\x{200C}/_.:*-]+\z|u
 
   @impl true
   def init(opts), do: {:ok, opts}
@@ -35,8 +43,14 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
   @impl true
   def validate(changeset, _opts, _context) do
     case Ash.Changeset.get_attribute(changeset, :path) do
-      nil -> :ok
-      path -> validate_path(path)
+      nil ->
+        :ok
+
+      path when is_binary(path) ->
+        path |> WebRunTimeMetaDataState.canonical_path() |> validate_path()
+
+      path ->
+        validate_path(path)
     end
   end
 

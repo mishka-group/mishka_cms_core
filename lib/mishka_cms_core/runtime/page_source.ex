@@ -41,6 +41,18 @@ defmodule MishkaCmsCore.Runtime.PageSource do
   that raises, or an event whose plugins cannot run, leaves the page with no source, and every
   reader reads for itself as it does without one.
 
+  ## A record that is not there
+
+  A plugin that owns the page but finds no record for the address, a `:slug` no post has, answers
+  `missing/0` as the `source`: `%{given | source: MishkaCmsCore.Runtime.PageSource.missing()}`.
+  `MishkaCmsWeb.RuntimeLive` then tries the next page that matches the address
+  (`MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.resolve_all/2`), so `/:year/:month/:slug`
+  can stand beside `/:slug` the way WordPress addresses do, and when none is left the visitor gets
+  the site's 404 with a 404 status. No reader is ever handed it.
+
+  Answer it only for a record the visitor's read did not find. A page that shows no record, or one
+  that lists several, is never missing.
+
   ## The rules a source keeps
 
     * IT IS READ AS THE VISITOR, through the public actions and the policies the blocks read with:
@@ -71,6 +83,15 @@ defmodule MishkaCmsCore.Runtime.PageSource do
   # Where `assign_source/1` keeps whom the source it assigned was read for, so the next address
   # hands it back as `held` only to the same visitor. Private, because nothing renders it.
   @read_for :mishka_cms_page_source_visitor
+
+  @doc "The `source` a plugin answers when the record the address names is not there."
+  @spec missing() :: :missing
+  def missing, do: :missing
+
+  @doc "Whether a page's source is `missing/0`."
+  @spec missing?(term()) :: boolean()
+  def missing?(:missing), do: true
+  def missing?(_source), do: false
 
   @doc "The event a page's rows are read through, once per `handle_params/3`."
   @spec event() :: String.t()

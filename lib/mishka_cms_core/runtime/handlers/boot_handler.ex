@@ -575,7 +575,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       # see `MishkaCmsCore.Runtime.PageProvision.serves_all_languages?/1`. `nil` reaches
       # `WebRunTimeMetaDataState`'s `edition?/2` as "answers whichever language the URL captured",
       # which is what all three want.
-      language: MishkaCmsCore.Runtime.PageProvision.routing_language(record)
+      language: MishkaCmsCore.Runtime.PageProvision.routing_language(record),
+      record: MishkaCmsCore.Runtime.Seo.record_of(Map.get(record, :extra))
     }
   end
 
