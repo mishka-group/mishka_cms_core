@@ -1371,23 +1371,23 @@ msgstr ""
 msgid "The state names %{name} twice; each name is one assign."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:523
+#: lib/mishka_cms_core/runtime/redirects.ex:558
 #, elixir-autogen, elixir-format
 msgid "A redirect cannot send an address to itself."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:613
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:627
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:631
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:645
 #, elixir-autogen, elixir-format
 msgid "Cannot edit an archived redirect. Restore it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:339
+#: lib/mishka_cms_core/runtime/redirects.ex:374
 #, elixir-autogen, elixir-format
 msgid "Enter a path on this site starting with /, or a full http:// or https:// address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:328
+#: lib/mishka_cms_core/runtime/redirects.ex:363
 #, elixir-autogen, elixir-format
 msgid "Enter an address on this site, such as /old-page."
 msgstr ""
@@ -1397,22 +1397,22 @@ msgstr ""
 msgid "Status must be 301, 302, 307 or 308."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:750
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:768
 #, elixir-autogen, elixir-format
 msgid "This redirect is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:919
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:937
 #, elixir-autogen, elixir-format
 msgid "This site already redirects that address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:542
+#: lib/mishka_cms_core/runtime/redirects.ex:577
 #, elixir-autogen, elixir-format
 msgid "This would make a loop: the redirects from %{target} come back to %{address}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:382
+#: lib/mishka_cms_core/runtime/redirects.ex:417
 #, elixir-autogen, elixir-format
 msgid "This address belongs to the CMS itself (/admin, /api, /live) and cannot be redirected."
 msgstr ""
@@ -2625,22 +2625,22 @@ msgstr ""
 msgid "must have Latin letters (a-z) or digits: a name is used in code and file names, so other letters are removed"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:359
+#: lib/mishka_cms_core/runtime/redirects.ex:394
 #, elixir-autogen, elixir-format
 msgid "A rewrite serves a page or a media file of this site: enter its path, starting with /, with no query. The CMS's own addresses cannot be served."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:497
+#: lib/mishka_cms_core/runtime/redirects.ex:532
 #, elixir-autogen, elixir-format
 msgid "A rewritten file must be one of this site's media files, under /uploads/<site>/media/."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:415
+#: lib/mishka_cms_core/runtime/redirects.ex:450
 #, elixir-autogen, elixir-format
 msgid "A wildcard such as p=* is a rule's whole query: write it alone."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:826
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:844
 #, elixir-autogen, elixir-format
 msgid "Enter where this rule sends or serves the address."
 msgstr ""

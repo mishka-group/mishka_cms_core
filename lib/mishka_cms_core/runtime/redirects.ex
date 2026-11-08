@@ -112,6 +112,41 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   def form_kind(_state), do: :redirect
 
+  @doc """
+  Whether the admin form's "Match a query string" box is ticked, which is what shows its `from_query`
+  field. `state` is the form's gervaz state.
+  """
+  @spec form_match_query?(map()) :: boolean()
+  def form_match_query?(%{form: %Phoenix.HTML.Form{} = form}),
+    do: Phoenix.HTML.Form.input_value(form, :match_query) in [true, "true"]
+
+  def form_match_query?(_state), do: false
+
+  @doc """
+  The admin form once opened: a rule that already has a `from_query` starts with the "Match a query
+  string" box ticked.
+  """
+  @spec tick_match_query(Phoenix.HTML.Form.t(), map()) :: Phoenix.HTML.Form.t()
+  def tick_match_query(
+        %Phoenix.HTML.Form{source: %AshPhoenix.Form{data: %{from_query: query}}} = form,
+        _state
+      )
+      when is_binary(query) and query != "" do
+    AshPhoenix.Form.update_params(form, &Map.put(&1, "match_query", "true"))
+  end
+
+  def tick_match_query(form, _state), do: form
+
+  @doc """
+  The admin form's save params with `from_query` emptied when the "Match a query string" box was
+  unticked, so a rule stops matching its query.
+  """
+  @spec clear_unmatched_query(map()) :: map()
+  def clear_unmatched_query(%{"form" => %{"match_query" => "false"} = values} = params),
+    do: %{params | "form" => Map.put(values, "from_query", "")}
+
+  def clear_unmatched_query(params), do: params
+
   @doc "The statuses a rule may answer with."
   @spec statuses() :: [301 | 302 | 307 | 308]
   def statuses, do: Enum.map(@statuses, &elem(&1, 0))

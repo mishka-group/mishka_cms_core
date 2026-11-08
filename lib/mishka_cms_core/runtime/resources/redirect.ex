@@ -437,7 +437,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
             description fn ->
               dgettext(
                 "mishka_gervaz",
-                "Redirect sends the visitor to the target. Rewrite serves the target, a page or a media file of this site, while the browser keeps this address. Gone and Not found answer the site's error page with 410 or 404."
+                "What this address answers: send the visitor on, serve another page here, or show the error page."
               )
             end
           end
@@ -454,13 +454,27 @@ defmodule MishkaCmsCore.Runtime.Redirect do
             description fn ->
               dgettext(
                 "mishka_gervaz",
-                "The address still being asked for. A full address works too: only its path is kept."
+                "The old address still being asked for."
               )
             end
           end
         end
 
+        field :match_query, :checkbox do
+          virtual true
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Match a query string") end
+
+            description fn ->
+              dgettext("mishka_gervaz", "For links such as WordPress ?p= addresses.")
+            end
+          end
+        end
+
         field :from_query, :text do
+          visible fn state -> Redirects.form_match_query?(state) end
+
           ui do
             label fn -> dgettext("mishka_gervaz", "From query") end
             placeholder "p=123"
@@ -487,7 +501,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
             description fn ->
               dgettext(
                 "mishka_gervaz",
-                "A path on this site, or a full http(s) address. A visitor's query string is kept when this has none. A rewrite takes a path on this site alone, such as /fa/blog/hello or a media file under /uploads."
+                "A path on this site, or a full http(s) address."
               )
             end
           end
@@ -518,7 +532,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
       groups do
         group :addresses do
-          fields [:site_id, :kind, :from_path, :from_query, :to]
+          fields [:site_id, :kind, :from_path, :match_query, :from_query, :to]
 
           ui do
             columns 1
@@ -537,8 +551,10 @@ defmodule MishkaCmsCore.Runtime.Redirect do
 
         group :details do
           fields [:description]
+          collapsed true
 
           ui do
+            label fn -> dgettext("mishka_gervaz", "Add a note") end
             columns 1
             class ""
           end
@@ -550,6 +566,8 @@ defmodule MishkaCmsCore.Runtime.Redirect do
       end
 
       hooks do
+        on_init &Redirects.tick_match_query/2
+        before_save fn params, _state -> Redirects.clear_unmatched_query(params) end
         on_cancel fn state -> state end
       end
     end

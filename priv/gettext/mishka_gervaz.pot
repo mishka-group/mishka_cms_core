@@ -428,7 +428,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/media.ex:797
 #: lib/mishka_cms_core/runtime/resources/media_category.ex:176
 #: lib/mishka_cms_core/runtime/resources/page.ex:934
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:513
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:527
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:607
 #, elixir-autogen, elixir-format
 msgid "Description"
@@ -2281,7 +2281,7 @@ msgid "Shown by search engines and link previews."
 msgstr ""
 
 #: lib/mishka_cms_core/mail/delivery.ex:71
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:483
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:497
 #, elixir-autogen, elixir-format
 msgid "To"
 msgstr ""
@@ -2446,11 +2446,6 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/redirect.ex:330
 #, elixir-autogen, elixir-format
 msgid "Restore this redirect?"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:455
-#, elixir-autogen, elixir-format
-msgid "The address still being asked for. A full address works too: only its path is kept."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/page.ex:1019
@@ -5328,7 +5323,7 @@ msgstr ""
 msgid "Suggestion"
 msgstr ""
 
-#: ../mishka_cms_builder/lib/mishka_cms_builder_web/templates/review_comment_form.ex:59
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:557
 #, elixir-autogen, elixir-format
 msgid "Add a note"
 msgstr ""
@@ -7162,14 +7157,9 @@ msgstr ""
 msgid "user"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:465
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:479
 #, elixir-autogen, elixir-format
 msgid "From query"
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:488
-#, elixir-autogen, elixir-format
-msgid "A path on this site, or a full http(s) address. A visitor's query string is kept when this has none. A rewrite takes a path on this site alone, such as /fa/blog/hello or a media file under /uploads."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/redirects.ex:74
@@ -7182,14 +7172,9 @@ msgstr ""
 msgid "Not found (404)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:470
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:484
 #, elixir-autogen, elixir-format
 msgid "Only when the address is asked with this query, such as p=123 or page_id=7 from WordPress. p=* answers p with any value when no rule names its exact value. Empty answers the address whatever its query."
-msgstr ""
-
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:438
-#, elixir-autogen, elixir-format
-msgid "Redirect sends the visitor to the target. Rewrite serves the target, a page or a media file of this site, while the browser keeps this address. Gone and Not found answer the site's error page with 410 or 404."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/redirects.ex:73
@@ -7200,4 +7185,29 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/redirect.ex:153
 #, elixir-autogen, elixir-format
 msgid "Rule"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:502
+#, elixir-autogen, elixir-format
+msgid "A path on this site, or a full http(s) address."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:470
+#, elixir-autogen, elixir-format
+msgid "For links such as WordPress ?p= addresses."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:467
+#, elixir-autogen, elixir-format
+msgid "Match a query string"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:455
+#, elixir-autogen, elixir-format
+msgid "The old address still being asked for."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:438
+#, elixir-autogen, elixir-format
+msgid "What this address answers: send the visitor on, serve another page here, or show the error page."
 msgstr ""
