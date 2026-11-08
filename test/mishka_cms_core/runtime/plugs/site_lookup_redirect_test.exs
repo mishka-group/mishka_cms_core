@@ -69,6 +69,20 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
 
   defp location(conn), do: conn |> get_resp_header("location") |> List.first()
 
+  # The path as a server hands it over: `Plug.Test` would read a leading `//` as a host.
+  defp raw_request(path, query, host) do
+    conn(:get, "/")
+    |> Map.merge(%{
+      request_path: path,
+      path_info: String.split(path, "/", trim: true),
+      query_string: query
+    })
+    |> Map.put(:req_headers, [{"host", host}])
+    |> init_test_session(%{})
+    |> fetch_query_params()
+    |> SiteLookupPlug.call(SiteLookupPlug.init([]))
+  end
+
   describe "an address a rule names" do
     test "is answered with the rule's status and location, before the session is touched", %{
       site: site
@@ -144,6 +158,19 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
       end
     end
 
+    test "sends no other parameter of the request on, to the site or another host", %{site: site} do
+      rule!(site, %{from_path: "/", from_query: "p=35", to: "/2026/02/hello"})
+      rule!(site, %{from_path: "/", from_query: "cat=*", to: "https://other.example/news"})
+      rule!(site, %{from_path: "/", from_query: "tag=go", to: "https://other.example/go?ref=old"})
+
+      assert location(request("/?p=35&foo=1", site.host)) == "/2026/02/hello"
+
+      assert location(request("/?foo=1&cat=9&next=//evil.com", site.host)) ==
+               "https://other.example/news"
+
+      assert location(request("/?tag=go&utm=x", site.host)) == "https://other.example/go?ref=old"
+    end
+
     test "wins over the rule on the path alone, which keeps the visitor's query", %{site: site} do
       rule!(site, %{from_path: "/old", to: "/new"})
       rule!(site, %{from_path: "/old", from_query: "cat=3", to: "/category/three"})
@@ -151,6 +178,32 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupRedirectTest do
       assert location(request("/old?cat=3", site.host)) == "/category/three"
       assert location(request("/old?cat=4", site.host)) == "/new?cat=4"
       assert location(request("/old", site.host)) == "/new"
+    end
+  end
+
+  describe "an address with repeated slashes" do
+    test "is sent once to the same path with single slashes, its trailing slash and query kept",
+         %{
+           site: site
+         } do
+      conn = raw_request("//about//team/", "x=1", site.host)
+
+      assert {conn.halted, conn.status, location(conn)} == {true, 301, "/about/team/?x=1"}
+      assert location(raw_request("//", "", site.host)) == "/"
+      refute request("/about/team/", site.host).halted
+    end
+
+    test "never names another host, whatever the path carries", %{site: site} do
+      for path <- ["//evil.com", "//evil.com/x", "///evil.com", "//\\evil.com"] do
+        location = location(raw_request(path, "", site.host))
+
+        assert %URI{host: nil, scheme: nil} = URI.parse(location), path
+
+        assert String.starts_with?(location, "/") and not String.starts_with?(location, "//"),
+               path
+
+        refute location =~ "\\", path
+      end
     end
   end
 

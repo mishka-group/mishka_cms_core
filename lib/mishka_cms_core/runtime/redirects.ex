@@ -675,17 +675,46 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   A file, a 410 and a 404 are answered only while the site is open
   (`MishkaCmsCore.Runtime.SiteAvailability.state/1`); on an offline site the conn goes on, for the
-  gate that answers an offline site to answer it. A conn no rule matches is returned untouched.
+  gate that answers an offline site to answer it. A `GET` or `HEAD` whose path has an empty segment,
+  `//about/`, is first sent with a 301 to the same path with each `//` made one `/`, `/about/`, its
+  query kept; the target always starts with a single `/`, so `//evil.com` is `/evil.com` on this
+  site. A conn no rule matches is returned untouched.
   """
   @spec redirect(Plug.Conn.t(), %{required(:id) => String.t(), optional(atom()) => term()}) ::
           Plug.Conn.t()
   def redirect(conn, %{id: site_id}) do
-    case lookup(site_id, conn.request_path, conn.query_string) do
+    case single_slashed(conn) || lookup(site_id, conn.request_path, conn.query_string) do
       nil -> conn
       {:redirect, location, status} -> moved(conn, location, status)
       answer -> served(conn, site_id, answer)
     end
   end
+
+  # AN ADDRESS WITH AN EMPTY SEGMENT (`//about/`) is sent to the one with each `//` made `/`, its
+  # trailing `/` and query kept: a path that starts with one `/`, with a backslash escaped, which a
+  # browser reads as `/`, so never another host.
+  defp single_slashed(%Plug.Conn{method: method, request_path: path} = conn)
+       when method in ["GET", "HEAD"] do
+    if String.contains?(path, "//"),
+      do: {:redirect, (collapsed(path) <> queried(conn.query_string)) |> escaped(), 301}
+  end
+
+  defp single_slashed(_conn), do: nil
+
+  defp collapsed(path) do
+    case String.split(path, "/", trim: true) do
+      [] -> "/"
+      segments -> "/" <> Enum.join(segments, "/") <> trailing(String.ends_with?(path, "/"))
+    end
+  end
+
+  defp trailing(true), do: "/"
+  defp trailing(false), do: ""
+
+  defp queried(""), do: ""
+  defp queried(query), do: "?" <> query
+
+  defp escaped(location), do: URI.encode(location, &(&1 in 0x21..0x7E and &1 != ?\\))
 
   defp moved(conn, location, status) do
     conn
