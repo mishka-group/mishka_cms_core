@@ -195,6 +195,10 @@ defmodule MishkaCmsCore.Runtime.Redirect do
           sortable true
           sort_field [:status]
 
+          ui do
+            width "minmax(180px,1fr)"
+          end
+
           render fn record ->
             assigns = %{
               redirect?: record.kind == :redirect,
