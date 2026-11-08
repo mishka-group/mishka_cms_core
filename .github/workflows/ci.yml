@@ -150,6 +150,21 @@ jobs:
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
+      # The Tailwind binary the runtime CSS compiler runs, kept apart from the build cache above: the
+      # build job never downloads it, so the `_build` restored here lacks it, and a GitHub
+      # release-download outage (504) used to fail every partition. The tailwind package saves it as
+      # `_build/tailwind-<target>-<version>`; the version comes from config/test.exs, the one place
+      # to change it, and the key carries it so a new version downloads once. This step runs after
+      # the `_build` restore, which only adds files and does not remove this one.
+      - id: tailwind
+        run: |
+          echo "version=$(sed -n '/config :tailwind,/,/version:/s/.*version: "\([^"]*\)".*/\1/p' config/test.exs)" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v6
+        with:
+          path: _build/tailwind-linux-x64-${{ steps.tailwind.outputs.version }}
+          key: tailwind-${{ runner.os }}-${{ runner.arch }}-${{ steps.tailwind.outputs.version }}
+
       # The migrations are generated, not in git: generate them before the test alias's `ash.setup`
       # migrates the test database.
       - run: MIX_ENV="test" mix ash.codegen ci
