@@ -197,7 +197,7 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
     _handled = :sys.get_state(RedirectsState)
 
     assert RedirectsState.lookup(site.id, "/images/blog/old.jpg", nil) ==
-             {"/uploads/localhost/media/old.jpg", 308}
+             {:redirect, "/uploads/localhost/media/old.jpg", 308}
 
     assert has_element?(view, row(saved))
   end
@@ -231,8 +231,49 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
     assert saved.from_query == "p=123"
 
     _handled = :sys.get_state(RedirectsState)
-    assert RedirectsState.lookup(site.id, "/", "p=123") == {"/fa/hello", 301}
+    assert RedirectsState.lookup(site.id, "/", "p=123") == {:redirect, "/fa/hello", 301}
     assert view |> element(row(saved)) |> render() =~ "/?p=123"
+  end
+
+  test "the form shows a rule's target and status only for the kinds that use them", %{
+    conn: conn,
+    site: site
+  } do
+    view = conn |> log_in(admin!(["admin:dashboard:runtime:redirect"], site.id)) |> open()
+
+    view |> element("#redirect-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#redirect_form-form [name='form[kind]']")
+    assert has_element?(view, "#redirect_form-form [name='form[to]']")
+    assert has_element?(view, "#redirect_form-form [name='form[status]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{"form" => %{"kind" => "rewrite"}, "_target" => ["form", "kind"]})
+
+    assert has_element?(view, "#redirect_form-form [name='form[to]']")
+    refute has_element?(view, "#redirect_form-form [name='form[status]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_change(%{"form" => %{"kind" => "gone"}, "_target" => ["form", "kind"]})
+
+    refute has_element?(view, "#redirect_form-form [name='form[to]']")
+    refute has_element?(view, "#redirect_form-form [name='form[status]']")
+
+    view
+    |> element("#redirect_form-form")
+    |> render_submit(%{
+      "form" => %{"kind" => "gone", "from_path" => "/retired", "active" => "true"}
+    })
+
+    settle(view)
+
+    assert [%{kind: :gone, to: nil} = saved] = stored(site)
+    _handled = :sys.get_state(RedirectsState)
+    assert RedirectsState.lookup(site.id, "/retired", nil) == {:gone, nil, 301}
+    assert view |> element(row(saved)) |> render() =~ "Gone (410)"
   end
 
   test "Add redirect after a close that sent the form nothing opens it empty", %{
@@ -296,7 +337,7 @@ defmodule MishkaCmsCoreWeb.Test.RedirectIndexTest do
     assert id == redirect.id
 
     _handled = :sys.get_state(RedirectsState)
-    assert RedirectsState.lookup(site.id, "/old", nil) == {"/newer", 302}
+    assert RedirectsState.lookup(site.id, "/old", nil) == {:redirect, "/newer", 302}
   end
 
   test "a rule that would loop is refused on the form, and nothing is stored", %{

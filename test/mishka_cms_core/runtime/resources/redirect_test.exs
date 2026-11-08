@@ -106,6 +106,144 @@ defmodule MishkaCmsCore.Runtime.Resources.RedirectTest do
     end
   end
 
+  describe "safe_target?/1" do
+    test "refuses every way a target can name another host, raw or escaped" do
+      for bad <- [
+            "//evil.com",
+            "/\\evil.com",
+            "http://good@evil.com",
+            "https://good.com@evil.com/x",
+            "%2f%2fevil.com",
+            "/%2F%2Fevil.com",
+            "/%5Cevil.com",
+            "\t//evil.com",
+            "/ok\n//evil.com",
+            "javascript:alert(1)",
+            "data:text/html,<script>x</script>",
+            "ftp://evil.com/x"
+          ] do
+        refute Redirects.safe_target?(bad), "#{inspect(bad)} was accepted"
+        assert Redirects.normalize_target(bad) == :error, "#{inspect(bad)} was accepted"
+      end
+    end
+
+    test "takes a path on the site and a full http(s) address" do
+      for good <- ["/fa/مجله", "/new?utm=rule#top", "/100%25", "https://docs.example.com/a?b=1"] do
+        assert Redirects.safe_target?(good), "#{inspect(good)} was refused"
+      end
+    end
+  end
+
+  describe "rewrite_target/1" do
+    test "takes a path on the site alone, normalized" do
+      assert Redirects.rewrite_target("/fa/blog/") == {:ok, "/fa/blog"}
+      assert Redirects.rewrite_target("/fa/%D8%A8") == {:ok, "/fa/ب"}
+    end
+
+    test "refuses another host, a query, and the CMS's own addresses" do
+      for bad <- [
+            "https://other.example/x",
+            "//evil.com",
+            "/a?b=1",
+            "/a#top",
+            "/admin",
+            "/live/x"
+          ] do
+        assert Redirects.rewrite_target(bad) == :error, "#{inspect(bad)} was accepted"
+      end
+    end
+  end
+
+  describe "a rule's kind" do
+    setup do
+      {:ok, site: create_site!()}
+    end
+
+    test "a 410 and a 404 keep no target, whatever was sent", %{site: site} do
+      assert %{kind: :gone, to: nil} = create!(site, %{kind: :gone, from_path: "/retired"})
+
+      assert %{kind: :not_found, to: nil} =
+               create!(site, %{kind: :not_found, from_path: "/x", to: "/ignored"})
+
+      redirect = create!(site, %{from_path: "/old", to: "/new"})
+      assert {:ok, %{kind: :gone, to: nil}} = edit(redirect, %{kind: :gone})
+    end
+
+    test "a redirect and a rewrite need a target", %{site: site} do
+      assert refused_on?(create(site, %{from_path: "/a"}), :to)
+      assert refused_on?(create(site, %{kind: :rewrite, from_path: "/a"}), :to)
+
+      gone = create!(site, %{kind: :gone, from_path: "/b"})
+      assert refused_on?(edit(gone, %{kind: :redirect}), :to)
+    end
+
+    test "a rewrite stores its target's path, on its own site only", %{site: site} do
+      assert %{to: "/fa/blog"} =
+               create!(site, %{kind: :rewrite, from_path: "/a", to: "/fa/blog/"})
+
+      for bad <- ["https://other.example/x", "//evil.com", "/admin", "/b?p=1"] do
+        assert refused_on?(create(site, %{kind: :rewrite, from_path: "/c", to: bad}), :to),
+               "#{inspect(bad)} was accepted"
+      end
+    end
+
+    test "a redirect turned into a rewrite cannot keep a target on another host", %{site: site} do
+      redirect = create!(site, %{from_path: "/docs", to: "https://docs.example.com"})
+      assert refused_on?(edit(redirect, %{kind: :rewrite}), :to)
+    end
+
+    test "a rewritten file is one of the site's own media files", %{site: site} do
+      other = create_site!()
+      own = "/uploads/#{site.id}/media/images/title.webp"
+
+      assert %{to: ^own} = create!(site, %{kind: :rewrite, from_path: "/i/a.jpg", to: own})
+
+      for bad <- [
+            "/uploads/#{other.id}/media/images/title.webp",
+            "/uploads/#{site.id}/share/card.png",
+            "/uploads/#{site.id}/media/../../#{other.id}/media/x.webp"
+          ] do
+        assert refused_on?(create(site, %{kind: :rewrite, from_path: "/i/b.jpg", to: bad}), :to),
+               "#{bad} was accepted"
+      end
+    end
+
+    test "a rewrite of its own address is refused; two rewriting each other are served once", %{
+      site: site
+    } do
+      assert refused_on?(create(site, %{kind: :rewrite, from_path: "/a", to: "/a/"}), :to)
+
+      assert {:ok, _} = create(site, %{kind: :rewrite, from_path: "/a", to: "/b"})
+      assert {:ok, _} = create(site, %{kind: :rewrite, from_path: "/b", to: "/a"})
+      _handled = :sys.get_state(MishkaCmsCore.Runtime.States.RedirectsState)
+
+      assert Redirects.lookup(site.id, "/a", "") == {:rewrite, "/b", 200}
+      assert Redirects.lookup(site.id, "/b", "") == {:rewrite, "/a", 200}
+    end
+
+    test "a redirect chain ends at a 410 or a rewrite", %{site: site} do
+      create!(site, %{kind: :gone, from_path: "/b"})
+      create!(site, %{kind: :rewrite, from_path: "/c", to: "/a"})
+
+      assert {:ok, _} = create(site, %{from_path: "/a", to: "/b"})
+      assert {:ok, _} = create(site, %{from_path: "/d", to: "/c"})
+    end
+
+    test "a wildcard is a rule's whole query", %{site: site} do
+      assert %{from_query: "p=*"} = create!(site, %{from_path: "/", from_query: "?p=*", to: "/x"})
+
+      assert refused_on?(
+               create(site, %{from_path: "/", from_query: "p=*&cat=1", to: "/y"}),
+               :from_query
+             )
+    end
+
+    test "a wildcard rule refuses a target its own wildcard answers", %{site: site} do
+      assert refused_on?(create(site, %{from_path: "/", from_query: "p=*", to: "/?p=1"}), :to)
+      assert {:ok, _} = create(site, %{from_path: "/", from_query: "p=*", to: "/?page_id=1"})
+    end
+  end
+
   describe "a save" do
     setup do
       {:ok, site: create_site!()}
