@@ -27,7 +27,7 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Runtime.Compilers.SitemapCompiler
-  alias MishkaCmsCore.Runtime.{Seo, SiteIcon}
+  alias MishkaCmsCore.Runtime.{Languages, Seo, SiteIcon}
 
   alias MishkaCmsCore.Runtime.States.{
     AssetsState,
@@ -898,6 +898,53 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
 
       assert addresses == [origin(site), origin(site) <> "/about"]
       assert built_locs(site) == addresses
+    end
+
+    # A browser asks for a non-ASCII path percent-encoded, while a page's path and a slug are stored
+    # raw: the canonical address, og:url, the page's own hreflang and the sitemap name one URL.
+    test "lists a non-ASCII address as the canonical address and its own hreflang name it", %{
+      site: site
+    } do
+      create_page!(site_id: site.id, path: "/:lang/داستان-ما", extra: @every_language)
+      {:ok, _} = Settings.put("seo.sitemap.paths", ["/fa/blog/داستان"], site_id: site.id)
+
+      base = Seo.base(site.host)
+      page = %{title: "Page", language: "fa", seo: %{description: nil, schema: []}}
+
+      literal = Languages.url("/:lang/داستان-ما", %{"lang" => "fa"}, site.id)
+      slug = Languages.url("/:lang/blog/:slug", %{"lang" => "fa", "slug" => "داستان"}, site.id)
+
+      addresses =
+        for path <- [literal, slug] do
+          requested = path |> URI.decode() |> URI.encode()
+
+          head =
+            Seo.resolve(page, site_id: site.id, url: Seo.absolute(requested, base), base: base)
+
+          canonical =
+            for {"link", a} <- head.tags, {"rel", "canonical"} in a, {"href", h} <- a, do: h
+
+          og_url =
+            for {"meta", a} <- head.tags, {"property", "og:url"} in a, {"content", c} <- a, do: c
+
+          own_hreflang =
+            for %{attrs: %{"hreflang" => "fa", "href" => href}} <-
+                  Seo.alternate_links(
+                    [%{language: "en", path: "/about"}, %{language: "fa", path: path}],
+                    base,
+                    site.id
+                  ),
+                do: href
+
+          assert canonical == [head.url]
+          assert og_url == [head.url]
+          assert own_hreflang == [head.url]
+          refute head.url =~ "داستان"
+          head.url
+        end
+
+      assert Enum.sort(addresses) ==
+               site |> built_locs() |> Enum.filter(&(&1 =~ "/fa/")) |> Enum.sort()
     end
 
     # THE ADDRESSES ARE COUNTED AS THEY ARE WRITTEN, so a plugin's rows are read from the database

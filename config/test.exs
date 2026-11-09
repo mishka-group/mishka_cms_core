@@ -158,3 +158,7 @@ config :localize, otp_app: :mishka_cms_core, allow_runtime_locale_download: true
 # A TOTP code of the previous 30-second period is also taken in tests only, so a test whose code is
 # made as its period ends does not fail on arrival. Production keeps the 30-second window.
 config :mishka_cms_core, :totp_grace_period, 1
+
+# `MishkaCmsCore.TestApiExtension` stands in for an extension with API routes, so the test router's
+# `extension_routes(:api)` mounts something for the gate in front of them to refuse.
+config :mishka_cms_core, extensions: [MishkaCmsCoreWeb, MishkaCmsCore.TestApiExtension]

@@ -42,6 +42,31 @@ defmodule MishkaCmsCore.ExtensionRouter do
         end
       end
 
+  ## API routes
+
+  `routes(:api)` is for what an extension answers that is not a page: a feed, a JSON endpoint, a
+  file it writes. The host mounts them before its catch-all, through a pipeline that resolves the
+  site and closes an offline one, with no CSRF check and no sign-in:
+
+      pipeline :extension_api do
+        plug :route_accepts, ["json"]
+        plug :fetch_session
+        plug :put_secure_browser_headers
+        plug MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
+        # the host's offline gate
+      end
+
+      scope "/" do
+        pipe_through :extension_api
+
+        extension_routes(:api)
+      end
+
+  Every extension's API routes are put in a scope of their own behind
+  `MishkaCmsCore.Runtime.Plugs.ExtensionGatePlug`, so a site that switched the extension off answers
+  them with a 404 and no session cookie is ever written. A route that answers something other than
+  JSON names it under `private: %{accepts: ...}` (see `route_accepts/2`).
+
   In config.exs:
 
       config :mishka_cms, :extensions, [
@@ -101,75 +126,93 @@ defmodule MishkaCmsCore.ExtensionRouter do
   """
   defmacro extension_routes(type) do
     quote do
-      extensions = Application.compile_env(:mishka_cms_core, :extensions, [])
+      require MishkaCmsCore.ExtensionRouter
 
-      routes =
-        Enum.flat_map(extensions, fn ext ->
-          routes_module = Module.concat(ext, Routes)
+      extension_routes =
+        MishkaCmsCore.ExtensionRouter.__routes__(
+          Application.compile_env(:mishka_cms_core, :extensions, []),
+          unquote(type)
+        )
 
-          case Code.ensure_compiled(routes_module) do
-            {:module, _} ->
-              :ok
+      for {ext, routes} <- extension_routes, routes != [] do
+        scope "/", alias: false do
+          if unquote(type) == :api,
+            do: pipe_through({MishkaCmsCore.Runtime.Plugs.ExtensionGatePlug, extension: ext})
 
-            {:error, reason} ->
-              raise CompileError,
-                description: """
-                Extension #{inspect(ext)} is missing its Routes module.
-
-                Expected module: #{inspect(routes_module)}
-                Reason: #{inspect(reason)}
-
-                Please create the module:
-
-                    defmodule #{inspect(routes_module)} do
-                      @behaviour MishkaCmsCore.ExtensionRouter
-
-                      @impl true
-                      def routes(:admin), do: []
-                      def routes(:public), do: []
-                      def routes(:api), do: []
-                    end
-                """
-          end
-
-          if !function_exported?(routes_module, :routes, 1) do
-            raise CompileError,
-              description: """
-              Extension #{inspect(routes_module)} does not implement routes/1 callback.
-
-              Please implement the MishkaCmsCore.ExtensionRouter behaviour:
-
-                  defmodule #{inspect(routes_module)} do
-                    @behaviour MishkaCmsCore.ExtensionRouter
-
-                    @impl true
-                    def routes(:admin), do: []
-                    def routes(:public), do: []
-                    def routes(:api), do: []
-                  end
-              """
-          end
-
-          routes_module.routes(unquote(type))
-        end)
-
-      scope "/", alias: false do
-        for route <- routes do
-          case route do
-            {:live, path, module, action} ->
-              live(path, module, action)
-
-            {:live, path, module, action, opts} ->
-              live(path, module, action, opts)
-
-            {verb, path, module, action} when verb in [:get, :post, :put, :patch, :delete] ->
-              match(verb, path, module, action)
-
-            {verb, path, module, action, opts}
-            when verb in [:get, :post, :put, :patch, :delete] ->
-              match(verb, path, module, action, opts)
-          end
+          for route <- routes, do: MishkaCmsCore.ExtensionRouter.__route__(route)
         end
+      end
+    end
+  end
+
+  @doc false
+  @spec __routes__([module()], route_type()) :: [{module(), [route()]}]
+  def __routes__(extensions, type) do
+    Enum.map(extensions, fn ext ->
+      routes_module = Module.concat(ext, Routes)
+
+      case Code.ensure_compiled(routes_module) do
+        {:module, _} ->
+          :ok
+
+        {:error, reason} ->
+          raise CompileError,
+            description: """
+            Extension #{inspect(ext)} is missing its Routes module.
+
+            Expected module: #{inspect(routes_module)}
+            Reason: #{inspect(reason)}
+
+            Please create the module:
+
+                defmodule #{inspect(routes_module)} do
+                  @behaviour MishkaCmsCore.ExtensionRouter
+
+                  @impl true
+                  def routes(:admin), do: []
+                  def routes(:public), do: []
+                  def routes(:api), do: []
+                end
+            """
+      end
+
+      if !function_exported?(routes_module, :routes, 1) do
+        raise CompileError,
+          description: """
+          Extension #{inspect(routes_module)} does not implement routes/1 callback.
+
+          Please implement the MishkaCmsCore.ExtensionRouter behaviour:
+
+              defmodule #{inspect(routes_module)} do
+                @behaviour MishkaCmsCore.ExtensionRouter
+
+                @impl true
+                def routes(:admin), do: []
+                def routes(:public), do: []
+                def routes(:api), do: []
+              end
+          """
+      end
+
+      {ext, routes_module.routes(type)}
+    end)
+  end
+
+  @doc false
+  defmacro __route__(route) do
+    quote do
+      case unquote(route) do
+        {:live, path, module, action} ->
+          live(path, module, action)
+
+        {:live, path, module, action, opts} ->
+          live(path, module, action, opts)
+
+        {verb, path, module, action} when verb in [:get, :post, :put, :patch, :delete] ->
+          match(verb, path, module, action)
+
+        {verb, path, module, action, opts} when verb in [:get, :post, :put, :patch, :delete] ->
+          match(verb, path, module, action, opts)
       end
     end
   end
