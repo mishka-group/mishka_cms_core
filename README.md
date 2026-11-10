@@ -95,6 +95,8 @@ config :mishka_cms,
 
 `MishkaCmsBuilderWeb` and `MishkaCmsBuilder` are the visual page builder's; leave them out to run without it.
 
+For a deploy's health check, plug `MishkaCmsCore.Runtime.Plugs.HealthPlug` first in the endpoint. `GET /_health` answers `200 ok` only once the boot has compiled the sites and every active site's CSS and JS is built, and `503` with the reason until then, whatever the host, so a container probe such as `curl -f http://localhost:4000/_health` keeps traffic on the old release while the new one warms up.
+
 To run it, follow [Getting started in mishka_cms](https://github.com/mishka-group/mishka_cms#-getting-started). To work on the engine, check out the packages side by side under `__extensions/` in a `mishka_cms` clone, and Mishka CMS uses those folders:
 
 ```bash

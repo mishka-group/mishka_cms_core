@@ -79,8 +79,8 @@ defmodule MishkaCmsCore.ExtensionRouter do
   route:
 
     * starts with a segment the host answers itself, one of `host_prefixes/0`: `/admin`, `/api`,
-      `/auth`, `/gql`, `/install`, `/_preview`, `/dev`, `/oban`, the static `/uploads`, `/assets`,
-      `/fonts` and `/images`, and the `/live`, `/ws` and `/phoenix` sockets;
+      `/auth`, `/gql`, `/install`, `/_preview`, `/_health`, `/dev`, `/oban`, the static `/uploads`,
+      `/assets`, `/fonts` and `/images`, and the `/live`, `/ws` and `/phoenix` sockets;
     * is `/`, or starts with a capture (`/:slug`, `/*rest`), which takes every address. The language
       capture is the exception (`MishkaCmsCore.Runtime.Languages.capture/0`, `/:lang/feed`) when a
       fixed segment that is not the host's follows it: `/:lang` alone, `/:lang/:slug` and
@@ -104,7 +104,7 @@ defmodule MishkaCmsCore.ExtensionRouter do
 
   alias MishkaCmsCore.Runtime.Languages
 
-  @host_prefixes ~w(admin api auth gql install _preview dev oban uploads assets fonts images live ws phoenix)
+  @host_prefixes ~w(admin api auth gql install _preview _health dev oban uploads assets fonts images live ws phoenix)
 
   @type route_type :: :admin | :admin_standalone | :public | :api
 

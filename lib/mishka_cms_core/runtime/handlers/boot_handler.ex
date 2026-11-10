@@ -146,34 +146,26 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
     GenServer.start_link(__MODULE__, opts, name: __MODULE__)
   end
 
+  @status_key {__MODULE__, :status}
+
   @doc """
-  Retrieves the current boot status of the application.
+  Where this node's boot is, read without a call, so a health probe gets an answer while the boot
+  is still compiling:
 
-  This function provides real-time information about the boot process state,
-  which is essential for health checks, monitoring systems, and ensuring the
-  application is ready to serve requests.
+  * `:initializing` - the boot is running, or no BootHandler has started on this node (a test run,
+    which starts none)
+  * `:ready` - every site is loaded, every precompiled page, layout, component and error page is
+    built, and the sites' CSS/JS jobs are queued
+  * `{:failed, reason}` - a boot task failed; `reason` names the tasks
 
-  ## Return Values
-
-  * `:ready` - Boot process completed successfully, application is ready
-  * `:initializing` - Boot process is currently running
-  * `{:failed, reason}` - Boot process failed with specific error information
-
-  ## Monitoring Integration
-
-      # Continuous monitoring in a GenServer
-      def handle_info(:check_status, state) do
-        status = BootHandler.get_status()
-
-        # Update external monitoring systems
-        :telemetry.execute([:boot, :status], %{}, %{status: status})
-
-        {:noreply, %{state | boot_status: status}}
-      end
+  `MishkaCmsCore.Runtime.Plugs.HealthPlug` reads it.
   """
-  def get_status do
-    GenServer.call(__MODULE__, :get_status)
-  end
+  @spec get_status() :: :initializing | :ready | {:failed, term()}
+  def get_status, do: :persistent_term.get(@status_key, :initializing)
+
+  @doc false
+  @spec put_status(:initializing | :ready | {:failed, term()}) :: :ok
+  def put_status(status), do: :persistent_term.put(@status_key, status)
 
   ####################################################################################
   ########################### (▰˘◡˘▰) Server API (▰˘◡˘▰) #############################
@@ -315,8 +307,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
   @impl true
   def init(_opts) do
-    {:ok, %{status: :initializing, started_at: System.monotonic_time(:millisecond)},
-     {:continue, :boot}}
+    :ok = put_status(:initializing)
+    {:ok, %{started_at: System.monotonic_time(:millisecond)}, {:continue, :boot}}
   end
 
   @impl true
@@ -331,25 +323,20 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
           "[BootHandler] Oban runs without Lifeline: a job a restart interrupts stays executing. Add `lifeline: [rescue_after: {30, :minutes}]` to the app's Oban config."
         )
 
-    new_state =
+    status =
       case perform_boot() do
         :ok ->
           boot_time = System.monotonic_time(:millisecond) - state.started_at
           Logger.notice("[BootHandler] Boot completed in #{boot_time}ms")
-          %{state | status: :ready}
+          :ready
 
         {:error, reason} ->
           Logger.error("[BootHandler] Boot failed: #{inspect(reason)}")
-
-          %{state | status: {:failed, reason}}
+          {:failed, reason}
       end
 
-    {:noreply, new_state}
-  end
-
-  @impl true
-  def handle_call(:get_status, _from, state) do
-    {:reply, state.status, state}
+    :ok = put_status(status)
+    {:noreply, state}
   end
 
   ####################################################################################
