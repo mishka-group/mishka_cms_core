@@ -59,6 +59,38 @@ defmodule MishkaCmsCore.HelpersTest do
       assert Helpers.address_path("/search/?q=a/b/&x=//") == "/search?q=a/b/&x=//"
       assert Helpers.address_path("/docs/#install/") == "/docs#install/"
     end
+
+    test "leaves each segment as it is given" do
+      assert Helpers.address_path("/fa/داستان/") == "/fa/داستان"
+      assert Helpers.address_path("/a%2Fb") == "/a%2Fb"
+    end
+  end
+
+  describe "url_path/1" do
+    test "writes a raw and an encoded segment as one URL, never encoding an escape twice" do
+      raw = Helpers.url_path("/fa/داستان-ما/")
+
+      assert raw == "/fa/" <> URI.encode("داستان-ما", &URI.char_unreserved?/1)
+      assert Helpers.url_path(raw) == raw
+      assert Helpers.url_path(String.downcase(raw)) == raw
+      assert raw |> URI.decode() == "/fa/داستان-ما"
+    end
+
+    test "keeps what a segment may hold as it is, and an escape of it as the character" do
+      assert Helpers.url_path("/a:b@c/(x)!") == "/a:b@c/(x)!"
+      assert Helpers.url_path("/a%3Ab") == "/a:b"
+      assert Helpers.url_path("/a b") == "/a%20b"
+    end
+
+    test "keeps an escaped slash, question mark or percent inside its segment" do
+      assert Helpers.url_path("/a%2Fb/c%3Fd/e%25f") == "/a%2Fb/c%3Fd/e%25f"
+      assert Helpers.url_path("/50%/%zz") == "/50%25/%25zz"
+    end
+
+    test "keeps the slash rule, the query and the fragment of address_path/1" do
+      assert Helpers.url_path("//blog//ما/?q=ما#x") == "/blog/%D9%85%D8%A7?q=ما#x"
+      assert Helpers.url_path("/") == ""
+    end
   end
 
   describe "site_url/2" do

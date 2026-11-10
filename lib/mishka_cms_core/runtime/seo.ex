@@ -105,9 +105,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
   (`absolute/2`). A stored `canonical`, `alternate`, `og:url`, `og:image` or `twitter:image` holding
   a `/…` path is written on the same base.
 
-  No address ends in a slash (`MishkaCmsCore.Helpers.address_path/1`): the home page is the site's
-  address alone, `https://example.com`, as the sitemap lists it, in the canonical address, `og:url`,
-  the `hreflang` alternates and the JSON-LD alike.
+  No address ends in a slash and each is percent-encoded once (`MishkaCmsCore.Helpers.url_path/1`):
+  the home page is the site's address alone, `https://example.com`, and `/fa/داستان` is
+  `/fa/%D8%AF…`, as the sitemap lists it, in the canonical address, `og:url`, the `hreflang`
+  alternates and the JSON-LD alike.
 
   ## Pages kept out of an index
 
@@ -884,12 +885,13 @@ defmodule MishkaCmsCore.Runtime.Seo do
   a protocol-relative address, a `javascript:` one, a relative path.
 
   An address on the site itself, a path or one that starts with `base`, is written as
-  `MishkaCmsCore.Helpers.address_path/1` writes a path: no slash at its end, so the home page is
-  `base` alone.
+  `MishkaCmsCore.Helpers.url_path/1` writes a path: no slash at its end, so the home page is
+  `base` alone, and each segment percent-encoded once, whether it came raw or encoded.
 
       absolute("/en/about/", "https://example.com") #=> "https://example.com/en/about"
       absolute("/", "https://example.com") #=> "https://example.com"
       absolute("https://example.com/", "https://example.com") #=> "https://example.com"
+      absolute("/fa/ما", "https://example.com") #=> "https://example.com/fa/%D9%85%D8%A7"
       absolute("//cdn.example.com/a.png", "https://example.com") #=> nil
   """
   @spec absolute(term(), String.t() | nil) :: String.t() | nil
@@ -898,7 +900,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
   def absolute("//" <> _protocol_relative, _base), do: nil
 
   def absolute("/" <> _ = path, base) when is_binary(base),
-    do: base <> Helpers.address_path(path)
+    do: base <> Helpers.url_path(path)
 
   def absolute(_not_an_address, _base), do: nil
 
@@ -906,7 +908,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
     with true <- String.starts_with?(url, base),
          rest = binary_part(url, byte_size(base), byte_size(url) - byte_size(base)),
          true <- rest == "" or String.starts_with?(rest, ["/", "?", "#"]) do
-      base <> Helpers.address_path(rest)
+      base <> Helpers.url_path(rest)
     else
       _elsewhere -> url
     end

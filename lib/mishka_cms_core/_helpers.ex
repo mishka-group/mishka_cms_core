@@ -154,7 +154,7 @@ defmodule MishkaCmsCore.Helpers do
   def site_url(host, path) when is_binary(host) and is_binary(path) do
     uri = apply(@host_endpoint, :struct_url, [])
     port = if uri.port in [80, 443, nil], do: "", else: ":#{uri.port}"
-    "#{uri.scheme}://#{host}#{port}#{address_path(path)}"
+    "#{uri.scheme}://#{host}#{port}#{url_path(path)}"
   end
 
   @doc """
@@ -175,10 +175,11 @@ defmodule MishkaCmsCore.Helpers do
   @doc """
   A path as every address of a site writes it: no slash at its end and never two in a row, so the
   home page is empty and the site's address stands alone. The query and the fragment, if any, are
-  kept as they are.
+  kept as they are. Its segments are left as they are given; `url_path/1` is the same path as a URL
+  writes it.
 
-  The one rule behind the sitemap, the canonical address, `og:url`, the `hreflang` alternates, the
-  JSON-LD `url`s and `site_url/2`; none of them writes an address of its own.
+  The one slash rule behind the sitemap, the canonical address, `og:url`, the `hreflang` alternates,
+  the JSON-LD `url`s and `site_url/2`; none of them writes an address of its own.
 
       address_path("/blog/")         #=> "/blog"
       address_path("//blog//post/")  #=> "/blog/post"
@@ -186,13 +187,56 @@ defmodule MishkaCmsCore.Helpers do
       address_path("/")              #=> ""
   """
   @spec address_path(String.t()) :: String.t()
-  def address_path(path) when is_binary(path) do
+  def address_path(path) when is_binary(path), do: written_path(path, & &1)
+
+  @doc """
+  `address_path/1` with each segment written in one form, whether it comes raw or already
+  percent-encoded: a character a path segment may hold as it is (RFC 3986 `pchar`: letters, digits,
+  `-._~!$&'()*+,;=:@`) stands as it is, every other byte — a non-ASCII letter, a space, or a `%`
+  that starts no escape — is `%XX` with upper-case hex, and an escape already there is never
+  encoded twice. A browser asks for `/fa/داستان` as `/fa/%D8%AF…`, so a stored path and the path a
+  visit came on name one URL.
+
+  What `site_url/2` and `MishkaCmsCore.Runtime.Seo.absolute/2` write, so the canonical address,
+  `og:url`, every `hreflang` alternate, the sitemap's `<loc>` and a feed's links agree.
+
+      url_path("/fa/ما/")           #=> "/fa/%D9%85%D8%A7"
+      url_path("/fa/%d9%85%D8%A7")  #=> "/fa/%D9%85%D8%A7"
+      url_path("/a%3Ab/50%")        #=> "/a:b/50%25"
+      url_path("/blog?q=ما")        #=> "/blog?q=ما"
+  """
+  @spec url_path(String.t()) :: String.t()
+  def url_path(path) when is_binary(path), do: written_path(path, &path_segment(&1, ""))
+
+  defp written_path(path, segment_fun) do
     {location, tail} =
       case :binary.match(path, ["?", "#"]) do
         {at, _length} -> {binary_part(path, 0, at), binary_part(path, at, byte_size(path) - at)}
         :nomatch -> {path, ""}
       end
 
-    for(segment <- String.split(location, "/", trim: true), into: "", do: "/" <> segment) <> tail
+    for(
+      segment <- String.split(location, "/", trim: true),
+      into: "",
+      do: "/" <> segment_fun.(segment)
+    ) <> tail
+  end
+
+  defguardp is_hex(char) when char in ?0..?9 or char in ?a..?f or char in ?A..?F
+
+  defp path_segment(<<?%, high, low, rest::binary>>, written)
+       when is_hex(high) and is_hex(low) do
+    path_segment(rest, written <> path_byte(List.to_integer([high, low], 16)))
+  end
+
+  defp path_segment(<<byte, rest::binary>>, written),
+    do: path_segment(rest, written <> path_byte(byte))
+
+  defp path_segment(<<>>, written), do: written
+
+  defp path_byte(byte) when byte in ~c"!$&'()*+,;=:@", do: <<byte>>
+
+  defp path_byte(byte) do
+    if URI.char_unreserved?(byte), do: <<byte>>, else: "%" <> Base.encode16(<<byte>>)
   end
 end
