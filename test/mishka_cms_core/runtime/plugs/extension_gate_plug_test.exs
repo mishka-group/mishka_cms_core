@@ -6,7 +6,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlugTest do
   @moduledoc """
   An extension's API routes as `extension_routes(:api)` mounts them, through the test router's
   `:extension_api` pipeline: they answer for the site the host names with no sign-in, CSRF token or
-  session cookie, a route naming `accepts: :any` answers any `Accept`, and a site that switched the
+  session cookie, a request that could change something cannot read the session, a route naming `accepts: :any` answers any `Accept`, and a site that switched the
   extension off, like an unknown host, does not reach them.
 
   `async: false`: `SiteState` and the settings cache are process-global.
@@ -45,9 +45,14 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlugTest do
   defp fetch(site, path, headers \\ []) do
     headers
     |> Enum.reduce(build_conn(), fn {key, value}, conn -> put_req_header(conn, key, value) end)
+    |> on_site(site)
+    |> get(path)
+  end
+
+  defp on_site(conn, site) do
+    conn
     |> Map.put(:host, site.host)
     |> Map.update!(:req_headers, &[{"host", site.host} | List.keydelete(&1, "host", 0)])
-    |> get(path)
   end
 
   test "answers for the request's site, with no session cookie", %{site: site} do
@@ -56,6 +61,25 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlugTest do
     assert %{"site" => site_id, "format" => "json"} = json_response(conn, 200)
     assert site_id == site.id
     assert get_resp_header(conn, "set-cookie") == []
+  end
+
+  test "a GET reads the session, a POST reads an empty one, and neither writes it back", %{
+    site: site
+  } do
+    signed_in = fn method ->
+      build_conn()
+      |> init_test_session(%{"probe" => "signed-in"})
+      |> on_site(site)
+      |> dispatch(@endpoint, method, "/_api_ext/session")
+    end
+
+    get_conn = signed_in.(:get)
+    assert json_response(get_conn, 200) == %{"probe" => "signed-in"}
+    assert get_resp_header(get_conn, "set-cookie") == []
+
+    post_conn = signed_in.(:post)
+    assert json_response(post_conn, 200) == %{"probe" => nil}
+    assert get_resp_header(post_conn, "set-cookie") == []
   end
 
   test "a route naming accepts: :any answers any Accept, the others only theirs", %{site: site} do

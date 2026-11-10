@@ -22,7 +22,11 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlug do
   so the host's error page is drawn for the site it resolved, with `cache-control: no-store`.
 
   An extension's API route keeps no session: a session the pipeline fetched is read but never
-  written back, so the answer carries no cookie and a cache in front of the site may keep it.
+  written back, so the answer carries no cookie and a cache in front of the site may keep it. A
+  `GET`, `HEAD` or `OPTIONS` reads it as it is; any other method reads an empty one, so
+  `get_session/2` answers `nil`. The pipeline has no CSRF check, and a form on another site posting
+  here would otherwise act as the visitor signed in to this one. A route taking such a method
+  authenticates the request itself, as a webhook checks its signature.
 
   The extension's OTP app is read from its `Routes` module once and kept in `:persistent_term`.
   """
@@ -32,6 +36,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlug do
 
   alias MishkaCmsCore.ErrorsExceptions.NotFoundError
   alias MishkaCmsCore.Install.Extensions
+
+  @session_methods ~w(GET HEAD OPTIONS)
 
   @impl Plug
   def init(opts), do: Keyword.fetch!(opts, :extension)
@@ -63,8 +69,12 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlug do
     end
   end
 
+  defp keep_session_unwritten(%Plug.Conn{private: %{plug_session_fetch: :done}} = conn)
+       when conn.method in @session_methods,
+       do: configure_session(conn, ignore: true)
+
   defp keep_session_unwritten(%Plug.Conn{private: %{plug_session_fetch: :done}} = conn),
-    do: configure_session(conn, ignore: true)
+    do: conn |> clear_session() |> configure_session(ignore: true)
 
   defp keep_session_unwritten(conn), do: conn
 
