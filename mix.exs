@@ -189,7 +189,7 @@ defmodule MishkaCmsCore.MixProject do
     end
   end
 
-  defp aliases() do
+  defp aliases do
     [
       test: ["ash.setup --quiet", "test"],
       setup: "ash.setup",

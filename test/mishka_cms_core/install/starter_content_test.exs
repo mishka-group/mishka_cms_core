@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
   alias MishkaCmsCore.Install.StarterContent
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, LiveViewCompiler}
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
 
@@ -1900,8 +1901,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   # The `<.link>`s of `html`, read as the editor reads them: their text and their attributes.
   defp link_attributes(html) do
-    alias MishkaCmsCore.Runtime.Authoring.Tree
-
     {:ok, tree} = Tree.parse(html)
 
     for %{tag: ".link"} = node <- Tree.walk(tree) do
