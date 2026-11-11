@@ -755,9 +755,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
 
       {:error, exception} ->
         {:error, Exception.message(exception)}
-
-      other ->
-        {:error, inspect(other)}
     end
   end
 

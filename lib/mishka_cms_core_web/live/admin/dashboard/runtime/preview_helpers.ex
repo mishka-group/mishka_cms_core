@@ -1581,7 +1581,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         |> Ash.read(page: [limit: @drafts_per_page, offset: offset, count: true])
         |> case do
           {:ok, %Ash.Page.Offset{results: results, count: count}} ->
-            {results, count || length(results)}
+            {results, count}
 
           {:ok, results} when is_list(results) ->
             {results, length(results)}
