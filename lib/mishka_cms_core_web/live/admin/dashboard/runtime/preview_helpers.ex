@@ -907,17 +907,22 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         socket
 
       draft ->
-        put_preview(socket, fn p ->
-          base = %{
-            p
-            | draft: draft,
-              edit_source: RuntimePreview.source(draft),
-              edit_html: nil,
-              render_nonce: p.render_nonce + 1
-          }
+        put_preview(socket, &show_draft(&1, draft))
+    end
+  end
 
-          if p.active_tab == "preview", do: %{base | preview_source: "draft"}, else: base
-        end)
+  defp show_draft(p, draft) do
+    base = %{
+      p
+      | draft: draft,
+        edit_source: RuntimePreview.source(draft),
+        edit_html: nil,
+        render_nonce: p.render_nonce + 1
+    }
+
+    case p.active_tab do
+      "preview" -> %{base | preview_source: "draft"}
+      _other_tab -> base
     end
   end
 
@@ -1439,26 +1444,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   defp maybe_warm_module(record, resource) do
     cfg = RuntimeStatus.config(resource)
+    site = warm_site_name(record)
 
-    if cfg.kind == :module and Map.get(record, :active, false) and
-         is_binary(Map.get(record, :path)) do
-      site = warm_site_name(record)
-      module = CompilerHelpers.module_name(Map.get(record, cfg.key_field), site, cfg.type)
-
-      if !CompilerHelpers.loaded?(module) do
-        Task.start(fn ->
-          ModuleCompilerHandler.compile_or_return_module(
-            module,
-            record.path,
-            site,
-            Map.get(record, :site_id)
-          )
-        end)
-      end
+    with true <- warmable?(record, cfg),
+         module = CompilerHelpers.module_name(Map.get(record, cfg.key_field), site, cfg.type),
+         false <- CompilerHelpers.loaded?(module) do
+      Task.start(fn ->
+        ModuleCompilerHandler.compile_or_return_module(
+          module,
+          record.path,
+          site,
+          Map.get(record, :site_id)
+        )
+      end)
     end
 
     :ok
   end
+
+  defp warmable?(record, %{kind: :module}),
+    do: Map.get(record, :active, false) == true and is_binary(Map.get(record, :path))
+
+  defp warmable?(_record, _cfg), do: false
 
   defp warm_site_name(%{site: %{name: name}}) when is_binary(name), do: name
   defp warm_site_name(_record), do: "Global"
@@ -1581,7 +1588,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         |> Ash.read(page: [limit: @drafts_per_page, offset: offset, count: true])
         |> case do
           {:ok, %Ash.Page.Offset{results: results, count: count}} ->
-            {results, count || length(results)}
+            {results, count}
 
           {:ok, results} when is_list(results) ->
             {results, length(results)}

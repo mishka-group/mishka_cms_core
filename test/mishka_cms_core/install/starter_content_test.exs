@@ -17,6 +17,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
   import Phoenix.LiveViewTest, only: [rendered_to_string: 1]
 
   alias MishkaCmsCore.Install.StarterContent
+  alias MishkaCmsCore.Runtime.Authoring.Tree
   alias MishkaCmsCore.Runtime.Compilers.{Helpers, LiveViewCompiler}
   alias MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler
 
@@ -438,6 +439,31 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     test "the home page has two links, the sign-in page and the docs", %{site: site} do
       assert home_links(site, "en") == ["/auth", "https://mishka.tools/cms/docs"]
       assert home_links(site, "fa") == ["/fa/auth", "https://mishka.tools/cms/docs"]
+    end
+
+    # The sign-in page sends a signed-in visitor back to `/`, so pointing an admin there is a loop.
+    test "the console button opens the console for a signed-in admin", %{site: site} do
+      admin = create_user_with_permissions!(["admin:dashboard:*"])
+
+      links =
+        hrefs(page(site, "/:lang").template, %{
+          page: %{language: "en"},
+          current_site: %{host: "acme.test"},
+          current_user: admin
+        })
+
+      assert links == ["/admin/dashboard", "https://mishka.tools/cms/docs"]
+    end
+
+    test "a signed-in visitor who may not open the console is not offered it", %{site: site} do
+      links =
+        hrefs(page(site, "/:lang").template, %{
+          page: %{language: "en"},
+          current_site: %{host: "acme.test"},
+          current_user: create_user!()
+        })
+
+      assert links == ["https://mishka.tools/cms/docs"]
     end
 
     test "the header links home, to the docs, to GitHub and to the sign-in page", %{site: site} do
@@ -1875,8 +1901,6 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
 
   # The `<.link>`s of `html`, read as the editor reads them: their text and their attributes.
   defp link_attributes(html) do
-    alias MishkaCmsCore.Runtime.Authoring.Tree
-
     {:ok, tree} = Tree.parse(html)
 
     for %{tag: ".link"} = node <- Tree.walk(tree) do

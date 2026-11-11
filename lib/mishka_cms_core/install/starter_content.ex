@@ -1705,6 +1705,10 @@ defmodule MishkaCmsCore.Install.StarterContent do
   # the components, and the hero's two gradients, whose stops are not colours of the theme, are
   # written out in both.
   #
+  # "Open admin console" is the sign-in page for a visitor and the console for an admin who is
+  # already signed in, since the sign-in page sends a signed-in visitor back to `/`. A signed-in
+  # visitor who may not open the console is not offered it.
+  #
   # THE HOST IS THE ONE THING THE PAGE ASKS THE SITE, read off `assigns[:current_site]` with
   # `Map.get/2` because the page builder's canvas hands it a map without one.
   #
@@ -1739,7 +1743,15 @@ defmodule MishkaCmsCore.Install.StarterContent do
         </p>
         <div class="mt-1 flex flex-wrap justify-center gap-3">
           <.link
-            navigate={site_path("/:lang/auth", @page.language)}
+            :if={
+              !assigns[:current_user] or
+                MishkaCmsCore.Sidebar.landing_path(assigns[:current_user]) != "/"
+            }
+            id="home-admin-console"
+            navigate={
+              (assigns[:current_user] && MishkaCmsCore.Sidebar.landing_path(assigns[:current_user])) ||
+                site_path("/:lang/auth", @page.language)
+            }
             class="flex h-[52px] items-center gap-2.5 rounded-[14px] bg-[linear-gradient(180deg,#6A60EC,#5246D6)] px-6 text-[15px] font-medium text-white shadow-[0_10px_24px_-10px_rgba(91,79,224,0.6)]"
           >
             Open admin console

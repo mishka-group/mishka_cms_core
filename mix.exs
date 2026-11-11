@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.MixProject do
   use Mix.Project
 
-  @version "0.0.5-alpha.11"
+  @version "0.0.5-alpha.12"
   @source_url "https://github.com/mishka-group/mishka_cms_core"
 
   def project do
@@ -189,7 +189,7 @@ defmodule MishkaCmsCore.MixProject do
     end
   end
 
-  defp aliases() do
+  defp aliases do
     [
       test: ["ash.setup --quiet", "test"],
       setup: "ash.setup",

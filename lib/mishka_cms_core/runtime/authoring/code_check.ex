@@ -341,9 +341,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
       {:error, {meta, message, token}} ->
         [fault(tab, index, name, line(meta), text(message, token))]
-
-      {:error, other} ->
-        [fault(tab, index, name, nil, inspect(other))]
     end
   end
 

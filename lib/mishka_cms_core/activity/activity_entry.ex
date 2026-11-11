@@ -417,7 +417,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   defp read_page(query, actor, site_id, resources \\ :all) do
     filters = normalize_filters(Ash.Query.get_argument(query, :gervaz_filters))
     limit = query.limit || @default_limit
-    offset = query.offset || 0
+    offset = query.offset
 
     opts = %{
       site_id: site_id,

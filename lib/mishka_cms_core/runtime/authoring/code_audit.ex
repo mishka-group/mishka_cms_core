@@ -48,8 +48,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeAudit do
   @doc """
   The resources that store Elixir, and which of their fields hold it.
 
-  `Mix.Tasks.Mishka.ResignCode` re-signs exactly what this counts, and reads the list from here so
-  that a fifth resource gaining a code field cannot be audited and left unsigned, or the reverse.
+  `resign/0` re-signs exactly what this counts, and reads the list from here so that a fifth
+  resource gaining a code field cannot be audited and left unsigned, or the reverse.
   """
   @spec sources() :: [{module(), [atom()]}]
   def sources, do: @sources
@@ -84,7 +84,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeAudit do
           "[CodeSignature] #{count} stored snippet(s) carry no signature this deployment can " <>
             "verify, and every one of them compiles to a clause that does nothing — handlers, " <>
             "helpers, and a live component's own event handling. If this database came from " <>
-            "another environment, run `mix mishka.resign_code`. If it did not, read the lines " <>
+            "another environment, run `mix mishka.resign_code` (in a release: " <>
+            "`bin/<app> rpc 'MishkaCmsCore.Runtime.Authoring.CodeAudit.resign()'`). If it did " <>
+            "not, read the lines " <>
             "above that name each one before you sign whatever is in there."
         )
 
@@ -94,6 +96,70 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeAudit do
     error ->
       Logger.warning("[CodeSignature] could not audit stored code: #{inspect(error)}")
       :ok
+  end
+
+  @doc """
+  Re-signs every stored snippet with this deployment's key and answers how many rows it wrote.
+
+  A database restored from another environment carries signatures made with that environment's
+  key, so every handler and helper in it compiles to a clause that does nothing. This signs whatever
+  is stored, which is right for a restored dump and wrong for a database somebody edited by hand:
+  read the `[CodeSignature]` warnings that name each unverified snippet before you run it.
+
+  Answers `{:error, :signing_off}` with no `:code_signing_key` configured, since signing with no key
+  changes nothing. Every row of every site is read as a stream, so there is no page-size cap.
+
+  ## Running it
+
+  In development, `mix mishka.resign_code` calls this. A release has no Mix, so call it on the
+  running node:
+
+      bin/my_app rpc 'MishkaCmsCore.Runtime.Authoring.CodeAudit.resign()'
+
+  or, with the node stopped, start the application inside `eval` first:
+
+      bin/my_app eval 'Application.ensure_all_started(:my_app); MishkaCmsCore.Runtime.Authoring.CodeAudit.resign()'
+
+  Recompile the runtime afterwards (a restart does it) for the new signatures to take effect.
+  """
+  @spec resign() :: {:ok, non_neg_integer()} | {:error, :signing_off}
+  def resign do
+    case CodeSignature.enabled?() do
+      false -> {:error, :signing_off}
+      true -> {:ok, @sources |> Enum.map(&resign_resource/1) |> Enum.sum()}
+    end
+  end
+
+  defp resign_resource({resource, fields}) do
+    resource
+    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
+    |> Ash.stream!(authorize?: false, batch_size: 100)
+    |> Enum.reduce(0, fn row, total -> total + resign_row(row, resource, fields) end)
+  end
+
+  defp resign_row(row, resource, fields) do
+    changes =
+      for field <- fields,
+          entries = Map.get(row, field),
+          is_list(entries) and entries != [],
+          into: %{},
+          do: {field, Enum.map(entries, &CodeSignature.put/1)}
+
+    write_signatures(row, resource, changes)
+  end
+
+  defp write_signatures(_row, _resource, changes) when map_size(changes) == 0, do: 0
+
+  defp write_signatures(row, resource, changes) do
+    row
+    |> Ash.Changeset.for_update(:master_update, changes,
+      authorize?: false,
+      context: %{page_code: :package}
+    )
+    |> Ash.update!()
+
+    Logger.info("[CodeSignature] signed #{inspect(resource)} #{row.name}")
+    1
   end
 
   defp count({resource, fields}) do
