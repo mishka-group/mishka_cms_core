@@ -2375,6 +2375,10 @@ defmodule MishkaCmsCore.Runtime.Page do
                       code: [
                         type: :string,
                         allow_nil?: false
+                      ],
+                      signature: [
+                        type: :string,
+                        allow_nil?: true
                       ]
                     ]
                   ]
@@ -2395,6 +2399,10 @@ defmodule MishkaCmsCore.Runtime.Page do
                       code: [
                         type: :string,
                         allow_nil?: false
+                      ],
+                      signature: [
+                        type: :string,
+                        allow_nil?: true
                       ]
                     ]
                   ]
@@ -2415,6 +2423,10 @@ defmodule MishkaCmsCore.Runtime.Page do
                       code: [
                         type: :string,
                         allow_nil?: false
+                      ],
+                      signature: [
+                        type: :string,
+                        allow_nil?: true
                       ]
                     ]
                   ]
