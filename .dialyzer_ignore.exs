@@ -21,7 +21,7 @@
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_without_opaque, 219},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex",
-   :call_without_opaque, 1654},
+   :call_without_opaque, 1661},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 465},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 491},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 502},
@@ -56,9 +56,5 @@
   {"lib/mishka_cms_core/runtime/authoring/page_forms/_form_placement.ex", :guard_fail, 1578},
   {"lib/mishka_cms_core/runtime/plugs/site_lookup_plug.ex", :exact_compare, 649},
   {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 178},
-  {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 210},
-
-  # From the mishka_gervaz dependency: its spec names `Phoenix.LiveView.AsyncResult.t/0`, a type
-  # LiveView does not define.
-  {"lib/mishka_gervaz/table/web/state.ex", :unknown_type, 248}
+  {"lib/mishka_cms_core_web/live/admin/components/translations_refusal.ex", :call, 210}
 ]
