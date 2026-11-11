@@ -440,6 +440,31 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert home_links(site, "fa") == ["/fa/auth", "https://mishka.tools/cms/docs"]
     end
 
+    # The sign-in page sends a signed-in visitor back to `/`, so pointing an admin there is a loop.
+    test "the console button opens the console for a signed-in admin", %{site: site} do
+      admin = create_user_with_permissions!(["admin:dashboard:*"])
+
+      links =
+        hrefs(page(site, "/:lang").template, %{
+          page: %{language: "en"},
+          current_site: %{host: "acme.test"},
+          current_user: admin
+        })
+
+      assert links == ["/admin/dashboard", "https://mishka.tools/cms/docs"]
+    end
+
+    test "a signed-in visitor who may not open the console is not offered it", %{site: site} do
+      links =
+        hrefs(page(site, "/:lang").template, %{
+          page: %{language: "en"},
+          current_site: %{host: "acme.test"},
+          current_user: create_user!()
+        })
+
+      assert links == ["https://mishka.tools/cms/docs"]
+    end
+
     test "the header links home, to the docs, to GitHub and to the sign-in page", %{site: site} do
       assert header_links(site, "en") == ["/", @docs, @github, "/auth"]
       assert header_links(site, "fa") == ["/fa", @docs, @github, "/fa/auth"]
