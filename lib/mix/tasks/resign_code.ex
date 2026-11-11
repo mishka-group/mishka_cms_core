@@ -27,77 +27,29 @@ defmodule Mix.Tasks.Mishka.ResignCode do
 
   Refuses to run with no key configured, because signing with no key is a no-op that would report
   success and change nothing.
+
+  The work is `MishkaCmsCore.Runtime.Authoring.CodeAudit.resign/0`, which a release (no Mix) calls
+  through `bin/<app> rpc`; see its docs.
   """
 
   use Mix.Task
 
   alias MishkaCmsCore.Runtime.Authoring.CodeAudit
-  alias MishkaCmsCore.Runtime.Authoring.CodeSignature
 
   @impl Mix.Task
   def run(_args) do
     Mix.Task.run("app.start")
 
-    case CodeSignature.enabled?() do
-      false ->
+    case CodeAudit.resign() do
+      {:error, :signing_off} ->
         Mix.raise(
           "No :code_signing_key is configured — signing is off and there is nothing to do."
         )
 
-      true ->
-        CodeAudit.sources() |> Enum.map(&resign/1) |> Enum.sum() |> report()
-    end
-  end
-
-  # STREAMED, NOT PAGED. This asked `:master_read` for `page: [limit: 1000]`, and that action caps
-  # `max_page_size` at 100 — so a deployment with more than a hundred pages re-signed the first
-  # hundred, reported success, and left every row after them inert. Silently, and exactly on the
-  # deployments large enough for it to matter.
-  #
-  # `:read_any` bypasses multitenancy and paginates by keyset, which is what makes a stream of every
-  # row across every site possible — the same read `MishkaCmsCore.Runtime.Handlers.BootHandler` uses
-  # to walk the whole runtime.
-  defp resign({resource, fields}) do
-    resource
-    |> Ash.Query.for_read(:read_any, %{}, authorize?: false)
-    |> Ash.stream!(authorize?: false, batch_size: 100)
-    |> Enum.map(&resign_row(&1, resource, fields))
-    |> Enum.sum()
-  end
-
-  defp resign_row(row, resource, fields) do
-    changes =
-      for field <- fields,
-          entries = Map.get(row, field),
-          is_list(entries) and entries != [],
-          into: %{},
-          do: {field, Enum.map(entries, &CodeSignature.put/1)}
-
-    case map_size(changes) do
-      0 ->
-        0
-
-      _some ->
-        # A RE-SIGN IS NOT A CODE CHANGE. `Validations.CodeChange` refuses `events`, `infos` and
-        # `helpers` from a write with no actor, and this task has no actor at all — so every write
-        # it made was refused and the task could not do its job on a single row carrying code,
-        # which is every row it exists for. It announces what it is the same way the kit installer
-        # and the seeds do; the bytes it writes are the bytes it read, with a signature attached.
-        row
-        |> Ash.Changeset.for_update(:master_update, changes,
-          authorize?: false,
-          context: %{page_code: :package}
+      {:ok, count} ->
+        Mix.shell().info(
+          "Re-signed #{count} document(s). Recompile the runtime for it to take effect."
         )
-        |> Ash.update!()
-
-        Mix.shell().info("  signed #{inspect(resource)} #{row.name}")
-        1
     end
-  end
-
-  defp report(count) do
-    Mix.shell().info(
-      "Re-signed #{count} document(s). Recompile the runtime for it to take effect."
-    )
   end
 end
