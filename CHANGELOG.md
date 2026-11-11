@@ -59,6 +59,7 @@
 - `CodeAudit.resign/0` re-signs every stored snippet with this deployment's key and answers `{:ok, rows}`, or `{:error, :signing_off}` with no key. A release has no Mix, so it runs as `bin/<app> rpc 'MishkaCmsCore.Runtime.Authoring.CodeAudit.resign()'`; `mix mishka.resign_code` calls it, and the boot audit's warning names both
 - The starter home page's Open admin console button takes a signed-in admin to the console (`Sidebar.landing_path/1`), and is not shown to a signed-in visitor who may not open it. It always went to the sign-in page, which sends a signed-in visitor back to `/`
 - The admin hooks' tests run on jsdom 31.0.0 (from 30.1.3), vitest 5.1.0 and vite 8.3.8, their newest releases, and `sortablejs`, the hooks' one peer dependency, is at its newest, 1.15.7. Every Hex dependency is at its latest release; assent stays at 0.3.2, the version ash_authentication requires
+- Needs mishka_gervaz 0.0.8, whose table specs name types that exist, and guarded_struct 0.1.7
 
 # Changelog for MishkaCmsCore 0.0.4
 
