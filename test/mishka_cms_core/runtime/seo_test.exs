@@ -374,6 +374,25 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
       assert value(head, "meta", "name", "twitter:title") == "OTP trees | Blog"
     end
 
+    test "{{site.tagline}} is the tagline setting, and a tag naming an empty one is left out", %{
+      site: site
+    } do
+      layout = [meta("name", "description", "{{site.name}}: {{site.tagline}}")]
+      {:ok, _} = Settings.put("site.tagline", "Elixir all the way down", site_id: site.id)
+
+      head = Seo.head(seo(site), base: @base, layers: [layout, []])
+      assert value(head, "meta", "name", "description") == "Acme Studio: Elixir all the way down"
+
+      {:ok, _} = Settings.put("site.tagline", "", site_id: site.id)
+
+      head = Seo.head(seo(site), base: @base, layers: [layout, []])
+      assert value(head, "meta", "name", "description") == nil
+    end
+
+    test "the variables list offers {{site.tagline}}" do
+      assert Enum.any?(Seo.variables(), &(&1.key == "site.tagline"))
+    end
+
     # A record's own SEO title, which a plugin hands over in its tags, is the record's title: the
     # layout's `{{page.title}} · {{site.name}}` dresses only a page that stores none.
     test "a record's own title wins over the layout's, which titles only a page with none", %{
@@ -712,6 +731,7 @@ defmodule MishkaCmsCore.Runtime.SeoTest do
     end
 
     test "are listed for an editor, every core one filled", %{site: site} do
+      {:ok, _} = Settings.put("site.tagline", "Elixir all the way down", site_id: site.id)
       keys = Enum.map(Seo.variables(), & &1.key)
       page = for key <- keys, do: meta("name", "x-" <> key, "{{#{key}}}")
 

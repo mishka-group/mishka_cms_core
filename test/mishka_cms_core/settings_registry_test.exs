@@ -59,6 +59,18 @@ defmodule MishkaCmsCore.Settings.RegistryTest do
     assert Enum.any?(Settings.definitions("general"), &(&1.key == "cms.offline"))
   end
 
+  test "the site tagline is a general setting beside the title, per site, empty by default" do
+    Settings.load_definitions()
+
+    keys = "general" |> Settings.definitions() |> Enum.map(& &1.key)
+
+    assert Enum.find_index(keys, &(&1 == "site.tagline")) >
+             Enum.find_index(keys, &(&1 == "site.title"))
+
+    assert %{type: :string, scope: :both} = Settings.definition("site.tagline")
+    assert Settings.get("site.tagline") == ""
+  end
+
   test "a runtime plugin contributes its own config via the settings:register hook" do
     register_plugin(SettingsRegisterProbe, "settings:register")
     on_exit(fn -> Event.unregister(:name, SettingsRegisterProbe, false) end)

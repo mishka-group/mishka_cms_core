@@ -590,6 +590,14 @@ defmodule MishkaCmsCore.Runtime.Seo do
         help: gettext("The site title setting, in the page's language when Translations has it.")
       },
       %{
+        key: "site.tagline",
+        label: gettext("Site tagline"),
+        help:
+          gettext(
+            "The site tagline setting, in the page's language when Translations has it. Empty leaves out whatever uses it."
+          )
+      },
+      %{
         key: "site.url",
         label: gettext("Site address"),
         help: gettext("The site's https address, with no path.")
@@ -1429,13 +1437,15 @@ defmodule MishkaCmsCore.Runtime.Seo do
       site_name(site_id, "fa") #=> "میشکا"
   """
   @spec site_name(String.t() | nil, String.t() | nil) :: String.t() | nil
-  def site_name(site_id, language) do
-    case presence(Settings.get("site.title", nil, site_id)) do
-      title when is_binary(title) and is_binary(language) ->
-        presence(TranslationsState.lookup(site_id, language, title)) || title
+  def site_name(site_id, language), do: translated_setting("site.title", site_id, language)
 
-      title ->
-        title
+  defp translated_setting(key, site_id, language) do
+    case presence(Settings.get(key, nil, site_id)) do
+      text when is_binary(text) and is_binary(language) ->
+        presence(TranslationsState.lookup(site_id, language, text)) || text
+
+      text ->
+        text
     end
   end
 
@@ -1553,6 +1563,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       "page.language" => seo.language,
       "page.image" => image,
       "site.name" => site_title,
+      "site.tagline" => translated_setting("site.tagline", seo.site_id, seo.language),
       "site.url" => base
     }
 
