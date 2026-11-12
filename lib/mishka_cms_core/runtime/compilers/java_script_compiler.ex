@@ -1259,18 +1259,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # in `boot.js` or `site_hooks.js` is caught at build time rather than at the next site compile.
   defp create_entry_file(js_assets_dir, site_name, timestamp) do
     entry_path = Path.join([js_assets_dir, "js", "entry_#{site_name}_#{timestamp}.js"])
+    _ = File.write!(entry_path, entry_source(site_name))
+    entry_path
+  end
 
-    entry = """
+  @doc false
+  # The entry's source. The site's name reaches it only as a JSON-encoded string literal, so no
+  # name can add code to the bundle.
+  def entry_source(site_name) do
+    """
     import { boot } from "./boot";
     import SharedHooks from "./shared_hooks";
     import SiteHooks from "./site_hooks";
-    import MishkaRuntimeComponents from "./#{site_name}/mishka_runtime_components.js";
+    import MishkaRuntimeComponents from #{Jason.encode!("./#{site_name}/mishka_runtime_components.js")};
 
     boot({ ...SharedHooks, ...SiteHooks, ...MishkaRuntimeComponents });
     """
-
-    _ = File.write!(entry_path, entry)
-    entry_path
   end
 
   # Clean up temporary runtime files after compilation.

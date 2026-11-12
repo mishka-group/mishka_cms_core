@@ -116,6 +116,43 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
       assert site.name == "my-awesome-site"
     end
 
+    # The name is an asset URL segment, a directory and a file name, so a save stores a slug or
+    # refuses the name.
+    test "stores a name that cannot leave its URL segment or directory as a slug" do
+      for {typed, host} <- [
+            {"Shop/Blog", "a1.com"},
+            {"../../etc", "a2.com"},
+            {~s(Shop"Blog'x), "a3.com"},
+            {"My Shop Site", "a4.com"},
+            {"Café Crème", "a5.com"}
+          ] do
+        site = create_site!(name: typed, host: host)
+
+        assert site.name =~ ~r/\A[a-z0-9]+(-[a-z0-9]+)*\z/,
+               "#{inspect(typed)} was stored as #{inspect(site.name)}"
+      end
+    end
+
+    test "refuses a name with nothing Latin in it on the name field, on create and update" do
+      assert {:error, %Ash.Error.Invalid{errors: errors}} =
+               Site
+               |> Ash.Changeset.for_create(:create, %{name: "فروشگاه", host: "fa.com"},
+                 authorize?: false
+               )
+               |> Ash.create()
+
+      assert Enum.any?(errors, &(&1.field == :name))
+
+      site = create_site!(name: "Latin Name", host: "latin.com")
+
+      assert {:error, %Ash.Error.Invalid{errors: errors}} =
+               site
+               |> Ash.Changeset.for_update(:update, %{name: "فروشگاه"}, authorize?: false)
+               |> Ash.update()
+
+      assert Enum.any?(errors, &(&1.field == :name))
+    end
+
     test "requires name and host" do
       assert_raise Ash.Error.Invalid, fn ->
         Site

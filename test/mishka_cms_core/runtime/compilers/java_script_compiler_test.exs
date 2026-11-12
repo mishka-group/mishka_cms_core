@@ -113,6 +113,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       ensure_entry_modules_exist()
     end
 
+    test "the entry imports the site's components through a string literal, never raw source" do
+      assert JavaScriptCompiler.entry_source("my-site") =~
+               ~s(import MishkaRuntimeComponents from "./my-site/mishka_runtime_components.js";)
+
+      source = JavaScriptCompiler.entry_source(~s|x";alert(1);//|)
+
+      assert source =~ ~s|from "./x\\";alert(1);//|
+      refute source =~ ~s|from "./x";|
+    end
+
     test "cleans up temporary files after compilation" do
       temp_dir = get_temp_dir()
       js_dir = Path.join([temp_dir, "js_assets", "js"])
