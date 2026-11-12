@@ -61,9 +61,9 @@ defmodule MishkaCmsCore.Sidebar do
   ## Nested entries
 
   An item may name another item as its `parent`. The parent stays a link to its own page and opens
-  the entries under it, one level below the top row and no more. Build an extension's list with
-  `items!/1` instead of mapping `Item.new!/1`, so a parent that is missing or a child that is a
-  parent fails the build:
+  the entries under it; a child may have entries of its own, two levels below the top row and no
+  more. Build an extension's list with `items!/1` instead of mapping `Item.new!/1`, so a parent
+  that is missing or a third level fails the build:
 
       @items MishkaCmsCore.Sidebar.items!([
                %{key: "shop", label: gettext_noop("Shop"), path: "/admin/dashboard/shop",
@@ -72,25 +72,35 @@ defmodule MishkaCmsCore.Sidebar do
                  path: "/admin/dashboard/shop/orders", parent: "shop",
                  permissions: ["admin:dashboard:shop"]},
                %{key: "shop.returns", label: gettext_noop("Returns"),
-                 path: "/admin/dashboard/shop/returns", parent: "shop",
+                 path: "/admin/dashboard/shop/returns", parent: "shop.orders",
+                 permissions: ["admin:dashboard:shop"]},
+               %{key: "shop.order", label: gettext_noop("Order"),
+                 path: "/admin/dashboard/shop/order", nav: false, mark: "shop.orders",
                  permissions: ["admin:dashboard:shop"]}
              ])
 
   A child is an ordinary item: it is shown only to whom its own `permissions` allow, it gets its own
   `order` and `visible` settings (its order is among its siblings), and `PageGuard` gates its
   `module`. A child whose parent is not shown is not shown either, and a parent left with no child
-  is drawn as a plain link.
+  is drawn as a plain link. `mark` names the entry a `nav: false` page keeps marked while it is open.
 
   The sidebar draws an entry with children as a link and a separate arrow that shows or hides them.
   The branch of the open page is open on load. What an admin folds or opens by hand, a group or a
   branch, is kept in the browser's `localStorage` by the `SidebarScroll` hook, because
-  `Phoenix.LiveView.JS` cannot write storage; it costs no query.
+  `Phoenix.LiveView.JS` cannot write storage; it costs no query. Under 980px the menu shows one
+  level at a time, with a back row, and opens at the level of the open page.
 
   ## Counts
 
   An entry may show a number beside its label. The extension supplies it with
-  `MishkaCmsCore.Sidebar.Counts.put/3`, from wherever its data changes. It is kept in memory, so
-  drawing it costs no query; zero hides it.
+  `MishkaCmsCore.Sidebar.Counts.put/3`, from wherever its data changes, and open pages update the
+  chip without a reload. It is kept in memory, so drawing it costs no query; zero hides it.
+
+  ## A bar at the bottom of a narrow screen
+
+  The shell keeps no fixed element at the bottom of the page and leaves the safe area of a phone
+  free. An extension that wants a bar of its own there draws it inside its own pages, for example
+  as a `sticky bottom-0` element at the end of its content.
 
   ## Permissions
 
@@ -241,7 +251,8 @@ defmodule MishkaCmsCore.Sidebar do
 
     `parent` is the key of another item, and makes this one an entry under it (see "Nested entries"
     in `MishkaCmsCore.Sidebar`). A child takes its `group` and `position` from the top of its chain,
-    so it sets neither. `children` is filled in by `MishkaCmsCore.Sidebar.menu/2`.
+    so it sets neither. `mark` is for a `nav: false` page: the key of the entry that stays marked
+    while the page is open. `children` is filled in by `MishkaCmsCore.Sidebar.menu/2`.
 
     See `MishkaCmsCore.Sidebar` for the event contract.
     """
@@ -282,6 +293,7 @@ defmodule MishkaCmsCore.Sidebar do
       field(:credit_name, String.t())
       field(:credit_url, String.t())
       field(:parent, String.t())
+      field(:mark, String.t())
       field(:children, list(), default: [])
     end
 
@@ -320,8 +332,8 @@ defmodule MishkaCmsCore.Sidebar do
 
   @event "sidebar:menus"
   @pubsub MishkaCmsCore.PubSub
-  @max_depth 1
-  @nesting_error "its parent is missing, or its parent is a child itself"
+  @max_depth 2
+  @nesting_error "its parent is missing, or it sits more than two levels below its top row"
 
   @core_groups Enum.map(
                  [
@@ -580,8 +592,8 @@ defmodule MishkaCmsCore.Sidebar do
 
   @doc """
   Builds an extension's items with `Item.new!/1` and checks them together, raising on a `parent`
-  that names no item of the list, and on a child whose parent is a child itself. Call it in a module
-  attribute, so a bad declaration fails the build.
+  or `mark` that names no item of the list, and on an entry more than two levels below its top
+  row. Call it in a module attribute, so a bad declaration fails the build.
   """
   @spec items!([map()]) :: [Item.t()]
   def items!(list) do
@@ -591,6 +603,9 @@ defmodule MishkaCmsCore.Sidebar do
     for item <- items do
       if root(item, by_key, 0) == :error,
         do: raise(ArgumentError, "sidebar item #{inspect(item.key)}: #{@nesting_error}")
+
+      if item.mark && !Map.has_key?(by_key, item.mark),
+        do: raise(ArgumentError, "sidebar item #{inspect(item.key)} marks an unknown entry")
     end
 
     items
@@ -665,18 +680,22 @@ defmodule MishkaCmsCore.Sidebar do
     end
   end
 
-  # The entry of the page at `path`: the declared link that matches most of it. Then its chain of
-  # parents, top first.
+  # The entry of the page at `path`: the declared path that matches most of it, a `nav: false` page
+  # standing for the entry it marks. Then its chain of parents, top first.
   defp trail(_items, nil), do: []
 
   defp trail(items, path) do
     by_key = Map.new(items, &{&1.key, &1})
 
     items
-    |> Enum.filter(&(&1.nav and opens_path?(path, &1.path)))
+    |> Enum.filter(&((&1.nav or is_binary(&1.mark)) and opens_path?(path, &1.path)))
     |> Enum.max_by(&String.length(&1.path), fn -> nil end)
+    |> marked(by_key)
     |> chain(by_key, [])
   end
+
+  defp marked(%Item{nav: false, mark: mark}, by_key), do: by_key[mark]
+  defp marked(item, _by_key), do: item
 
   defp chain(nil, _by_key, keys), do: keys
   defp chain(%Item{parent: nil, key: key}, _by_key, keys), do: [key | keys]

@@ -145,7 +145,9 @@ defmodule MishkaCmsCore.Layouts do
   beside entries (`MishkaCmsCore.Sidebar.Counts`).
 
   A group and a branch fold with `Phoenix.LiveView.JS`; the `SidebarScroll` hook keeps what was
-  folded by hand. The branch of the open page is open, and so is the group holding it.
+  folded by hand. The branch of the open page is open, and so is the group holding it. Under 980px
+  the menu is drawn as one level at a time instead, each level a list `JS` shows or hides, starting
+  at the level of the open page.
   """
   attr :current_path, :string, default: nil
   attr :current_user, :any, default: nil
@@ -156,11 +158,15 @@ defmodule MishkaCmsCore.Layouts do
     %{main: main, footer: footer, trail: trail} =
       Sidebar.menu(assigns.current_user, assigns.current_path)
 
+    levels = for entry <- main, item <- entry_items(entry), level <- levels(item, nil), do: level
+
     assigns =
       assign(assigns,
         main_entries: main,
         footer_entries: footer,
-        trail: trail
+        trail: trail,
+        levels: levels,
+        level: open_level(trail, levels)
       )
 
     ~H"""
@@ -170,7 +176,7 @@ defmodule MishkaCmsCore.Layouts do
           `<html dir>`. --%>
     <aside
       id="admin-sidebar"
-      class="flex h-full w-[266px] shrink-0 flex-col border-e border-[#ecebe6] bg-white p-[16px_14px] max-[980px]:fixed! max-[980px]:inset-y-0 max-[980px]:left-0 max-[980px]:z-[90] max-[980px]:-translate-x-[105%]! max-[980px]:shadow-[0_24px_70px_rgba(20,18,26,0.35)] max-[980px]:transition-transform"
+      class="flex h-full w-[266px] shrink-0 flex-col border-e border-[#ecebe6] bg-white p-[16px_14px] max-[980px]:fixed! max-[980px]:inset-y-0 max-[980px]:left-0 max-[980px]:z-[90] max-[980px]:-translate-x-[105%]! max-[980px]:pb-[max(16px,env(safe-area-inset-bottom))]! max-[980px]:shadow-[0_24px_70px_rgba(20,18,26,0.35)] max-[980px]:transition-transform"
     >
       <div class="mb-1.5 flex items-center gap-3 border-b border-[#e6e4de] px-1.5 pb-[18px] pt-1">
         <div class="flex size-[44px] items-center justify-center rounded-[14px] border border-[#e4e2f7] bg-[radial-gradient(120%_120%_at_30%_20%,#ffffff,#f4f3fd)] shadow-[0_6px_16px_rgba(79,75,204,0.14),inset_0_1px_0_#fff]">
@@ -201,7 +207,7 @@ defmodule MishkaCmsCore.Layouts do
         phx-hook="SidebarScroll"
         class="-mx-0.5 flex flex-1 flex-col gap-0.5 overflow-y-auto px-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <div id="admin-sidebar-tree" class="flex flex-col gap-0.5">
+        <div id="admin-sidebar-tree" class="flex flex-col gap-0.5 max-[980px]:hidden">
           <%= for entry <- @main_entries do %>
             <div :if={group?(entry)}>
               <button
@@ -233,6 +239,54 @@ defmodule MishkaCmsCore.Layouts do
             </div>
             <.nav_link :if={!group?(entry)} item={entry} trail={@trail} counts={@counts} />
           <% end %>
+        </div>
+
+        <div id="admin-sidebar-levels" class="hidden max-[980px]:block">
+          <div id="sbm-root" class={["flex flex-col gap-0.5", @level && "hidden"]}>
+            <%= for entry <- @main_entries do %>
+              <div
+                :if={group?(entry)}
+                class="mb-1 mt-4 px-[10px] text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]"
+              >
+                {label(entry.label)}
+              </div>
+              <.level_row
+                :for={item <- entry_items(entry)}
+                item={item}
+                from="sbm-root"
+                trail={@trail}
+                counts={@counts}
+              />
+            <% end %>
+          </div>
+          <div
+            :for={{item, up} <- @levels}
+            id={dom_id("sbm", item.key)}
+            class={["flex flex-col gap-0.5", @level != item.key && "hidden"]}
+          >
+            <button
+              type="button"
+              phx-click={swap(dom_id("sbm", item.key), (up && dom_id("sbm", up.key)) || "sbm-root")}
+              class="flex min-h-12 items-center gap-2 rounded-[10px] px-[10px] text-[13px] font-semibold text-[#8a877f] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+            >
+              <.icon name="hero-chevron-left" class="size-4 rtl:rotate-180" />
+              {(up && gettext("Back to %{label}", label: label(up.label))) ||
+                gettext("Back to the menu")}
+            </button>
+            <.level_row
+              item={%{item | children: []}}
+              from={dom_id("sbm", item.key)}
+              trail={@trail}
+              counts={@counts}
+            />
+            <.level_row
+              :for={child <- item.children}
+              item={child}
+              from={dom_id("sbm", item.key)}
+              trail={@trail}
+              counts={@counts}
+            />
+          </div>
         </div>
       </nav>
 
@@ -345,6 +399,28 @@ defmodule MishkaCmsCore.Layouts do
       <span class="min-w-0 flex-1 truncate">{label(@item.label)}</span>
       <.count_chip key={@item.key} count={@counts[@item.key]} />
     </.link>
+    """
+  end
+
+  attr :item, :map, required: true
+  attr :from, :string, required: true
+  attr :trail, :list, default: []
+  attr :counts, :map, default: %{}
+
+  defp level_row(assigns) do
+    ~H"""
+    <div class="flex items-stretch gap-0.5">
+      <.entry_link item={@item} trail={@trail} counts={@counts} class="min-h-12 text-[14px]" />
+      <button
+        :if={@item.children != []}
+        type="button"
+        aria-label={gettext("Open the entries under %{label}", label: label(@item.label))}
+        phx-click={swap(@from, dom_id("sbm", @item.key))}
+        class="flex size-12 shrink-0 items-center justify-center rounded-[10px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+      >
+        <.icon name="hero-chevron-right" class="size-4 rtl:rotate-180" />
+      </button>
+    </div>
     """
   end
 
@@ -757,6 +833,22 @@ defmodule MishkaCmsCore.Layouts do
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
 
+  defp entry_items(%Group{items: items}), do: items
+  defp entry_items(item), do: [item]
+
+  # Every entry with entries under it is a level of the narrow menu, with the entry its back row
+  # returns to: `nil` for the top level.
+  defp levels(%{children: []}, _up), do: []
+  defp levels(item, up), do: [{item, up} | Enum.flat_map(item.children, &levels(&1, item))]
+
+  # The narrow menu opens at the level that lists the open page: its parent's, or the top one.
+  defp open_level([_top, _next | _rest] = trail, levels) do
+    parent = Enum.at(trail, -2)
+    if Enum.any?(levels, fn {item, _up} -> item.key == parent end), do: parent
+  end
+
+  defp open_level(_trail, _levels), do: nil
+
   # `page` for the entry of the open page, `true` (the quieter mark) for the entries above it.
   defp mark(%{key: key}, trail) do
     cond do
@@ -769,6 +861,11 @@ defmodule MishkaCmsCore.Layouts do
   defp fold(id) do
     JS.toggle_class("hidden", to: "#" <> id)
     |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+  end
+
+  defp swap(from, to) do
+    JS.add_class("hidden", to: "#" <> from)
+    |> JS.remove_class("hidden", to: "#" <> to)
   end
 
   defp dom_id(prefix, key), do: prefix <> "-" <> String.replace(key, ~r/[^A-Za-z0-9_-]/, "-")

@@ -12,14 +12,20 @@ defmodule MishkaCmsCore.Sidebar.Counts do
       MishkaCmsCore.Sidebar.Counts.put("shop.orders", waiting, :attention)
 
   The value goes to an ETS table, which `MishkaCmsCore.Layouts.Nav` reads when an admin page
-  mounts, so the chip costs no query.
+  mounts, so the chip costs no query. Open pages hear the change on the `"sidebar:counts"` PubSub
+  topic as `{:sidebar_count, key, number, tone}` and redraw the chip. At most one message a second
+  is sent for one entry: the first change is sent at once, and the last of the changes that follow
+  within the second is sent when it ends.
 
   A tone is `:plain` or `:attention`, which is drawn in the warning colour. A count of zero hides
-  the chip. The table is this node's: an extension in a cluster puts the count on each node.
+  the chip. The table is this node's, like the PubSub broadcast: an extension in a cluster puts the
+  count on each node.
   """
   use GenServer
 
   @table :mishka_cms_sidebar_counts
+  @topic "sidebar:counts"
+  @interval 1_000
   @tones [:plain, :attention]
 
   @type tone :: :plain | :attention
@@ -27,12 +33,16 @@ defmodule MishkaCmsCore.Sidebar.Counts do
   @doc false
   def start_link(opts \\ []), do: GenServer.start_link(__MODULE__, opts, name: __MODULE__)
 
-  @doc "Sets the count of the entry `key`."
+  @doc "The PubSub topic open pages hear a count on."
+  @spec topic() :: String.t()
+  def topic, do: @topic
+
+  @doc "Sets the count of the entry `key`, and tells the open pages."
   @spec put(String.t(), non_neg_integer(), tone()) :: :ok
   def put(key, number, tone \\ :plain)
       when is_binary(key) and is_integer(number) and number >= 0 and tone in @tones do
     :ets.insert(@table, {key, number, tone})
-    :ok
+    GenServer.cast(__MODULE__, {:sidebar_count, key, number, tone})
   end
 
   @doc "Every count set on this node, as `%{key => {number, tone}}`."
@@ -48,5 +58,32 @@ defmodule MishkaCmsCore.Sidebar.Counts do
   def init(_opts) do
     :ets.new(@table, [:named_table, :set, :public, read_concurrency: true])
     {:ok, %{}}
+  end
+
+  # `held` holds each entry sent within the last second, with the token of its timer and the
+  # change waiting for the second to end, or `nil` when none came after it.
+  @impl true
+  def handle_cast({:sidebar_count, key, _number, _tone} = change, held) do
+    case held do
+      %{^key => {token, _waiting}} -> {:noreply, Map.put(held, key, {token, change})}
+      _free -> {:noreply, send_count(held, change)}
+    end
+  end
+
+  @impl true
+  def handle_info({:release, key, token}, held) do
+    case held do
+      %{^key => {^token, nil}} -> {:noreply, Map.delete(held, key)}
+      %{^key => {^token, change}} -> {:noreply, send_count(held, change)}
+      _stale -> {:noreply, held}
+    end
+  end
+
+  defp send_count(held, {:sidebar_count, key, _number, _tone} = change) do
+    Phoenix.PubSub.local_broadcast(MishkaCmsCore.PubSub, @topic, change)
+
+    token = make_ref()
+    Process.send_after(self(), {:release, key, token}, @interval)
+    Map.put(held, key, {token, nil})
   end
 end

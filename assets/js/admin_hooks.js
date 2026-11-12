@@ -247,7 +247,7 @@ function readFolds() {
   }
 }
 
-// A link inside a folded list has no box to scroll to.
+// A link hidden by its own list (or by the wide or narrow half of the nav) has no box to scroll to.
 function shown(el) {
   return typeof el.checkVisibility !== "function" || el.checkVisibility();
 }

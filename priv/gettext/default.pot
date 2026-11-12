@@ -173,7 +173,7 @@ msgstr ""
 msgid "%{count} total"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:361
+#: lib/mishka_cms_core/layouts.ex:540
 #, elixir-autogen, elixir-format
 msgid "%{count} unread"
 msgid_plural "%{count} unread"
@@ -429,12 +429,12 @@ msgstr ""
 msgid "%{label} updated"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:749
+#: lib/mishka_cms_core/sidebar.ex:902
 #, elixir-autogen, elixir-format
 msgid "%{label} — position"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:759
+#: lib/mishka_cms_core/sidebar.ex:912
 #, elixir-autogen, elixir-format
 msgid "%{label} — shown"
 msgstr ""
@@ -909,12 +909,12 @@ msgstr ""
 msgid "Access Not Allowed"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:284
+#: lib/mishka_cms_core/sidebar.ex:349
 #, elixir-autogen, elixir-format
 msgid "Account"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:501
+#: lib/mishka_cms_core/layouts.ex:680
 #, elixir-autogen, elixir-format
 msgid "Account settings"
 msgstr ""
@@ -964,7 +964,7 @@ msgstr ""
 msgid "Active site"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:466
+#: lib/mishka_cms_core/sidebar.ex:531
 #, elixir-autogen, elixir-format
 msgid "Activity"
 msgstr ""
@@ -1038,12 +1038,12 @@ msgstr ""
 msgid "Adds its permission names, the components and the sample pages. Anything already there — including your own edits — is left alone, and you can press this again whenever you like."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:662
+#: lib/mishka_cms_core/layouts.ex:874
 #, elixir-autogen, elixir-format
 msgid "Admin"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:181
+#: lib/mishka_cms_core/layouts.ex:199
 #, elixir-autogen, elixir-format
 msgid "Admin console"
 msgstr ""
@@ -1085,7 +1085,7 @@ msgstr ""
 msgid "All live"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:218
+#: lib/mishka_cms_core/layouts.ex:298
 #, elixir-autogen, elixir-format
 msgid "All systems operational"
 msgstr ""
@@ -1680,7 +1680,7 @@ msgstr ""
 msgid "Component updated successfully"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:326
+#: lib/mishka_cms_core/sidebar.ex:391
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/component/index.html.heex:9
 #: lib/mishka_cms_core_web/ui_adapters/admin.ex:330
 #, elixir-autogen, elixir-format
@@ -2245,7 +2245,7 @@ msgstr ""
 msgid "Error Page Draft"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:352
+#: lib/mishka_cms_core/sidebar.ex:417
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/error_page/index.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "Error Pages"
@@ -2634,7 +2634,7 @@ msgstr ""
 msgid "History"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:307
+#: lib/mishka_cms_core/sidebar.ex:372
 #, elixir-autogen, elixir-format
 msgid "Home"
 msgstr ""
@@ -2862,7 +2862,7 @@ msgstr ""
 msgid "JS Hook"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:404
+#: lib/mishka_cms_core/sidebar.ex:469
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/js_hook/index.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "JS Hooks"
@@ -2941,7 +2941,7 @@ msgstr ""
 msgid "Label this new draft (e.g. Hero redesign)"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:515
+#: lib/mishka_cms_core/layouts.ex:694
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:73
 #, elixir-autogen, elixir-format
 msgid "Language"
@@ -3022,7 +3022,7 @@ msgstr ""
 msgid "Layout wraps page content — previewed with placeholder content (add an Example to render real content)."
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:339
+#: lib/mishka_cms_core/sidebar.ex:404
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/layout/index.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "Layouts"
@@ -3223,7 +3223,7 @@ msgstr ""
 msgid "Loop Detected"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:750
+#: lib/mishka_cms_core/sidebar.ex:903
 #, elixir-autogen, elixir-format
 msgid "Lower numbers sit higher in the sidebar."
 msgstr ""
@@ -3308,13 +3308,13 @@ msgstr ""
 msgid "Manage your site pages and their content."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:370
+#: lib/mishka_cms_core/layouts.ex:549
 #: lib/mishka_cms_core_web/live/admin/dashboard/notification/index.ex:68
 #, elixir-autogen, elixir-format
 msgid "Mark all read"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:445
+#: lib/mishka_cms_core/layouts.ex:624
 #, elixir-autogen, elixir-format
 msgid "Mark read"
 msgstr ""
@@ -3350,7 +3350,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/authoring/elements.ex:287
 #: lib/mishka_cms_core/runtime/content_components.ex:1128
 #: lib/mishka_cms_core/runtime/resources/__mixins/media_paper_trail_mixin.ex:33
-#: lib/mishka_cms_core/sidebar.ex:378
+#: lib/mishka_cms_core/sidebar.ex:443
 #, elixir-autogen, elixir-format
 msgid "Media"
 msgstr ""
@@ -3764,10 +3764,10 @@ msgid_plural "Nothing updated. %{count} components waiting on a choice."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core/layouts.ex:359
+#: lib/mishka_cms_core/layouts.ex:538
 #: lib/mishka_cms_core/notify.ex:136
 #: lib/mishka_cms_core/settings.ex:933
-#: lib/mishka_cms_core/sidebar.ex:475
+#: lib/mishka_cms_core/sidebar.ex:540
 #: lib/mishka_cms_core_web/live/admin/dashboard/notification/index.ex:30
 #: lib/mishka_cms_core_web/live/admin/dashboard/notification/index.ex:55
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:89
@@ -3885,7 +3885,7 @@ msgstr ""
 msgid "Open issues"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:298
+#: lib/mishka_cms_core/layouts.ex:477
 #, elixir-autogen, elixir-format
 msgid "Open menu"
 msgstr ""
@@ -4012,7 +4012,7 @@ msgstr ""
 msgid "Page updated successfully"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:365
+#: lib/mishka_cms_core/sidebar.ex:430
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/page/index.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "Pages"
@@ -4116,7 +4116,7 @@ msgstr ""
 msgid "Permission saved successfully"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:453
+#: lib/mishka_cms_core/sidebar.ex:518
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:182
 #: lib/mishka_cms_core_web/live/admin/dashboard/account/permission/index.html.heex:9
 #, elixir-autogen, elixir-format
@@ -4164,12 +4164,12 @@ msgstr ""
 msgid "Please check the domain name and try again."
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:294
+#: lib/mishka_cms_core/sidebar.ex:359
 #, elixir-autogen, elixir-format
 msgid "Plugins"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:628
+#: lib/mishka_cms_core/layouts.ex:807
 #, elixir-autogen, elixir-format
 msgid "Powered by"
 msgstr ""
@@ -4563,7 +4563,7 @@ msgstr ""
 msgid "Running"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:277
+#: lib/mishka_cms_core/sidebar.ex:342
 #: lib/mishka_cms_core_web/live/admin/dashboard/activity/index.html.heex:12
 #, elixir-autogen, elixir-format
 msgid "Runtime"
@@ -4595,7 +4595,7 @@ msgstr ""
 msgid "Runtime parts"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:222
+#: lib/mishka_cms_core/layouts.ex:302
 #, elixir-autogen, elixir-format
 msgid "Runtime · %{uptime} uptime"
 msgstr ""
@@ -4677,7 +4677,7 @@ msgstr ""
 msgid "Search engines, robots.txt and the sitemap"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:311
+#: lib/mishka_cms_core/layouts.ex:490
 #, elixir-autogen, elixir-format
 msgid "Search pages, posts, people…"
 msgstr ""
@@ -4689,7 +4689,7 @@ msgstr ""
 msgid "Section"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:572
+#: lib/mishka_cms_core/sidebar.ex:725
 #, elixir-autogen, elixir-format
 msgid "Sections"
 msgstr ""
@@ -4793,7 +4793,7 @@ msgstr ""
 msgid "Set width to %{width}"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:484
+#: lib/mishka_cms_core/sidebar.ex:549
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:122
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:947
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:15
@@ -4865,7 +4865,7 @@ msgstr ""
 msgid "Sidebar"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:548
+#: lib/mishka_cms_core/layouts.ex:727
 #, elixir-autogen, elixir-format
 msgid "Sign out"
 msgstr ""
@@ -5050,7 +5050,7 @@ msgid "Sitemap"
 msgstr ""
 
 #: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:71
-#: lib/mishka_cms_core/sidebar.ex:316
+#: lib/mishka_cms_core/sidebar.ex:381
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/site/index.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "Sites"
@@ -5186,7 +5186,7 @@ msgstr ""
 msgid "Stylesheet updated successfully"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:391
+#: lib/mishka_cms_core/sidebar.ex:456
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/stylesheet/index.html.heex:9
 #, elixir-autogen, elixir-format
 msgid "Stylesheets"
@@ -5207,12 +5207,12 @@ msgstr ""
 msgid "Success message"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:323
+#: lib/mishka_cms_core/layouts.ex:502
 #, elixir-autogen, elixir-format
 msgid "Switch to dark"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:332
+#: lib/mishka_cms_core/layouts.ex:511
 #, elixir-autogen, elixir-format
 msgid "Switch to light"
 msgstr ""
@@ -5748,7 +5748,7 @@ msgstr ""
 msgid "Too many sign-in link requests"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:575
+#: lib/mishka_cms_core/sidebar.ex:728
 #: lib/mishka_cms_core_web/live/admin/components/media_move.ex:238
 #, elixir-autogen, elixir-format
 msgid "Top level"
@@ -5785,7 +5785,7 @@ msgstr ""
 msgid "Translation saved"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:417
+#: lib/mishka_cms_core/sidebar.ex:482
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/translation/index.ex:34
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/translation/index.html.heex:9
 #, elixir-autogen, elixir-format
@@ -5806,7 +5806,7 @@ msgid_plural "Try again in %{count} seconds."
 msgstr[0] ""
 msgstr[1] ""
 
-#: lib/mishka_cms_core/sidebar.ex:761
+#: lib/mishka_cms_core/sidebar.ex:914
 #, elixir-autogen, elixir-format
 msgid "Turn off to hide this entry from the sidebar for everyone who can see it."
 msgstr ""
@@ -6004,7 +6004,7 @@ msgstr ""
 #: lib/mishka_cms_core/dashboard/widgets/overview_metrics.ex:72
 #: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:46
 #: lib/mishka_cms_core/dashboard/widgets/users_summary.ex:79
-#: lib/mishka_cms_core/sidebar.ex:443
+#: lib/mishka_cms_core/sidebar.ex:508
 #: lib/mishka_cms_core_web/live/admin/dashboard/account/user/index.ex:47
 #: lib/mishka_cms_core_web/live/admin/dashboard/account/user/index.html.heex:18
 #, elixir-autogen, elixir-format
@@ -6057,7 +6057,7 @@ msgstr ""
 msgid "View all"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:458
+#: lib/mishka_cms_core/layouts.ex:637
 #, elixir-autogen, elixir-format
 msgid "View all activity"
 msgstr ""
@@ -6402,7 +6402,7 @@ msgstr ""
 
 #: lib/mishka_cms_core/live_user_auth.ex:86
 #: lib/mishka_cms_core/runtime/plugs/require_permission.ex:102
-#: lib/mishka_cms_core/sidebar.ex:888
+#: lib/mishka_cms_core/sidebar.ex:1041
 #, elixir-autogen, elixir-format
 msgid "You don't have permission to access this page"
 msgstr ""
@@ -6422,7 +6422,7 @@ msgstr ""
 msgid "You must log in to access this page."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:378
+#: lib/mishka_cms_core/layouts.ex:557
 #, elixir-autogen, elixir-format
 msgid "You're all caught up."
 msgstr ""
@@ -7900,12 +7900,12 @@ msgstr ""
 msgid "Your authenticator is turned off. Sign-ins ask for the password alone."
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:529
+#: lib/mishka_cms_core/layouts.ex:708
 #, elixir-autogen, elixir-format
 msgid "Show %{count} more"
 msgstr ""
 
-#: lib/mishka_cms_core/layouts.ex:539
+#: lib/mishka_cms_core/layouts.ex:718
 #, elixir-autogen, elixir-format
 msgid "Show less"
 msgstr ""
@@ -8454,7 +8454,7 @@ msgstr ""
 msgid "Redirect updated"
 msgstr ""
 
-#: lib/mishka_cms_core/sidebar.ex:430
+#: lib/mishka_cms_core/sidebar.ex:495
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.ex:38
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/redirect/index.html.heex:9
 #, elixir-autogen, elixir-format
@@ -19763,4 +19763,24 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/seo.ex:613
 #, elixir-autogen, elixir-format
 msgid "The site tagline setting, in the page's language when Translations has it. Empty leaves out whatever uses it."
+msgstr ""
+
+#: lib/mishka_cms_core/layouts.ex:273
+#, elixir-autogen, elixir-format
+msgid "Back to %{label}"
+msgstr ""
+
+#: lib/mishka_cms_core/layouts.ex:274
+#, elixir-autogen, elixir-format
+msgid "Back to the menu"
+msgstr ""
+
+#: lib/mishka_cms_core/layouts.ex:417
+#, elixir-autogen, elixir-format
+msgid "Open the entries under %{label}"
+msgstr ""
+
+#: lib/mishka_cms_core/layouts.ex:338
+#, elixir-autogen, elixir-format
+msgid "Show or hide the entries under %{label}"
 msgstr ""

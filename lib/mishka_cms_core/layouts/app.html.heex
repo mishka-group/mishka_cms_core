@@ -33,7 +33,7 @@ SPDX-License-Identifier: Apache-2.0
     />
 
     <main class="flex-1 scroll-smooth overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <div class="px-8 pb-16 pt-7 max-[980px]:px-[15px]! max-[980px]:pb-12! max-[980px]:pt-[18px]!">
+      <div class="px-8 pb-16 pt-7 max-[980px]:px-[15px]! max-[980px]:pb-[calc(48px+env(safe-area-inset-bottom))]! max-[980px]:pt-[18px]!">
         <div class="mx-auto max-w-[1340px]">
           {@inner_content}
         </div>

@@ -668,20 +668,28 @@ defmodule MishkaCmsCore.SidebarTest do
     end
 
     defp shop(menu), do: Enum.find(group(menu, "plugins").items, &(&1.key == "nested"))
+    defp child(item, key), do: Enum.find(item.children, &(&1.key == key))
 
-    test "an entry shows as one row holding its children", %{user: user} do
+    test "an entry shows as one row holding its children, and three of them hold two each", %{
+      user: user
+    } do
       shop = shop(Sidebar.menu(user))
 
       assert labels(group(Sidebar.menu(user), "plugins").items) == ["Shop"]
       assert length(shop.children) == 9
-      assert Enum.all?(shop.children, &(&1.children == []))
+
+      assert shop.children |> Enum.filter(&(&1.children != [])) |> labels() ==
+               ["Orders", "Reports", "Stock"]
+
+      assert labels(child(shop, "nested.orders").children) == ["Returns", "Drafts"]
     end
 
     test "a child takes its group and position from the top of its chain" do
       items = Map.new(Sidebar.collect().items, &{&1.key, &1})
 
       assert items["nested.orders"].group == "plugins"
-      assert items["nested.orders"].position == :main
+      assert items["nested.orders.returns"].group == "plugins"
+      assert items["nested.orders.returns"].position == :main
     end
 
     test "a child the user may not see is not shown, and the rest stay" do
@@ -707,32 +715,44 @@ defmodule MishkaCmsCore.SidebarTest do
       shop = shop(Sidebar.menu(user))
 
       refute "Orders" in labels(shop.children)
-      assert "Inbox" in labels(shop.children)
+      refute Enum.any?(shop.children, &("Returns" in labels(&1.children)))
     end
 
-    test "order and visible settings work among siblings", %{user: user} do
+    test "order and visible settings work among siblings, on both levels", %{user: user} do
       override(Sidebar.order_key("nested.taxes"), 1)
-      override(Sidebar.visible_key("nested.stock"), false)
+      override(Sidebar.order_key("nested.orders.drafts"), 1)
+      override(Sidebar.visible_key("nested.stock.low"), false)
 
       shop = shop(Sidebar.menu(user))
 
       assert shop.children |> labels() |> List.first() == "Taxes"
-      refute "Stock" in labels(shop.children)
+      assert labels(child(shop, "nested.orders").children) == ["Drafts", "Returns"]
+      assert labels(child(shop, "nested.stock").children) == ["Out"]
     end
 
     test "children are arranged on the settings page under their top row's section" do
       definitions = Map.new(Sidebar.settings_definitions(), &{&1.key, &1})
 
       assert definitions[Sidebar.order_key("nested.orders")].group == "Plugins"
-      assert definitions[Sidebar.visible_key("nested.orders")].group == "Plugins"
+      assert definitions[Sidebar.visible_key("nested.orders.returns")].group == "Plugins"
     end
 
     test "the trail runs from the top row down to the entry of the open page", %{user: user} do
       root = NestedMenu.path()
 
+      assert Sidebar.menu(user, root <> "/orders-returns").trail ==
+               ["nested", "nested.orders", "nested.orders.returns"]
+
       assert Sidebar.menu(user, root <> "/inbox/42").trail == ["nested", "nested.inbox"]
       assert Sidebar.menu(user, root).trail == ["nested"]
       assert Sidebar.menu(user).trail == []
+    end
+
+    test "a page not in the nav keeps the entry it names marked", %{user: user} do
+      assert Sidebar.menu(user, NestedMenu.path() <> "/order").trail ==
+               ["nested", "nested.orders"]
+
+      assert Sidebar.menu(user, "/admin/dashboard/notifications").trail == []
     end
 
     test "a child is guarded by its own module and permissions, like any item" do
@@ -745,19 +765,35 @@ defmodule MishkaCmsCore.SidebarTest do
     defp entry(key, extra \\ %{}),
       do: Map.merge(%{key: key, label: key, path: "/admin/dashboard/#{key}"}, extra)
 
-    test "builds a list one level deep" do
-      assert [_, _] = Sidebar.items!([entry("a"), entry("b", %{parent: "a"})])
+    test "builds a list two levels deep" do
+      assert [_, _, _] =
+               Sidebar.items!([
+                 entry("a"),
+                 entry("b", %{parent: "a"}),
+                 entry("c", %{parent: "b"})
+               ])
     end
 
-    test "refuses a child that is a parent" do
-      assert_raise ArgumentError, ~r/is a child itself/, fn ->
-        Sidebar.items!([entry("a"), entry("b", %{parent: "a"}), entry("c", %{parent: "b"})])
+    test "refuses a third level" do
+      assert_raise ArgumentError, ~r/two levels/, fn ->
+        Sidebar.items!([
+          entry("a"),
+          entry("b", %{parent: "a"}),
+          entry("c", %{parent: "b"}),
+          entry("d", %{parent: "c"})
+        ])
       end
     end
 
     test "refuses a parent that is not in the list" do
       assert_raise ArgumentError, ~r/parent is missing/, fn ->
         Sidebar.items!([entry("b", %{parent: "a"})])
+      end
+    end
+
+    test "refuses a mark that names no entry of the list" do
+      assert_raise ArgumentError, ~r/marks an unknown entry/, fn ->
+        Sidebar.items!([entry("a", %{nav: false, mark: "z"})])
       end
     end
 

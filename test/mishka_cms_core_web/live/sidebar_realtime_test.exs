@@ -311,7 +311,11 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
     @chip "#admin-sidebar-tree [data-count='nested.inbox']"
 
+    # The count server has sent its broadcast once it answers a call, and the page has drawn it
+    # once it answers `render/1`.
     defp shown_count(view) do
+      :sys.get_state(Counts)
+
       view
       |> render()
       |> LazyHTML.from_fragment()
@@ -320,8 +324,41 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
       |> String.trim()
     end
 
+    defp release(key) do
+      %{^key => {token, _state}} = :sys.get_state(Counts)
+      send(Counts, {:release, key, token})
+    end
+
+    # An earlier test's count may still be held for its second; end it, so the next one is sent.
+    defp free(key) do
+      case :sys.get_state(Counts) do
+        %{^key => {token, _state}} ->
+          send(Counts, {:release, key, token})
+          free(key)
+
+        _free ->
+          :ok
+      end
+    end
+
+    test "changes on the open page without a reload, and zero hides it", %{site: site} do
+      view = open("localhost", "counts@example.com", site.id, @other_page)
+      free("nested.inbox")
+      assert shown_count(view) == ""
+
+      Counts.put("nested.inbox", 5, :attention)
+      assert shown_count(view) == "5"
+
+      Counts.put("nested.inbox", 0)
+      assert shown_count(view) == "5"
+
+      release("nested.inbox")
+      assert shown_count(view) == ""
+    end
+
     test "a page that opens after the count was set shows it", %{site: site} do
       Counts.put("nested.inbox", 7)
+      :sys.get_state(Counts)
       on_exit(fn -> Counts.put("nested.inbox", 0) end)
 
       view = open("localhost", "late@example.com", site.id, @other_page)

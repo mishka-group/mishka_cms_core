@@ -26,7 +26,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   the page after that event is answered with the redrawn sidebar.
 
   It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`): read from
-  memory when the page mounts.
+  memory when the page mounts, then changed by each count the page hears.
 
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
@@ -98,6 +98,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
 
     if connected?(socket) do
       Sidebar.subscribe(socket.assigns[:current_user])
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, Counts.topic())
       attach_hook(socket, :sidebar_changed, :handle_info, &sidebar_message/2)
     else
       socket
@@ -121,6 +122,11 @@ defmodule MishkaCmsCore.Layouts.Nav do
      socket
      |> put_private(:sidebar_refresh_pending, false)
      |> assign(:sidebar_version, version)}
+  end
+
+  defp sidebar_message({:sidebar_count, key, number, tone}, socket) do
+    {:halt,
+     assign(socket, :sidebar_counts, Map.put(socket.assigns.sidebar_counts, key, {number, tone}))}
   end
 
   defp sidebar_message(_message, socket), do: {:cont, socket}

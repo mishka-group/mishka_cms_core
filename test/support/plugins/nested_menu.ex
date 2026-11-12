@@ -4,8 +4,9 @@
 
 defmodule MishkaCmsCore.Test.Plugins.NestedMenu do
   @moduledoc """
-  Test plugin: one `sidebar:menus` entry under Plugins, "Shop", with nine children. They
-  ask for the shop's permission, and "Secret" for one of its own.
+  Test plugin: one `sidebar:menus` entry under Plugins, "Shop", with nine children, three of which
+  have two children each. "Secret" asks for a permission of its own, and "Order" is a page that is
+  not in the nav and keeps "Orders" marked.
   """
   use MishkaInstaller.Event.Hook, event: "sidebar:menus"
 
@@ -15,6 +16,12 @@ defmodule MishkaCmsCore.Test.Plugins.NestedMenu do
   @shop "admin:dashboard:probe_nested"
 
   @children ~w(overview orders inbox reports stock buyers notes taxes secret)
+  @grandchildren %{
+    "orders" => ~w(returns drafts),
+    "reports" => ~w(daily monthly),
+    "stock" => ~w(low out)
+  }
+
   @items Sidebar.items!(
            [
              %{
@@ -26,16 +33,40 @@ defmodule MishkaCmsCore.Test.Plugins.NestedMenu do
                permissions: [@shop]
              }
            ] ++
-             Enum.map(Enum.with_index(@children), fn {name, index} ->
+             (@children
+              |> Enum.with_index()
+              |> Enum.flat_map(fn {name, index} ->
+                [
+                  %{
+                    key: "nested.#{name}",
+                    label: String.capitalize(name),
+                    path: "#{@root}/#{name}",
+                    parent: "nested",
+                    order: (index + 1) * 10,
+                    permissions: [(name == "secret" && "admin:dashboard:probe_secret") || @shop]
+                  }
+                  | Enum.map(Enum.with_index(Map.get(@grandchildren, name, [])), fn {sub, at} ->
+                      %{
+                        key: "nested.#{name}.#{sub}",
+                        label: String.capitalize(sub),
+                        path: "#{@root}/#{name}-#{sub}",
+                        parent: "nested.#{name}",
+                        order: (at + 1) * 10,
+                        permissions: [@shop]
+                      }
+                    end)
+                ]
+              end)) ++
+             [
                %{
-                 key: "nested.#{name}",
-                 label: String.capitalize(name),
-                 path: "#{@root}/#{name}",
-                 parent: "nested",
-                 order: (index + 1) * 10,
-                 permissions: [(name == "secret" && "admin:dashboard:probe_secret") || @shop]
+                 key: "nested.order",
+                 label: "Order",
+                 path: "#{@root}/order",
+                 nav: false,
+                 mark: "nested.orders",
+                 permissions: [@shop]
                }
-             end)
+             ]
          )
 
   @doc "The path of the entry's own page."
