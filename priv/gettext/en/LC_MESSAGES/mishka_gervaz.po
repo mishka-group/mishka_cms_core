@@ -21,8 +21,8 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:407
 #: lib/mishka_cms_core/runtime/resources/page.ex:413
 #: lib/mishka_cms_core/runtime/resources/page.ex:512
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:216
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:228
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:220
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:232
 #: lib/mishka_cms_core/runtime/resources/site.ex:341
 #: lib/mishka_cms_core/runtime/resources/site.ex:461
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:253
@@ -397,7 +397,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:185
 #: lib/mishka_cms_core/runtime/resources/page.ex:590
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:216
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:323
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:327
 #: lib/mishka_cms_core/runtime/resources/site.ex:520
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:415
 #: lib/mishka_cms_core/runtime/resources/translation.ex:313
@@ -428,7 +428,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/media.ex:797
 #: lib/mishka_cms_core/runtime/resources/media_category.ex:176
 #: lib/mishka_cms_core/runtime/resources/page.ex:934
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:527
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:531
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:607
 #, elixir-autogen, elixir-format
 msgid "Description"
@@ -469,7 +469,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:467
 #: lib/mishka_cms_core/runtime/resources/media.ex:624
 #: lib/mishka_cms_core/runtime/resources/page.ex:556
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:309
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:313
 #: lib/mishka_cms_core/runtime/resources/site.ex:501
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:397
 #, elixir-autogen, elixir-format
@@ -910,7 +910,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:499
 #: lib/mishka_cms_core/runtime/resources/media.ex:660
 #: lib/mishka_cms_core/runtime/resources/page.ex:606
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:337
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:341
 #: lib/mishka_cms_core/runtime/resources/site.ex:532
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:431
 #, elixir-autogen, elixir-format
@@ -950,7 +950,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/media.ex:481
 #: lib/mishka_cms_core/runtime/resources/page.ex:477
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:157
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:260
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:264
 #: lib/mishka_cms_core/runtime/resources/site.ex:436
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:296
 #: lib/mishka_cms_core/runtime/resources/translation.ex:233
@@ -965,7 +965,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/layout.ex:386
 #: lib/mishka_cms_core/runtime/resources/media.ex:495
 #: lib/mishka_cms_core/runtime/resources/page.ex:491
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:274
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:278
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:310
 #: lib/mishka_cms_core/runtime/resources/translation.ex:250
 #, elixir-autogen, elixir-format
@@ -1011,7 +1011,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/media_category.ex:152
 #: lib/mishka_cms_core/runtime/resources/page.ex:455
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:325
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:241
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:245
 #: lib/mishka_cms_core/runtime/resources/site.ex:241
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:278
 #: lib/mishka_cms_core/runtime/resources/translation.ex:211
@@ -1559,7 +1559,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:410
 #: lib/mishka_cms_core/runtime/resources/layout.ex:519
 #: lib/mishka_cms_core/runtime/resources/page.ex:626
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:354
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:358
 #: lib/mishka_cms_core/runtime/resources/site.ex:549
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:451
 #, elixir-autogen, elixir-format
@@ -1689,7 +1689,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/js_hook.ex:254
 #: lib/mishka_cms_core/runtime/resources/layout.ex:318
 #: lib/mishka_cms_core/runtime/resources/page.ex:419
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:229
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:233
 #: lib/mishka_cms_core/runtime/resources/site.ex:342
 #: lib/mishka_cms_core/runtime/resources/stylesheet.ex:269
 #, elixir-autogen, elixir-format
@@ -2281,7 +2281,7 @@ msgid "Shown by search engines and link previews."
 msgstr ""
 
 #: lib/mishka_cms_core/mail/delivery.ex:71
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:497
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:501
 #, elixir-autogen, elixir-format
 msgid "To"
 msgstr ""
@@ -2347,7 +2347,7 @@ msgstr ""
 msgid "Who may open this page; empty means everyone. If the page shows records, leave it empty: each record's own Permissions are used."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:450
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:454
 #, elixir-autogen, elixir-format
 msgid "From"
 msgstr ""
@@ -2383,67 +2383,67 @@ msgstr ""
 msgid "Confirm this account's email address without the confirmation email?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:65
+#: lib/mishka_cms_core/runtime/redirects.ex:83
 #, elixir-autogen, elixir-format
 msgid "301 Moved permanently"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:66
+#: lib/mishka_cms_core/runtime/redirects.ex:84
 #, elixir-autogen, elixir-format
 msgid "302 Found"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:67
+#: lib/mishka_cms_core/runtime/redirects.ex:85
 #, elixir-autogen, elixir-format
 msgid "307 Temporary"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:68
+#: lib/mishka_cms_core/runtime/redirects.ex:86
 #, elixir-autogen, elixir-format
 msgid "308 Permanent"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:291
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:295
 #, elixir-autogen, elixir-format
 msgid "Any status"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:367
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:371
 #, elixir-autogen, elixir-format
 msgid "Archive selected redirects?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:316
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:320
 #, elixir-autogen, elixir-format
 msgid "Archive this redirect?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:406
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:410
 #, elixir-autogen, elixir-format
 msgid "No redirects yet"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:382
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:386
 #, elixir-autogen, elixir-format
 msgid "Permanently delete selected redirects? This cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:346
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:350
 #, elixir-autogen, elixir-format
 msgid "Permanently delete this redirect? This cannot be undone."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:72
+#: lib/mishka_cms_core/runtime/redirects.ex:90
 #, elixir-autogen, elixir-format
 msgid "Redirect"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:374
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:378
 #, elixir-autogen, elixir-format
 msgid "Restore selected redirects?"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:330
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:334
 #, elixir-autogen, elixir-format
 msgid "Restore this redirect?"
 msgstr ""
@@ -5323,7 +5323,7 @@ msgstr ""
 msgid "Suggestion"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:557
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:561
 #, elixir-autogen, elixir-format
 msgid "Add a note"
 msgstr ""
@@ -5746,7 +5746,7 @@ msgstr ""
 msgid "Already in the CMS, so linked and kept as it is"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:282
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:286
 #, elixir-autogen, elixir-format
 msgid "Any kind"
 msgstr ""
@@ -7157,27 +7157,27 @@ msgstr ""
 msgid "user"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:479
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:483
 #, elixir-autogen, elixir-format
 msgid "From query"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:74
+#: lib/mishka_cms_core/runtime/redirects.ex:92
 #, elixir-autogen, elixir-format
 msgid "Gone (410)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:75
+#: lib/mishka_cms_core/runtime/redirects.ex:93
 #, elixir-autogen, elixir-format
 msgid "Not found (404)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:484
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:488
 #, elixir-autogen, elixir-format
 msgid "Only when the address is asked with this query, such as p=123 or page_id=7 from WordPress. p=* answers p with any value when no rule names its exact value. Empty answers the address whatever its query."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:73
+#: lib/mishka_cms_core/runtime/redirects.ex:91
 #, elixir-autogen, elixir-format
 msgid "Rewrite"
 msgstr ""
@@ -7187,27 +7187,27 @@ msgstr ""
 msgid "Rule"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:502
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:506
 #, elixir-autogen, elixir-format
 msgid "A path on this site, or a full http(s) address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:470
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:474
 #, elixir-autogen, elixir-format
 msgid "For links such as WordPress ?p= addresses."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:467
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:471
 #, elixir-autogen, elixir-format
 msgid "Match a query string"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:455
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:459
 #, elixir-autogen, elixir-format
 msgid "The old address still being asked for."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:438
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:442
 #, elixir-autogen, elixir-format
 msgid "What this address answers: send the visitor on, serve another page here, or show the error page."
 msgstr ""

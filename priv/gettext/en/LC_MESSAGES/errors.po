@@ -758,7 +758,7 @@ msgstr ""
 msgid "Page is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:58
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:59
 #, elixir-autogen, elixir-format
 msgid "Path must be a string."
 msgstr ""
@@ -1031,7 +1031,7 @@ msgstr ""
 msgid "A layout"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2735
+#: lib/mishka_cms_core/runtime/resources/page.ex:2747
 #, elixir-autogen, elixir-format
 msgid "A page with this language already exists in this language group."
 msgstr ""
@@ -1105,7 +1105,7 @@ msgstr ""
 msgid "Host must be unique."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1275
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex:1301
 #, elixir-autogen, elixir-format
 msgid "Invalid"
 msgstr ""
@@ -1145,38 +1145,38 @@ msgstr ""
 msgid "Media path must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/page.ex:2708
+#: lib/mishka_cms_core/runtime/resources/page.ex:2720
 #, elixir-autogen, elixir-format
 msgid "Page name must be unique within a site."
 msgstr ""
 
 #: lib/mishka_cms_core/runtime/resources/__validations/page_path_unique.ex:43
-#: lib/mishka_cms_core/runtime/resources/page.ex:2722
+#: lib/mishka_cms_core/runtime/resources/page.ex:2734
 #, elixir-autogen, elixir-format
 msgid "Page path must be unique within a site."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:76
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:77
 #, elixir-autogen, elixir-format
 msgid "Path may only contain letters, digits, and the characters - _ / . : *"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:66
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:67
 #, elixir-autogen, elixir-format
 msgid "Path must be at most %{max} characters"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:69
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:70
 #, elixir-autogen, elixir-format
 msgid "Path must not contain '..' (directory traversal)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:72
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:73
 #, elixir-autogen, elixir-format
 msgid "Path must not contain '//' (empty path segment)"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:63
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:64
 #, elixir-autogen, elixir-format
 msgid "Path must start with '/'"
 msgstr ""
@@ -1190,7 +1190,7 @@ msgstr ""
 #: lib/mishka_cms_core/runtime/resources/error_page_draft.ex:694
 #: lib/mishka_cms_core/runtime/resources/layout.ex:1997
 #: lib/mishka_cms_core/runtime/resources/layout_draft.ex:730
-#: lib/mishka_cms_core/runtime/resources/page.ex:2715
+#: lib/mishka_cms_core/runtime/resources/page.ex:2727
 #: lib/mishka_cms_core/runtime/resources/page_draft.ex:1029
 #, elixir-autogen, elixir-format
 msgid "Preview token collision."
@@ -1371,23 +1371,23 @@ msgstr ""
 msgid "The state names %{name} twice; each name is one assign."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:558
+#: lib/mishka_cms_core/runtime/redirects.ex:582
 #, elixir-autogen, elixir-format
 msgid "A redirect cannot send an address to itself."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:631
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:645
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:635
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:649
 #, elixir-autogen, elixir-format
 msgid "Cannot edit an archived redirect. Restore it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:374
+#: lib/mishka_cms_core/runtime/redirects.ex:398
 #, elixir-autogen, elixir-format
 msgid "Enter a path on this site starting with /, or a full http:// or https:// address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:363
+#: lib/mishka_cms_core/runtime/redirects.ex:387
 #, elixir-autogen, elixir-format
 msgid "Enter an address on this site, such as /old-page."
 msgstr ""
@@ -1397,22 +1397,22 @@ msgstr ""
 msgid "Status must be 301, 302, 307 or 308."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:768
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:772
 #, elixir-autogen, elixir-format
 msgid "This redirect is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:937
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:941
 #, elixir-autogen, elixir-format
 msgid "This site already redirects that address."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:577
+#: lib/mishka_cms_core/runtime/redirects.ex:601
 #, elixir-autogen, elixir-format
 msgid "This would make a loop: the redirects from %{target} come back to %{address}."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:417
+#: lib/mishka_cms_core/runtime/redirects.ex:441
 #, elixir-autogen, elixir-format
 msgid "This address belongs to the CMS itself (/admin, /api, /live) and cannot be redirected."
 msgstr ""
@@ -2625,22 +2625,22 @@ msgstr ""
 msgid "must have Latin letters (a-z) or digits: a name is used in code and file names, so other letters are removed"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:394
+#: lib/mishka_cms_core/runtime/redirects.ex:418
 #, elixir-autogen, elixir-format
 msgid "A rewrite serves a page or a media file of this site: enter its path, starting with /, with no query. The CMS's own addresses cannot be served."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:532
+#: lib/mishka_cms_core/runtime/redirects.ex:556
 #, elixir-autogen, elixir-format
 msgid "A rewritten file must be one of this site's media files, under /uploads/<site>/media/."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/redirects.ex:450
+#: lib/mishka_cms_core/runtime/redirects.ex:474
 #, elixir-autogen, elixir-format
 msgid "A wildcard such as p=* is a rule's whole query: write it alone."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/redirect.ex:844
+#: lib/mishka_cms_core/runtime/resources/redirect.ex:848
 #, elixir-autogen, elixir-format
 msgid "Enter where this rule sends or serves the address."
 msgstr ""
@@ -2656,4 +2656,14 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1779
 #, elixir-autogen, elixir-format
 msgid "This post's address, %{address}, is already a page of this site."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:87
+#, elixir-autogen, elixir-format
+msgid "A wildcard like *rest must start a path segment"
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/__validations/path_format.ex:84
+#, elixir-autogen, elixir-format
+msgid "Path may hold only one wildcard like *rest"
 msgstr ""
