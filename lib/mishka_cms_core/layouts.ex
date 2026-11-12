@@ -290,7 +290,7 @@ defmodule MishkaCmsCore.Layouts do
         </div>
       </nav>
 
-      <div class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
+      <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
         <div class="mb-2 rounded-[13px] border border-[#e2ece5] bg-[#f3f8f4] px-[13px] py-3">
           <div class="flex items-center gap-2">
             <span class="size-2 shrink-0 animate-pulse rounded-full bg-[#1f9d6b]"></span>
@@ -369,7 +369,7 @@ defmodule MishkaCmsCore.Layouts do
   attr :trail, :list, default: []
   attr :counts, :map, default: %{}
   attr :nested, :boolean, default: false
-  attr :class, :string, default: "py-[9px] text-[13px]"
+  attr :class, :string, default: "py-[9px] text-[13px] max-[980px]:min-h-12"
 
   defp entry_link(assigns) do
     assigns = assign(assigns, mark: mark(assigns.item, assigns.trail))

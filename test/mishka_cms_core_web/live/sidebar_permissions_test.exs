@@ -378,6 +378,11 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
       # Rows of 48px at least, and an entry with children keeps its two targets.
       assert Enum.all?(attr(html, "#{levels} a", "class"), &(&1 =~ "min-h-12"))
 
+      # The footer's rows, Settings among them, are as tall on a narrow screen.
+      footer = attr(html, "#admin-sidebar-footer a", "class")
+      assert footer != []
+      assert Enum.all?(footer, &(&1 =~ "max-[980px]:min-h-12"))
+
       assert attr(
                html,
                "#sbm-nested button[aria-label='Open the entries under Orders']",
