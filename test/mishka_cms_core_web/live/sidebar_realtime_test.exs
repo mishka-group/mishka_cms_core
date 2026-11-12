@@ -20,7 +20,8 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
-  alias MishkaCmsCore.Test.Plugins.ExtensionMenu
+  alias MishkaCmsCore.Sidebar.Counts
+  alias MishkaCmsCore.Test.Plugins.{ExtensionMenu, NestedMenu}
   alias MishkaInstaller.Event.{Event, EventHandler}
 
   require Ash.Query
@@ -289,6 +290,107 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
 
       {:ok, _} = Settings.put(@media_key, true)
       assert_receive {:sidebar_changed, nil}
+    end
+  end
+
+  describe "a count on an entry" do
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: NestedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, NestedMenu, false) end)
+      Settings.load_definitions()
+      :ok
+    end
+
+    @chip "#admin-sidebar-tree [data-count='nested.inbox']"
+
+    defp shown_count(view) do
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(@chip)
+      |> LazyHTML.text()
+      |> String.trim()
+    end
+
+    test "a page that opens after the count was set shows it", %{site: site} do
+      Counts.put("nested.inbox", 7)
+      on_exit(fn -> Counts.put("nested.inbox", 0) end)
+
+      view = open("localhost", "late@example.com", site.id, @other_page)
+
+      assert shown_count(view) == "7"
+    end
+  end
+
+  describe "queries of an admin page" do
+    # Every query the request and the page it mounts run, counted by the repo's own telemetry.
+    defp queries(fun) do
+      test = self()
+      handler = "sidebar-queries-#{System.unique_integer([:positive])}"
+
+      :telemetry.attach(
+        handler,
+        [:mishka_cms_core, :repo, :query],
+        fn _event, _measurements, _metadata, _config ->
+          if self() == test or test in (Process.get(:"$callers") || []),
+            do: send(test, {:query, handler})
+        end,
+        nil
+      )
+
+      fun.()
+      :telemetry.detach(handler)
+      count(handler, 0)
+    end
+
+    defp count(handler, total) do
+      receive do
+        {:query, ^handler} -> count(handler, total + 1)
+      after
+        0 -> total
+      end
+    end
+
+    defp load(site, email) do
+      view = open("localhost", email, site.id, @other_page)
+      render(view)
+      ref = Process.monitor(view.pid)
+      GenServer.stop(view.pid, :normal)
+      assert_receive {:DOWN, ^ref, :process, _pid, _reason}
+    end
+
+    test "are as many with nested entries and counts as without", %{site: site} do
+      load(site, "warm@example.com")
+      plain = queries(fn -> load(site, "plain@example.com") end)
+
+      {:ok, _} =
+        Event.write(%{
+          name: NestedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, NestedMenu, false) end)
+      Settings.load_definitions()
+
+      Counts.put("nested.inbox", 3)
+      Counts.put("nested.orders", 9, :attention)
+      on_exit(fn -> Enum.each(~w(nested.inbox nested.orders), &Counts.put(&1, 0)) end)
+
+      nested = queries(fn -> load(site, "nested@example.com") end)
+
+      assert plain > 0
+      assert nested == plain
     end
   end
 end

@@ -134,22 +134,34 @@ defmodule MishkaCmsCore.Layouts do
   defp flash_notices, do: @flash_notices
 
   @doc """
-  The admin sidebar — logo, collapsible nav groups, and the active item highlighted from
-  `@current_path` (set by `MishkaCmsCore.Layouts.Nav`). Groups collapse client-side via `JS.toggle`.
+  The admin sidebar — logo, folding nav groups, entries with entries under them, and the entry of
+  the open page highlighted from `@current_path` (set by `MishkaCmsCore.Layouts.Nav`).
 
-  The nav itself is data, not markup: `MishkaCmsCore.Sidebar.menu/1` collects it from every
+  The nav itself is data, not markup: `MishkaCmsCore.Sidebar.menu/2` collects it from every
   extension's `"sidebar:menus"` plugin, drops what `@current_user` may not see, and orders it from
   Settings. This component only paints what it is handed, so an empty section is one that was
   filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
-  sidebar is drawn again each time it changes.
+  sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
+  beside entries (`MishkaCmsCore.Sidebar.Counts`).
+
+  A group and a branch fold with `Phoenix.LiveView.JS`; the `SidebarScroll` hook keeps what was
+  folded by hand. The branch of the open page is open, and so is the group holding it.
   """
   attr :current_path, :string, default: nil
   attr :current_user, :any, default: nil
   attr :version, :integer, default: 0
+  attr :counts, :map, default: %{}
 
   def sidebar(assigns) do
-    %{main: main, footer: footer} = Sidebar.menu(assigns.current_user)
-    assigns = assign(assigns, main_entries: main, footer_entries: footer)
+    %{main: main, footer: footer, trail: trail} =
+      Sidebar.menu(assigns.current_user, assigns.current_path)
+
+    assigns =
+      assign(assigns,
+        main_entries: main,
+        footer_entries: footer,
+        trail: trail
+      )
 
     ~H"""
     <%!-- ON A NARROW SCREEN THE MENU SLIDES IN FROM THE LEFT in either direction: its open state is
@@ -189,25 +201,39 @@ defmodule MishkaCmsCore.Layouts do
         phx-hook="SidebarScroll"
         class="-mx-0.5 flex flex-1 flex-col gap-0.5 overflow-y-auto px-0.5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
       >
-        <%= for entry <- @main_entries do %>
-          <div :if={group?(entry)}>
-            <button
-              type="button"
-              phx-click={JS.toggle(to: "#sb-" <> entry.key)}
-              class="mb-1 mt-4 flex w-full items-center gap-2.5 px-[10px] py-1.5"
-            >
-              <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
-                {label(entry.label)}
-              </span>
-              <span class="h-px flex-1 bg-[#e6e4de]"></span>
-              <.icon name="hero-chevron-down" class="size-[13px] text-[#c2bfb6]" />
-            </button>
-            <div id={"sb-" <> entry.key} class="flex flex-col gap-0.5">
-              <.nav_link :for={item <- entry.items} item={item} current_path={@current_path} child />
+        <div id="admin-sidebar-tree" class="flex flex-col gap-0.5">
+          <%= for entry <- @main_entries do %>
+            <div :if={group?(entry)}>
+              <button
+                type="button"
+                data-fold
+                aria-expanded="true"
+                aria-controls={dom_id("sb", entry.key)}
+                phx-click={fold(dom_id("sb", entry.key))}
+                class="group mb-1 mt-4 flex w-full items-center gap-2.5 px-[10px] py-1.5"
+              >
+                <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
+                  {label(entry.label)}
+                </span>
+                <span class="h-px flex-1 bg-[#e6e4de]"></span>
+                <span
+                  data-folded-count
+                  class="text-[10.5px] font-bold text-[#a8a5a0] group-aria-expanded:hidden"
+                >
+                  ({length(entry.items)})
+                </span>
+                <.icon
+                  name="hero-chevron-down"
+                  class="size-[13px] text-[#c2bfb6] transition-transform group-aria-expanded:rotate-180"
+                />
+              </button>
+              <div id={dom_id("sb", entry.key)} class="flex flex-col gap-0.5">
+                <.nav_link :for={item <- entry.items} item={item} trail={@trail} counts={@counts} />
+              </div>
             </div>
-          </div>
-          <.nav_link :if={!group?(entry)} item={entry} current_path={@current_path} />
-        <% end %>
+            <.nav_link :if={!group?(entry)} item={entry} trail={@trail} counts={@counts} />
+          <% end %>
+        </div>
       </nav>
 
       <div class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
@@ -222,7 +248,7 @@ defmodule MishkaCmsCore.Layouts do
             {gettext("Runtime · %{uptime} uptime", uptime: "99.98%")}
           </div>
         </div>
-        <.nav_link :for={item <- @footer_entries} item={item} current_path={@current_path} />
+        <.nav_link :for={item <- @footer_entries} item={item} trail={@trail} counts={@counts} />
       </div>
     </aside>
 
@@ -239,32 +265,109 @@ defmodule MishkaCmsCore.Layouts do
   end
 
   attr :item, :map, required: true
-  attr :current_path, :string, default: nil
-  attr :child, :boolean, default: false
+  attr :trail, :list, default: []
+  attr :counts, :map, default: %{}
+  attr :nested, :boolean, default: false
 
   defp nav_link(assigns) do
-    assigns = assign(assigns, :active, active?(assigns.current_path, assigns.item.path))
+    assigns = assign(assigns, :panel, dom_id("sbi", assigns.item.key))
+
+    ~H"""
+    <div :if={@item.children != []}>
+      <div class="flex items-center gap-0.5">
+        <.entry_link item={@item} trail={@trail} counts={@counts} nested={@nested} />
+        <button
+          type="button"
+          data-fold
+          aria-controls={@panel}
+          aria-expanded={to_string(@item.key in @trail)}
+          aria-label={gettext("Show or hide the entries under %{label}", label: label(@item.label))}
+          phx-click={fold(@panel)}
+          class="group flex size-[30px] shrink-0 items-center justify-center rounded-[8px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+        >
+          <.icon
+            name="hero-chevron-down"
+            class="size-[13px] transition-transform group-aria-expanded:rotate-180"
+          />
+        </button>
+      </div>
+      <div
+        id={@panel}
+        class={[
+          "ms-[22px] mt-0.5 flex flex-col gap-0.5 border-s border-[#e6e4de] ps-2",
+          @item.key not in @trail && "hidden"
+        ]}
+      >
+        <.nav_link :for={child <- @item.children} item={child} trail={@trail} counts={@counts} nested />
+      </div>
+    </div>
+    <.entry_link
+      :if={@item.children == []}
+      item={@item}
+      trail={@trail}
+      counts={@counts}
+      nested={@nested}
+    />
+    """
+  end
+
+  attr :item, :map, required: true
+  attr :trail, :list, default: []
+  attr :counts, :map, default: %{}
+  attr :nested, :boolean, default: false
+  attr :class, :string, default: "py-[9px] text-[13px]"
+
+  defp entry_link(assigns) do
+    assigns = assign(assigns, mark: mark(assigns.item, assigns.trail))
 
     ~H"""
     <.link
       navigate={@item.path}
-      aria-current={@active && "page"}
+      aria-current={@mark}
       class={[
-        "flex items-center gap-3 rounded-[10px] px-[10px] py-[9px] text-[13px] transition-colors",
-        (@active && "bg-[#f2f1fc] font-bold text-[#4f4bcc]") ||
-          "font-semibold text-[#5c5a54] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+        "flex min-w-0 flex-1 items-center gap-3 rounded-[10px] px-[10px] transition-colors",
+        @class,
+        @mark == "page" && "bg-[#f2f1fc] font-bold text-[#4f4bcc]",
+        @mark == "true" && "font-bold text-[#1b1a18] hover:bg-[#f6f5f2]",
+        !@mark && "font-semibold text-[#5c5a54] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
       ]}
     >
-      <span class={[
-        "flex size-[26px] shrink-0 items-center justify-center rounded-[8px]",
-        @active && "bg-[#e4e2f7] text-[#5b57d6]"
-      ]}>
+      <span
+        :if={!@nested}
+        class={[
+          "flex size-[26px] shrink-0 items-center justify-center rounded-[8px]",
+          @mark == "page" && "bg-[#e4e2f7] text-[#5b57d6]",
+          @mark == "true" && "text-[#5b57d6]"
+        ]}
+      >
         <.icon name={@item.icon} class="size-4" />
       </span>
-      <span class="flex-1">{label(@item.label)}</span>
+      <span class="min-w-0 flex-1 truncate">{label(@item.label)}</span>
+      <.count_chip key={@item.key} count={@counts[@item.key]} />
     </.link>
     """
   end
+
+  attr :key, :string, required: true
+  attr :count, :any, default: nil
+
+  defp count_chip(%{count: {number, tone}} = assigns) when is_integer(number) and number > 0 do
+    assigns = assign(assigns, number: number, tone: tone)
+
+    ~H"""
+    <span
+      data-count={@key}
+      class={[
+        "shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-bold leading-[16px]",
+        (@tone == :attention && "bg-[#fbf1df] text-[#cf8a24]") || "bg-[#eeedfb] text-[#5b57d6]"
+      ]}
+    >
+      {@number}
+    </span>
+    """
+  end
+
+  defp count_chip(assigns), do: ~H""
 
   @doc """
   The admin topbar — search, theme toggle, notifications, and the user's menu: Account settings, the
@@ -654,9 +757,21 @@ defmodule MishkaCmsCore.Layouts do
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
 
-  defp active?(nil, _path), do: false
-  defp active?(current, "/admin/dashboard"), do: current == "/admin/dashboard"
-  defp active?(current, path), do: current == path or String.starts_with?(current, path <> "/")
+  # `page` for the entry of the open page, `true` (the quieter mark) for the entries above it.
+  defp mark(%{key: key}, trail) do
+    cond do
+      List.last(trail) == key -> "page"
+      key in trail -> "true"
+      true -> nil
+    end
+  end
+
+  defp fold(id) do
+    JS.toggle_class("hidden", to: "#" <> id)
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+  end
+
+  defp dom_id(prefix, key), do: prefix <> "-" <> String.replace(key, ~r/[^A-Za-z0-9_-]/, "-")
 
   defp user_email(%{email: email}) when not is_nil(email), do: to_string(email)
   defp user_email(_), do: gettext("Admin")

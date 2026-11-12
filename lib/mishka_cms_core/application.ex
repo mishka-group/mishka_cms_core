@@ -149,13 +149,14 @@ defmodule MishkaCmsCore.Application do
     #
     # `RenderMetrics` is started here rather than by the host, like the other runtime states, because
     # nothing outside the core reads or writes it: a host that never lists it still gets the
-    # component preview's render times.
+    # component preview's render times. `Sidebar.Counts` likewise needs nothing of the host's.
     children =
       [{Phoenix.PubSub, name: MishkaCmsCore.PubSub}] ++
         installer_children() ++
         [
           {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
-          MishkaCmsCore.Runtime.RenderMetrics
+          MishkaCmsCore.Runtime.RenderMetrics,
+          MishkaCmsCore.Sidebar.Counts
         ] ++
         plugins()
 

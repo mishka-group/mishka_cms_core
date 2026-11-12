@@ -225,8 +225,32 @@ const NumberBounds = {
 // The admin sidebar's scrolling nav. It is drawn by the LiveView layout, so every live navigation
 // replaces it with a fresh element at the top; this puts it back where the reader left it. The
 // position lives in `sessionStorage`, one per tab, so it also survives the full page loads into and
-// out of the builder. With nothing saved, the active link is scrolled into view instead.
+// out of the builder. Then the active link is scrolled into view, which moves nothing when it is
+// already in view.
+//
+// It also keeps what the reader folded. A group or a branch folds with `Phoenix.LiveView.JS`, but
+// `JS` cannot write storage, so the hook remembers each fold in `localStorage` (one map of panel id
+// to open, for every tab and the next visit) and puts it back on the fresh nav. A panel that holds
+// the open page stays open whatever was remembered. The fold is put back through `this.js()`, so a
+// later patch of the sidebar keeps it, as it keeps one made by a click.
 const SIDEBAR_SCROLL_KEY = "admin-sidebar:scrollTop";
+const SIDEBAR_FOLDS_KEY = "admin-sidebar:folds";
+
+function readFolds() {
+  try {
+    const folds = JSON.parse(localStorage.getItem(SIDEBAR_FOLDS_KEY));
+
+    return folds && typeof folds === "object" && !Array.isArray(folds) ? folds : {};
+  } catch (_denied) {
+    // Refused storage or a value that is not JSON: nothing is remembered.
+    return {};
+  }
+}
+
+// A link inside a folded list has no box to scroll to.
+function shown(el) {
+  return typeof el.checkVisibility !== "function" || el.checkVisibility();
+}
 
 const SidebarScroll = {
   mounted() {
@@ -238,13 +262,15 @@ const SidebarScroll = {
       // Private browsing may refuse sessionStorage; fall back to the active link below.
     }
 
+    this.restoreFolds();
+
     const top = saved === null ? NaN : parseInt(saved, 10);
 
-    if (Number.isNaN(top)) {
-      this.el.querySelector("[aria-current='page']")?.scrollIntoView({ block: "nearest" });
-    } else {
-      this.el.scrollTop = top;
-    }
+    if (!Number.isNaN(top)) this.el.scrollTop = top;
+
+    [...this.el.querySelectorAll("[aria-current='page']")]
+      .find(shown)
+      ?.scrollIntoView({ block: "nearest" });
 
     this.frame = null;
     this.onScroll = () => {
@@ -264,10 +290,51 @@ const SidebarScroll = {
       });
     };
 
+    // LiveView runs the fold from its own click listener on `window`, after this one, so the state
+    // the click leads to is the opposite of the one read here.
+    this.onFold = (event) => {
+      const button = event.target.closest?.("[data-fold]");
+      const id = button?.getAttribute("aria-controls");
+
+      if (!id) return;
+
+      const folds = readFolds();
+      folds[id] = button.getAttribute("aria-expanded") !== "true";
+
+      try {
+        localStorage.setItem(SIDEBAR_FOLDS_KEY, JSON.stringify(folds));
+      } catch (_denied) {
+        // Without storage the fold lasts until the nav is drawn again.
+      }
+    };
+
     this.el.addEventListener("scroll", this.onScroll, { passive: true });
+    this.el.addEventListener("click", this.onFold);
+  },
+  restoreFolds() {
+    const folds = readFolds();
+    const js = this.js();
+
+    this.el.querySelectorAll("[data-fold]").forEach((button) => {
+      const id = button.getAttribute("aria-controls");
+      const panel = id && document.getElementById(id);
+
+      if (!panel || typeof folds[id] !== "boolean") return;
+
+      const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
+
+      js.setAttribute(button, "aria-expanded", String(open));
+
+      if (open) {
+        js.removeClass(panel, "hidden");
+      } else {
+        js.addClass(panel, "hidden");
+      }
+    });
   },
   destroyed() {
     this.el.removeEventListener("scroll", this.onScroll);
+    this.el.removeEventListener("click", this.onFold);
 
     if (this.frame !== null) cancelAnimationFrame(this.frame);
   },

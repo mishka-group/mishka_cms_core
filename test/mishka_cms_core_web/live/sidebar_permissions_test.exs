@@ -20,7 +20,10 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
 
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Layouts
   alias MishkaCmsCore.Sidebar
+  alias MishkaCmsCore.Test.Plugins.NestedMenu
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @home "/admin/dashboard"
   @users "/admin/dashboard/account/users"
@@ -132,12 +135,10 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
                "Sites"
              )
 
+      html = view |> render() |> LazyHTML.from_fragment()
+
       assert [_only_one] =
-               view
-               |> render()
-               |> LazyHTML.from_fragment()
-               |> LazyHTML.query("#admin-sidebar [aria-current]")
-               |> Enum.to_list()
+               html |> LazyHTML.query("#admin-sidebar [aria-current]") |> Enum.to_list()
 
       close(view)
     end
@@ -240,6 +241,104 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
 
       assert {:ok, view, _html} = live(conn, @sites)
       close(view)
+    end
+  end
+
+  describe "nested entries in the chrome" do
+    @shop NestedMenu.path()
+
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: NestedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, NestedMenu, false) end)
+
+      {:ok, user: create_user_with_permissions!(["*"])}
+    end
+
+    defp sidebar(user, path, counts \\ %{}) do
+      (&Layouts.sidebar/1)
+      |> render_component(current_user: user, current_path: path, counts: counts)
+      |> LazyHTML.from_fragment()
+    end
+
+    defp one(html, selector), do: html |> LazyHTML.query(selector) |> Enum.to_list()
+
+    defp attr(html, selector, name),
+      do: html |> LazyHTML.query(selector) |> LazyHTML.attribute(name)
+
+    defp hidden?(html, id), do: "hidden" in classes(html, id)
+
+    defp classes(html, id),
+      do: html |> attr("##{id}", "class") |> List.first("") |> String.split()
+
+    test "the entry is one row whose link opens its page and whose arrow only folds", %{
+      user: user
+    } do
+      html = sidebar(user, "/admin/dashboard")
+      tree = "#admin-sidebar-tree"
+
+      assert [_link] = one(html, "#{tree} #sb-plugins > div > div > a[href='#{@shop}']")
+
+      assert attr(html, "#{tree} button[aria-controls='sbi-nested']", "aria-label") ==
+               ["Show or hide the entries under Shop"]
+
+      assert attr(html, "#{tree} button[aria-controls='sbi-nested']", "phx-click") |> hd() =~
+               "toggle_class"
+
+      assert html |> one("#sbi-nested > a, #sbi-nested > div") |> length() == 9
+      assert hidden?(html, "sbi-nested")
+    end
+
+    test "the branch of an open child page is open on load, and its parent marked", %{
+      user: user
+    } do
+      html = sidebar(user, @shop <> "/orders")
+      tree = "#admin-sidebar-tree"
+
+      refute hidden?(html, "sbi-nested")
+      assert attr(html, "#{tree} [aria-current='page']", "href") == [@shop <> "/orders"]
+      assert attr(html, "#{tree} [aria-current='true']", "href") == [@shop]
+
+      assert attr(html, "#{tree} button[aria-controls='sbi-nested']", "aria-expanded") ==
+               ["true"]
+    end
+
+    test "every group can fold, shows how many entries it holds, and the open page's group is open",
+         %{user: user} do
+      html = sidebar(user, @shop <> "/inbox")
+
+      for key <- ~w(runtime account plugins) do
+        assert attr(html, "button[aria-controls='sb-#{key}']", "data-fold") == [""]
+        refute hidden?(html, "sb-#{key}")
+      end
+
+      assert html
+             |> LazyHTML.query("button[aria-controls='sb-plugins'] [data-folded-count]")
+             |> LazyHTML.text()
+             |> String.trim() == "(1)"
+    end
+
+    test "a count chip shows the number in its tone, and zero hides it", %{user: user} do
+      html =
+        sidebar(user, "/admin/dashboard", %{
+          "nested.inbox" => {5, :attention},
+          "nested.orders" => {0, :plain},
+          "nested" => {12, :plain}
+        })
+
+      assert html
+             |> LazyHTML.query("#admin-sidebar-tree [data-count='nested.inbox']")
+             |> LazyHTML.text() =~ "5"
+
+      assert one(html, "#admin-sidebar-tree [data-count='nested']") != []
+      assert one(html, "[data-count='nested.orders']") == []
     end
   end
 end
