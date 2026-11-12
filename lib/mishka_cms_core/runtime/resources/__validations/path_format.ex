@@ -80,7 +80,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
           )
         )
 
-      length(String.split(path, "*")) > 2 ->
+      match?([_, _, _ | _], String.split(path, "*")) ->
         error(dgettext_noop("errors", "Path may hold only one wildcard like *rest"))
 
       String.match?(path, ~r{[^/]\*}) ->
