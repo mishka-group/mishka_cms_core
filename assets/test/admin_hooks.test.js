@@ -309,3 +309,55 @@ describe("ContentParts", () => {
     hook.destroyed();
   });
 });
+
+// The preview modal's "Loading the preview…" sits behind the frame; a page with no background of its
+// own showed it through, so it goes when the frame has loaded, and comes back with a new frame.
+describe("PreviewFrame", () => {
+  function frame(id) {
+    return `<div data-preview-spinner id="spinner-${id}"></div><iframe id="frame-${id}"></iframe>`;
+  }
+
+  function mount(id) {
+    document.body.innerHTML = `<div id="wrap">${frame(id)}</div>`;
+
+    const hook = Object.create(AdminHooks.PreviewFrame);
+    hook.el = document.getElementById("wrap");
+    hook.mounted();
+
+    return hook;
+  }
+
+  const spinner = () => document.querySelector("[data-preview-spinner]");
+
+  test("shows the note until the frame loads, then hides it", () => {
+    mount("a");
+    expect(spinner().hidden).toBe(false);
+
+    document.querySelector("iframe").dispatchEvent(new Event("load"));
+    expect(spinner().hidden).toBe(true);
+  });
+
+  test("keeps the note hidden across a patch that redraws it for the same frame", () => {
+    const hook = mount("a");
+    const iframe = document.querySelector("iframe");
+    iframe.dispatchEvent(new Event("load"));
+
+    spinner().replaceWith(Object.assign(document.createElement("div"), { id: "spinner-a" }));
+    document.getElementById("spinner-a").setAttribute("data-preview-spinner", "");
+    hook.updated();
+
+    expect(spinner().hidden).toBe(true);
+  });
+
+  test("shows the note again for a new frame, until that one loads", () => {
+    const hook = mount("a");
+    document.querySelector("iframe").dispatchEvent(new Event("load"));
+
+    hook.el.innerHTML = frame("b");
+    hook.updated();
+    expect(spinner().hidden).toBe(false);
+
+    document.querySelector("iframe").dispatchEvent(new Event("load"));
+    expect(spinner().hidden).toBe(true);
+  });
+});

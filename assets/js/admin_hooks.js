@@ -5,8 +5,8 @@
 // THE HOOKS THE CORE'S OWN ADMIN TEMPLATES MOUNT, beside the code box (`pb_code_editor.js`) and the
 // rich-text editor (`pb_content_editor.js`): the dashboard's widget grid and its library tray, the
 // parts of a content component in its settings drawer, the media thumbnails, a widget's bounded
-// number fields and the sidebar's scroll position. No public template names one of them; `index.js`
-// hands all eight to the host's admin bundle.
+// number fields, the sidebar's scroll position and the preview modal's frame. No public template names
+// one of them; `index.js` hands all nine to the host's admin bundle.
 //
 // `sortablejs` is a peer dependency (package.json): it comes from the host's own
 // `assets/node_modules`, which the host's esbuild profile puts on `NODE_PATH`.
@@ -273,7 +273,42 @@ const SidebarScroll = {
   },
 };
 
+// THE PREVIEW MODAL'S FRAME, whose "Loading the preview…" note sits behind the iframe. A page with
+// no background of its own let the note show through it after the page had loaded, so the note goes
+// on the frame's `load`. A hook because nothing else can: `Phoenix.LiveView.JS` binds no `load`,
+// and the CSP refuses an inline `onload`. The frame and the note are re-keyed together for every new
+// address, so a new frame brings its note back; a patch that keeps the frame keeps the note hidden.
+const PreviewFrame = {
+  mounted() {
+    this.sync();
+  },
+  updated() {
+    this.sync();
+  },
+  sync() {
+    const frame = this.el.querySelector("iframe");
+    if (!frame) return;
+
+    if (frame !== this.frame) {
+      this.frame = frame;
+      this.loaded = false;
+      frame.addEventListener("load", () => {
+        if (this.frame !== frame) return;
+        this.loaded = true;
+        this.hide();
+      });
+    }
+
+    if (this.loaded) this.hide();
+  },
+  hide() {
+    const spinner = this.el.querySelector("[data-preview-spinner]");
+    if (spinner) spinner.hidden = true;
+  },
+};
+
 export default {
+  PreviewFrame,
   NumberBounds,
   SidebarScroll,
   MediaThumb,

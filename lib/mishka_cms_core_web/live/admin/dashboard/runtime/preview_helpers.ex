@@ -70,7 +70,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   require Ash.Query
 
   alias MishkaCmsCore.Runtime.{RuntimePreview, RuntimeStatus, DraftPreviewAssets, ComponentCopy}
-  alias MishkaCmsCore.Runtime.{Languages, PageEditions}
+  alias MishkaCmsCore.Runtime.{Languages, PageEditions, PreviewStates}
   alias MishkaCmsCore.Runtime.States.{AssetsState, SiteState}
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.Helpers, as: RuntimeHelpers
@@ -286,6 +286,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     edit_html: nil,
     preview_source: "original",
     preview_error_status: nil,
+    preview_states: [],
+    preview_state: nil,
     current_user: nil,
     form_record_id: nil,
     has_config?: false,
@@ -780,6 +782,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     do:
       put_preview(socket, fn p ->
         %{p | preview_error_status: status, edit_html: nil, render_nonce: p.render_nonce + 1}
+      end)
+
+  @doc """
+  Draw the Preview tab in the page's state `id` (`MishkaCmsCore.Runtime.PreviewStates`): the frame
+  reloads with its parameters, and "Open page" follows a record sample to its address. An `id` the
+  page does not offer draws it as it is.
+  """
+  def set_preview_state(socket, id),
+    do:
+      put_preview(socket, fn p ->
+        state = PreviewStates.find(p.preview_states, id)
+
+        %{
+          p
+          | preview_state: state && state.id,
+            live_url: live_url(p.record, p.resource, state),
+            edit_html: nil,
+            render_nonce: p.render_nonce + 1
+        }
       end)
 
   defp first_error_status(record, MishkaCmsCore.Runtime.ErrorPage),
@@ -1357,6 +1378,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     {drafts, drafts_total} = list_drafts(record, resource, actor, 1)
     draft = List.first(drafts)
     {versions, total, masters} = load_versions_page(record, resource, actor, 1)
+    states = preview_states(record, resource)
+    state = PreviewStates.initial(states)
 
     %{
       @empty
@@ -1376,11 +1399,13 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
         direct_save?: direct_save?(resource, record, actor),
         code_visible?: code_visible?(resource, record, actor),
         preview_error_status: first_error_status(record, resource),
+        preview_states: states,
+        preview_state: state && state.id,
         draft: draft,
         drafts: drafts,
         drafts_total: drafts_total,
         edit_source: RuntimePreview.source(draft || record),
-        live_url: live_url(record, resource),
+        live_url: live_url(record, resource, state),
         current_user: actor,
         form_record_id: record.id,
         has_config?: configurable?(resource, actor),
@@ -1398,20 +1423,28 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   language the page is served in, at the address the site's URL mode gives it
   (`MishkaCmsCore.Runtime.Languages.url/3`: `/:lang/blog` opens `/blog`, or `/en/blog` on a site
   that prefixes every language). One that captures a record — `/:lang/blog/:slug`,
-  `/:lang/docs/:workspace/:section` — is the template of many URLs and the address of none, so it
-  has no page to open: the button is hidden, and "Copy link" shares the preview instead of a path
-  that answers 404.
+  `/:lang/docs/:workspace/:section` — is filled from the preview state chosen in the modal
+  (`MishkaCmsCore.Runtime.PreviewStates`): a record sample's parameters are its captures. With none
+  chosen it is the address of no page: the button is hidden, and "Copy link" shares the preview
+  instead of a path that answers 404.
 
       live_url(%Page{active: true, path: "/:lang/blog", language: "en", site: site}, Page)
       #=> "http://site-b.localhost:4000/blog"
+
+      live_url(page_at_blog_slug, Page, %{params: %{"slug" => "hello", "lang" => "en"}})
+      #=> "http://site-b.localhost:4000/blog/hello"
   """
-  @spec live_url(map(), module()) :: String.t() | nil
+  @spec live_url(map(), module(), map() | nil) :: String.t() | nil
+  def live_url(record, resource, state \\ nil)
+
   def live_url(
         %{active: true, path: path, site: %{host: host} = site} = page,
-        MishkaCmsCore.Runtime.Page
+        MishkaCmsCore.Runtime.Page,
+        state
       )
       when is_binary(host) and is_binary(path) do
-    captured = %{Languages.capture() => open_language(page, site)}
+    captured =
+      Map.merge(%{Languages.capture() => open_language(page, site)}, state_params(state))
 
     case Languages.url(path, captured, Map.get(site, :id)) do
       nil -> nil
@@ -1419,7 +1452,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
     end
   end
 
-  def live_url(_record, _resource), do: nil
+  def live_url(_record, _resource, _state), do: nil
+
+  defp state_params(%{params: params}), do: params
+  defp state_params(_no_state), do: %{}
+
+  # Only a page has states: one plugin call and the record kinds, read once as the preview opens.
+  defp preview_states(%{site_id: site_id} = page, MishkaCmsCore.Runtime.Page),
+    do: PreviewStates.for_page(page, site_id)
+
+  defp preview_states(_record, _resource), do: []
 
   # The page's own language when the site serves it there, else the first it is served in.
   defp open_language(page, site) do

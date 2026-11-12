@@ -121,6 +121,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
       |> assign(:preview_source, p.preview_source)
       |> assign(:preview_error_status, p.preview_error_status)
       |> assign(:error_statuses, preview_error_statuses(active_error_record(p)))
+      |> assign(:preview_states, p.preview_states)
+      |> assign(:preview_state, p.preview_state)
       |> assign(:has_config?, p.has_config?)
       |> assign(:config_mounted?, p.config_mounted?)
       |> assign(:versions_loading?, p.versions_loading?)
@@ -935,6 +937,41 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
         </button>
       </div>
 
+      <%!-- A page's preview states: its record samples and what its extension names (see
+            `MishkaCmsCore.Runtime.PreviewStates`). A page that needs no record can go back to
+            itself as it is. --%>
+      <div
+        :if={@preview_states != []}
+        id="runtime-preview-states"
+        class="flex flex-wrap items-center gap-1.5 rounded-lg border border-[#ecebe6] bg-[#faf9f6] px-3 py-2"
+      >
+        <span class="inline-flex items-center gap-1 text-xs font-semibold text-[#5c5a54]">
+          <.icon name="hero-squares-2x2" class="size-4" /> {gettext("Preview with")}
+        </span>
+        <button
+          :for={
+            {id, label} <-
+              if(Enum.any?(@preview_states, & &1.record?),
+                do: [],
+                else: [{"", gettext("As it is")}]
+              ) ++ Enum.map(@preview_states, &{&1.id, &1.label})
+          }
+          type="button"
+          phx-click="preview_set_state"
+          phx-value-state={id}
+          aria-pressed={to_string((@preview_state || "") == id)}
+          class={[
+            "max-w-[16rem] truncate rounded-md px-2.5 py-0.5 text-xs font-semibold transition-colors",
+            if((@preview_state || "") == id,
+              do: "bg-[#5b57d6] text-white shadow",
+              else: "bg-white text-[#5c5a54] ring-1 ring-[#ecebe6] hover:bg-[#f2f1ed]"
+            )
+          ]}
+        >
+          {label}
+        </button>
+      </div>
+
       <div
         :if={@show_edit?}
         class="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-700"
@@ -999,14 +1036,23 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
           </div>
         </div>
         <div class="flex max-h-[60vh] justify-center overflow-auto bg-[#f4f3ef] p-4">
-          <div class={["relative max-w-full", @device_class]}>
+          <div
+            id={"runtime-preview-frame-#{@record && @record.id}"}
+            phx-hook="PreviewFrame"
+            class={["relative max-w-full", @device_class]}
+          >
             <%!-- `live_src`: the real `/_preview/:resource/:token` (draft or original) or a Page's live
                   URL — full lifecycle, JS hooks + components, no sandbox. Its id is keyed by source +
                   error status + nonce so switching view/code/draft actually reloads it. Edit: a
                   sandboxed static doc of unsaved changes. Static `@html`: a sandboxed fallback for an
                   inactive Page. The spinner sits BEHIND the (transparent-until-loaded) iframe. --%>
+            <%!-- `PreviewFrame` hides it once the frame has loaded: an iframe's `load` is no event
+                  `Phoenix.LiveView.JS` can bind, and the CSP refuses an inline `onload`. Keyed like
+                  the frame, so a new frame shows it again. --%>
             <div
               :if={@live_src}
+              id={"runtime-preview-spinner-#{@record.id}-#{@preview_source}-#{@preview_error_status}-#{@render_nonce}"}
+              data-preview-spinner
               class="pointer-events-none absolute inset-0 flex items-center justify-center gap-2 text-sm text-zinc-400"
             >
               <div class="size-5 animate-spin rounded-full border-b-2 border-indigo-500"></div>
@@ -1361,6 +1407,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp with_status(url, %{resource: ErrorPage, preview_error_status: status})
        when not is_nil(status),
        do: url <> "?status=#{status}"
+
+  # A page's chosen preview state rides on the query; the preview route hands it to the page.
+  defp with_status(url, %{preview_states: states, preview_state: id}),
+    do:
+      MishkaCmsCore.Runtime.PreviewStates.with_params(
+        url,
+        MishkaCmsCore.Runtime.PreviewStates.find(states, id)
+      )
 
   defp with_status(url, _assigns), do: url
 

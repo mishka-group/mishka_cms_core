@@ -241,6 +241,10 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
     do: {:noreply, PreviewHelpers.set_preview_source(socket, source)}
 
   @impl true
+  def handle_event("preview_set_state", %{"state" => state}, socket),
+    do: {:noreply, PreviewHelpers.set_preview_state(socket, state)}
+
+  @impl true
   def handle_event("close_preview_modal", _params, socket),
     do: {:noreply, PreviewHelpers.close(socket)}
 
