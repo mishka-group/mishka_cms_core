@@ -172,5 +172,14 @@ defmodule MishkaCmsCore.Runtime.AnchoredValidatorsTest do
         assert {:error, field: :path, message: _} = path_problem("/about" <> newline)
       end
     end
+
+    test "holds one wildcard at most, at the start of a segment" do
+      assert path_problem("/:lang/*category/:slug") == :ok
+      assert path_problem("/docs/*chain/edit") == :ok
+
+      for path <- ["/*a/*b", "/blog/*/*", "/a*b", "/blog/x*"] do
+        assert {:error, field: :path, message: _} = path_problem(path)
+      end
+    end
   end
 end

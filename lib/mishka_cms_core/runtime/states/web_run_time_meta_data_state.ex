@@ -469,8 +469,10 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   The page whose stored path PATTERN matches this request, with the segments it captured.
 
   A page stored at `/post/:category/:slug` answers `/post/elixir/hello-world` and captures
-  `%{"category" => "elixir", "slug" => "hello-world"}`. `*rest` captures everything left, joined,
-  which is how one page serves a whole subtree.
+  `%{"category" => "elixir", "slug" => "hello-world"}`. `*rest` captures one or more segments, joined,
+  which is how one page serves a whole subtree. It may sit anywhere in the pattern, once: it takes the
+  fewest segments that let the fixed segments after it match, so `/*category/:slug` answers
+  `/design/accessibility/my-post` with `%{"category" => "design/accessibility", "slug" => "my-post"}`.
 
   ## Why this is ours and not Phoenix's
 
@@ -554,13 +556,20 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
   # `[]` is a match only when the pattern is spent too — `/post/:slug` must not answer `/post`.
   defp match([], [], _languages), do: {:ok, %{}}
 
-  defp match(["*" <> name | _rest_of_pattern], rest, languages) when rest != [] do
-    value = Enum.join(rest, "/")
+  # A `*name` takes the fewest segments, at least one, that let the rest of the pattern match. A
+  # path holds one `*` at most (`PathFormat`), so the tail tried after it is plain segments.
+  defp match(["*" <> name | pattern], segments, languages) when segments != [] do
+    Enum.find_value(1..length(segments)//1, :error, fn taken ->
+      {chain, rest} = Enum.split(segments, taken)
+      value = Enum.join(chain, "/")
 
-    case Languages.admits?(name, value, languages) do
-      true -> {:ok, %{name => value}}
-      false -> :error
-    end
+      with true <- Languages.admits?(name, value, languages),
+           {:ok, captured} <- match(pattern, rest, languages) do
+        {:ok, Map.put(captured, name, value)}
+      else
+        _no_match -> nil
+      end
+    end)
   end
 
   defp match([":" <> name | pattern], [value | rest], languages) when value != "" do
