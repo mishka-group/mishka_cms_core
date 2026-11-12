@@ -214,6 +214,12 @@ defmodule MishkaCmsCore.Runtime.Seo do
     * `:captures` — the captures its address must have, `["slug"]`, `[]` for none
     * `:samples` — a few records to preview a page with,
       `[%{label: "A post", params: %{"slug" => "a-post"}}]`
+    * `:moves` — `true` when a record of this kind can be reached at an address other than its
+      own, which the plugin answers on `MishkaCmsCore.Runtime.Redirects.moved_event/0`. `false` when
+      left out, and the event is never asked for its pages.
+
+  When `site_id` is `nil` only the kinds are wanted (`moves?/1`, asked on a visitor's request): a
+  plugin reads no samples then.
   """
   @spec records_event() :: String.t()
   def records_event, do: @records_event
@@ -245,6 +251,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
         label: label,
         captures:
           for(capture <- List.wrap(Map.get(type, :captures)), is_binary(capture), do: capture),
+        moves: Map.get(type, :moves) == true,
         samples:
           for(
             %{label: sample, params: %{} = params} <- List.wrap(Map.get(type, :samples)),
@@ -256,6 +263,16 @@ defmodule MishkaCmsCore.Runtime.Seo do
   end
 
   defp record_type(_not_a_type), do: []
+
+  @doc """
+  Whether the plugin that names `record`, a kind of record, declared `moves: true` on
+  `records_event/0`. Asked with no site, so no plugin reads samples for it.
+  """
+  @spec moves?(String.t()) :: boolean()
+  def moves?(record) when is_binary(record),
+    do: Enum.any?(record_types(nil), &(&1.id == record and &1.moves))
+
+  def moves?(_no_record), do: false
 
   @doc """
   The kind of record a page shows, from its `extra`: `"blog:post"`, `nil` for none.

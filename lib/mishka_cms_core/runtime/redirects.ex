@@ -48,6 +48,24 @@ defmodule MishkaCmsCore.Runtime.Redirects do
   of its own), or `nil` to serve none, so the request goes on to its page. Only a request a rule
   names reaches it; an extension that adds rules of its own writes them as
   `MishkaCmsCore.Runtime.Redirect` rows, which are served from memory like every other.
+
+  ## A record that moved
+
+  An address no rule names may still be a record's old one: a post asked for under a category it is
+  no longer filed in. When the address resolves to a page
+  (`MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.resolve_all/2`) whose kind of record the
+  plugin that names it declared with `moves: true` (`MishkaCmsCore.Runtime.Seo.records_event/0`),
+  `moved_event/0` is asked with `nil` and `meta: %{site_id:, site:, page:, record:, params:, path:,
+  query:}`: the site's name, the page as memory holds it, its kind of record, what its pattern
+  captured, and the address as the request asked it. A plugin returns `{to, status}`, a path on the
+  site and 301, 302, 307 or 308, to send the visitor there, or `nil` (handed on unchanged) to let the
+  page answer. The answer is served as a rule's: checked with `safe_target?/1`, given the request's
+  query string when it has none, passed through `web:request:redirected`, sent by `redirect/2` and
+  followed by a live navigation through `lookup/3`. An answer that points at the address itself is
+  dropped.
+
+  The page and the kinds are read from memory, and a page of a kind that does not move never asks,
+  so a request pays for the event only where an extension wants it.
   """
   use Gettext, backend: MishkaCmsCore.Gettext
 
@@ -57,8 +75,8 @@ defmodule MishkaCmsCore.Runtime.Redirects do
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.ErrorsExceptions.NotFoundError
-  alias MishkaCmsCore.Runtime.{Media, Redirect, SiteAvailability}
-  alias MishkaCmsCore.Runtime.States.{RedirectsState, SiteState}
+  alias MishkaCmsCore.Runtime.{Media, Redirect, Seo, SiteAvailability}
+  alias MishkaCmsCore.Runtime.States.{RedirectsState, SiteState, WebRunTimeMetaDataState}
   alias MishkaInstaller.Event.Hook
 
   @statuses [
@@ -74,6 +92,12 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     {:gone, dgettext_noop("mishka_gervaz", "Gone (410)")},
     {:not_found, dgettext_noop("mishka_gervaz", "Not found (404)")}
   ]
+
+  @moved_event "runtime:page:moved"
+
+  @doc "The event a plugin answers a record's old address on, as the moduledoc describes."
+  @spec moved_event() :: String.t()
+  def moved_event, do: @moved_event
 
   @doc "What a rule may answer: `:redirect`, `:rewrite`, `:gone` or `:not_found`."
   @spec kinds() :: [:redirect | :rewrite | :gone | :not_found]
@@ -650,7 +674,8 @@ defmodule MishkaCmsCore.Runtime.Redirects do
     path = key(request_path)
 
     case answer(by_query(site_id, path, query_string), "") ||
-           answer(RedirectsState.lookup(site_id, path, nil), query_string) do
+           answer(RedirectsState.lookup(site_id, path, nil), query_string) ||
+           answer(moved(site_id, path, request_path, query_string), query_string) do
       nil ->
         nil
 
@@ -658,6 +683,30 @@ defmodule MishkaCmsCore.Runtime.Redirects do
         Hook.call("web:request:redirected", answer,
           meta: %{site_id: site_id, path: request_path, query: query_string}
         )
+    end
+  end
+
+  defp moved(site_id, path, request_path, query_string) do
+    with {:ok, %{name: site}} <- SiteState.get(site_id),
+         [{%{section: "Page", record: record} = page, captured} | _rest] <-
+           WebRunTimeMetaDataState.resolve_all(path, site),
+         true <- Seo.moves?(record),
+         {to, status} when is_binary(to) <-
+           Hook.call(@moved_event, nil,
+             meta: %{
+               site_id: site_id,
+               site: site,
+               page: page,
+               record: record,
+               params: captured,
+               path: request_path,
+               query: query_string
+             }
+           ),
+         true <- status in statuses() and normalize_path(to) != {:ok, path} do
+      {:redirect, to, status}
+    else
+      _stays -> nil
     end
   end
 
