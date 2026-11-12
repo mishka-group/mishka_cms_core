@@ -10,6 +10,14 @@ defmodule MishkaCmsCore.Runtime.PreviewStates do
   `@query_params`, as it hands a visitor's query, so a state shows what the page shows for those
   values. Preview handlers never run, so no state does anything.
 
+  ## A state only a preview can be in
+
+  A plugin's state also names itself on the frame's address as `?preview_state=<id>` (`param/0`).
+  The preview route takes it out of `@query_params` and assigns it as `@preview_state`; a page served
+  to a visitor never has that assign, whatever its address says. So a page draws an outcome no
+  query can reach, such as "You're subscribed", by handing `assigns[:preview_state]` to its
+  component, and a visitor cannot fake it with `?preview_state=confirmed`.
+
   ## Where they come from
 
     * A page that shows a record (`MishkaCmsCore.Runtime.Seo.record_of/1`) whose address captures
@@ -21,22 +29,27 @@ defmodule MishkaCmsCore.Runtime.PreviewStates do
       page appends its own and hands every other page back untouched:
 
           def call(%{page: %{extra: %{"newsletter_role" => "confirm"}}, states: states} = given),
-            do: {:reply, %{given | states: states ++ [%{id: "invalid", label: "Invalid link", params: %{"token" => "preview"}}]}}
+            do: {:reply, %{given | states: states ++ [%{id: "confirmed", label: "Confirmed", params: %{}}]}}
 
           def call(given), do: {:reply, given}
 
   A state is `%{id:, label:, params:}`: a string id and label, and string parameters. A state of
-  any other shape is left out, and so is a parameter named `resource` or `token`, which the preview
-  route keeps for itself. Read once, when a page's preview opens.
+  any other shape is left out, and so is a parameter named `resource`, `token` or `preview_state`,
+  which the preview route keeps for itself. Read once, when a page's preview opens.
   """
 
   alias MishkaCmsCore.Runtime.Seo
   alias MishkaInstaller.Event.Hook
 
   @event "runtime:page:preview_states"
-  @reserved ["resource", "token"]
+  @param "preview_state"
+  @reserved ["resource", "token", @param]
 
   @type state :: %{id: String.t(), label: String.t(), params: %{String.t() => String.t()}}
+
+  @doc "The query key a plugin's state names itself under on the frame's address."
+  @spec param() :: String.t()
+  def param, do: @param
 
   @doc "The event a plugin names the preview states of its pages on."
   @spec event() :: String.t()
@@ -118,14 +131,25 @@ defmodule MishkaCmsCore.Runtime.PreviewStates do
   def initial(states), do: Enum.find(states, & &1.record?)
 
   @doc """
-  `url` with `state`'s parameters as its query string. `url` itself when there is no state, or no
-  url.
+  `url` with `state`'s parameters as its query string, and a plugin's state's id under `param/0`.
+  `url` itself when there is no state, or no url.
 
-      with_params("/_preview/page/t", %{params: %{"slug" => "a-post"}}) #=> "/_preview/page/t?slug=a-post"
+      with_params("/_preview/page/t", %{id: "record-0", record?: true, params: %{"slug" => "a"}})
+      #=> "/_preview/page/t?slug=a"
+
+      with_params("/_preview/page/t", %{id: "confirmed", record?: false, params: %{}})
+      #=> "/_preview/page/t?preview_state=confirmed"
   """
   @spec with_params(String.t() | nil, map() | nil) :: String.t() | nil
-  def with_params(url, %{params: params}) when is_binary(url) and url != "" and params != %{},
-    do: url <> "?" <> URI.encode_query(params)
+  def with_params(url, %{params: params} = state) when is_binary(url) and url != "" do
+    case query(state, params) do
+      empty when empty == %{} -> url
+      query -> url <> "?" <> URI.encode_query(query)
+    end
+  end
 
   def with_params(url, _no_state), do: url
+
+  defp query(%{record?: false, id: id}, params), do: Map.put(params, @param, id)
+  defp query(_record_sample, params), do: params
 end

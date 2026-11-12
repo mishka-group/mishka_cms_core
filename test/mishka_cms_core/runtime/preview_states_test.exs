@@ -142,7 +142,7 @@ defmodule MishkaCmsCore.Runtime.PreviewStatesTest do
       assert html =~ ~s(src="/_preview/page/tok-states")
 
       assert modal(page, states, "confirmed") =~
-               ~s(src="/_preview/page/tok-states?state=confirmed")
+               ~s(src="/_preview/page/tok-states?preview_state=confirmed&amp;state=confirmed")
     end
 
     test "the frame's loading note is marked for the hook that hides it", %{site: site} do
@@ -150,6 +150,22 @@ defmodule MishkaCmsCore.Runtime.PreviewStatesTest do
 
       assert html =~ ~s(phx-hook="PreviewFrame")
       assert html =~ "data-preview-spinner"
+    end
+  end
+
+  describe "with_params/2" do
+    test "names a plugin's state on the address, never a record sample" do
+      assert PreviewStates.with_params("/p", %{id: "c", record?: false, params: %{}}) ==
+               "/p?preview_state=c"
+
+      assert PreviewStates.with_params("/p", %{
+               id: "record-0",
+               record?: true,
+               params: %{"slug" => "a"}
+             }) ==
+               "/p?slug=a"
+
+      assert PreviewStates.with_params("/p", nil) == "/p"
     end
   end
 

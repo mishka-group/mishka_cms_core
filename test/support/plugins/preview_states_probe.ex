@@ -21,7 +21,12 @@ defmodule MishkaCmsCore.Test.Plugins.PreviewStatesProbe do
                %{
                  id: "confirmed",
                  label: "Confirmed",
-                 params: %{"state" => "confirmed", "token" => "real", "count" => 2}
+                 params: %{
+                   "state" => "confirmed",
+                   "token" => "real",
+                   "preview_state" => "x",
+                   "count" => 2
+                 }
                },
                %{id: "no-label", params: %{"state" => "x"}},
                %{id: "", label: "No id", params: %{}},
