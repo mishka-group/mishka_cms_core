@@ -545,19 +545,23 @@ defmodule MishkaCmsCore.Agent.Receipts do
 
     with reach when reach != :nothing <- Helpers.reach(viewer),
          true <-
-           AccessPermissions.match?(viewer, context,
-             permissions: ["admin:#{surface}:agent:receipts"]
-           ) do
+           AccessPermissions.match?(viewer, context, permissions: [read_permission(surface)]) do
       %{
         viewer: viewer,
         reach: reach,
         context: context,
-        full?: AccessPermissions.match?(viewer, context, permissions: ["admin:#{surface}:*"])
+        full?: AccessPermissions.match?(viewer, context, permissions: [full_permission(surface)])
       }
     else
       _nobody -> nil
     end
   end
+
+  defp read_permission(:dashboard), do: "admin:dashboard:agent:receipts"
+  defp read_permission(:api), do: "admin:api:agent:receipts"
+
+  defp full_permission(:dashboard), do: "admin:dashboard:*"
+  defp full_permission(:api), do: "admin:api:*"
 
   defp readable?(%{reach: reach} = reader, %Receipt{site_id: site_id, visibility: visibility}) do
     in_reach?(reach, site_id) and
