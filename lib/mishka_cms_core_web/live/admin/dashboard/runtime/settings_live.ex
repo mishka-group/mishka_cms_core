@@ -182,9 +182,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
 
   def handle_event("switch_scope", _params, socket), do: {:noreply, socket}
 
+  # A number typed outside its setting's bounds shows its error as it is typed, not first on save.
   def handle_event("validate", %{"settings" => params}, socket) do
     merged = Map.merge(socket.assigns.form.params, params)
-    errors = Map.drop(socket.assigns.field_errors, Map.keys(params))
+
+    errors =
+      socket.assigns.field_errors
+      |> Map.drop(Map.keys(params))
+      |> Map.merge(out_of_bounds(params, socket.assigns.fields))
 
     {:noreply,
      assign(socket, dirty?: true, field_errors: errors, form: to_form(merged, as: :settings))}
@@ -648,6 +653,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
   end
 
   defp in_bounds?(_definition, _raw), do: true
+
+  defp out_of_bounds(params, fields) do
+    for {definition, true} <- fields,
+        {:ok, raw} <- [Map.fetch(params, definition.key)],
+        not in_bounds?(definition, raw),
+        into: %{},
+        do: {definition.key, true}
+  end
 
   defp write_unchanged(socket, definition, value, scope) do
     if read_value(socket, definition) == value,

@@ -749,6 +749,24 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       assert Settings.get("bounded.retention_days") == 90
     end
 
+    test "an integer outside the bounds shows its error as it is typed, and loses it once in them",
+         %{conn: conn} do
+      view = security_tab(conn)
+
+      view
+      |> element("#settings-form")
+      |> render_change(%{"settings" => %{"bounded.retention_days" => "500"}})
+
+      assert has_element?(view, "[data-role=field-error]")
+      assert Settings.get("bounded.retention_days") == 30
+
+      view
+      |> element("#settings-form")
+      |> render_change(%{"settings" => %{"bounded.retention_days" => "90"}})
+
+      refute has_element?(view, "[data-role=field-error]")
+    end
+
     test "a number that will not parse is refused instead of being written as zero", %{conn: conn} do
       view = security_tab(conn)
 
