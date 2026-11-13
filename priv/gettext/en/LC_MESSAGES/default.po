@@ -28,7 +28,7 @@ msgstr ""
 msgid " or "
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:967
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:980
 #, elixir-autogen, elixir-format
 msgid "%{category} settings"
 msgstr ""
@@ -444,7 +444,7 @@ msgstr ""
 msgid "%{names} on the Handlers tab will stop being called."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:681
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:694
 #, elixir-autogen, elixir-format
 msgid "%{name} (inactive)"
 msgstr ""
@@ -2509,8 +2509,8 @@ msgstr ""
 #: lib/mishka_cms_core_web/live/admin/components/runtime_preview_modal.ex:1609
 #: lib/mishka_cms_core_web/live/admin/components/site_health_panel.ex:354
 #: lib/mishka_cms_core_web/live/admin/components/user_details_modal.ex:158
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:565
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:678
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:570
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:691
 #, elixir-autogen, elixir-format
 msgid "Global"
 msgstr ""
@@ -2895,7 +2895,7 @@ msgstr ""
 msgid "Job %{state}."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:564
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:569
 #, elixir-autogen, elixir-format
 msgid "Just for you"
 msgstr ""
@@ -3617,7 +3617,7 @@ msgstr ""
 msgid "No settings in this category yet."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:859
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:872
 #, elixir-autogen, elixir-format
 msgid "This value is not accepted. See the description below."
 msgstr ""
@@ -4412,7 +4412,7 @@ msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1970
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1971
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:796
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:809
 #, elixir-autogen, elixir-format
 msgid "Remove"
 msgstr ""
@@ -4796,13 +4796,13 @@ msgstr ""
 
 #: lib/mishka_cms_core/sidebar.ex:549
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:122
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:960
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:973
 #: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.html.heex:15
 #, elixir-autogen, elixir-format
 msgid "Settings"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:593
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:598
 #, elixir-autogen, elixir-format
 msgid "Settings saved."
 msgstr ""
@@ -5093,7 +5093,7 @@ msgstr ""
 msgid "Solid"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:598
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:603
 #, elixir-autogen, elixir-format
 msgid "Some settings could not be saved."
 msgstr ""
@@ -5615,7 +5615,7 @@ msgid "This record no longer exists."
 msgstr ""
 
 #: lib/mishka_cms_core_web/live/admin/components/content_component_picker.ex:1464
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:566
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:571
 #, elixir-autogen, elixir-format
 msgid "This site"
 msgstr ""
@@ -6805,7 +6805,7 @@ msgstr ""
 msgid "there"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:687
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:700
 #, elixir-autogen, elixir-format
 msgid "this site"
 msgstr ""
@@ -7471,12 +7471,12 @@ msgstr ""
 msgid "None — no email is sent"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:233
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:238
 #, elixir-autogen, elixir-format
 msgid "Not sent: %{why}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:408
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:413
 #, elixir-autogen, elixir-format
 msgid "Not set"
 msgstr ""
@@ -7501,7 +7501,7 @@ msgstr ""
 msgid "Resend API key"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:403
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:408
 #, elixir-autogen, elixir-format
 msgid "Saved, ends in %{last} — type a new one to replace it"
 msgstr ""
@@ -7563,7 +7563,7 @@ msgstr ""
 msgid "Test email from %{site}"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:229
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:234
 #, elixir-autogen, elixir-format
 msgid "Test email sent to %{to}."
 msgstr ""
@@ -7583,12 +7583,12 @@ msgstr ""
 msgid "The email provider is missing its key or settings."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:221
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:226
 #, elixir-autogen, elixir-format
 msgid "The key could not be removed."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:218
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:223
 #, elixir-autogen, elixir-format
 msgid "The key was removed."
 msgstr ""
@@ -7756,7 +7756,7 @@ msgstr ""
 msgid "While sign-in is closed, whoever could not sign in now is signed out on every device, at their next page, click or API call. Masters and the people allowed below stay."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:203
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:208
 #, elixir-autogen, elixir-format
 msgid "This would shut you out too. Add your permission or email to Still allowed first."
 msgstr ""
@@ -8385,12 +8385,12 @@ msgstr ""
 msgid "hCaptcha site key"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:793
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:806
 #, elixir-autogen, elixir-format
 msgid "Remove this key? What uses it stops until a new one is saved."
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:406
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:411
 #, elixir-autogen, elixir-format
 msgid "Saved with an older server key — type it again"
 msgstr ""
@@ -8400,7 +8400,7 @@ msgstr ""
 msgid "Something here needs your attention"
 msgstr ""
 
-#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:804
+#: lib/mishka_cms_core_web/live/admin/dashboard/runtime/settings_live.ex:817
 #, elixir-autogen, elixir-format
 msgid "This key was saved under an older server key (SECRET_KEY_BASE) and can no longer be read, so nothing uses it. Type it again and save."
 msgstr ""
