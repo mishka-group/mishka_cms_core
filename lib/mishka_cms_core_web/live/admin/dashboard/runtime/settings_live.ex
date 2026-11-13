@@ -182,9 +182,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
 
   def handle_event("switch_scope", _params, socket), do: {:noreply, socket}
 
+  # A number typed outside its setting's bounds shows its error as it is typed, not first on save.
   def handle_event("validate", %{"settings" => params}, socket) do
     merged = Map.merge(socket.assigns.form.params, params)
-    errors = Map.drop(socket.assigns.field_errors, Map.keys(params))
+
+    errors =
+      socket.assigns.field_errors
+      |> Map.drop(Map.keys(params))
+      |> Map.merge(out_of_bounds(params, socket.assigns.fields))
 
     {:noreply,
      assign(socket, dirty?: true, field_errors: errors, form: to_form(merged, as: :settings))}
@@ -629,11 +634,32 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     end
   end
 
+  # A number typed outside its definition's `min`/`max` is refused here, so the admin is told,
+  # where `Settings.cast/2` would bound it without a word.
   defp store(socket, definition, raw, scope) do
-    case Settings.cast(definition, raw) do
-      {:ok, value} -> write_unchanged(socket, definition, value, scope)
-      :error -> {:error, definition.key}
+    with true <- in_bounds?(definition, raw),
+         {:ok, value} <- Settings.cast(definition, raw) do
+      write_unchanged(socket, definition, value, scope)
+    else
+      _refused -> {:error, definition.key}
     end
+  end
+
+  defp in_bounds?(%{type: :integer} = definition, raw) do
+    case Settings.cast(Map.drop(definition, [:min, :max]), raw) do
+      {:ok, number} -> Settings.cast(definition, raw) == {:ok, number}
+      :error -> true
+    end
+  end
+
+  defp in_bounds?(_definition, _raw), do: true
+
+  defp out_of_bounds(params, fields) do
+    for {definition, true} <- fields,
+        {:ok, raw} <- [Map.fetch(params, definition.key)],
+        not in_bounds?(definition, raw),
+        into: %{},
+        do: {definition.key, true}
   end
 
   defp write_unchanged(socket, definition, value, scope) do
