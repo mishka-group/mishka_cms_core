@@ -165,7 +165,7 @@ defmodule MishkaCmsCore.MixProject do
       # (`MishkaCmsCore.Localized`). No backend module; a language's data loads the first time it
       # is read.
       {:localize, "~> 1.4"},
-      mishka_dep(:mishka_gervaz, "~> 0.0.8"),
+      mishka_dep(:mishka_gervaz, "~> 0.0.10"),
       # Names and slugs: `MishkaCmsCore.Runtime.Resources.Changes.InternalName` and
       # `MishkaCmsCore.Runtime.Languages.slug_locales/1`.
       mishka_dep(:mishka_slug, "~> 0.0.1"),
