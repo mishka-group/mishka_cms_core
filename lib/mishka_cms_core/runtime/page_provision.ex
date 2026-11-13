@@ -433,11 +433,12 @@ defmodule MishkaCmsCore.Runtime.PageProvision do
 
   defp held_by_us?(rows, matched, source) do
     Enum.any?(rows, fn row ->
-      Enum.any?(matched, fn fields ->
-        Enum.all?(fields, fn {key, value} -> Map.get(row, key) == value end)
-      end) and ours?(row, source)
+      Enum.any?(matched, &holds?(row, &1)) and ours?(row, source)
     end)
   end
+
+  defp holds?(row, fields),
+    do: Enum.all?(fields, fn {key, value} -> Map.get(row, key) == value end)
 
   # THE SECOND READ, and only when there is something to ask about: the names offered instead are
   # not in the first one, because they are chosen from what it answered. Every candidate of every

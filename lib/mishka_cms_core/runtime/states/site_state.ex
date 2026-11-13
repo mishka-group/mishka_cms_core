@@ -607,18 +607,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
       {:ok, site} ->
         # Unset any existing master
         :ets.tab2list(@main_table)
-        |> Enum.each(fn
-          {id, name, host, priority, active, true, mode, frontend_domain, allowed_origins} ->
-            if id != site_id do
-              :ets.insert(
-                @main_table,
-                {id, name, host, priority, active, false, mode, frontend_domain, allowed_origins}
-              )
-            end
-
-          _ ->
-            :ok
-        end)
+        |> Enum.each(&unset_other_master(&1, site_id))
 
         # Set the new master
         :ets.insert(
@@ -633,6 +622,19 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
         error
     end
   end
+
+  defp unset_other_master(
+         {id, name, host, priority, active, true, mode, frontend_domain, allowed_origins},
+         site_id
+       )
+       when id != site_id do
+    :ets.insert(
+      @main_table,
+      {id, name, host, priority, active, false, mode, frontend_domain, allowed_origins}
+    )
+  end
+
+  defp unset_other_master(_row, _site_id), do: :ok
 
   @doc """
   Unsets the master site (finds the current master and sets its master flag to false).

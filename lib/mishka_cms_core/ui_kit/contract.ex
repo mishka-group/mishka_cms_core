@@ -99,7 +99,7 @@ defmodule MishkaCmsCore.UiKit.Contract do
     component
     |> get(:extra)
     |> case do
-      %{} = extra -> Map.get(extra, "clauses") || Map.get(extra, :clauses) || []
+      %{} = extra -> get(extra, :clauses) || []
       _absent -> []
     end
     |> List.wrap()
@@ -112,7 +112,7 @@ defmodule MishkaCmsCore.UiKit.Contract do
     |> Enum.flat_map(&List.wrap(get(component, &1)))
     |> Enum.map(fn
       %{} = declaration ->
-        to_string(Map.get(declaration, "name") || Map.get(declaration, :name) || "")
+        to_string(get(declaration, :name) || "")
 
       _other ->
         ""
@@ -127,19 +127,19 @@ defmodule MishkaCmsCore.UiKit.Contract do
   @required [:name, :template]
 
   defp required(component) do
-    Enum.find_value(@required, :ok, fn key ->
-      case get(component, key) do
-        value when is_binary(value) ->
-          if String.trim(value) == "", do: {:error, {:blank, key}}, else: nil
-
-        nil ->
-          {:error, {:missing, key}}
-
-        _other ->
-          {:error, {:not_a_string, key}}
-      end
-    end)
+    Enum.find_value(@required, :ok, &required_error(component, &1))
   end
+
+  defp required_error(component, key) do
+    case get(component, key) do
+      value when is_binary(value) -> blank_error(String.trim(value), key)
+      nil -> {:error, {:missing, key}}
+      _other -> {:error, {:not_a_string, key}}
+    end
+  end
+
+  defp blank_error("", key), do: {:error, {:blank, key}}
+  defp blank_error(_value, _key), do: nil
 
   @doc """
   Splits a bundle's components into the ones this CMS can install and the ones it cannot.

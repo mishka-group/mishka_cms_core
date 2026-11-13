@@ -134,12 +134,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeSignature do
     |> String.trim_trailing("\n")
   end
 
-  # `Map.get/2` RATHER THAN `snippet[:code]`. A snippet is a plain map for `events` and `infos`, and a
-  # `%MishkaCmsCore.Runtime.Resources.Embeddeds.Helper{}` for `helpers` — and a struct does not
-  # implement Access, so the bracket form raised the moment a deployment configured a key and saved
-  # anything carrying helpers. Every one of the four signed resources, on the next write.
-  defp code_of(snippet), do: Map.get(snippet, :code) || Map.get(snippet, "code")
-  defp signature_of(snippet), do: Map.get(snippet, :signature) || Map.get(snippet, "signature")
+  # A snippet whose code sits under `"code"` is a stored map with string keys (the same test `place/2`
+  # makes); any other is an atom-keyed map or a
+  # `%MishkaCmsCore.Runtime.Resources.Embeddeds.Helper{}`, read with `Map.get/2` because a struct does
+  # not implement Access.
+  defp code_of(%{"code" => code}), do: code
+  defp code_of(snippet), do: Map.get(snippet, :code)
+
+  defp signature_of(%{"code" => _code} = snippet), do: Map.get(snippet, "signature")
+  defp signature_of(snippet), do: Map.get(snippet, :signature)
 
   # A STRUCT ONLY TAKES A FIELD IT DECLARES, and a signature written where there is no field for it
   # is lost between here and the column — `trusted?/1` would then answer false for a snippet this

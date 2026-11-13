@@ -2503,28 +2503,29 @@ defmodule MishkaCmsCore.Runtime.Media do
     end
   end
 
-  def get_content_type(format) do
-    case String.downcase(format) do
-      "jpg" -> "image/jpeg"
-      "jpeg" -> "image/jpeg"
-      "png" -> "image/png"
-      "gif" -> "image/gif"
-      "webp" -> "image/webp"
-      "svg" -> "image/svg+xml"
-      "mp4" -> "video/mp4"
-      "webm" -> "video/webm"
-      "mov" -> "video/quicktime"
-      "pdf" -> "application/pdf"
-      "doc" -> "application/msword"
-      "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      "xls" -> "application/vnd.ms-excel"
-      "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      "ppt" -> "application/vnd.ms-powerpoint"
-      "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-      "txt" -> "text/plain"
-      "csv" -> "text/csv"
-      "woff2" -> "font/woff2"
-      _ -> "application/octet-stream"
-    end
-  end
+  # Only these formats are named; anything else is served as a download.
+  @content_types %{
+    "jpg" => "image/jpeg",
+    "jpeg" => "image/jpeg",
+    "png" => "image/png",
+    "gif" => "image/gif",
+    "webp" => "image/webp",
+    "svg" => "image/svg+xml",
+    "mp4" => "video/mp4",
+    "webm" => "video/webm",
+    "mov" => "video/quicktime",
+    "pdf" => "application/pdf",
+    "doc" => "application/msword",
+    "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xls" => "application/vnd.ms-excel",
+    "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ppt" => "application/vnd.ms-powerpoint",
+    "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "txt" => "text/plain",
+    "csv" => "text/csv",
+    "woff2" => "font/woff2"
+  }
+
+  def get_content_type(format),
+    do: Map.get(@content_types, String.downcase(format), "application/octet-stream")
 end

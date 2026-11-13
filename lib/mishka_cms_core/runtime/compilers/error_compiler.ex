@@ -144,17 +144,18 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
       ast = build_module(params)
   """
   def build_module(params) do
+    atomized_params = MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+    meta = %{title: atomized_params[:title], site: atomized_params[:site]}
+
     MishkaInstaller.Event.Hook.call("runtime:compile:before_error_page", params,
-      meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+      meta: meta,
       return: false
     )
 
     :telemetry.span(
       [:mishka_cms, :runtime, :compilers, :error],
-      %{name: params[:title] || params["title"], site: params[:site] || params["site"]},
+      %{name: meta.title, site: meta.site},
       fn ->
-        atomized_params = MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
-
         result =
           atomized_params
           |> build_error_information()
@@ -164,7 +165,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
           |> create_module_ast()
 
         MishkaInstaller.Event.Hook.call("runtime:compile:after_error_page", params,
-          meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+          meta: meta,
           return: false
         )
 
@@ -567,11 +568,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompiler do
   # WRITTEN ONE WAY, READ THE OTHER. `layout` is a bare `:map` inside the `error_pages` constraint,
   # so Ash leaves its inner keys exactly as they were stored — and a form stores strings. Matching
   # `%{template: template}` therefore never matched anything the editor wrote: an author could fill
-  # the layout in, save it, and the wrapper was silently ignored. Read by either spelling, and only
-  # when there is something to compile.
+  # the layout in, save it, and the wrapper was silently ignored. Its keys are atomized first, so
+  # either spelling reads the same, and it is compiled only when there is something to compile.
   defp layout_template(error_page) do
     case Map.get(error_page, :layout) do
-      %{} = layout -> Map.get(layout, "template") || Map.get(layout, :template)
+      %{} = layout -> layout |> MishkaCmsCore.Runtime.Helpers.atomize_keys() |> Map.get(:template)
       _no_layout -> nil
     end
   end

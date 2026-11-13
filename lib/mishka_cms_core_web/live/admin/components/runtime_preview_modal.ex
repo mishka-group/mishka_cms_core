@@ -857,6 +857,20 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
   defp file_label(Component), do: gettext("Bundle Size")
   defp file_label(_resource), do: gettext("File Size")
 
+  defp framed(true = _show_edit?, _draft_view?, _assigns), do: nil
+  defp framed(_show_edit?, true = _draft_view?, assigns), do: assigns.draft
+  defp framed(_show_edit?, _draft_view?, assigns), do: assigns.record
+
+  # The address bar names the frame's full address: the same preview on the admin's own domain.
+  defp url_text(true = _show_edit?, _live_src, _framed, assigns),
+    do: gettext("Unsaved edit · %{label}", label: draft_label(assigns.draft || %{}))
+
+  defp url_text(_show_edit?, nil, _framed, assigns),
+    do: "#{site_name(assigns.record)}#{subtitle(assigns.record)}"
+
+  defp url_text(_show_edit?, _live_src, framed, assigns),
+    do: with_status(draft_url(framed, assigns.current_user), assigns)
+
   defp preview_tab(assigns) do
     draft_view? = assigns.preview_source == "draft"
     show_edit? = draft_view? and assigns.edit_html != nil
@@ -869,27 +883,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
     # ALWAYS THE ADMIN'S OWN ORIGIN, never the record's site host — see
     # `MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers.frame_url/1`. A site's domain can
     # resolve to a different machine entirely, and the admin's `frame-src 'self'` refuses it anyway.
-    framed =
-      cond do
-        show_edit? -> nil
-        draft_view? -> assigns.draft
-        true -> assigns.record
-      end
-
+    framed = framed(show_edit?, draft_view?, assigns)
     live_src = framed && with_status(frame_url(framed), assigns)
-
-    # The address bar names the frame's full address: the same preview on the admin's own domain.
-    url_text =
-      cond do
-        show_edit? ->
-          gettext("Unsaved edit · %{label}", label: draft_label(assigns.draft || %{}))
-
-        live_src ->
-          with_status(draft_url(framed, assigns.current_user), assigns)
-
-        true ->
-          "#{site_name(assigns.record)}#{subtitle(assigns.record)}"
-      end
+    url_text = url_text(show_edit?, live_src, framed, assigns)
 
     assigns =
       assigns

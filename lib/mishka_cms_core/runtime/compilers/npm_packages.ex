@@ -136,12 +136,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
         # otherwise both download it, and the second rename would find the first one's folder.
         :global.trans(
           {{__MODULE__, target}, self()},
-          fn ->
-            if ready?(target, entry["integrity"]), do: :ok, else: fetch_into(entry, target)
-          end,
+          fn -> fetch_unless_ready(entry, target) end,
           [node()]
         )
     end
+  end
+
+  defp fetch_unless_ready(entry, target) do
+    if ready?(target, entry["integrity"]), do: :ok, else: fetch_into(entry, target)
   end
 
   defp describe(%{"name" => name, "version" => version}),

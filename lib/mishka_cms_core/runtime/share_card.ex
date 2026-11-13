@@ -1052,16 +1052,19 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     img = text!(string, weight, size, color, width)
     limit = tallest(string, weight, size, lines)
 
-    if height(img) <= limit do
-      img
-    else
-      words = String.split(string)
+    if height(img) <= limit,
+      do: img,
+      else: shortened(string, img, {weight, size, color, width}, limit)
+  end
 
-      Enum.find_value((length(words) - 1)..1//-1, img, fn count ->
-        img = text!(Enum.join(Enum.take(words, count), " ") <> "…", weight, size, color, width)
-        if height(img) <= limit, do: img
-      end)
-    end
+  # The most words of `string` that fit `limit`, with an ellipsis; `img` when not even one does.
+  defp shortened(string, img, {weight, size, color, width}, limit) do
+    words = String.split(string)
+
+    Enum.find_value((length(words) - 1)..1//-1, img, fn count ->
+      img = text!(Enum.join(Enum.take(words, count), " ") <> "…", weight, size, color, width)
+      if height(img) <= limit, do: img
+    end)
   end
 
   # How tall `lines` lines are, in the script `string` is written in — Arabic script stands taller.

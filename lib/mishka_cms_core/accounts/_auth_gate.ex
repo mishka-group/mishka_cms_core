@@ -185,17 +185,19 @@ defmodule MishkaCmsCore.Accounts.AuthGate do
   @spec prepare(Ash.Query.t(), map(), [action()]) :: Ash.Query.t()
   def prepare(query, _context, actions) do
     Ash.Query.after_action(query, fn query, users ->
-      Enum.reduce_while(users, {:ok, users}, fn user, ok ->
-        case check(actions, query.tenant, %{user: user}) do
-          :ok ->
-            {:cont, ok}
-
-          {:error, closed} ->
-            Token.revoke_minted(user)
-            {:halt, {:error, closed}}
-        end
-      end)
+      Enum.reduce_while(users, {:ok, users}, &check_user(&1, &2, actions, query.tenant))
     end)
+  end
+
+  defp check_user(user, ok, actions, tenant) do
+    case check(actions, tenant, %{user: user}) do
+      :ok ->
+        {:cont, ok}
+
+      {:error, closed} ->
+        Token.revoke_minted(user)
+        {:halt, {:error, closed}}
+    end
   end
 
   @doc """

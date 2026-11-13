@@ -268,32 +268,28 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     # Asked again inside the lock — the pass this caller waited on was probably the install itself.
     if !:persistent_term.get(@esbuild_verified_key, false) do
       wanted = Esbuild.configured_version()
-
-      case probe_esbuild(wanted) do
-        :ok ->
-          :persistent_term.put(@esbuild_verified_key, true)
-
-        {:unusable, why} ->
-          Logger.info("[JavaScriptCompiler] ESBuild #{why}, installing #{wanted}...")
-          Esbuild.install()
-
-          case probe_esbuild(wanted) do
-            :ok ->
-              Logger.info(
-                "[JavaScriptCompiler] ESBuild #{wanted} installed at #{Esbuild.bin_path()}"
-              )
-
-              :persistent_term.put(@esbuild_verified_key, true)
-
-            {:unusable, why} ->
-              # Deliberately not cached: the next compile has to look again rather than trust a
-              # flag that says verified over a binary that will not run.
-              raise "ESBuild #{wanted} is unusable after installing — #{why}"
-          end
-      end
+      wanted |> probe_esbuild() |> install_unless_usable(wanted)
     end
 
     :ok
+  end
+
+  defp install_unless_usable(:ok, _wanted), do: :persistent_term.put(@esbuild_verified_key, true)
+
+  defp install_unless_usable({:unusable, why}, wanted) do
+    Logger.info("[JavaScriptCompiler] ESBuild #{why}, installing #{wanted}...")
+    Esbuild.install()
+
+    case probe_esbuild(wanted) do
+      :ok ->
+        Logger.info("[JavaScriptCompiler] ESBuild #{wanted} installed at #{Esbuild.bin_path()}")
+        :persistent_term.put(@esbuild_verified_key, true)
+
+      {:unusable, why} ->
+        # Deliberately not cached: the next compile has to look again rather than trust a
+        # flag that says verified over a binary that will not run.
+        raise "ESBuild #{wanted} is unusable after installing — #{why}"
+    end
   end
 
   # Every way esbuild can be unusable, folded into one answer that carries WHICH way.
@@ -852,14 +848,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         {[], []}
 
       hooks ->
-        Enum.reduce(hooks, {[], []}, fn hook, {ready, left_out} ->
-          case NpmPackages.ensure(hook.npm, js_assets_dir) do
-            :ok -> {ready ++ [hook], left_out}
-            {:error, reason} -> {ready, [{hook, reason} | left_out]}
-          end
+        Enum.reduce(hooks, {[], []}, fn hook, acc ->
+          hook.npm |> NpmPackages.ensure(js_assets_dir) |> sort_hook(hook, acc)
         end)
     end
   end
+
+  defp sort_hook(:ok, hook, {ready, left_out}), do: {ready ++ [hook], left_out}
+
+  defp sort_hook({:error, reason}, hook, {ready, left_out}),
+    do: {ready, [{hook, reason} | left_out]}
 
   # ONE HOOK THAT DOES NOT BUILD IS LEFT OUT, and the rest of the site's hooks still build: a single
   # unresolved import or syntax error fails esbuild for the whole bundle, and that bundle is what

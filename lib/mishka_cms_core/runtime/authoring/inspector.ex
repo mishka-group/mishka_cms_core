@@ -767,6 +767,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
       type(attr) == "global" -> :global
       type(attr) == "struct" -> {:struct, field(attr, "struct_name")}
       icon_map?(attr) -> :icon
+      true -> infer_from_values(attr, name, opts, values, component)
+    end
+  end
+
+  defp infer_from_values(attr, name, opts, values, component) do
+    cond do
       # A LIST IS NOT A LINE OF TEXT. `chelekom-filterable-gallery` keeps its whole content in two
       # list attributes, and a one-line box wrote what was typed into it as a STRING — so the
       # component, which maps over them, raised the moment anything was entered. The one control
@@ -775,6 +781,12 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
       columns?(name, values) -> {:columns, values}
       is_list(values) and values != [] -> select_or_segmented(values)
       value_type(attr) in @numbers -> number(opts)
+      true -> infer_from_name(attr, name, component)
+    end
+  end
+
+  defp infer_from_name(attr, name, component) do
+    cond do
       styling?(name) -> :text
       named?(name, @colour_names) -> :color
       named?(name, @icon_names) -> :icon

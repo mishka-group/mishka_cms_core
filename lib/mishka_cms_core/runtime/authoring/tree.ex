@@ -674,10 +674,13 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
 
   defp upsert_attr(attrs, name, value) do
     case Enum.any?(attrs, &match?({^name, _}, &1)) do
-      true -> Enum.map(attrs, fn {n, v} -> if(n == name, do: {n, value}, else: {n, v}) end)
+      true -> Enum.map(attrs, &replace_attr(&1, name, value))
       false -> attrs ++ [{name, value}]
     end
   end
+
+  defp replace_attr({name, _old}, name, value), do: {name, value}
+  defp replace_attr(attr, _name, _value), do: attr
 
   @doc "Removes an attribute. An unset attribute serializes to nothing, restoring the default."
   @spec delete_attr(t(), String.t(), String.t() | :root) :: {:ok, t()} | error()
@@ -1082,18 +1085,19 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
       # inside `id` — and the next line removes `id` and everything still beneath it, so "take the
       # wrapper off" quietly became "take the wrapper and its contents off", as one step, answering
       # `{:ok, tree}`. A wrapper that stays is recoverable; a subtree that is gone is not.
-      node.children
-      |> Enum.reduce_while({:ok, {tree, index}}, fn child_id, {:ok, {acc, at}} ->
-        case move(acc, child_id, parent, at) do
-          {:ok, moved} -> {:cont, {:ok, {moved, at + 1}}}
-          {:error, reason} -> {:halt, {:error, reason}}
-        end
-      end)
-      |> case do
-        {:ok, {promoted, _next}} -> delete(promoted, id)
-        {:error, reason} -> {:error, reason}
+      with {:ok, {promoted, _next}} <- promote_children(tree, node.children, parent, index) do
+        delete(promoted, id)
       end
     end
+  end
+
+  defp promote_children(tree, children, parent, index) do
+    Enum.reduce_while(children, {:ok, {tree, index}}, fn child_id, {:ok, {acc, at}} ->
+      case move(acc, child_id, parent, at) do
+        {:ok, moved} -> {:cont, {:ok, {moved, at + 1}}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
   end
 
   defp validate_present(tree, id) do

@@ -177,23 +177,25 @@ defmodule MishkaCmsCore.Install.Bootstrap do
 
       permissions
       |> Enum.reject(fn {name, _description} -> MapSet.member?(held, name) end)
-      |> Enum.reduce_while({:ok, []}, fn {name, description}, {:ok, created} ->
-        Permission
-        |> Ash.Changeset.for_create(:create, %{name: name, description: description},
-          authorize?: false
-        )
-        |> Ash.create()
-        |> case do
-          {:ok, permission} -> {:cont, {:ok, [permission | created]}}
-          # ANOTHER RUN GOT THERE FIRST: two sites installing the same extension at once both find
-          # a name missing, and the second create meets the unique name the first wrote.
-          {:error, _error} = error -> stored_meanwhile(name, created, error)
-        end
-      end)
+      |> Enum.reduce_while({:ok, []}, &create_permission/2)
       |> case do
         {:ok, created} -> {:ok, %{stored: stored ++ created, created: Enum.reverse(created)}}
         error -> error
       end
+    end
+  end
+
+  defp create_permission({name, description}, {:ok, created}) do
+    Permission
+    |> Ash.Changeset.for_create(:create, %{name: name, description: description},
+      authorize?: false
+    )
+    |> Ash.create()
+    |> case do
+      {:ok, permission} -> {:cont, {:ok, [permission | created]}}
+      # ANOTHER RUN GOT THERE FIRST: two sites installing the same extension at once both find
+      # a name missing, and the second create meets the unique name the first wrote.
+      {:error, _error} = error -> stored_meanwhile(name, created, error)
     end
   end
 

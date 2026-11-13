@@ -87,17 +87,7 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker do
       by_producer
       |> Enum.sort_by(&elem(&1, 0))
       |> Enum.reduce({[], %{}, MapSet.new()}, fn {producer, targets}, {jobs, counts, seen} ->
-        {mine, seen} =
-          Enum.reduce(targets, {[], seen}, fn target, {mine, seen} ->
-            case job(site_id, target, force) do
-              nil ->
-                {mine, seen}
-
-              {id, changeset} ->
-                if id in seen, do: {mine, seen}, else: {[changeset | mine], MapSet.put(seen, id)}
-            end
-          end)
-
+        {mine, seen} = Enum.reduce(targets, {[], seen}, &add_job(site_id, &1, force, &2))
         {mine ++ jobs, Map.put(counts, producer, length(mine)), seen}
       end)
 
@@ -107,6 +97,16 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardPlanWorker do
     |> Enum.each(&Oban.insert_all/1)
 
     counts
+  end
+
+  defp add_job(site_id, target, force, {mine, seen}) do
+    case job(site_id, target, force) do
+      nil ->
+        {mine, seen}
+
+      {id, changeset} ->
+        if id in seen, do: {mine, seen}, else: {[changeset | mine], MapSet.put(seen, id)}
+    end
   end
 
   defp job(site_id, {:page, id} = target, force) when is_binary(id),

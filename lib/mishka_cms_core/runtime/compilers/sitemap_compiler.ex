@@ -257,18 +257,17 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
     if chain != :persistent_term.get(@chain_key, :none_yet) do
       :persistent_term.put(@chain_key, chain)
 
-      if Process.whereis(BootHandler) do
-        _ =
-          Task.Supervisor.start_child(MishkaCmsCore.Runtime.TaskSupervisor, fn ->
-            schedule(nil)
-          end)
-      end
+      if Process.whereis(BootHandler), do: schedule_in_task()
     end
 
     :ok
   end
 
   def handle_telemetry(_event, _measurements, _meta, _config), do: :ok
+
+  defp schedule_in_task do
+    _ = Task.Supervisor.start_child(MishkaCmsCore.Runtime.TaskSupervisor, fn -> schedule(nil) end)
+  end
 
   # What the compiled chain holds — its plugins and whether it can call them — as mishka_installer
   # decides whether to rebuild it.

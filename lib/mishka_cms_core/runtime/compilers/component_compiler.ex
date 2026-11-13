@@ -137,17 +137,20 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
       ast = build_module(params)
   """
   def build_module(params) do
+    atomized_params = MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+    meta = %{title: atomized_params[:title], site: atomized_params[:site]}
+
     MishkaInstaller.Event.Hook.call("runtime:compile:before_component", params,
-      meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+      meta: meta,
       return: false
     )
 
     :telemetry.span(
       [:mishka_cms, :runtime, :compilers, :component],
-      %{name: params[:title] || params["title"], site: params[:site] || params["site"]},
+      %{name: meta.title, site: meta.site},
       fn ->
         result =
-          MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+          atomized_params
           |> build_component_information()
           |> build_module_attributes()
           |> build_attributes()
@@ -158,7 +161,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
           |> create_module_ast()
 
         MishkaInstaller.Event.Hook.call("runtime:compile:after_component", params,
-          meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+          meta: meta,
           return: false
         )
 
@@ -194,41 +197,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   - `:extra` - Additional custom metadata
   """
   def build_component_information(params) do
-    extra = render_time_extra(params[:extra])
+    information = Macro.escape(component_information(params))
 
     component_info_ast =
       quote do
         def __component_information__ do
-          %{
-            component: %{
-              name: unquote(params[:title]),
-              timestamp: unquote(Macro.escape(params[:timestamp])),
-              attrs: unquote(Macro.escape(params[:attrs] || [])),
-              slots: unquote(Macro.escape(params[:slots] || []))
-            },
-            private: %{
-              id: unquote(params[:id]),
-              priority: unquote(params[:priority] || 0),
-              component_module: unquote(params[:component_module]),
-              site: unquote(params[:site]),
-              site_id: unquote(params[:site_id]),
-              host: unquote(params[:host]),
-              format: unquote(params[:format]) || :heex,
-              # WHAT THIS MODULE IS, asked of the module itself. Dispatch reads this rather than a
-              # name pattern or a column at render time: the compiled artefact is the only thing
-              # that knows which shape it actually took, and a stale module built before this column
-              # existed answers `nil` through `get_in/2`, which is falsy — so it keeps the old path
-              # until something rebuilds it.
-              stateful: unquote(params[:stateful] == true),
-              # Whether the template draws stored content — calls `rich_content`. Such a component
-              # is never drawn by a marker inside content, which could be a marker for itself. See
-              # `MishkaCmsCore.Runtime.ContentComponents`.
-              draws_content:
-                unquote(MishkaCmsCore.Runtime.ContentComponents.draws_content?(params[:template]))
-            },
-            acl: %{permissions: unquote(Macro.escape(params[:permissions] || []))},
-            extra: unquote(Macro.escape(extra))
-          }
+          unquote(information)
         end
 
         def __component_information__(key) when is_atom(key) do
@@ -249,6 +223,38 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
       end
 
     {params, [component_info_ast]}
+  end
+
+  defp component_information(params) do
+    %{
+      component: %{
+        name: params[:title],
+        timestamp: params[:timestamp],
+        attrs: params[:attrs] || [],
+        slots: params[:slots] || []
+      },
+      private: %{
+        id: params[:id],
+        priority: params[:priority] || 0,
+        component_module: params[:component_module],
+        site: params[:site],
+        site_id: params[:site_id],
+        host: params[:host],
+        format: params[:format] || :heex,
+        # WHAT THIS MODULE IS, asked of the module itself. Dispatch reads this rather than a
+        # name pattern or a column at render time: the compiled artefact is the only thing
+        # that knows which shape it actually took, and a stale module built before this column
+        # existed answers `nil` through `get_in/2`, which is falsy — so it keeps the old path
+        # until something rebuilds it.
+        stateful: params[:stateful] == true,
+        # Whether the template draws stored content — calls `rich_content`. Such a component
+        # is never drawn by a marker inside content, which could be a marker for itself. See
+        # `MishkaCmsCore.Runtime.ContentComponents`.
+        draws_content: MishkaCmsCore.Runtime.ContentComponents.draws_content?(params[:template])
+      },
+      acl: %{permissions: params[:permissions] || []},
+      extra: render_time_extra(params[:extra])
+    }
   end
 
   # `extra.examples` and `extra.demo_examples` are install/preview metadata (per-option example
@@ -559,69 +565,71 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
       # Called after the parent's assigns are carried across, so the kit's clause sees them already
       # on the socket rather than having to do that work again.
       def update_many(var!(pairs)) do
-        Enum.map(var!(pairs), fn {var!(assigns), var!(socket)} ->
-          given = Map.drop(var!(assigns), unquote(Macro.escape(@injected_assigns)))
-          declared = unquote(Macro.escape(declared))
+        Enum.map(var!(pairs), fn {assigns, socket} -> __carry__(assigns, socket) end)
+      end
 
-          # A SLOT IS NOT A GLOBAL ATTRIBUTE. Whatever is left after the declared names still has to
-          # be split again, because a caller passes slots the component never declared — the
-          # builder's canvas hands every component an `inner_block` whether it takes one or not, and
-          # `render_slot/1` needs it under its own name. Swept into `:rest` it is rendered as an HTML
-          # attribute, and a slot is a map: "lists in Phoenix.HTML may only contain integers
-          # representing bytes, binaries or other lists".
-          #
-          # Split on the VALUE rather than on a list of names, so an undeclared slot and a declared
-          # one are treated the same way and no name has to be remembered here.
-          {slots, globals} =
-            given
-            |> Map.drop(declared)
-            |> Enum.split_with(fn {_name, value} ->
-              case value do
-                %{__slot__: _which} -> true
-                [%{__slot__: _which} | _rest] -> true
-                _ordinary -> false
-              end
-            end)
+      defp __carry__(var!(assigns), var!(socket)) do
+        given = Map.drop(var!(assigns), unquote(Macro.escape(@injected_assigns)))
+        declared = unquote(Macro.escape(declared))
 
-          # A DECLARED DEFAULT HAS TO REACH THE SOCKET, not just the render. `render/1` merges the
-          # defaults into its own copy of the assigns, which is enough for `{@step}` in the template
-          # and nothing else: `update/2` and `handle_event/3` read `socket.assigns`, and a component
-          # whose parent left a defaulted attr unset raised `key :step not found` on its first
-          # click. Found by driving a kit-exported component rather than a hand-built one, because a
-          # hand-built one passes every attr.
-          #
-          # `assign_new/3` and not a merge, so this only ever FILLS A GAP: the parent's value is
-          # assigned below and wins, and a value a handler put there survives the next update rather
-          # than being reset to the declaration's default on every parent re-render.
-          unquote(Macro.escape(defaults_map))
-          |> Enum.reduce(var!(socket), fn {key, value}, seeded ->
-            Phoenix.Component.assign_new(seeded, key, fn -> value end)
+        # A SLOT IS NOT A GLOBAL ATTRIBUTE. Whatever is left after the declared names still has to
+        # be split again, because a caller passes slots the component never declared — the
+        # builder's canvas hands every component an `inner_block` whether it takes one or not, and
+        # `render_slot/1` needs it under its own name. Swept into `:rest` it is rendered as an HTML
+        # attribute, and a slot is a map: "lists in Phoenix.HTML may only contain integers
+        # representing bytes, binaries or other lists".
+        #
+        # Split on the VALUE rather than on a list of names, so an undeclared slot and a declared
+        # one are treated the same way and no name has to be remembered here.
+        {slots, globals} =
+          given
+          |> Map.drop(declared)
+          |> Enum.split_with(fn
+            {_name, %{__slot__: _which}} -> true
+            {_name, [%{__slot__: _which} | _rest]} -> true
+            _ordinary -> false
           end)
-          |> Phoenix.Component.assign(Map.take(given, declared))
-          |> Phoenix.Component.assign(Map.new(slots))
-          # `:id` is what a live component is identified by, and the stored template may read `@id`.
-          # credo:disable-for-next-line Jump.CredoChecks.UnusedLiveViewAssign
-          |> Phoenix.Component.assign(:id, Map.get(var!(assigns), :id))
-          # THE DISPATCH'S OWN KEYS, PUT BACK FROM WHAT THIS MODULE WAS COMPILED WITH. `live/3`
-          # drops `site` and `component_name` before calling `live_component/1`, because a live
-          # component sweeps every undeclared key into its global attr and both were being rendered
-          # onto the component's root element. A function component keeps them — the synthetic
-          # `attr :site` and `attr :component_name` declare them on the bridge, and the bridge is
-          # not on this path — so a kit component that draws its own siblings with
-          # `<.component component_name="…" site={@site} />` worked as a function component and
-          # raised `key :site not found` as a live one.
-          #
-          # Taken from the compiled constants rather than from the call: this module is NAMED for
-          # its (name, site) pair, so the site is a property of the module and cannot disagree.
-          |> Phoenix.Component.assign(unquote(Macro.escape(restored)))
-          |> Phoenix.Component.assign(unquote(global), Map.new(globals))
-          |> then(fn carried ->
-            case function_exported?(__MODULE__, :update, 2) do
-              false -> carried
-              true -> __MODULE__.update(var!(assigns), carried) |> elem(1)
-            end
-          end)
+
+        # A DECLARED DEFAULT HAS TO REACH THE SOCKET, not just the render. `render/1` merges the
+        # defaults into its own copy of the assigns, which is enough for `{@step}` in the template
+        # and nothing else: `update/2` and `handle_event/3` read `socket.assigns`, and a component
+        # whose parent left a defaulted attr unset raised `key :step not found` on its first
+        # click. Found by driving a kit-exported component rather than a hand-built one, because a
+        # hand-built one passes every attr.
+        #
+        # `assign_new/3` and not a merge, so this only ever FILLS A GAP: the parent's value is
+        # assigned below and wins, and a value a handler put there survives the next update rather
+        # than being reset to the declaration's default on every parent re-render.
+        unquote(Macro.escape(defaults_map))
+        |> Enum.reduce(var!(socket), fn {key, value}, seeded ->
+          Phoenix.Component.assign_new(seeded, key, fn -> value end)
         end)
+        |> Phoenix.Component.assign(Map.take(given, declared))
+        |> Phoenix.Component.assign(Map.new(slots))
+        # `:id` is what a live component is identified by, and the stored template may read `@id`.
+        # credo:disable-for-next-line Jump.CredoChecks.UnusedLiveViewAssign
+        |> Phoenix.Component.assign(:id, Map.get(var!(assigns), :id))
+        # THE DISPATCH'S OWN KEYS, PUT BACK FROM WHAT THIS MODULE WAS COMPILED WITH. `live/3`
+        # drops `site` and `component_name` before calling `live_component/1`, because a live
+        # component sweeps every undeclared key into its global attr and both were being rendered
+        # onto the component's root element. A function component keeps them — the synthetic
+        # `attr :site` and `attr :component_name` declare them on the bridge, and the bridge is
+        # not on this path — so a kit component that draws its own siblings with
+        # `<.component component_name="…" site={@site} />` worked as a function component and
+        # raised `key :site not found` as a live one.
+        #
+        # Taken from the compiled constants rather than from the call: this module is NAMED for
+        # its (name, site) pair, so the site is a property of the module and cannot disagree.
+        |> Phoenix.Component.assign(unquote(Macro.escape(restored)))
+        |> Phoenix.Component.assign(unquote(global), Map.new(globals))
+        |> then(&__kit_update__(var!(assigns), &1))
+      end
+
+      defp __kit_update__(assigns, carried) do
+        case function_exported?(__MODULE__, :update, 2) do
+          false -> carried
+          true -> __MODULE__.update(assigns, carried) |> elem(1)
+        end
       end
 
       # Timed for the component preview's Performance Metrics: a live component is rendered by
@@ -674,7 +682,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # none — both correct, neither special-cased.
   defp declared_keys(params) do
     for declaration <- (params[:attrs] || []) ++ (params[:slots] || []),
-        name = declaration[:name] || declaration["name"],
+        name = string_keys(declaration)["name"],
         is_binary(name) or is_atom(name),
         do: to_existing_or_new_atom(name)
   end
@@ -1180,20 +1188,25 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # round-tripped through Ash (`:map`-typed nested values stay
   # string-keyed). Normalize the top-level keys we use.
   defp normalize_attr_map(%{} = a) do
+    a = string_keys(a)
+
     %{
-      name: Map.get(a, :name) || Map.get(a, "name"),
-      type: Map.get(a, :type) || Map.get(a, "type") || "any",
-      opts: Map.get(a, :opts) || Map.get(a, "opts") || %{},
-      struct_name: Map.get(a, :struct_name) || Map.get(a, "struct_name")
+      name: a["name"],
+      type: a["type"] || "any",
+      opts: a["opts"] || %{},
+      struct_name: a["struct_name"]
     }
   end
 
   defp normalize_slot_map(%{} = s) do
-    %{
-      name: Map.get(s, :name) || Map.get(s, "name"),
-      opts: Map.get(s, :opts) || Map.get(s, "opts") || %{}
-    }
+    s = string_keys(s)
+    %{name: s["name"], opts: s["opts"] || %{}}
   end
+
+  # An attr or slot declaration with its top-level keys as strings, whichever way it arrived. Only
+  # the top level: an `opts` default is the author's value and keeps its own keys.
+  defp string_keys(%{} = declaration),
+    do: Map.new(declaration, fn {key, value} -> {to_string(key), value} end)
 
   defp split_args_and_guard(args) when is_binary(args) do
     case String.split(args, " when ", parts: 2) do
@@ -1360,13 +1373,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # Names read back from the module just compiled, whose attr and slot declarations made them atoms.
   defp probe_key(declaration) do
     declaration
-    |> Map.get(:name, Map.get(declaration, "name", "unknown"))
+    |> string_keys()
+    |> Map.get("name", "unknown")
     |> to_string()
     |> String.to_atom()
   end
 
   defp probe_value(attr) do
-    opts = Map.get(attr, :opts) || Map.get(attr, "opts") || %{}
+    opts = string_keys(attr)["opts"] || %{}
 
     case Map.get(opts, :default, Map.get(opts, "default")) do
       nil -> "probe"
@@ -1889,31 +1903,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # "small"}`); top-level attrs that flow through Ash arrive atom-
   # keyed. Coerce both shapes into an atom-keyed keyword list, then
   # filter to the keys Phoenix's `attr/3` macro accepts.
-  defp ignore_invalid_attr_opts(opts) when is_map(opts) do
-    opts
-    |> Enum.flat_map(fn {k, v} ->
-      key = if is_atom(k), do: k, else: safe_atomize(k)
-      if key in @valid_attr_opt_keys, do: [{key, v}], else: []
-    end)
-  end
-
-  defp ignore_invalid_attr_opts(opts) when is_list(opts) do
-    Enum.flat_map(opts, fn
-      {k, v} when is_atom(k) ->
-        if k in @valid_attr_opt_keys, do: [{k, v}], else: []
-
-      {k, v} when is_binary(k) ->
-        case safe_atomize(k) do
-          nil -> []
-          atom -> if atom in @valid_attr_opt_keys, do: [{atom, v}], else: []
-        end
-
-      _ ->
-        []
-    end)
-  end
+  defp ignore_invalid_attr_opts(opts) when is_map(opts) or is_list(opts),
+    do: Enum.flat_map(opts, &valid_attr_opt/1)
 
   defp ignore_invalid_attr_opts(_opts), do: []
+
+  defp valid_attr_opt({key, value}) when is_binary(key),
+    do: valid_attr_opt({safe_atomize(key), value})
+
+  defp valid_attr_opt({key, value}) when key in @valid_attr_opt_keys, do: [{key, value}]
+  defp valid_attr_opt(_opt), do: []
 
   # `String.to_existing_atom/1` won't crash on unknown strings — but
   # @valid_attr_opt_keys atoms exist at this point (they're literal

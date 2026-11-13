@@ -249,23 +249,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
         :ok
 
       {:ok, site_name, site_id} ->
-        if action in ["create", "unarchive"] and !hook["active"] do
-          :ok
-        else
-          if purge?(action, hook),
-            do: BootHandler.delete_template_file(template_site(hook), "js_hook", hook["name"])
-
-          if is_nil(site_id) do
-            JavaScriptCompiler.delete_shared_base_js()
-            # The shared base scans the global hooks' templates, so it is rebuilt after they are
-            # written; in place, so a base that does not build leaves the last one that did.
-            BootHandler.create_js_hooks_template()
-            TailwindCompiler.compile_and_store_shared_base()
-            BootHandler.create_assets_compilation_jobs()
-          else
-            create_js_hooks_template_run_js_compiler(site_id, site_name)
-          end
-        end
+        unless action in ["create", "unarchive"] and !hook["active"],
+          do: js_hook_changed(action, hook, site_name, site_id)
 
         :ok
     end
@@ -279,16 +264,8 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
         :ok
 
       {:ok, site_name, site_id} ->
-        if action in ["create", "unarchive"] and !sheet["active"] do
-          :ok
-        else
-          if is_nil(site_id) do
-            TailwindCompiler.compile_and_store_shared_base()
-            BootHandler.create_assets_compilation_jobs("css")
-          else
-            run_asset_compiler(site_name, site_id, "css")
-          end
-        end
+        unless action in ["create", "unarchive"] and !sheet["active"],
+          do: rebuild_stylesheets(site_name, site_id)
 
         :ok
     end
@@ -340,6 +317,32 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker do
     # TODO: We should log this why it happends
     :ok
   end
+
+  defp js_hook_changed(action, hook, site_name, site_id) do
+    if purge?(action, hook),
+      do: BootHandler.delete_template_file(template_site(hook), "js_hook", hook["name"])
+
+    rebuild_js_hooks(site_name, site_id)
+  end
+
+  defp rebuild_js_hooks(_site_name, nil) do
+    JavaScriptCompiler.delete_shared_base_js()
+    # The shared base scans the global hooks' templates, so it is rebuilt after they are
+    # written; in place, so a base that does not build leaves the last one that did.
+    BootHandler.create_js_hooks_template()
+    TailwindCompiler.compile_and_store_shared_base()
+    BootHandler.create_assets_compilation_jobs()
+  end
+
+  defp rebuild_js_hooks(site_name, site_id),
+    do: create_js_hooks_template_run_js_compiler(site_id, site_name)
+
+  defp rebuild_stylesheets(_site_name, nil) do
+    TailwindCompiler.compile_and_store_shared_base()
+    BootHandler.create_assets_compilation_jobs("css")
+  end
+
+  defp rebuild_stylesheets(site_name, site_id), do: run_asset_compiler(site_name, site_id, "css")
 
   defp create_js_hooks_template_run_js_compiler(site_id, site_name) do
     try do

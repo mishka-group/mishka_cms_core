@@ -42,15 +42,17 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.RegisterTranslationKeys do
   @impl true
   def change(changeset, _opts, _context) do
     if changeset.action_type == :create or asks_anew?(changeset) do
-      Ash.Changeset.after_action(changeset, fn _changeset, record ->
-        if translated?(record),
-          do: :ok = Translations.register(record.site_id, Translations.source_keys(record))
-
-        {:ok, record}
-      end)
+      Ash.Changeset.after_action(changeset, fn _changeset, record -> register(record) end)
     else
       changeset
     end
+  end
+
+  defp register(record) do
+    if translated?(record),
+      do: :ok = Translations.register(record.site_id, Translations.source_keys(record))
+
+    {:ok, record}
   end
 
   defp asks_anew?(changeset) do

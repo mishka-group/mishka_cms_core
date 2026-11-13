@@ -275,9 +275,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     |> then(&UiKitHandler.component_features(%{"helpers" => &1}))
   end
 
-  defp helper_discriminators(helper) when is_map(helper),
-    do: Map.get(helper, :discriminators) || Map.get(helper, "discriminators")
-
+  defp helper_discriminators(%{discriminators: discriminators}), do: discriminators
+  defp helper_discriminators(%{"discriminators" => discriminators}), do: discriminators
   defp helper_discriminators(_helper), do: []
 
   # Showing the base example beats showing nothing when narrowing ruled every example out.
@@ -471,7 +470,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   defp default_status(record), do: record |> error_statuses() |> List.first()
 
-  defp estatus(entry), do: ErrorStatus.parse(Map.get(entry, :status) || Map.get(entry, "status"))
+  defp estatus(entry), do: ErrorStatus.parse(string_keys(entry)["status"])
+
+  # An error page entry is keyed by atoms once cast and by strings as a form or stored JSON wrote it,
+  # so each one is read by string keys.
+  defp string_keys(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
 
   @doc """
   Render ONE error code's COMPLETE page exactly like the runtime serves it: the status's `:template`
@@ -589,11 +592,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     end
   end
 
-  defp entry_template(entry), do: Map.get(entry, :template) || Map.get(entry, "template") || ""
+  defp entry_template(entry), do: string_keys(entry)["template"] || ""
 
   defp status_layout_template(entry) do
-    case Map.get(entry, :layout) || Map.get(entry, "layout") do
-      %{} = layout -> Map.get(layout, :template) || Map.get(layout, "template")
+    case string_keys(entry)["layout"] do
+      %{} = layout -> string_keys(layout)["template"]
       _ -> nil
     end
   end
@@ -713,9 +716,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   defp error_pages_source(pages) do
     Enum.map_join(pages, "\n\n", fn page ->
-      status = Map.get(page, :status) || Map.get(page, "status")
-      template = Map.get(page, :template) || Map.get(page, "template") || ""
-      "<!-- #{status} -->\n#{template}"
+      page = string_keys(page)
+      "<!-- #{page["status"]} -->\n#{page["template"] || ""}"
     end)
   end
 

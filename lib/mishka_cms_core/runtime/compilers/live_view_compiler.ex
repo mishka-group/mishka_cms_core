@@ -283,19 +283,22 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   Each stage adds specific functionality to the final compiled LiveView module.
   """
   def build_module(params) do
+    atomized_params = MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+    meta = %{title: atomized_params[:title], site: atomized_params[:site]}
+
     MishkaInstaller.Event.Hook.call("runtime:compile:before_page", params,
-      meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+      meta: meta,
       return: false
     )
 
     :telemetry.span(
       [:mishka_cms, :runtime, :compilers, :live_view],
-      %{name: params[:title] || params["title"], site: params[:site] || params["site"]},
+      %{name: meta.title, site: meta.site},
       fn ->
         # A HIDDEN ELEMENT IS LEFT OUT FIRST, so every stage after this one — the forms the page
         # declares included — sees only what a visitor gets. See `Authoring.Visibility`.
         result =
-          MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+          atomized_params
           |> Map.update(:template, nil, &MishkaCmsCore.Runtime.Authoring.Visibility.strip/1)
           |> build_assigns()
           |> build_uploads()
@@ -309,7 +312,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
           |> create_module_ast()
 
         MishkaInstaller.Event.Hook.call("runtime:compile:after_page", params,
-          meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+          meta: meta,
           return: false
         )
 
@@ -403,43 +406,45 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
   This function is typically called as the first stage in the compilation pipeline.
   """
   def build_assigns(params) do
+    info = with_assign_defaults(params)
+
     assigns_ast =
       quote do
         def __page_information__ do
           %{
             page: %{
-              title: unquote(params[:title]),
-              path: unquote(params[:path]),
-              section: unquote(params[:section]),
-              language: unquote(params[:language]),
-              language_group_id: unquote(params[:language_group_id]),
-              timestamp: unquote(Macro.escape(params[:timestamp])),
-              content: unquote(Macro.escape(params[:content])),
+              title: unquote(info[:title]),
+              path: unquote(info[:path]),
+              section: unquote(info[:section]),
+              language: unquote(info[:language]),
+              language_group_id: unquote(info[:language_group_id]),
+              timestamp: unquote(Macro.escape(info[:timestamp])),
+              content: unquote(Macro.escape(info[:content])),
               seo: %{
-                description: unquote(params[:description]),
-                meta_tags: unquote(Macro.escape(params[:seo_tags] || [])),
-                schema: unquote(Macro.escape(params[:schema] || []))
+                description: unquote(info[:description]),
+                meta_tags: unquote(Macro.escape(info[:seo_tags])),
+                schema: unquote(Macro.escape(info[:schema]))
               }
             },
             private: %{
-              id: unquote(params[:id]),
-              layout: unquote(Macro.escape(params[:layout])),
-              priority: unquote(params[:priority] || 0),
-              page_module: unquote(params[:page_module]),
-              site: unquote(params[:site]),
-              site_id: unquote(params[:site_id]),
-              host: unquote(params[:host]),
-              format: unquote(params[:format]) || :heex,
+              id: unquote(info[:id]),
+              layout: unquote(Macro.escape(info[:layout])),
+              priority: unquote(info[:priority]),
+              page_module: unquote(info[:page_module]),
+              site: unquote(info[:site]),
+              site_id: unquote(info[:site_id]),
+              host: unquote(info[:host]),
+              format: unquote(info[:format]),
               # WHETHER SERVING THIS PAGE HAS TO LOAD THE SIGNED-IN USER — see
               # `MishkaCmsCore.Runtime.Compilers.UserClosure`, which works it out from the page's
               # own markup and code. The layout it is drawn inside answers separately, in its own
               # module, and `MishkaCmsWeb.RuntimeLive` puts the two together. ANYTHING BUT AN
               # EXPLICIT `false` MEANS LOAD, so a page compiled without the answer carries the safe
               # one rather than the absent one.
-              reads_user: unquote(params[:reads_user] != false)
+              reads_user: unquote(info[:reads_user] != false)
             },
-            acl: %{permissions: unquote(Macro.escape(params[:permissions] || []))},
-            extra: unquote(Macro.escape(params[:extra]))
+            acl: %{permissions: unquote(Macro.escape(info[:permissions]))},
+            extra: unquote(Macro.escape(info[:extra]))
           }
         end
 
@@ -461,6 +466,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       end
 
     {params, [assigns_ast]}
+  end
+
+  @assign_defaults [seo_tags: [], schema: [], priority: 0, format: :heex, permissions: []]
+
+  defp with_assign_defaults(params) do
+    Enum.reduce(@assign_defaults, params, fn {key, default}, acc ->
+      Map.update(acc, key, default, &(&1 || default))
+    end)
   end
 
   @doc """

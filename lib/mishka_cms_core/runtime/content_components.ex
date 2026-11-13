@@ -2028,17 +2028,17 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp attr(text) do
     with {:ok, key, after_key} <- name(text),
          true <- Regex.match?(@key, key) do
-      case skip_space(after_key) do
-        "=" <> value ->
-          with {:ok, value, rest} <- value(skip_space(value)), do: {:ok, {key, value}, rest}
-
-        _bare ->
-          {:ok, {key, true}, after_key}
-      end
+      attr_value(skip_space(after_key), key, after_key)
     else
       _not_a_key -> :error
     end
   end
+
+  defp attr_value("=" <> value, key, _after_key) do
+    with {:ok, value, rest} <- value(skip_space(value)), do: {:ok, {key, value}, rest}
+  end
+
+  defp attr_value(_bare, key, after_key), do: {:ok, {key, true}, after_key}
 
   defp value(text) do
     case Enum.find(@quotes, fn {open, _close} -> String.starts_with?(text, open) end) do

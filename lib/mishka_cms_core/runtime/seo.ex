@@ -804,15 +804,18 @@ defmodule MishkaCmsCore.Runtime.Seo do
   @spec stored_tags(term()) :: [%{tag: term(), attrs: map(), content: term()}]
   def stored_tags(tags) do
     for %{} = tag <- List.wrap(tags), not is_struct(tag) do
-      attrs =
-        case field(tag, :attrs) do
-          %{} = attrs -> Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
-          _no_attrs -> %{}
-        end
-
-      %{tag: field(tag, :tag), attrs: attrs, content: field(tag, :content)}
+      %{
+        tag: field(tag, :tag),
+        attrs: stored_attrs(field(tag, :attrs)),
+        content: field(tag, :content)
+      }
     end
   end
+
+  defp stored_attrs(%{} = attrs),
+    do: Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
+
+  defp stored_attrs(_no_attrs), do: %{}
 
   @doc """
   A stored tag for `tag` with `attrs` holding `value`: a meta's in `content`, a link's in its `href`.
@@ -1138,23 +1141,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
     unfilled = layers |> Enum.map(&tags/1) |> stack()
 
     core =
-      fill_vars(
-        seo,
-        %{
-          url: url,
-          image:
-            absolute(seo.image, base) ||
-              absolute(meta_value(unfilled, "property", "og:image"), base)
-        },
-        site_title,
-        base
-      )
+      fill_vars(seo, %{url: url, image: default_image(seo, unfilled, base)}, site_title, base)
 
-    description =
-      filled_text(seo.description, core) ||
-        filled_text(meta_value(unfilled, "name", "description"), core)
-
-    vars = if description, do: Map.put(core, "page.description", description), else: core
+    description = default_description(seo, unfilled, core)
+    vars = description_var(core, description)
     [plugin | own] = Enum.map(layers, &(&1 |> fill_tags(vars) |> tags()))
     own = layout_title_for_none(own, plugin)
     owned = owned(stack(own), Keyword.get(opts, :page_description?, false))
@@ -1165,8 +1155,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
     description = meta_value(stored, "name", "description") || description
     stored_image = absolute(meta_value(stored, "property", "og:image"), base)
 
-    {spec, card} =
-      if stored_image, do: {nil, nil}, else: share_card(seo, description, site_title, base, opts)
+    {spec, card} = stored_or_card(stored_image, seo, description, site_title, base, opts)
 
     resolved =
       Map.put(
@@ -1174,8 +1163,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
           seo
           | title: numbered(title_value(stored) || seo.title, Keyword.get(opts, :page_number)),
             description: description,
-            image:
-              stored_image || (card && absolute(card.url, base)) || absolute(seo.image, base),
+            image: resolved_image(stored_image, card, seo, base),
             url: url
         },
         :share_card,
@@ -1206,6 +1194,31 @@ defmodule MishkaCmsCore.Runtime.Seo do
       permissions: seo.permissions
     }
   end
+
+  defp default_image(seo, unfilled, base),
+    do: absolute(seo.image, base) || absolute(meta_value(unfilled, "property", "og:image"), base)
+
+  defp default_description(seo, unfilled, core),
+    do:
+      filled_text(seo.description, core) ||
+        filled_text(meta_value(unfilled, "name", "description"), core)
+
+  defp description_var(vars, nil), do: vars
+  defp description_var(vars, description), do: Map.put(vars, "page.description", description)
+
+  # A stored og:image is the picture, so no share card is asked for.
+  defp stored_or_card(nil, seo, description, site_title, base, opts),
+    do: share_card(seo, description, site_title, base, opts)
+
+  defp stored_or_card(_stored_image, _seo, _description, _site_title, _base, _opts),
+    do: {nil, nil}
+
+  defp resolved_image(nil, nil, seo, base), do: absolute(seo.image, base)
+
+  defp resolved_image(nil, card, seo, base),
+    do: absolute(card.url, base) || absolute(seo.image, base)
+
+  defp resolved_image(stored_image, _card, _seo, _base), do: stored_image
 
   # `{{page.image}}` in the JSON-LD is the picture the head resolved: a stored og:image, else the
   # share card once drawn, else the plugin's.

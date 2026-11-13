@@ -270,7 +270,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
           render fn record ->
             codes =
               record.error_pages
-              |> Enum.map(&(Map.get(&1, "status") || Map.get(&1, :status)))
+              |> Enum.map(&Map.get(&1, :status))
               |> Enum.reject(&is_nil/1)
               |> Enum.sort()
 
@@ -1770,7 +1770,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPage do
       calculation fn records, _context ->
         Enum.map(records, fn error_page ->
           error_page.error_pages
-          |> Enum.map(fn page -> Map.get(page, "status") || Map.get(page, :status) end)
+          |> Enum.map(&Map.get(&1, :status))
           |> Enum.reject(&is_nil/1)
           |> Enum.sort()
         end)

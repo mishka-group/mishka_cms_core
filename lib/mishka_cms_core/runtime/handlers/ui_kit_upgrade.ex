@@ -310,22 +310,30 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitUpgrade do
          {:ok, plan} <- plan(bundle_path, site_id, actor) do
       {taken, left} = split(plan, include)
 
-      case Enum.map(taken, & &1.name) do
-        [] ->
-          {:ok, report(plan, taken, left, [])}
+      install_taken(
+        Enum.map(taken, & &1.name),
+        bundle,
+        bundle_path,
+        site_id,
+        actor,
+        {plan, taken, left}
+      )
+    end
+  end
 
-        names ->
-          added = missing_pieces(bundle, plan, names)
+  defp install_taken([], _bundle, _bundle_path, _site_id, _actor, {plan, taken, left}),
+    do: {:ok, report(plan, taken, left, [])}
 
-          with {:ok, _installed} <-
-                 UiKitHandler.install_kit!(bundle_path,
-                   site_id: site_id,
-                   selection: %{components: names ++ added},
-                   actor: actor
-                 ) do
-            {:ok, report(plan, taken, left, added)}
-          end
-      end
+  defp install_taken(names, bundle, bundle_path, site_id, actor, {plan, taken, left}) do
+    added = missing_pieces(bundle, plan, names)
+
+    with {:ok, _installed} <-
+           UiKitHandler.install_kit!(bundle_path,
+             site_id: site_id,
+             selection: %{components: names ++ added},
+             actor: actor
+           ) do
+      {:ok, report(plan, taken, left, added)}
     end
   end
 
