@@ -114,8 +114,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   def handle_info({:form_cancelled, HeadCode}, socket),
     do: {:noreply, head_code_form(socket, nil)}
 
-  def handle_info({:row_action, "head_code_edit", %{"id" => id}}, socket),
-    do: {:noreply, head_code_form(socket, id)}
+  def handle_info({:head_code_expand, id}, socket) do
+    case socket.assigns.head_code_writer? do
+      true ->
+        send_update(MishkaGervaz.Table.Web.Live,
+          id: HeadCodeModal.table_id(),
+          expanded_html: HeadCodeModal.entry_form(id, socket.assigns.current_user)
+        )
+
+        {:noreply, head_code_form(socket, nil)}
+
+      false ->
+        send_update(MishkaGervaz.Table.Web.Live,
+          id: HeadCodeModal.table_id(),
+          expanded_error: :forbidden
+        )
+
+        {:noreply, put_flash(socket, :error, gettext("Only a master writes head code."))}
+    end
+  end
 
   def handle_info(
         %Phoenix.Socket.Broadcast{

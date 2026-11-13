@@ -169,6 +169,88 @@ defmodule MishkaCmsCoreWeb.Test.HeadCodeModalTest do
     refute has_element?(view, "#head-code-form")
   end
 
+  defp unfold(view, entry) do
+    view
+    |> element(~s(#head-codes-table button[phx-click="expand_row"][phx-value-id="#{entry.id}"]))
+    |> render_click()
+
+    settle(view)
+  end
+
+  # What the browser sends when a JS command pushes `close_expanded` to the entries table.
+  defp fold(view) do
+    view |> with_target("#head-codes-table") |> render_click("close_expanded", %{})
+    settle(view)
+  end
+
+  defp folds_the_row?(button_html) do
+    [js] = button_html |> LazyHTML.from_fragment() |> LazyHTML.attribute("phx-click")
+    pushes_fold?(Jason.decode!(js))
+  end
+
+  defp pushes_fold?(ops),
+    do: ["push", %{"event" => "close_expanded", "target" => "#head-codes-table"}] in ops
+
+  test "Edit unfolds the row to its form, one row at a time, and Cancel folds it", %{
+    conn: conn,
+    site: site
+  } do
+    first = entry!(site)
+    second = entry!(site, %{name: "Probe"})
+
+    view = conn |> log_in(admin!(["*"])) |> open() |> open_head_code() |> unfold(first)
+
+    assert has_element?(view, "#head-codes-table #head-code-row-form-#{first.id}")
+    refute has_element?(view, "#head-code-form")
+
+    unfold(view, second)
+
+    assert has_element?(view, "#head-codes-table #head-code-row-form-#{second.id}")
+    refute has_element?(view, "#head-code-row-form-#{first.id}")
+
+    assert view
+           |> element("#head-code-row-form-form button", "Cancel")
+           |> render()
+           |> folds_the_row?()
+
+    fold(view)
+
+    refute has_element?(view, "#head-code-row-form-#{second.id}")
+  end
+
+  test "saving the row's form updates the entry and folds the row", %{conn: conn, site: site} do
+    entry = entry!(site)
+
+    view = conn |> log_in(admin!(["*"])) |> open() |> open_head_code() |> unfold(entry)
+
+    view
+    |> element("#head-code-row-form-form")
+    |> render_submit(%{"form" => %{"name" => "Plausible EU"}})
+
+    settle(view)
+
+    assert Ash.get!(HeadCode, entry.id, tenant: site.id, authorize?: false).name == "Plausible EU"
+    assert_push_event(view, "gervaz:exec-js", %{js: js})
+    assert pushes_fold?(Jason.decode!(js))
+
+    fold(view)
+
+    refute has_element?(view, "#head-code-row-form-#{entry.id}")
+    assert has_element?(view, "#head-codes-table", "Plausible EU")
+  end
+
+  test "Add entry folds an open row before it opens the new form", %{conn: conn, site: site} do
+    entry = entry!(site)
+
+    view = conn |> log_in(admin!(["*"])) |> open() |> open_head_code() |> unfold(entry)
+
+    view |> element("#head-code-add") |> render_click()
+    settle(view)
+
+    assert has_element?(view, "#head-code-form")
+    refute has_element?(view, "#head-code-row-form-#{entry.id}")
+  end
+
   test "lists what extensions add, apart from the site's own", %{conn: conn, site: site} do
     {:ok, _} =
       Event.write(%{

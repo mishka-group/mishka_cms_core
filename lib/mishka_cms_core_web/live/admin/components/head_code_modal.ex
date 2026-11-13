@@ -4,13 +4,20 @@
 
 defmodule MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal do
   @moduledoc """
-  The "Head code" modal of the Pages screen: a site's own head code entries in a Gervaz table, the
-  entry being edited in a Gervaz form, and what extensions add to the head, read only.
+  The "Head code" modal of the Pages screen: a site's own head code entries in a Gervaz table, a
+  Gervaz form for a new entry above it, and what extensions add to the head, read only.
+
+  An entry is edited in place: its row's caret unfolds the row (Gervaz's expanded row) to that
+  entry's form, one row at a time. Cancel or a save folds it again, and the row shows the saved
+  entry through the table's realtime update.
 
   Drawn only while it is open, so the Pages screen reads no head code until the reader asks for it.
   `MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index` holds its state in `@head_code`:
 
       %{form: nil | :new | entry_id, extensions: %{items: [...], origins: [...]}}
+
+  `form` is the form drawn above the table: `:new` from "Add entry", or an entry id when a page's
+  Configuration tab opens one before the table is there to unfold.
 
   See `MishkaCmsCore.Runtime.HeadCode` for the table and the form, and
   `MishkaCmsCore.Runtime.HeadCodes` for what reaches a page.
@@ -25,6 +32,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal do
 
   @modal_id "head-code-modal"
   @table_id "head-codes-table"
+  @row_form_id "head-code-row-form"
 
   @doc "The modal's DOM id."
   @spec modal_id() :: String.t()
@@ -33,6 +41,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal do
   @doc "The id of the entries table, which the Pages screen sends its realtime updates to."
   @spec table_id() :: String.t()
   def table_id, do: @table_id
+
+  @doc """
+  Folds the entries table's open row: what Cancel and a save on its inline form run, and what
+  "Add entry" runs first, so only one form is ever open.
+  """
+  @spec collapse_row(JS.t()) :: JS.t()
+  def collapse_row(js \\ %JS{}), do: JS.push(js, "close_expanded", target: "#" <> @table_id)
+
+  @doc """
+  The edit form an entry's row unfolds to. The Pages screen sends it to the entries table as the
+  row's expanded content when the row's Edit caret is pressed; it stays a rendered template, so
+  the form inside it is a live component of its own.
+  """
+  @spec entry_form(String.t(), map()) :: Phoenix.LiveView.Rendered.t()
+  def entry_form(record_id, current_user) do
+    assigns = %{record_id: record_id, current_user: current_user, form_id: @row_form_id}
+
+    ~H"""
+    <div id={"head-code-row-form-" <> @record_id}>
+      <.live_component
+        module={MishkaGervaz.Form.Web.Live}
+        id={@form_id}
+        resource={HeadCode}
+        current_user={@current_user}
+        record_id={@record_id}
+      />
+    </div>
+    """
+  end
 
   attr :head_code, :map, required: true
   attr :current_user, :map, required: true
@@ -71,7 +108,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal do
             :if={@writable?}
             type="button"
             id="head-code-add"
-            phx-click="head_code_add"
+            phx-click={collapse_row() |> JS.push("head_code_add")}
             icon="hero-plus"
           >
             {gettext("Add entry")}

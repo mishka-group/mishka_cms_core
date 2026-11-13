@@ -52,6 +52,7 @@ defmodule MishkaCmsCore.Runtime.HeadCode do
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Runtime.HeadCodes
   alias MishkaCmsCore.Runtime.Resources.Validations.TenantContext
+  alias MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal
 
   use MishkaGervaz.Messages, backend: MishkaCmsCore.Gettext
 
@@ -222,8 +223,7 @@ defmodule MishkaCmsCore.Runtime.HeadCode do
 
       row_actions do
         action :edit do
-          type :event
-          event "head_code_edit"
+          type :accordion
 
           visible fn _record, state ->
             state.archive_status == :active and HeadCodes.writes?(state.current_user)
@@ -289,6 +289,13 @@ defmodule MishkaCmsCore.Runtime.HeadCode do
 
         visible fn record, user ->
           is_nil(user.site_id) or record.site_id == user.site_id
+        end
+      end
+
+      hooks do
+        on_expand fn id, socket ->
+          send(self(), {:head_code_expand, id})
+          {:halt, socket}
         end
       end
 
@@ -434,6 +441,11 @@ defmodule MishkaCmsCore.Runtime.HeadCode do
 
       hooks do
         on_cancel fn state -> state end
+
+        js do
+          on_cancel fn _id -> HeadCodeModal.collapse_row() end
+          after_save fn _id -> HeadCodeModal.collapse_row() end
+        end
       end
     end
   end
