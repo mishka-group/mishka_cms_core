@@ -129,7 +129,8 @@ jobs:
           key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
           fail-on-cache-miss: true
 
-      - uses: actions/cache@v6
+      - id: plt
+        uses: actions/cache/restore@v6
         with:
           path: |
             ~/.mix/dialyxir_*
@@ -141,6 +142,18 @@ jobs:
       - run: MIX_ENV="test" mix mishka_cms_core.credence
 
       - run: MIX_ENV="test" mix sobelow --config
+
+      # Built once per lock and saved even when dialyzer then reports a warning, so the next run does
+      # not build the PLTs again.
+      - run: MIX_ENV="test" mix dialyzer --plt
+
+      - if: steps.plt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.mix/dialyxir_*
+            _build/test/dialyxir_*
+          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', '.tool-versions') }}
 
       - run: MIX_ENV="test" mix dialyzer
 
