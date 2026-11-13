@@ -38,17 +38,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   then creates the page through its own create action, as the reader: see
   `MishkaCmsCore.Runtime.PageEditions.translate/4`. The path follows the language until the reader
   types one of their own. The new edition opens on the inspector's Configuration tab, inactive.
+
+  ## Head code
+
+  The header's "Head code" button opens `MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal`: the
+  site's own head code entries, the one being edited, and what extensions add. It is drawn only
+  while open, and its button is a writer's (`MishkaCmsCore.Runtime.HeadCodes.writes?/1`). A page's
+  Configuration tab lists the entries that reach it, and each opens here.
   """
 
   use MishkaCmsCore.ExtensionLiveView
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.RuntimeStatusLive
-  alias MishkaCmsCore.Runtime.{Languages, Page, PageEditions}
+  alias MishkaCmsCore.Runtime.{HeadCode, HeadCodes, Languages, Page, PageEditions}
   alias MishkaCmsCore.Runtime.Authoring.Section
+  alias MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers
   alias MishkaGervaz.Table.Web.UrlSync
 
   @impl true
-  def mount(_params, _session, socket) do
+  def mount(_params, session, socket) do
     socket = assign_new(socket, :current_user, fn -> nil end)
     socket = PreviewHelpers.assign_access(socket, MishkaCmsCore.Runtime.Page)
 
@@ -67,7 +75,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
 
     socket =
       MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed.setup(socket,
-        resources: [MishkaCmsCore.Runtime.Page],
+        resources: [MishkaCmsCore.Runtime.Page, HeadCode],
         feed_id: "pages-activity"
       )
 
@@ -76,6 +84,9 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
       |> assign(:page_title, gettext("Listing Pages"))
       |> assign(:url_state, nil)
       |> assign(:translation, nil)
+      |> assign(:head_code, nil)
+      |> assign(:head_code_site_id, head_code_site(socket.assigns.current_user, session))
+      |> assign(:head_code_writer?, HeadCodes.writes?(socket.assigns.current_user))
 
     {:ok,
      new_socket
@@ -90,6 +101,39 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   end
 
   @impl true
+  def handle_info({:form_saved, action, %HeadCode{}}, socket) do
+    message =
+      case action do
+        :create -> gettext("Head code entry created")
+        _update -> gettext("Head code entry updated")
+      end
+
+    {:noreply, socket |> head_code_form(nil) |> put_flash(:success, message)}
+  end
+
+  def handle_info({:form_cancelled, HeadCode}, socket),
+    do: {:noreply, head_code_form(socket, nil)}
+
+  def handle_info({:row_action, "head_code_edit", %{"id" => id}}, socket),
+    do: {:noreply, head_code_form(socket, id)}
+
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: "head_code" <> _,
+          payload: %Ash.Notifier.Notification{} = notification
+        },
+        socket
+      ) do
+    if socket.assigns.head_code,
+      do:
+        send_update(MishkaGervaz.Table.Web.Live,
+          id: HeadCodeModal.table_id(),
+          pubsub_notification: notification
+        )
+
+    {:noreply, socket}
+  end
+
   # THE EDITOR IS ASKED AGAIN, NOT REMEMBERED from mount: it answers with the new record's own
   # address, and an editor gone since the menu was drawn leaves the plain create behind.
   # A redirect rather than a live navigation, for the reason the menu's main half is a plain link.
@@ -300,6 +344,35 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
   def handle_event("preview_discard_draft", params, socket),
     do: {:noreply, PreviewHelpers.discard_draft(socket, params["id"])}
 
+  ## Head code
+
+  @impl true
+  def handle_event("head_code_open", _params, socket), do: {:noreply, open_head_code(socket)}
+
+  def handle_event("head_code_close", _params, socket),
+    do: {:noreply, assign(socket, :head_code, nil)}
+
+  def handle_event("head_code_add", _params, socket) do
+    if socket.assigns.head_code && socket.assigns.head_code.form,
+      do:
+        send_update(MishkaGervaz.Form.Web.Live,
+          id: MishkaGervaz.Resource.Info.Form.component_id(HeadCode),
+          record_id: nil,
+          reset: true
+        )
+
+    {:noreply, head_code_form(socket, :new)}
+  end
+
+  # A page's Configuration tab names the entries that reach it; each opens here, on its form.
+  def handle_event("head_code_edit", %{"id" => id}, socket) do
+    {:noreply,
+     socket
+     |> PreviewHelpers.close()
+     |> open_head_code()
+     |> head_code_form(id)}
+  end
+
   ## Add translation
 
   # READ AS THE READER, so the row id in the event cannot name a page they could not have opened.
@@ -399,6 +472,34 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Page.Index do
 
   defp refuse_translation(socket, translation, message),
     do: assign(socket, :translation, %{translation | error: message})
+
+  defp open_head_code(socket) do
+    case socket.assigns.head_code do
+      nil ->
+        assign(socket, :head_code, %{
+          form: nil,
+          extensions: HeadCodes.from_extensions(socket.assigns.head_code_site_id)
+        })
+
+      _open ->
+        socket
+    end
+  end
+
+  defp head_code_form(%{assigns: %{head_code: %{} = head_code}} = socket, form) do
+    case form != nil and not socket.assigns.head_code_writer? do
+      true -> put_flash(socket, :error, gettext("Only a master writes head code."))
+      false -> assign(socket, :head_code, %{head_code | form: form})
+    end
+  end
+
+  defp head_code_form(socket, _form), do: socket
+
+  # The site whose extensions the modal lists: a site user's own, else the site the admin is served
+  # on.
+  defp head_code_site(%{site_id: site_id}, _session) when is_binary(site_id), do: site_id
+  defp head_code_site(_user, %{"current_site" => %{id: site_id}}), do: site_id
+  defp head_code_site(_user, _session), do: nil
 
   defp created(socket),
     do:

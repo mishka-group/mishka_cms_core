@@ -59,6 +59,10 @@ defmodule MishkaCmsCore.Application do
     MishkaCmsCore.Runtime.AdminSiteIcons
   ]
 
+  # A site's own head code entries, drawn on its public pages through `runtime:page:head`
+  # (`MishkaCmsCore.Runtime.SiteHeadCode`), the event extensions add their head tags on.
+  @head_code_plugins [MishkaCmsCore.Runtime.SiteHeadCode]
+
   # `settings:register` plugins — the core widgets' settings under the General tab, and every
   # sidebar entry's position/visibility switches under the Sidebar tab.
   @settings_plugins [
@@ -123,6 +127,7 @@ defmodule MishkaCmsCore.Application do
         @settings_plugins ++
         @share_card_plugins ++
         @site_icon_plugins ++
+        @head_code_plugins ++
         @mail_providers ++ @captcha_providers ++ @account_notices
 
   @doc """

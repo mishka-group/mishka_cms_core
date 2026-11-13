@@ -413,9 +413,49 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal do
             hidden_fields={@form_hidden}
             defaults={@form_defaults}
           />
+          <.page_head_code :if={@resource == MishkaCmsCore.Runtime.Page and @record} page={@record} />
         </div>
       </div>
     </DetailModal.shell>
+    """
+  end
+
+  attr :page, :map, required: true
+
+  # THE HEAD CODE THAT REACHES THIS PAGE, from memory: each entry opens in the Pages screen's "Head
+  # code" modal (`MishkaCmsCore.Runtime.HeadCodes.for_page/2`).
+  defp page_head_code(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :entries,
+        MishkaCmsCore.Runtime.HeadCodes.for_page(assigns.page.site_id, assigns.page.path)
+      )
+
+    ~H"""
+    <div id="runtime-preview-head-code" class="mt-6 border-t border-zinc-100 pt-4">
+      <div class="mb-2 text-sm font-semibold text-zinc-700">{gettext("Head code")}</div>
+      <p :if={@entries == []} class="text-xs text-zinc-400">
+        {gettext("No head code entry reaches this page.")}
+      </p>
+      <ul class="flex flex-col gap-1.5">
+        <li :for={entry <- @entries}>
+          <button
+            type="button"
+            id={"runtime-preview-head-code-" <> entry.id}
+            phx-click="head_code_edit"
+            phx-value-id={entry.id}
+            class="inline-flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-800"
+          >
+            <.icon name="hero-code-bracket" class="size-4" />
+            {entry.name}
+            <span class="text-xs font-normal text-zinc-400">
+              {MishkaCmsCore.Runtime.HeadCodes.scope_label(entry.scope)}
+            </span>
+          </button>
+        </li>
+      </ul>
+    </div>
     """
   end
 

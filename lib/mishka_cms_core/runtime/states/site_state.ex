@@ -20,6 +20,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   - **Origins Index**: O(1) lookup of whether a site allows a CORS origin — see `allows_origin?/2`
   - **Page Editions Index**: the live editions of each page group, so a page names its other
     languages without a query — see `page_editions/2`
+  - **Head Codes Index**: each site's published head code entries, already parsed, so a public
+    page's head and its policy read no query — see `head_codes/1`
   - **Conflict Detection**: Automatic hostname and name uniqueness validation
 
   ## Data Structure
@@ -156,13 +158,20 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # the group `MishkaCmsCore.Runtime.PageLanguageBackfill` gives it, so the backfill moves no row.
   @page_editions_index :mishka_sites_page_editions_index
 
+  # `{{site_id, entry_id}, %{id:, name:, scope:, paths:, origins:, items:}}` for every published,
+  # unarchived `MishkaCmsCore.Runtime.HeadCode`: what `MishkaCmsCore.Runtime.HeadCodes` draws in a
+  # public page's head and adds to its policy. Parsed once, when the entry is written. Ordered, so a
+  # site's entries are one range, in the order they were made (the ids are UUIDv7).
+  @head_codes_index :mishka_sites_head_codes_index
+
   @tables [
     @main_table,
     @host_index,
     @name_index,
     @allowed_origins_index,
     @components_index,
-    @page_editions_index
+    @page_editions_index,
+    @head_codes_index
   ]
 
   @pubsub MishkaCmsCore.PubSub
@@ -176,6 +185,9 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # of a page, its master twins included, lands on "page:created" or "page:updated", and an archive
   # or a permanent delete on "page:destroyed".
   @page_topics ["page:created", "page:updated", "page:destroyed"]
+
+  # The same three of `MishkaCmsCore.Runtime.HeadCode`'s.
+  @head_code_topics ["head_code:created", "head_code:updated", "head_code:destroyed"]
 
   # What a page's edition carries: what `PageEditions.alternates/3` builds a URL from, and the
   # `extra` that says whether a pattern page answers every language.
@@ -764,6 +776,87 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   end
 
   @doc """
+  The published head code entries of `site_id`, oldest first, each with its items already parsed —
+  see `MishkaCmsCore.Runtime.HeadCodes`. One ETS range read, and no query.
+  """
+  @spec head_codes(String.t() | nil) :: [map()]
+  def head_codes(site_id) when is_binary(site_id) do
+    case head_codes_indexed?() do
+      true -> :ets.select(@head_codes_index, [{{{site_id, :_}, :"$1"}, [], [:"$1"]}])
+      false -> []
+    end
+  end
+
+  def head_codes(_site_id), do: []
+
+  @doc """
+  Keeps the head code row `entry` in the index as it is now: parsed, while it is published and
+  unarchived and its code keeps something; out of it otherwise.
+
+  `MishkaCmsCore.Runtime.Resources.Notifiers.HeadCodes` calls it on the node that wrote the row, and
+  this process on every other one, from the row the write's broadcast carries.
+  """
+  @spec put_head_code(map()) :: :ok
+  def put_head_code(%{id: id, site_id: site_id, published: true} = entry)
+      when is_binary(id) and is_binary(site_id) do
+    with nil <- Map.get(entry, :archived_at),
+         true <- head_codes_indexed?(),
+         {:ok, row} <- head_code_row(entry) do
+      :ets.insert(@head_codes_index, row)
+      :ok
+    else
+      _not_served -> delete_head_code(entry)
+    end
+  end
+
+  def put_head_code(entry), do: delete_head_code(entry)
+
+  @doc "Takes the head code row `entry` out of the index: a draft, archived or deleted."
+  @spec delete_head_code(map()) :: :ok
+  def delete_head_code(%{id: id, site_id: site_id}) when is_binary(id) and is_binary(site_id) do
+    if head_codes_indexed?(), do: :ets.delete(@head_codes_index, {site_id, id})
+    :ok
+  end
+
+  def delete_head_code(_entry), do: :ok
+
+  @doc """
+  Puts every row of `entries` in the head code index at once: the boot's batch, from a read of the
+  published entries alone (see `MishkaCmsCore.Runtime.Handlers.BootHandler.load_head_codes/0`).
+  """
+  @spec save_head_codes([map()]) :: :ok
+  def save_head_codes(entries) when is_list(entries) do
+    rows =
+      for entry <- entries,
+          {:ok, row} <- [head_code_row(entry)],
+          do: row
+
+    :ets.insert(@head_codes_index, rows)
+    :ok
+  end
+
+  defp head_code_row(%{id: id, site_id: site_id, code: code} = entry) when is_binary(site_id) do
+    case MishkaCmsCore.Runtime.HeadCodes.parse(code) do
+      {:ok, items} ->
+        {:ok,
+         {{site_id, id},
+          %{
+            id: id,
+            name: entry.name,
+            scope: entry.scope,
+            paths: entry.paths || [],
+            origins: entry.origins || [],
+            items: Enum.map(items, &Map.put(&1, :key, id))
+          }}}
+
+      :error ->
+        :error
+    end
+  end
+
+  defp head_code_row(_entry), do: :error
+
+  @doc """
   Returns the number of sites.
   """
   def count, do: :ets.info(@main_table, :size)
@@ -859,6 +952,14 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
       write_concurrency: true
     ])
 
+    :ets.new(@head_codes_index, [
+      :ordered_set,
+      :public,
+      :named_table,
+      read_concurrency: true,
+      write_concurrency: true
+    ])
+
     # THE WRITE IS OFTEN NOT THIS NODE'S. These tables are per node and `DNSCluster` means there are
     # usually several, so a site created, renamed, activated or destroyed on one node left every
     # other one resolving hosts against a stale table — a request answered by the wrong site, or by
@@ -868,7 +969,10 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     #
     # A page's editions the same way: `MishkaCmsCore.Runtime.Page` publishes too, so a translation
     # added, moved or removed on one node is offered, or no longer offered, on every other.
-    for topic <- @site_topics ++ @page_topics, do: Phoenix.PubSub.subscribe(@pubsub, topic)
+    #
+    # And a site's head code: an entry published on one node is drawn by every other.
+    for topic <- @site_topics ++ @page_topics ++ @head_code_topics,
+        do: Phoenix.PubSub.subscribe(@pubsub, topic)
 
     {:ok, %{}, {:continue, :load}}
   end
@@ -974,6 +1078,30 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
     {:noreply, state}
   end
 
+  # Another node's head code write, from the row its broadcast carries and with no read.
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: "head_code:destroyed",
+          payload: %Ash.Notifier.Notification{data: %{id: _id} = entry}
+        },
+        state
+      ) do
+    delete_head_code(entry)
+    {:noreply, state}
+  end
+
+  def handle_info(
+        %Phoenix.Socket.Broadcast{
+          topic: topic,
+          payload: %Ash.Notifier.Notification{data: %{id: _id} = entry}
+        },
+        state
+      )
+      when topic in ["head_code:created", "head_code:updated"] do
+    put_head_code(entry)
+    {:noreply, state}
+  end
+
   def handle_info(_message, state), do: {:noreply, state}
 
   ####################################################################################
@@ -1009,6 +1137,8 @@ defmodule MishkaCmsCore.Runtime.States.SiteState do
   # application — has no index to keep. The boot reads every page anyway, and a write must not fail
   # after its row is committed for want of a cache.
   defp indexed?, do: :ets.whereis(@page_editions_index) != :undefined
+
+  defp head_codes_indexed?, do: :ets.whereis(@head_codes_index) != :undefined
 
   defp origins_record(id, host, frontend_domain, allowed_origins) do
     site = %{host: host, frontend_domain: frontend_domain, allowed_origins: allowed_origins}

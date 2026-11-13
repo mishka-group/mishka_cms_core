@@ -445,7 +445,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
 
   @doc """
   Streams every site from the DB in tuned batches and upserts them into `SiteState`'s ETS cache,
-  then the editions of their pages (`load_page_editions/0`).
+  then the editions of their pages (`load_page_editions/0`) and their published head code
+  (`load_head_codes/0`).
 
   This is the single site-cache loader: `perform_boot/0` runs it at startup, and
   `SiteState.handle_continue/2` reuses it to self-heal after an owner crash. Streaming (rather than
@@ -491,6 +492,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       |> Stream.run()
 
       load_page_editions()
+      load_head_codes()
     end
   rescue
     error ->
@@ -535,6 +537,30 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
   rescue
     error ->
       Logger.error("[BootHandler] Error loading page editions: #{inspect(error)}")
+      {:error, error}
+  end
+
+  @doc """
+  Reads every site's published head code entries into `SiteState`'s head code index, parsed: what
+  `MishkaCmsCore.Runtime.HeadCodes` draws in a public page's head and adds to its policy without a
+  query.
+
+  Part of `load_sites/0`, so it runs at boot and whenever `SiteState` restarts; from there on every
+  write keeps the index itself (`MishkaCmsCore.Runtime.Resources.Notifiers.HeadCodes`). Streamed in
+  batches, as the sites are. A load error is logged and returned as `{:error, reason}`, as in `load_sites/0`.
+  """
+  @spec load_head_codes() :: :ok | {:error, term()}
+  def load_head_codes do
+    MishkaCmsCore.Runtime.HeadCode
+    |> Ash.Query.for_read(:read_any)
+    |> Ash.Query.filter(published == true)
+    |> Ash.stream!(batch_size: 500, authorize?: false)
+    |> Stream.chunk_every(500)
+    |> Stream.each(&SiteState.save_head_codes/1)
+    |> Stream.run()
+  rescue
+    error ->
+      Logger.error("[BootHandler] Error loading head code: #{inspect(error)}")
       {:error, error}
   end
 

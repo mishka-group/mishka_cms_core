@@ -98,6 +98,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
      "Writing translation rows. Every dashboard admin reads them."},
     {"admin:dashboard:runtime:redirect",
      "Writing the site's redirect rules. Every dashboard admin reads them."},
+    {"admin:dashboard:runtime:head_code",
+     "Writing the code a site's public pages carry in their head, and the origins it adds to the site's Content Security Policy. Masters only."},
     {"admin:dashboard:setting",
      "Writing site settings that declare no permission of their own, the extension switches and the notification toggles included."},
     {"admin:dashboard:user",

@@ -9,6 +9,16 @@ SPDX-License-Identifier: Apache-2.0
     {gettext("Pages")}
     <:subtitle>{gettext("Manage your site pages and their content.")}</:subtitle>
     <:actions>
+      <.button
+        :if={@head_code_writer?}
+        type="button"
+        id="head-code-open"
+        variant="soft"
+        icon="hero-code-bracket"
+        phx-click="head_code_open"
+      >
+        {gettext("Head code")}
+      </.button>
       <%!-- CREATING WRITES, so it is offered to a writer of the type; everyone else reads the list. --%>
       <%!-- THE EDITOR IS THE MAIN HALF ONLY WHEN ONE ANSWERS `runtime:document:editor_url`; without one
             the main half is the full form, and "then open the editor" is not offered. --%>
@@ -42,6 +52,13 @@ SPDX-License-Identifier: Apache-2.0
   <%!-- Runtime detail modal: Overview · Preview · Code · Versions · Pipeline · Configuration
         (add/edit in-modal, so there is no second form modal on this page). --%>
   <MishkaCmsCoreWeb.Live.Admin.Components.RuntimePreviewModal.modal preview={@preview} />
+
+  <MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal.modal
+    :if={@head_code}
+    head_code={@head_code}
+    current_user={@current_user}
+    writable?={@head_code_writer?}
+  />
 
   <.modal
     :if={@translation}
