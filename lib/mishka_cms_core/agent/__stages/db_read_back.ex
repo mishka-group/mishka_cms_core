@@ -30,9 +30,9 @@ defmodule MishkaCmsCore.Agent.Stages.DbReadBack do
   archival filter, and it never reuses the struct the action returned, so a bug in the action
   cannot vouch for itself. The values are read back through the attribute's Ash type.
 
-  `observed` keeps each field as the value when it is a scalar a receipt may hold (a status, a
-  boolean), `:present`/`:absent` for anything else, and `:matches`/`:differs` for `:claimed`: a
-  title or a body is compared, never stored.
+  `observed` keeps each field as the value when it is an atom, a boolean, a number or a time (a
+  status, a flag), `:present`/`:absent` for anything else, a string of any length included, and
+  `:matches`/`:differs` for `:claimed`: a title, a slug or a body is compared, never stored.
 
   ## What verified means
 
@@ -218,6 +218,10 @@ defmodule MishkaCmsCore.Agent.Stages.DbReadBack do
 
   defp expected(wanted) when wanted in [:present, :absent, :claimed, :since_start], do: wanted
   defp expected(wanted), do: shown(wanted)
+
+  # A column's text is the record's content however short it is, so only a status, a flag, a number
+  # or a time is shown; any string is only there or not.
+  defp shown(value) when is_binary(value) or is_nil(value), do: presence(value)
 
   defp shown(value) do
     if Redactor.scalar?(value), do: value, else: presence(value)

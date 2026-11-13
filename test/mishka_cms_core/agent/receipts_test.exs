@@ -385,6 +385,34 @@ defmodule MishkaCmsCore.Agent.ReceiptsTest do
       for receipt <- [receipt, ok_receipt], do: refute(inspect(receipt) =~ "Top secret")
     end
 
+    test "a column's text is compared and never stored, however short", %{
+      site: site,
+      master: master
+    } do
+      operation =
+        Operation.new!(%{
+          name: "cms_core:media_category:create",
+          resource: MediaCategory,
+          action: :create,
+          stages: [
+            :action_committed,
+            {:db_read_back, expect: [name: "Hushhush", description: "Other"]}
+          ],
+          required: [:db_read_back]
+        })
+
+      {:ok, _category, receipt} = Receipts.run(operation, create(site, master, "Hushhush"))
+
+      assert %{
+               status: :failed,
+               reason: :mismatch,
+               observed: %{name: :present, description: :absent}
+             } =
+               stage(receipt, :db_read_back)
+
+      refute inspect(receipt) =~ "Hushhush"
+    end
+
     test "stage/2 adds evidence only the caller has, and a declared stage takes it" do
       operation =
         Operation.new!(%{
