@@ -918,6 +918,18 @@ defmodule MishkaCmsCore.Settings do
             "Times every component a visitor's page draws, for the Performance Metrics card of each component. It adds about a microsecond to each component render, more for long lists inside nested components, so leave it off unless you are looking for a slow component."
           )
       ),
+      # Read by every tracked operation, through `MishkaCmsCore.Agent.Receipts.on?/0`.
+      define("agent.receipts", :boolean,
+        default: false,
+        category: "general",
+        group: gettext_noop("Agents"),
+        scope: :master,
+        label: gettext_noop("Keep agent receipts"),
+        description:
+          gettext_noop(
+            "Keeps a short-lived record of what each tracked operation actually did, checked stage by stage, for AI agents and admins to read. It adds one or two database reads to each tracked operation, so leave it off unless something reads the receipts."
+          )
+      ),
       define("notify.cms_core.user.permissions_changed", :boolean,
         default: true,
         category: "notifications",

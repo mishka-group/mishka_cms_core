@@ -75,7 +75,10 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.SendToOban do
       build_job_args(changeset, record)
       |> MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker.new(
         queue: :modules,
-        meta: %{slug: "#{inspect(changeset.resource)}:#{record.id}"},
+        meta:
+          MishkaCmsCore.Agent.Receipts.job_meta(%{
+            slug: "#{inspect(changeset.resource)}:#{record.id}"
+          }),
         unique: [fields: [:worker, :meta], keys: [:slug], states: [:available, :scheduled]],
         replace: [available: [:args], scheduled: [:args]]
       )

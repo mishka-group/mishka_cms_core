@@ -175,7 +175,16 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ExtensionInstallerPanel do
   def install(socket, site_id, _allowed, answers) when is_binary(site_id) do
     state = socket.assigns.extension_install
 
-    case Extensions.install(site_id, state.app, answers, socket.assigns[:current_user]) do
+    {result, _receipt} =
+      MishkaCmsCore.Agent.Installer.install_extension(
+        site_id,
+        state.app,
+        answers,
+        socket.assigns[:current_user],
+        source: :admin
+      )
+
+    case result do
       {:ok, report} ->
         socket
         |> assign(:extension_install, %{

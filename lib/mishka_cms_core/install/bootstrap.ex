@@ -110,6 +110,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
      "The Activity screen, activity entries and the recent-activity widget."},
     {"admin:dashboard:code",
      "Writing pages, layouts, components, error pages, stylesheets and JS hooks, their code included, and opening every builder."},
+    {"admin:dashboard:agent:receipts",
+     "Reading agent receipts on the dashboard, for the areas the holder already holds."},
     {"admin:api:runtime:*",
      "Every runtime section over the admin JSON:API, their code included."},
     {"admin:api:runtime:site", "Site data over the admin JSON:API."},
@@ -129,6 +131,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
     {"admin:api:user", "Accounts over the admin JSON:API."},
     {"admin:api:permission", "The permission names and the grants over the admin JSON:API."},
     {"admin:api:runtime:activity", "The activity log over the admin JSON:API."},
+    {"admin:api:agent:receipts",
+     "Reading agent receipts over the API, for the areas the holder already holds."},
     {"admin:api:code",
      "Writing pages, layouts, components, error pages, stylesheets and JS hooks over the admin JSON:API, their code included."}
   ]

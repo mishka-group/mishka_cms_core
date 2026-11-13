@@ -1368,6 +1368,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandler do
       priority: Keyword.get(opts, :priority, 1),
       max_attempts: rules.max_attempts,
       worker: MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorker,
+      meta: MishkaCmsCore.Agent.Receipts.job_meta(),
       schedule_in: 3,
       unique: [
         period: rules.period,

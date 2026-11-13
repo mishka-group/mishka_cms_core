@@ -115,6 +115,12 @@ defmodule MishkaCmsCore.Application do
     MishkaInstaller.MnesiaRepo
   ]
 
+  # `agent:operations` plugins — the installer steps the core keeps receipts for. An extension
+  # declares its own operations the same way (see `MishkaCmsCore.Agent.Operation`).
+  @agent_operations [
+    MishkaCmsCore.Agent.Installer
+  ]
+
   @doc """
   Every mishka_installer plugin the core ships, and exactly the plugins `start/2` supervises. A plugin
   left out of it never registers, so the event it listens on never reaches it.
@@ -128,7 +134,7 @@ defmodule MishkaCmsCore.Application do
         @share_card_plugins ++
         @site_icon_plugins ++
         @head_code_plugins ++
-        @mail_providers ++ @captcha_providers ++ @account_notices
+        @mail_providers ++ @captcha_providers ++ @account_notices ++ @agent_operations
 
   @doc """
   The parts of `mishka_installer`'s own tree this application has to supervise, in the library's
@@ -154,14 +160,16 @@ defmodule MishkaCmsCore.Application do
     #
     # `RenderMetrics` is started here rather than by the host, like the other runtime states, because
     # nothing outside the core reads or writes it: a host that never lists it still gets the
-    # component preview's render times. `Sidebar.Counts` likewise needs nothing of the host's.
+    # component preview's render times. `Sidebar.Counts` and the agent receipts' store likewise need
+    # nothing of the host's.
     children =
       [{Phoenix.PubSub, name: MishkaCmsCore.PubSub}] ++
         installer_children() ++
         [
           {AshAuthentication.Supervisor, [otp_app: :mishka_cms_core]},
           MishkaCmsCore.Runtime.RenderMetrics,
-          MishkaCmsCore.Sidebar.Counts
+          MishkaCmsCore.Sidebar.Counts,
+          MishkaCmsCore.Agent.ReceiptStore
         ] ++
         plugins()
 

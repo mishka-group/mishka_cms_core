@@ -150,6 +150,7 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
     :ets.insert(@table, entries)
     MishkaCmsCore.Runtime.SiteAvailability.changed(nil)
     MishkaCmsCore.Runtime.RenderMetrics.switch_changed()
+    MishkaCmsCore.Agent.Receipts.switch_changed()
     {:reply, :ok, state}
   end
 
@@ -232,6 +233,10 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
   defp written(_site_id, "runtime.render_metrics"),
     do: MishkaCmsCore.Runtime.RenderMetrics.switch_changed()
 
+  # THE RECEIPTS' SWITCH is read by every tracked operation from `:persistent_term`, the same way.
+  defp written(_site_id, "agent.receipts"),
+    do: MishkaCmsCore.Agent.Receipts.switch_changed()
+
   # AN EXTENSION'S SWITCH DRAWS OR DROPS ITS ENTRIES, so the sidebars open on that site are told too.
   defp written(site_id, key) do
     if MishkaCmsCore.Install.Extensions.active_key?(key),
@@ -243,6 +248,7 @@ defmodule MishkaCmsCore.Runtime.States.SettingsState do
     load_rows()
     MishkaCmsCore.Runtime.SiteAvailability.changed(nil)
     MishkaCmsCore.Runtime.RenderMetrics.switch_changed()
+    MishkaCmsCore.Agent.Receipts.switch_changed()
   end
 
   defp load_rows do
