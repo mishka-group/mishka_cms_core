@@ -1745,6 +1745,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Inspector do
 
   defp seed_pattern(nil), do: nil
 
+  # The seed is passed through `Regex.escape/1`.
+  # sobelow_skip ["DOS.Regex"]
   defp seed_pattern(seed) do
     escaped = Regex.escape(seed)
     Regex.compile!(~s/:#{escaped}(_form)?(?![A-Za-z0-9_?!@])|"#{escaped}"/)

@@ -213,6 +213,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Icons.Bundled do
 
   # A bundle is a third party's file — see `MishkaCmsCore.UiKit.Contract`. One that cannot be read,
   # or whose `icons` block is the wrong shape, costs its own icon set and nothing else.
+  # The path is an installed kit bundle under this library's own folders.
+  # sobelow_skip ["Traversal.FileModule"]
   defp read(path) do
     with {:ok, raw} <- File.read(path),
          {:ok, %{"icons" => icons}} <- Jason.decode(raw),

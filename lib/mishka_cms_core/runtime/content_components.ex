@@ -1171,6 +1171,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     ~H"<%= for part <- @parts do %>{part}<% end %>"noformat
   end
 
+  # The HTML is the site's own stored content, drawn as the editor saved it.
+  # sobelow_skip ["XSS.Raw"]
   defp part({:html, html}, _context, _mode), do: Phoenix.HTML.raw(html)
 
   defp part({:component, marker}, context, mode) do

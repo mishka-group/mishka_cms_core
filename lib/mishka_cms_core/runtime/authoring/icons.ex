@@ -60,6 +60,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Icons do
 
   def classes_in(_source), do: []
 
+  # Every prefix is passed through `Regex.escape/1`.
+  # sobelow_skip ["DOS.Regex"]
   defp class_pattern do
     libraries()
     |> Enum.flat_map(& &1.prefixes())

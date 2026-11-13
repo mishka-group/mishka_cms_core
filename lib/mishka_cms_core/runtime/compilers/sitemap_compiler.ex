@@ -316,6 +316,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
   end
 
   # The index comes last, gzipped like the files; it is unzipped here once, so no request does.
+  # The index is the gzip this module just wrote, never an uploaded file.
+  # sobelow_skip ["DOS.Decompression"]
   defp collect({"sitemap.xml.gz", index}, sitemap), do: %{sitemap | index: :zlib.gunzip(index)}
   defp collect({name, file}, sitemap), do: %{sitemap | files: Map.put(sitemap.files, name, file)}
 
@@ -456,6 +458,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.SitemapCompiler do
 
   # The paths a route in front of the pages answers, each as its segments: every `:public` GET or
   # live route of the configured extensions, which the router mounts before its page catch-all.
+  # `extension` is an installed extension module, so its `Routes` atom already exists.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp routed do
     for extension <- Application.get_env(:mishka_cms_core, :extensions, []),
         routes <- [Module.concat(extension, Routes)],

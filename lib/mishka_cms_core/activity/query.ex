@@ -181,6 +181,7 @@ defmodule MishkaCmsCore.Activity.Query do
 
   defp per_day(%{sql: []}, _site_id, _resource, _search), do: %{}
 
+  # sobelow_skip ["SQL.Query"]
   defp per_day(union, site_id, resource, search) do
     sql = """
     SELECT day, COUNT(*) FROM (
@@ -205,6 +206,8 @@ defmodule MishkaCmsCore.Activity.Query do
   # Same param shape as `run/7` — the branches read $1/$4/$5/$6, and the LIMIT/OFFSET keeps $2/$3
   # referenced so Postgres can still infer their types (they are positional, so neither can be
   # skipped). The limit doubles as the cap: a log past `@max_cap` reports the cap.
+  # Only a table name or this module's own SQL is interpolated; values are bound parameters.
+  # sobelow_skip ["SQL.Query"]
   defp count(union, site_id, resource, search) do
     sql = """
     SELECT COUNT(*) FROM (
@@ -254,6 +257,7 @@ defmodule MishkaCmsCore.Activity.Query do
 
   def actor_emails(_user_ids, _nobody), do: %{}
 
+  # sobelow_skip ["SQL.Query"]
   defp decode_emails(sql, params) do
     case Ecto.Adapters.SQL.query(@repo, sql, params) do
       {:ok, %{rows: rows}} ->
@@ -267,6 +271,7 @@ defmodule MishkaCmsCore.Activity.Query do
   @doc "Bulk-resolve site `id`s to their name in ONE query (archived included)."
   def site_names([]), do: %{}
 
+  # sobelow_skip ["SQL.Query"]
   def site_names(site_ids) do
     sql = "SELECT id::text, name FROM sites WHERE id = ANY($1::text[]::uuid[])"
 
@@ -505,6 +510,7 @@ defmodule MishkaCmsCore.Activity.Query do
 
   # Params: $1 = cap, $2 = limit, $3 = offset, $4 = resource (or nil), $5 = search
   # (or nil), $6 = tenant site_id (tenant only), then the union sources' own.
+  # sobelow_skip ["SQL.Query"]
   defp run(union, site_id, cap, limit, offset, resource, search) do
     sql = """
     SELECT source, resource, action, source_id, event_id, site_id, user_id, inserted_at, payload
@@ -654,6 +660,7 @@ defmodule MishkaCmsCore.Activity.Query do
     |> Helpers.translate()
   end
 
+  # sobelow_skip ["SQL.Query"]
   defp distinct_event_resources(table) do
     sql = "SELECT DISTINCT resource FROM #{table} WHERE resource IS NOT NULL"
 

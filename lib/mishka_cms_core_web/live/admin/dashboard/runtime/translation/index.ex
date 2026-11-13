@@ -209,4 +209,15 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index do
 
   defp close_unused(socket),
     do: socket |> assign(:unused_ids, nil) |> hide_modal_by(@unused_modal_id)
+
+  # The sentence comes from this library's gettext catalog, and its one piece of markup is the
+  # `code` tag written here.
+  # sobelow_skip ["XSS.Raw"]
+  defp subtitle do
+    Phoenix.HTML.raw(
+      gettext("Words your templates ask for with %{code}, per language.",
+        code: ~s[<code class="font-mono">t("…")</code>]
+      )
+    )
+  end
 end

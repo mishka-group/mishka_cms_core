@@ -90,6 +90,8 @@ defmodule MishkaCmsCore.Runtime.PageLanguageBackfill do
   @spec mark_extension_pages() :: {:ok, non_neg_integer()} | {:error, term()}
   def mark_extension_pages, do: query(@unmarked, [])
 
+  # Only a table name or this module's own SQL is interpolated; values are bound parameters.
+  # sobelow_skip ["SQL.Query"]
   defp query(sql, params) do
     case Ecto.Adapters.SQL.query(@repo, sql, params) do
       {:ok, %{num_rows: changed}} -> {:ok, changed}

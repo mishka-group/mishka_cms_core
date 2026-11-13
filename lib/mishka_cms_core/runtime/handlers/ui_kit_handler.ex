@@ -698,6 +698,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     end
   end
 
+  # Every path here is under this library's own build, temp or cache folders, never request input.
+  # sobelow_skip ["Traversal.FileModule"]
   defp cache_bundle(bundle, path) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, Jason.encode!(bundle))

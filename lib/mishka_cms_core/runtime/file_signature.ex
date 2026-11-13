@@ -93,6 +93,8 @@ defmodule MishkaCmsCore.Runtime.FileSignature do
   or is none of the kinds in the table.
   """
   @spec sniff(Path.t()) :: {:ok, kind()} | :error
+  # Callers hand it a path they already resolved (a staged upload or a site's own file).
+  # sobelow_skip ["Traversal.FileModule"]
   def sniff(path) when is_binary(path) do
     case File.open(path, [:read, :binary], &IO.binread(&1, @head_bytes)) do
       {:ok, head} when is_binary(head) -> classify(head)

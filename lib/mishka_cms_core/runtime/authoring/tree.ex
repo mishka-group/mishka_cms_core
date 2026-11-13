@@ -849,6 +849,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Tree do
   # READ BACK RATHER THAN ASSUMED: a name the author's own expression could not be given is not one
   # this element answers to, and handing it out anyway keys a CSS rule and an interaction's `to:` to
   # a class that is nowhere on the page.
+  # MD5 only names a cache entry or module here; nothing relies on it for security.
+  # sobelow_skip ["Crypto.WeakHash"]
   defp mint_scope(tree, node) do
     scope = ElementScopes.scope_for(:erlang.md5(node.id))
     tree = put_node(tree, %{node | attrs: add_classes(node.attrs, [scope])})

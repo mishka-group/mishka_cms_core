@@ -138,6 +138,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiAvailabilityPlug do
   """
   @spec send_refusal(Plug.Conn.t(), :offline | :inactive, map() | nil, :json_api | :graphql) ::
           Plug.Conn.t()
+  # The body is JSON this plug encodes, sent with a JSON content type.
+  # sobelow_skip ["XSS.SendResp"]
   def send_refusal(conn, state, site, api) do
     {code, title, message} = reason(state, site)
 

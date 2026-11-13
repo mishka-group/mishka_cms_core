@@ -2036,6 +2036,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   defp version_get_action(_not_a_user), do: {:error, :forbidden}
 
+  # `resource` is one of the runtime's own Ash resources, whose `Version` module exists.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp count_versions(resource, id, actor) do
     version_resource = Module.concat(resource, Version)
 

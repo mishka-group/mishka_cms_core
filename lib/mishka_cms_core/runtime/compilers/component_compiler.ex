@@ -1752,6 +1752,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompiler do
   # walks the source's `alias` declarations and emits the fully-
   # qualified name. So `Module.concat([struct_name])` always lands on
   # a real loadable module without needing a runtime lookup table.
+  # The struct name comes from a component's declared attr type, compiled into its module anyway.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp attr_type_to_atom("struct", struct_name), do: Module.concat([struct_name])
 
   # sobelow_skip ["DOS.StringToAtom"]

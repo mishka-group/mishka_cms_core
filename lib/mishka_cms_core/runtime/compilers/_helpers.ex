@@ -45,6 +45,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.Helpers do
   - The function assumes `resource` contains only valid module name characters
   """
   @spec module_name(String.t(), String.t() | nil, String.t()) :: module()
+  # MD5 only makes a stable module name; the name holds a site's own compiled module.
+  # sobelow_skip ["Crypto.WeakHash", "DOS.ModuleConcat"]
   def module_name(id, site, resource) do
     # Coerce a missing/nil site to "Global" so callers can pass raw
     # `assigns[:site]` (which is `nil` outside the parent's declared

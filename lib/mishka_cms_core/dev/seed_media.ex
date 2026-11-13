@@ -258,6 +258,8 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
   # first step of the `with` rather than a raise before it, so a source that cannot be read is
   # reported and skipped like every other failure instead of ending the run. Removing the stage
   # again on the failure path, because only the success path removes it.
+  # The files are the seed pictures this library ships in priv.
+  # sobelow_skip ["Traversal.FileModule"]
   defp store(file, site_id, category_id) do
     staged = staged_path(file)
 
@@ -377,6 +379,7 @@ defmodule MishkaCmsCore.Dev.SeedMedia do
   # Dimensions
   # ---------------------------------------------------------------------------
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp header(path, bytes) do
     case File.open(path, [:read, :binary]) do
       {:ok, io} ->

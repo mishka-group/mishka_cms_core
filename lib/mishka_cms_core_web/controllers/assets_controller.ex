@@ -339,6 +339,8 @@ defmodule MishkaCmsCoreWeb.AssetsController do
 
   defp respond(%{content: nil} = data, site, type), do: refuse(data.conn, site, type, :missing)
 
+  # The body is a compiled asset with its own stored content type, never request input.
+  # sobelow_skip ["XSS.SendResp"]
   defp respond(data, _site, _type) do
     data.conn
     |> put_resp_header("content-type", data.headers["content-type"])

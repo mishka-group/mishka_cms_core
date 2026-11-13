@@ -358,6 +358,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # that is a real cost and worth stating: a site saving a hundred pages a day would take about
   # thirty years to reach the default limit, and a restart clears it. This runtime already mints a
   # module atom for every page, component and layout it compiles.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp candidate,
     do: Module.concat(__MODULE__, "C#{System.unique_integer([:positive])}")
 
@@ -428,6 +429,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   # logged)" and puts the sentence the author needs on the logger instead. `with_diagnostics/1` hands
   # it back, so "undefined function no_such_fn/1" reaches the box that has the call in it rather than
   # the server console.
+  # Compiling the admin's own code is what this check is for.
+  # sobelow_skip ["RCE.Compile"]
   defp load(built, module) do
     ast = LiveViewCompiler.create_module_ast(built)
     purge(module)

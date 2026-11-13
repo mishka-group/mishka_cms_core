@@ -465,6 +465,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosure do
     end)
   end
 
+  # The path is a compiled template under the site's own template folder.
+  # sobelow_skip ["Traversal.FileModule"]
   defp summary(path, dirs) do
     case File.read(path) do
       {:ok, source} ->

@@ -319,6 +319,8 @@ defmodule MishkaCmsCore.Runtime.PageUpload do
     end
   end
 
+  # The LiveView upload's temp file, stored in the site's own folder under a random name.
+  # sobelow_skip ["Traversal.FileModule"]
   defp copy(path, entry, site_id, extension) do
     directory = directory(site_id)
     stored = random_name() <> "." <> extension

@@ -253,6 +253,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
     |> LayoutCompiler.build_module()
   end
 
+  # The module name is a hash of the draft's content, so a draft makes at most one atom per version.
+  # sobelow_skip ["Crypto.WeakHash", "DOS.ModuleConcat"]
   defp preview_module(%resource{preview_token: token}) do
     kind = if resource in [Layout, LayoutDraft], do: "Layout", else: "Page"
     hash = :md5 |> :crypto.hash(token) |> Base.encode16(case: :lower)

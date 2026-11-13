@@ -48,6 +48,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.SiteRuntime do
   permanent-delete) the site's on-disk template dir is removed too. Returns the
   counts; `:modules` is how many were actually loaded (and thus genuinely freed).
   """
+  # The template folder is the site's own, under this library's template root.
+  # sobelow_skip ["Traversal.FileModule"]
   def purge_parts(site_name, module_specs, remove_templates?) do
     MishkaInstaller.Event.Hook.call(
       "runtime:site:before_purge",

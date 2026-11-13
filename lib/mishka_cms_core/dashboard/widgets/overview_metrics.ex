@@ -119,6 +119,8 @@ defmodule MishkaCmsCore.Dashboard.Widgets.OverviewMetrics do
   defp dot_class(_green), do: "[background:#8ee0b8]"
 
   # A tile shows its count only to whoever may see the card it comes from.
+  # The module parts are this module's own `@sources`, not input.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp count(key, user) do
     {parts, keys} = Map.fetch!(@sources, key)
     module = Module.concat(parts)

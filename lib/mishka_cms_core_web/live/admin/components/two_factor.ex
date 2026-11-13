@@ -165,6 +165,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TwoFactor do
   end
 
   @impl true
+  # The QR code is an SVG the server draws from the TOTP secret.
+  # sobelow_skip ["XSS.Raw"]
   def render(assigns) do
     assigns =
       assign(assigns,

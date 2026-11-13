@@ -298,14 +298,18 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   If no supported pattern is matched, the function logs an error with the
   problematic quoted expression for debugging purposes.
   """
+  # The name is the admin's own `defmodule`, which the runtime compiles into a module anyway.
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_name({:defmodule, _, [{:__aliases__, _, [module]}, _]}) do
     {:ok, Module.concat([module])}
   end
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_name({:defmodule, _, [module, _]}) do
     {:ok, Module.concat([module])}
   end
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_name({module, {:defmodule, _, _}}) do
     {:ok, Module.concat([module])}
   end

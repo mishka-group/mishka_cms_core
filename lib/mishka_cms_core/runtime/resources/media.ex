@@ -2312,6 +2312,8 @@ defmodule MishkaCmsCore.Runtime.Media do
     refused
   end
 
+  # Paths reach here through `own_file/3`, which keeps them inside the site's own media folder.
+  # sobelow_skip ["Traversal.FileModule"]
   def save_file_to_storage(%{source_path: source_path, extension: ext}, site_id, category_id) do
     category_dir = category_id || "uncategorized"
     path = "/uploads/#{site_id}/media/#{category_dir}/#{Ash.UUID.generate()}#{ext}"
@@ -2360,6 +2362,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       else: String.replace_suffix(relative_path, old_ext, new_ext)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp replace_file(source_path, old, new) do
     same_format? = old.active == new.active
     backup_path = old.active <> ".replacing"
@@ -2398,6 +2401,7 @@ defmodule MishkaCmsCore.Runtime.Media do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp restore_backup(full_path, backup_path) do
     if File.exists?(backup_path) do
       File.rm(full_path)
@@ -2459,6 +2463,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   is not served. `nil` when the file is not there, or is not a file of the site `site_id`'s own
   folder (see `storage_paths/2`).
   """
+  # sobelow_skip ["Traversal.FileModule"]
   def get_archived_image_data_uri(relative_path, site_id, format) do
     with {:ok, %{archived: archived}} <- own_file(:read, relative_path, site_id),
          {:ok, binary} <- File.read(archived) do
@@ -2468,12 +2473,14 @@ defmodule MishkaCmsCore.Runtime.Media do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp remove_file(path, folder) do
     File.rm(path)
     cleanup_empty_dirs(Path.dirname(path), folder)
     :ok
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp move_file(source, dest, source_folder) do
     with true <- File.exists?(source),
          :ok <- File.mkdir_p(Path.dirname(dest)),
@@ -2487,6 +2494,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   end
 
   # A rename cannot cross disks, so two trees on different ones take a copy and a delete.
+  # sobelow_skip ["Traversal.FileModule"]
   defp rename_or_copy(source, dest) do
     case File.rename(source, dest) do
       :ok -> :ok

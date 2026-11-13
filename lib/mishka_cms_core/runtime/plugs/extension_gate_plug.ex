@@ -55,6 +55,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.ExtensionGatePlug do
 
   @doc "The OTP app `extension` (`MishkaBlogWeb`) belongs to, read from its `Routes` module."
   @spec app(module()) :: atom() | nil
+  # `extension` is an installed extension module, so its `Routes` atom already exists.
+  # sobelow_skip ["DOS.ModuleConcat"]
   def app(extension) do
     key = {__MODULE__, extension}
 
