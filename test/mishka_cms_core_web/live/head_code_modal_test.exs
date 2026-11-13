@@ -130,6 +130,13 @@ defmodule MishkaCmsCoreWeb.Test.HeadCodeModalTest do
     settle(view)
   end
 
+  test "the Head code button sits in one row with + Add Page", %{conn: conn} do
+    view = conn |> log_in(admin!(["*"])) |> open()
+
+    assert has_element?(view, "#pages-header-actions.flex.items-center #head-code-open")
+    assert has_element?(view, "#pages-header-actions.flex.items-center #add-page-main")
+  end
+
   test "a master of the section adds an entry through the form, and it is served", %{
     conn: conn,
     site: site
