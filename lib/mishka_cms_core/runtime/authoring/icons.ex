@@ -60,6 +60,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.Icons do
 
   def classes_in(_source), do: []
 
+  # Every prefix is passed through `Regex.escape/1`.
+  # sobelow_skip ["DOS.Regex"]
   defp class_pattern do
     libraries()
     |> Enum.flat_map(& &1.prefixes())
@@ -227,7 +229,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Icons do
   @doc "How many match, uncapped — what tells a reader their query is too broad."
   @spec count(String.t() | nil, String.t(), keyword()) :: non_neg_integer()
   def count(query, variant \\ "", opts \\ []) do
-    opts |> chosen() |> Enum.map(& &1.count(query, variant)) |> Enum.sum()
+    opts |> chosen() |> Enum.sum_by(& &1.count(query, variant))
   end
 
   defp chosen(opts) do

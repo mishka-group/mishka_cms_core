@@ -10,6 +10,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   use ExUnit.Case, async: false
   import Ash.Test
   alias MishkaCmsCore.Runtime.Page
+  alias MishkaCmsCore.Runtime.PageDraft
   alias MishkaCmsCore.Runtime.States.AssetsState
   require Ash.Query
   @moduletag :unit
@@ -100,7 +101,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       assert page.format == :heex
       assert page.priority == 0
       assert page.site_id == site.id
-      assert page.page_module != nil
       assert to_string(page.page_module) =~ ~r/Page$/
     end
 
@@ -799,7 +799,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       pages = page.results
 
-      assert length(pages) == 3
+      assert match?([_, _, _], pages)
       assert Enum.at(pages, 0).priority == 20
       assert Enum.at(pages, 0).name == "aaa-page"
       assert Enum.at(pages, 1).priority == 20
@@ -814,7 +814,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:by_path, %{path: context.site1_page1.path})
         |> Ash.read!(authorize?: false)
 
-      assert length(pages) == 1
+      assert match?([_], pages)
       assert List.first(pages).id == context.site1_page1.id
     end
 
@@ -828,7 +828,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:by_section, %{section: "blog"})
         |> Ash.read!(authorize?: false)
 
-      assert length(pages) == 2
+      assert match?([_, _], pages)
       assert Enum.all?(pages, fn p -> p.section == "blog" end)
     end
 
@@ -843,7 +843,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:by_layout, %{layout_id: layout.id})
         |> Ash.read!(authorize?: false)
 
-      assert length(pages) == 2
+      assert match?([_, _], pages)
       assert Enum.all?(pages, fn p -> p.layout_id == layout.id end)
     end
   end
@@ -854,7 +854,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       page = create_page!(site_id: site.id)
 
       assert {:ok, archived} = Ash.destroy(page, authorize?: false, return_destroyed?: true)
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       pages = Page |> Ash.Query.set_tenant(site.id) |> Ash.read!(authorize?: false)
       page_ids = Enum.map(pages, & &1.id)
@@ -916,7 +916,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       page = Ash.get!(Page, page.id, load: [:page_module], tenant: site.id, authorize?: false)
 
-      assert page.page_module != nil
       module_string = to_string(page.page_module)
       assert module_string =~ ~r/Page/
       assert module_string =~ ~r/Page$/
@@ -929,7 +928,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       page = Ash.get!(Page, page.id, load: [:loaded_layout], tenant: site.id, authorize?: false)
 
-      assert page.loaded_layout != nil
+      assert %MishkaCmsCore.Runtime.Layout{} = page.loaded_layout
       assert page.loaded_layout.id == layout.id
       assert page.loaded_layout.name == "test-layout"
     end
@@ -960,7 +959,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       page = Ash.get!(Page, page.id, load: [:latest_version], tenant: site.id, authorize?: false)
 
-      assert page.latest_version != nil
+      assert %Page.Version{} = page.latest_version
       assert page.latest_version.version_action_name == :update
       assert page.latest_version.changes["description"] == "Second update"
     end
@@ -979,8 +978,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       page = Ash.get!(Page, page.id, load: [:recent_versions], tenant: site.id, authorize?: false)
 
-      assert page.recent_versions != nil
-      assert is_list(page.recent_versions)
       assert length(page.recent_versions) == 6
 
       # Verify they are sorted by version_inserted_at desc (most recent first)
@@ -998,10 +995,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       # Normal case - should have at least the create version
       page = Ash.get!(Page, page.id, load: [:recent_versions], tenant: site.id, authorize?: false)
 
-      assert page.recent_versions != nil
-      assert is_list(page.recent_versions)
       # Should have at least the create version
-      assert length(page.recent_versions) >= 1
+      assert [_ | _] = page.recent_versions
     end
   end
 
@@ -1052,8 +1047,8 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       assert page.resource_links == []
       assert page.helpers == []
       assert page.permissions == []
-      assert page.inserted_at != nil
-      assert page.updated_at != nil
+      assert %DateTime{} = page.inserted_at
+      assert %DateTime{} = page.updated_at
     end
   end
 
@@ -1171,7 +1166,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       versions = versions(MishkaCmsCore.Runtime.Page.Version, page.id)
 
-      assert length(versions) == 1
+      assert match?([_], versions)
       version = List.first(versions)
       assert version.version_action_name == :create
       assert version.version_action_type == :create
@@ -1196,7 +1191,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       versions = versions(MishkaCmsCore.Runtime.Page.Version, updated_page.id)
 
-      assert length(versions) == 2
+      assert match?([_, _], versions)
 
       # versions/3 returns oldest-first, so create is first and update is last
       create_version = List.first(versions)
@@ -1221,7 +1216,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       versions = versions(MishkaCmsCore.Runtime.Page.Version, page.id)
 
       # Still only has the create version
-      assert length(versions) == 1
+      assert match?([_], versions)
       assert List.first(versions).version_action_name == :create
     end
 
@@ -1362,7 +1357,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       new_versions = versions(MishkaCmsCore.Runtime.Page.Version, restored.id)
 
       # Should have 4 versions now (create + 2 updates + restore)
-      assert length(new_versions) == 4
+      assert match?([_, _, _, _], new_versions)
       latest_version = List.last(new_versions)
       assert latest_version.version_action_name == :restore_version
     end
@@ -1673,7 +1668,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       result = Ash.get!(Page, archived.id, action: :master_get, authorize?: false)
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
   end
 
@@ -1690,7 +1685,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
   end
 
@@ -1729,7 +1724,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
   end
 
@@ -1801,7 +1796,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(authorize?: false, return_destroyed?: true)
 
-      assert destroyed.archived_at != nil
+      assert %DateTime{} = destroyed.archived_at
     end
   end
 
@@ -1853,8 +1848,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   end
 
   describe "get_with_versions and master_get_with_versions actions" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "get_with_versions loads sorted versions (tenant)" do
       site = create_site!()
       page = create_page!(name: "With Versions", site_id: site.id)
@@ -1872,7 +1865,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == page.id
-      assert length(result.sorted_versions) >= 1
+      assert [_ | _] = result.sorted_versions
     end
 
     test "master_get_with_versions loads versions bypassing tenant" do
@@ -1892,13 +1885,11 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == page.id
-      assert length(result.sorted_versions) >= 1
+      assert [_ | _] = result.sorted_versions
     end
   end
 
   describe "master_list_versions action" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "lists versions bypassing tenant" do
       site = create_site!()
       page = create_page!(name: "Master List Versions", site_id: site.id)
@@ -1914,13 +1905,11 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:master_list_versions, %{page_id: page.id}, authorize?: false)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) == 1
+      assert match?([_], results)
     end
   end
 
   describe "restore_version_api action" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "restores via API (tenant)" do
       site = create_site!()
       page = create_page!(name: "API Restore", description: "Original", site_id: site.id)
@@ -1951,8 +1940,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   end
 
   describe "master_restore_version action" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "restores bypassing tenant" do
       site = create_site!()
       page = create_page!(name: "Master Restore", description: "Original", site_id: site.id)
@@ -1983,8 +1970,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   end
 
   describe "preview_version action" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "previews a version without restoring (tenant)" do
       site = create_site!()
       page = create_page!(name: "Preview Test", description: "Original", site_id: site.id)
@@ -2018,8 +2003,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   end
 
   describe "master_preview_version action" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "previews bypassing tenant" do
       site = create_site!()
       page = create_page!(name: "Master Preview", description: "Original", site_id: site.id)
@@ -2066,9 +2049,6 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
   # record as it is now. The preview's CSS is compiled on every open and kept nowhere. The builder's
   # own save purged the keys; these three write the same row and did not.
   describe "the live page's preview keys" do
-    import MishkaCmsCore.Test.VersionHelpers
-    alias MishkaCmsCore.Runtime.PageDraft
-
     setup do
       site = create_site!()
       page = create_page!(site_id: site.id)

@@ -70,7 +70,7 @@ defmodule MishkaCmsCore.Runtime.Resources.RegisterTranslationKeysTest do
         record = update!(record, %{description: "Edited #{n}"})
 
         assert site_rows(site.id) == before
-        assert length(before) == 2
+        assert match?([_, _], before)
 
         update!(record, %{template: ~s|<div>{t("Stays #{n}")}</div><br />|})
 

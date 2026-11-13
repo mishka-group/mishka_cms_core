@@ -435,9 +435,7 @@ defmodule MishkaCmsCore.Runtime.Media do
             width "90px"
           end
 
-          format fn size ->
-            MishkaGervaz.Helpers.format_filesize(size)
-          end
+          format &MishkaGervaz.Helpers.format_filesize/1
         end
 
         column :category_info do
@@ -882,7 +880,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       uploads do
         upload :media_files do
-          accept ~w(.jpg .jpeg .png .gif .webp .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
+          accept ~w(.jpg .jpeg .png .gif .webp .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv .woff2)
           max_entries 1
           max_file_size 50_000_000
           style :dropzone
@@ -2046,7 +2044,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   @allowed_extensions %{
     images: ~w(.jpg .jpeg .png .gif .webp),
     videos: ~w(.mp4 .webm .mov),
-    documents: ~w(.pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
+    documents: ~w(.pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv .woff2)
   }
 
   @max_file_size 50_000_000
@@ -2314,6 +2312,8 @@ defmodule MishkaCmsCore.Runtime.Media do
     refused
   end
 
+  # Paths reach here through `own_file/3`, which keeps them inside the site's own media folder.
+  # sobelow_skip ["Traversal.FileModule"]
   def save_file_to_storage(%{source_path: source_path, extension: ext}, site_id, category_id) do
     category_dir = category_id || "uncategorized"
     path = "/uploads/#{site_id}/media/#{category_dir}/#{Ash.UUID.generate()}#{ext}"
@@ -2362,6 +2362,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       else: String.replace_suffix(relative_path, old_ext, new_ext)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp replace_file(source_path, old, new) do
     same_format? = old.active == new.active
     backup_path = old.active <> ".replacing"
@@ -2400,6 +2401,7 @@ defmodule MishkaCmsCore.Runtime.Media do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp restore_backup(full_path, backup_path) do
     if File.exists?(backup_path) do
       File.rm(full_path)
@@ -2461,6 +2463,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   is not served. `nil` when the file is not there, or is not a file of the site `site_id`'s own
   folder (see `storage_paths/2`).
   """
+  # sobelow_skip ["Traversal.FileModule"]
   def get_archived_image_data_uri(relative_path, site_id, format) do
     with {:ok, %{archived: archived}} <- own_file(:read, relative_path, site_id),
          {:ok, binary} <- File.read(archived) do
@@ -2470,12 +2473,14 @@ defmodule MishkaCmsCore.Runtime.Media do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp remove_file(path, folder) do
     File.rm(path)
     cleanup_empty_dirs(Path.dirname(path), folder)
     :ok
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp move_file(source, dest, source_folder) do
     with true <- File.exists?(source),
          :ok <- File.mkdir_p(Path.dirname(dest)),
@@ -2489,6 +2494,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   end
 
   # A rename cannot cross disks, so two trees on different ones take a copy and a delete.
+  # sobelow_skip ["Traversal.FileModule"]
   defp rename_or_copy(source, dest) do
     case File.rename(source, dest) do
       :ok -> :ok
@@ -2505,27 +2511,29 @@ defmodule MishkaCmsCore.Runtime.Media do
     end
   end
 
-  def get_content_type(format) do
-    case String.downcase(format) do
-      "jpg" -> "image/jpeg"
-      "jpeg" -> "image/jpeg"
-      "png" -> "image/png"
-      "gif" -> "image/gif"
-      "webp" -> "image/webp"
-      "svg" -> "image/svg+xml"
-      "mp4" -> "video/mp4"
-      "webm" -> "video/webm"
-      "mov" -> "video/quicktime"
-      "pdf" -> "application/pdf"
-      "doc" -> "application/msword"
-      "docx" -> "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-      "xls" -> "application/vnd.ms-excel"
-      "xlsx" -> "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-      "ppt" -> "application/vnd.ms-powerpoint"
-      "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-      "txt" -> "text/plain"
-      "csv" -> "text/csv"
-      _ -> "application/octet-stream"
-    end
-  end
+  # Only these formats are named; anything else is served as a download.
+  @content_types %{
+    "jpg" => "image/jpeg",
+    "jpeg" => "image/jpeg",
+    "png" => "image/png",
+    "gif" => "image/gif",
+    "webp" => "image/webp",
+    "svg" => "image/svg+xml",
+    "mp4" => "video/mp4",
+    "webm" => "video/webm",
+    "mov" => "video/quicktime",
+    "pdf" => "application/pdf",
+    "doc" => "application/msword",
+    "docx" => "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "xls" => "application/vnd.ms-excel",
+    "xlsx" => "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "ppt" => "application/vnd.ms-powerpoint",
+    "pptx" => "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "txt" => "text/plain",
+    "csv" => "text/csv",
+    "woff2" => "font/woff2"
+  }
+
+  def get_content_type(format),
+    do: Map.get(@content_types, String.downcase(format), "application/octet-stream")
 end

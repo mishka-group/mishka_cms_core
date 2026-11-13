@@ -103,6 +103,8 @@ defmodule MishkaCmsCore.Activity.Sources.RuntimeCompile do
   defp res_topic(resource), do: "#{@topic}:res:#{inspect(resource)}"
   defp site_res_topic(id, resource), do: "#{@topic}:site:#{id}:res:#{inspect(resource)}"
 
+  # `module` is a runtime resource, so the module this names already exists.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp runtime_resource(module) do
     type = module |> Module.split() |> List.last()
     Module.concat([MishkaCmsCore.Runtime, type])

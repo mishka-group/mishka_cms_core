@@ -73,7 +73,7 @@ defmodule MishkaCmsCore.Activity.Sources.PaperTrail do
       source_id: source_id,
       site_id: Map.get(n.data, :site_id),
       user_id: n.actor && Map.get(n.actor, :id),
-      message: message_for(label, action, n.data)
+      message: message_for(label, action, record_title(n.data))
     }
   end
 
@@ -149,7 +149,7 @@ defmodule MishkaCmsCore.Activity.Sources.PaperTrail do
       source_id: source_id,
       site_id: row["site_id"],
       user_id: row["user_id"],
-      message: message_for(label, action, row["payload"])
+      message: message_for(label, action, stored_title(row["payload"]))
     }
   end
 
@@ -184,7 +184,7 @@ defmodule MishkaCmsCore.Activity.Sources.PaperTrail do
       source_id: version.version_source_id,
       site_id: Map.get(version, :site_id),
       user_id: Map.get(version, :user_id),
-      message: message_for(label, action, version.version_action_inputs)
+      message: message_for(label, action, stored_title(version.version_action_inputs))
     }
   end
 
@@ -193,21 +193,15 @@ defmodule MishkaCmsCore.Activity.Sources.PaperTrail do
     "pt-#{source_id}-#{action}-#{unix}"
   end
 
-  defp message_for(label, action, source) do
-    case record_title(source) do
-      name when name in [nil, ""] -> unnamed_message(label, action)
-      name -> named_message(label, name, action)
-    end
-  end
+  defp message_for(label, action, name) when name in [nil, ""], do: unnamed_message(label, action)
+  defp message_for(label, action, name), do: named_message(label, name, action)
 
-  defp record_title(%{} = record) do
-    Map.get(record, :title) ||
-      Map.get(record, :name) ||
-      Map.get(record, "title") ||
-      Map.get(record, "name")
-  end
+  # A live notification carries the record itself; a stored payload or version's inputs come back
+  # from the database as JSON, keyed by strings.
+  defp record_title(record), do: Map.get(record, :title) || Map.get(record, :name)
 
-  defp record_title(_), do: nil
+  defp stored_title(%{} = payload), do: Map.get(payload, "title") || Map.get(payload, "name")
+  defp stored_title(_), do: nil
 
   defp unnamed_message(label, action) when action in [:create, :master_create],
     do: gettext("%{label} created", label: label)

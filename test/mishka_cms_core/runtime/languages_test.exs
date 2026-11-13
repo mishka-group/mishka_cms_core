@@ -241,7 +241,7 @@ defmodule MishkaCmsCore.Runtime.LanguagesTest do
 
   describe "session/0" do
     test "names the key a visitor's language is remembered under" do
-      assert is_binary(Languages.session())
+      assert Languages.session() == "site_language"
       assert Languages.session() != Languages.capture()
     end
   end

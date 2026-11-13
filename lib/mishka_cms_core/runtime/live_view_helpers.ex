@@ -706,8 +706,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpers do
   defp slot_name(%{name: name}), do: name
   defp slot_name(%{"name" => name}), do: name
 
-  defp helper_name(helper) when is_map(helper),
-    do: to_string(Map.get(helper, :name) || Map.get(helper, "name"))
-
+  defp helper_name(%{name: name}) when not is_nil(name), do: to_string(name)
+  defp helper_name(%{"name" => name}), do: to_string(name)
+  defp helper_name(%{}), do: ""
   defp helper_name(_helper), do: nil
 end

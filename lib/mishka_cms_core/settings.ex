@@ -749,6 +749,17 @@ defmodule MishkaCmsCore.Settings do
         label: gettext_noop("Site title"),
         description: gettext_noop("Shown in the browser tab and anywhere the site names itself.")
       ),
+      define("site.tagline", :string,
+        default: "",
+        trim: true,
+        category: "general",
+        scope: :both,
+        label: gettext_noop("Tagline"),
+        description:
+          gettext_noop(
+            "A short line about the site. SEO tags read it as {{site.tagline}}, in the page's language when Translations has it."
+          )
+      ),
       define("site.logo", :image,
         default: "",
         category: "general",
@@ -905,6 +916,18 @@ defmodule MishkaCmsCore.Settings do
         description:
           gettext_noop(
             "Times every component a visitor's page draws, for the Performance Metrics card of each component. It adds about a microsecond to each component render, more for long lists inside nested components, so leave it off unless you are looking for a slow component."
+          )
+      ),
+      # Read by every tracked operation, through `MishkaCmsCore.Agent.Receipts.on?/0`.
+      define("agent.receipts", :boolean,
+        default: false,
+        category: "general",
+        group: gettext_noop("Agents"),
+        scope: :master,
+        label: gettext_noop("Keep agent receipts"),
+        description:
+          gettext_noop(
+            "Keeps a short-lived record of what each tracked operation actually did, checked stage by stage, for AI agents and admins to read. It adds one or two database reads to each tracked operation, so leave it off unless something reads the receipts."
           )
       ),
       define("notify.cms_core.user.permissions_changed", :boolean,

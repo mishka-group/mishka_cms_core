@@ -135,7 +135,8 @@ defmodule MishkaCmsCore.Activity.HelpersTest do
 
     test "avatar_tone is deterministic for the same seed" do
       assert Helpers.avatar_tone("user-1") == Helpers.avatar_tone("user-1")
-      assert is_atom(Helpers.avatar_tone("user-1"))
+
+      assert Helpers.avatar_tone("user-1") in ~w(emerald sky amber rose indigo violet teal fuchsia)a
     end
   end
 end

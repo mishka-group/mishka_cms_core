@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# The on_mount hook is tested on its own, and the socket it returns is its answer.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
+
 defmodule MishkaCmsCore.Runtime.CspNonceTest do
   @moduledoc """
   The nonce a response's header names has to reach every template that response renders — the

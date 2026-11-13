@@ -244,7 +244,7 @@ defmodule MishkaCmsCore.Dashboard.Widgets.SiteOverview do
   defp average_kb(type) do
     case AssetsState.get_by_type(type) do
       [] -> 0
-      assets -> assets |> Enum.map(&asset_kb/1) |> Enum.sum() |> div(length(assets))
+      assets -> assets |> Enum.sum_by(&asset_kb/1) |> div(length(assets))
     end
   end
 

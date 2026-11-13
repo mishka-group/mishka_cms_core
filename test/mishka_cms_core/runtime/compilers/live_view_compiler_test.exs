@@ -67,7 +67,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       ast = LiveViewCompiler.build_module(params)
 
       assert {:defmodule, _, [_module_name, [do: block]]} = ast
-      assert block != nil
+
+      rendered = Macro.to_string(block)
+      assert rendered =~ ~s{def handle_event("increment"}
+      assert rendered =~ "format_text"
+      assert rendered =~ "String.upcase(text)"
     end
 
     test "handles params with string keys by atomizing them" do
@@ -111,9 +115,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       assert updated_params == params
       assert {:__block__, _, functions} = info_ast
 
-      # Check that it contains the expected function definitions
-      assert is_list(functions)
-      assert length(functions) > 0
+      # `__page_information__/0` and its three `/1` clauses (atom, list and dotted string key).
+      assert [{:def, _, _}, {:def, _, _}, {:def, _, _}, {:def, _, _}] = functions
     end
 
     test "keeps the page's description beside its SEO tags and schema" do
@@ -197,7 +200,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 2 event handlers + 1 catch-all
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
 
       # Check for catch-all handler
       assert Enum.any?(functions_ast, fn
@@ -213,7 +216,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # Only catch-all handler
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles complex event handler code" do
@@ -249,7 +252,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 1 event handler + 1 catch-all
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
   end
 
@@ -340,7 +343,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 2 info handlers + 1 catch-all
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
 
     test "adds catch-all info handler when no infos defined" do
@@ -350,7 +353,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # Only catch-all handler
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles pattern matching in info handlers" do
@@ -373,7 +376,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 1 info handler + 1 catch-all
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
   end
 
@@ -394,12 +397,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_renders({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
 
       # Check the function AST structure
       [{:__block__, _, defs}] = functions_ast
       # __component_references__/0 + render/1 + templates/1
-      assert length(defs) == 3
+      assert match?([_, _, _], defs)
     end
 
     test "handles empty template" do
@@ -413,7 +416,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_renders({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "compiles complex HEEx template" do
@@ -442,7 +445,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_renders({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 
@@ -466,7 +469,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "builds helper with multiple arguments" do
@@ -483,7 +486,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles empty helpers list" do
@@ -547,7 +550,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 
@@ -604,18 +607,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       env = LiveViewCompiler.make_env()
 
       assert %Macro.Env{} = env
-      # The function should create an environment
-      assert is_list(env.functions)
+      assert {Elixir.JS, Phoenix.LiveView.JS} in env.aliases
     end
 
     test "creates environment with specific imports" do
-      # This would require Phoenix.Component to be available
-      # Skip if module not loaded
-      if Code.ensure_loaded?(Phoenix.Component) do
-        env = LiveViewCompiler.make_env([Phoenix.Component])
-        assert %Macro.Env{} = env
-        assert length(env.functions) > 0
-      end
+      env = LiveViewCompiler.make_env([Phoenix.Component])
+
+      assert %Macro.Env{} = env
+      assert {Phoenix.Component, imported} = List.keyfind(env.functions, Phoenix.Component, 0)
+      assert {:link, 1} in imported
     end
   end
 

@@ -14,8 +14,10 @@ defmodule MishkaCmsCore.Test.Activity.ActivityFeedTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  import MishkaCmsCore.Test.Factory
   import Phoenix.LiveViewTest
 
+  alias MishkaCmsCore.Activity.Helpers
   alias MishkaCmsCore.Test.ActivityStubSource, as: Stub
   alias MishkaCmsCoreWeb.Live.Admin.Components.ActivityFeed
   alias Phoenix.LiveView.JS
@@ -49,7 +51,7 @@ defmodule MishkaCmsCore.Test.Activity.ActivityFeedTest do
     )
   end
 
-  defp viewer(:master), do: MishkaCmsCore.Test.Factory.create_user_with_permissions!(["*"])
+  defp viewer(:master), do: create_user_with_permissions!(["*"])
   defp viewer(user_or_nobody), do: user_or_nobody
 
   defp broadcast(entry) do
@@ -355,10 +357,6 @@ defmodule MishkaCmsCore.Test.Activity.ActivityFeedTest do
   # account, never either one's email. A master names every account. The feed loads the names of the
   # actors on its entries with `Helpers.actor_labels/2` and draws them under each entry.
   describe "who each entry names" do
-    import MishkaCmsCore.Test.Factory
-
-    alias MishkaCmsCore.Activity.Helpers
-
     setup do
       site = create_site!()
 

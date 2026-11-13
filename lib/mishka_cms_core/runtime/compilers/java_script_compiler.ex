@@ -268,32 +268,28 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     # Asked again inside the lock — the pass this caller waited on was probably the install itself.
     if !:persistent_term.get(@esbuild_verified_key, false) do
       wanted = Esbuild.configured_version()
-
-      case probe_esbuild(wanted) do
-        :ok ->
-          :persistent_term.put(@esbuild_verified_key, true)
-
-        {:unusable, why} ->
-          Logger.info("[JavaScriptCompiler] ESBuild #{why}, installing #{wanted}...")
-          Esbuild.install()
-
-          case probe_esbuild(wanted) do
-            :ok ->
-              Logger.info(
-                "[JavaScriptCompiler] ESBuild #{wanted} installed at #{Esbuild.bin_path()}"
-              )
-
-              :persistent_term.put(@esbuild_verified_key, true)
-
-            {:unusable, why} ->
-              # Deliberately not cached: the next compile has to look again rather than trust a
-              # flag that says verified over a binary that will not run.
-              raise "ESBuild #{wanted} is unusable after installing — #{why}"
-          end
-      end
+      wanted |> probe_esbuild() |> install_unless_usable(wanted)
     end
 
     :ok
+  end
+
+  defp install_unless_usable(:ok, _wanted), do: :persistent_term.put(@esbuild_verified_key, true)
+
+  defp install_unless_usable({:unusable, why}, wanted) do
+    Logger.info("[JavaScriptCompiler] ESBuild #{why}, installing #{wanted}...")
+    Esbuild.install()
+
+    case probe_esbuild(wanted) do
+      :ok ->
+        Logger.info("[JavaScriptCompiler] ESBuild #{wanted} installed at #{Esbuild.bin_path()}")
+        :persistent_term.put(@esbuild_verified_key, true)
+
+      {:unusable, why} ->
+        # Deliberately not cached: the next compile has to look again rather than trust a
+        # flag that says verified over a binary that will not run.
+        raise "ESBuild #{wanted} is unusable after installing — #{why}"
+    end
   end
 
   # Every way esbuild can be unusable, folded into one answer that carries WHICH way.
@@ -361,6 +357,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
           IO.puts("Compilation failed: \#{reason}")
       end
   """
+  # Every path here is under this library's own build, temp or cache folders, never request input.
+  # sobelow_skip ["Traversal.FileModule"]
   def compile(site_name, opts \\ []) do
     global_only? = Keyword.get(opts, :global_only, false)
 
@@ -537,6 +535,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # key so serving stays per-site and unchanged. If the base can't be built,
   # fall back to a direct per-site compile — the optimization must never break
   # compilation.
+  # MD5 only names a cache entry or module here; nothing relies on it for security.
+  # sobelow_skip ["Crypto.WeakHash"]
   defp reuse_shared_base_for(site_name) do
     case get_or_compile_shared_base() do
       "" ->
@@ -576,6 +576,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
     end
   end
 
+  # sobelow_skip ["Crypto.WeakHash"]
   defp asset_records(id, type, value, updated_at) do
     {brotli, gzip} = Helpers.compress_asset(value)
     hash = Base.encode16(:crypto.hash(:md5, value), case: :lower)
@@ -748,6 +749,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   #
   # - Development: "priv/static/temp"
   # - Production: "{app_priv_dir}/static/temp"
+  # sobelow_skip ["Traversal.FileModule"]
   defp get_temp_dir do
     dir =
       case :code.priv_dir(@host_app) do
@@ -774,6 +776,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # - `js_assets/js/` - Site-specific JavaScript files
   # - `js_assets/vendor/` - Vendor JavaScript files
   # - `js_assets/node_modules/` - Node modules for ESBuild
+  # sobelow_skip ["Traversal.FileModule"]
   defp get_js_assets_dir do
     dir =
       case :code.priv_dir(@host_app) do
@@ -807,6 +810,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # ## File Structure
   #
   # Creates: `node_modules/phoenix-colocated/mishka_cms.js`
+  # sobelow_skip ["Traversal.FileModule"]
   defp ensure_colocated_hooks(js_assets_dir) do
     colocated_dir = Path.join([js_assets_dir, "node_modules", "phoenix-colocated"])
     _ = File.mkdir_p!(colocated_dir)
@@ -852,14 +856,16 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         {[], []}
 
       hooks ->
-        Enum.reduce(hooks, {[], []}, fn hook, {ready, left_out} ->
-          case NpmPackages.ensure(hook.npm, js_assets_dir) do
-            :ok -> {ready ++ [hook], left_out}
-            {:error, reason} -> {ready, [{hook, reason} | left_out]}
-          end
+        Enum.reduce(hooks, {[], []}, fn hook, acc ->
+          hook.npm |> NpmPackages.ensure(js_assets_dir) |> sort_hook(hook, acc)
         end)
     end
   end
+
+  defp sort_hook(:ok, hook, {ready, left_out}), do: {ready ++ [hook], left_out}
+
+  defp sort_hook({:error, reason}, hook, {ready, left_out}),
+    do: {ready, [{hook, reason} | left_out]}
 
   # ONE HOOK THAT DOES NOT BUILD IS LEFT OUT, and the rest of the site's hooks still build: a single
   # unresolved import or syntax error fails esbuild for the whole bundle, and that bundle is what
@@ -898,6 +904,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   # The hook's own file, with its `modules` and `npm` packages, built as one ES module whose default
   # export is the hook — then that file is rewritten as the stub that imports it.
+  # Paths are under this library's own build and temp folders; MD5 only names a cached file.
+  # sobelow_skip ["Crypto.WeakHash", "Traversal.FileModule"]
   defp build_lazy_module(hook, site_name, tmp_dir) do
     js_dir = Path.join(get_js_assets_dir(), "js")
     site_js_dir = Path.join(js_dir, site_name)
@@ -982,7 +990,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   defp owns?(hook, file, site_name) do
     own_files = Enum.map(hook_files(hook, site_name), &["js", site_name, &1])
 
-    Enum.take(Path.split(file), -3) in own_files or
+    Enum.slice(Path.split(file), -3..-1//1) in own_files or
       Enum.any?(hook.npm || [], &in_package?(file, &1))
   end
 
@@ -1045,6 +1053,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # Writes each hook to `{site_name}/{hookName}.js` beside its `modules`, and
   # `{site_name}/mishka_runtime_components.js`, which exports them all under their browser names:
   # `Global{Name}` for a global hook, `{SitePrefix}{Name}` for a site's own.
+  # sobelow_skip ["Traversal.FileModule"]
   defp write_runtime_hooks!(hooks, site_name) do
     site_js_dir = Path.join([get_js_assets_dir(), "js", site_name])
     _ = File.mkdir_p!(site_js_dir)
@@ -1092,6 +1101,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   # The files a hook imports from beside itself (`./chart_extensions.js`), written next to it. The
   # names were checked when the hook was saved — see `Validations.HookPackages`.
+  # sobelow_skip ["Traversal.FileModule"]
   defp write_modules(hook, site_js_dir) do
     for module <- hook.modules || [],
         MishkaCmsCore.Runtime.Resources.Validations.HookPackages.module?(module),
@@ -1152,6 +1162,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   defp esbuild_profile,
     do: Application.get_env(:mishka_cms_core, :esbuild_profile, :"#{@host_app}_js")
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp execute_esbuild(tmp_dir, site_name) do
     timestamp = :os.system_time(:nanosecond)
     output_file = Path.join(tmp_dir, "output_#{site_name}_#{timestamp}.js")
@@ -1203,6 +1214,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
 
   # The profile run the way `Esbuild.run/2` runs it, with esbuild's messages kept rather than
   # streamed to stdout: they name the file each error is in.
+  # The esbuild/Tailwind binary runs with arguments this module builds, never a shell string.
+  # sobelow_skip ["CI.System"]
   defp run_esbuild(args) do
     config = Esbuild.config_for!(esbuild_profile())
 
@@ -1257,20 +1270,25 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   #
   # `assets/js/site.js` is the same four lines, built by the root esbuild profile, so a syntax error
   # in `boot.js` or `site_hooks.js` is caught at build time rather than at the next site compile.
+  # sobelow_skip ["Traversal.FileModule"]
   defp create_entry_file(js_assets_dir, site_name, timestamp) do
     entry_path = Path.join([js_assets_dir, "js", "entry_#{site_name}_#{timestamp}.js"])
+    _ = File.write!(entry_path, entry_source(site_name))
+    entry_path
+  end
 
-    entry = """
+  @doc false
+  # The entry's source. The site's name reaches it only as a JSON-encoded string literal, so no
+  # name can add code to the bundle.
+  def entry_source(site_name) do
+    """
     import { boot } from "./boot";
     import SharedHooks from "./shared_hooks";
     import SiteHooks from "./site_hooks";
-    import MishkaRuntimeComponents from "./#{site_name}/mishka_runtime_components.js";
+    import MishkaRuntimeComponents from #{Jason.encode!("./#{site_name}/mishka_runtime_components.js")};
 
     boot({ ...SharedHooks, ...SiteHooks, ...MishkaRuntimeComponents });
     """
-
-    _ = File.write!(entry_path, entry)
-    entry_path
   end
 
   # Clean up temporary runtime files after compilation.
@@ -1287,6 +1305,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   # - Removes all .js files from the directory
   # - Ignores errors if directory doesn't exist
   # - Preserves directory structure for future compilations
+  # sobelow_skip ["Traversal.FileModule"]
   defp cleanup_runtime_files(site_js_dir) do
     case File.ls(site_js_dir) do
       {:ok, files} ->
@@ -1335,7 +1354,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   def browser_name(hook, site_name), do: format_hook_name(hook, site_name)
 
   defp format_hook_name(hook, site_name) do
-    base_name = hook.name |> String.split("-") |> Enum.map_join("", &String.capitalize/1)
+    base_name = hook.name |> String.split("-") |> Enum.map_join(&String.capitalize/1)
 
     case {hook.is_global, site_name} do
       {true, _any} ->
@@ -1349,7 +1368,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         base_name
 
       {_site_scoped, name} ->
-        prefix = name |> String.split(["_", "-"]) |> Enum.map_join("", &String.capitalize/1)
+        prefix = name |> String.split(["_", "-"]) |> Enum.map_join(&String.capitalize/1)
 
         "#{prefix}#{base_name}"
     end

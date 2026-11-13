@@ -190,15 +190,23 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
     :telemetry.span([:mishka_cms, :runtime, :draft_preview, :compile], %{module: module}, fn ->
       result =
         alone(module, fn ->
-          case current?(token, module, revision) do
-            true -> {:ok, module}
-            false -> compile_module_alone(record, module, revision, asset_site)
-          end
+          compile_unless_current(
+            current?(token, module, revision),
+            record,
+            module,
+            revision,
+            asset_site
+          )
         end)
 
       {result, %{module: module}}
     end)
   end
+
+  defp compile_unless_current(true, _record, module, _revision, _asset_site), do: {:ok, module}
+
+  defp compile_unless_current(false, record, module, revision, asset_site),
+    do: compile_module_alone(record, module, revision, asset_site)
 
   defp current?(token, module, revision) do
     case AssetsState.get!(token, "module") do
@@ -245,6 +253,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
     |> LayoutCompiler.build_module()
   end
 
+  # The module name is a hash of the draft's content, so a draft makes at most one atom per version.
+  # sobelow_skip ["Crypto.WeakHash", "DOS.ModuleConcat"]
   defp preview_module(%resource{preview_token: token}) do
     kind = if resource in [Layout, LayoutDraft], do: "Layout", else: "Page"
     hash = :md5 |> :crypto.hash(token) |> Base.encode16(case: :lower)
@@ -310,16 +320,8 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   defp scan_content(%{error_pages: pages} = record) when is_list(pages) do
     status_html =
       Enum.map_join(pages, "\n", fn entry ->
-        template = Map.get(entry, :template) || Map.get(entry, "template") || ""
-        layout = Map.get(entry, :layout) || Map.get(entry, "layout")
-
-        layout_template =
-          case layout do
-            %{} = l -> Map.get(l, :template) || Map.get(l, "template") || ""
-            _ -> ""
-          end
-
-        template <> "\n" <> layout_template
+        entry = MishkaCmsCore.Runtime.Helpers.stringify_keys(entry)
+        (entry["template"] || "") <> "\n" <> layout_template(entry["layout"])
       end)
 
     status_html <> "\n" <> (Map.get(record, :root_layout_template) || "")
@@ -334,4 +336,7 @@ defmodule MishkaCmsCore.Runtime.DraftPreviewAssets do
   defp scan_content(%{template: template}) when is_binary(template), do: template
 
   defp scan_content(_record), do: ""
+
+  defp layout_template(%{"template" => template}) when is_binary(template), do: template
+  defp layout_template(_layout), do: ""
 end

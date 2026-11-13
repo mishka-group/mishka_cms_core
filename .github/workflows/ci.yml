@@ -54,7 +54,7 @@ jobs:
 
       - run: MIX_ENV="test" mix compile --warnings-as-errors
 
-  # Beside the tests rather than in front of them.
+  # In front of the tests, like the audit and the lint job.
   format:
     needs: build
     runs-on: ubuntu-latest
@@ -105,13 +105,68 @@ jobs:
 
       - run: MIX_ENV="test" mix deps.audit
 
+  # The checks `mix ci` runs besides the format check, the audit and the tests: Credo (with the Jump
+  # and ExSlop checks .credo.exs adds), Credence, Sobelow, Dialyzer and ExDNA. Dialyzer's PLTs take
+  # minutes to build, so they are cached apart from the build, keyed on what they are made from.
+  lint:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
+
+      - uses: actions/cache/restore@v6
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
+          fail-on-cache-miss: true
+
+      - id: plt
+        uses: actions/cache/restore@v6
+        with:
+          path: |
+            ~/.mix/dialyxir_*
+            _build/test/dialyxir_*
+          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', '.tool-versions') }}
+
+      - run: MIX_ENV="test" mix credo --strict
+
+      - run: MIX_ENV="test" mix mishka_cms_core.credence
+
+      - run: MIX_ENV="test" mix sobelow --config
+
+      # Built once per lock and saved even when dialyzer then reports a warning, so the next run does
+      # not build the PLTs again.
+      - run: MIX_ENV="test" mix dialyzer --plt
+
+      - if: steps.plt.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: |
+            ~/.mix/dialyxir_*
+            _build/test/dialyxir_*
+          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', '.tool-versions') }}
+
+      - run: MIX_ENV="test" mix dialyzer
+
+      - run: MIX_ENV="test" mix ex_dna --max-clones 92
+
   # FOUR MACHINES, A QUARTER OF THE TEST FILES EACH. Three quarters of the suite is `async: false` —
   # it shares the runtime's global state — and runs one module at a time, so more cores do not make
   # it faster and more machines do. Mix deals the test files out by `--partitions`, and each
   # partition has its own Postgres and its own database (`config/test.exs` names it after
-  # MIX_TEST_PARTITION).
+  # MIX_TEST_PARTITION). They start only once the format check, the audit and the lint job pass, so
+  # a run that fails on those does not spend four machines on the suite.
   test:
-    needs: build
+    needs: [build, format, audit, lint]
     runs-on: ubuntu-latest
 
     strategy:

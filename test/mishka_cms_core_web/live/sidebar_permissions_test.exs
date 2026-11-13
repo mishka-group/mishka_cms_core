@@ -20,7 +20,10 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
 
   alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Layouts
   alias MishkaCmsCore.Sidebar
+  alias MishkaCmsCore.Test.Plugins.NestedMenu
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @home "/admin/dashboard"
   @users "/admin/dashboard/account/users"
@@ -132,12 +135,12 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
                "Sites"
              )
 
-      assert [_only_one] =
-               view
-               |> render()
-               |> LazyHTML.from_fragment()
-               |> LazyHTML.query("#admin-sidebar [aria-current]")
-               |> Enum.to_list()
+      html = view |> render() |> LazyHTML.from_fragment()
+
+      # One mark in the wide tree, and one in the narrow menu that replaces it under 980px.
+      for half <- ["#admin-sidebar-tree", "#admin-sidebar-levels"] do
+        assert [_only_one] = html |> LazyHTML.query("#{half} [aria-current]") |> Enum.to_list()
+      end
 
       close(view)
     end
@@ -240,6 +243,162 @@ defmodule MishkaCmsCoreWeb.Test.SidebarPermissionsTest do
 
       assert {:ok, view, _html} = live(conn, @sites)
       close(view)
+    end
+  end
+
+  describe "nested entries in the chrome" do
+    @shop NestedMenu.path()
+
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: NestedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, NestedMenu, false) end)
+
+      {:ok, user: create_user_with_permissions!(["*"])}
+    end
+
+    defp sidebar(user, path, counts \\ %{}) do
+      (&Layouts.sidebar/1)
+      |> render_component(current_user: user, current_path: path, counts: counts)
+      |> LazyHTML.from_fragment()
+    end
+
+    defp one(html, selector), do: html |> LazyHTML.query(selector) |> Enum.to_list()
+
+    defp attr(html, selector, name),
+      do: html |> LazyHTML.query(selector) |> LazyHTML.attribute(name)
+
+    defp hidden?(html, id), do: "hidden" in classes(html, id)
+
+    defp classes(html, id),
+      do: html |> attr("##{id}", "class") |> List.first("") |> String.split()
+
+    test "the entry is one row whose link opens its page and whose arrow only folds", %{
+      user: user
+    } do
+      html = sidebar(user, "/admin/dashboard")
+      tree = "#admin-sidebar-tree"
+
+      assert [_link] = one(html, "#{tree} #sb-plugins > div > div > a[href='#{@shop}']")
+
+      assert attr(html, "#{tree} button[aria-controls='sbi-nested']", "aria-label") ==
+               ["Show or hide the entries under Shop"]
+
+      assert attr(html, "#{tree} button[aria-controls='sbi-nested']", "phx-click") |> hd() =~
+               "toggle_class"
+
+      assert html |> one("#sbi-nested > a, #sbi-nested > div") |> length() == 9
+      assert hidden?(html, "sbi-nested")
+    end
+
+    test "the branch of an open page of the second level is open on load, and marked", %{
+      user: user
+    } do
+      html = sidebar(user, @shop <> "/orders-drafts")
+      tree = "#admin-sidebar-tree"
+
+      refute hidden?(html, "sbi-nested")
+      refute hidden?(html, "sbi-nested-orders")
+      assert hidden?(html, "sbi-nested-reports")
+
+      assert attr(html, "#{tree} [aria-current='page']", "href") == [@shop <> "/orders-drafts"]
+
+      assert attr(html, "#{tree} [aria-current='true']", "href") |> Enum.sort() ==
+               Enum.sort([@shop, @shop <> "/orders"])
+
+      assert attr(html, "#{tree} button[aria-controls='sbi-nested-orders']", "aria-expanded") ==
+               ["true"]
+    end
+
+    test "a page not in the nav keeps the entry it names marked", %{user: user} do
+      html = sidebar(user, @shop <> "/order")
+
+      assert attr(html, "#admin-sidebar-tree [aria-current='page']", "href") ==
+               [@shop <> "/orders"]
+    end
+
+    test "every group can fold, shows how many entries it holds, and the open page's group is open",
+         %{user: user} do
+      html = sidebar(user, @shop <> "/inbox")
+
+      for key <- ~w(runtime account plugins) do
+        assert attr(html, "button[aria-controls='sb-#{key}']", "data-fold") == [""]
+        refute hidden?(html, "sb-#{key}")
+      end
+
+      assert html
+             |> LazyHTML.query("button[aria-controls='sb-plugins'] [data-folded-count]")
+             |> LazyHTML.text()
+             |> String.trim() == "(1)"
+    end
+
+    test "a count chip shows the number in its tone, and zero hides it", %{user: user} do
+      html =
+        sidebar(user, "/admin/dashboard", %{
+          "nested.inbox" => {5, :attention},
+          "nested.orders" => {0, :plain},
+          "nested" => {12, :plain}
+        })
+
+      assert html
+             |> LazyHTML.query("#admin-sidebar-tree [data-count='nested.inbox']")
+             |> LazyHTML.text() =~ "5"
+
+      assert one(html, "#admin-sidebar-tree [data-count='nested']") != []
+      assert one(html, "[data-count='nested.orders']") == []
+    end
+
+    test "under 980px the menu is one level at a time, opening at the level of the open page", %{
+      user: user
+    } do
+      html = sidebar(user, @shop <> "/orders-returns")
+      levels = "#admin-sidebar-levels"
+
+      assert hidden?(html, "sbm-root")
+      assert hidden?(html, "sbm-nested")
+      refute hidden?(html, "sbm-nested-orders")
+
+      # The level starts with its back row, then the page of the entry itself, then its children.
+      assert html |> LazyHTML.query("#sbm-nested-orders > button") |> LazyHTML.text() =~
+               "Back to Shop"
+
+      assert attr(html, "#sbm-nested-orders > div > a", "href") ==
+               [@shop <> "/orders", @shop <> "/orders-returns", @shop <> "/orders-drafts"]
+
+      assert html |> LazyHTML.query("#sbm-nested > button") |> LazyHTML.text() =~
+               "Back to the menu"
+
+      # Rows of 48px at least, and an entry with children keeps its two targets.
+      assert Enum.all?(attr(html, "#{levels} a", "class"), &(&1 =~ "min-h-12"))
+
+      # The footer's rows, Settings among them, are as tall on a narrow screen.
+      footer = attr(html, "#admin-sidebar-footer a", "class")
+      assert footer != []
+      assert Enum.all?(footer, &(&1 =~ "max-[980px]:min-h-12"))
+
+      assert attr(
+               html,
+               "#sbm-nested button[aria-label='Open the entries under Orders']",
+               "phx-click"
+             )
+             |> hd() =~ "sbm-nested-orders"
+
+      assert attr(html, "#sbm-nested-orders a[aria-current='page']", "href") ==
+               [@shop <> "/orders-returns"]
+    end
+
+    test "the narrow menu opens at the top level for a page of the top level", %{user: user} do
+      html = sidebar(user, "/admin/dashboard/runtime/pages")
+
+      refute hidden?(html, "sbm-root")
+      assert hidden?(html, "sbm-nested")
     end
   end
 end

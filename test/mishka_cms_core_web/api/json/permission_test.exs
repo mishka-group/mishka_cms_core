@@ -134,7 +134,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
              } = result
 
       # Should return all permissions (admin_permission + 3 new ones)
-      assert length(permissions) >= 4
+      assert match?([_, _, _, _ | _], permissions)
 
       # Verify the response includes all created permissions
       permission_names = Enum.map(permissions, fn perm -> perm["attributes"]["name"] end)
@@ -185,25 +185,18 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
                "jsonapi" => %{"version" => "1.0"}
              } = result
 
-      assert is_list(data)
+      # The setup's admin permission is listed with the default fields
+      assert [first_permission | _] = data
 
-      # Check first permission has proper structure with default fields
-      if length(data) > 0 do
-        [first_permission | _] = data
+      assert %{
+               "type" => "permission",
+               "id" => id,
+               "attributes" => %{"name" => name}
+             } = first_permission
 
-        assert %{
-                 "type" => "permission",
-                 "id" => id,
-                 "attributes" => attributes
-               } = first_permission
-
-        # Verify id is at top level and is a UUID
-        assert {:ok, _uuid} = Ecto.UUID.cast(id)
-
-        # Verify expected attributes
-        assert Map.has_key?(attributes, "name")
-        assert is_binary(attributes["name"])
-      end
+      # Verify id is at top level and is a UUID
+      assert {:ok, _uuid} = Ecto.UUID.cast(id)
+      assert byte_size(name) > 0
     end
 
     test "supports pagination with limit and offset", %{master_user: master_user} do
@@ -244,7 +237,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
       assert response.status == 200
       result = Jason.decode!(response.resp_body)
       assert %{"data" => data} = result
-      assert length(data) == 5
+      assert match?([_, _, _, _, _], data)
     end
   end
 
@@ -579,7 +572,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
              } = result
 
       # Should return all permissions
-      assert length(permissions) >= 2
+      assert match?([_, _ | _], permissions)
 
       # Verify the response includes created permissions
       permission_names = Enum.map(permissions, fn perm -> perm["attributes"]["name"] end)
@@ -621,7 +614,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
       assert response.status == 200
       result = Jason.decode!(response.resp_body)
       assert %{"data" => data} = result
-      assert length(data) == 5
+      assert match?([_, _, _, _, _], data)
     end
   end
 

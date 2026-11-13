@@ -61,7 +61,7 @@ defmodule MishkaCmsCore.Builder.EventsTest do
     test "each registry names an event and the payload key it accumulates under" do
       for {_registry, {event, key}} <- Events.registries() do
         assert String.starts_with?(event, "builder:")
-        assert is_atom(key)
+        assert Atom.to_string(key) =~ ~r/^[a-z_]+$/
       end
     end
 
@@ -83,7 +83,7 @@ defmodule MishkaCmsCore.Builder.EventsTest do
       seed = [seed("layers", 10), seed("layers", 20)]
       collected = Events.collect(:rails, seed)
 
-      assert length(collected) == 1
+      assert match?([_], collected)
       assert hd(collected).priority == 10
     end
 

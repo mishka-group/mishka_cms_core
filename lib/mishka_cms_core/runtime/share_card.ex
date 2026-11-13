@@ -154,11 +154,15 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   drawn yet. Saves within two seconds of each other are one look.
 
   `force: true` looks now and draws the card again even when it is drawn, over the old file.
+
+  Queued while an operation runs with a receipt, the job carries its id
+  (`MishkaCmsCore.Agent.Receipts.job_meta/1`), so the receipt hears how the look went.
   """
   @spec refresh(String.t(), target(), keyword()) :: :ok | {:error, term()}
   def refresh(site_id, target, opts \\ []) when is_binary(site_id) do
     force = Keyword.get(opts, :force, false)
     later = if force, do: [], else: [schedule_in: 2]
+    later = [meta: MishkaCmsCore.Agent.Receipts.job_meta()] ++ later
 
     %{site_id: site_id, target: encode(target), force: force}
     |> ShareCardRefreshWorker.new(later)
@@ -909,7 +913,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       texts(card, text_width)
 
     blocks = Enum.filter([{eyebrow, 18}, {title, 22}, {description, 0}], &elem(&1, 0))
-    total = blocks |> Enum.map(fn {block, gap} -> height(block) + gap end) |> Enum.sum()
+    total = blocks |> Enum.sum_by(fn {block, gap} -> height(block) + gap end)
     start = top + max(div(bottom - top - total, 2), 0)
 
     {canvas, _y} =
@@ -1048,16 +1052,19 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
     img = text!(string, weight, size, color, width)
     limit = tallest(string, weight, size, lines)
 
-    if height(img) <= limit do
-      img
-    else
-      words = String.split(string)
+    if height(img) <= limit,
+      do: img,
+      else: shortened(string, img, {weight, size, color, width}, limit)
+  end
 
-      Enum.find_value((length(words) - 1)..1//-1, img, fn count ->
-        img = text!(Enum.join(Enum.take(words, count), " ") <> "…", weight, size, color, width)
-        if height(img) <= limit, do: img
-      end)
-    end
+  # The most words of `string` that fit `limit`, with an ellipsis; `img` when not even one does.
+  defp shortened(string, img, {weight, size, color, width}, limit) do
+    words = String.split(string)
+
+    Enum.find_value((length(words) - 1)..1//-1, img, fn count ->
+      img = text!(Enum.join(Enum.take(words, count), " ") <> "…", weight, size, color, width)
+      if height(img) <= limit, do: img
+    end)
   end
 
   # How tall `lines` lines are, in the script `string` is written in — Arabic script stands taller.
@@ -1247,8 +1254,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp glow({cx, cy}, radius, color, strength) do
     {x, y} = axes(@width, @height)
-    dx = Op.linear!(x, [1.0], [-cx * 1.0])
-    dy = Op.linear!(y, [1.0], [-cy * 1.0])
+    dx = Op.linear!(x, [1.0], [:erlang.float(-cx)])
+    dy = Op.linear!(y, [1.0], [:erlang.float(-cy)])
 
     distance =
       Op.math2_const!(
@@ -1285,7 +1292,10 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp gradient(t, from, to) do
     t
-    |> Op.linear!(Enum.zip_with(to, from, &((&1 - &2) * 1.0)), Enum.map(from, &(&1 * 1.0)))
+    |> Op.linear!(
+      Enum.zip_with(to, from, &:erlang.float(&1 - &2)),
+      Enum.map(from, &:erlang.float(&1))
+    )
     |> uchar()
     |> Op.copy!(interpretation: :VIPS_INTERPRETATION_sRGB)
   end

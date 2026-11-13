@@ -13,6 +13,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.SiteLookupPlugTest do
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
+  # A plug's result is the conn it assigns to.
+  @moduletag :plug_test
 
   # Helper to create a conn with proper host header
   defp conn_with_host(method, path, host) do

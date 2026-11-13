@@ -212,24 +212,27 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
   Each stage adds specific functionality to the final compiled module.
   """
   def build_module(params) do
+    atomized_params = MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+    meta = %{title: atomized_params[:title], site: atomized_params[:site]}
+
     MishkaInstaller.Event.Hook.call("runtime:compile:before_layout", params,
-      meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+      meta: meta,
       return: false
     )
 
     :telemetry.span(
       [:mishka_cms, :runtime, :compilers, :layout],
-      %{name: params[:title] || params["title"], site: params[:site] || params["site"]},
+      %{name: meta.title, site: meta.site},
       fn ->
         result =
-          MishkaCmsCore.Runtime.Helpers.atomize_keys(params)
+          atomized_params
           |> build_layout_information()
           |> build_render_functions()
           |> build_helpers()
           |> create_module_ast()
 
         MishkaInstaller.Event.Hook.call("runtime:compile:after_layout", params,
-          meta: %{title: params[:title] || params["title"], site: params[:site] || params["site"]},
+          meta: meta,
           return: false
         )
 
@@ -317,37 +320,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
   This function is typically called as the first stage in the compilation pipeline.
   """
   def build_layout_information(params) do
+    information = Macro.escape(layout_information(params))
+
     layout_info_ast =
       quote do
         def __layout_information__ do
-          %{
-            layout: %{
-              title: unquote(params[:title]),
-              path: unquote(params[:path]),
-              timestamp: unquote(Macro.escape(params[:timestamp])),
-              content: unquote(Macro.escape(params[:content])),
-              resource_links: unquote(Macro.escape(params[:resource_links] || [])),
-              seo: %{
-                meta_tags: unquote(Macro.escape(params[:seo_tags] || []))
-              }
-            },
-            private: %{
-              id: unquote(params[:id]),
-              layout_module: unquote(params[:layout_module]),
-              priority: unquote(params[:priority] || 0),
-              site: unquote(params[:site]),
-              site_id: unquote(params[:site_id]),
-              host: unquote(params[:host]),
-              format: unquote(params[:format]) || :heex,
-              # WHETHER DRAWING A PAGE INSIDE THIS LAYOUT HAS TO LOAD THE SIGNED-IN USER — see
-              # `MishkaCmsCore.Runtime.Compilers.UserClosure`, which works it out from the layout's
-              # own markup and code. ANYTHING BUT AN EXPLICIT `false` MEANS LOAD, so a layout
-              # compiled without the answer carries the safe one rather than the absent one.
-              reads_user: unquote(params[:reads_user] != false)
-            },
-            acl: %{permissions: unquote(Macro.escape(params[:permissions] || []))},
-            extra: unquote(Macro.escape(params[:extra]))
-          }
+          unquote(information)
         end
 
         def __layout_information__(key) when is_atom(key) do
@@ -368,6 +346,35 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompiler do
       end
 
     {params, [layout_info_ast]}
+  end
+
+  defp layout_information(params) do
+    %{
+      layout: %{
+        title: params[:title],
+        path: params[:path],
+        timestamp: params[:timestamp],
+        content: params[:content],
+        resource_links: params[:resource_links] || [],
+        seo: %{meta_tags: params[:seo_tags] || []}
+      },
+      private: %{
+        id: params[:id],
+        layout_module: params[:layout_module],
+        priority: params[:priority] || 0,
+        site: params[:site],
+        site_id: params[:site_id],
+        host: params[:host],
+        format: params[:format] || :heex,
+        # WHETHER DRAWING A PAGE INSIDE THIS LAYOUT HAS TO LOAD THE SIGNED-IN USER — see
+        # `MishkaCmsCore.Runtime.Compilers.UserClosure`, which works it out from the layout's
+        # own markup and code. ANYTHING BUT AN EXPLICIT `false` MEANS LOAD, so a layout
+        # compiled without the answer carries the safe one rather than the absent one.
+        reads_user: params[:reads_user] != false
+      },
+      acl: %{permissions: params[:permissions] || []},
+      extra: params[:extra]
+    }
   end
 
   @doc """

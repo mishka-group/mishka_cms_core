@@ -135,7 +135,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.CustomKitInstallTest do
 
       installed = rows(Component, ["acme-icon", "acme-chip", "acme-gauge"])
 
-      assert length(installed) == 3
+      assert match?([_, _, _], installed)
     end
 
     # The categories are the kit's own words. Rewriting them to something recognised would be the

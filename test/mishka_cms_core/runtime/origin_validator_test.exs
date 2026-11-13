@@ -13,6 +13,8 @@ defmodule MishkaCmsCore.Runtime.OriginValidatorTest do
 
   alias MishkaCmsCore.Runtime.OriginValidator
 
+  require OriginValidator
+
   @moduletag :unit
 
   describe "host_name/1" do
@@ -60,8 +62,6 @@ defmodule MishkaCmsCore.Runtime.OriginValidatorTest do
   end
 
   describe "is_loopback_host/1" do
-    require OriginValidator
-
     test "is localhost, a name under .localhost, 127.0.0.1 and ::1" do
       for host <- ["localhost", "site-a.localhost", "a.b.localhost", "127.0.0.1", "::1"] do
         assert OriginValidator.is_loopback_host(host), host

@@ -104,9 +104,7 @@ defmodule MishkaCmsCore.Runtime.LayoutDraftTest do
     published = publish!(draft)
     assert published.status == :published
 
-    layout = layout_by_path("/layouts/global")
-    assert layout
-    assert is_nil(layout.site_id)
+    assert %Layout{site_id: nil, template: @tmpl} = layout_by_path("/layouts/global")
   end
 
   test "a layout can have multiple labeled drafts, listed paginated newest-first with a count" do

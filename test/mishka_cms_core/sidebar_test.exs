@@ -19,6 +19,8 @@ defmodule MishkaCmsCore.SidebarTest do
   alias MishkaCmsCore.Settings
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCore.Sidebar.{Group, Item}
+  alias MishkaCmsCore.Test.Plugins.NestedMenu
+  alias MishkaInstaller.Event.{Event, EventHandler}
   alias MishkaCmsCoreWeb.Live.Admin.Dashboard.{Account, Runtime}
 
   # Both cache writes are ETS-only, so they never touch the sandboxed connection — but ETS outlives
@@ -152,7 +154,7 @@ defmodule MishkaCmsCore.SidebarTest do
     test "an API admin sees nothing: the sidebar is the dashboard's" do
       user = create_user_with_permissions!(["admin:api:*"])
 
-      assert Sidebar.menu(user) == %{main: [], footer: []}
+      assert Sidebar.menu(user) == %{main: [], footer: [], trail: []}
     end
 
     test "a full dashboard admin sees everything the core declares" do
@@ -174,11 +176,11 @@ defmodule MishkaCmsCore.SidebarTest do
     end
 
     test "a user holding nothing sees nothing" do
-      assert Sidebar.menu(create_user!()) == %{main: [], footer: []}
+      assert Sidebar.menu(create_user!()) == %{main: [], footer: [], trail: []}
     end
 
     test "no user sees nothing — an absent actor is never treated as a permitted one" do
-      assert Sidebar.menu(nil) == %{main: [], footer: []}
+      assert Sidebar.menu(nil) == %{main: [], footer: [], trail: []}
     end
 
     test "works with an already-loaded actor without reloading it" do
@@ -407,7 +409,7 @@ defmodule MishkaCmsCore.SidebarTest do
 
     test "every declared nav link points at a real static path" do
       for item <- Sidebar.core_menu().items, item.nav do
-        assert String.starts_with?(item.path, "/admin/dashboard") or item.path == "/"
+        assert String.starts_with?(item.path, "/admin/dashboard")
 
         refute String.contains?(item.path, ":"),
                "#{item.path} is a link, so it cannot take params"
@@ -445,7 +447,7 @@ defmodule MishkaCmsCore.SidebarTest do
       Sidebar.core_menu().items
       |> Enum.group_by(& &1.module, & &1.permissions)
       |> Enum.each(fn {module, lists} ->
-        assert Enum.uniq(lists) |> length() == 1,
+        assert MapSet.new(lists) |> MapSet.size() == 1,
                "#{inspect(module)} is declared twice with different gates: #{inspect(lists)}"
       end)
     end
@@ -646,6 +648,163 @@ defmodule MishkaCmsCore.SidebarTest do
       assert definitions[Sidebar.visible_key("runtime.sites")].group == "Runtime"
       assert definitions[Sidebar.visible_key("home")].group == "Top level"
       assert definitions[Sidebar.visible_key("runtime")].group == "Sections"
+    end
+  end
+
+  describe "nested entries" do
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: NestedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, NestedMenu, false) end)
+
+      {:ok, user: create_user_with_permissions!(["*"])}
+    end
+
+    defp shop(menu), do: Enum.find(group(menu, "plugins").items, &(&1.key == "nested"))
+    defp child(item, key), do: Enum.find(item.children, &(&1.key == key))
+
+    test "an entry shows as one row holding its children, and three of them hold two each", %{
+      user: user
+    } do
+      shop = shop(Sidebar.menu(user))
+
+      assert labels(group(Sidebar.menu(user), "plugins").items) == ["Shop"]
+      assert length(shop.children) == 9
+
+      assert shop.children |> Enum.filter(&(&1.children != [])) |> labels() ==
+               ["Orders", "Reports", "Stock"]
+
+      assert labels(child(shop, "nested.orders").children) == ["Returns", "Drafts"]
+    end
+
+    test "a child takes its group and position from the top of its chain" do
+      items = Map.new(Sidebar.collect().items, &{&1.key, &1})
+
+      assert items["nested.orders"].group == "plugins"
+      assert items["nested.orders.returns"].group == "plugins"
+      assert items["nested.orders.returns"].position == :main
+    end
+
+    test "a child the user may not see is not shown, and the rest stay" do
+      user = create_user_with_permissions!([NestedMenu.permission()])
+
+      shop = shop(Sidebar.menu(user))
+
+      refute "Secret" in labels(shop.children)
+      assert "Orders" in labels(shop.children)
+    end
+
+    test "a parent left with no child it may show is a plain link", %{user: user} do
+      for name <- ~w(overview orders inbox reports stock buyers notes taxes secret),
+          do: override(Sidebar.visible_key("nested.#{name}"), false)
+
+      assert %Item{children: [], path: path} = shop(Sidebar.menu(user))
+      assert path == NestedMenu.path()
+    end
+
+    test "a child whose parent is hidden is hidden with it", %{user: user} do
+      override(Sidebar.visible_key("nested.orders"), false)
+
+      shop = shop(Sidebar.menu(user))
+
+      refute "Orders" in labels(shop.children)
+      refute Enum.any?(shop.children, &("Returns" in labels(&1.children)))
+    end
+
+    test "order and visible settings work among siblings, on both levels", %{user: user} do
+      override(Sidebar.order_key("nested.taxes"), 1)
+      override(Sidebar.order_key("nested.orders.drafts"), 1)
+      override(Sidebar.visible_key("nested.stock.low"), false)
+
+      shop = shop(Sidebar.menu(user))
+
+      assert shop.children |> labels() |> List.first() == "Taxes"
+      assert labels(child(shop, "nested.orders").children) == ["Drafts", "Returns"]
+      assert labels(child(shop, "nested.stock").children) == ["Out"]
+    end
+
+    test "children are arranged on the settings page under their top row's section" do
+      definitions = Map.new(Sidebar.settings_definitions(), &{&1.key, &1})
+
+      assert definitions[Sidebar.order_key("nested.orders")].group == "Plugins"
+      assert definitions[Sidebar.visible_key("nested.orders.returns")].group == "Plugins"
+    end
+
+    test "the trail runs from the top row down to the entry of the open page", %{user: user} do
+      root = NestedMenu.path()
+
+      assert Sidebar.menu(user, root <> "/orders-returns").trail ==
+               ["nested", "nested.orders", "nested.orders.returns"]
+
+      assert Sidebar.menu(user, root <> "/inbox/42").trail == ["nested", "nested.inbox"]
+      assert Sidebar.menu(user, root).trail == ["nested"]
+      assert Sidebar.menu(user).trail == []
+    end
+
+    test "a page not in the nav keeps the entry it names marked", %{user: user} do
+      assert Sidebar.menu(user, NestedMenu.path() <> "/order").trail ==
+               ["nested", "nested.orders"]
+
+      assert Sidebar.menu(user, "/admin/dashboard/notifications").trail == []
+    end
+
+    test "a child is guarded by its own module and permissions, like any item" do
+      assert Sidebar.permissions(Sidebar.collect().items, "nested.secret") ==
+               ["admin:dashboard:probe_secret"]
+    end
+  end
+
+  describe "items!/1" do
+    defp entry(key, extra \\ %{}),
+      do: Map.merge(%{key: key, label: key, path: "/admin/dashboard/#{key}"}, extra)
+
+    test "builds a list two levels deep" do
+      assert [_, _, _] =
+               Sidebar.items!([
+                 entry("a"),
+                 entry("b", %{parent: "a"}),
+                 entry("c", %{parent: "b"})
+               ])
+    end
+
+    test "refuses a third level" do
+      assert_raise ArgumentError, ~r/two levels/, fn ->
+        Sidebar.items!([
+          entry("a"),
+          entry("b", %{parent: "a"}),
+          entry("c", %{parent: "b"}),
+          entry("d", %{parent: "c"})
+        ])
+      end
+    end
+
+    test "refuses a parent that is not in the list" do
+      assert_raise ArgumentError, ~r/parent is missing/, fn ->
+        Sidebar.items!([entry("b", %{parent: "a"})])
+      end
+    end
+
+    test "refuses a mark that names no entry of the list" do
+      assert_raise ArgumentError, ~r/marks an unknown entry/, fn ->
+        Sidebar.items!([entry("a", %{nav: false, mark: "z"})])
+      end
+    end
+
+    test "refuses a child that sets its own group, or names itself" do
+      assert_raise ArgumentError, ~r/group from its parent/, fn ->
+        Item.new!(entry("b", %{parent: "a", group: "plugins"}))
+      end
+
+      assert_raise ArgumentError, ~r/names itself/, fn ->
+        Item.new!(entry("a", %{parent: "a"}))
+      end
     end
   end
 

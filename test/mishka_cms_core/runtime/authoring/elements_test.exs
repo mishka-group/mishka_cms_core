@@ -182,7 +182,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.ElementsTest do
 
       radios = tree |> Tree.walk() |> Enum.filter(&(node_attr(&1, "type") == "radio"))
 
-      assert length(radios) == 2
+      assert match?([_, _], radios)
       assert radios |> Enum.map(&node_attr(&1, "name")) |> Enum.uniq() == ["choice"]
       assert Enum.map(radios, &node_attr(&1, "value")) == ["one", "two"]
     end

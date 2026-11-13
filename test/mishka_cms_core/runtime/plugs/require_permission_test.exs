@@ -11,6 +11,8 @@ defmodule MishkaCmsCore.Runtime.Plugs.RequirePermissionTest do
   alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsWeb.Runtime.Plugs.RequirePermission
   @moduletag :unit
+  # Every test runs the plug and reads what it put on the conn.
+  @moduletag :plug_test
 
   setup do
     # Create a basic conn for testing with session and flash fetched
@@ -177,10 +179,9 @@ defmodule MishkaCmsCore.Runtime.Plugs.RequirePermissionTest do
       result1 = RequirePermission.call(conn, ["first.permission"])
       assert result1.halted
 
-      # Can't really proceed after halt, but verify conn is still valid
-      assert is_map(result1)
-      # Redirect status
+      # Can't really proceed after halt, but the conn is still a redirect home
       assert result1.status == 302
+      assert redirected_to(result1) == "/"
     end
   end
 

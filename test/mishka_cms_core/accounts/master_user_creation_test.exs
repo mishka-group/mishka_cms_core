@@ -19,6 +19,7 @@ defmodule MishkaCmsCore.Accounts.MasterUserCreationTest do
   use MishkaCmsCore.DataCase
 
   alias MishkaCmsCore.Accounts.User
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   require Ash.Query
 
@@ -147,8 +148,6 @@ defmodule MishkaCmsCore.Accounts.MasterUserCreationTest do
 
   # A PLUGIN HEARS EVERY MASTER CREATION REFUSED, with the action, who asked and for which address.
   describe "a refused master creation" do
-    alias MishkaInstaller.Event.{Event, EventHandler}
-
     setup do
       Process.register(self(), :__plugin_hook_probe__)
       event = "cms_core:user:master_creation_refused"

@@ -9,9 +9,13 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
   """
   use ExUnit.Case, async: false
 
+  # A plug's result is the conn it assigns to.
+  @moduletag :plug_test
+
   import Plug.Test
   import Plug.Conn
 
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
 
@@ -328,8 +332,6 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
   end
 
   describe "the players a site lets its pages embed" do
-    alias MishkaCmsCore.Runtime.States.SettingsState
-
     @key "security.frame_origins"
 
     setup do
@@ -385,6 +387,53 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
       refute SecurityHeaders.frame_origins?(["https://YouTube.com"])
       refute SecurityHeaders.frame_origins?(["youtube.com"])
       refute SecurityHeaders.frame_origins?("https://www.youtube.com")
+    end
+  end
+
+  describe "the origins a site's head code reaches" do
+    setup do
+      snapshot = SiteState.snapshot()
+      on_exit(fn -> SiteState.restore(snapshot) end)
+
+      :ok =
+        SiteState.put_head_code(%{
+          id: "entry-plausible",
+          site_id: "site-head",
+          name: "Plausible",
+          code: ~s(<script defer src="https://plausible.io/js/script.js"></script>),
+          scope: :all,
+          paths: [],
+          origins: ["https://plausible.io"],
+          published: true,
+          archived_at: nil
+        })
+    end
+
+    defp head_site(path) do
+      Application.put_env(:mishka_cms, SecurityHeaders, csp: :enforce)
+
+      :get
+      |> conn(path)
+      |> assign(:current_site, %{id: "site-head", master: false})
+      |> SecurityHeaders.call([])
+    end
+
+    defp directive(conn, name) do
+      [value] = Regex.run(~r/(?:^|; )#{name} [^;]+/, csp(conn))
+      value
+    end
+
+    test "are added to script-src and connect-src on that site's public pages" do
+      conn = head_site("/pricing")
+
+      assert directive(conn, "script-src") =~ "https://plausible.io"
+      assert directive(conn, "connect-src") =~ "https://plausible.io"
+      refute directive(conn, "frame-src") =~ "plausible"
+    end
+
+    test "never reach another site's pages or an admin page" do
+      refute csp(run("/pricing", csp: :enforce)) =~ "plausible"
+      refute csp(head_site("/admin/dashboard/runtime/pages")) =~ "plausible"
     end
   end
 end

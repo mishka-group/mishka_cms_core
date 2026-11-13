@@ -40,7 +40,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
     test "creates one Component row per JSON entry" do
       {:ok, %{components: cps}} = Installer.install_chelekom!(bundle_path: @seed_path)
 
-      assert length(cps) == 4
+      assert match?([_, _, _, _], cps)
 
       names = installed_components() |> Enum.map(& &1.name) |> Enum.sort()
 
@@ -63,9 +63,11 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
 
       assert btn.format == :heex
       assert btn.active == true
-      assert is_list(btn.helpers)
-      assert length(btn.helpers) > 0
-      assert is_list(btn.attrs)
+      assert [_ | _] = btn.helpers
+
+      assert Enum.map(btn.attrs, & &1.name) ==
+               ["id", "variant", "color", "on_click", "class", "rest"]
+
       assert btn.extra["ui_kit"] == "kit"
       assert btn.extra["component"] == "sample_button"
       assert btn.extra["function"] == "sample_button"
@@ -98,8 +100,8 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       second = installed_components()
       second_ids = second |> Enum.map(& &1.id) |> Enum.sort()
 
-      assert length(first_ids) == 4
-      assert length(second) == 4, "no duplicate rows created on re-import"
+      assert match?([_, _, _, _], first_ids)
+      assert match?([_, _, _, _], second), "no duplicate rows created on re-import"
       assert first_ids == second_ids, "rows updated in place, IDs preserved"
     end
 
@@ -109,7 +111,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       assert {:ok, %{components: cps}} =
                Installer.install_chelekom!(bundle_path: @seed_path, cleanup: false)
 
-      assert length(cps) == 4
+      assert match?([_, _, _, _], cps)
       assert length(installed_components()) == 4
     end
 
@@ -181,7 +183,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
   describe "install_kit!/2 — generic API" do
     test "install_kit!/2 installs from an explicit bundle path" do
       {:ok, %{components: cps}} = Installer.install_kit!(@seed_path)
-      assert length(cps) == 4
+      assert match?([_, _, _, _], cps)
       assert length(installed_components()) == 4
     end
 
@@ -387,9 +389,9 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
 
       assert [%{"name" => "aria-label"}] =
                card.slots
-               |> Enum.find(&(to_string(&1["name"] || &1[:name]) == "item"))
-               |> then(&(&1["attrs"] || &1[:attrs]))
-               |> Enum.map(&%{"name" => to_string(&1["name"] || &1[:name])})
+               |> Enum.find(&(&1.name == "item"))
+               |> Map.fetch!(:attrs)
+               |> Enum.map(&Map.take(&1, ["name"]))
     end
   end
 
@@ -475,7 +477,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
           selection: %{components: ["sample-button", "sample-card"]}
         )
 
-      assert length(cps) == 2
+      assert match?([_, _], cps)
 
       names = installed_components() |> Enum.map(& &1.name) |> Enum.sort()
       assert names == ["kit-sample-button", "kit-sample-card"]
@@ -488,7 +490,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
           selection: %{components: ["kit-sample-button"]}
         )
 
-      assert length(cps) == 1
+      assert match?([_], cps)
 
       names = installed_components() |> Enum.map(& &1.name)
       assert names == ["kit-sample-button"]
@@ -498,7 +500,7 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       {:ok, %{components: cps_all}} =
         Installer.install_chelekom!(bundle_path: @seed_path, selection: :all)
 
-      assert length(cps_all) == 4
+      assert match?([_, _, _, _], cps_all)
     end
 
     test "variants: filter narrows helpers to matching first-positional clauses" do
@@ -579,8 +581,8 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       # Either the original opts map (no values key) or an unmodified
       # passthrough — both prove the narrow function didn't corrupt
       # the attr when there was nothing to narrow.
-      assert is_map(variant_attr.opts)
-      refute Map.has_key?(variant_attr.opts || %{}, "values")
+      assert variant_attr.opts["default"] == "default"
+      refute Map.has_key?(variant_attr.opts, "values")
     end
 
     test "non-literal helper args (e.g. `assigns`) are always retained" do
@@ -631,9 +633,9 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       cv = Enum.filter(button.helpers || [], &(&1.name == "color_variant"))
       args = Enum.map(cv, & &1.args)
 
-      assert "\"default\", \"danger\"" in args
-      refute "\"default\", \"primary\"" in args
-      refute "\"outline\", \"primary\"" in args
+      assert ~s("default", "danger") in args
+      refute ~s("default", "primary") in args
+      refute ~s("outline", "primary") in args
       assert "_, _" in args, "catch-all (empty discriminators) always retained"
     end
 
@@ -650,9 +652,9 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       cv = Enum.filter(button.helpers || [], &(&1.name == "color_variant"))
       args = Enum.map(cv, & &1.args)
 
-      assert "\"default\", \"primary\"" in args
-      assert "\"default\", \"danger\"" in args
-      refute "\"outline\", \"primary\"" in args
+      assert ~s("default", "primary") in args
+      assert ~s("default", "danger") in args
+      refute ~s("outline", "primary") in args
     end
 
     test "empty discriminators ⇒ helper kept under any selection" do

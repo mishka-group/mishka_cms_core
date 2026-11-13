@@ -188,7 +188,11 @@ defmodule MishkaCmsCore.Activity.Sources.EventLog do
   # same merge `MishkaCmsCore.Activity.Query` does in SQL, so a row reads the same live as it does
   # once it comes back from the database.
   defp payload_of(row),
-    do: Map.merge(json_map(Map.get(row, :metadata)), json_map(Map.get(row, :data)))
+    do: Map.merge(string_keys(Map.get(row, :metadata)), string_keys(Map.get(row, :data)))
+
+  # A record's own map may carry atom keys; the database's JSON always has strings.
+  defp string_keys(map),
+    do: map |> json_map() |> Map.new(fn {key, value} -> {to_string(key), value} end)
 
   defp json_map(map) when is_map(map) and not is_struct(map), do: map
   defp json_map(_map), do: %{}
@@ -229,8 +233,7 @@ defmodule MishkaCmsCore.Activity.Sources.EventLog do
     end
   end
 
-  defp record_title(%{} = data),
-    do: data["title"] || data["name"] || data[:title] || data[:name]
+  defp record_title(%{} = data), do: data["title"] || data["name"]
 
   defp record_title(_), do: nil
 

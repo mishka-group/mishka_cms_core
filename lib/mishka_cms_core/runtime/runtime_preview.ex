@@ -275,9 +275,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     |> then(&UiKitHandler.component_features(%{"helpers" => &1}))
   end
 
-  defp helper_discriminators(helper) when is_map(helper),
-    do: Map.get(helper, :discriminators) || Map.get(helper, "discriminators")
-
+  defp helper_discriminators(%{discriminators: discriminators}), do: discriminators
+  defp helper_discriminators(%{"discriminators" => discriminators}), do: discriminators
   defp helper_discriminators(_helper), do: []
 
   # Showing the base example beats showing nothing when narrowing ruled every example out.
@@ -471,7 +470,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   defp default_status(record), do: record |> error_statuses() |> List.first()
 
-  defp estatus(entry), do: ErrorStatus.parse(Map.get(entry, :status) || Map.get(entry, "status"))
+  defp estatus(entry), do: ErrorStatus.parse(string_keys(entry)["status"])
+
+  # An error page entry is keyed by atoms once cast and by strings as a form or stored JSON wrote it,
+  # so each one is read by string keys.
+  defp string_keys(%{} = map), do: Map.new(map, fn {key, value} -> {to_string(key), value} end)
 
   @doc """
   Render ONE error code's COMPLETE page exactly like the runtime serves it: the status's `:template`
@@ -518,6 +521,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
       {note_body(gettext("No template for status %{status}.", status: status), nonce),
        "no template"}
 
+  # The markup is the admin's own template, compiled by the runtime; the preview renders it as is.
+  # sobelow_skip ["XSS.Raw"]
   defp error_inner_body(record, status, nonce, entry) do
     # Inner + per-status layout render through the HEEx TagEngine (like the live server) so
     # `<.component site={@site} />` and `phx-*` hooks work; `site`/`page` mirror page_assigns/1.
@@ -546,6 +551,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   # Wrap the inner page in the record's `root_layout_template` (classic `Phoenix.HTML.Engine`, so it
   # may use `@conn`/csrf/site-CSS attribute interpolation like the live server), or the default full
   # document when none is set.
+  # sobelow_skip ["XSS.Raw"]
   defp render_root_layout(record, status, inner, note, nonce) do
     case Map.get(record, :root_layout_template) do
       root when is_binary(root) and root != "" ->
@@ -589,11 +595,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     end
   end
 
-  defp entry_template(entry), do: Map.get(entry, :template) || Map.get(entry, "template") || ""
+  defp entry_template(entry), do: string_keys(entry)["template"] || ""
 
   defp status_layout_template(entry) do
-    case Map.get(entry, :layout) || Map.get(entry, "layout") do
-      %{} = layout -> Map.get(layout, :template) || Map.get(layout, "template")
+    case string_keys(entry)["layout"] do
+      %{} = layout -> string_keys(layout)["template"]
       _ -> nil
     end
   end
@@ -668,6 +674,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   @doc """
   What a layout is previewed around: its `example`, or a placeholder.
   """
+  # sobelow_skip ["XSS.Raw"]
   def layout_inner_content(%{example: example}) when is_binary(example) and example != "",
     do: Phoenix.HTML.raw(example)
 
@@ -713,9 +720,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   defp error_pages_source(pages) do
     Enum.map_join(pages, "\n\n", fn page ->
-      status = Map.get(page, :status) || Map.get(page, "status")
-      template = Map.get(page, :template) || Map.get(page, "template") || ""
-      "<!-- #{status} -->\n#{template}"
+      page = string_keys(page)
+      "<!-- #{page["status"]} -->\n#{page["template"] || ""}"
     end)
   end
 
@@ -803,6 +809,8 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   # Read once per node and kept in `:persistent_term` — one shared copy, and no disk read on the way
   # to rendering a preview. Missing file degrades to no generator at all: the preview renders
   # unstyled, which is what it did before, rather than a broken document.
+  # Every path here is under this library's own build, temp or cache folders, never request input.
+  # sobelow_skip ["Traversal.FileModule"]
   defp engine_source do
     case :persistent_term.get(@engine_key, :unread) do
       :unread ->
@@ -824,6 +832,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   defp nonce_attr(_nonce), do: ""
 
+  # sobelow_skip ["XSS.Raw"]
   defp placeholder do
     Phoenix.HTML.raw(
       ~s|<div class="mishka-preview-placeholder">#{escape(gettext("Page content appears here"))}</div>|

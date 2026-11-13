@@ -26,6 +26,7 @@ defmodule MishkaCmsCore.Runtime.FileSignature do
   | `:matroska` | `webm` | the EBML header `1A 45 DF A3` |
   | `:ole2` | `doc`, `xls`, `ppt` | the OLE2 compound file header |
   | `:zip` | `docx`, `xlsx`, `pptx`, `odt`, `ods`, `zip` | `PK` and a local file header |
+  | `:woff2` | `woff2` | `wOF2` |
   | `:text` | `txt`, `csv` | valid UTF-8 with no NUL byte and no control character but tab and line breaks |
 
   An extension that is not in the table has no kind, so nothing matches it: `html`, `htm`, `svg`,
@@ -54,6 +55,7 @@ defmodule MishkaCmsCore.Runtime.FileSignature do
     "odt" => :zip,
     "ods" => :zip,
     "zip" => :zip,
+    "woff2" => :woff2,
     "txt" => :text,
     "csv" => :text
   }
@@ -72,6 +74,7 @@ defmodule MishkaCmsCore.Runtime.FileSignature do
           | :matroska
           | :ole2
           | :zip
+          | :woff2
           | :text
 
   @doc """
@@ -90,6 +93,8 @@ defmodule MishkaCmsCore.Runtime.FileSignature do
   or is none of the kinds in the table.
   """
   @spec sniff(Path.t()) :: {:ok, kind()} | :error
+  # Callers hand it a path they already resolved (a staged upload or a site's own file).
+  # sobelow_skip ["Traversal.FileModule"]
   def sniff(path) when is_binary(path) do
     case File.open(path, [:read, :binary], &IO.binread(&1, @head_bytes)) do
       {:ok, head} when is_binary(head) -> classify(head)
@@ -125,6 +130,7 @@ defmodule MishkaCmsCore.Runtime.FileSignature do
     do: {:ok, :ole2}
 
   defp classify(<<"PK", 0x03, 0x04, _rest::binary>>), do: {:ok, :zip}
+  defp classify(<<"wOF2", _rest::binary>>), do: {:ok, :woff2}
 
   defp classify(<<0, _size::binary-size(3), box::binary-size(4), _rest::binary>>)
        when box in @iso_boxes,

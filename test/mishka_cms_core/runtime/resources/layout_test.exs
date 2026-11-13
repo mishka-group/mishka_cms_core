@@ -88,7 +88,6 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
       assert layout.template == "<html><body><%= @content %></body></html>"
       assert layout.is_global == false
       assert layout.site_id == site.id
-      assert layout.layout_module != nil
       assert to_string(layout.layout_module) =~ ~r/Layout$/
     end
 
@@ -556,7 +555,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.Query.for_read(:by_path, %{path: "/site1/*"})
         |> Ash.read!(authorize?: false)
 
-      assert length(layouts) == 1
+      assert match?([_], layouts)
       assert List.first(layouts).id == context.site1_layout.id
     end
   end
@@ -567,7 +566,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
       layout = create_layout!(site_id: site.id)
 
       assert {:ok, archived} = Ash.destroy(layout, authorize?: false, return_destroyed?: true)
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       layouts = Layout |> Ash.Query.set_tenant(site.id) |> Ash.read!(authorize?: false)
       layout_ids = Enum.map(layouts, & &1.id)
@@ -660,8 +659,8 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
       assert layout.seo_tags == []
       assert layout.helpers == []
       assert layout.permissions == []
-      assert layout.inserted_at != nil
-      assert layout.updated_at != nil
+      assert %DateTime{} = layout.inserted_at
+      assert %DateTime{} = layout.updated_at
     end
   end
 
@@ -908,8 +907,8 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
       tenant_version =
         first_version(MishkaCmsCore.Runtime.Layout.Version, tenant_layout.id, tenant: site.id)
 
-      assert global_version != nil
-      assert tenant_version != nil
+      assert global_version.version_source_id == global_layout.id
+      assert tenant_version.version_source_id == tenant_layout.id
 
       # Master user (no tenant) can restore global layout using master_restore_version
       {:ok, restored_global} =
@@ -1463,7 +1462,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
       # master_get_archived should return the archived layout
       result = Ash.get!(Layout, layout.id, action: :master_get_archived, authorize?: false)
       assert result.id == layout.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
 
     test "read_any returns all layouts for admin" do
@@ -1552,7 +1551,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       # Verify it's not in active list
       layouts = Layout |> Ash.Query.set_tenant(site.id) |> Ash.read!(authorize?: false)
@@ -1604,7 +1603,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.read!(authorize?: false)
 
       # list_versions returns layouts with sorted_versions loaded
-      assert length(results) == 1
+      assert match?([_], results)
       layout_with_versions = List.first(results)
       assert length(layout_with_versions.sorted_versions) >= 2
     end
@@ -1631,9 +1630,9 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.Query.for_read(:master_list_versions, %{layout_id: layout.id}, authorize?: false)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) == 1
+      assert match?([_], results)
       layout_with_versions = List.first(results)
-      assert length(layout_with_versions.sorted_versions) >= 1
+      assert [_ | _] = layout_with_versions.sorted_versions
     end
 
     test "get_with_versions returns layout with paginated versions" do
@@ -1660,7 +1659,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == layout.id
-      assert length(result.sorted_versions) >= 1
+      assert [_ | _] = result.sorted_versions
     end
 
     test "master_get_with_versions returns layout with paginated versions" do
@@ -1687,7 +1686,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == layout.id
-      assert length(result.sorted_versions) >= 1
+      assert [_ | _] = result.sorted_versions
     end
   end
 

@@ -381,7 +381,7 @@ defmodule MishkaCmsCore.Runtime.Translation do
           depends_on :site_id
           mode :search
           min_chars 1
-          options fn state -> Translations.language_options_for(state) end
+          options &Translations.language_options_for/1
 
           ui do
             label fn -> dgettext("mishka_gervaz", "Language") end

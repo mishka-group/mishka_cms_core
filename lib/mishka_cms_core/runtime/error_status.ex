@@ -104,10 +104,11 @@ defmodule MishkaCmsCore.Runtime.ErrorStatus do
 
   @doc """
   Whether a list of Error Page entries holds the `:offline` one, however its status was spelled.
+  An entry is atom-keyed, as the `error_pages` attribute's `fields` constraint casts it.
   """
   @spec offline_entry?([map()]) :: boolean()
   def offline_entry?(entries) when is_list(entries),
-    do: Enum.any?(entries, &(parse(Map.get(&1, :status) || Map.get(&1, "status")) == @offline))
+    do: Enum.any?(entries, &(parse(Map.get(&1, :status)) == @offline))
 
   @doc """
   The choices the Error Page form offers, `:offline` first, then the client and server error codes

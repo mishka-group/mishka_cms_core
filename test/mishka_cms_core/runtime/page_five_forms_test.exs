@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# These drive the compiled page module's handle_event/3 directly (see the moduledoc), so the
+# socket it returns is the result under test.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Runtime.PageFiveFormsTest do
   @moduledoc """
   Five unrelated forms on one page, each minding its own business.

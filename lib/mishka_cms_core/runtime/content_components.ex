@@ -1171,6 +1171,8 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
     ~H"<%= for part <- @parts do %>{part}<% end %>"noformat
   end
 
+  # The HTML is the site's own stored content, drawn as the editor saved it.
+  # sobelow_skip ["XSS.Raw"]
   defp part({:html, html}, _context, _mode), do: Phoenix.HTML.raw(html)
 
   defp part({:component, marker}, context, mode) do
@@ -1615,7 +1617,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp atom_keyed?(%{"__atom_map__" => pairs}), do: pairs != []
 
   defp atom_keyed?(%{} = map) when not is_struct(map),
-    do: map_size(map) > 0 and map |> Map.keys() |> Enum.all?(&is_atom/1)
+    do: map_size(map) > 0 and Enum.all?(map, fn {x, _v} -> is_atom(x) end)
 
   defp atom_keyed?(_default), do: false
 
@@ -2028,17 +2030,17 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp attr(text) do
     with {:ok, key, after_key} <- name(text),
          true <- Regex.match?(@key, key) do
-      case skip_space(after_key) do
-        "=" <> value ->
-          with {:ok, value, rest} <- value(skip_space(value)), do: {:ok, {key, value}, rest}
-
-        _bare ->
-          {:ok, {key, true}, after_key}
-      end
+      attr_value(skip_space(after_key), key, after_key)
     else
       _not_a_key -> :error
     end
   end
+
+  defp attr_value("=" <> value, key, _after_key) do
+    with {:ok, value, rest} <- value(skip_space(value)), do: {:ok, {key, value}, rest}
+  end
+
+  defp attr_value(_bare, key, after_key), do: {:ok, {key, true}, after_key}
 
   defp value(text) do
     case Enum.find(@quotes, fn {open, _close} -> String.starts_with?(text, open) end) do

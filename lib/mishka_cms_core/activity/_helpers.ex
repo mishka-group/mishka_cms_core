@@ -314,7 +314,7 @@ defmodule MishkaCmsCore.Activity.Helpers do
     name
     |> String.split(~r/\s+/, trim: true)
     |> Enum.take(2)
-    |> Enum.map_join("", fn word -> word |> String.first() |> String.upcase() end)
+    |> Enum.map_join(fn word -> word |> String.first() |> String.upcase() end)
   end
 
   def initials(_), do: "?"

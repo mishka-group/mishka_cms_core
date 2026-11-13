@@ -13,6 +13,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
   import MishkaCmsCore.Test.Factory
 
   alias MishkaCmsCore.Runtime.ErrorAddress
+  alias MishkaCmsCoreWeb.Test.AreaApi
   import MishkaCmsCore.Test.VersionHelpers
   import MishkaCmsCoreWeb.Test.AuthTestHelpers
 
@@ -1044,8 +1045,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
       body = Jason.decode!(response.resp_body)
       assert body["data"]["id"] == ep.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
-      assert length(sorted_versions) == 2
+      assert match?([_, _], sorted_versions)
     end
 
     test "master can get error page with versions from any site", %{
@@ -1078,8 +1078,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
       body = Jason.decode!(response.resp_body)
       assert body["data"]["id"] == ep.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
-      assert length(sorted_versions) == 2
+      assert match?([_, _], sorted_versions)
     end
   end
 
@@ -1114,8 +1113,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
       # The response is the error page with sorted_versions loaded
+      assert Enum.map(body["data"], & &1["id"]) == [ep.id]
     end
 
     test "master can list versions for error page from any site", %{
@@ -1384,7 +1383,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert body["data"]["attributes"]["latest_version"] != nil
+      assert %{"version_action_name" => "update"} = body["data"]["attributes"]["latest_version"]
     end
 
     test "can load recent_versions calculation", %{tenant_admin: tenant_admin, site: site} do
@@ -1416,7 +1415,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"]["attributes"]["recent_versions"])
+      assert [_, _, _] = body["data"]["attributes"]["recent_versions"]
     end
   end
 
@@ -1549,8 +1548,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
   # THE API HAS ITS OWN NAMES. `admin:api:runtime:error_page` writes over it; `admin:dashboard:runtime:error_page` is
   # the screens' name and does not reach it; another API area reads the list and writes nothing.
   describe "the error_page area over the API" do
-    alias MishkaCmsCoreWeb.Test.AreaApi
-
     test "admin:api:runtime:error_page writes; admin:dashboard:runtime:error_page and another area do not",
          %{
            site: site
@@ -1588,7 +1585,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ErrorPageTest do
 
   defp typed_error_page do
     %{
-      "name" => MishkaCmsCoreWeb.Test.AreaApi.unique("errors"),
+      "name" => AreaApi.unique("errors"),
       "path" => "/errors/*",
       "error_pages" => [%{"status" => 404, "template" => "<p>typed</p>"}]
     }

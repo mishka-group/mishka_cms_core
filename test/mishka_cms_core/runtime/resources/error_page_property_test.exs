@@ -244,14 +244,14 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPagePropertyTest do
       # PATH IS NOT ONE OF THEM ANY MORE. `Changes.ErrorPageAddress` writes it from the site before
       # `validate present([:name, :path])` is reached, so leaving it out is not a mistake a caller
       # can make — and including it is not a way of choosing one.
-      if not include_name do
-        refute changeset.valid?,
-               "Expected invalid changeset when required fields missing: #{inspect(attrs)}"
-      else
+      if include_name do
         assert changeset.valid?,
                "Expected valid changeset when all required fields present: #{inspect(attrs)}"
 
         assert Ash.Changeset.get_attribute(changeset, :path) == ErrorAddress.for_site(site.id)
+      else
+        refute changeset.valid?,
+               "Expected invalid changeset when required fields missing: #{inspect(attrs)}"
       end
     end
   end

@@ -647,7 +647,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitSourcesTest do
       assert {:error, reason} =
                UiKitHandler.add_custom_kit("https://example.test/a.json", kits_dir: dir)
 
-      assert is_binary(reason)
+      assert reason =~ "connection refused"
     end
 
     # `/install` IS OPEN TO WHOEVER REACHES A CMS THAT HAS NO MASTER YET, and the address is theirs to

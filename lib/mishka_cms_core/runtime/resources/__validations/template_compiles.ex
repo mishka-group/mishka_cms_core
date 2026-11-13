@@ -97,12 +97,15 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.TemplateCompiles do
         changeset
         |> Ash.Changeset.get_attribute(:error_pages)
         |> List.wrap()
-        |> Enum.map(&{:error_pages, {:status, status(&1)}, template(&1)})
+        |> Enum.map(&status_template/1)
     end
   end
 
-  defp status(entry), do: Map.get(entry, "status") || Map.get(entry, :status)
-  defp template(entry), do: Map.get(entry, "template") || Map.get(entry, :template) || ""
+  # An entry is keyed by strings or atoms depending on who wrote it, so it is read by string keys.
+  defp status_template(entry) do
+    entry = Map.new(entry, fn {key, value} -> {to_string(key), value} end)
+    {:error_pages, {:status, entry["status"]}, entry["template"] || ""}
+  end
 
   @impl true
   def atomic(_changeset, _opts, _context), do: :ok

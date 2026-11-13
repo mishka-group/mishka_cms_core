@@ -522,5 +522,7 @@ defmodule MishkaCmsCore.Runtime do
 
     resource MishkaCmsCore.Runtime.Redirect do
     end
+
+    resource MishkaCmsCore.Runtime.HeadCode
   end
 end

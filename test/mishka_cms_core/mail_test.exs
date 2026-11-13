@@ -117,6 +117,8 @@ defmodule MishkaCmsCore.MailTest do
       assert Settings.secret_hint(@key, site.id) == "3456"
     end
 
+    # The code under test is `config/config.exs`'s `:filter_parameters`, which only Phoenix reads.
+    # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
     test "never reaches a request or event log" do
       params = %{"settings" => %{@key => "re_live_abcdef123456", "mailer.from" => "a@b.test"}}
 

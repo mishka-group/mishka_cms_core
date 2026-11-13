@@ -799,12 +799,14 @@ defmodule MishkaCmsCore.Runtime.Translations do
   defp interpolate(text, bindings) when bindings in [[], %{}], do: text
 
   defp interpolate(text, bindings) do
-    Regex.replace(@placeholder, text, fn whole, name ->
-      case Enum.find(bindings, fn {key, _value} -> to_string(key) == name end) do
-        {_key, value} -> to_string(value)
-        nil -> whole
-      end
-    end)
+    Regex.replace(@placeholder, text, fn whole, name -> binding_text(bindings, name, whole) end)
+  end
+
+  defp binding_text(bindings, name, whole) do
+    case Enum.find(bindings, fn {key, _value} -> to_string(key) == name end) do
+      {_key, value} -> to_string(value)
+      nil -> whole
+    end
   end
 
   defp asked(resource, scope) do

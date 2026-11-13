@@ -182,6 +182,8 @@ defmodule MishkaCmsCore.Runtime.SiteHealth do
   # still-failed). Match on `site_id` ONLY — an immutable UUID that's never reused. (Not
   # `site_name`: it's reusable after a site is archived, which would cross-match another
   # site's bundle jobs. All jobs, incl. asset-bundle, carry `data.site_id`.)
+  # Only a table name or this module's own SQL is interpolated; values are bound parameters.
+  # sobelow_skip ["SQL.Query"]
   defp site_jobs(site_id) do
     # `errors` is a Postgres jsonb[] array, so use `errors[1]->>'error'`, not the `#>>` path op.
     sql =

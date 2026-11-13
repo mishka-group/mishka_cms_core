@@ -250,6 +250,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
     :ok
   end
 
+  # Cache paths are built under this library's own cache folder from module hashes.
+  # sobelow_skip ["Traversal.FileModule"]
   defp loaded({:miss, reason} = miss, %{module: module, key: key, path: path}) do
     if reason != :absent do
       _ = File.rm(path)
@@ -269,6 +271,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
     miss
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp read(path) do
     case File.read(path) do
       {:ok, binary} -> {:ok, binary}
@@ -316,6 +319,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
   from before. A file that cannot be written is logged and left out; the module is loaded either way.
   """
   @spec store(entry(), binary()) :: :ok
+  # sobelow_skip ["Traversal.FileModule"]
   def store(%{module: module, key: key, folder: folder, path: path}, binary) do
     temporary = path <> ".#{Base.encode16(:crypto.strong_rand_bytes(6), case: :lower)}.tmp"
 
@@ -337,6 +341,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
 
   # The module's folder, its build's and the cache's own, `0700` — `File.mkdir_p/1` makes any of them
   # again with the default mode when it was deleted while the node ran.
+  # sobelow_skip ["Traversal.FileModule"]
   defp private(folder) do
     generation = Path.dirname(folder)
 
@@ -350,6 +355,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
 
   defp stored(:ok, _module, _path, _temporary), do: :ok
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp stored(failure, module, path, temporary) do
     _ = File.rm(temporary)
 
@@ -360,6 +366,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
     :ok
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp drop_older(folder, keep) do
     case File.ls(folder) do
       {:ok, names} ->
@@ -376,6 +383,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
   Called by `ModuleCompiler.unload/1`.
   """
   @spec forget(module()) :: :ok
+  # sobelow_skip ["Traversal.FileModule"]
   def forget(module) do
     with dir when is_binary(dir) <- dir(),
          %{id: id} <- :persistent_term.get(@generation_key, nil),
@@ -527,6 +535,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp prepare(dir, id) do
     folder = Path.join(dir, id)
 
@@ -571,6 +580,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCache do
   # — at most `@sweep_limit` of them. Only a folder named like a generation id is ever touched, so
   # a `dir` that also holds something else keeps it.
   @spec sweep(Path.t(), String.t(), non_neg_integer()) :: [Path.t()]
+  # sobelow_skip ["Traversal.FileModule"]
   def sweep(dir, current, seconds) do
     cutoff = System.os_time(:second) - seconds
 

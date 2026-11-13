@@ -191,6 +191,8 @@ defmodule MishkaCmsCore.ExtensionRouter do
     |> check_routes!(type)
   end
 
+  # `ext` is an installed extension module, so its `Routes` atom already exists.
+  # sobelow_skip ["DOS.ModuleConcat"]
   defp extension_routes!(ext, type) do
     routes_module = Module.concat(ext, Routes)
 

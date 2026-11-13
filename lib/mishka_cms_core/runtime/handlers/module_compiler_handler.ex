@@ -223,16 +223,18 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
               {:error, CompileFailureState.reason(module_name)}
 
             true ->
-              case compile(module_name, path, site, site_id, type) do
-                {:started, result} -> tap(result, &maybe_emit_compiled(&1, site_id))
-                {:waited, result} -> result
-              end
+              module_name |> compile(path, site, site_id, type) |> compile_answer(site_id)
           end
 
         {result, %{}}
       end
     )
   end
+
+  defp compile_answer({:started, result}, site_id),
+    do: tap(result, &maybe_emit_compiled(&1, site_id))
+
+  defp compile_answer({:waited, result}, _site_id), do: result
 
   @doc """
   Resolves a module's compile outcome from already-recorded shared state — the loaded-code table
@@ -694,9 +696,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
       id: component.id,
       title: component.name,
       component_module: component.component_module,
-      site: component.site && component.site.name,
-      site_id: component.site && component.site.id,
-      host: component.site && component.site.host,
       template: component.template,
       priority: component.priority,
       format: component.format,
@@ -709,11 +708,13 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
       # WHICH SHAPE TO EMIT. `== true` rather than the value, because a row read before the column
       # existed answers `nil` and a lazily-compiled stale module must take the old path.
       stateful: component.stateful == true,
-      extra: extra,
-      prelude: extra["prelude"] || extra[:prelude],
-      module_attributes: extra["module_attributes"] || extra[:module_attributes] || [],
-      clauses: extra["clauses"] || extra[:clauses] || []
+      extra: extra
     }
+
+    params =
+      params
+      |> Map.merge(component_site_params(component.site))
+      |> Map.merge(component_extra_params(extra))
 
     {:ok, ComponentCompiler.build_module(params)}
   end
@@ -812,6 +813,22 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
     )
 
     {:error, :not_found}
+  end
+
+  defp component_site_params(%{name: name, id: id, host: host}),
+    do: %{site: name, site_id: id, host: host}
+
+  defp component_site_params(_site), do: %{site: nil, site_id: nil, host: nil}
+
+  # `extra` is stored JSON, but a component built in memory (a kit install, a test) holds atom keys.
+  defp component_extra_params(extra) do
+    extra = Map.new(extra, fn {key, value} -> {to_string(key), value} end)
+
+    %{
+      prelude: extra["prelude"],
+      module_attributes: extra["module_attributes"] || [],
+      clauses: extra["clauses"] || []
+    }
   end
 
   @doc """
@@ -1137,10 +1154,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
     end
   end
 
-  defp get_module_name(module_name_and_item) do
-    case module_name_and_item do
-      {module_name, _item} -> module_name
-      module_name -> module_name
-    end
-  end
+  defp get_module_name({module_name, _item}), do: module_name
+  defp get_module_name(module_name), do: module_name
 end

@@ -68,7 +68,7 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
     assert published.applied_at
 
     page = page_by_path(site.id, "/brand-new")
-    assert page
+    assert %Page{} = page
     assert page.template == "<h1>new</h1>"
   end
 
@@ -136,11 +136,19 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
 
       assert reloaded.template == "<p>from the draft</p>"
 
-      for {field, kept} <- [events: "saved_since", infos: ":saved_since", helpers: "saved_since"] do
-        names = reloaded |> Map.get(field) |> Enum.map(&(Map.get(&1, :name) || &1["name"]))
+      # `events` and `infos` are typed maps and `helpers` embedded, so all read back with atom keys.
+      names = %{
+        events: Enum.map(reloaded.events, & &1.name),
+        infos: Enum.map(reloaded.infos, & &1.name),
+        helpers: Enum.map(reloaded.helpers, & &1.name)
+      }
 
-        assert names == [kept], "the draft's #{field} replaced the page's"
-      end
+      assert names == %{
+               events: ["saved_since"],
+               infos: [":saved_since"],
+               helpers: ["saved_since"]
+             },
+             "the draft's fields replaced the page's"
     end
   end
 

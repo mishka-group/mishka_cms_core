@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
   alias MishkaCmsCore.Runtime.States.SiteState
   alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
+  @moduletag :plug_test
 
   # Test module to replace SiteState during tests
   defmodule TestSiteState do
@@ -184,8 +185,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
     test "successfully looks up existing site and assigns tenant" do
       # Only run if SiteState is available
       if Code.ensure_loaded?(MishkaCmsCore.Runtime.States.SiteState) do
-        alias MishkaCmsCore.Runtime.States.SiteState
-
         # Ensure SiteState is running
         case GenServer.whereis(SiteState) do
           nil -> {:ok, _pid} = SiteState.start_link()
@@ -220,7 +219,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
 
         # Verify the site was properly assigned
         refute result_conn.halted
-        assert result_conn.assigns.current_site != nil
         assert result_conn.assigns.current_site.id == "test-site-123"
         assert result_conn.private.ash.tenant == "test-site-123"
         assert result_conn.assigns.current_site.host == "api.testsite.com"
@@ -236,8 +234,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
 
     test "handles site lookup for hybrid mode" do
       if Code.ensure_loaded?(MishkaCmsCore.Runtime.States.SiteState) do
-        alias MishkaCmsCore.Runtime.States.SiteState
-
         # Ensure SiteState is running
         case GenServer.whereis(SiteState) do
           nil -> {:ok, _pid} = SiteState.start_link()
@@ -270,7 +266,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
 
         # Hybrid mode should allow API access
         refute result_conn.halted
-        assert result_conn.assigns.current_site != nil
         assert result_conn.assigns.current_site.id == "hybrid-site-456"
         assert result_conn.assigns.current_site.mode == :hybrid
 
@@ -283,8 +278,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
 
     test "denies access for inactive site" do
       if Code.ensure_loaded?(MishkaCmsCore.Runtime.States.SiteState) do
-        alias MishkaCmsCore.Runtime.States.SiteState
-
         # Ensure SiteState is running
         case GenServer.whereis(SiteState) do
           nil -> {:ok, _pid} = SiteState.start_link()
@@ -332,8 +325,6 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlugTest do
 
     test "denies access for phoenix_only mode" do
       if Code.ensure_loaded?(MishkaCmsCore.Runtime.States.SiteState) do
-        alias MishkaCmsCore.Runtime.States.SiteState
-
         # Ensure SiteState is running
         case GenServer.whereis(SiteState) do
           nil -> {:ok, _pid} = SiteState.start_link()

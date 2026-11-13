@@ -41,6 +41,8 @@ defmodule MishkaCmsCore.ApplicationTest do
         do: assert(Process.whereis(child), "#{inspect(child)} is not running")
   end
 
+  # What is checked is the running application itself, so there is no function of ours to call.
+  # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
   test "the event table is loaded, so a plugin's wait_for_tables returns instead of blocking" do
     assert :mnesia.wait_for_tables([Event], 0) == :ok
   end
@@ -49,6 +51,7 @@ defmodule MishkaCmsCore.ApplicationTest do
   # purpose, and none of them may take the tree with it. This is the assertion the regression broke
   # — `MishkaCmsCore.Supervisor` was gone before the first test, and every `Hook.call/2` in the run
   # answered with its own payload.
+  # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
   test "the tree this application supervises its plugins under is still up" do
     assert Process.whereis(MishkaCmsCore.Supervisor)
   end

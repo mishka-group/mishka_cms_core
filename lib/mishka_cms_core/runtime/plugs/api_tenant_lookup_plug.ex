@@ -377,37 +377,7 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
       fn ->
         conn = Hook.call("api:request:before_tenant_resolve", conn)
 
-        result =
-          with {:ok, host} <- extract_host(conn),
-               {:ok, site} <- lookup_site(host),
-               :ok <- validate_site_active(site),
-               :ok <- validate_api_access(site) do
-            conn
-            |> scope(site)
-            |> assign(:current_site, site)
-          else
-            {:error, :no_host} ->
-              if opts[:allow_no_tenant],
-                do: assign(conn, :current_site, nil),
-                else:
-                  send_api_error(conn, 400, "missing_host", gettext("Host header is required"))
-
-            {:error, :site_not_found} ->
-              if opts[:allow_no_tenant],
-                do: assign(conn, :current_site, nil),
-                else: send_api_error(conn, 404, "domain_not_found", gettext("Domain not found"))
-
-            {:error, {:site_inactive, site}} ->
-              site_inactive(conn, site)
-
-            {:error, :api_not_allowed} ->
-              send_api_error(
-                conn,
-                403,
-                "api_access_denied",
-                gettext("API access is not allowed for this site")
-              )
-          end
+        result = resolve_tenant(conn, opts)
 
         host =
           case extract_host(conn) do
@@ -424,6 +394,38 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
         {result, %{host: host, site: site && site.name, tenant_id: site && site.id}}
       end
     )
+  end
+
+  defp resolve_tenant(conn, opts) do
+    with {:ok, host} <- extract_host(conn),
+         {:ok, site} <- lookup_site(host),
+         :ok <- validate_site_active(site),
+         :ok <- validate_api_access(site) do
+      conn
+      |> scope(site)
+      |> assign(:current_site, site)
+    else
+      {:error, :no_host} ->
+        if opts[:allow_no_tenant],
+          do: assign(conn, :current_site, nil),
+          else: send_api_error(conn, 400, "missing_host", gettext("Host header is required"))
+
+      {:error, :site_not_found} ->
+        if opts[:allow_no_tenant],
+          do: assign(conn, :current_site, nil),
+          else: send_api_error(conn, 404, "domain_not_found", gettext("Domain not found"))
+
+      {:error, {:site_inactive, site}} ->
+        site_inactive(conn, site)
+
+      {:error, :api_not_allowed} ->
+        send_api_error(
+          conn,
+          403,
+          "api_access_denied",
+          gettext("API access is not allowed for this site")
+        )
+    end
   end
 
   @doc """
@@ -523,22 +525,23 @@ defmodule MishkaCmsCore.Runtime.Plugs.ApiTenantLookupPlug do
     header_flag || param_flag
   end
 
-  defp extract_host(conn) do
-    if Application.get_env(:mishka_cms_core, :env_test?, false) do
-      if conn.host, do: {:ok, conn.host}, else: {:error, :no_host}
-    else
-      case get_req_header(conn, "host") do
-        [host | _] ->
-          case MishkaCmsCore.Runtime.OriginValidator.host_name(host) do
-            nil -> {:error, :no_host}
-            clean_host -> {:ok, clean_host}
-          end
+  defp extract_host(conn),
+    do: extract_host(conn, Application.get_env(:mishka_cms_core, :env_test?, false))
 
-        [] ->
-          {:error, :no_host}
-      end
+  defp extract_host(conn, test?) when test? in [false, nil],
+    do: conn |> get_req_header("host") |> header_host()
+
+  defp extract_host(%Plug.Conn{host: nil}, _test?), do: {:error, :no_host}
+  defp extract_host(%Plug.Conn{host: host}, _test?), do: {:ok, host}
+
+  defp header_host([host | _]) do
+    case MishkaCmsCore.Runtime.OriginValidator.host_name(host) do
+      nil -> {:error, :no_host}
+      clean_host -> {:ok, clean_host}
     end
   end
+
+  defp header_host([]), do: {:error, :no_host}
 
   # THE SAME SITE THE BROWSER REACHES ON THIS ADDRESS, `localhost` in dev and test included.
   defp lookup_site(host) do

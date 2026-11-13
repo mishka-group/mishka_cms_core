@@ -214,6 +214,12 @@ defmodule MishkaCmsCore.Runtime.Seo do
     * `:captures` — the captures its address must have, `["slug"]`, `[]` for none
     * `:samples` — a few records to preview a page with,
       `[%{label: "A post", params: %{"slug" => "a-post"}}]`
+    * `:moves` — `true` when a record of this kind can be reached at an address other than its
+      own, which the plugin answers on `MishkaCmsCore.Runtime.Redirects.moved_event/0`. `false` when
+      left out, and the event is never asked for its pages.
+
+  When `site_id` is `nil` only the kinds are wanted (`moves?/1`, asked on a visitor's request): a
+  plugin reads no samples then.
   """
   @spec records_event() :: String.t()
   def records_event, do: @records_event
@@ -245,6 +251,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
         label: label,
         captures:
           for(capture <- List.wrap(Map.get(type, :captures)), is_binary(capture), do: capture),
+        moves: Map.get(type, :moves) == true,
         samples:
           for(
             %{label: sample, params: %{} = params} <- List.wrap(Map.get(type, :samples)),
@@ -256,6 +263,16 @@ defmodule MishkaCmsCore.Runtime.Seo do
   end
 
   defp record_type(_not_a_type), do: []
+
+  @doc """
+  Whether the plugin that names `record`, a kind of record, declared `moves: true` on
+  `records_event/0`. Asked with no site, so no plugin reads samples for it.
+  """
+  @spec moves?(String.t()) :: boolean()
+  def moves?(record) when is_binary(record),
+    do: Enum.any?(record_types(nil), &(&1.id == record and &1.moves))
+
+  def moves?(_no_record), do: false
 
   @doc """
   The kind of record a page shows, from its `extra`: `"blog:post"`, `nil` for none.
@@ -590,6 +607,14 @@ defmodule MishkaCmsCore.Runtime.Seo do
         help: gettext("The site title setting, in the page's language when Translations has it.")
       },
       %{
+        key: "site.tagline",
+        label: gettext("Site tagline"),
+        help:
+          gettext(
+            "The site tagline setting, in the page's language when Translations has it. Empty leaves out whatever uses it."
+          )
+      },
+      %{
         key: "site.url",
         label: gettext("Site address"),
         help: gettext("The site's https address, with no path.")
@@ -779,15 +804,18 @@ defmodule MishkaCmsCore.Runtime.Seo do
   @spec stored_tags(term()) :: [%{tag: term(), attrs: map(), content: term()}]
   def stored_tags(tags) do
     for %{} = tag <- List.wrap(tags), not is_struct(tag) do
-      attrs =
-        case field(tag, :attrs) do
-          %{} = attrs -> Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
-          _no_attrs -> %{}
-        end
-
-      %{tag: field(tag, :tag), attrs: attrs, content: field(tag, :content)}
+      %{
+        tag: field(tag, :tag),
+        attrs: stored_attrs(field(tag, :attrs)),
+        content: field(tag, :content)
+      }
     end
   end
+
+  defp stored_attrs(%{} = attrs),
+    do: Map.new(attrs, fn {key, value} -> {to_string(key), value} end)
+
+  defp stored_attrs(_no_attrs), do: %{}
 
   @doc """
   A stored tag for `tag` with `attrs` holding `value`: a meta's in `content`, a link's in its `href`.
@@ -1113,23 +1141,10 @@ defmodule MishkaCmsCore.Runtime.Seo do
     unfilled = layers |> Enum.map(&tags/1) |> stack()
 
     core =
-      fill_vars(
-        seo,
-        %{
-          url: url,
-          image:
-            absolute(seo.image, base) ||
-              absolute(meta_value(unfilled, "property", "og:image"), base)
-        },
-        site_title,
-        base
-      )
+      fill_vars(seo, %{url: url, image: default_image(seo, unfilled, base)}, site_title, base)
 
-    description =
-      filled_text(seo.description, core) ||
-        filled_text(meta_value(unfilled, "name", "description"), core)
-
-    vars = if description, do: Map.put(core, "page.description", description), else: core
+    description = default_description(seo, unfilled, core)
+    vars = description_var(core, description)
     [plugin | own] = Enum.map(layers, &(&1 |> fill_tags(vars) |> tags()))
     own = layout_title_for_none(own, plugin)
     owned = owned(stack(own), Keyword.get(opts, :page_description?, false))
@@ -1140,8 +1155,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
     description = meta_value(stored, "name", "description") || description
     stored_image = absolute(meta_value(stored, "property", "og:image"), base)
 
-    {spec, card} =
-      if stored_image, do: {nil, nil}, else: share_card(seo, description, site_title, base, opts)
+    {spec, card} = stored_or_card(stored_image, seo, description, site_title, base, opts)
 
     resolved =
       Map.put(
@@ -1149,8 +1163,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
           seo
           | title: numbered(title_value(stored) || seo.title, Keyword.get(opts, :page_number)),
             description: description,
-            image:
-              stored_image || (card && absolute(card.url, base)) || absolute(seo.image, base),
+            image: resolved_image(stored_image, card, seo, base),
             url: url
         },
         :share_card,
@@ -1181,6 +1194,34 @@ defmodule MishkaCmsCore.Runtime.Seo do
       permissions: seo.permissions
     }
   end
+
+  defp default_image(seo, unfilled, base),
+    do: absolute(seo.image, base) || absolute(meta_value(unfilled, "property", "og:image"), base)
+
+  defp default_description(seo, unfilled, core),
+    do:
+      filled_text(seo.description, core) ||
+        filled_text(meta_value(unfilled, "name", "description"), core)
+
+  defp description_var(vars, description) when description in [nil, false], do: vars
+  defp description_var(vars, description), do: Map.put(vars, "page.description", description)
+
+  # A stored og:image is the picture, so no share card is asked for.
+  defp stored_or_card(stored_image, seo, description, site_title, base, opts)
+       when stored_image in [nil, false],
+       do: share_card(seo, description, site_title, base, opts)
+
+  defp stored_or_card(_stored_image, _seo, _description, _site_title, _base, _opts),
+    do: {nil, nil}
+
+  # A stored og:image, else the drawn share card (`false` while it is not drawn), else the plugin's.
+  defp resolved_image(stored_image, card, seo, base) when stored_image in [nil, false],
+    do: card_image(card, base) || absolute(seo.image, base)
+
+  defp resolved_image(stored_image, _card, _seo, _base), do: stored_image
+
+  defp card_image(%{url: url}, base), do: absolute(url, base)
+  defp card_image(_no_card, _base), do: nil
 
   # `{{page.image}}` in the JSON-LD is the picture the head resolved: a stored og:image, else the
   # share card once drawn, else the plugin's.
@@ -1429,13 +1470,15 @@ defmodule MishkaCmsCore.Runtime.Seo do
       site_name(site_id, "fa") #=> "میشکا"
   """
   @spec site_name(String.t() | nil, String.t() | nil) :: String.t() | nil
-  def site_name(site_id, language) do
-    case presence(Settings.get("site.title", nil, site_id)) do
-      title when is_binary(title) and is_binary(language) ->
-        presence(TranslationsState.lookup(site_id, language, title)) || title
+  def site_name(site_id, language), do: translated_setting("site.title", site_id, language)
 
-      title ->
-        title
+  defp translated_setting(key, site_id, language) do
+    case presence(Settings.get(key, nil, site_id)) do
+      text when is_binary(text) and is_binary(language) ->
+        presence(TranslationsState.lookup(site_id, language, text)) || text
+
+      text ->
+        text
     end
   end
 
@@ -1553,6 +1596,7 @@ defmodule MishkaCmsCore.Runtime.Seo do
       "page.language" => seo.language,
       "page.image" => image,
       "site.name" => site_title,
+      "site.tagline" => translated_setting("site.tagline", seo.site_id, seo.language),
       "site.url" => base
     }
 

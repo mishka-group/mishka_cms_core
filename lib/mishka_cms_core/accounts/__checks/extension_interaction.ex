@@ -41,20 +41,10 @@ defmodule MishkaCmsCore.Accounts.Checks.ExtensionInteraction do
 
   @impl Ash.Policy.SimpleCheck
   def match?(_actor, context, _opts) do
-    # Simply check if this is a relationship load
-    # If accessing_from is present, it means Ash is loading through a relationship
-    accessing_from = get_accessing_from(context)
-
-    case accessing_from do
-      %{source: source_resource}
-      when is_atom(source_resource) and source_resource != MishkaCmsCore.Accounts.User ->
-        # Relationship load detected - allow access
-        true
-
-      _ ->
-        # No relationship load - deny access
-        false
-    end
+    Kernel.match?(
+      %{source: source} when is_atom(source) and source != MishkaCmsCore.Accounts.User,
+      get_accessing_from(context)
+    )
   end
 
   # Extract accessing_from information from Ash authorization context

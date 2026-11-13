@@ -5,8 +5,8 @@
 // THE HOOKS THE CORE'S OWN ADMIN TEMPLATES MOUNT, beside the code box (`pb_code_editor.js`) and the
 // rich-text editor (`pb_content_editor.js`): the dashboard's widget grid and its library tray, the
 // parts of a content component in its settings drawer, the media thumbnails, a widget's bounded
-// number fields and the sidebar's scroll position. No public template names one of them; `index.js`
-// hands all eight to the host's admin bundle.
+// number fields, the sidebar's scroll position and the preview modal's frame. No public template names
+// one of them; `index.js` hands all nine to the host's admin bundle.
 //
 // `sortablejs` is a peer dependency (package.json): it comes from the host's own
 // `assets/node_modules`, which the host's esbuild profile puts on `NODE_PATH`.
@@ -225,8 +225,32 @@ const NumberBounds = {
 // The admin sidebar's scrolling nav. It is drawn by the LiveView layout, so every live navigation
 // replaces it with a fresh element at the top; this puts it back where the reader left it. The
 // position lives in `sessionStorage`, one per tab, so it also survives the full page loads into and
-// out of the builder. With nothing saved, the active link is scrolled into view instead.
+// out of the builder. Then the active link is scrolled into view, which moves nothing when it is
+// already in view.
+//
+// It also keeps what the reader folded. A group or a branch folds with `Phoenix.LiveView.JS`, but
+// `JS` cannot write storage, so the hook remembers each fold in `localStorage` (one map of panel id
+// to open, for every tab and the next visit) and puts it back on the fresh nav. A panel that holds
+// the open page stays open whatever was remembered. The fold is put back through `this.js()`, so a
+// later patch of the sidebar keeps it, as it keeps one made by a click.
 const SIDEBAR_SCROLL_KEY = "admin-sidebar:scrollTop";
+const SIDEBAR_FOLDS_KEY = "admin-sidebar:folds";
+
+function readFolds() {
+  try {
+    const folds = JSON.parse(localStorage.getItem(SIDEBAR_FOLDS_KEY));
+
+    return folds && typeof folds === "object" && !Array.isArray(folds) ? folds : {};
+  } catch (_denied) {
+    // Refused storage or a value that is not JSON: nothing is remembered.
+    return {};
+  }
+}
+
+// A link hidden by its own list (or by the wide or narrow half of the nav) has no box to scroll to.
+function shown(el) {
+  return typeof el.checkVisibility !== "function" || el.checkVisibility();
+}
 
 const SidebarScroll = {
   mounted() {
@@ -238,13 +262,15 @@ const SidebarScroll = {
       // Private browsing may refuse sessionStorage; fall back to the active link below.
     }
 
+    this.restoreFolds();
+
     const top = saved === null ? NaN : parseInt(saved, 10);
 
-    if (Number.isNaN(top)) {
-      this.el.querySelector("[aria-current='page']")?.scrollIntoView({ block: "nearest" });
-    } else {
-      this.el.scrollTop = top;
-    }
+    if (!Number.isNaN(top)) this.el.scrollTop = top;
+
+    [...this.el.querySelectorAll("[aria-current='page']")]
+      .find(shown)
+      ?.scrollIntoView({ block: "nearest" });
 
     this.frame = null;
     this.onScroll = () => {
@@ -264,16 +290,92 @@ const SidebarScroll = {
       });
     };
 
+    // LiveView runs the fold from its own click listener on `window`, after this one, so the state
+    // the click leads to is the opposite of the one read here.
+    this.onFold = (event) => {
+      const button = event.target.closest?.("[data-fold]");
+      const id = button?.getAttribute("aria-controls");
+
+      if (!id) return;
+
+      const folds = readFolds();
+      folds[id] = button.getAttribute("aria-expanded") !== "true";
+
+      try {
+        localStorage.setItem(SIDEBAR_FOLDS_KEY, JSON.stringify(folds));
+      } catch (_denied) {
+        // Without storage the fold lasts until the nav is drawn again.
+      }
+    };
+
     this.el.addEventListener("scroll", this.onScroll, { passive: true });
+    this.el.addEventListener("click", this.onFold);
+  },
+  restoreFolds() {
+    const folds = readFolds();
+    const js = this.js();
+
+    this.el.querySelectorAll("[data-fold]").forEach((button) => {
+      const id = button.getAttribute("aria-controls");
+      const panel = id && document.getElementById(id);
+
+      if (!panel || typeof folds[id] !== "boolean") return;
+
+      const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
+
+      js.setAttribute(button, "aria-expanded", String(open));
+
+      if (open) {
+        js.removeClass(panel, "hidden");
+      } else {
+        js.addClass(panel, "hidden");
+      }
+    });
   },
   destroyed() {
     this.el.removeEventListener("scroll", this.onScroll);
+    this.el.removeEventListener("click", this.onFold);
 
     if (this.frame !== null) cancelAnimationFrame(this.frame);
   },
 };
 
+// THE PREVIEW MODAL'S FRAME, whose "Loading the preview…" note sits behind the iframe. A page with
+// no background of its own let the note show through it after the page had loaded, so the note goes
+// on the frame's `load`. A hook because nothing else can: `Phoenix.LiveView.JS` binds no `load`,
+// and the CSP refuses an inline `onload`. The frame and the note are re-keyed together for every new
+// address, so a new frame brings its note back; a patch that keeps the frame keeps the note hidden.
+const PreviewFrame = {
+  mounted() {
+    this.sync();
+  },
+  updated() {
+    this.sync();
+  },
+  sync() {
+    const frame = this.el.querySelector("iframe");
+    if (!frame) return;
+
+    if (frame !== this.frame) {
+      this.frame = frame;
+      this.loaded = false;
+      frame.addEventListener("load", () => {
+        if (this.frame !== frame) return;
+        this.loaded = true;
+        this.hide();
+      });
+    }
+
+    if (this.loaded) this.hide();
+  },
+  hide() {
+    const spinner = this.el.querySelector("[data-preview-spinner]");
+    if (spinner) spinner.hidden = true;
+  },
+};
+
 export default {
+  PreviewFrame,
   NumberBounds,
   SidebarScroll,
   MediaThumb,

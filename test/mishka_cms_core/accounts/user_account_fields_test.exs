@@ -557,7 +557,7 @@ defmodule MishkaCmsCore.Accounts.UserAccountFieldsTest do
 
       assert to_string(signed_in.email) == "account.owner@example.com"
       assert signed_in.site_id == site.id
-      assert is_binary(signed_in.__metadata__.token)
+      assert [_header, _claims, _signature] = String.split(signed_in.__metadata__.token, ".")
     end
 
     test "the actor read back from a token is whole, permissions included", %{site: site} do

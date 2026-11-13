@@ -17,7 +17,7 @@ defmodule MishkaCmsCore.Test.Plugins.BuilderSaveGatePlugin do
 
   @sentinel "FORBIDDEN"
 
-  @doc "The marker a template must contain for this plugin to veto its save."
+  @doc "A template holding this word is refused its save by this plugin."
   def sentinel, do: @sentinel
 
   @impl true

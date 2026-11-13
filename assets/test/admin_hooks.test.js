@@ -99,6 +99,7 @@ describe("SidebarScroll", () => {
     frames = [];
     storage = fakeStorage();
     vi.stubGlobal("sessionStorage", storage);
+    vi.stubGlobal("localStorage", fakeStorage());
     vi.stubGlobal("requestAnimationFrame", (fn) => frames.push(fn));
     vi.stubGlobal("cancelAnimationFrame", vi.fn());
   });
@@ -134,10 +135,18 @@ describe("SidebarScroll", () => {
     return { el, writes, active };
   }
 
+  // `this.js()` as LiveView gives it to a hook, applied straight to the element.
+  const js = {
+    setAttribute: (el, name, value) => el.setAttribute(name, value),
+    addClass: (el, name) => el.classList.add(name),
+    removeClass: (el, name) => el.classList.remove(name),
+  };
+
   function mount(el) {
     const hook = Object.create(AdminHooks.SidebarScroll);
 
     hook.el = el;
+    hook.js = () => js;
     hook.mounted();
 
     return hook;
@@ -150,14 +159,14 @@ describe("SidebarScroll", () => {
     pending.forEach((fn) => fn(0));
   }
 
-  test("puts a new nav back at the position the last one was left at", () => {
+  test("puts a new nav back at the position the last one was left at, then shows the active link", () => {
     storage.setItem(KEY, "240");
     const { el, writes, active } = nav();
 
     mount(el);
 
     expect(writes).toEqual([240]);
-    expect(active.scrollIntoView).not.toHaveBeenCalled();
+    expect(active.scrollIntoView).toHaveBeenCalledWith({ block: "nearest" });
   });
 
   test("with nothing remembered, shows the active link without moving the rest", () => {
@@ -240,6 +249,119 @@ describe("SidebarScroll", () => {
   });
 });
 
+// A folded group or branch is put back on the fresh nav a live navigation or a reload draws, except
+// the one that holds the open page.
+describe("SidebarScroll folds", () => {
+  const FOLDS = "admin-sidebar:folds";
+  let local;
+
+  const js = {
+    setAttribute: (el, name, value) => el.setAttribute(name, value),
+    addClass: (el, name) => el.classList.add(name),
+    removeClass: (el, name) => el.classList.remove(name),
+  };
+
+  beforeEach(() => {
+    const values = new Map();
+
+    local = {
+      getItem: (key) => (values.has(key) ? values.get(key) : null),
+      setItem: (key, value) => values.set(key, String(value)),
+    };
+
+    vi.stubGlobal("localStorage", local);
+    vi.stubGlobal("sessionStorage", { getItem: () => null, setItem: () => {} });
+    vi.stubGlobal("requestAnimationFrame", vi.fn());
+    vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function nav() {
+    document.body.innerHTML = `
+      <nav id="admin-sidebar-nav">
+        <button data-fold aria-expanded="true" aria-controls="sb-runtime">Runtime</button>
+        <div id="sb-runtime"><a href="/admin/dashboard/runtime/pages">Pages</a></div>
+        <button data-fold aria-expanded="true" aria-controls="sb-plugins">Plugins</button>
+        <div id="sb-plugins">
+          <a href="/admin/dashboard/shop">Shop</a>
+          <button data-fold aria-expanded="false" aria-controls="sbi-shop">Shop</button>
+          <div id="sbi-shop" class="hidden">
+            <a href="/admin/dashboard/shop/orders" aria-current="page">Orders</a>
+          </div>
+        </div>
+      </nav>`;
+
+    const el = document.querySelector("nav");
+    el.querySelectorAll("a").forEach((link) => (link.scrollIntoView = vi.fn()));
+
+    return el;
+  }
+
+  function mount(el) {
+    const hook = Object.create(AdminHooks.SidebarScroll);
+
+    hook.el = el;
+    hook.js = () => js;
+    hook.mounted();
+
+    return hook;
+  }
+
+  const button = (el, id) => el.querySelector(`[aria-controls='${id}']`);
+  const folded = (id) => document.getElementById(id).classList.contains("hidden");
+
+  test("remembers a fold as the state the click leads to", () => {
+    const el = nav();
+    mount(el);
+
+    button(el, "sb-runtime").click();
+
+    expect(JSON.parse(local.getItem(FOLDS))).toEqual({ "sb-runtime": false });
+  });
+
+  test("puts a remembered fold back on a fresh nav", () => {
+    local.setItem(FOLDS, JSON.stringify({ "sb-runtime": false }));
+    const el = nav();
+
+    mount(el);
+
+    expect(folded("sb-runtime")).toBe(true);
+    expect(button(el, "sb-runtime").getAttribute("aria-expanded")).toBe("false");
+    expect(folded("sb-plugins")).toBe(false);
+  });
+
+  test("keeps the group and branch of the open page open, whatever was remembered", () => {
+    local.setItem(FOLDS, JSON.stringify({ "sb-plugins": false, "sbi-shop": false }));
+    const el = nav();
+
+    mount(el);
+
+    expect(folded("sb-plugins")).toBe(false);
+    expect(folded("sbi-shop")).toBe(false);
+    expect(button(el, "sbi-shop").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  test("ignores a remembered value that is not a map of folds", () => {
+    local.setItem(FOLDS, "[1,2]");
+    const el = nav();
+
+    expect(() => mount(el)).not.toThrow();
+    expect(folded("sb-runtime")).toBe(false);
+  });
+
+  test("stops remembering once destroyed", () => {
+    const el = nav();
+    mount(el).destroyed();
+
+    button(el, "sb-runtime").click();
+
+    expect(local.getItem(FOLDS)).toBe(null);
+  });
+});
+
 // A part dragged in the content editor's settings: the page is put back as it was, and the server
 // is told the part it was dropped beside, which draws the new order.
 describe("ContentParts", () => {
@@ -307,5 +429,57 @@ describe("ContentParts", () => {
     expect(hook.sorter.options.handle).toBe("[data-part='grip']");
     expect(hook.sorter.options.draggable).toBe("[data-content-part]");
     hook.destroyed();
+  });
+});
+
+// The preview modal's "Loading the preview…" sits behind the frame; a page with no background of its
+// own showed it through, so it goes when the frame has loaded, and comes back with a new frame.
+describe("PreviewFrame", () => {
+  function frame(id) {
+    return `<div data-preview-spinner id="spinner-${id}"></div><iframe id="frame-${id}"></iframe>`;
+  }
+
+  function mount(id) {
+    document.body.innerHTML = `<div id="wrap">${frame(id)}</div>`;
+
+    const hook = Object.create(AdminHooks.PreviewFrame);
+    hook.el = document.getElementById("wrap");
+    hook.mounted();
+
+    return hook;
+  }
+
+  const spinner = () => document.querySelector("[data-preview-spinner]");
+
+  test("shows the note until the frame loads, then hides it", () => {
+    mount("a");
+    expect(spinner().hidden).toBe(false);
+
+    document.querySelector("iframe").dispatchEvent(new Event("load"));
+    expect(spinner().hidden).toBe(true);
+  });
+
+  test("keeps the note hidden across a patch that redraws it for the same frame", () => {
+    const hook = mount("a");
+    const iframe = document.querySelector("iframe");
+    iframe.dispatchEvent(new Event("load"));
+
+    spinner().replaceWith(Object.assign(document.createElement("div"), { id: "spinner-a" }));
+    document.getElementById("spinner-a").setAttribute("data-preview-spinner", "");
+    hook.updated();
+
+    expect(spinner().hidden).toBe(true);
+  });
+
+  test("shows the note again for a new frame, until that one loads", () => {
+    const hook = mount("a");
+    document.querySelector("iframe").dispatchEvent(new Event("load"));
+
+    hook.el.innerHTML = frame("b");
+    hook.updated();
+    expect(spinner().hidden).toBe(false);
+
+    document.querySelector("iframe").dispatchEvent(new Event("load"));
+    expect(spinner().hidden).toBe(true);
   });
 });

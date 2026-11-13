@@ -21,6 +21,7 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
   }
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsCore.Runtime.SiteIcon
   alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Settings
 
@@ -1800,8 +1801,6 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       conn: conn,
       site: site
     } do
-      alias MishkaCmsCore.Runtime.SiteIcon
-
       view = conn |> log_in(create_admin("boss@example.com", nil)) |> site_view(site)
       assert SiteIcon.theme_color(site.id) == nil
 

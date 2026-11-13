@@ -334,6 +334,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   # `System.cmd/3` RAISES rather than answering when it cannot run the file at all — a bad
   # interpreter, a wrong architecture, a working directory the process can no longer reach. That
   # raise used to escape this function entirely, so the caller saw a crash instead of a reason.
+  # The esbuild/Tailwind binary runs with arguments this module builds, never a shell string.
+  # sobelow_skip ["CI.System"]
   defp ran(path) do
     {output, status} =
       System.cmd(path, ["--help"], stderr_to_stdout: true, env: [{"NO_COLOR", "1"}])
@@ -468,6 +470,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
+  # MD5 only names a cache entry or module here; nothing relies on it for security.
+  # sobelow_skip ["Crypto.WeakHash"]
   defp build_and_store_shared_base do
     case compile_shared_base() do
       {:ok, css} ->
@@ -701,12 +705,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
+  # Every path here is under this library's own build, temp or cache folders, never request input.
+  # sobelow_skip ["Traversal.FileModule"]
   defp write_preview_template(preview_ns, name, content) do
     dir = Path.join([get_temp_dir(), "runtime", preview_ns, "page"])
     File.mkdir_p!(dir)
     File.write!(Path.join(dir, "#{preview_slug(name)}.template"), content)
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp cleanup_preview_template(preview_ns),
     do: File.rm_rf(Path.join([get_temp_dir(), "runtime", preview_ns]))
 
@@ -838,6 +845,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
   * **Cache Efficiency**: Hash-based versioning enables aggressive browser caching
   * **CDN Optimization**: Multiple formats support optimal CDN distribution
   """
+  # sobelow_skip ["Crypto.WeakHash"]
   def compile_and_store(site_name) do
     MishkaInstaller.Event.Hook.call("runtime:compile:before_css", %{site: site_name},
       meta: %{site: site_name},
@@ -1309,7 +1317,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
-  @doc false
   # The globally-installed templates NO WALK CAN REACH: JS hooks and stylesheet rows.
   #
   # Global LAYOUTS, ERROR PAGES and COMPONENTS used to be here too, which is what made "global" mean

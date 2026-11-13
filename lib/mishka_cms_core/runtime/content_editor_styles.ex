@@ -98,6 +98,8 @@ defmodule MishkaCmsCore.Runtime.ContentEditorStyles do
   end
 
   # What the stylesheet is built from: the stylesheet it starts from, by its hash, and the template.
+  # MD5 only keys the cached stylesheet; nothing relies on it for security.
+  # sobelow_skip ["Crypto.WeakHash"]
   defp fingerprint(base, template) do
     :md5
     |> :crypto.hash([AssetsState.hash(base, "css") || "", "\n", template])

@@ -45,7 +45,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompilerTest do
                ModuleCompiler.compile_module(quoted, "simple_module.ex")
 
       assert module == TestModuleCompilerSimple
-      assert is_list(diagnostics)
+      assert diagnostics == []
       assert TestModuleCompilerSimple.hello() == "Hello, World!"
 
       # Cleanup
@@ -90,8 +90,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompilerTest do
 
       assert module == TestModuleCompilerWarning
 
-      # Check for warnings in diagnostics - may or may not have warnings depending on compiler settings
-      assert is_list(diagnostics)
+      # A module that compiled reports warnings at most.
+      assert Enum.all?(diagnostics, &(&1.severity == :warning))
 
       # Cleanup
       ModuleCompiler.unload(TestModuleCompilerWarning)
@@ -111,7 +111,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompilerTest do
                ModuleCompiler.compile_module(quoted, "error_module.ex")
 
       assert %CompileError{} = error
-      assert is_list(diagnostics)
+
+      assert Enum.any?(
+               diagnostics,
+               &(&1.severity == :error and &1.message =~ "undefined_function_that_does_not_exist")
+             )
     end
 
     test "returns error for invalid module structure" do
@@ -377,7 +381,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompilerTest do
       # Compile with diagnostics
       assert {:ok, module, diagnostics} = ModuleCompiler.compile_module(quoted, "full_cycle.ex")
       assert module == TestModuleCompilerFullCycle
-      assert is_list(diagnostics)
+      assert Enum.all?(diagnostics, &(&1.severity == :warning))
 
       # Use the compiled module
       assert TestModuleCompilerFullCycle.public_fun(5) == 10

@@ -287,7 +287,7 @@ defmodule MishkaCmsCore.Test.Notify.DeliveryTest do
         |> Ash.Changeset.for_update(:mark_seen, %{}, actor: user, tenant: user.site_id)
         |> Ash.update!()
 
-      assert not is_nil(updated.seen_at)
+      assert %DateTime{} = updated.seen_at
       assert unseen_count(user) == 2
 
       read =
@@ -295,7 +295,7 @@ defmodule MishkaCmsCore.Test.Notify.DeliveryTest do
         |> Ash.Changeset.for_update(:mark_read, %{}, actor: user, tenant: user.site_id)
         |> Ash.update!()
 
-      assert not is_nil(read.read_at)
+      assert %DateTime{} = read.read_at
     end
   end
 

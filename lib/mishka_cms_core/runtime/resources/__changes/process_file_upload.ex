@@ -60,18 +60,21 @@ defmodule MishkaCmsCore.Runtime.Resources.Changes.ProcessFileUpload do
 
     with {:ok, path, client_name} <- extract_file_info(file, changeset),
          {:ok, file_info} <- validate_file(path, client_name) do
-      if existing_path do
-        replace_file(changeset, file_info, existing_path)
-      else
-        case save_new_file(changeset, file_info) do
-          {:ok, saved_path} -> apply_create_attributes(changeset, file_info, saved_path)
-          {:error, error} -> add_file_error(changeset, error)
-        end
-      end
+      store_update(changeset, file_info, existing_path)
     else
       {:error, error} -> add_file_error(changeset, error)
     end
   end
+
+  defp store_update(changeset, file_info, nil) do
+    case save_new_file(changeset, file_info) do
+      {:ok, saved_path} -> apply_create_attributes(changeset, file_info, saved_path)
+      {:error, error} -> add_file_error(changeset, error)
+    end
+  end
+
+  defp store_update(changeset, file_info, existing_path),
+    do: replace_file(changeset, file_info, existing_path)
 
   # ONLY A FILE OF THE ROW'S OWN FOLDER IS REPLACED. A path naming anything else — set while
   # `relative_path` could still be edited — is left where it is, and the upload is stored as a new

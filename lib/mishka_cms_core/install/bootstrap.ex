@@ -98,6 +98,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
      "Writing translation rows. Every dashboard admin reads them."},
     {"admin:dashboard:runtime:redirect",
      "Writing the site's redirect rules. Every dashboard admin reads them."},
+    {"admin:dashboard:runtime:head_code",
+     "Writing the code a site's public pages carry in their head, and the origins it adds to the site's Content Security Policy. Masters only."},
     {"admin:dashboard:setting",
      "Writing site settings that declare no permission of their own, the extension switches and the notification toggles included."},
     {"admin:dashboard:user",
@@ -108,6 +110,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
      "The Activity screen, activity entries and the recent-activity widget."},
     {"admin:dashboard:code",
      "Writing pages, layouts, components, error pages, stylesheets and JS hooks, their code included, and opening every builder."},
+    {"admin:dashboard:agent:receipts",
+     "Reading agent receipts on the dashboard, for the areas the holder already holds."},
     {"admin:api:runtime:*",
      "Every runtime section over the admin JSON:API, their code included."},
     {"admin:api:runtime:site", "Site data over the admin JSON:API."},
@@ -127,6 +131,8 @@ defmodule MishkaCmsCore.Install.Bootstrap do
     {"admin:api:user", "Accounts over the admin JSON:API."},
     {"admin:api:permission", "The permission names and the grants over the admin JSON:API."},
     {"admin:api:runtime:activity", "The activity log over the admin JSON:API."},
+    {"admin:api:agent:receipts",
+     "Reading agent receipts over the API, for the areas the holder already holds."},
     {"admin:api:code",
      "Writing pages, layouts, components, error pages, stylesheets and JS hooks over the admin JSON:API, their code included."}
   ]
@@ -171,23 +177,25 @@ defmodule MishkaCmsCore.Install.Bootstrap do
 
       permissions
       |> Enum.reject(fn {name, _description} -> MapSet.member?(held, name) end)
-      |> Enum.reduce_while({:ok, []}, fn {name, description}, {:ok, created} ->
-        Permission
-        |> Ash.Changeset.for_create(:create, %{name: name, description: description},
-          authorize?: false
-        )
-        |> Ash.create()
-        |> case do
-          {:ok, permission} -> {:cont, {:ok, [permission | created]}}
-          # ANOTHER RUN GOT THERE FIRST: two sites installing the same extension at once both find
-          # a name missing, and the second create meets the unique name the first wrote.
-          {:error, _error} = error -> stored_meanwhile(name, created, error)
-        end
-      end)
+      |> Enum.reduce_while({:ok, []}, &create_permission/2)
       |> case do
         {:ok, created} -> {:ok, %{stored: stored ++ created, created: Enum.reverse(created)}}
         error -> error
       end
+    end
+  end
+
+  defp create_permission({name, description}, {:ok, created}) do
+    Permission
+    |> Ash.Changeset.for_create(:create, %{name: name, description: description},
+      authorize?: false
+    )
+    |> Ash.create()
+    |> case do
+      {:ok, permission} -> {:cont, {:ok, [permission | created]}}
+      # ANOTHER RUN GOT THERE FIRST: two sites installing the same extension at once both find
+      # a name missing, and the second create meets the unique name the first wrote.
+      {:error, _error} = error -> stored_meanwhile(name, created, error)
     end
   end
 

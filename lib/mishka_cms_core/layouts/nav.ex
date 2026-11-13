@@ -25,6 +25,9 @@ defmodule MishkaCmsCore.Layouts.Nav do
   with the new `version` as its measurement and the page's `view` as its metadata, so whatever asks
   the page after that event is answered with the redrawn sidebar.
 
+  It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`): read from
+  memory when the page mounts, then changed by each count the page hears.
+
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
   which loads an unloaded actor — so without this the chrome would issue a query on every render.
@@ -36,6 +39,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
+  alias MishkaCmsCore.Sidebar.Counts
 
   @sidebar_refresh_ms 50
   @redrawn [:mishka_cms, :sidebar, :redrawn]
@@ -90,10 +94,11 @@ defmodule MishkaCmsCore.Layouts.Nav do
   end
 
   defp follow_sidebar(socket) do
-    socket = assign(socket, :sidebar_version, 0)
+    socket = assign(socket, sidebar_version: 0, sidebar_counts: Counts.all())
 
     if connected?(socket) do
       Sidebar.subscribe(socket.assigns[:current_user])
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, Counts.topic())
       attach_hook(socket, :sidebar_changed, :handle_info, &sidebar_message/2)
     else
       socket
@@ -117,6 +122,11 @@ defmodule MishkaCmsCore.Layouts.Nav do
      socket
      |> put_private(:sidebar_refresh_pending, false)
      |> assign(:sidebar_version, version)}
+  end
+
+  defp sidebar_message({:sidebar_count, key, number, tone}, socket) do
+    {:halt,
+     assign(socket, :sidebar_counts, Map.put(socket.assigns.sidebar_counts, key, {number, tone}))}
   end
 
   defp sidebar_message(_message, socket), do: {:cont, socket}

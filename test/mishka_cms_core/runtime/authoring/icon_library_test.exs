@@ -16,6 +16,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.IconLibraryTest do
   use ExUnit.Case, async: false
 
   alias MishkaCmsCore.Runtime.Authoring.Icons
+  alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
   alias MishkaCmsCore.Runtime.Authoring.Icons.Heroicons
 
   @moduletag :unit
@@ -128,8 +129,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.IconLibraryTest do
   # to write, no config line to add. `mix mishka.ui.export` writes them under a top-level `icons`
   # key and `MishkaCmsCore.Runtime.Authoring.Icons.Bundled` reads them out of the installed bundle.
   describe "a set that arrived inside a kit" do
-    alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
-
     @kits_dir MishkaCmsCore.Runtime.Handlers.UiKitHandler.kits_dir()
 
     setup do
@@ -251,8 +250,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.IconLibraryTest do
   # picker. A host that has both must not end up with two: every heroicon would be listed twice and
   # the picker would grow a library row offering a choice between two identical sets.
   describe "a bundled set whose prefix is already claimed" do
-    alias MishkaCmsCore.Runtime.Authoring.Icons.Bundled
-
     @kits_dir MishkaCmsCore.Runtime.Handlers.UiKitHandler.kits_dir()
 
     setup do

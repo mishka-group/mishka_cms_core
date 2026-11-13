@@ -431,13 +431,13 @@ defmodule MishkaCmsCoreWeb.Templates.ActivityTimeline do
 
   # "15 events". A day that filled the read's scan cap is only a floor, so it says so rather than
   # naming a total it never actually reached.
-  defp event_count(count, max_cap) when is_integer(count) and count >= 0 do
-    if is_integer(max_cap) and count >= max_cap,
-      do:
-        dgettext("mishka_gervaz", "%{count}+ events",
-          count: MishkaCmsCore.Localized.number(max_cap)
-        ),
-      else: dngettext("mishka_gervaz", "%{count} event", "%{count} events", count)
+  defp event_count(count, max_cap)
+       when is_integer(count) and count >= 0 and is_integer(max_cap) and count >= max_cap do
+    dgettext("mishka_gervaz", "%{count}+ events", count: MishkaCmsCore.Localized.number(max_cap))
+  end
+
+  defp event_count(count, _max_cap) when is_integer(count) and count >= 0 do
+    dngettext("mishka_gervaz", "%{count} event", "%{count} events", count)
   end
 
   defp event_count(_count, _max_cap), do: nil

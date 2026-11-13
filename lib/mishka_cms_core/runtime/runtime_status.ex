@@ -283,8 +283,11 @@ defmodule MishkaCmsCore.Runtime.RuntimeStatus do
   defp failed_label("cancelled"), do: gettext("Compile cancelled")
   defp failed_label(_), do: gettext("Compile failed")
 
-  defp job_error(%{errors: [first | _]}) when is_map(first),
-    do: first["error"] || first[:error] || inspect(first)
+  # A job read back from the database holds its errors as JSON, keyed by strings; Oban's own
+  # in-memory job keys them by atoms.
+  defp job_error(%{errors: [%{"error" => error} | _]}) when not is_nil(error), do: error
+  defp job_error(%{errors: [%{error: error} | _]}) when not is_nil(error), do: error
+  defp job_error(%{errors: [first | _]}) when is_map(first), do: inspect(first)
 
   defp job_error(_), do: nil
 

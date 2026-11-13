@@ -62,6 +62,8 @@ defmodule MishkaCmsCore.Runtime.Workers.ShareCardSweepWorker do
     end
   end
 
+  # The folder is the site's own share card folder from `ShareCard.dir/1`.
+  # sobelow_skip ["Traversal.FileModule"]
   defp sweep(site_id, since) do
     dir = ShareCard.dir(site_id)
 

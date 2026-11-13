@@ -215,7 +215,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   def template("error-page", record, opts) do
     case entry(record, status(record, opts)) do
       nil -> ""
-      %{} = entry -> entry["template"] || entry[:template] || ""
+      %{} = entry -> entry["template"] || ""
     end
   end
 
@@ -315,7 +315,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
     record
     |> entries()
     |> Enum.reject(&(entry_status(&1) == editing))
-    |> Enum.map(&(&1["template"] || &1[:template] || ""))
+    |> Enum.map(&(&1["template"] || ""))
     |> Enum.reject(&(&1 == ""))
   end
 
@@ -380,13 +380,15 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   defp normalize_status(status), do: ErrorStatus.parse(status)
 
   # An entry the form wrote before it was read back spells `offline` as text.
-  defp entry_status(entry), do: ErrorStatus.parse(entry["status"] || entry[:status])
+  defp entry_status(entry), do: ErrorStatus.parse(entry["status"])
 
+  # Entries are read with string keys whichever way the record holds them: a form's params and a
+  # stored row do not agree.
   defp entries(nil), do: []
 
   defp entries(record) do
     case Map.get(record, :error_pages) do
-      entries when is_list(entries) -> entries
+      entries when is_list(entries) -> Enum.map(entries, &stringify/1)
       _other -> []
     end
   end
@@ -398,7 +400,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Section do
   # A status the record does not define yet is appended, so the editor can author a new one rather
   # than silently dropping the work.
   defp replace_entry(record, status, heex) do
-    entries = Enum.map(entries(record), &stringify/1)
+    entries = entries(record)
 
     case Enum.find_index(entries, &(entry_status(&1) == status)) do
       nil -> entries ++ [%{"status" => status, "template" => heex, "layout" => %{}}]

@@ -184,7 +184,7 @@ defmodule MishkaCmsCoreWeb.Live.LoadMoreListTest do
         |> Enum.filter(&String.contains?(html, &1.id))
         |> Enum.take(2)
 
-      assert length(removed) == 2
+      assert match?([_, _], removed)
       for notification <- removed, do: Ash.destroy!(notification, actor: admin)
 
       :sys.get_state(view.pid)

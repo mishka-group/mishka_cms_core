@@ -396,7 +396,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.StatefulTemplateOnceTest do
 
   describe "a stateful component compiled with its template once" do
     test "draws what it drew with two copies, on every surface", %{site: site, stateful: rows} do
-      assert length(rows) == 5,
+      assert match?([_, _, _, _, _], rows),
              "expected 5 live components, got #{inspect(Enum.map(rows, & &1.name))}"
 
       page = compile_page!()

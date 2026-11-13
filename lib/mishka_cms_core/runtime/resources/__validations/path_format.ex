@@ -15,6 +15,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
       paths, route params like `:id`, and wildcards like `*rest`): `/fa/وردپرس` is a path, and so
       is the zero-width non-joiner a Persian word is written with. No space and no other
       punctuation.
+    * holds at most one `*` wildcard, at the start of a segment (`/*category/:slug`, `/blog/*`)
     * is at most 255 characters
 
   It is checked as `MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState.canonical_path/1` reads
@@ -78,6 +79,12 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.PathFormat do
             "Path may only contain letters, digits, and the characters - _ / . : *"
           )
         )
+
+      match?([_, _, _ | _], String.split(path, "*")) ->
+        error(dgettext_noop("errors", "Path may hold only one wildcard like *rest"))
+
+      String.match?(path, ~r{[^/]\*}) ->
+        error(dgettext_noop("errors", "A wildcard like *rest must start a path segment"))
 
       true ->
         :ok

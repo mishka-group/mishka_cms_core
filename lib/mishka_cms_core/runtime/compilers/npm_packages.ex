@@ -136,12 +136,14 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
         # otherwise both download it, and the second rename would find the first one's folder.
         :global.trans(
           {{__MODULE__, target}, self()},
-          fn ->
-            if ready?(target, entry["integrity"]), do: :ok, else: fetch_into(entry, target)
-          end,
+          fn -> fetch_unless_ready(entry, target) end,
           [node()]
         )
     end
+  end
+
+  defp fetch_unless_ready(entry, target) do
+    if ready?(target, entry["integrity"]), do: :ok, else: fetch_into(entry, target)
   end
 
   defp describe(%{"name" => name, "version" => version}),
@@ -150,6 +152,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
   defp describe(entry), do: inspect(entry, limit: 5)
 
   # In place with this integrity, or a folder the CMS provisioned itself — never replaced.
+  # Every path here is under this library's own build, temp or cache folders, never request input.
+  # sobelow_skip ["Traversal.FileModule"]
   defp ready?(target, integrity) do
     case File.read(Path.join(target, @marker)) do
       {:ok, ^integrity} -> true
@@ -221,6 +225,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
 
   # npm packs every file under one top folder, `package/` by convention; the files are what is
   # below it.
+  # The archive matched the registry's integrity hash before it is unpacked, in memory.
+  # sobelow_skip ["DOS.Tar"]
   defp unpack(tgz) do
     case :erl_tar.extract({:binary, tgz}, [:compressed, :memory]) do
       {:ok, entries} -> inside(entries)
@@ -262,6 +268,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
 
   # Unpacked beside its target and renamed into place, so esbuild never reads half a package. A
   # folder there already is an older version this module wrote: `ready?/2` keeps everything else.
+  # sobelow_skip ["Traversal.FileModule"]
   defp place(files, target, integrity) do
     staging = "#{target}.#{System.unique_integer([:positive])}.partial"
 
@@ -281,6 +288,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.NpmPackages do
     result
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp write_all(files, staging) do
     Enum.reduce_while(files, :ok, fn {relative, content}, :ok ->
       destination = Path.join(staging, relative)

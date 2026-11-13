@@ -121,6 +121,79 @@ defmodule MishkaCmsCore.Runtime.States.PageAddressTest do
     end
   end
 
+  describe "a *name in the middle of a path" do
+    test "takes the fewest segments, at least one, that let the rest match", %{site: site} do
+      route!(site, "post", "/:lang/*category/:slug")
+
+      assert {:ok, %{id: "post"}, %{"lang" => "en", "category" => "news", "slug" => "my-post"}} =
+               WebRunTimeMetaDataState.resolve("/en/news/my-post", site.name)
+
+      assert {:ok, %{id: "post"}, %{"category" => "design/accessibility", "slug" => "my-post"}} =
+               WebRunTimeMetaDataState.resolve("/en/design/accessibility/my-post", site.name)
+
+      assert {:error, :not_found} = WebRunTimeMetaDataState.resolve("/en/my-post", site.name)
+    end
+
+    test "with a fixed segment after it, stops at the first place that segment matches", %{
+      site: site
+    } do
+      route!(site, "edit", "/docs/*chain/edit")
+
+      assert {:ok, %{id: "edit"}, %{"chain" => "a/b"}} =
+               WebRunTimeMetaDataState.resolve("/docs/a/b/edit", site.name)
+
+      assert {:ok, %{id: "edit"}, %{"chain" => "edit/x"}} =
+               WebRunTimeMetaDataState.resolve("/docs/edit/x/edit", site.name)
+
+      assert {:error, :not_found} = WebRunTimeMetaDataState.resolve("/docs/a/b", site.name)
+    end
+
+    test "captures a Persian chain decoded, typed or %-escaped", %{site: site} do
+      route!(site, "post", "/:lang/*category/:slug")
+
+      for path <- [
+            "/fa/طراحی/دسترسی/نوشته",
+            "/fa/" <> URI.encode("طراحی/دسترسی/نوشته")
+          ] do
+        assert {:ok, %{id: "post"}, %{"category" => "طراحی/دسترسی", "slug" => "نوشته"}} =
+                 WebRunTimeMetaDataState.resolve(path, site.name)
+      end
+    end
+
+    test "ranks behind a literal page and a pattern with fewer wildcards", %{site: site} do
+      route!(site, "post", "/:lang/*category/:slug")
+      route!(site, "blog", "/:lang/blog/:slug")
+      route!(site, "news", "/en/blog/news")
+
+      assert ids(site, "/en/blog/news") == ["news"]
+      assert ids(site, "/en/blog/hello") == ["blog", "post"]
+      assert ids(site, "/en/design/ux/hello") == ["post"]
+    end
+
+    test "is matched from memory, with no query", %{site: site} do
+      route!(site, "post", "/:lang/*category/:slug")
+
+      handler = "mid-wildcard-#{System.unique_integer([:positive])}"
+      test = self()
+
+      :telemetry.attach(
+        handler,
+        [:mishka_cms_core, :repo, :query],
+        fn _event, _measurements, meta, _config -> send(test, {handler, meta[:query]}) end,
+        nil
+      )
+
+      try do
+        assert {:ok, %{id: "post"}, _captured} =
+                 WebRunTimeMetaDataState.resolve("/en/a/b/c/hello", site.name)
+      after
+        :telemetry.detach(handler)
+      end
+
+      refute_received {^handler, _query}
+    end
+  end
+
   describe "path_for_record/3" do
     test "is the path of the page written in the language asked, then one for every language", %{
       site: site

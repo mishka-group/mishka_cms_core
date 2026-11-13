@@ -90,11 +90,14 @@ defmodule MishkaCmsCore.Builder.SeamCatalogTest do
     end
   end
 
+  # The payload key each registry carries its list under.
+  @payload_keys ~w(entries blocks elements sections tabs actions commands checks structures libraries rules hooks sources)a
+
   describe "the names themselves" do
     test "every registry event is namespaced to the builder" do
       for {_registry, {event, key}} <- Events.registries() do
         assert String.starts_with?(event, "builder:")
-        assert is_atom(key)
+        assert key in @payload_keys
       end
     end
 

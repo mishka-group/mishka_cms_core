@@ -337,7 +337,6 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
 
       value = Translations.translate(key)
       assert value == "<script>alert(1)</script>"
-      assert is_binary(value)
 
       assigns = %{key: key}
 
@@ -402,7 +401,7 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
       :ok = Translations.register(site.id, [key])
 
       assert shape(rows([key])) == first
-      assert length(first) == 2
+      assert match?([_, _], first)
     end
 
     # Saving a template again runs this again; a translation somebody wrote must survive it.
@@ -1371,7 +1370,7 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
           ~s|<p>{t("Pong #{n}")}<.component component_name="ping-#{n}" site="#{site.name}" /></p>|
       )
 
-      assert %{} = words = Translations.component_words([{"ping-#{n}", site.name}])
+      words = Translations.component_words([{"ping-#{n}", site.name}])
       assert Enum.sort(words[site.id]) == Enum.sort(["Ping #{n}", "Pong #{n}"])
     end
 

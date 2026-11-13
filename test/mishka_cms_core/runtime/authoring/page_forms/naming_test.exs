@@ -93,7 +93,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.NamingTest do
 
         assert seed =~ ~r/^[a-z][a-z0-9_]*$/
         assert {:ok, atom} = Code.string_to_quoted(":" <> seed)
-        assert is_atom(atom)
+        assert Atom.to_string(atom) == seed
       end
     end
 

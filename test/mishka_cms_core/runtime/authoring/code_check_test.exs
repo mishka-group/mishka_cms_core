@@ -27,6 +27,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
   @moduletag :unit
 
   alias MishkaCmsCore.Runtime.Authoring.CodeCheck
+  alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Test.Factory
 
   # The real Chelekom form rows, for the placement checks that read a kit component's own markup.
@@ -171,8 +172,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
     @form ~s(<.form :let={f} id="contact-form" as={:contact} for={assigns[:contact_form]} phx-change="contact-k7m2q-validate" phx-submit="contact-k7m2q-submit"><input name={f[:email].name} value={f[:email].value} /><button type="submit">Send</button></.form>)
 
     test "a handler body calling __page_forms__() passes, as the default code does" do
-      alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
-
       events = [
         %{
           name: "contact-k7m2q-submit",
@@ -200,8 +199,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
     end
 
     test "the default code passes for two forms built deep, one of them a kit wrapper" do
-      alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
-
       template = """
       <section>
         <div class="card"><div class="grid"><div class="col">#{@form}</div></div></div>
@@ -336,7 +333,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheckTest do
     test "and refuses an expression that is not Elixir" do
       assert {:error, fault} = CodeCheck.template("<div>{@a + }</div>")
       assert fault.tab == :template
-      assert is_binary(fault.message)
+      assert byte_size(fault.message) > 0
     end
 
     test "an unclosed block is refused too" do

@@ -25,6 +25,7 @@ defmodule MishkaCmsCore.Runtime.FileSignatureTest do
   @webm <<0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81>>
   @ole2 <<0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, 0, 0>>
   @zip <<"PK", 3, 4, 20, 0, 0, 0>>
+  @woff2 <<"wOF2", 0, 1, 0, 0, 0, 0, 4, 0>>
 
   @script "<script>alert(document.domain)</script>"
   @svg ~s|<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"/>|
@@ -56,6 +57,7 @@ defmodule MishkaCmsCore.Runtime.FileSignatureTest do
             matroska: @webm,
             ole2: @ole2,
             zip: @zip,
+            woff2: @woff2,
             text: "name,email\nada,ada@example.com\n"
           ] do
         assert FileSignature.sniff(write.(content)) == {:ok, kind}, "#{kind} was not recognised"
@@ -105,6 +107,7 @@ defmodule MishkaCmsCore.Runtime.FileSignatureTest do
       assert FileSignature.kind(".jpeg") == :jpeg
       assert FileSignature.kind("docx") == :zip
       assert FileSignature.kind("csv") == :text
+      assert FileSignature.kind(".woff2") == :woff2
     end
 
     test "has no kind for a type a site must not serve back from its own origin" do
@@ -124,11 +127,13 @@ defmodule MishkaCmsCore.Runtime.FileSignatureTest do
       assert FileSignature.matches?(write.(@pdf), ".pdf")
       assert FileSignature.matches?(write.(@zip), ".docx")
       assert FileSignature.matches?(write.("one line\n"), ".txt")
+      assert FileSignature.matches?(write.(@woff2), ".woff2")
     end
 
     # THE RENAME. A script written to a file called `x.png` is the whole attack.
     test "is false for a script, a page or an SVG given a picture's extension", %{write: write} do
-      for content <- [@script, @svg, @html], extension <- ~w(.png .jpg .gif .webp .pdf .mp4) do
+      for content <- [@script, @svg, @html],
+          extension <- ~w(.png .jpg .gif .webp .pdf .mp4 .woff2) do
         refute FileSignature.matches?(write.(content), extension),
                "#{inspect(content)} passed as #{extension}"
       end
@@ -139,6 +144,8 @@ defmodule MishkaCmsCore.Runtime.FileSignatureTest do
       refute FileSignature.matches?(write.(@png), ".pdf")
       refute FileSignature.matches?(write.(@pdf), ".png")
       refute FileSignature.matches?(write.(@png), ".txt")
+      refute FileSignature.matches?(write.(@png), ".woff2")
+      refute FileSignature.matches?(write.(@woff2), ".png")
     end
 
     test "is false for an extension with no kind, whatever the bytes are", %{write: write} do

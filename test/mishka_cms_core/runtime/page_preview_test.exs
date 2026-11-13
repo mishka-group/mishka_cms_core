@@ -54,7 +54,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreviewTest do
 
       {html, note} = RuntimePreview.render_document(page, Page)
 
-      assert is_binary(note)
+      assert note =~ "not_provided"
       assert html =~ "Preview unavailable"
     end
 
@@ -144,7 +144,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreviewTest do
     test "render_error_document returns a note (not a crash) for an unknown status" do
       {html, note} = RuntimePreview.render_error_document(error_record(), 418)
 
-      assert is_binary(note)
+      assert note == "no template"
       assert html =~ "No template for status 418"
     end
 
@@ -173,14 +173,14 @@ defmodule MishkaCmsCore.Runtime.RuntimePreviewTest do
 
       {html, note} = RuntimePreview.render_document(page, Page, "n0nce")
 
-      assert is_binary(note)
+      assert note =~ "not_provided"
       assert length(String.split(html, ~s(<style nonce="n0nce">))) - 1 == 2
     end
 
     test "the ErrorPage fallback document carries it on both of its blocks" do
       {html, note} = RuntimePreview.render_error_document(error_record(), 418, "err-nonce")
 
-      assert is_binary(note)
+      assert note == "no template"
       assert length(String.split(html, ~s(<style nonce="err-nonce">))) - 1 == 2
     end
 

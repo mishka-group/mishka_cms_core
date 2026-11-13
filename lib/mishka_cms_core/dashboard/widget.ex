@@ -819,6 +819,8 @@ defmodule MishkaCmsCore.Dashboard.Widget do
   # `rescue` has gone out of scope, in the LiveView process — where a raise kills the page and the
   # client reconnects straight back into it. LiveView offers nothing that would contain that, so what
   # keeps a widget safe is the shape of the data it is handed, not this.
+  # The only markup is this fallback's own tag; the message is escaped.
+  # sobelow_skip ["XSS.Raw"]
   defp render_loaded(widget, assigns) do
     {module, function} = widget.component
     apply(module, function, [assigns])

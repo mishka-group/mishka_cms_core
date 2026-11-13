@@ -137,24 +137,24 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.TenantContextTest do
     test "reads as its own message where policy breakdowns are shown" do
       assert Application.get_env(:ash, :policies)[:show_policy_breakdowns?]
 
+      site_only = "A site user can act only on their own site."
+      master_only = "This action requires a master user"
+
       refusals = [
-        validate(@tenant, Ash.UUID.generate(), site_user(Ash.UUID.generate())),
-        atomic(@tenant, Ash.UUID.generate(), site_user(Ash.UUID.generate())),
-        validate(@master, nil, nil),
-        atomic(@master, nil, nil)
+        {validate(@tenant, Ash.UUID.generate(), site_user(Ash.UUID.generate())), site_only},
+        {atomic(@tenant, Ash.UUID.generate(), site_user(Ash.UUID.generate())), site_only},
+        {validate(@master, nil, nil), master_only},
+        {atomic(@master, nil, nil), master_only}
       ]
 
-      for {:error, %Ash.Error.Forbidden.Policy{} = error} <- refusals do
+      for {refusal, opening} <- refusals do
+        assert {:error, %Ash.Error.Forbidden.Policy{} = error} = refusal
         message = Exception.message(error)
 
-        assert String.starts_with?(message, "A site user can act only on their own site.") or
-                 String.starts_with?(message, "This action requires a master user")
-
+        assert String.starts_with?(message, opening)
         refute message =~ "CondClauseError"
         assert error.resource == User
       end
-
-      assert length(refusals) == 4
     end
 
     test "is returned, not raised, where policy breakdowns are logged", %{policies: policies} do

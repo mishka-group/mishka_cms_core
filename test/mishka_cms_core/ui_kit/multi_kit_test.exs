@@ -98,7 +98,7 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
 
       chelekom = Enum.find(kits, &(&1.name == "chelekom"))
       assert chelekom.components > 100
-      assert is_binary(chelekom.version)
+      assert chelekom.version =~ ~r/^\d+\.\d+\.\d+/
       assert String.ends_with?(chelekom.path, "chelekom.json")
     end
 
@@ -288,7 +288,7 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
 
       assert {:ok, %{components: installed}} = UiKitHandler.install_kit!(path, site_id: nil)
 
-      assert length(installed) == 2
+      assert match?([_, _], installed)
       assert installed?("acme-alert")
       assert installed?("acme-card")
       refute installed?("acme-broken")

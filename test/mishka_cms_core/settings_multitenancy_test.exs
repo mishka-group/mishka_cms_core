@@ -57,7 +57,7 @@ defmodule MishkaCmsCore.SettingsMultitenancyTest do
     rows =
       Setting |> Ash.Query.filter(key == "k") |> Ash.read!(action: :read_any, authorize?: false)
 
-    assert length(rows) == 2
+    assert match?([_, _], rows)
     assert Enum.count(rows, &is_nil(&1.site_id)) == 1
     assert Enum.count(rows, &(&1.site_id == site.id)) == 1
   end
@@ -85,7 +85,7 @@ defmodule MishkaCmsCore.SettingsMultitenancyTest do
     all =
       Setting |> Ash.Query.filter(key == "g") |> Ash.read!(action: :read_any, authorize?: false)
 
-    assert length(all) == 3
+    assert match?([_, _, _], all)
 
     tenant_rows =
       Setting |> Ash.Query.filter(key == "g") |> Ash.read!(tenant: site.id, authorize?: false)

@@ -203,6 +203,8 @@ defmodule MishkaCmsCore.Runtime.PageForm.Rules do
   # once and kept — anchored, because the browser anchors it. A source that will not compile is
   # remembered as `nil` and contributes no rule, rather than raising from inside a form the author
   # already saved.
+  # The pattern is the site author's own; PCRE's match limit bounds a slow one.
+  # sobelow_skip ["DOS.Regex"]
   defp compiled(source) do
     key = {__MODULE__, :anchored, source}
 

@@ -148,6 +148,8 @@ defmodule MishkaCmsCore.Runtime.DraftArchivalPurge do
   end
 
   # `applied_at IS NULL` is what makes this provably unable to delete the record of a publish.
+  # Only a table name or this module's own SQL is interpolated; values are bound parameters.
+  # sobelow_skip ["SQL.Query"]
   defp legacy_ids(table) do
     sql =
       "SELECT id::text FROM #{table} WHERE archived_at IS NOT NULL AND applied_at IS NULL " <>
@@ -168,6 +170,7 @@ defmodule MishkaCmsCore.Runtime.DraftArchivalPurge do
     end
   end
 
+  # sobelow_skip ["SQL.Query"]
   defp column?(table) do
     sql = """
     SELECT EXISTS (

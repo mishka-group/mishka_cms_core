@@ -14,10 +14,28 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   use MishkaCmsCore.DataCase, async: false
 
   import MishkaCmsCore.Test.Factory
+  import MishkaCmsCore.Test.VersionHelpers
 
   require Ash.Query
 
-  alias MishkaCmsCore.Runtime.{ErrorPageDraft, LayoutDraft, Media, Page, PageDraft}
+  alias Ash.Resource.Validation.Context
+  alias MishkaCmsCore.Accounts.User
+  alias MishkaCmsCore.Notify.Notification
+
+  alias MishkaCmsCore.Runtime.{
+    Component,
+    ErrorPageDraft,
+    Layout,
+    LayoutDraft,
+    Media,
+    Page,
+    PageDraft
+  }
+
+  alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
+  alias MishkaCmsCore.Test.Plugins.PageLinkSwap
+  alias MishkaGervaz.Form.Web.DataLoader.RelationLoader.Default, as: RelationLoader
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @moduletag :unit
 
@@ -315,9 +333,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   # A JOIN ROW HAS NO SITE OF ITS OWN: `own:` names the parent whose site it has, and the other
   # parent must be that site's (or shared, where allowed). Whoever writes, a master included.
   describe "a record with no site of its own, placed by the parent it names in `own:`" do
-    alias MishkaCmsCore.Runtime.Layout
-    alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
-
     defp check(attrs, extra_opts \\ []) do
       {:ok, opts} =
         SameSiteReference.init(
@@ -363,8 +378,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   end
 
   describe "a notification" do
-    alias MishkaCmsCore.Notify.Notification
-
     defp deliver(tenant, attrs) do
       Notification
       |> Ash.Changeset.for_create(
@@ -486,9 +499,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   end
 
   describe "a page a plugin changes before it is created" do
-    alias MishkaCmsCore.Test.Plugins.PageLinkSwap
-    alias MishkaInstaller.Event.{Event, EventHandler}
-
     @before_create "cms_core:page:before_create"
 
     setup do
@@ -549,10 +559,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   end
 
   describe "a restored version" do
-    alias MishkaCmsCore.Runtime.Media
-
-    import MishkaCmsCore.Test.VersionHelpers
-
     defp restore(record, version, actor) do
       record
       |> Ash.Changeset.for_update(:restore_version, %{version_id: version.id},
@@ -735,10 +741,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   end
 
   describe "a record other records name, moved to another site" do
-    alias MishkaCmsCore.Accounts.User
-    alias MishkaCmsCore.Runtime.{Component, Layout}
-    alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
-
     @moved_away "still use this"
 
     defp move(record, site_id, master) do
@@ -1174,9 +1176,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   # WHAT A FORM OFFERS is what the write accepts: the record's own site's rows and the shared ones,
   # for a master following the site of the record being written.
   describe "a page form's layout picker" do
-    alias MishkaCmsCore.Runtime.Layout
-    alias MishkaGervaz.Form.Web.DataLoader.RelationLoader.Default, as: RelationLoader
-
     defp offered(state) do
       field = MishkaGervaz.Resource.Info.Form.field(Page, :layout_id)
       {:ok, options, _more?} = RelationLoader.load_options(field, state)
@@ -1239,8 +1238,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   end
 
   describe "a media form's category picker" do
-    alias MishkaGervaz.Form.Web.DataLoader.RelationLoader.Default, as: RelationLoader
-
     defp categories_offered(state) do
       field = MishkaGervaz.Resource.Info.Form.field(Media, :media_category_id)
       {:ok, options, _more?} = RelationLoader.load_options(field, state)
@@ -1277,10 +1274,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteReferencesTest do
   # `shared?: :master` asks who writes: a record with no site is named only by a master or by the
   # system. A site's user gets the refusal another site's record gets, whatever it holds.
   describe "a shared record that only a master or the system may name" do
-    alias MishkaCmsCore.Runtime.Layout
-    alias MishkaCmsCore.Runtime.Resources.Validations.SameSiteReference
-    alias Ash.Resource.Validation.Context
-
     defp check_as(layout, context, shared?) do
       {:ok, opts} =
         SameSiteReference.init(

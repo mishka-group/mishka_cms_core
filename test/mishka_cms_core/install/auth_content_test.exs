@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# The sign-in page's handlers are called with a bare socket, and the socket they return is the contract.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Install.AuthContentTest do
   @moduledoc """
   The sign-in content every site is given — `MishkaCmsCore.Install.StarterContent.ensure_auth!/1`
@@ -311,7 +313,8 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
 
       assert path == "/api/auth/user/password/sign_in_with_token"
       assert %{"return_to" => ^token, "token" => signed} = URI.decode_query(query)
-      assert is_binary(signed)
+      assert {:ok, %{"sub" => subject}} = AshAuthentication.Jwt.peek(signed)
+      assert subject == "user?id=#{user.id}"
     end
 
     test "a sign-in refused for its rate says how long to wait while auth:live:rate_limited cannot run",
@@ -782,7 +785,7 @@ defmodule MishkaCmsCore.Install.AuthContentTest do
   defp sources(record) do
     [record.template] ++
       Enum.map(Map.get(record, :helpers) || [], & &1.code) ++
-      Enum.map(Map.get(record, :events) || [], &(&1[:code] || &1["code"]))
+      Enum.map(Map.get(record, :events) || [], & &1.code)
   end
 
   defp fa_rows(site), do: rows_in(site, "fa")

@@ -69,6 +69,8 @@ defmodule Mix.MishkaCmsCore.GettextTemplates do
   end
 
   # Writes one template when merging the source's messages into it changes it.
+  # A Mix task writing the project's own gettext templates.
+  # sobelow_skip ["Traversal.FileModule"]
   defp write(path, prefix, messages) do
     template = read(path)
     merged = %{template | messages: merge_messages(template.messages, prefix, messages)}
@@ -81,6 +83,7 @@ defmodule Mix.MishkaCmsCore.GettextTemplates do
     end
   end
 
+  # sobelow_skip ["Traversal.FileModule"]
   defp write!(path, content) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, content)

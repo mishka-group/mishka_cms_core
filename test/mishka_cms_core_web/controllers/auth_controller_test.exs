@@ -17,6 +17,9 @@ defmodule MishkaCmsCoreWeb.Test.AuthControllerTest do
   """
   use MishkaCmsCore.ConnCase, async: false
 
+  # Controller tests: the conn a request leaves behind is what they check.
+  @moduletag :plug_test
+
   require Ash.Query
 
   import MishkaCmsCore.Test.Factory

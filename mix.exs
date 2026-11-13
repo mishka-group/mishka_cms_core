@@ -5,7 +5,7 @@
 defmodule MishkaCmsCore.MixProject do
   use Mix.Project
 
-  @version "0.0.5-alpha.13"
+  @version "0.0.5-alpha.15"
   @source_url "https://github.com/mishka-group/mishka_cms_core"
 
   def project do
@@ -26,16 +26,19 @@ defmodule MishkaCmsCore.MixProject do
       docs: [
         main: "readme",
         source_ref: "v#{@version}",
-        extras: ["README.md", LICENSE: [title: "License"]],
+        extras: ["README.md", "guides/agent-receipts.md", LICENSE: [title: "License"]],
         source_url: @source_url
       ],
       # A reference outside the core is written by `mix mishka_cms_core.gettext.gervaz` or
       # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
       gettext: [excluded_refs_from_purging: ~r{^\.\./}],
       # `lib/mix/` calls `Mix`, and `test/support` (compiled in :test, where `mix ci` runs dialyzer)
-      # calls ExUnit; neither is in the default PLT. `.dialyzer_ignore.exs` lists what dialyzer
+      # calls ExUnit and, from `mix mishka_cms_core.credence`, Credence; none is in the default PLT. `.dialyzer_ignore.exs` lists what dialyzer
       # reports that is not a defect, each with the reason.
-      dialyzer: [plt_add_apps: [:mix, :ex_unit], ignore_warnings: ".dialyzer_ignore.exs"]
+      dialyzer: [
+        plt_add_apps: [:mix, :ex_unit, :credence],
+        ignore_warnings: ".dialyzer_ignore.exs"
+      ]
     ]
   end
 
@@ -79,7 +82,7 @@ defmodule MishkaCmsCore.MixProject do
     ]
   end
 
-  def cli, do: [preferred_envs: [ci: :test]]
+  def cli, do: [preferred_envs: [ci: :test, "mishka_cms_core.credence": :test]]
 
   # Run "mix help compile.app" to learn about applications.
   def application do
@@ -152,6 +155,9 @@ defmodule MishkaCmsCore.MixProject do
       {:guarded_struct, "~> 0.1.7"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
+      # `MishkaCmsCore.Runtime.HeadCodes` parses a site's head code with `:mochiweb_html`, which
+      # reads a script's body as raw text.
+      {:mochiweb, "~> 3.5"},
       # Share images (`MishkaCmsCore.Runtime.ShareCard`), drawn with libvips in a separate OS process
       # (`MishkaCmsCore.Isolated`). Vix brings a precompiled libvips: nothing to install.
       {:image, "~> 0.72"},
@@ -169,6 +175,8 @@ defmodule MishkaCmsCore.MixProject do
       {:jump_credo_checks, "~> 0.6", only: [:dev, :test], runtime: false},
       {:ex_slop, "~> 0.4", only: [:dev, :test], runtime: false},
       {:ex_dna, "~> 1.5", only: [:dev, :test], runtime: false},
+      # `mix mishka_cms_core.credence` (test/support/mix/tasks) runs its pattern rules.
+      {:credence, "~> 0.8.1", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev, :test], runtime: false},
       # `mix hex.publish` builds the docs with it.
       {:ex_doc, "~> 0.40", only: :dev, runtime: false}
@@ -199,6 +207,7 @@ defmodule MishkaCmsCore.MixProject do
         "compile --warnings-as-errors",
         "format --check-formatted",
         "credo --strict",
+        "mishka_cms_core.credence",
         "sobelow --config",
         "deps.audit",
         "dialyzer",

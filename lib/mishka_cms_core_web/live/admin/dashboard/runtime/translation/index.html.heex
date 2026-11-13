@@ -8,11 +8,7 @@ SPDX-License-Identifier: Apache-2.0
   <.header>
     {gettext("Translations")}
     <:subtitle>
-      {raw(
-        gettext("Words your templates ask for with %{code}, per language.",
-          code: ~s[<code class="font-mono">t("…")</code>]
-        )
-      )}
+      {subtitle()}
     </:subtitle>
     <:actions>
       <div :if={@writable?} class="flex flex-wrap items-center gap-2">

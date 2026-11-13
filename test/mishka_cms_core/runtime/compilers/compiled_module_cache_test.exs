@@ -129,7 +129,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CompiledModuleCacheTest do
 
       {first, compiled} = traced({:elixir_compiler, :quoted, 3}, [], fn -> compile(ast) end)
       assert {:ok, ^module, _diagnostics} = first
-      assert length(compiled) == 1
+      assert match?([_], compiled)
       assert [%{cache: :miss, module: ^module}] = stops()
       md5 = module.module_info(:md5)
 

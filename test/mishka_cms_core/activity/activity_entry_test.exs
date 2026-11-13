@@ -14,6 +14,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntryTest do
   @repo Application.compile_env!(:mishka_cms_core, :repo)
 
   alias MishkaCmsCore.Activity.ActivityEntry
+  alias MishkaCmsCore.Activity.Query
   alias MishkaGervaz.Table.Web.State
 
   defp read(filters, opts) do
@@ -278,8 +279,6 @@ defmodule MishkaCmsCore.Activity.ActivityEntryTest do
   end
 
   describe "global sharing per resource (Query.shares_globals?/1)" do
-    alias MishkaCmsCore.Activity.Query
-
     test "only runtime resources that share globals with tenants are marked" do
       # These expose :for_tenant_with_globals (their admin pages show globals to tenants)
       assert Query.shares_globals?(MishkaCmsCore.Runtime.Component)
@@ -343,8 +342,11 @@ defmodule MishkaCmsCore.Activity.ActivityEntryTest do
       }
     end
 
-    defp inserts(socket, state),
-      do: socket.assigns.streams |> Map.fetch!(state.static.stream_name) |> Map.fetch!(:inserts)
+    # The stream handler is called with a bare socket, and the stream it queues is its contract.
+    defp inserts(socket, state) do
+      # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
+      socket.assigns.streams |> Map.fetch!(state.static.stream_name) |> Map.fetch!(:inserts)
+    end
 
     defp notification(entry) do
       %Ash.Notifier.Notification{

@@ -221,7 +221,8 @@ defmodule MishkaCmsCore.Activity.Sources.RuntimeDraft do
   defp event_time(%{} = data),
     do: Map.get(data, :updated_at) || DateTime.utc_now()
 
-  defp payload_name(%{} = payload), do: Map.get(payload, "name") || Map.get(payload, :name)
+  # The SQL row's payload is `jsonb_build_object('name', ...)`, so its key is a string.
+  defp payload_name(%{"name" => name}), do: name
   defp payload_name(_payload), do: nil
 
   defp unix(%DateTime{} = at), do: at |> DateTime.truncate(:second) |> DateTime.to_unix()

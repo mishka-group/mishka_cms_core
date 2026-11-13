@@ -155,7 +155,7 @@ defmodule MishkaCmsCore.Runtime.ComponentCopyTest do
         |> Ash.Query.filter(version_source_id == ^copy.id)
         |> Ash.read!(page: false, authorize?: false)
 
-      assert length(versions) == 1
+      assert match?([_], versions)
     end
   end
 

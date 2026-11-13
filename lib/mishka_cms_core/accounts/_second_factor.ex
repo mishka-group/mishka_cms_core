@@ -186,17 +186,19 @@ defmodule MishkaCmsCore.Accounts.SecondFactor do
   @spec prepare(Ash.Query.t(), map(), :code | :refuse) :: Ash.Query.t()
   def prepare(query, _context, way) do
     Ash.Query.after_action(query, fn query, users ->
-      Enum.reduce_while(users, {:ok, users}, fn user, ok ->
-        case passed(way, user, query) do
-          :ok ->
-            {:cont, ok}
-
-          {:error, error} ->
-            refused(user, error)
-            {:halt, {:error, error}}
-        end
-      end)
+      Enum.reduce_while(users, {:ok, users}, &check_user(&1, &2, way, query))
     end)
+  end
+
+  defp check_user(user, ok, way, query) do
+    case passed(way, user, query) do
+      :ok ->
+        {:cont, ok}
+
+      {:error, error} ->
+        refused(user, error)
+        {:halt, {:error, error}}
+    end
   end
 
   defp passed(way, user, query) do

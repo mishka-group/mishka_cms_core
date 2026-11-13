@@ -298,14 +298,18 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
   If no supported pattern is matched, the function logs an error with the
   problematic quoted expression for debugging purposes.
   """
+  # The name is the admin's own `defmodule`, which the runtime compiles into a module anyway.
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_name({:defmodule, _, [{:__aliases__, _, [module]}, _]}) do
     {:ok, Module.concat([module])}
   end
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_name({:defmodule, _, [module, _]}) do
     {:ok, Module.concat([module])}
   end
 
+  # sobelow_skip ["DOS.ModuleConcat"]
   def module_name({module, {:defmodule, _, _}}) do
     {:ok, Module.concat([module])}
   end
@@ -423,14 +427,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
 
     case results do
       [_ | _] = mods ->
-        Enum.each(mods, fn {module, binary} ->
-          if :code.is_loaded(module) != false, do: :code.purge(module)
-
-          case :code.load_binary(module, String.to_charlist(file), binary) do
-            {:module, ^module} -> :ok
-            {:error, reason} -> throw({:load_failed, module, reason})
-          end
-        end)
+        Enum.each(mods, fn {module, binary} -> load_binary!(module, binary, file) end)
 
         # Return the LAST module (the user-facing component module — its
         # related Version/PaperTrail modules come earlier in the list).
@@ -444,6 +441,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.ModuleCompiler do
     error -> {:error, error}
   catch
     {:load_failed, module, reason} -> {:error, {:load_failed, module, reason}}
+  end
+
+  defp load_binary!(module, binary, file) do
+    if :code.is_loaded(module) != false, do: :code.purge(module)
+
+    case :code.load_binary(module, String.to_charlist(file), binary) do
+      {:module, ^module} -> :ok
+      {:error, reason} -> throw({:load_failed, module, reason})
+    end
   end
 
   ####################################################################################

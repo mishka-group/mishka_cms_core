@@ -1202,13 +1202,12 @@ defmodule MishkaCmsCore.Dev.Seeds do
   # "already there" can only be a number.
   defp held_count(resource, site_id) do
     [:read_any, :master_archived]
-    |> Enum.map(fn action ->
+    |> Enum.sum_by(fn action ->
       resource
       |> Ash.Query.for_read(action, %{}, authorize?: false)
       |> scoped(site_id)
       |> Ash.count!(authorize?: false)
     end)
-    |> Enum.sum()
   end
 
   defp rows(_query, 0), do: []

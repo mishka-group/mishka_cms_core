@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# These tests call the page's handlers with a bare socket, and the socket they return is the contract.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Runtime.PageStateTest do
   @moduledoc """
   A page's starting state, from the row to the socket.
@@ -49,8 +51,14 @@ defmodule MishkaCmsCore.Runtime.PageStateTest do
   end
 
   # A row read back holds atom keys where the column is typed and string keys where it is not.
-  defp pairs(entries),
-    do: Enum.map(entries, &{&1[:name] || &1["name"], &1[:code] || &1["code"]})
+  defp pairs(entries) do
+    Enum.map(entries, fn entry ->
+      %{"name" => name, "code" => code} =
+        Map.new(entry, fn {key, value} -> {to_string(key), value} end)
+
+      {name, code}
+    end)
+  end
 
   defp socket(assigns \\ %{}),
     do: %Phoenix.LiveView.Socket{assigns: Map.put(assigns, :__changed__, %{})}

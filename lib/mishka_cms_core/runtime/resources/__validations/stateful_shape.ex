@@ -125,14 +125,13 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.StatefulShape do
     end
   end
 
-  defp clauses(%{} = extra),
-    do: (Map.get(extra, "clauses") || Map.get(extra, :clauses) || []) |> List.wrap()
-
+  # `extra` and its declarations come from a form (string keys) or from code (atom keys).
+  defp clauses(%{"clauses" => clauses}) when not is_nil(clauses), do: List.wrap(clauses)
+  defp clauses(%{clauses: clauses}) when not is_nil(clauses), do: List.wrap(clauses)
   defp clauses(_extra), do: []
 
-  defp name_of(%{} = declaration),
-    do: to_string(Map.get(declaration, "name") || Map.get(declaration, :name) || "")
-
+  defp name_of(%{"name" => name}) when not is_nil(name), do: to_string(name)
+  defp name_of(%{name: name}) when not is_nil(name), do: to_string(name)
   defp name_of(_declaration), do: ""
 
   defp reserved_message([_one]),

@@ -9,6 +9,9 @@ defmodule MishkaCmsCore.Test.InfraHooksTest do
   """
   use MishkaCmsCore.DataCase, async: false
 
+  # Every test runs a real plug and reads what it put on the conn.
+  @moduletag :plug_test
+
   import Plug.Conn
 
   alias MishkaInstaller.Event.{Event, EventHandler}

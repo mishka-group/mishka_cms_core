@@ -212,8 +212,8 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
 
   # WHO CAUSED THE JOB. `SendToOban.build_job_args/2` stamps the acting user into the args; a job
   # nobody triggered carries none and stays "System", which is what it is. Args come back from the
-  # database as JSON, so the key is a string.
-  defp actor_id(%{} = args), do: Map.get(args, "actor_id") || Map.get(args, :actor_id)
+  # database as JSON (and Oban's inline engine recodes them the same way), so the key is a string.
+  defp actor_id(%{"actor_id" => actor_id}), do: actor_id
   defp actor_id(_args), do: nil
 
   defp state_event("completed"), do: :completed

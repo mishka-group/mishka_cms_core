@@ -1160,6 +1160,8 @@ defmodule MishkaCmsCore.Runtime.MediaCategory do
   How many live files sit directly in each of `folders`, in their order — one query for all of them.
   """
   @spec media_counts([%__MODULE__{}]) :: [non_neg_integer()]
+  # The SQL is a constant; the folder ids go in as a bound parameter.
+  # sobelow_skip ["SQL.Query"]
   def media_counts(folders) do
     sql = """
     SELECT media_category_id, COUNT(*)

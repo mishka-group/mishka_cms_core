@@ -28,10 +28,12 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     Media,
     Page,
     PageProvision,
+    Seo,
     Stylesheet,
     Translations
   }
 
+  alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Settings
 
   require Ash.Query
@@ -67,6 +69,66 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
     # THE LAYOUT IS IN THE REPORT WHETHER OR NOT THIS CALL WROTE IT, because a caller adding pages of
     # its own — `MishkaCmsCore.Dev.Seeds` does — has to hang them on the same row on every run.
     assert report.layout_id == one(Layout, site).id
+  end
+
+  describe "the tagline" do
+    setup do
+      snapshot = SettingsState.snapshot()
+      on_exit(fn -> SettingsState.restore(snapshot) end)
+    end
+
+    test "a new site gets a sample tagline, and its home titles and describes itself with it", %{
+      site: site
+    } do
+      {:ok, _} = Settings.put("site.title", "Acme", site_id: site.id)
+      StarterContent.seed!(site)
+
+      tagline = Settings.get("site.tagline", nil, site.id)
+      assert is_binary(tagline) and tagline != ""
+
+      head = home_head(site)
+      assert head.title == "Acme · " <> tagline
+      assert head.description == tagline
+    end
+
+    test "a site's own tagline is kept, and with none the home leaves no dangling separator", %{
+      site: site
+    } do
+      {:ok, _} = Settings.put("site.title", "Acme", site_id: site.id)
+      {:ok, _} = Settings.put("site.tagline", "Hand-made bread", site_id: site.id)
+      StarterContent.seed!(site)
+
+      assert Settings.get("site.tagline", nil, site.id) == "Hand-made bread"
+      assert home_head(site).title == "Acme · Hand-made bread"
+
+      {:ok, _} = Settings.put("site.tagline", "", site_id: site.id)
+      head = home_head(site)
+
+      assert head.title == "Home · Acme"
+      assert head.description == nil
+    end
+  end
+
+  defp home_head(site) do
+    home = one(Page, site)
+    layout = one(Layout, site)
+
+    Seo.head(
+      %{
+        title: home.title,
+        description: home.description,
+        image: nil,
+        type: "website",
+        url: "https://starter.test/en",
+        language: "en",
+        tags: [],
+        schema: [],
+        vars: %{},
+        site_id: site.id
+      },
+      base: "https://starter.test",
+      layers: [layout.seo_tags, home.seo_tags]
+    )
   end
 
   # A FIRST INSTALL ANSWERS ONE PAGE. About, Contact and Privacy were the installer's and are the dev
@@ -1670,7 +1732,8 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
                ["About", "Pricing", "Blog"]
 
       # A TUPLE OR A MAP: the three are drawn alike.
-      assert html |> attribute("#site-nav-dev-menu > a", "class") |> Enum.uniq() |> length() == 1
+      assert html |> attribute("#site-nav-dev-menu > a", "class") |> MapSet.new() |> MapSet.size() ==
+               1
 
       # SHUT UNTIL ITS BUTTON OPENS IT.
       assert "hidden" in class_list(html, "#site-nav-dev-menu")
@@ -1687,7 +1750,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert html |> query("#site-nav-dev-label") |> LazyHTML.text() |> String.trim() == "Dev"
 
       assert attribute(html, "#{group} > a", "href") == ["/about", "/pricing", "/blog"]
-      assert html |> attribute("#{group} > a", "class") |> Enum.uniq() |> length() == 1
+      assert html |> attribute("#{group} > a", "class") |> MapSet.new() |> MapSet.size() == 1
 
       # NO BUTTON TO OPEN: the panel is already something the visitor opened.
       assert html |> query("#{group} button") |> Enum.count() == 0

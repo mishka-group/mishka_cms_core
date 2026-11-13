@@ -54,6 +54,8 @@ defmodule MishkaCmsCore.Dashboard.CoreWidgetsTest do
   end
 
   for {module, id, marker} <- @widgets do
+    # The widget's call/1 runs through `unquote(module)`, which the check cannot see as our code.
+    # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
     test "#{id}: call/1 appends a valid descriptor" do
       assert {:reply,
               %{widgets: [%Widget{id: unquote(id), component: {unquote(module), :render}}]}} =

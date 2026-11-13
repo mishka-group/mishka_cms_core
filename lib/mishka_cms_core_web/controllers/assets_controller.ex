@@ -284,34 +284,12 @@ defmodule MishkaCmsCoreWeb.AssetsController do
           |> then(&Hook.call("AssetsController.Serve.BeforeServe", &1))
           |> Map.get(:conn)
 
-        accepted =
-          conn |> get_req_header("accept-encoding") |> List.first("") |> String.downcase()
-
-        {encoding, key} =
-          cond do
-            accepted =~ "br" -> {"br", "brotli_#{asset}"}
-            accepted =~ "gzip" -> {"gzip", "gzip_#{asset}"}
-            true -> {nil, asset}
-          end
+        {encoding, key} = encoding_and_key(conn, asset)
 
         %{content: content, encoding: encoding} =
           %{site: site, key: key, type: type, asset: asset, encoding: encoding}
           |> then(&Hook.call("AssetsController.Serve.BeforeAssetLookup", &1))
-          |> then(fn data ->
-            {get_asset, encoding} =
-              case AssetsState.get_value(data.site, data.key) do
-                nil -> {AssetsState.get_value(data.site, data.asset), nil}
-                found -> {found, data.encoding}
-              end
-
-            :telemetry.execute(
-              [:mishka_cms, :assets, if(get_asset, do: :cache_hit, else: :cache_miss)],
-              %{count: 1, size: if(get_asset, do: byte_size(get_asset), else: 0)},
-              %{site: data.site, asset_type: data.type, key: data.key}
-            )
-
-            %{content: get_asset, encoding: encoding}
-          end)
+          |> lookup_asset()
           |> then(&Hook.call("AssetsController.Serve.AfterAssetLookup", &1))
 
         result =
@@ -326,29 +304,55 @@ defmodule MishkaCmsCoreWeb.AssetsController do
             }
           }
           |> then(&Hook.call("AssetsController.Serve.BeforeResponse", &1))
-          |> then(fn
-            %{content: nil} = data ->
-              refuse(data.conn, site, type, :missing)
-
-            data ->
-              data.conn
-              |> put_resp_header("content-type", data.headers["content-type"])
-              |> then(
-                &if(data.encoding,
-                  do: put_resp_header(&1, "content-encoding", data.encoding),
-                  else: &1
-                )
-              )
-              |> put_resp_header("cache-control", data.headers["cache-control"])
-              # If you have external assets, you can add them here or BeforeResponse events plugins
-              # |> then(
-              #   &if(type == "css", do: put_resp_header(&1, "access-control-allow-origin", "*"), else: &1)
-              # )
-              |> send_resp(200, data.content)
-          end)
+          |> respond(site, type)
 
         {result, %{}}
       end
     )
   end
+
+  defp encoding_and_key(conn, asset) do
+    accepted = conn |> get_req_header("accept-encoding") |> List.first("") |> String.downcase()
+
+    cond do
+      accepted =~ "br" -> {"br", "brotli_#{asset}"}
+      accepted =~ "gzip" -> {"gzip", "gzip_#{asset}"}
+      true -> {nil, asset}
+    end
+  end
+
+  defp lookup_asset(data) do
+    {get_asset, encoding} =
+      case AssetsState.get_value(data.site, data.key) do
+        nil -> {AssetsState.get_value(data.site, data.asset), nil}
+        found -> {found, data.encoding}
+      end
+
+    :telemetry.execute(
+      [:mishka_cms, :assets, if(get_asset, do: :cache_hit, else: :cache_miss)],
+      %{count: 1, size: if(get_asset, do: byte_size(get_asset), else: 0)},
+      %{site: data.site, asset_type: data.type, key: data.key}
+    )
+
+    %{content: get_asset, encoding: encoding}
+  end
+
+  defp respond(%{content: nil} = data, site, type), do: refuse(data.conn, site, type, :missing)
+
+  # The body is a compiled asset with its own stored content type, never request input.
+  # sobelow_skip ["XSS.SendResp"]
+  defp respond(data, _site, _type) do
+    data.conn
+    |> put_resp_header("content-type", data.headers["content-type"])
+    |> put_encoding(data.encoding)
+    |> put_resp_header("cache-control", data.headers["cache-control"])
+    # If you have external assets, you can add them here or BeforeResponse events plugins
+    # |> then(
+    #   &if(type == "css", do: put_resp_header(&1, "access-control-allow-origin", "*"), else: &1)
+    # )
+    |> send_resp(200, data.content)
+  end
+
+  defp put_encoding(conn, nil), do: conn
+  defp put_encoding(conn, encoding), do: put_resp_header(conn, "content-encoding", encoding)
 end

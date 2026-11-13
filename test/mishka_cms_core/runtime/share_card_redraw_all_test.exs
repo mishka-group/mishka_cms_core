@@ -201,7 +201,7 @@ defmodule MishkaCmsCore.Runtime.ShareCardRedrawAllTest do
       looks = all_enqueued(worker: ShareCardRefreshWorker)
       targets = Enum.map(looks, &ShareCard.decode(&1.args["target"]))
 
-      assert length(looks) == 4
+      assert match?([_, _, _, _], looks)
       assert {:page, page.id} in targets
       assert Enum.all?(looks, &(&1.args["force"] and &1.queue == "share_cards"))
 
@@ -253,7 +253,7 @@ defmodule MishkaCmsCore.Runtime.ShareCardRedrawAllTest do
         })
 
       targets = Enum.map(all_enqueued(worker: ShareCardRefreshWorker), & &1.args["target"])
-      assert length(targets) == 3
+      assert match?([_, _, _], targets)
       refute Enum.any?(targets, &Map.has_key?(&1, "page"))
     end
 

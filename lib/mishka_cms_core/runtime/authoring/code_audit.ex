@@ -63,7 +63,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeAudit do
   def untrusted do
     case CodeSignature.enabled?() do
       false -> 0
-      true -> @sources |> Enum.map(&count/1) |> Enum.sum()
+      true -> @sources |> Enum.sum_by(&count/1)
     end
   end
 
@@ -126,7 +126,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeAudit do
   def resign do
     case CodeSignature.enabled?() do
       false -> {:error, :signing_off}
-      true -> {:ok, @sources |> Enum.map(&resign_resource/1) |> Enum.sum()}
+      true -> {:ok, @sources |> Enum.sum_by(&resign_resource/1)}
     end
   end
 

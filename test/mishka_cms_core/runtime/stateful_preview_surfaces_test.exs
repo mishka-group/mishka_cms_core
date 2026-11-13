@@ -129,7 +129,6 @@ defmodule MishkaCmsCore.Runtime.StatefulPreviewSurfacesTest do
           %{}
         )
 
-      assert is_binary(result)
       assert result =~ ~s(data-role="plain")
     end
   end
@@ -138,8 +137,10 @@ defmodule MishkaCmsCore.Runtime.StatefulPreviewSurfacesTest do
     # THE EVAL ENVIRONMENT IMPORTS THE WHOLE MODULE, so a function missing from it is a function a
     # template can no longer call — which is how a preview surface breaks silently.
     test "delegate everything a template may reach for" do
+      exported = MishkaCmsCore.Runtime.StaticHelpers.__info__(:functions)
+
       for {name, arity} <- [{:component, 1}, {:component, 3}, {:ensure_component_loaded, 2}] do
-        assert function_exported?(MishkaCmsCore.Runtime.StaticHelpers, name, arity),
+        assert {name, arity} in exported,
                "StaticHelpers is missing #{name}/#{arity}, which templates can call"
       end
     end

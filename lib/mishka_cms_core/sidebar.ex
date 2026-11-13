@@ -58,6 +58,50 @@ defmodule MishkaCmsCore.Sidebar do
   mishka_installer has finished starting. `Enum.uniq_by/2` keeps the FIRST declaration of a key, so
   a plugin can add sections but never silently redefine a core one.
 
+  ## Nested entries
+
+  An item may name another item as its `parent`. The parent stays a link to its own page and opens
+  the entries under it; a child may have entries of its own, two levels below the top row and no
+  more. Build an extension's list with `items!/1` instead of mapping `Item.new!/1`, so a parent
+  that is missing or a third level fails the build:
+
+      @items MishkaCmsCore.Sidebar.items!([
+               %{key: "shop", label: gettext_noop("Shop"), path: "/admin/dashboard/shop",
+                 group: "plugins", permissions: ["admin:dashboard:shop"]},
+               %{key: "shop.orders", label: gettext_noop("Orders"),
+                 path: "/admin/dashboard/shop/orders", parent: "shop",
+                 permissions: ["admin:dashboard:shop"]},
+               %{key: "shop.returns", label: gettext_noop("Returns"),
+                 path: "/admin/dashboard/shop/returns", parent: "shop.orders",
+                 permissions: ["admin:dashboard:shop"]},
+               %{key: "shop.order", label: gettext_noop("Order"),
+                 path: "/admin/dashboard/shop/order", nav: false, mark: "shop.orders",
+                 permissions: ["admin:dashboard:shop"]}
+             ])
+
+  A child is an ordinary item: it is shown only to whom its own `permissions` allow, it gets its own
+  `order` and `visible` settings (its order is among its siblings), and `PageGuard` gates its
+  `module`. A child whose parent is not shown is not shown either, and a parent left with no child
+  is drawn as a plain link. `mark` names the entry a `nav: false` page keeps marked while it is open.
+
+  The sidebar draws an entry with children as a link and a separate arrow that shows or hides them.
+  The branch of the open page is open on load. What an admin folds or opens by hand, a group or a
+  branch, is kept in the browser's `localStorage` by the `SidebarScroll` hook, because
+  `Phoenix.LiveView.JS` cannot write storage; it costs no query. Under 980px the menu shows one
+  level at a time, with a back row, and opens at the level of the open page.
+
+  ## Counts
+
+  An entry may show a number beside its label. The extension supplies it with
+  `MishkaCmsCore.Sidebar.Counts.put/3`, from wherever its data changes, and open pages update the
+  chip without a reload. It is kept in memory, so drawing it costs no query; zero hides it.
+
+  ## A bar at the bottom of a narrow screen
+
+  The shell keeps no fixed element at the bottom of the page and leaves the safe area of a phone
+  free. An extension that wants a bar of its own there draws it inside its own pages, for example
+  as a `sticky bottom-0` element at the end of its content.
+
   ## Permissions
 
   `permissions` on an item is a list where holding ANY entry grants; `menu/1` compares it against
@@ -205,6 +249,11 @@ defmodule MishkaCmsCore.Sidebar do
     here, hidden from the nav, is what lets them be gated apart while the sidebar still renders the
     single link it renders today.
 
+    `parent` is the key of another item, and makes this one an entry under it (see "Nested entries"
+    in `MishkaCmsCore.Sidebar`). A child takes its `group` and `position` from the top of its chain,
+    so it sets neither. `mark` is for a `nav: false` page: the key of the entry that stays marked
+    while the page is open. `children` is filled in by `MishkaCmsCore.Sidebar.menu/2`.
+
     See `MishkaCmsCore.Sidebar` for the event contract.
     """
     use GuardedStruct
@@ -243,6 +292,9 @@ defmodule MishkaCmsCore.Sidebar do
       # entries; an entry that names only one of them credits nobody.
       field(:credit_name, String.t())
       field(:credit_url, String.t())
+      field(:parent, String.t())
+      field(:mark, String.t())
+      field(:children, list(), default: [])
     end
 
     @doc """
@@ -254,8 +306,19 @@ defmodule MishkaCmsCore.Sidebar do
     @spec new!(map()) :: t()
     def new!(attrs) do
       case builder(attrs) do
-        {:ok, item} -> item
-        error -> raise ArgumentError, "invalid sidebar item #{inspect(attrs)}: #{inspect(error)}"
+        {:ok, %__MODULE__{parent: parent, group: group}}
+        when is_binary(parent) and is_binary(group) ->
+          raise ArgumentError,
+                "invalid sidebar item #{inspect(attrs)}: a child takes its group from its parent"
+
+        {:ok, %__MODULE__{parent: key, key: key}} ->
+          raise ArgumentError, "invalid sidebar item #{inspect(attrs)}: it names itself as parent"
+
+        {:ok, item} ->
+          item
+
+        error ->
+          raise ArgumentError, "invalid sidebar item #{inspect(attrs)}: #{inspect(error)}"
       end
     end
   end
@@ -269,6 +332,8 @@ defmodule MishkaCmsCore.Sidebar do
 
   @event "sidebar:menus"
   @pubsub MishkaCmsCore.PubSub
+  @max_depth 2
+  @nesting_error "its parent is missing, or it sits more than two levels below its top row"
 
   @core_groups Enum.map(
                  [
@@ -518,7 +583,7 @@ defmodule MishkaCmsCore.Sidebar do
   def collect do
     case MishkaInstaller.Event.Hook.call(@event, core_menu()) do
       %{groups: groups, items: items} when is_list(groups) and is_list(items) ->
-        %{groups: descriptors(groups, Group), items: descriptors(items, Item)}
+        %{groups: descriptors(groups, Group), items: items |> descriptors(Item) |> inherit()}
 
       _ ->
         core_menu()
@@ -526,20 +591,48 @@ defmodule MishkaCmsCore.Sidebar do
   end
 
   @doc """
-  What `user` may see, ready to render: `%{main: [...], footer: [...]}`, each a list of
-  `Group.t()` (with `items` filled in) and top-level `Item.t()` interleaved in display order.
+  Builds an extension's items with `Item.new!/1` and checks them together, raising on a `parent`
+  or `mark` that names no item of the list, and on an entry more than two levels below its top
+  row. Call it in a module attribute, so a bad declaration fails the build.
+  """
+  @spec items!([map()]) :: [Item.t()]
+  def items!(list) do
+    items = Enum.map(list, &Item.new!/1)
+    by_key = Map.new(items, &{&1.key, &1})
+
+    for item <- items do
+      if root(item, by_key, 0) == :error,
+        do: raise(ArgumentError, "sidebar item #{inspect(item.key)}: #{@nesting_error}")
+
+      if item.mark && !Map.has_key?(by_key, item.mark),
+        do: raise(ArgumentError, "sidebar item #{inspect(item.key)} marks an unknown entry")
+    end
+
+    items
+  end
+
+  @doc """
+  What `user` may see, ready to render: `%{main: [...], footer: [...], trail: [...]}`. `main` and
+  `footer` are each a list of `Group.t()` (with `items` filled in) and top-level `Item.t()`
+  interleaved in display order, and every item carries its own `children`. `trail` is the keys from
+  the top row down to the entry of the page at `current_path`, the last one being that entry: `[]`
+  when no entry declares the page.
 
   Items the user may not see are dropped, then groups left with no items are dropped with them — a
   tenant admin holding only `admin:dashboard:blog:post` gets Home, the Runtime content lists,
   Plugins → Blog and Settings, and nothing else. Ordering and per-entry visibility come from
   Settings, resolved against the viewer's own site.
   """
-  @spec menu(map() | nil) :: %{main: list(), footer: list()}
-  def menu(user) do
+  @spec menu(map() | nil, String.t() | nil) :: %{
+          main: list(),
+          footer: list(),
+          trail: [String.t()]
+        }
+  def menu(user, current_path \\ nil) do
     %{groups: groups, items: items} = collect()
     user = load_permissions(user)
     site_id = site_id(user)
-    visible = Enum.filter(items, &(&1.nav && visible?(&1, user, site_id)))
+    visible = items |> Enum.filter(&(&1.nav && visible?(&1, user, site_id))) |> nest(nil, site_id)
 
     groups
     |> Enum.filter(&visible?(&1, user, site_id))
@@ -548,12 +641,72 @@ defmodule MishkaCmsCore.Sidebar do
     |> Enum.concat(Enum.filter(visible, &is_nil(&1.group)))
     |> arrange(site_id)
     |> Enum.split_with(&(&1.position == :main))
-    |> then(fn {main, footer} -> %{main: main, footer: footer} end)
+    |> then(fn {main, footer} ->
+      %{main: main, footer: footer, trail: trail(items, current_path)}
+    end)
   end
 
   defp fill(group, items, site_id) do
     %{group | items: items |> Enum.filter(&(&1.group == group.key)) |> arrange(site_id)}
   end
+
+  defp nest(items, parent, site_id) do
+    items
+    |> Enum.filter(&(&1.parent == parent))
+    |> Enum.map(&%{&1 | children: nest(items, &1.key, site_id)})
+    |> arrange(site_id)
+  end
+
+  # A child takes its group and position from the top of its chain, so the menu, the settings page
+  # and the page guard all read the same item. A broken chain is dropped rather than drawn.
+  defp inherit(items) do
+    by_key = Map.new(items, &{&1.key, &1})
+
+    Enum.flat_map(items, fn item ->
+      case root(item, by_key, 0) do
+        {:ok, top} -> [%{item | group: top.group, position: top.position}]
+        :error -> []
+      end
+    end)
+  end
+
+  defp root(%Item{parent: nil} = item, _by_key, _depth), do: {:ok, item}
+  defp root(_item, _by_key, depth) when depth >= @max_depth, do: :error
+
+  defp root(%Item{parent: parent}, by_key, depth) do
+    case by_key do
+      %{^parent => up} -> root(up, by_key, depth + 1)
+      _missing -> :error
+    end
+  end
+
+  # The entry of the page at `path`: the declared path that matches most of it, a `nav: false` page
+  # standing for the entry it marks. Then its chain of parents, top first.
+  defp trail(_items, nil), do: []
+
+  defp trail(items, path) do
+    by_key = Map.new(items, &{&1.key, &1})
+
+    items
+    |> Enum.filter(&((&1.nav or is_binary(&1.mark)) and opens_path?(path, &1.path)))
+    |> Enum.max_by(&String.length(&1.path), fn -> nil end)
+    |> marked(by_key)
+    |> chain(by_key, [])
+  end
+
+  defp marked(%Item{nav: false, mark: mark}, by_key), do: by_key[mark]
+  defp marked(item, _by_key), do: item
+
+  defp chain(nil, _by_key, keys), do: keys
+  defp chain(%Item{parent: nil, key: key}, _by_key, keys), do: [key | keys]
+
+  defp chain(%Item{parent: parent, key: key}, by_key, keys),
+    do: chain(by_key[parent], by_key, [key | keys])
+
+  defp opens_path?(current, "/admin/dashboard"), do: current == "/admin/dashboard"
+
+  defp opens_path?(current, path),
+    do: current == path or String.starts_with?(current, path <> "/")
 
   @doc """
   The `order`/`visible` setting definitions for every declared entry — what

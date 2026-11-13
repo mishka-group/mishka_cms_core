@@ -546,8 +546,8 @@ defmodule MishkaCmsCore.Runtime.SiteLayoutTest do
       # THE CATEGORY ANSWER HALTS THE CHAIN, so the section's bar is the section clause's alone.
       assert assigns.page_section_bar == nil
 
-      socket = put_in(socket.assigns.page, page("/:lang/probe", section: "probe"))
-      socket = put_in(socket.assigns.extra, %{})
+      socket =
+        Phoenix.Component.assign(socket, page: page("/:lang/probe", section: "probe"), extra: %{})
 
       assert %{title: "Probe"} = SiteLayout.assign_frame(socket).assigns.page_section_bar
     end

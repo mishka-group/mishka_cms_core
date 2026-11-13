@@ -44,7 +44,7 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
   import Plug.Conn
 
   alias MishkaCmsCore.Captcha
-  alias MishkaCmsCore.Runtime.CspNonce
+  alias MishkaCmsCore.Runtime.{CspNonce, HeadCodes}
   alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
@@ -178,7 +178,12 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
 
   defp policy(conn, admin?, nonce),
     do:
-      directives(fonts?(conn, admin?), nonce, captcha_sources(conn, admin?), frame_origins(conn))
+      directives(
+        fonts?(conn, admin?),
+        nonce,
+        conn |> captcha_sources(admin?) |> with_head_code(head_code_origins(conn, admin?)),
+        frame_origins(conn)
+      )
 
   defp fonts?(conn, admin?), do: not admin? or String.starts_with?(conn.request_path, @canvas)
 
@@ -254,6 +259,25 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeaders do
       Captcha.csp_sources(if(Map.get(site, :master) == true, do: [site_id, nil], else: [site_id]))
 
   defp captcha_sources(_no_site, false), do: %{}
+
+  # WHAT A SITE'S HEAD CODE REACHES, on its public pages alone: the origins of its published entries
+  # and the ones plugins declare on `runtime:page:head_origins` (`MishkaCmsCore.Runtime.HeadCodes`).
+  # The scripts themselves run by their nonce; these are what they load next and where they send.
+  # Read from memory, no query. An admin page never draws head code, so it gets none.
+  defp head_code_origins(_conn, true), do: []
+
+  defp head_code_origins(%{assigns: %{current_site: %{id: site_id}}}, false),
+    do: HeadCodes.origins(site_id)
+
+  defp head_code_origins(_no_site, false), do: []
+
+  defp with_head_code(sources, []), do: sources
+
+  defp with_head_code(sources, origins) do
+    sources
+    |> Map.update(:script_src, origins, &Enum.uniq(&1 ++ origins))
+    |> Map.update(:connect_src, origins, &Enum.uniq(&1 ++ origins))
+  end
 
   # THE PLAYERS A SITE LETS ITS PAGES EMBED — a video, a map — from `security.frame_origins`, the
   # site's own value, else the global one. Read from the settings cache, no query. An admin page

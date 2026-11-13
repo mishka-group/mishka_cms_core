@@ -14,6 +14,7 @@ defmodule MishkaCmsCore.Accounts.User.Senders.SendNewUserConfirmationEmailTest d
 
   import Swoosh.TestAssertions
 
+  alias MishkaCmsCore.Accounts.Helper
   alias MishkaCmsCore.Accounts.User
   alias MishkaCmsCore.Accounts.User.Senders.SendNewUserConfirmationEmail
 
@@ -41,8 +42,6 @@ defmodule MishkaCmsCore.Accounts.User.Senders.SendNewUserConfirmationEmailTest d
   end
 
   test "a sign-in email's link is http with the port on localhost and every *.localhost site" do
-    alias MishkaCmsCore.Accounts.Helper
-
     assert "http://localhost:4000/auth/confirm/tok/" <> _ =
              Helper.auth_link("localhost", "confirm", "tok", nil)
 

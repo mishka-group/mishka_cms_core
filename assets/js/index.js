@@ -2,7 +2,7 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
-// THE PACKAGE'S ENTRY, named by `main` and `module` in the root `package.json`: the eight hooks the
+// THE PACKAGE'S ENTRY, named by `main` and `module` in the root `package.json`: the nine hooks the
 // core's admin templates mount. A host's admin bundle imports it by name and hands the hooks to its
 // LiveSocket with its own:
 //

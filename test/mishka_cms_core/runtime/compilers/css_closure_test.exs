@@ -66,8 +66,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.CssClosureTest do
   end
 
   defp unbounded_naming(fun) do
-    log = capture_log(fn -> assert fun.() == :unbounded end)
-    log
+    capture_log(fn -> assert fun.() == :unbounded end)
   end
 
   describe "reachability" do

@@ -560,7 +560,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms do
   defp rebound(nil, _var, _key), do: nil
 
   defp rebound({_replaced, path}, var, key),
-    do: "#{var}[:#{key}]" <> Enum.map_join(path, "", &".#{&1}")
+    do: "#{var}[:#{key}]" <> Enum.map_join(path, &".#{&1}")
 
   @doc """
   Every attribute on `node` that binds `key`, rebound to `to`, ready for
@@ -663,6 +663,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms do
 
   # A pattern that will not compile contributes no rule rather than raising into a page compile. The
   # source travels and is compiled once at runtime, because it is matched on every keystroke.
+  # The pattern is the site author's own; PCRE's match limit bounds a slow one.
+  # sobelow_skip ["DOS.Regex"]
   defp pattern_rule(node) do
     with source when is_binary(source) <- Node.attr_text(node, "pattern"),
          {:ok, _regex} <- Regex.compile(source) do

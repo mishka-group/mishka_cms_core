@@ -629,8 +629,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     opts
     |> Keyword.get(:components, [])
     |> Enum.find(&(component_meta_name(&1) == name))
-    |> component_meta_slots()
-    |> Kernel.!=([])
+    |> component_meta_slots() != []
   end
 
   # A CMS-LOCAL FUNCTION COMPONENT IS NOT IN THE KIT CATALOG. `<.form>` declares `inner_block` and
@@ -647,8 +646,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Containment do
     module
     |> declared_components()
     |> Map.get(name, %{})
-    |> Map.get(:slots, [])
-    |> Kernel.!=([])
+    |> Map.get(:slots, []) != []
   end
 
   defp declared_components(module) do

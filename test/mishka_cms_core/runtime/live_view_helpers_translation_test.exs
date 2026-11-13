@@ -342,7 +342,8 @@ defmodule MishkaCmsCore.Runtime.LiveViewHelpersTranslationTest do
       assert outside.captured == "/fa/blog/a%20b"
       assert outside.word == @categories
       assert outside.bound == "3 نوشته را بخوانید"
-      assert is_binary(outside.nonce)
+      assert outside.nonce == CspNonce.current()
+      assert outside.nonce =~ ~r/^nonce-\d+$/
 
       socket = module.in_task(connected_socket())
       {_ref, pid, _kind} = socket.private.live_async[:probe]

@@ -269,6 +269,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Site.Index do
   defp owns_job?(%{assigns: %{current_user: %{site_id: nil}}}, _int_id), do: true
   defp owns_job?(_socket, _int_id), do: false
 
+  # Only a table name or this module's own SQL is interpolated; values are bound parameters.
+  # sobelow_skip ["SQL.Query"]
   defp job_belongs_to_site?(int_id, site_id) do
     sql =
       "SELECT 1 FROM oban_jobs WHERE id = $1 " <>

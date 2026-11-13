@@ -184,10 +184,12 @@ defmodule MishkaCmsCore.Mail do
         {:error, :not_configured}
 
       id ->
-        with {:ok, provider} <- Provider.fetch(id) do
-          if provider.ready?(site_id), do: {:ok, provider}, else: {:error, :not_ready}
-        end
+        with {:ok, provider} <- Provider.fetch(id), do: ready_provider(provider, site_id)
     end
+  end
+
+  defp ready_provider(provider, site_id) do
+    if provider.ready?(site_id), do: {:ok, provider}, else: {:error, :not_ready}
   end
 
   @doc "Whether `site_id` can send email now."

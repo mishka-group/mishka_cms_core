@@ -257,23 +257,21 @@ defmodule MishkaCmsCore.Accounts.Helper do
   Uses frontend_domain if available, otherwise falls back to host.
   """
   def get_email_sender_domain(user_or_email, context) do
-    case {user_or_email, context[:tenant]} do
-      {%{site_id: nil}, nil} ->
-        site = SiteState.get_by_master!()
-        site[:frontend_domain] || site[:host]
-
-      {%{site_id: site_id}, tenant} when not is_nil(tenant) and site_id == tenant ->
-        site = SiteState.get!(site_id)
-        site[:frontend_domain] || site[:host]
-
-      {email, tenant} when not is_nil(tenant) and is_binary(email) ->
-        site = SiteState.get!(tenant)
-        site[:frontend_domain] || site[:host]
-
-      _ ->
-        nil
+    case sender_site(user_or_email, context[:tenant]) do
+      nil -> nil
+      site -> site[:frontend_domain] || site[:host]
     end
   end
+
+  defp sender_site(%{site_id: nil}, nil), do: SiteState.get_by_master!()
+
+  defp sender_site(%{site_id: site_id}, tenant) when not is_nil(tenant) and site_id == tenant,
+    do: SiteState.get!(site_id)
+
+  defp sender_site(email, tenant) when not is_nil(tenant) and is_binary(email),
+    do: SiteState.get!(tenant)
+
+  defp sender_site(_user_or_email, _tenant), do: nil
 
   @doc """
   Builds a complete URL structure with schema, domain, and port

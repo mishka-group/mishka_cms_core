@@ -168,8 +168,8 @@ defmodule MishkaCmsCore.UiKit.CompilerIntegrationTest do
         )
 
       result = apply(module, :make_id, [])
-      assert is_binary(result)
-      assert String.starts_with?(result, "id-")
+      assert "id-" <> suffix = result
+      assert byte_size(suffix) > 0
     end
   end
 

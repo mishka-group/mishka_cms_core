@@ -227,12 +227,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
     with %{} = child <- arriving_child(params, socket),
          {:reply, %{error: _}, _socket} = refused <-
-           reshape(socket, marker, params["serial"], fn tree ->
-             case listed(components, tree.name) do
-               %{inner_block: true} -> put_inside(tree, child, params["beside"], params["after"])
-               _holds_nothing -> nil
-             end
-           end) do
+           reshape(socket, marker, params["serial"], &nest_inside(&1, components, child, params)) do
       refused
     else
       nil -> {:reply, %{error: refused(params["name"] || "")}, socket}
@@ -533,6 +528,14 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.ContentComponentPicker do
 
   # `child` among the parts of `tree`: before its part `beside`, after it when `after` is `true`, or
   # at the end.
+  # Puts `child` inside `tree` when its component holds an inner block; `nil` refuses the move.
+  defp nest_inside(tree, components, child, params) do
+    case listed(components, tree.name) do
+      %{inner_block: true} -> put_inside(tree, child, params["beside"], params["after"])
+      _holds_nothing -> nil
+    end
+  end
+
   defp put_inside(%{parts: parts} = tree, child, beside, after?) do
     at =
       case is_binary(beside) && decode(beside) do

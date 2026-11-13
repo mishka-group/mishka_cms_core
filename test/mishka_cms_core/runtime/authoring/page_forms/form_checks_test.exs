@@ -457,7 +457,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecksTest do
       node = session |> forms() |> List.last()
 
       assert {:ops, ops} = FormChecks.repair(session, "form-duplicate-seed", node.id)
-      assert length(ops) == 5
+      assert match?([_, _, _, _, _], ops)
 
       tree = apply_ops!(session.tree, ops)
 
@@ -1462,7 +1462,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms.FormChecksTest do
       refute "form-no-submit" in kit_rules(phoenix_form("q", deep_fields("f")), kit)
 
       stranded = kit_findings(~s(<section>) <> deep_fields("f") <> ~s(</section>), kit)
-      assert stranded |> Enum.filter(&(&1.rule == "field-no-form")) |> length() == 2
+      assert stranded |> Enum.count(&(&1.rule == "field-no-form")) == 2
     end
 
     test "two forms on one page are judged apart, fields and Send buttons alike", %{kit: kit} do

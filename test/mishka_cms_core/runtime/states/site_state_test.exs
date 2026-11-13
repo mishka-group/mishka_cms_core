@@ -335,7 +335,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateTest do
     test "returns only active sites sorted by priority DESC" do
       active_sites = SiteState.get_active_sites()
 
-      assert length(active_sites) == 3
+      assert match?([_, _, _], active_sites)
 
       # Check that all returned sites are active
       assert Enum.all?(active_sites, & &1.active)
@@ -495,7 +495,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateTest do
         SiteState.stream(%{active: true})
         |> Enum.to_list()
 
-      assert length(active_sites) == 5
+      assert match?([_, _, _, _, _], active_sites)
       assert Enum.all?(active_sites, & &1.active)
     end
 
@@ -545,7 +545,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateTest do
     test "returns sites within priority range sorted DESC" do
       sites = SiteState.get_by_priority_range(25, 75)
 
-      assert length(sites) == 3
+      assert match?([_, _, _], sites)
 
       ids = Enum.map(sites, & &1.id)
       assert ids == ["site_4", "site_3", "site_2"]
@@ -561,7 +561,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateTest do
 
     test "includes boundaries" do
       sites = SiteState.get_by_priority_range(10, 90)
-      assert length(sites) == 5
+      assert match?([_, _, _, _, _], sites)
     end
   end
 
@@ -1310,7 +1310,7 @@ defmodule MishkaCmsCore.Runtime.States.SiteStateTest do
 
       # Within same priority, order should be stable (though not guaranteed which order)
       priority_80_sites = result.data |> Enum.filter(&(&1.priority == 80)) |> Enum.map(& &1.id)
-      assert length(priority_80_sites) == 2
+      assert match?([_, _], priority_80_sites)
       assert "d1" in priority_80_sites
       assert "e1" in priority_80_sites
     end

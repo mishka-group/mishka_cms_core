@@ -57,7 +57,8 @@ defmodule MishkaCmsCore.IsolatedTest do
   end
 
   test "with nice, the peer runs that much below the caller's priority" do
-    caller = niceness(:os.cmd(~c"ps -o nice= -p $$"))
+    {ps, 0} = System.cmd("ps", ["-o", "nice=", "-p", System.pid()])
+    caller = niceness(ps)
 
     assert {:ok, peer} = Isolated.run(:os, :cmd, [~c"ps -o nice= -p $$"], nice: 10)
     assert niceness(peer) == min(caller + 10, 19)
@@ -81,5 +82,5 @@ defmodule MishkaCmsCore.IsolatedTest do
     assert erl =~ "erts-#{:erlang.system_info(:version)}"
   end
 
-  defp niceness(output), do: output |> List.to_string() |> String.trim() |> String.to_integer()
+  defp niceness(output), do: output |> to_string() |> String.trim() |> String.to_integer()
 end

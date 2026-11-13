@@ -117,9 +117,14 @@ defmodule MishkaCmsCore.Captcha do
         {:error, :off}
 
       id ->
-        with {:ok, provider} <- Provider.fetch(id) do
-          if provider.ready?(site_id), do: {:ok, provider}, else: {:error, :not_ready}
-        end
+        with {:ok, provider} <- Provider.fetch(id), do: ready(provider, site_id)
+    end
+  end
+
+  defp ready(provider, site_id) do
+    case provider.ready?(site_id) do
+      true -> {:ok, provider}
+      _not_ready -> {:error, :not_ready}
     end
   end
 

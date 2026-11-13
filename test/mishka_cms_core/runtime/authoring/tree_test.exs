@@ -567,8 +567,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
     end
 
     test "malformed eex does not crash the caller" do
-      assert {:error, %{message: message}} = Tree.parse("<%= if true do %>")
-      assert is_binary(message)
+      assert Tree.parse("<%= if true do %>") ==
+               {:error, %{line: 1, column: 1, message: "<%= if true do %> has no <% end %>"}}
     end
 
     test "an EEx block with no end is named as it is written, at its line and column" do
@@ -1009,8 +1009,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.TreeTest do
   # showed the field empty and the next save wrapped the list again — keeping the stale utility
   # beside the new one at equal specificity, where the old value can win.
   describe "a style override on a class written as a list" do
-    alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
-
     defp restyled(markup, value) do
       {:ok, tree} = Tree.parse(markup)
       node = tree |> Tree.walk() |> Enum.find(&(&1.kind == :tag))

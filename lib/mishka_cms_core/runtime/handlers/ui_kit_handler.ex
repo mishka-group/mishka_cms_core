@@ -698,6 +698,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
     end
   end
 
+  # Every path here is under this library's own build, temp or cache folders, never request input.
+  # sobelow_skip ["Traversal.FileModule"]
   defp cache_bundle(bundle, path) do
     File.mkdir_p!(Path.dirname(path))
     File.write!(path, Jason.encode!(bundle))
@@ -2385,7 +2387,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   end
 
   defp live_hook_key(name),
-    do: "Global" <> (name |> String.split("-") |> Enum.map_join("", &String.capitalize/1))
+    do: "Global" <> (name |> String.split("-") |> Enum.map_join(&String.capitalize/1))
 
   # What this bundle says it has renamed, and nothing else — never the bundle's own new names, which
   # are about to be written.

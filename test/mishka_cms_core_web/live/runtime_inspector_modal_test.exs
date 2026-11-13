@@ -543,10 +543,9 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
           precompile: false
         )
 
-      html = save_through_the_form(conn, %{"description" => "opened and saved"})
+      save_through_the_form(conn, %{"description" => "opened and saved"})
 
-      assert html =~ "opened and saved" or
-               Ash.get!(Component, source.id, authorize?: false).description == "opened and saved"
+      assert Ash.get!(Component, source.id, authorize?: false).description == "opened and saved"
 
       assert options(Ash.get!(Component, source.id, authorize?: false)) == %{
                "params" => %{"default" => %{}}
@@ -709,6 +708,8 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
     defp labels(page, actor), do: "page" |> Drafts.list(page, actor) |> Enum.map(& &1.label)
 
+    # The chosen badge differs from the others only in its colours, so the modal's state says which.
+    # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
     defp selected(view), do: :sys.get_state(view.pid).socket.assigns.preview.draft
 
     test "the strip opens with a badge and a ✖ for each draft", %{view: view, drafts: drafts} do
@@ -720,9 +721,13 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
     # THE ROW THE BUTTON IS ON, not the row that happens to be selected. The event used to carry no
     # id at all and the helper read `preview.draft`, so every ✖ on the strip deleted the same draft.
-    test "deletes the draft whose badge it sits on", %{view: view, page: page, drafts: drafts} do
+    test "deletes the draft whose badge it sits on", %{
+      view: view,
+      page: page,
+      drafts: drafts,
+      admin: actor
+    } do
       [_three, _two, one] = Enum.reverse(drafts)
-      actor = :sys.get_state(view.pid).socket.assigns.current_user
 
       delete_badge(view, one)
 
@@ -760,7 +765,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       html = delete_badge(view, two)
 
       assert html =~ "Draft discarded."
-      assert :sys.get_state(view.pid).socket.assigns.preview.drafts_total == 2
+      assert has_element?(view, "span.tabular-nums", ~r/^\s*2\s*$/)
     end
 
     # A badge someone else deleted a moment ago. The id resolves to nothing, and the answer is a
@@ -810,14 +815,17 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       {:ok, their_draft} =
         Drafts.save_as("page", theirs, nil, "<div>theirs</div>", admin, nil, "Theirs", nil)
 
+      tenant_admin = create_admin("tenant-#{n}@example.com", site.id)
+
       tenant =
         Phoenix.ConnTest.build_conn()
         |> Map.put(:host, "localhost")
         |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
-        |> log_in(create_admin("tenant-#{n}@example.com", site.id))
+        |> log_in(tenant_admin)
 
       {:ok,
        tenant_conn: tenant,
+       tenant_admin: tenant_admin,
        mine: mine,
        theirs: theirs,
        my_draft: my_draft,
@@ -845,10 +853,19 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
     # The fixture is only worth anything if the two actors really are different kinds. A master has
     # no site; a tenant has exactly one, and that attribute is what every scope below reads.
-    test "the fixture has one of each kind of actor", %{tenant_conn: conn, mine: mine, site: site} do
-      view = open_modal(conn, mine)
+    test "the fixture has one of each kind of actor", %{
+      tenant_conn: conn,
+      tenant_admin: tenant_admin,
+      admin: admin,
+      mine: mine,
+      my_draft: my_draft,
+      site: site
+    } do
+      assert tenant_admin.site_id == site.id
+      assert admin.site_id == nil
 
-      assert :sys.get_state(view.pid).socket.assigns.current_user.site_id == site.id
+      view = open_modal(conn, mine)
+      assert has_element?(view, "#runtime-preview-draft-#{my_draft.id}")
     end
 
     # The strip a tenant is looking at is their own site's rows, so the id of somebody else's draft
@@ -953,7 +970,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       |> Map.fetch!(:results)
     end
 
-    defp flash(view, kind), do: :sys.get_state(view.pid).socket.assigns.flash[kind]
+    defp flash(view, kind), do: view |> element("#flash-#{kind}") |> render()
 
     test "writes a copy named after the component and closes the modal on it", %{conn: conn} do
       source = create_component!(name: "dup-#{unique()}")
@@ -971,7 +988,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       assert copy.site_id == nil
 
       refute has_element?(view, @duplicate), "the modal stayed open on the source"
-      assert flash(view, "success") == "Duplicated as “#{copy.name}”"
+      assert flash(view, "success") =~ "Duplicated as “#{copy.name}”"
     end
 
     test "is offered on no other runtime table's modal", %{conn: conn, site: site} do
@@ -1034,7 +1051,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
       render_click(view, "preview_duplicate", %{})
 
       assert copies_of(shared) == []
-      assert flash(view, "error") == "This component cannot be duplicated here."
+      assert flash(view, "error") =~ "This component cannot be duplicated here."
     end
 
     # THE COMPONENT SECTION OR CODE WRITES A COMPONENT'S CODE, so either copies one carrying
@@ -1087,7 +1104,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
 
       assert copies_of(source) == []
       assert has_element?(view, "#{@duplicate}:not([disabled])"), "the modal closed on a refusal"
-      assert flash(view, "error") == "Could not duplicate: #{CodeAccess.refusal()}"
+      assert flash(view, "error") =~ "Could not duplicate: #{CodeAccess.refusal()}"
     end
   end
 
@@ -1330,9 +1347,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
         {:ok, reader, _html} = live(tenant_conn(site, ["admin:dashboard:runtime:media"]), url)
         render_async(reader, @await)
 
-        assert has_element?(reader, "##{table} [id*='#{record.id}']") or
-                 render(reader) =~ record.id,
-               "#{url} is not readable by another section"
+        assert render(reader) =~ record.id, "#{url} is not readable by another section"
 
         refute has_element?(reader, "##{add}"), "#{url} offers create to another section"
         refute has_element?(reader, "##{add}-toggle")
@@ -1342,7 +1357,7 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
           {:ok, writer, _html} = live(tenant_conn(site, names), url)
           render_async(writer, @await)
 
-          assert has_element?(writer, "##{add}") or has_element?(writer, "##{add}-toggle"),
+          assert has_element?(writer, "##{add}, ##{add}-toggle"),
                  "#{url} does not offer create to #{inspect(names)}"
 
           assert has_element?(writer, pencil(table, "edit_preview_modal")),

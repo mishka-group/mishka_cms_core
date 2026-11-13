@@ -46,8 +46,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerSharedBaseTest do
       assert is_binary(js) and byte_size(js) > 0
 
       assert AssetsState.get_value(@base_id, "js") == js
-      assert AssetsState.get_value(@base_id, "brotli_js") != nil
-      assert AssetsState.get_value(@base_id, "gzip_js") != nil
+      assert ExBrotli.decompress!(AssetsState.get_value(@base_id, "brotli_js")) == js
+      assert :zlib.gunzip(AssetsState.get_value(@base_id, "gzip_js")) == js
     end
   end
 
@@ -74,8 +74,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerSharedBaseTest do
 
   describe "delete_shared_base_js/0" do
     test "clears all cached formats" do
-      {:ok, _} = JS.compile_and_store_shared_base()
-      assert AssetsState.get_value(@base_id, "js") != nil
+      {:ok, js} = JS.compile_and_store_shared_base()
+      assert AssetsState.get_value(@base_id, "js") == js
 
       JS.delete_shared_base_js()
 
@@ -97,14 +97,13 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerSharedBaseTest do
   # what a build needs on disk. Stubs are written only where nothing is checked in, and taken back
   # after, so a run that finds the real files uses them.
   defp ensure_entry_modules_exist do
-    Enum.each(entry_module_stubs(), fn {name, source} ->
-      path = Path.join(js_dir(), name)
-
-      unless File.exists?(path) do
-        File.mkdir_p!(Path.dirname(path))
-        File.write!(path, source)
-        on_exit(fn -> File.rm(path) end)
-      end
+    entry_module_stubs()
+    |> Enum.map(fn {name, source} -> {Path.join(js_dir(), name), source} end)
+    |> Enum.reject(fn {path, _source} -> File.exists?(path) end)
+    |> Enum.each(fn {path, source} ->
+      File.mkdir_p!(Path.dirname(path))
+      File.write!(path, source)
+      on_exit(fn -> File.rm(path) end)
     end)
   end
 
