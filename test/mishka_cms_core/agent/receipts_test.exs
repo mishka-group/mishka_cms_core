@@ -151,10 +151,7 @@ defmodule MishkaCmsCore.Agent.ReceiptsTest do
       assert :name in receipt.error.fields
     end
 
-    test "an action that claims what the table does not hold fails the read-back", %{
-      site: site,
-      master: master
-    } do
+    test "an action that claims what the table does not hold fails the read-back", %{site: site} do
       category = create_media_category!(site_id: site.id, name: "Original")
 
       changeset =
