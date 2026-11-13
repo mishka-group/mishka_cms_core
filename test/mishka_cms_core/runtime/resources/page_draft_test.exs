@@ -136,10 +136,10 @@ defmodule MishkaCmsCore.Runtime.PageDraftTest do
 
       assert reloaded.template == "<p>from the draft</p>"
 
-      # `events` and `infos` are stored maps, read back with string keys; `helpers` are embedded.
+      # `events` and `infos` are typed maps and `helpers` embedded, so all read back with atom keys.
       names = %{
-        events: Enum.map(reloaded.events, & &1["name"]),
-        infos: Enum.map(reloaded.infos, & &1["name"]),
+        events: Enum.map(reloaded.events, & &1.name),
+        infos: Enum.map(reloaded.infos, & &1.name),
         helpers: Enum.map(reloaded.helpers, & &1.name)
       }
 

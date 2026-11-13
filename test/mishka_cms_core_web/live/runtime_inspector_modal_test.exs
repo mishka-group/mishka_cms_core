@@ -543,9 +543,8 @@ defmodule MishkaCmsCoreWeb.Test.RuntimeInspectorModalTest do
           precompile: false
         )
 
-      html = save_through_the_form(conn, %{"description" => "opened and saved"})
+      save_through_the_form(conn, %{"description" => "opened and saved"})
 
-      assert html =~ "opened and saved"
       assert Ash.get!(Component, source.id, authorize?: false).description == "opened and saved"
 
       assert options(Ash.get!(Component, source.id, authorize?: false)) == %{

@@ -42,9 +42,9 @@ defmodule MishkaCmsCore.Runtime.Authoring.DraftsTest do
 
   # An error page's draft keeps one template per status, so an assertion about a template has to say
   # which status it is reading — the whole hazard here is work arriving under the wrong one. The
-  # draft writes its entries with string keys (`Section.save_fields/3`).
+  # entries are typed maps (`fields` constraint), so they read back with atom keys.
   defp by_status(draft) do
-    Map.new(draft.error_pages, fn entry -> {entry["status"], entry["template"]} end)
+    Map.new(draft.error_pages, fn entry -> {entry.status, entry[:template]} end)
   end
 
   # THE ELEMENT CSS APPLIED IN DRAFT IS THE DRAFT'S OWN, written beside the markup that carries its
