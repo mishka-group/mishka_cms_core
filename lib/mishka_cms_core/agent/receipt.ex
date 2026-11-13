@@ -92,6 +92,12 @@ defmodule MishkaCmsCore.Agent.Receipt do
             meta: %{}
 
   @sources [:admin, :api, :agent, :job, :system, :test]
+  @stage_statuses %{
+    "verified" => :verified,
+    "failed" => :failed,
+    "skipped" => :skipped,
+    "unverified" => :unverified
+  }
 
   @doc "The sources a receipt names; any other is stored as `:system`."
   @spec sources() :: [source()]
@@ -108,7 +114,8 @@ defmodule MishkaCmsCore.Agent.Receipt do
   The verdict of `stages` for an operation whose `required` stage names are listed. See the
   moduledoc for the rules.
   """
-  @spec status([Stage.t()], [atom()]) :: status()
+  @spec status([Stage.t() | %{kind: term(), name: term(), status: Stage.status()}], [term()]) ::
+          status()
   def status(stages, required) do
     cond do
       Enum.any?(stages, &(&1.status == :failed)) -> :failed
@@ -117,6 +124,31 @@ defmodule MishkaCmsCore.Agent.Receipt do
       true -> :unverified
     end
   end
+
+  @doc """
+  `status/2` of stages and required names kept as `to_public/1` wrote them, answered as a string:
+  `"verified"`, `"failed"`, `"partial"` or `"unverified"`. A consumer that saved a receipt and
+  merges late stages into it asks this, so its verdict is always the core's.
+
+      Receipt.public_status(saved["stages"], saved["required"])
+      #=> "verified"
+  """
+  @spec public_status([map()], [String.t()]) :: String.t()
+  def public_status(stages, required) when is_list(stages) and is_list(required) do
+    stages
+    |> Enum.map(
+      &%{
+        kind: public_kind(&1["kind"]),
+        name: &1["name"],
+        status: Map.get(@stage_statuses, &1["status"], :unverified)
+      }
+    )
+    |> status(required)
+    |> public()
+  end
+
+  defp public_kind("dispatched"), do: :dispatched
+  defp public_kind(kind), do: kind
 
   @doc """
   `receipt` with the evidence that arrived after it was stored applied: a late stage replaces the
@@ -164,6 +196,7 @@ defmodule MishkaCmsCore.Agent.Receipt do
       "source" => public(receipt.source),
       "status" => public(receipt.status),
       "required" => public(receipt.required),
+      "visibility" => receipt.visibility,
       "stages" => Enum.map(receipt.stages, &Stage.to_public/1),
       "started_at" => public(receipt.started_at),
       "finished_at" => public(receipt.finished_at),
@@ -293,6 +326,7 @@ defmodule MishkaCmsCore.Agent.Receipt.Stage do
     %{
       "kind" => Receipt.public(stage.kind),
       "name" => Receipt.public(stage.name),
+      "key" => stage.key,
       "layer" => Receipt.public(stage.layer),
       "status" => Receipt.public(stage.status),
       "reason" => Receipt.public(stage.reason),

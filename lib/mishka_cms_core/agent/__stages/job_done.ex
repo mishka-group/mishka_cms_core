@@ -37,7 +37,7 @@ defmodule MishkaCmsCore.Agent.Stages.JobDone do
   @behaviour MishkaCmsCore.Agent.Stages
 
   alias MishkaCmsCore.Agent.Receipt.Stage
-  alias MishkaCmsCore.Agent.ReceiptStore
+  alias MishkaCmsCore.Agent.Receipts
   alias MishkaCmsCore.Agent.Stages.JobEnqueued
 
   @handler_id "mishka-cms-core-agent-receipts-oban"
@@ -90,7 +90,7 @@ defmodule MishkaCmsCore.Agent.Stages.JobDone do
     with id when is_binary(id) <- job_meta["receipt_id"],
          answer when not is_nil(answer) <- answer(Map.get(meta, :state)) do
       spec = %{kind: :job_done, name: :job_done, layer: :app, key: job.worker, module: __MODULE__}
-      _ = ReceiptStore.late(id, Stage.new(spec, answer))
+      _ = Receipts.late(id, Stage.new(spec, answer))
     end
 
     :ok

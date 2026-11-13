@@ -109,4 +109,70 @@ defmodule MishkaCmsCore.Agent.ReceiptTest do
     assert public["resource"] == "MishkaCmsCore.Runtime.MediaCategory"
     assert [%{"status" => "verified", "observed" => %{"status" => "ok"}}] = public["stages"]
   end
+
+  test "to_public/1 keeps what a saved receipt is checked and merged by later" do
+    at = DateTime.utc_now()
+
+    receipt = %Receipt{
+      id: "rcpt_x",
+      operation: "a:b:c",
+      required: [:a],
+      visibility: ["admin:dashboard:runtime:media"],
+      started_at: at,
+      stages: [%{stage(:a, :unverified, :job_done) | at: at, key: "MyWorker"}],
+      node: node()
+    }
+
+    public = receipt |> Receipt.to_public() |> JSON.encode!() |> JSON.decode!()
+
+    assert public["required"] == ["a"]
+    assert public["visibility"] == ["admin:dashboard:runtime:media"]
+    assert [%{"key" => "MyWorker", "at" => stage_at}] = public["stages"]
+    assert {:ok, ^at, 0} = DateTime.from_iso8601(stage_at)
+  end
+
+  describe "public_status/2" do
+    defp public(stages, required) do
+      %Receipt{stages: stages, required: required}
+      |> Receipt.to_public()
+      |> JSON.encode!()
+      |> JSON.decode!()
+      |> then(&Receipt.public_status(&1["stages"], &1["required"]))
+    end
+
+    test "answers what status/2 answers for the same stages" do
+      dispatched = stage(:dispatched, :verified, :dispatched)
+
+      cases = [
+        {[stage(:a, :verified), stage(:b, :failed)], [:a]},
+        {[stage(:a, :verified), stage(:b, :verified)], [:a, :b]},
+        {[stage(:a, :verified), stage(:b, :skipped)], [:a, :b]},
+        {[dispatched, stage(:a, :unverified)], [:a]},
+        {[dispatched, stage(:a, :verified)], []}
+      ]
+
+      for {stages, required} <- cases do
+        assert public(stages, required) == to_string(Receipt.status(stages, required))
+      end
+    end
+
+    test "a late stage merged into a saved receipt changes the verdict the core's way" do
+      saved =
+        %Receipt{
+          stages: [stage(:a, :verified), %{stage(:job, :unverified, :job_done) | key: "W"}],
+          required: [:a, :job]
+        }
+        |> Receipt.to_public()
+
+      assert Receipt.public_status(saved["stages"], saved["required"]) == "partial"
+
+      merged =
+        Enum.map(saved["stages"], fn
+          %{"name" => "job"} = job -> %{job | "status" => "verified"}
+          other -> other
+        end)
+
+      assert Receipt.public_status(merged, saved["required"]) == "verified"
+    end
+  end
 end

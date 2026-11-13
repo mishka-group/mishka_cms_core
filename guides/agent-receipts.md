@@ -175,6 +175,60 @@ narrow and never widen.
 These are the functions a future MCP tool calls with its session's user and returns
 `to_public/1` of. No MCP code ships in the core.
 
+## Saving and showing receipts elsewhere
+
+Receipts live in memory for an hour. An extension that keeps them longer, shows them on a page of
+its own or alerts when one fails listens on the `agent:receipt:finished` event
+(`Receipts.finished_event/0`), and the core does not need to know it:
+
+```elixir
+defmodule MyExtension.Agent.ReceiptLog do
+  use MishkaInstaller.Event.Hook, event: "agent:receipt:finished"
+
+  @impl true
+  def call(%{receipt: receipt, site_id: site_id, operation: operation} = payload) do
+    MyExtension.ReceiptLog.save(site_id, operation, receipt)
+    if receipt["status"] == "failed", do: MyExtension.Alerts.notify(site_id, receipt)
+    {:reply, payload}
+  end
+end
+```
+
+- `receipt` is `Receipt.to_public/1`: redacted and JSON-safe, the same map an API returns. Never the
+  record, the params or the changeset.
+- `trigger` is `:finished` when the receipt is stored with its status, and `:late` each time late
+  evidence (`:job_done`, `:ui_observed`) is kept for it, with the receipt read again. Save by
+  `receipt["id"]` and keep the last: the same receipt may come more than once. `node` is the node
+  that announced it, the one that ran the operation and heard the late evidence.
+- The map holds what a saved receipt needs later without the operation's declaration:
+  `"required"` (the stage names that decide it), `"visibility"` (the permission names whose holders
+  may read it, to check a reader against as `Receipts.get/3` does), and per stage its `"at"` (when it
+  was recorded) and `"key"` (what late evidence is matched by, such as a job's worker).
+- A consumer that merges late stages into a saved receipt never decides the status itself:
+  `Receipt.public_status(receipt["stages"], receipt["required"])` answers the core's verdict
+  (`"verified"`, `"failed"`, `"partial"` or `"unverified"`) for the public maps.
+- The plugin runs in a task under `MishkaCmsCore.Runtime.TaskSupervisor`, after the operation has
+  returned. It never slows the operation or changes its result; a plugin that raises is logged and
+  nothing else.
+- With receipts off, or no plugin on the event, nothing is started: one `:persistent_term` read.
+  Announcing makes no query.
+
+The event carries what any viewer of the receipt could read. Who may see what the plugin saves is the
+plugin's own question: a receipt's `"site_id"` and `"operation"` are there to scope it.
+
+### Telemetry
+
+For tracing tools (OpenTelemetry and the like), without a plugin:
+
+| Event | Measurements | Metadata |
+|---|---|---|
+| `[:mishka_cms, :agent, :receipt, :stop]` | `elapsed_us`, `stage_count` | `id`, `operation`, `status`, `site_id` |
+| `[:mishka_cms, :agent, :receipt, :stage]` (once per stage) | `elapsed_us` | `id`, `operation`, `site_id`, `kind`, `name`, `layer`, `status`, `reason` |
+| `[:mishka_cms, :agent, :receipt, :late]` | `system_time` | `id`, `kind`, `name`, `layer`, `status`, `reason` |
+
+They carry ids, names and statuses only, in the process that ran the operation or heard the late
+evidence, as `:telemetry` handlers always run. None is sent with receipts off.
+
 ## What is never stored
 
 Content, params, assigns, sockets, changesets, emails, names, tokens, job args and exception

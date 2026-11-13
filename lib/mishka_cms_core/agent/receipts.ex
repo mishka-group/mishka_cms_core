@@ -59,12 +59,46 @@ defmodule MishkaCmsCore.Agent.Receipts do
   With receipts on, an operation costs what its declared stages read: one primary-key query for a
   `:db_read_back`, one indexed query for a `:job_enqueued`, a subscription for a
   `:broadcast_published`. Reading receipts never touches the database.
+
+  ## Announcing a finished receipt
+
+  Another extension saves, shows or alerts on receipts through the `agent:receipt:finished` event
+  (`finished_event/0`), without the core knowing it. A plugin gets
+
+      %{receipt: Receipt.to_public(receipt), site_id: site_id, operation: name,
+        trigger: :finished, node: node()}
+
+  when the receipt is stored with its status, and the same with `trigger: :late`, the receipt read
+  again, each time late evidence (`:job_done`, `:ui_observed`) is kept for it. `node` is the node
+  that announced it: the one that ran the operation and heard the late evidence. The receipt is the
+  redacted, JSON-safe map, never the record, the params or the changeset. Its `"id"` is the key: a
+  later call carries newer evidence for the same receipt.
+
+  Plugins run in a task under `MishkaCmsCore.Runtime.TaskSupervisor`, after the operation has
+  returned its result, so they never slow it down or change it, and a plugin that raises is logged
+  and nothing else. With receipts off, or no plugin on the event, nothing is started: the check is
+  one `:persistent_term` read. Announcing makes no query.
+
+  ## Telemetry
+
+    * `[:mishka_cms, :agent, :receipt, :stop]` — a receipt was stored. Measurements `elapsed_us`
+      and `stage_count`; metadata `id`, `operation`, `status`, `site_id`.
+    * `[:mishka_cms, :agent, :receipt, :stage]` — once per stage of a stored receipt. Measurements
+      `elapsed_us`; metadata `id`, `operation`, `site_id`, `kind`, `name`, `layer`, `status`,
+      `reason`.
+    * `[:mishka_cms, :agent, :receipt, :late]` — late evidence was kept for a receipt this node
+      knows. Measurements `system_time`; metadata `id`, `kind`, `name`, `layer`, `status`,
+      `reason`.
+
+  They carry ids, names and statuses only, and are emitted in the process that ran the operation
+  (or heard the late evidence), as `:telemetry` handlers are.
   """
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
   alias MishkaCmsCore.Activity.Helpers
   alias MishkaCmsCore.Agent.{Operation, Receipt, ReceiptStore, Redactor, Stages}
   alias MishkaCmsCore.Agent.Receipt.Stage
+  alias MishkaInstaller.Event.{Hook, ModuleStateCompiler}
 
   require Logger
 
@@ -76,6 +110,9 @@ defmodule MishkaCmsCore.Agent.Receipts do
   @max_limit 100
   @default_limit 20
   @telemetry [:mishka_cms, :agent, :receipt, :stop]
+  @telemetry_stage [:mishka_cms, :agent, :receipt, :stage]
+  @telemetry_late [:mishka_cms, :agent, :receipt, :late]
+  @finished_event "agent:receipt:finished"
 
   @typedoc "Who reads: a user, as the rest of the core passes one."
   @type viewer :: map() | nil
@@ -100,6 +137,10 @@ defmodule MishkaCmsCore.Agent.Receipts do
     if on?() != on, do: :persistent_term.put(@switch, on)
     on
   end
+
+  @doc "The event a finished receipt is announced on, as the moduledoc describes."
+  @spec finished_event() :: String.t()
+  def finished_event, do: @finished_event
 
   @doc "The setting that turns receipts on."
   @spec setting() :: String.t()
@@ -312,9 +353,25 @@ defmodule MishkaCmsCore.Agent.Receipts do
   def get_unchecked(id), do: ReceiptStore.fetch(id)
 
   @doc false
-  # Keeps evidence that arrived after the receipt was stored, from `UiObserver` or `JobDone`.
+  # Keeps evidence that arrived after the receipt was stored, from `UiObserver` or `JobDone`, and
+  # announces the receipt again.
   @spec late(String.t(), Stage.t()) :: :ok | :unknown
-  def late(id, %Stage{} = stage), do: ReceiptStore.late(id, stage)
+  def late(id, %Stage{} = stage) do
+    with :ok <- ReceiptStore.late(id, stage) do
+      if on?(), do: announce_late(id, stage)
+      :ok
+    end
+  end
+
+  defp announce_late(id, stage) do
+    :telemetry.execute(
+      @telemetry_late,
+      %{system_time: System.system_time()},
+      Map.put(stage_meta(stage), :id, id)
+    )
+
+    announce(id, :late)
+  end
 
   ## Running
 
@@ -468,11 +525,70 @@ defmodule MishkaCmsCore.Agent.Receipts do
       %{
         operation: receipt.operation,
         status: receipt.status,
-        site_id: receipt.site_id
+        site_id: receipt.site_id,
+        id: receipt.id
       }
     )
 
+    common = %{id: receipt.id, operation: receipt.operation, site_id: receipt.site_id}
+
+    Enum.each(stages, fn stage ->
+      :telemetry.execute(
+        @telemetry_stage,
+        %{elapsed_us: stage.elapsed_us || 0},
+        Map.merge(stage_meta(stage), common)
+      )
+    end)
+
+    announce(receipt.id, :finished)
     stored
+  end
+
+  defp stage_meta(%Stage{} = stage),
+    do: %{
+      kind: stage.kind,
+      name: stage.name,
+      layer: stage.layer,
+      status: stage.status,
+      reason: stage.reason
+    }
+
+  # Plugins hear the receipt from a task, read from the store then, so a receipt still running (late
+  # evidence before it was stored) is announced once it is.
+  defp announce(id, trigger) do
+    case ModuleStateCompiler.event_module(@finished_event) do
+      nil -> :ok
+      _module -> start_announce(fn -> announced(id, trigger) end)
+    end
+  end
+
+  defp start_announce(work) do
+    case Process.whereis(MishkaCmsCore.Runtime.TaskSupervisor) do
+      nil -> Task.start(work)
+      _supervisor -> Task.Supervisor.start_child(MishkaCmsCore.Runtime.TaskSupervisor, work)
+    end
+
+    :ok
+  end
+
+  defp announced(id, trigger) do
+    case ReceiptStore.fetch(id) do
+      %Receipt{} = receipt ->
+        Hook.call(
+          @finished_event,
+          %{
+            receipt: Receipt.to_public(receipt),
+            site_id: receipt.site_id,
+            operation: receipt.operation,
+            trigger: trigger,
+            node: node()
+          },
+          raised: :raised
+        )
+
+      nil ->
+        :ok
+    end
   end
 
   defp error_of({:raised, kind, reason, stacktrace}), do: Redactor.error(kind, reason, stacktrace)
