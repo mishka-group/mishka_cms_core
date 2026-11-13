@@ -152,6 +152,9 @@ defmodule MishkaCmsCore.MixProject do
       {:guarded_struct, "~> 0.1.7"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
+      # `MishkaCmsCore.Runtime.HeadCodes` parses a site's head code with `:mochiweb_html`, which
+      # reads a script's body as raw text.
+      {:mochiweb, "~> 3.5"},
       # Share images (`MishkaCmsCore.Runtime.ShareCard`), drawn with libvips in a separate OS process
       # (`MishkaCmsCore.Isolated`). Vix brings a precompiled libvips: nothing to install.
       {:image, "~> 0.72"},
