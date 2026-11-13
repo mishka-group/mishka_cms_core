@@ -123,11 +123,10 @@ defmodule MishkaCmsCoreWeb.Test.SiteIndexTest do
 
     minimum =
       tracks
-      |> Enum.map(fn track ->
+      |> Enum.sum_by(fn track ->
         [px] = Regex.run(~r/^(?:minmax\()?(\d+)px/, track, capture: :all_but_first)
         String.to_integer(px)
       end)
-      |> Enum.sum()
       |> Kernel.+(actions)
 
     assert minimum <= 930, "the table needs #{minimum}px: #{inspect(tracks)} and #{actions}px"

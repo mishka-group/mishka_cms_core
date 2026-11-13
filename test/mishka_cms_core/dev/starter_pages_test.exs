@@ -61,7 +61,7 @@ defmodule MishkaCmsCore.Dev.StarterPagesTest do
     StarterContent.seed!(site, extra_pages: pages)
 
     stored = rows(Page, site)
-    assert length(stored) == 4
+    assert match?([_, _, _, _], stored)
 
     for page <- stored do
       assert page.section == "starter", page.path

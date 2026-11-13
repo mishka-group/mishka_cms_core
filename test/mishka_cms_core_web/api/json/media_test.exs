@@ -1007,7 +1007,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.MediaTest do
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) >= 2
+      assert match?([_, _ | _], sorted_versions)
     end
 
     test "master can get media with versions from any site", %{

@@ -556,7 +556,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.Query.for_read(:by_path, %{path: "/site1/*"})
         |> Ash.read!(authorize?: false)
 
-      assert length(layouts) == 1
+      assert match?([_], layouts)
       assert List.first(layouts).id == context.site1_layout.id
     end
   end
@@ -1604,7 +1604,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.read!(authorize?: false)
 
       # list_versions returns layouts with sorted_versions loaded
-      assert length(results) == 1
+      assert match?([_], results)
       layout_with_versions = List.first(results)
       assert length(layout_with_versions.sorted_versions) >= 2
     end
@@ -1631,7 +1631,7 @@ defmodule MishkaCmsCore.Runtime.Resources.LayoutTest do
         |> Ash.Query.for_read(:master_list_versions, %{layout_id: layout.id}, authorize?: false)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) == 1
+      assert match?([_], results)
       layout_with_versions = List.first(results)
       assert length(layout_with_versions.sorted_versions) >= 1
     end

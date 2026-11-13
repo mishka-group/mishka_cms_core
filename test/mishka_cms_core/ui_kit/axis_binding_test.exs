@@ -117,7 +117,7 @@ defmodule MishkaCmsCore.UiKit.AxisBindingTest do
     test "over the whole kit it refuses three pairings and keeps four", %{bundle: b} do
       kept = rebinds(b)
 
-      assert length(kept) == 4, "kept: #{inspect(kept)}"
+      assert match?([_, _, _, _], kept), "kept: #{inspect(kept)}"
       assert {"chelekom-alert", "color", "kind"} in kept
     end
   end

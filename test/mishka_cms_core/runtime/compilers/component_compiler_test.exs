@@ -103,7 +103,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       # Check that it contains the expected function definitions
       # The functions list contains multiple def statements for __component_information__
       assert is_list(functions)
-      assert length(functions) > 0
+      assert functions != []
     end
 
     test "handles missing optional fields with defaults" do
@@ -147,7 +147,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # setup + rest attr + 2 synthetic attrs (:site, :component_name)
-      assert length(functions_ast) == 4
+      assert match?([_, _, _, _], functions_ast)
     end
 
     test "handles struct type attributes" do
@@ -161,7 +161,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # setup + user attr + 2 synthetic attrs (:site, :component_name)
-      assert length(functions_ast) == 4
+      assert match?([_, _, _, _], functions_ast)
     end
 
     test "filters invalid attribute options" do
@@ -184,7 +184,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       # The invalid options should be filtered out
       # setup + 1 attr + 2 synthetic attrs (:site, :component_name)
-      assert length(functions_ast) == 4
+      assert match?([_, _, _, _], functions_ast)
     end
 
     test "handles empty attrs list" do
@@ -194,7 +194,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # setup + 2 synthetic attrs (:site, :component_name)
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
   end
 
@@ -211,7 +211,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # setup + 2 slots
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
 
     test "builds slots with nested attributes" do
@@ -232,7 +232,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # setup + 1 slot with nested attrs
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "filters invalid slot options" do
@@ -254,7 +254,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {_, functions_ast} = ComponentCompiler.build_slots({params, []})
 
       # setup + 1 slot
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "handles empty slots list" do
@@ -264,7 +264,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # just setup
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 
@@ -282,7 +282,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {updated_params, functions_ast} = ComponentCompiler.build_component_function({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
 
       # ONE def, NOT TWO. There used to be a `render(name, assigns)` alias beside the component's own
       # function — the same body a second time, with the name as its first argument. Nothing in the
@@ -302,7 +302,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {updated_params, functions_ast} = ComponentCompiler.build_component_function({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles empty template" do
@@ -314,7 +314,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {updated_params, functions_ast} = ComponentCompiler.build_component_function({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "merges default values from attributes" do
@@ -331,7 +331,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
       assert updated_params == params
       # The function should include default value merging
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 
@@ -355,7 +355,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {updated_params, functions_ast} = ComponentCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "appends a total catch-all so a narrowed dispatcher tolerates a dropped combo" do
@@ -412,7 +412,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {_params, functions_ast} = ComponentCompiler.build_helpers({params, []})
 
       # 3 clauses in, 3 out — no synthetic catch-all injected.
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
 
     test "a REAL component compiles via the full pipeline and tolerates unknown combos (all arities)" do
@@ -509,7 +509,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       for fname <- ~w(direction_class justify_class align_class), do: assert(fname in flex)
 
       # Broadly: hundreds of dispatchers across the whole kit get a fallback — nothing slipped through.
-      total = bundle["components"] |> Enum.map(&MapSet.size(catchall_names(&1))) |> Enum.sum()
+      total = bundle["components"] |> Enum.sum_by(&MapSet.size(catchall_names(&1)))
       assert total > 200
     end
 
@@ -527,7 +527,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       {updated_params, functions_ast} = ComponentCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles empty helpers list" do

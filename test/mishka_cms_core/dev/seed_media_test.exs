@@ -55,9 +55,7 @@ defmodule MishkaCmsCore.Dev.SeedMediaTest do
 
   test "the set has something for every shape a seed asks for" do
     counts =
-      SeedMedia.files()
-      |> Enum.group_by(& &1.shape)
-      |> Map.new(fn {shape, files} -> {shape, length(files)} end)
+      Enum.frequencies_by(SeedMedia.files(), & &1.shape)
 
     # A shape with one file in it gives every post the same cover and every blogger the same face.
     for shape <- [:cover, :card, :avatar, :document] do

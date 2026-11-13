@@ -165,7 +165,7 @@ defmodule MishkaCmsCore.UiKit.AuthoringExampleTest do
         |> Ash.Query.load(:is_global)
         |> Ash.read!(authorize?: false)
 
-      assert length(rows) == 1
+      assert match?([_], rows)
       assert hd(rows).is_global, "a bundle row ships site_id: null, which is what makes it global"
       assert JavaScriptCompiler.browser_name(hd(rows), nil) == "GlobalAcmeReveal"
     end

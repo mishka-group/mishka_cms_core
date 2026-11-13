@@ -1296,7 +1296,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
 
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) == 3
+      assert match?([_, _, _], sorted_versions)
     end
 
     test "tenant admin cannot get other site's component with versions", %{
@@ -1348,7 +1348,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) == 2
+      assert match?([_, _], sorted_versions)
     end
 
     test "master admin can list versions for any component", %{
@@ -1393,7 +1393,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       component_data = List.first(body["data"])
       sorted_versions = component_data["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) == 3
+      assert match?([_, _, _], sorted_versions)
     end
   end
 
@@ -1461,7 +1461,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       # Check recent_versions
       recent = body["data"]["attributes"]["recent_versions"]
       assert is_list(recent)
-      assert length(recent) == 4
+      assert match?([_, _, _, _], recent)
 
       # Verify sorted descending
       descriptions = Enum.map(recent, & &1["changes"]["description"])
@@ -1513,7 +1513,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       component_data = List.first(body["data"])
       sorted_versions = component_data["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) == 3
+      assert match?([_, _, _], sorted_versions)
     end
 
     test "tenant admin cannot list versions from other site's component", %{

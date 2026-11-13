@@ -113,7 +113,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       # Check that it contains the expected function definitions
       assert is_list(functions)
-      assert length(functions) > 0
+      assert functions != []
     end
 
     test "keeps the page's description beside its SEO tags and schema" do
@@ -197,7 +197,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 2 event handlers + 1 catch-all
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
 
       # Check for catch-all handler
       assert Enum.any?(functions_ast, fn
@@ -213,7 +213,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # Only catch-all handler
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles complex event handler code" do
@@ -249,7 +249,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 1 event handler + 1 catch-all
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
   end
 
@@ -340,7 +340,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 2 info handlers + 1 catch-all
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
 
     test "adds catch-all info handler when no infos defined" do
@@ -350,7 +350,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # Only catch-all handler
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles pattern matching in info handlers" do
@@ -373,7 +373,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
 
       assert updated_params == params
       # 1 info handler + 1 catch-all
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
   end
 
@@ -394,12 +394,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_renders({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
 
       # Check the function AST structure
       [{:__block__, _, defs}] = functions_ast
       # __component_references__/0 + render/1 + templates/1
-      assert length(defs) == 3
+      assert match?([_, _, _], defs)
     end
 
     test "handles empty template" do
@@ -413,7 +413,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_renders({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "compiles complex HEEx template" do
@@ -442,7 +442,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_renders({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 
@@ -466,7 +466,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "builds helper with multiple arguments" do
@@ -483,7 +483,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles empty helpers list" do
@@ -547,7 +547,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       {updated_params, functions_ast} = LiveViewCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 

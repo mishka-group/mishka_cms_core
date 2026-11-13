@@ -83,7 +83,7 @@ defmodule MishkaCmsCore.Builder.EventsTest do
       seed = [seed("layers", 10), seed("layers", 20)]
       collected = Events.collect(:rails, seed)
 
-      assert length(collected) == 1
+      assert match?([_], collected)
       assert hd(collected).priority == 10
     end
 

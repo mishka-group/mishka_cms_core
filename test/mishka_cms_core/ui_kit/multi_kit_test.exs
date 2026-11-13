@@ -288,7 +288,7 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
 
       assert {:ok, %{components: installed}} = UiKitHandler.install_kit!(path, site_id: nil)
 
-      assert length(installed) == 2
+      assert match?([_, _], installed)
       assert installed?("acme-alert")
       assert installed?("acme-card")
       refute installed?("acme-broken")

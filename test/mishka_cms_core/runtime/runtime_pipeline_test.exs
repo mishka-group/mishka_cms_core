@@ -84,7 +84,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
 
       boot_ids = Enum.map(enqueued_asset_jobs("site_y", "css"), & &1.args["boot_id"])
 
-      assert length(boot_ids) == 2
+      assert match?([_, _], boot_ids)
       assert BootHandler.boot_id() in boot_ids
     end
   end

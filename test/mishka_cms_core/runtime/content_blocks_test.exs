@@ -80,7 +80,7 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
       blocks = blocks(kit)
 
       assert length(blocks) > 50
-      assert blocks |> Enum.map(& &1.id) |> Enum.uniq() |> length() == length(blocks)
+      assert blocks |> Enum.map(& &1.id) |> MapSet.new() |> MapSet.size() == length(blocks)
 
       for block <- blocks do
         assert {:ok, read} = ContentComponents.read(block.marker), block.id
@@ -99,7 +99,7 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
 
       sections = for {:component, section} <- tracking.tree.parts, do: section
 
-      assert length(sections) == 4
+      assert match?([_, _, _, _], sections)
       assert Enum.all?(sections, &(&1.name == "chelekom-timeline-section"))
       assert hd(sections).attrs["title"] == "Payment confirmed"
       refute Map.has_key?(hd(sections).attrs, "site")

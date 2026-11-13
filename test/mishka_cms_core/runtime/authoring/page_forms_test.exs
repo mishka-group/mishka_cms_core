@@ -131,7 +131,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageFormsTest do
 
     test "no derived name is shared by two forms", %{specs: specs} do
       for read <- [& &1.assign, & &1.as, & &1.id, & &1.change, & &1.submit] do
-        assert specs |> Enum.map(read) |> Enum.uniq() |> length() == 5
+        assert specs |> Enum.map(read) |> MapSet.new() |> MapSet.size() == 5
       end
     end
 

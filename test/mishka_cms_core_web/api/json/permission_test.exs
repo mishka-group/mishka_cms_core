@@ -134,7 +134,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
              } = result
 
       # Should return all permissions (admin_permission + 3 new ones)
-      assert length(permissions) >= 4
+      assert match?([_, _, _, _ | _], permissions)
 
       # Verify the response includes all created permissions
       permission_names = Enum.map(permissions, fn perm -> perm["attributes"]["name"] end)
@@ -188,7 +188,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
       assert is_list(data)
 
       # Check first permission has proper structure with default fields
-      if length(data) > 0 do
+      if data != [] do
         [first_permission | _] = data
 
         assert %{
@@ -244,7 +244,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
       assert response.status == 200
       result = Jason.decode!(response.resp_body)
       assert %{"data" => data} = result
-      assert length(data) == 5
+      assert match?([_, _, _, _, _], data)
     end
   end
 
@@ -579,7 +579,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
              } = result
 
       # Should return all permissions
-      assert length(permissions) >= 2
+      assert match?([_, _ | _], permissions)
 
       # Verify the response includes created permissions
       permission_names = Enum.map(permissions, fn perm -> perm["attributes"]["name"] end)
@@ -621,7 +621,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
       assert response.status == 200
       result = Jason.decode!(response.resp_body)
       assert %{"data" => data} = result
-      assert length(data) == 5
+      assert match?([_, _, _, _, _], data)
     end
   end
 

@@ -1732,7 +1732,8 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
                ["About", "Pricing", "Blog"]
 
       # A TUPLE OR A MAP: the three are drawn alike.
-      assert html |> attribute("#site-nav-dev-menu > a", "class") |> Enum.uniq() |> length() == 1
+      assert html |> attribute("#site-nav-dev-menu > a", "class") |> MapSet.new() |> MapSet.size() ==
+               1
 
       # SHUT UNTIL ITS BUTTON OPENS IT.
       assert "hidden" in class_list(html, "#site-nav-dev-menu")
@@ -1749,7 +1750,7 @@ defmodule MishkaCmsCore.Install.StarterContentTest do
       assert html |> query("#site-nav-dev-label") |> LazyHTML.text() |> String.trim() == "Dev"
 
       assert attribute(html, "#{group} > a", "href") == ["/about", "/pricing", "/blog"]
-      assert html |> attribute("#{group} > a", "class") |> Enum.uniq() |> length() == 1
+      assert html |> attribute("#{group} > a", "class") |> MapSet.new() |> MapSet.size() == 1
 
       # NO BUTTON TO OPEN: the panel is already something the visitor opened.
       assert html |> query("#{group} button") |> Enum.count() == 0

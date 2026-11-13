@@ -676,7 +676,7 @@ defmodule MishkaCmsCore.Runtime.PageLanguageTest do
         )
         |> Ash.read!(actor: master_user, page: [limit: 100])
 
-      assert length(rows) == 5
+      assert match?([_, _, _, _, _], rows)
 
       assert rows
              |> Enum.take_while(&(&1.language_group_id == &1.id))

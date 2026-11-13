@@ -1415,7 +1415,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.Query.for_read(:list_versions, %{media_id: media.id}, tenant: site.id)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) == 1
+      assert match?([_], results)
       assert hd(results).id == media.id
     end
 
@@ -1434,7 +1434,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.Query.for_read(:master_list_versions, %{media_id: media.id}, authorize?: false)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) == 1
+      assert match?([_], results)
     end
 
     test "restore_version restores media to a previous version (tenant)" do

@@ -929,7 +929,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.Query.for_read(:list_versions, %{category_id: category.id}, tenant: site.id)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) >= 1
+      assert results != []
     end
 
     test "master_list_versions returns versions for any category" do
@@ -948,7 +948,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         )
         |> Ash.read!(authorize?: false)
 
-      assert length(results) >= 1
+      assert results != []
     end
   end
 

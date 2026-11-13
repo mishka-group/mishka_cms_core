@@ -402,7 +402,7 @@ defmodule MishkaCmsCore.Runtime.TranslationsTest do
       :ok = Translations.register(site.id, [key])
 
       assert shape(rows([key])) == first
-      assert length(first) == 2
+      assert match?([_, _], first)
     end
 
     # Saving a template again runs this again; a translation somebody wrote must survive it.

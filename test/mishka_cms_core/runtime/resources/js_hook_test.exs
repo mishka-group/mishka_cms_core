@@ -399,7 +399,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.Query.sort(priority: :desc, name: :asc)
         |> Ash.read!(authorize?: false)
 
-      assert length(hooks) == 2
+      assert match?([_, _], hooks)
 
       assert Enum.at(hooks, 0).priority == 20
       assert Enum.at(hooks, 0).name == "aaa-hook"
@@ -1565,7 +1565,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       versions =
         versions(MishkaCmsCore.Runtime.JsHook.Version, hook.id, tenant: site.id)
 
-      assert length(versions) >= 2
+      assert match?([_, _ | _], versions)
 
       %{site: site, hook: hook, versions: versions}
     end
@@ -1621,7 +1621,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.Query.for_read(:list_versions, %{js_hook_id: hook.id}, tenant: site.id)
         |> Ash.read(authorize?: false)
 
-      assert length(result) == 1
+      assert match?([_], result)
       found = List.first(result)
       assert found.id == hook.id
       assert is_list(found.sorted_versions)
@@ -1642,7 +1642,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       global_versions =
         versions(MishkaCmsCore.Runtime.JsHook.Version, global_hook.id)
 
-      assert length(global_versions) >= 1
+      assert global_versions != []
 
       # Tenant list_versions returns empty for global hooks (multitenancy filtering)
       # To access global hook versions, use master_list_versions
@@ -1652,7 +1652,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.read(authorize?: false)
 
       # Global hooks are not returned due to multitenancy filtering on list_versions
-      assert length(result) == 0
+      assert result == []
 
       # Master can access global hook versions
       {:ok, %Ash.Page.Offset{results: master_result}} =
@@ -1662,7 +1662,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         )
         |> Ash.read(authorize?: false)
 
-      assert length(master_result) == 1
+      assert match?([_], master_result)
       found = List.first(master_result)
       assert found.id == global_hook.id
     end
@@ -1673,7 +1673,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.Query.for_read(:master_list_versions, %{js_hook_id: hook.id}, authorize?: false)
         |> Ash.read(authorize?: false)
 
-      assert length(result) == 1
+      assert match?([_], result)
       found = List.first(result)
       assert found.id == hook.id
       assert is_list(found.sorted_versions)

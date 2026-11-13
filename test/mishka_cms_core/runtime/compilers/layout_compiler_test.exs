@@ -99,7 +99,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
 
       # Check that it contains the expected function definitions
       assert is_list(functions)
-      assert length(functions) > 0
+      assert functions != []
     end
 
     test "handles missing optional fields with defaults" do
@@ -145,12 +145,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       {updated_params, functions_ast} = LayoutCompiler.build_render_functions({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
 
       # Check the function AST structure
       [{:__block__, _, defs}] = functions_ast
       # __component_references__/0 + render/1 + render/2
-      assert length(defs) == 3
+      assert match?([_, _, _], defs)
     end
 
     test "builds render functions with SEO tags and resources" do
@@ -182,7 +182,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       {updated_params, functions_ast} = LayoutCompiler.build_render_functions({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles empty template" do
@@ -194,7 +194,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       {updated_params, functions_ast} = LayoutCompiler.build_render_functions({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "merges layout data with assigns" do
@@ -209,7 +209,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
 
       assert updated_params == params
       # The function should include layout data merging
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 
@@ -233,7 +233,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       {updated_params, functions_ast} = LayoutCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "builds helper with multiple arguments" do
@@ -250,7 +250,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       {updated_params, functions_ast} = LayoutCompiler.build_helpers({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "handles empty helpers list" do

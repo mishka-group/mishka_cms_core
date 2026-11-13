@@ -249,7 +249,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert response.status == 403
       assert %{"errors" => errors} = Jason.decode!(response.resp_body)
-      assert length(errors) > 0
+      assert errors != []
 
       # Check that no token is returned
       result = Jason.decode!(response.resp_body)
@@ -272,7 +272,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert response.status == 403
       assert %{"errors" => errors} = Jason.decode!(response.resp_body)
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "fails to sign in tenant user without proper host", %{site: site} do
@@ -365,7 +365,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert response.status == 400
       assert %{"errors" => errors} = Jason.decode!(response.resp_body)
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "can use query param for no-tenant instead of header" do
@@ -1105,7 +1105,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
 
       # Check that the error is about password confirmation
       assert Enum.any?(errors, fn error ->
@@ -1133,7 +1133,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "fails to register user with duplicate email in same tenant", %{site: site} do
@@ -1165,7 +1165,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
 
       # Check for uniqueness violation
       assert Enum.any?(errors, fn error ->
@@ -1193,7 +1193,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "fails to register tenant user with no-tenant header set to true", %{site: site} do
@@ -1514,7 +1514,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
              } = result
 
       # Should return all users (master + tenant users)
-      assert length(users) >= 3
+      assert match?([_, _, _ | _], users)
 
       # Verify the response includes the created users
       user_emails = Enum.map(users, fn user -> user["attributes"]["email"] end)
@@ -1655,7 +1655,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       result = Jason.decode!(response.resp_body)
       assert %{"data" => users} = result
       # Should get exactly 2 users
-      assert length(users) == 2
+      assert match?([_, _], users)
 
       response =
         make_api_request(
@@ -1672,7 +1672,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       result = Jason.decode!(response.resp_body)
       assert %{"data" => users} = result
       # Should get exactly 2 users
-      assert length(users) == 2
+      assert match?([_, _], users)
 
       # Get third page to verify we have the right total
       response =
@@ -1690,7 +1690,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       result = Jason.decode!(response.resp_body)
       assert %{"data" => users} = result
       # This page should have the remaining users
-      assert length(users) >= 1
+      assert users != []
     end
 
     test "admin with tenant context only sees users from their site", %{
@@ -1901,7 +1901,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert is_list(data)
 
       # Each user should have proper structure
-      if length(data) > 0 do
+      if data != [] do
         [first_user | _] = data
 
         assert %{
@@ -1978,7 +1978,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert %{"data" => users} = result
 
       # Should only contain the admin user itself
-      assert length(users) == 1
+      assert match?([_], users)
       assert List.first(users)["attributes"]["email"] == to_string(empty_site_admin.email)
 
       # Clean up
@@ -2695,7 +2695,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 403
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "fails when new password and confirmation don't match", %{site: site} do
@@ -2806,7 +2806,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "returns 400 when no authentication token provided", %{site: site} do
@@ -3043,7 +3043,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
     end
   end
 
@@ -3237,7 +3237,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
 
       # Should have error about invalid token
       assert Enum.any?(errors, fn error ->
@@ -3312,7 +3312,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 400
       result = Jason.decode!(response.resp_body)
       assert %{"errors" => errors} = result
-      assert length(errors) > 0
+      assert errors != []
 
       # Should have validation error about password strength
       assert Enum.any?(errors, fn error ->
@@ -3520,7 +3520,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert %{"errors" => errors} = result
       assert is_list(errors)
-      assert length(errors) > 0
+      assert errors != []
     end
 
     test "requires authentication to assign permissions", %{site: site} do
@@ -3922,7 +3922,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       # Verify first permission was added
       permission_values1 = result1["data"]["attributes"]["permission_values"] || []
       assert perm1.name in permission_values1
-      assert length(permission_values1) == 1
+      assert match?([_], permission_values1)
 
       # Add second permission
       response2 =
@@ -3949,7 +3949,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       permission_values2 = result2["data"]["attributes"]["permission_values"] || []
       assert perm1.name in permission_values2
       assert perm2.name in permission_values2
-      assert length(permission_values2) == 2
+      assert match?([_, _], permission_values2)
     end
 
     test "non-admin user cannot add permissions", %{site: site} do
@@ -4418,7 +4418,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert perm1.name in permission_values
       assert perm3.name in permission_values
       refute perm2.name in permission_values
-      assert length(permission_values) == 2
+      assert match?([_, _], permission_values)
     end
 
     test "removing permission user doesn't have fails", %{
@@ -4499,7 +4499,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
         get_result = Jason.decode!(get_response.resp_body)
         permission_values = get_result["data"]["attributes"]["permission_values"] || []
         assert perm1.name in permission_values
-        assert length(permission_values) == 1
+        assert match?([_], permission_values)
       end
     end
 

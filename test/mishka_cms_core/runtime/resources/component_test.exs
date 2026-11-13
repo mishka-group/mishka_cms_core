@@ -611,7 +611,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.read!(action: :by_priority, authorize?: false)
 
       components = page.results
-      assert length(components) == 3
+      assert match?([_, _, _], components)
       assert Enum.at(components, 0).name == "ccc"
       assert Enum.at(components, 1).name == "aaa"
       assert Enum.at(components, 2).name == "bbb"
@@ -1372,7 +1372,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.read!()
 
       components = result.results
-      assert length(components) == 1
+      assert match?([_], components)
       assert List.first(components).id == component.id
       assert is_list(List.first(components).sorted_versions)
     end
@@ -1416,7 +1416,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.read!(authorize?: false)
 
       components = result.results
-      assert length(components) == 1
+      assert match?([_], components)
       assert is_list(List.first(components).sorted_versions)
     end
   end

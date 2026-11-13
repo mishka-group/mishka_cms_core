@@ -447,7 +447,7 @@ defmodule MishkaCmsCore.SidebarTest do
       Sidebar.core_menu().items
       |> Enum.group_by(& &1.module, & &1.permissions)
       |> Enum.each(fn {module, lists} ->
-        assert Enum.uniq(lists) |> length() == 1,
+        assert MapSet.new(lists) |> MapSet.size() == 1,
                "#{inspect(module)} is declared twice with different gates: #{inspect(lists)}"
       end)
     end

@@ -743,7 +743,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
       # Should only see site1
       assert site1.id in site_ids
       refute site2.id in site_ids
-      assert length(site_ids) == 1
+      assert match?([_], site_ids)
     end
 
     test "tenant user cannot get other sites" do

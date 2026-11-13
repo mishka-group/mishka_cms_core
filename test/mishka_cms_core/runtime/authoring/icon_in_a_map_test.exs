@@ -92,7 +92,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.IconInAMapTest do
             name = Inspector.icon_in(Inspector.default(attr)),
             do: name
 
-      assert length(defaults) == 5
+      assert match?([_, _, _, _, _], defaults)
 
       for name <- defaults do
         assert Icons.known?(name), "#{name} is not an icon any installed set ships"

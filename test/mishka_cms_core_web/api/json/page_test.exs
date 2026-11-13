@@ -1051,7 +1051,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) >= 2
+      assert match?([_, _ | _], sorted_versions)
     end
 
     test "master can get page with versions from any site", %{
@@ -1611,7 +1611,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       body = Jason.decode!(response.resp_body)
       seo_tags = body["data"]["attributes"]["seo_tags"]
       assert is_list(seo_tags)
-      assert length(seo_tags) == 1
+      assert match?([_], seo_tags)
     end
 
     # THE PAGE SECTION WRITES A PAGE'S ELIXIR. `admin:api:runtime:page` stores a handler over the API;
@@ -1649,7 +1649,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       body = Jason.decode!(response.resp_body)
       events = body["data"]["attributes"]["events"]
       assert is_list(events)
-      assert length(events) == 1
+      assert match?([_], events)
     end
 
     # THE GATE REACHES THE API, which is the half that matters: the editor can hide a tab, and a

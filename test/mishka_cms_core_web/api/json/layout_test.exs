@@ -1278,7 +1278,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
       assert body["data"]["id"] == layout.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) == 2
+      assert match?([_, _], sorted_versions)
     end
 
     test "tenant cannot get global layout with versions via tenant endpoint", %{
@@ -1338,7 +1338,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
       assert body["data"]["id"] == layout.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
       assert is_list(sorted_versions)
-      assert length(sorted_versions) == 2
+      assert match?([_, _], sorted_versions)
     end
   end
 

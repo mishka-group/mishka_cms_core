@@ -367,7 +367,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
 
     test "returns all assets for a specific site" do
       assets = AssetsState.get_by_site("example_site")
-      assert length(assets) == 3
+      assert match?([_, _, _], assets)
 
       types = Enum.map(assets, & &1.type) |> Enum.sort()
       assert types == ["config", "scripts", "theme"]
@@ -423,7 +423,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
       keys = [{"site1", "theme"}, {"site2", "theme"}, {"site1", "config"}]
       assets = AssetsState.get_many(keys)
 
-      assert length(assets) == 3
+      assert match?([_, _, _], assets)
 
       # Check each asset
       site1_theme = Enum.find(assets, &(&1.id == "site1" && &1.type == "theme"))
@@ -439,7 +439,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
       keys = [{"site1", "theme"}, {"nonexistent", "theme"}, {"site1", "nonexistent"}]
       assets = AssetsState.get_many(keys)
 
-      assert length(assets) == 1
+      assert match?([_], assets)
       assert hd(assets).id == "site1"
       assert hd(assets).type == "theme"
     end
@@ -453,7 +453,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
       keys = [{"site1", "config"}, {"site1", "theme"}]
       assets = AssetsState.get_many(keys)
 
-      assert length(assets) == 2
+      assert match?([_, _], assets)
       assert Enum.at(assets, 0).type == "config"
       assert Enum.at(assets, 1).type == "theme"
     end
@@ -498,7 +498,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
 
     test "returns all assets of a specific type across all sites" do
       theme_assets = AssetsState.get_by_type("theme")
-      assert length(theme_assets) == 3
+      assert match?([_, _, _], theme_assets)
 
       site_ids = Enum.map(theme_assets, & &1.id) |> Enum.sort()
       assert site_ids == ["site1", "site2", "site3"]
@@ -515,7 +515,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
 
     test "does not return assets of other types" do
       config_assets = AssetsState.get_by_type("config")
-      assert length(config_assets) == 1
+      assert match?([_], config_assets)
       assert hd(config_assets).id == "site1"
       assert hd(config_assets).type == "config"
     end
@@ -550,7 +550,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
       AssetsState.save_batch(assets)
 
       all_assets = AssetsState.get_all()
-      assert length(all_assets) == 3
+      assert match?([_, _, _], all_assets)
 
       # Check that all assets are present
       ids_and_types =
@@ -1105,7 +1105,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
 
       # Verify get_by_site works correctly
       site1_assets = AssetsState.get_by_site("site1")
-      assert length(site1_assets) == 1
+      assert match?([_], site1_assets)
       assert hd(site1_assets).type == "theme"
       assert hd(site1_assets).value == %{v: 10}
     end

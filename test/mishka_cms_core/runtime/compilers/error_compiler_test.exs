@@ -129,7 +129,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       # Check that it contains the expected function definitions
       assert is_list(functions)
-      assert length(functions) > 0
+      assert functions != []
     end
 
     test "handles missing optional fields with defaults" do
@@ -168,7 +168,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Should have 2 layout functions
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "builds layout functions for error pages without layouts" do
@@ -184,7 +184,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Should still have 2 layout functions (default ones)
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "handles empty error pages list" do
@@ -213,7 +213,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
       {updated_params, functions_ast} = ErrorCompiler.build_layout_functions({params, []})
 
       assert updated_params == params
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
   end
 
@@ -232,7 +232,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Should have 3 render functions + 1 catch-all
-      assert length(functions_ast) == 4
+      assert match?([_, _, _, _], functions_ast)
     end
 
     test "adds catch-all render function" do
@@ -247,7 +247,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # 1 specific render + 1 catch-all
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
 
       # Check that catch-all function is present
       catch_all_ast = List.last(functions_ast)
@@ -263,7 +263,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Should have just the catch-all
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
 
     test "render functions include site in warning message" do
@@ -302,7 +302,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # 2 helpers + 1 root_layout
-      assert length(functions_ast) == 3
+      assert match?([_, _, _], functions_ast)
     end
 
     test "builds root layout with custom template" do
@@ -325,7 +325,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Just the root_layout function
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
 
       root_layout_ast = List.last(functions_ast)
       ast_string = Macro.to_string(root_layout_ast)
@@ -339,7 +339,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Just the default root_layout
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
 
       root_layout_ast = List.last(functions_ast)
       ast_string = Macro.to_string(root_layout_ast)
@@ -363,7 +363,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # 1 helper + 1 root_layout
-      assert length(functions_ast) == 2
+      assert match?([_, _], functions_ast)
     end
 
     test "handles empty helpers list" do
@@ -373,7 +373,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert updated_params == params
       # Just the root_layout
-      assert length(functions_ast) == 1
+      assert match?([_], functions_ast)
     end
   end
 

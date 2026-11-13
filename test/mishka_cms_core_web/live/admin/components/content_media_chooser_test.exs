@@ -313,7 +313,7 @@ defmodule MishkaCmsCoreWeb.Test.ContentMediaChooserTest do
     assert is_nil(folder.parent_id)
 
     files = Ash.read!(Media, tenant: ctx.site.id, authorize?: false)
-    assert length(files) == 2
+    assert match?([_, _], files)
     assert Enum.all?(files, &(&1.media_category_id == folder.id))
   end
 

@@ -799,7 +799,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       pages = page.results
 
-      assert length(pages) == 3
+      assert match?([_, _, _], pages)
       assert Enum.at(pages, 0).priority == 20
       assert Enum.at(pages, 0).name == "aaa-page"
       assert Enum.at(pages, 1).priority == 20
@@ -814,7 +814,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:by_path, %{path: context.site1_page1.path})
         |> Ash.read!(authorize?: false)
 
-      assert length(pages) == 1
+      assert match?([_], pages)
       assert List.first(pages).id == context.site1_page1.id
     end
 
@@ -828,7 +828,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:by_section, %{section: "blog"})
         |> Ash.read!(authorize?: false)
 
-      assert length(pages) == 2
+      assert match?([_, _], pages)
       assert Enum.all?(pages, fn p -> p.section == "blog" end)
     end
 
@@ -843,7 +843,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:by_layout, %{layout_id: layout.id})
         |> Ash.read!(authorize?: false)
 
-      assert length(pages) == 2
+      assert match?([_, _], pages)
       assert Enum.all?(pages, fn p -> p.layout_id == layout.id end)
     end
   end
@@ -1171,7 +1171,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       versions = versions(MishkaCmsCore.Runtime.Page.Version, page.id)
 
-      assert length(versions) == 1
+      assert match?([_], versions)
       version = List.first(versions)
       assert version.version_action_name == :create
       assert version.version_action_type == :create
@@ -1196,7 +1196,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
 
       versions = versions(MishkaCmsCore.Runtime.Page.Version, updated_page.id)
 
-      assert length(versions) == 2
+      assert match?([_, _], versions)
 
       # versions/3 returns oldest-first, so create is first and update is last
       create_version = List.first(versions)
@@ -1221,7 +1221,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       versions = versions(MishkaCmsCore.Runtime.Page.Version, page.id)
 
       # Still only has the create version
-      assert length(versions) == 1
+      assert match?([_], versions)
       assert List.first(versions).version_action_name == :create
     end
 
@@ -1362,7 +1362,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
       new_versions = versions(MishkaCmsCore.Runtime.Page.Version, restored.id)
 
       # Should have 4 versions now (create + 2 updates + restore)
-      assert length(new_versions) == 4
+      assert match?([_, _, _, _], new_versions)
       latest_version = List.last(new_versions)
       assert latest_version.version_action_name == :restore_version
     end
@@ -1914,7 +1914,7 @@ defmodule MishkaCmsCore.Runtime.Resources.PageTest do
         |> Ash.Query.for_read(:master_list_versions, %{page_id: page.id}, authorize?: false)
         |> Ash.read!(authorize?: false)
 
-      assert length(results) == 1
+      assert match?([_], results)
     end
   end
 

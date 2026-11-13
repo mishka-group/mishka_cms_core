@@ -442,7 +442,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
         |> Ash.Query.for_read(:by_path, %{path: ErrorAddress.for_site(context.site1.id)})
         |> Ash.read!(authorize?: false)
 
-      assert length(error_pages) == 1
+      assert match?([_], error_pages)
       assert List.first(error_pages).id == context.error_page1.id
     end
   end

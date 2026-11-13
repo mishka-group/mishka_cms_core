@@ -184,7 +184,7 @@ defmodule MishkaCmsCore.UiKit.HookNamespaceTest do
         |> Ash.Query.filter(site_id == ^site.id and name == "carousel")
         |> Ash.read!(authorize?: false)
 
-      assert length(mine) == 1,
+      assert match?([_], mine),
              "a site's own hook must survive a kit install that renames its own"
     end
   end

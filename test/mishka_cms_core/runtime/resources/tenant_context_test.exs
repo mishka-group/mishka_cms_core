@@ -154,7 +154,7 @@ defmodule MishkaCmsCore.Runtime.Resources.Validations.TenantContextTest do
         assert error.resource == User
       end
 
-      assert length(refusals) == 4
+      assert match?([_, _, _, _], refusals)
     end
 
     test "is returned, not raised, where policy breakdowns are logged", %{policies: policies} do
