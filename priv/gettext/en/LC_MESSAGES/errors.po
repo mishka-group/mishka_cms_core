@@ -1503,24 +1503,24 @@ msgstr ""
 msgid "must be a JSON object"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:46
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/range.ex:28
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:47
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/range.ex:31
 #, elixir-autogen, elixir-format
 msgid "must be a number"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/date.ex:24
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/date.ex:33
 #, elixir-autogen, elixir-format
 msgid "must be a valid date"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/datetime.ex:29
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/datetime.ex:40
 #, elixir-autogen, elixir-format
 msgid "must be a valid date and time"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:29
-#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:42
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:30
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:43
 #, elixir-autogen, elixir-format
 msgid "must be a whole number"
 msgstr ""
@@ -1530,7 +1530,7 @@ msgstr ""
 msgid "must be valid JSON"
 msgstr ""
 
-#: ../mishka_gervaz/lib/mishka_gervaz/form/templates/standard.ex:2096
+#: ../mishka_gervaz/lib/mishka_gervaz/form/templates/standard.ex:2093
 #, elixir-autogen, elixir-format
 msgid "is required"
 msgstr ""
@@ -2752,4 +2752,24 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/resources/__validations/publish_directly.ex:83
 #, elixir-autogen, elixir-format
 msgid "Your blogger profile can't publish directly. Save the post as a draft for an editor to publish."
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/datetime.ex:125
+#, elixir-autogen, elixir-format
+msgid "is too early"
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/datetime.ex:126
+#, elixir-autogen, elixir-format
+msgid "is too late"
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:66
+#, elixir-autogen, elixir-format
+msgid "is too large"
+msgstr ""
+
+#: ../mishka_gervaz/lib/mishka_gervaz/form/types/field/number.ex:65
+#, elixir-autogen, elixir-format
+msgid "is too small"
 msgstr ""
