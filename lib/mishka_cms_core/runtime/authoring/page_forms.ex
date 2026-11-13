@@ -560,7 +560,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageForms do
   defp rebound(nil, _var, _key), do: nil
 
   defp rebound({_replaced, path}, var, key),
-    do: "#{var}[:#{key}]" <> Enum.map_join(path, "", &".#{&1}")
+    do: "#{var}[:#{key}]" <> Enum.map_join(path, &".#{&1}")
 
   @doc """
   Every attribute on `node` that binds `key`, rebound to `to`, ready for

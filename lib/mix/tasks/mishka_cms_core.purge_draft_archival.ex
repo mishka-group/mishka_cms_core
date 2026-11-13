@@ -66,8 +66,8 @@ defmodule Mix.Tasks.MishkaCmsCore.PurgeDraftArchival do
   defp report(report, dry_run?) do
     Enum.each(report, fn {table, result} -> Mix.shell().info(line(table, result)) end)
 
-    total = report |> Map.values() |> Enum.map(&Map.get(&1, :deleted, 0)) |> Enum.sum()
-    found = report |> Map.values() |> Enum.map(&Map.get(&1, :found, 0)) |> Enum.sum()
+    total = report |> Map.values() |> Enum.sum_by(&Map.get(&1, :deleted, 0))
+    found = report |> Map.values() |> Enum.sum_by(&Map.get(&1, :found, 0))
 
     Mix.shell().info(summary(dry_run?, found, total))
   end

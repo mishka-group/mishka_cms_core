@@ -325,7 +325,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.SiteDetailsModal do
       else: "https://" <> domain
   end
 
-  defp parts_total(parts) when is_list(parts), do: Enum.sum(Enum.map(parts, &(&1.active || 0)))
+  defp parts_total(parts) when is_list(parts), do: Enum.sum_by(parts, &(&1.active || 0))
   defp parts_total(_), do: 0
 
   defp bundle_text(%{present?: true, updated_at: %DateTime{} = at}),

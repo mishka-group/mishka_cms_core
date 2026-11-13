@@ -174,7 +174,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.HeadCodeModal do
   # One line a reader recognises the item by: its tag and its attributes, and the start of a
   # script's code.
   defp describe(%{tag: tag, attrs: attrs} = item) do
-    attributes = Enum.map_join(attrs, "", fn {name, value} -> ~s( #{name}="#{value}") end)
+    attributes = Enum.map_join(attrs, fn {name, value} -> ~s( #{name}="#{value}") end)
 
     code =
       case item.content do

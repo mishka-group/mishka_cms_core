@@ -1533,7 +1533,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
   def nav_links(nav) when is_list(nav) do
     nav
     |> Enum.with_index()
-    |> Enum.map_join("", fn
+    |> Enum.map_join(fn
       {%{label: label, children: children} = group, index} ->
         nav_group(
           label,

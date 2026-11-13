@@ -435,9 +435,7 @@ defmodule MishkaCmsCore.Runtime.Media do
             width "90px"
           end
 
-          format fn size ->
-            MishkaGervaz.Helpers.format_filesize(size)
-          end
+          format &MishkaGervaz.Helpers.format_filesize/1
         end
 
         column :category_info do

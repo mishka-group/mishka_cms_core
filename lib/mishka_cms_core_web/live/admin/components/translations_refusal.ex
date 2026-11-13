@@ -258,5 +258,5 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Components.TranslationsRefusal do
     end
   end
 
-  defp count(refusal), do: refusal.originals |> Enum.map(&length(&1.translations)) |> Enum.sum()
+  defp count(refusal), do: refusal.originals |> Enum.sum_by(&length(&1.translations))
 end

@@ -2385,7 +2385,7 @@ defmodule MishkaCmsCore.Runtime.Handlers.UiKitHandler do
   end
 
   defp live_hook_key(name),
-    do: "Global" <> (name |> String.split("-") |> Enum.map_join("", &String.capitalize/1))
+    do: "Global" <> (name |> String.split("-") |> Enum.map_join(&String.capitalize/1))
 
   # What this bundle says it has renamed, and nothing else — never the bundle's own new names, which
   # are about to be written.

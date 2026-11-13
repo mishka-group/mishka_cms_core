@@ -477,7 +477,7 @@ defmodule MishkaCmsCore.Runtime.Redirect do
         end
 
         field :from_query, :text do
-          visible fn state -> Redirects.form_match_query?(state) end
+          visible &Redirects.form_match_query?/1
 
           ui do
             label fn -> dgettext("mishka_gervaz", "From query") end

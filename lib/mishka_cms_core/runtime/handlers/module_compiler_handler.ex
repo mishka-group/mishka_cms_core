@@ -1137,10 +1137,6 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandler do
     end
   end
 
-  defp get_module_name(module_name_and_item) do
-    case module_name_and_item do
-      {module_name, _item} -> module_name
-      module_name -> module_name
-    end
-  end
+  defp get_module_name({module_name, _item}), do: module_name
+  defp get_module_name(module_name), do: module_name
 end

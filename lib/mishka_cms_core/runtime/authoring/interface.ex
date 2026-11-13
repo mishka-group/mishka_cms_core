@@ -100,7 +100,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.Interface do
   defp named(rows, kind, rule \\ :identifier) do
     seen =
       rows
-      |> Enum.with_index()
+      |> Stream.with_index()
       |> Enum.reduce({MapSet.new(), []}, fn {row, index}, {names, faults} ->
         name = value(row, "name")
 

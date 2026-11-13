@@ -1309,7 +1309,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.TailwindCompiler do
     end
   end
 
-  @doc false
   # The globally-installed templates NO WALK CAN REACH: JS hooks and stylesheet rows.
   #
   # Global LAYOUTS, ERROR PAGES and COMPONENTS used to be here too, which is what made "global" mean

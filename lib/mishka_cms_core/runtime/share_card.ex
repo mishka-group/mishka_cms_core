@@ -913,7 +913,7 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
       texts(card, text_width)
 
     blocks = Enum.filter([{eyebrow, 18}, {title, 22}, {description, 0}], &elem(&1, 0))
-    total = blocks |> Enum.map(fn {block, gap} -> height(block) + gap end) |> Enum.sum()
+    total = blocks |> Enum.sum_by(fn {block, gap} -> height(block) + gap end)
     start = top + max(div(bottom - top - total, 2), 0)
 
     {canvas, _y} =
@@ -1251,8 +1251,8 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp glow({cx, cy}, radius, color, strength) do
     {x, y} = axes(@width, @height)
-    dx = Op.linear!(x, [1.0], [-cx * 1.0])
-    dy = Op.linear!(y, [1.0], [-cy * 1.0])
+    dx = Op.linear!(x, [1.0], [:erlang.float(-cx)])
+    dy = Op.linear!(y, [1.0], [:erlang.float(-cy)])
 
     distance =
       Op.math2_const!(
@@ -1289,7 +1289,10 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
 
   defp gradient(t, from, to) do
     t
-    |> Op.linear!(Enum.zip_with(to, from, &((&1 - &2) * 1.0)), Enum.map(from, &(&1 * 1.0)))
+    |> Op.linear!(
+      Enum.zip_with(to, from, &:erlang.float(&1 - &2)),
+      Enum.map(from, &:erlang.float(&1))
+    )
     |> uchar()
     |> Op.copy!(interpretation: :VIPS_INTERPRETATION_sRGB)
   end

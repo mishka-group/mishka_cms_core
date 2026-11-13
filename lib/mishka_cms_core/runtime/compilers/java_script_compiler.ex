@@ -982,7 +982,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   defp owns?(hook, file, site_name) do
     own_files = Enum.map(hook_files(hook, site_name), &["js", site_name, &1])
 
-    Enum.take(Path.split(file), -3) in own_files or
+    Enum.slice(Path.split(file), -3..-1//1) in own_files or
       Enum.any?(hook.npm || [], &in_package?(file, &1))
   end
 
@@ -1339,7 +1339,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
   def browser_name(hook, site_name), do: format_hook_name(hook, site_name)
 
   defp format_hook_name(hook, site_name) do
-    base_name = hook.name |> String.split("-") |> Enum.map_join("", &String.capitalize/1)
+    base_name = hook.name |> String.split("-") |> Enum.map_join(&String.capitalize/1)
 
     case {hook.is_global, site_name} do
       {true, _any} ->
@@ -1353,7 +1353,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompiler do
         base_name
 
       {_site_scoped, name} ->
-        prefix = name |> String.split(["_", "-"]) |> Enum.map_join("", &String.capitalize/1)
+        prefix = name |> String.split(["_", "-"]) |> Enum.map_join(&String.capitalize/1)
 
         "#{prefix}#{base_name}"
     end

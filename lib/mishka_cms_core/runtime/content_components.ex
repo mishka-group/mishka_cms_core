@@ -1615,7 +1615,7 @@ defmodule MishkaCmsCore.Runtime.ContentComponents do
   defp atom_keyed?(%{"__atom_map__" => pairs}), do: pairs != []
 
   defp atom_keyed?(%{} = map) when not is_struct(map),
-    do: map_size(map) > 0 and map |> Map.keys() |> Enum.all?(&is_atom/1)
+    do: map_size(map) > 0 and Enum.all?(map, fn {x, _v} -> is_atom(x) end)
 
   defp atom_keyed?(_default), do: false
 

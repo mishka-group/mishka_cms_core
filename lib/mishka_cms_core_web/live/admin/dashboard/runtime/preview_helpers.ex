@@ -677,8 +677,8 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
   end
 
   defp shown(statuses) do
-    count = statuses |> Enum.map(fn {_status, full} -> full.count end) |> Enum.sum()
-    time = statuses |> Enum.map(fn {_status, full} -> full.avg_us * full.count end) |> Enum.sum()
+    count = statuses |> Enum.sum_by(fn {_status, full} -> full.count end)
+    time = statuses |> Enum.sum_by(fn {_status, full} -> full.avg_us * full.count end)
     avg = if count > 0, do: div(time, count), else: 0
 
     %{full: %{count: count, avg_us: avg}, update: %{count: 0, avg_us: 0}, statuses: statuses}
