@@ -128,6 +128,13 @@ defmodule MishkaCmsCore.Install.StarterContent do
   dev site does. It ships as a PNG under `priv/install`: the library refuses SVG, because a vector
   served from the site's own origin can carry a script.
 
+  ## The tagline
+
+  The home page shows where the `site.tagline` setting goes: its title tag is
+  `{{site.name}} · {{site.tagline}}` and its description `{{site.tagline}}`. A site that reads no
+  tagline, its own or the install's, is given a sample one to edit in Settings. Cleared, the home
+  falls back to the layout's title and has no description (see `MishkaCmsCore.Runtime.Seo`).
+
   ## Why the dev seeds run it too
 
   `MishkaCmsCore.Dev.Seeds` gives every dev site this same base before it adds what that site exists
@@ -211,6 +218,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     Translation
   }
 
+  alias MishkaCmsCore.Settings
   alias MishkaInstaller.Event.Hook
 
   require Ash.Query
@@ -470,6 +478,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
     {logo, media} = ensure_logo(site)
     components = ensure_components(site, brand, logo)
     {layout, layouts} = ensure_layout(site, brand, opts)
+    :ok = ensure_tagline(site)
 
     pages = [home(logo) | Keyword.get(opts, :extra_pages, [])]
 
@@ -526,6 +535,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
         description: definition.description,
         format: :heex,
         template: definition.template,
+        seo_tags: Map.get(definition, :seo_tags, []),
         active: true,
         layout_id: layout_id,
         site_id: site_id
@@ -1689,14 +1699,35 @@ defmodule MishkaCmsCore.Install.StarterContent do
   @chip_tag ~S|tag_class: "bg-chip-wash text-brand dark:bg-chip-wash-dark dark:text-brand-dark",|
   @warn_tag ~S|tag_class: "bg-warn-wash text-warn-ink dark:bg-warn-wash-dark dark:text-warn-ink-dark",|
 
+  # THE HOME PAGE SAYS THE SITE'S TAGLINE: its title tag is `Acme · <tagline>` and its description
+  # the tagline itself. With no tagline both variables are left unfilled, so the title tag is left
+  # out and the layout's `Home · Acme` stands, and the page has no description.
   defp home(logo) do
     %{
       name: "Home",
       title: "Home",
       path: "/:lang",
-      description: "The first page a visitor sees.",
+      description: "{{site.tagline}}",
+      seo_tags: [%{tag: "title", attrs: %{}, content: "{{site.name}} · {{site.tagline}}"}],
       template: home_template(logo)
     }
+  end
+
+  @sample_tagline "Pages, layouts and components, edited in the admin and served live."
+
+  # A NEW SITE STARTS WITH A TAGLINE, so its home shows where one goes. Only when it reads none,
+  # its own or the install's, so a run never writes over the admin's.
+  defp ensure_tagline(%{id: site_id}) do
+    case Settings.get("site.tagline", nil, site_id) do
+      tagline when tagline in [nil, ""] ->
+        {:ok, _setting} =
+          Settings.put("site.tagline", @sample_tagline, site_id: site_id, category: "general")
+
+        :ok
+
+      _tagline ->
+        :ok
+    end
   end
 
   # THE DESIGN'S THREE SECTIONS, and nothing the layout already draws: the dotted welcome, how a page
