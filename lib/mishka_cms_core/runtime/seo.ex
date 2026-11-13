@@ -1203,22 +1203,25 @@ defmodule MishkaCmsCore.Runtime.Seo do
       filled_text(seo.description, core) ||
         filled_text(meta_value(unfilled, "name", "description"), core)
 
-  defp description_var(vars, nil), do: vars
+  defp description_var(vars, description) when description in [nil, false], do: vars
   defp description_var(vars, description), do: Map.put(vars, "page.description", description)
 
   # A stored og:image is the picture, so no share card is asked for.
-  defp stored_or_card(nil, seo, description, site_title, base, opts),
-    do: share_card(seo, description, site_title, base, opts)
+  defp stored_or_card(stored_image, seo, description, site_title, base, opts)
+       when stored_image in [nil, false],
+       do: share_card(seo, description, site_title, base, opts)
 
   defp stored_or_card(_stored_image, _seo, _description, _site_title, _base, _opts),
     do: {nil, nil}
 
-  defp resolved_image(nil, nil, seo, base), do: absolute(seo.image, base)
-
-  defp resolved_image(nil, card, seo, base),
-    do: absolute(card.url, base) || absolute(seo.image, base)
+  # A stored og:image, else the drawn share card (`false` while it is not drawn), else the plugin's.
+  defp resolved_image(stored_image, card, seo, base) when stored_image in [nil, false],
+    do: card_image(card, base) || absolute(seo.image, base)
 
   defp resolved_image(stored_image, _card, _seo, _base), do: stored_image
+
+  defp card_image(%{url: url}, base), do: absolute(url, base)
+  defp card_image(_no_card, _base), do: nil
 
   # `{{page.image}}` in the JSON-LD is the picture the head resolved: a stored og:image, else the
   # share card once drawn, else the plugin's.
