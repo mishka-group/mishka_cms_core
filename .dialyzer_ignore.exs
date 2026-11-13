@@ -12,16 +12,17 @@
    89},
   {"lib/mishka_cms_core/accounts/_helper.ex", :call_without_opaque, 130},
   {"lib/mishka_cms_core/activity/_helpers.ex", :call_without_opaque, 298},
-  {"lib/mishka_cms_core/runtime/authoring/containment.ex", :call_without_opaque, 979},
-  {"lib/mishka_cms_core/runtime/authoring/containment.ex", :call_with_opaque, 1002},
-  {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 476},
-  {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 483},
-  {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_without_opaque, 474},
+  {"lib/mishka_cms_core/runtime/authoring/containment.ex", :call_without_opaque, 977},
+  {"lib/mishka_cms_core/runtime/authoring/containment.ex", :call_with_opaque, 1000},
+  {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 484},
+  {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_with_opaque, 491},
+  {"lib/mishka_cms_core/runtime/compilers/compiled_module_cache.ex", :call_without_opaque, 482},
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_with_opaque, 653},
   {"lib/mishka_cms_core/runtime/authoring/fields.ex", :call_without_opaque, 219},
   {"lib/mishka_cms_core/runtime/authoring/strict.ex", :call_without_opaque, 190},
   {"lib/mishka_cms_core_web/live/admin/dashboard/runtime/preview_helpers.ex",
-   :call_without_opaque, 1661},
+   :call_without_opaque, 1703},
+  {"lib/mishka_cms_core_web/live/admin/components/head_code_modal.ex", :contract_with_opaque, 49},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 465},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 491},
   {"lib/mishka_cms_core_web/templates/_card_chrome.ex", :contract_with_opaque, 502},
@@ -37,12 +38,12 @@
 
   # A last clause that matches anything, after clauses the current callers already cover. Kept on
   # purpose: it is the answer to a shape a plugin, a stored row or a later caller may send.
-  {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1831},
-  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1767},
+  {"lib/mishka_cms_core/runtime/compilers/component_compiler.ex", :pattern_match_cov, 1845},
+  {"lib/mishka_cms_core/runtime/compilers/tailwind_compiler.ex", :pattern_match_cov, 1774},
   {"lib/mishka_cms_core/runtime/authoring/tree/styles.ex", :pattern_match_cov, 1252},
   {"lib/mishka_cms_core/runtime/resources/__changes/process_file_upload.ex", :pattern_match_cov,
-   152},
-  {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 368},
+   155},
+  {"lib/mishka_cms_core/runtime/runtime_preview.ex", :pattern_match_cov, 367},
 
   # `ProviderStrategy` stands in for AshAuthentication's `OAuth2` strategy struct (same fields, see its
   # moduledoc), and `OAuth2.Plug` is specified for `OAuth2.t()` only.

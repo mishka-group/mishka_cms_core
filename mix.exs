@@ -33,9 +33,12 @@ defmodule MishkaCmsCore.MixProject do
       # `mix mishka_cms_core.gettext.extensions`; `mix gettext.extract` keeps its message.
       gettext: [excluded_refs_from_purging: ~r{^\.\./}],
       # `lib/mix/` calls `Mix`, and `test/support` (compiled in :test, where `mix ci` runs dialyzer)
-      # calls ExUnit; neither is in the default PLT. `.dialyzer_ignore.exs` lists what dialyzer
+      # calls ExUnit and, from `mix mishka_cms_core.credence`, Credence; none is in the default PLT. `.dialyzer_ignore.exs` lists what dialyzer
       # reports that is not a defect, each with the reason.
-      dialyzer: [plt_add_apps: [:mix, :ex_unit], ignore_warnings: ".dialyzer_ignore.exs"]
+      dialyzer: [
+        plt_add_apps: [:mix, :ex_unit, :credence],
+        ignore_warnings: ".dialyzer_ignore.exs"
+      ]
     ]
   end
 
