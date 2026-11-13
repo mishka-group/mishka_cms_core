@@ -165,10 +165,10 @@ msgstr ""
 msgid "auto-posting configuration"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2422
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2500
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2574
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2591
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2426
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2504
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2578
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2595
 #, elixir-autogen, elixir-format
 msgid "blog post"
 msgstr ""
@@ -1548,7 +1548,7 @@ msgstr ""
 msgid "is required"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3244
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3248
 #, elixir-autogen, elixir-format
 msgid "A blog post with this language already exists in this language group."
 msgstr ""
@@ -1573,17 +1573,17 @@ msgstr ""
 msgid "Auto-posting configuration is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2193
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2197
 #, elixir-autogen, elixir-format
 msgid "Blog post is already archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2254
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2258
 #, elixir-autogen, elixir-format
 msgid "Blog post is not archived."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3236
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3240
 #, elixir-autogen, elixir-format
 msgid "Blog post slug must be unique within a site."
 msgstr ""
@@ -1616,8 +1616,8 @@ msgstr ""
 msgid "Cannot edit archived auto-posting configuration. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1677
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1751
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1679
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1753
 #, elixir-autogen, elixir-format
 msgid "Cannot edit archived blog post. Please unarchive it first."
 msgstr ""
@@ -1666,10 +1666,10 @@ msgstr ""
 msgid "Cannot restore version of archived auto-posting. Please unarchive it first."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2413
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2465
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2491
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2545
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2417
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2469
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2495
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:2549
 #, elixir-autogen, elixir-format
 msgid "Cannot restore version of archived blog post. Please unarchive it first."
 msgstr ""
@@ -1762,8 +1762,8 @@ msgstr ""
 msgid "Display order must be non-negative."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1531
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1670
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1533
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1672
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1201
 #: ../mishka_blog/lib/mishka_blog/resources/collection.ex:1255
 #: ../mishka_blog/lib/mishka_blog/resources/tag.ex:969
@@ -1981,7 +1981,7 @@ msgstr ""
 msgid "Cannot delete the latest version. Mark another version as latest first."
 msgstr ""
 
-#: ../mishka_document/lib/mishka_document/resources/__changes/auto_apply_note_draft.ex:133
+#: ../mishka_document/lib/mishka_document/resources/__changes/auto_apply_note_draft.ex:152
 #, elixir-autogen, elixir-format
 msgid "Cannot determine section for note"
 msgstr ""
@@ -2652,15 +2652,15 @@ msgstr ""
 msgid "Enter where this rule sends or serves the address."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3230
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:3234
 #, elixir-autogen, elixir-format
 msgid "Another post of this site already has this number."
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1564
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1632
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1708
-#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1782
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1566
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1634
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1710
+#: ../mishka_blog/lib/mishka_blog/resources/blog_post.ex:1784
 #, elixir-autogen, elixir-format
 msgid "This post's address, %{address}, is already a page of this site."
 msgstr ""
@@ -2728,4 +2728,44 @@ msgstr ""
 #: ../mishka_newsletter/lib/mishka_newsletter/resources/__changes/queue_sync.ex:30
 #, elixir-autogen, elixir-format
 msgid "This site does not copy subscribers to Resend: set a Resend key on the Email tab and switch syncing on in the Newsletter tab."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:330
+#, elixir-autogen, elixir-format
+msgid "Add at least one page path, such as /pricing."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/head_code.ex:491
+#, elixir-autogen, elixir-format
+msgid "Cannot edit an archived entry. Restore it first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:322
+#, elixir-autogen, elixir-format
+msgid "Each origin is https:// and a host, with an optional port, and nothing after it."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:313
+#, elixir-autogen, elixir-format
+msgid "Nothing in this code can go in a page's head. Use script, meta, link or noscript tags."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/resources/head_code.ex:591
+#, elixir-autogen, elixir-format
+msgid "This entry is not archived."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:373
+#, elixir-autogen, elixir-format
+msgid "This site already has %{count} head code entries, the most it may hold."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__changes/auto_apply_note_draft.ex:123
+#, elixir-autogen, elixir-format
+msgid "Cannot apply a draft of an archived note. Please unarchive the note first."
+msgstr ""
+
+#: ../mishka_document/lib/mishka_document/resources/__changes/auto_apply_section_draft.ex:82
+#, elixir-autogen, elixir-format
+msgid "Cannot apply a draft of an archived page. Please unarchive the page first."
 msgstr ""
