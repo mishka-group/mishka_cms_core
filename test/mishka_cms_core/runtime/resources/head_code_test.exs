@@ -40,6 +40,20 @@ defmodule MishkaCmsCore.Runtime.HeadCodeTest do
     )
   end
 
+  # The refusal of `attrs` on `field`, worded as the admin's form shows it.
+  defp refusal(site, master, attrs, field \\ :code) do
+    assert {:error, %Ash.Error.Invalid{errors: errors}} =
+             Ash.create(
+               HeadCode,
+               Map.merge(%{site_id: site.id, name: "x", code: @plausible}, attrs),
+               action: :master_create,
+               actor: master
+             )
+
+    error = Enum.find(errors, &(Map.get(&1, :field) == field))
+    MishkaGervaz.Errors.translate_error(error.message, error.vars)
+  end
+
   # Read back as the admin's form reads it, under no tenant: a master's actions take none.
   defp fresh!(entry, master), do: Ash.get!(HeadCode, entry.id, action: :master_get, actor: master)
 
@@ -117,8 +131,36 @@ defmodule MishkaCmsCore.Runtime.HeadCodeTest do
     test "a site holds a limited number of entries", %{site: site, master: master} do
       for _n <- 1..HeadCodes.max_entries(), do: write!(site, master, %{published: false})
 
-      assert_raise Ash.Error.Invalid, ~r/the most it may hold/, fn ->
-        write!(site, master, %{published: false})
+      assert refusal(site, master, %{published: false}) ==
+               "This site already has #{HeadCodes.max_entries()} head code entries, the most it may hold."
+    end
+
+    test "code over the byte limit is refused in KB, counted in bytes", %{
+      site: site,
+      master: master
+    } do
+      ascii = "<script>" <> String.duplicate("a", HeadCodes.max_code_bytes()) <> "</script>"
+
+      wide =
+        "<script>" <> String.duplicate("é", div(HeadCodes.max_code_bytes(), 2)) <> "</script>"
+
+      assert String.length(wide) < HeadCodes.max_code_bytes()
+
+      for code <- [ascii, wide] do
+        assert refusal(site, master, %{code: code}) == "Head code can hold at most 20 KB."
+      end
+    end
+
+    test "an attribute that would be dropped is named, with why", %{site: site, master: master} do
+      for {code, words} <- [
+            {~s|<script src="javascript:alert(1)"></script>|, ~s|src "javascript:alert(1)"|},
+            {~s|<script src="data:text/javascript,alert(1)"></script>|, "http(s) address"},
+            {@plausible <> ~s|<link rel="icon" href="javascript:x()">|, "link tag"},
+            {~s|<link rel="preload" href="/f.css" onload="go()">|, "onload of the link tag"},
+            {~s|<script nonce="abc">go()</script>|, "nonce of the script tag"},
+            {~s|<meta http-equiv="refresh" content="0">|, "http-equiv of the meta tag"}
+          ] do
+        assert refusal(site, master, %{code: code}) =~ words
       end
     end
   end
@@ -172,6 +214,21 @@ defmodule MishkaCmsCore.Runtime.HeadCodeTest do
       assert keys(head(site, "/pricing")) == [only.id]
       assert keys(head(site, "/about")) == [except.id]
       assert keys(head(site, "/blog/hello", "/blog/:slug")) == [except.id]
+    end
+
+    test "a page stored as a pattern lists the entries of the addresses it answers", %{
+      site: site,
+      master: master
+    } do
+      english = write!(site, master, %{name: "English", scope: :only, paths: ["/en"]})
+      pattern = write!(site, master, %{name: "Pattern", scope: :only, paths: ["/:lang"]})
+      _other = write!(site, master, %{name: "Elsewhere", scope: :only, paths: ["/xyz", "/en/a"]})
+      everywhere = write!(site, master, %{name: "All", scope: :except, paths: ["/en"]})
+
+      listed = site.id |> HeadCodes.for_page("/:lang") |> MapSet.new(& &1.id)
+
+      assert listed == MapSet.new([english.id, pattern.id, everywhere.id])
+      assert Enum.map(HeadCodes.for_page(site.id, "/pricing"), & &1.id) == [everywhere.id]
     end
 
     test "another site's entries never reach it", %{site: site, other: other, master: master} do

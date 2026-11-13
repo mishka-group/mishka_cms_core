@@ -2730,32 +2730,32 @@ msgstr ""
 msgid "This site does not copy subscribers to Resend: set a Resend key on the Email tab and switch syncing on in the Newsletter tab."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:330
+#: lib/mishka_cms_core/runtime/head_codes.ex:381
 #, elixir-autogen, elixir-format
 msgid "Add at least one page path, such as /pricing."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/head_code.ex:491
+#: lib/mishka_cms_core/runtime/resources/head_code.ex:490
 #, elixir-autogen, elixir-format, fuzzy
 msgid "Cannot edit an archived entry. Restore it first."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:322
+#: lib/mishka_cms_core/runtime/head_codes.ex:373
 #, elixir-autogen, elixir-format
 msgid "Each origin is https:// and a host, with an optional port, and nothing after it."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:313
+#: lib/mishka_cms_core/runtime/head_codes.ex:364
 #, elixir-autogen, elixir-format
 msgid "Nothing in this code can go in a page's head. Use script, meta, link or noscript tags."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/resources/head_code.ex:591
+#: lib/mishka_cms_core/runtime/resources/head_code.ex:590
 #, elixir-autogen, elixir-format, fuzzy
 msgid "This entry is not archived."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:373
+#: lib/mishka_cms_core/runtime/head_codes.ex:459
 #, elixir-autogen, elixir-format
 msgid "This site already has %{count} head code entries, the most it may hold."
 msgstr ""
@@ -2768,4 +2768,34 @@ msgstr ""
 #: ../mishka_document/lib/mishka_document/resources/__changes/auto_apply_section_draft.ex:82
 #, elixir-autogen, elixir-format
 msgid "Cannot apply a draft of an archived page. Please unarchive the page first."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:354
+#, elixir-autogen, elixir-format
+msgid "Head code can hold at most %{size} KB."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:387
+#, elixir-autogen, elixir-format
+msgid "The %{attribute} \"%{value}\" of the %{tag} tag cannot stay: it must be an http(s) address or a path on this site, such as /js/app.js."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:394
+#, elixir-autogen, elixir-format
+msgid "The %{attribute} of the %{tag} tag cannot stay: a page's head runs no inline handler. Put the code in a script tag."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:415
+#, elixir-autogen, elixir-format
+msgid "The %{tag} tag has an attribute named %{attribute}, which is not a valid name. Remove it."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:408
+#, elixir-autogen, elixir-format
+msgid "The http-equiv of the %{tag} tag cannot stay: it could change the page's security headers. Remove it."
+msgstr ""
+
+#: lib/mishka_cms_core/runtime/head_codes.ex:401
+#, elixir-autogen, elixir-format
+msgid "The nonce of the %{tag} tag cannot stay: the page gives each script its own. Remove it."
 msgstr ""

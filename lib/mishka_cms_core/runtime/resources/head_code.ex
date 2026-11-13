@@ -445,8 +445,7 @@ defmodule MishkaCmsCore.Runtime.HeadCode do
       derives: "sanitize(trim, no_control) validate(string, not_empty, max_len=100)"
 
     field :code, :string,
-      derives:
-        "sanitize(trim, no_zero_width, no_control) validate(string, not_empty, max_len=20000)"
+      derives: "sanitize(trim, no_zero_width, no_control) validate(string, not_empty)"
 
     field :scope, :atom, derives: "validate(atom, enum=Atom[all::only::except])"
 
@@ -665,8 +664,9 @@ defmodule MishkaCmsCore.Runtime.HeadCode do
     attribute :code, :string do
       allow_nil? false
       public? true
-      constraints max_length: 20_000, trim?: false
-      description "The tags as the admin wrote them; parsed by HeadCodes.parse/1 when served"
+      constraints trim?: false
+
+      description "The tags as the admin wrote them, at most HeadCodes.max_code_bytes/0 bytes; parsed by HeadCodes.parse/1 when served"
     end
 
     attribute :scope, :atom do

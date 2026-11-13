@@ -40,7 +40,8 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
     * `</script` and `<!--` inside a script's code are written as `<\\/script` and `<\\!--`, so the
       code cannot close its own element.
 
-  An entry whose code keeps nothing is refused.
+  An entry is refused when its code is over `max_code_bytes/0` bytes, keeps nothing, or carries an
+  attribute these rules would drop, with a message naming the attribute and why it cannot stay.
 
   ## The Content Security Policy
 
@@ -74,7 +75,8 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
   require Ash.Query
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.Languages
+  alias MishkaCmsCore.Runtime.States.{SiteState, WebRunTimeMetaDataState}
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
   alias MishkaInstaller.Event.Hook
 
@@ -84,7 +86,6 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
   @tags ["script", "meta", "link", "noscript"]
   @noscript_tags ["meta", "link"]
   @attribute ~r/\A[a-z][a-z0-9:_.-]*\z/i
-  @dropped_attributes ["nonce", "http-equiv"]
   @address_attributes ["src", "href"]
 
   @max_code_bytes 20_000
@@ -173,15 +174,19 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
   """
   @spec parse(term()) :: {:ok, [item()]} | :error
   def parse(code) when is_binary(code) and byte_size(code) <= @max_code_bytes do
+    with {:ok, nodes} <- elements(code), do: items(nodes)
+  end
+
+  def parse(_code), do: :error
+
+  defp elements(code) do
     case :mochiweb_html.parse("<html><head>" <> code <> "</head></html>") do
-      {"html", _attrs, sections} -> sections |> Enum.flat_map(&children/1) |> items()
+      {"html", _attrs, sections} -> {:ok, Enum.flat_map(sections, &children/1)}
       _other -> :error
     end
   rescue
     _unreadable -> :error
   end
-
-  def parse(_code), do: :error
 
   defp children({_section, _attrs, nodes}) when is_list(nodes), do: Enum.map(nodes, &element/1)
   defp children(_text), do: []
@@ -264,19 +269,51 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
   defp put_key(item, key) when is_binary(key) and key != "", do: Map.put(item, :key, key)
   defp put_key(item, _key), do: item
 
-  defp attribute({name, value}) when is_binary(name) and is_binary(value) do
-    name = String.downcase(name)
-
-    cond do
-      not String.match?(name, @attribute) -> []
-      String.starts_with?(name, "on") -> []
-      name in @dropped_attributes -> []
-      name in @address_attributes and not address?(value) -> []
-      true -> [{name, value}]
+  defp attribute({name, value} = attribute) do
+    case refusal(attribute) do
+      nil -> [{String.downcase(name), value}]
+      _refused -> []
     end
   end
 
   defp attribute(_attribute), do: []
+
+  defp refusal({name, value}) when is_binary(name) and is_binary(value) do
+    name = String.downcase(name)
+
+    cond do
+      not String.match?(name, @attribute) -> :name
+      String.starts_with?(name, "on") -> :handler
+      name == "nonce" -> :nonce
+      name == "http-equiv" -> :http_equiv
+      name in @address_attributes and not address?(value) -> :address
+      true -> nil
+    end
+  end
+
+  defp refusal(_attribute), do: :name
+
+  # The first attribute of a kept tag that `attribute/1` would drop, with why.
+  defp dropped(nodes) when is_list(nodes), do: Enum.find_value(nodes, &dropped/1)
+
+  defp dropped(%{tag: tag, attrs: attrs, content: content}),
+    do: Enum.find_value(attrs, &dropped_attribute(tag, &1)) || dropped(content)
+
+  defp dropped(_node), do: nil
+
+  defp dropped_attribute(tag, {name, value} = attribute) do
+    case refusal(attribute) do
+      nil -> nil
+      reason -> {reason, tag: tag, attribute: String.downcase(name), value: shorten(value)}
+    end
+  end
+
+  defp shorten(value) do
+    case String.length(value) > 40 do
+      true -> String.slice(value, 0, 40) <> "..."
+      false -> value
+    end
+  end
 
   defp address?(value) do
     case URI.new(String.trim(value)) do
@@ -293,19 +330,33 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
   end
 
   @doc """
-  The validation every write of `MishkaCmsCore.Runtime.HeadCode` runs: its code keeps at least one
-  tag (`parse/1`), its origins are origins (`origins?/1`), and a scope other than `:all` names at
-  least one path, each a path on the site.
+  The validation every write of `MishkaCmsCore.Runtime.HeadCode` runs: its code is at most
+  `max_code_bytes/0` bytes, no attribute of its tags is dropped, it keeps at least one tag
+  (`parse/1`), its origins are origins (`origins?/1`), and a scope other than `:all` names at least
+  one path, each a path on the site.
   """
   @spec check_entry(Ash.Changeset.t(), map()) :: :ok | {:error, keyword()}
   def check_entry(changeset, _context) do
+    code = Ash.Changeset.get_attribute(changeset, :code)
     origins = Ash.Changeset.get_attribute(changeset, :origins) || []
 
-    with {:ok, _items} <- changeset |> Ash.Changeset.get_attribute(:code) |> parse(),
+    with true <- byte_size(code) <= @max_code_bytes || {:error, :size},
+         {:ok, nodes} <- elements(code),
+         nil <- dropped(nodes),
+         {:ok, _items} <- items(nodes),
          true <- origins?(origins) || {:error, :origins},
          :ok <- check_paths(Ash.Changeset.get_attribute(changeset, :scope), changeset) do
       :ok
     else
+      {:error, :size} ->
+        {:error,
+         field: :code,
+         message: dgettext_noop("errors", "Head code can hold at most %{size} KB."),
+         size: div(@max_code_bytes, 1000)}
+
+      {reason, vars} when is_atom(reason) and is_list(vars) ->
+        {:error, [field: :code, message: dropped_message(reason)] ++ vars}
+
       :error ->
         {:error,
          field: :code,
@@ -330,6 +381,41 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
          message: dgettext_noop("errors", "Add at least one page path, such as /pricing.")}
     end
   end
+
+  defp dropped_message(:address),
+    do:
+      dgettext_noop(
+        "errors",
+        "The %{attribute} \"%{value}\" of the %{tag} tag cannot stay: it must be an http(s) address or a path on this site, such as /js/app.js."
+      )
+
+  defp dropped_message(:handler),
+    do:
+      dgettext_noop(
+        "errors",
+        "The %{attribute} of the %{tag} tag cannot stay: a page's head runs no inline handler. Put the code in a script tag."
+      )
+
+  defp dropped_message(:nonce),
+    do:
+      dgettext_noop(
+        "errors",
+        "The nonce of the %{tag} tag cannot stay: the page gives each script its own. Remove it."
+      )
+
+  defp dropped_message(:http_equiv),
+    do:
+      dgettext_noop(
+        "errors",
+        "The http-equiv of the %{tag} tag cannot stay: it could change the page's security headers. Remove it."
+      )
+
+  defp dropped_message(:name),
+    do:
+      dgettext_noop(
+        "errors",
+        "The %{tag} tag has an attribute named %{attribute}, which is not a valid name. Remove it."
+      )
 
   defp check_paths(:all, _changeset), do: :ok
 
@@ -374,7 +460,7 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
              "errors",
              "This site already has %{count} head code entries, the most it may hold."
            ),
-         vars: [count: @max_entries]}
+         count: @max_entries}
     end
   end
 
@@ -431,17 +517,31 @@ defmodule MishkaCmsCore.Runtime.HeadCodes do
     do: Map.put(item, :key, "x" <> Integer.to_string(:erlang.phash2(item), 36))
 
   @doc """
-  The entries of `site_id` that apply to the page stored at `page_path`, for the page's admin detail:
-  each with its `id`, `name` and `scope`. From memory, no query.
+  The entries of `site_id` that reach the page stored at `page_path`, for the page's admin detail:
+  each with its `id`, `name` and `scope`. An entry limited to pages reaches it when one of its paths
+  is the pattern itself or an address the pattern answers, so `/en` reaches the page stored at
+  `/:lang`. From memory, no query.
   """
   @spec for_page(String.t() | nil, String.t() | nil) :: [map()]
   def for_page(site_id, page_path) when is_binary(site_id) do
+    languages = if Languages.captures?(page_path), do: Languages.site(site_id), else: []
+
     for entry <- SiteState.head_codes(site_id),
-        applies?(entry.scope, entry.paths, page_path, page_path),
+        reaches?(entry, page_path, languages),
         do: Map.take(entry, [:id, :name, :scope])
   end
 
   def for_page(_site_id, _page_path), do: []
+
+  defp reaches?(%{scope: :only, paths: paths}, page_path, languages),
+    do:
+      Enum.any?(
+        paths,
+        &(&1 == page_path or WebRunTimeMetaDataState.matches?(page_path, &1, languages))
+      )
+
+  defp reaches?(entry, page_path, _languages),
+    do: applies?(entry.scope, entry.paths, page_path, page_path)
 
   @doc """
   What extensions add to every page of `site_id`: the items of `head/4` asked with no page that are

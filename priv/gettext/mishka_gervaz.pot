@@ -7410,12 +7410,12 @@ msgstr ""
 msgid "A page's address or its path pattern, such as /pricing or /blog/:slug. A script on these pages stays loaded until the visitor reloads, even after moving to another page."
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:94
+#: lib/mishka_cms_core/runtime/head_codes.ex:95
 #, elixir-autogen, elixir-format
 msgid "All pages"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:96
+#: lib/mishka_cms_core/runtime/head_codes.ex:97
 #, elixir-autogen, elixir-format
 msgid "All pages except these"
 msgstr ""
@@ -7445,7 +7445,7 @@ msgstr ""
 msgid "No head code yet"
 msgstr ""
 
-#: lib/mishka_cms_core/runtime/head_codes.ex:95
+#: lib/mishka_cms_core/runtime/head_codes.ex:96
 #, elixir-autogen, elixir-format
 msgid "Only these pages"
 msgstr ""

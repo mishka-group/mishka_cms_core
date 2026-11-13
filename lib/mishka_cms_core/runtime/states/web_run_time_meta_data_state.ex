@@ -553,6 +553,19 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataState do
 
   def dynamic_path?(_path), do: false
 
+  @doc """
+  Whether the stored `pattern` answers `path`, matched as `find_by_dynamic_path/2` matches it: a
+  `:name` takes one segment, a `*name` one or more, and a capture named `lang` only one of
+  `languages`. A literal pattern answers itself alone. No ETS read.
+
+      matches?("/:lang/about", "/en/about", ["en"]) #=> true
+  """
+  @spec matches?(String.t() | nil, String.t() | nil, [String.t()]) :: boolean()
+  def matches?(pattern, path, languages) when is_binary(pattern) and is_binary(path),
+    do: match?({:ok, _captured}, match(split(pattern), split(path), languages))
+
+  def matches?(_pattern, _path, _languages), do: false
+
   # `[]` is a match only when the pattern is spent too — `/post/:slug` must not answer `/post`.
   defp match([], [], _languages), do: {:ok, %{}}
 
