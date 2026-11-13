@@ -54,7 +54,7 @@ jobs:
 
       - run: MIX_ENV="test" mix compile --warnings-as-errors
 
-  # Beside the tests rather than in front of them.
+  # In front of the tests, like the audit and the lint job.
   format:
     needs: build
     runs-on: ubuntu-latest
@@ -150,9 +150,10 @@ jobs:
   # it shares the runtime's global state — and runs one module at a time, so more cores do not make
   # it faster and more machines do. Mix deals the test files out by `--partitions`, and each
   # partition has its own Postgres and its own database (`config/test.exs` names it after
-  # MIX_TEST_PARTITION).
+  # MIX_TEST_PARTITION). They start only once the format check, the audit and the lint job pass, so
+  # a run that fails on those does not spend four machines on the suite.
   test:
-    needs: build
+    needs: [build, format, audit, lint]
     runs-on: ubuntu-latest
 
     strategy:
