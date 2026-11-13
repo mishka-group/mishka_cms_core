@@ -726,20 +726,27 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       assert Settings.get("locked.fingerprint") == "do-not-touch"
     end
 
-    test "an integer is clamped to the bounds its definition declared", %{conn: conn} do
+    test "an integer outside the bounds its definition declared is refused, and said so", %{
+      conn: conn
+    } do
       view = security_tab(conn)
 
+      for typed <- ["500", "0", "-5"] do
+        html =
+          view
+          |> element("#settings-form")
+          |> render_submit(%{"settings" => %{"bounded.retention_days" => typed}})
+
+        assert html =~ "could not be saved"
+        assert has_element?(view, "[data-role=field-error]")
+        assert Settings.get("bounded.retention_days") == 30
+      end
+
       view
-      |> form("#settings-form", settings: %{"bounded.retention_days" => "500"})
-      |> render_submit()
+      |> element("#settings-form")
+      |> render_submit(%{"settings" => %{"bounded.retention_days" => "90"}})
 
       assert Settings.get("bounded.retention_days") == 90
-
-      view
-      |> form("#settings-form", settings: %{"bounded.retention_days" => "0"})
-      |> render_submit()
-
-      assert Settings.get("bounded.retention_days") == 1
     end
 
     test "a number that will not parse is refused instead of being written as zero", %{conn: conn} do
@@ -1018,13 +1025,12 @@ defmodule MishkaCmsCoreWeb.Test.SettingsLiveTest do
       refute has_element?(view, "#set-share_cards-workers")
     end
 
-    test "saves the share-card workers held to 0..4, and refuses what is not a number", %{
-      conn: conn
-    } do
+    test "saves the share-card workers within 0..4, and refuses what is out of it or not a number",
+         %{conn: conn} do
       conn = log_in(conn, create_admin("boss@example.com", nil))
       {:ok, view, _html} = live(conn, @path <> "?tab=seo")
 
-      for {typed, saved} <- [{"3", 3}, {"9", 4}, {"-2", 0}, {"0", 0}, {"2", 2}] do
+      for {typed, saved} <- [{"3", 3}, {"9", 3}, {"-2", 3}, {"0", 0}, {"2", 2}] do
         view
         |> form("#settings-form", settings: %{"share_cards.workers" => typed})
         |> render_submit()

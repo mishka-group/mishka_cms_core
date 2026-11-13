@@ -629,12 +629,25 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.SettingsLive do
     end
   end
 
+  # A number typed outside its definition's `min`/`max` is refused here, so the admin is told,
+  # where `Settings.cast/2` would bound it without a word.
   defp store(socket, definition, raw, scope) do
-    case Settings.cast(definition, raw) do
-      {:ok, value} -> write_unchanged(socket, definition, value, scope)
-      :error -> {:error, definition.key}
+    with true <- in_bounds?(definition, raw),
+         {:ok, value} <- Settings.cast(definition, raw) do
+      write_unchanged(socket, definition, value, scope)
+    else
+      _refused -> {:error, definition.key}
     end
   end
+
+  defp in_bounds?(%{type: :integer} = definition, raw) do
+    case Settings.cast(Map.drop(definition, [:min, :max]), raw) do
+      {:ok, number} -> Settings.cast(definition, raw) == {:ok, number}
+      :error -> true
+    end
+  end
+
+  defp in_bounds?(_definition, _raw), do: true
 
   defp write_unchanged(socket, definition, value, scope) do
     if read_value(socket, definition) == value,
