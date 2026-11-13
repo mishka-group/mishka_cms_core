@@ -119,7 +119,8 @@ defmodule MishkaCmsCore.Runtime.MediaUploadContentTest do
             {"clip.mp4", Files.mp4()},
             {"guide.pdf", Files.pdf()},
             {"notes.txt", "notes\n"},
-            {"data.csv", "a,b\n1,2\n"}
+            {"data.csv", "a,b\n1,2\n"},
+            {"inter.woff2", Files.woff2()}
           ] do
         assert {:ok, %{extension: extension}} = check(name, content), name
         assert extension == name |> Path.extname() |> String.downcase()
@@ -134,7 +135,7 @@ defmodule MishkaCmsCore.Runtime.MediaUploadContentTest do
     end
 
     test "turns away a page, a script and an SVG saved under a picture's name" do
-      for name <- ~w(cover.png photo.jpg anim.gif hero.webp),
+      for name <- ~w(cover.png photo.jpg anim.gif hero.webp inter.woff2),
           content <- [Files.html(), Files.svg(), Files.script()] do
         assert {:error, error} = check(name, content), "#{name} was taken"
         assert Exception.message(error) =~ "is not a", name
@@ -146,6 +147,12 @@ defmodule MishkaCmsCore.Runtime.MediaUploadContentTest do
       assert {:error, _error} = check("guide.pdf", Files.png())
       assert {:error, _error} = check("cover.png", Files.pdf())
       assert {:error, _error} = check("photo.jpg", Files.png())
+      assert {:error, _error} = check("inter.woff2", Files.png())
+    end
+
+    test "names a font's content type" do
+      assert Media.get_content_type("woff2") == "font/woff2"
+      assert Media.get_content_type("WOFF2") == "font/woff2"
     end
 
     test "turns away a file whose extension is not a media type, whatever it holds" do

@@ -42,6 +42,10 @@ defmodule MishkaCmsCore.Test.Files do
   @spec mp4() :: binary()
   def mp4, do: <<0, 0, 0, 24, "ftypisom", 0, 0, 2, 0, "isomiso2">>
 
+  @doc "The start of a WOFF2 font."
+  @spec woff2() :: binary()
+  def woff2, do: <<"wOF2", 0, 1, 0, 0, 0, 0, 4, 0, 0, 12, 0, 0>>
+
   @doc "A page with a script in it."
   @spec html() :: binary()
   def html, do: "<!doctype html><html><body><script>alert(document.domain)</script></body></html>"

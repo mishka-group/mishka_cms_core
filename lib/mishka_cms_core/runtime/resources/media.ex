@@ -882,7 +882,7 @@ defmodule MishkaCmsCore.Runtime.Media do
 
       uploads do
         upload :media_files do
-          accept ~w(.jpg .jpeg .png .gif .webp .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
+          accept ~w(.jpg .jpeg .png .gif .webp .mp4 .webm .mov .pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv .woff2)
           max_entries 1
           max_file_size 50_000_000
           style :dropzone
@@ -2046,7 +2046,7 @@ defmodule MishkaCmsCore.Runtime.Media do
   @allowed_extensions %{
     images: ~w(.jpg .jpeg .png .gif .webp),
     videos: ~w(.mp4 .webm .mov),
-    documents: ~w(.pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv)
+    documents: ~w(.pdf .doc .docx .xls .xlsx .ppt .pptx .txt .csv .woff2)
   }
 
   @max_file_size 50_000_000
@@ -2525,6 +2525,7 @@ defmodule MishkaCmsCore.Runtime.Media do
       "pptx" -> "application/vnd.openxmlformats-officedocument.presentationml.presentation"
       "txt" -> "text/plain"
       "csv" -> "text/csv"
+      "woff2" -> "font/woff2"
       _ -> "application/octet-stream"
     end
   end
