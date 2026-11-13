@@ -20325,11 +20325,6 @@ msgstr ""
 msgid "Approximate across servers"
 msgstr ""
 
-#: ../mishka_blog/lib/mishka_blog/plugins/blog_settings.ex:79
-#, elixir-autogen, elixir-format
-msgid "Each night, the daily view counts older than this are deleted."
-msgstr ""
-
 #: ../mishka_blog/lib/mishka_blog_web/live/admin/dashboard/analytics/index.html.heex:20
 #, elixir-autogen, elixir-format
 msgid "How your posts are being read: one view is a reader opening a post, counted when the page is shown in a browser."
@@ -20348,4 +20343,9 @@ msgstr ""
 #: ../mishka_blog/lib/mishka_blog/plugins/blog_settings.ex:74
 #, elixir-autogen, elixir-format
 msgid "Views"
+msgstr ""
+
+#: ../mishka_blog/lib/mishka_blog/plugins/blog_settings.ex:79
+#, elixir-autogen, elixir-format
+msgid "Each night, the daily view counts older than this are deleted. From 1 to 3650 days."
 msgstr ""
