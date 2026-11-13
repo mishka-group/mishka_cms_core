@@ -154,11 +154,15 @@ defmodule MishkaCmsCore.Runtime.ShareCard do
   drawn yet. Saves within two seconds of each other are one look.
 
   `force: true` looks now and draws the card again even when it is drawn, over the old file.
+
+  Queued while an operation runs with a receipt, the job carries its id
+  (`MishkaCmsCore.Agent.Receipts.job_meta/1`), so the receipt hears how the look went.
   """
   @spec refresh(String.t(), target(), keyword()) :: :ok | {:error, term()}
   def refresh(site_id, target, opts \\ []) when is_binary(site_id) do
     force = Keyword.get(opts, :force, false)
     later = if force, do: [], else: [schedule_in: 2]
+    later = [meta: MishkaCmsCore.Agent.Receipts.job_meta()] ++ later
 
     %{site_id: site_id, target: encode(target), force: force}
     |> ShareCardRefreshWorker.new(later)

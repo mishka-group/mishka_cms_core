@@ -43,7 +43,7 @@ defmodule MishkaCmsCore.Agent.Receipts do
 
     * into the Ash action's shared context (`context.shared.receipt_id`), so it reaches every
       notifier, nested actions and the broadcast payload;
-    * into an Oban job's `meta` built with `job_meta/1` (the core's runtime and sitemap jobs are);
+    * into an Oban job's `meta` built with `job_meta/1` (the core's runtime, sitemap and share-card jobs are);
     * into another process only through `carry/1`.
 
   ## Reading
