@@ -1006,7 +1006,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.MediaTest do
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _ | _], sorted_versions)
     end
 
@@ -1034,8 +1033,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.MediaTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
+      assert [_, _] = body["data"]["attributes"]["sorted_versions"]
     end
   end
 
@@ -1061,7 +1059,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.MediaTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
+      assert [%{"id" => id}] = body["data"]
+      assert id == media.id
     end
 
     test "master can list versions for media from any site", %{
@@ -1286,7 +1285,9 @@ defmodule MishkaCmsCoreWeb.Api.Json.MediaTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert body["data"]["attributes"]["latest_version"] != nil
+
+      assert %{"version_action_name" => "update", "changes" => %{"featured" => true}} =
+               body["data"]["attributes"]["latest_version"]
     end
 
     test "can load recent_versions calculation", %{site: site, tenant_admin: tenant_admin} do
@@ -1310,7 +1311,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.MediaTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"]["attributes"]["recent_versions"])
+      assert [_, _] = body["data"]["attributes"]["recent_versions"]
     end
   end
 

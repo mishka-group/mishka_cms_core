@@ -711,15 +711,11 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaPropertyTest do
 
   defp valid_name_generator do
     bind(string([?a..?z, ?A..?Z], length: 1), fn first_char ->
-      bind(string([?a..?z, ?A..?Z, ?0..?9, ?\s], max_length: 19), fn rest ->
-        name = String.trim(first_char <> rest)
-
-        if String.length(name) >= 1 do
-          constant(name)
-        else
-          constant(first_char)
-        end
-      end)
+      # The first character is a letter, so the trimmed name is never empty.
+      StreamData.map(
+        string([?a..?z, ?A..?Z, ?0..?9, ?\s], max_length: 19),
+        &String.trim(first_char <> &1)
+      )
     end)
   end
 

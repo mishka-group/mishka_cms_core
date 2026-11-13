@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# PreviewHelpers is a set of socket state helpers: the socket each returns is its contract.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCoreWeb.Test.PreviewWarmTest do
   @moduledoc """
   What the runtime preview modal does on its way to showing you something.

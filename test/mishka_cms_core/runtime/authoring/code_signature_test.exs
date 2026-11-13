@@ -23,6 +23,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeSignatureTest do
 
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.Authoring.CodeSignature
+  alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
 
   @key "a-test-signing-key-that-is-long-enough"
 
@@ -122,8 +123,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeSignatureTest do
   # used raised on every one of them, so configuring a key made saving OR compiling anything that
   # carries a helper fail outright, on all four signed resources.
   describe "a snippet that is a struct" do
-    alias MishkaCmsCore.Runtime.Resources.Embeddeds.Helper
-
     # `_name` because the INERT clause this compiles to under a key has an empty body, and a bound
     # argument nothing reads is a warning on the generated module rather than on this file.
     defp helper, do: %Helper{name: "greet", args: "_name", code: ~s("hi")}
@@ -147,7 +146,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeSignatureTest do
 
       signed = CodeSignature.put(helper())
 
-      assert is_binary(signed.signature)
+      assert signed.signature == CodeSignature.sign(signed.code)
       assert CodeSignature.trusted?(signed)
       refute CodeSignature.trusted?(%{signed | code: ~s("tampered")})
     end
@@ -161,7 +160,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeSignatureTest do
       round_tripped =
         helper() |> CodeSignature.put() |> Jason.encode!() |> Jason.decode!()
 
-      assert is_binary(round_tripped["signature"])
+      assert round_tripped["signature"] == CodeSignature.sign(round_tripped["code"])
       assert CodeSignature.trusted?(round_tripped)
     end
 

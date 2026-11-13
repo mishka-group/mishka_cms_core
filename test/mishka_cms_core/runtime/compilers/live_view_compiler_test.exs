@@ -67,7 +67,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       ast = LiveViewCompiler.build_module(params)
 
       assert {:defmodule, _, [_module_name, [do: block]]} = ast
-      assert block != nil
+
+      rendered = Macro.to_string(block)
+      assert rendered =~ ~s{def handle_event("increment"}
+      assert rendered =~ "format_text"
+      assert rendered =~ "String.upcase(text)"
     end
 
     test "handles params with string keys by atomizing them" do
@@ -111,9 +115,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       assert updated_params == params
       assert {:__block__, _, functions} = info_ast
 
-      # Check that it contains the expected function definitions
-      assert is_list(functions)
-      assert functions != []
+      # `__page_information__/0` and its three `/1` clauses (atom, list and dotted string key).
+      assert [{:def, _, _}, {:def, _, _}, {:def, _, _}, {:def, _, _}] = functions
     end
 
     test "keeps the page's description beside its SEO tags and schema" do
@@ -604,18 +607,15 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompilerTest do
       env = LiveViewCompiler.make_env()
 
       assert %Macro.Env{} = env
-      # The function should create an environment
-      assert is_list(env.functions)
+      assert {Elixir.JS, Phoenix.LiveView.JS} in env.aliases
     end
 
     test "creates environment with specific imports" do
-      # This would require Phoenix.Component to be available
-      # Skip if module not loaded
-      if Code.ensure_loaded?(Phoenix.Component) do
-        env = LiveViewCompiler.make_env([Phoenix.Component])
-        assert %Macro.Env{} = env
-        assert length(env.functions) > 0
-      end
+      env = LiveViewCompiler.make_env([Phoenix.Component])
+
+      assert %Macro.Env{} = env
+      assert {Phoenix.Component, imported} = List.keyfind(env.functions, Phoenix.Component, 0)
+      assert {:link, 1} in imported
     end
   end
 

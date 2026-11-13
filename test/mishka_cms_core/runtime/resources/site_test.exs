@@ -15,8 +15,10 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
   @repo Application.compile_env!(:mishka_cms_core, :repo)
   use ExUnit.Case, async: false
   import Ash.Test
+  import Ecto.Query, only: [from: 2]
   require Ash.Query
   alias MishkaCmsCore.Runtime.Site
+  alias MishkaCmsCore.Runtime.States.SiteState
   @moduletag :unit
 
   defp set_as_master!(site) do
@@ -43,8 +45,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
   # AN ARCHIVED MASTER, AS ONE ARCHIVED BEFORE THE MASTER SITE COULD NO LONGER BE: straight in the
   # database, since `:destroy` now refuses the master site. Restoring such a site still has to work.
   defp archive_as_before!(site) do
-    import Ecto.Query
-
     {1, _} =
       MishkaCmsCore.Repo.update_all(
         from(s in "sites", where: s.id == type(^site.id, :binary_id)),
@@ -76,7 +76,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
 
     test "uses UUID for primary keys" do
       site = create_site!()
-      assert is_binary(site.id)
+      assert {:ok, _uuid} = Ecto.UUID.cast(site.id)
       assert String.length(site.id) == 36
     end
 
@@ -326,8 +326,8 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
       assert site.master == false
       assert site.mode == :hybrid
       assert site.allowed_origins == []
-      assert site.inserted_at != nil
-      assert site.updated_at != nil
+      assert %DateTime{} = site.inserted_at
+      assert %DateTime{} = site.updated_at
     end
   end
 
@@ -467,7 +467,7 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
         |> Ash.Changeset.for_destroy(:destroy, %{}, authorize?: false)
         |> Ash.destroy!(return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       # Should not appear in regular read
       result = Ash.read!(Site, action: :master_read, authorize?: false)
@@ -1254,8 +1254,6 @@ defmodule MishkaCmsCore.Runtime.Resources.SiteTest do
     end
 
     test "is the one the site cache names master once the flag moves" do
-      alias MishkaCmsCore.Runtime.States.SiteState
-
       [from, to] =
         for _site <- 1..2 do
           n = System.unique_integer([:positive])

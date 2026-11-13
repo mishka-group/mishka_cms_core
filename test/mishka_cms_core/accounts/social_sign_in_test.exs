@@ -59,7 +59,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       assert query["client_id"] == "github-id"
       assert query["redirect_uri"] =~ "://#{site.host}"
       assert String.ends_with?(query["redirect_uri"], "/api/auth/user/provider/callback")
-      assert is_binary(query["state"])
+      assert byte_size(query["state"]) > 0
 
       # PKCE, since the plugin asks for it: the challenge goes out, the verifier waits in the session.
       assert query["code_challenge_method"] == "S256"
@@ -278,7 +278,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
              |> Ash.Query.filter(email == "stranger@example.com")
              |> Ash.read_one!(authorize?: false)
 
-      assert master
+      assert identities(master) == []
     end
 
     test "a site account's identity signs no master in", %{site: site, master: master} do
@@ -351,7 +351,7 @@ defmodule MishkaCmsCore.Accounts.SocialSignInTest do
       assert {:ok, %User{} = signed_in} =
                second_step(pending, NimbleTOTP.verification_code(secret), site.id)
 
-      assert is_binary(signed_in.__metadata__.token)
+      assert [_header, _claims, _signature] = String.split(signed_in.__metadata__.token, ".")
 
       assert {:error, _spent} =
                second_step(pending, NimbleTOTP.verification_code(secret), site.id)

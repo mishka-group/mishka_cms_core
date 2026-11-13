@@ -26,6 +26,8 @@ defmodule MishkaCmsCore.Test.ActivityFeedHostLive do
   def mount(_params, session, socket) do
     {:ok,
      socket
+     # `ActivityFeed.setup/2` reads it to scope the feed to what this user may see.
+     # credo:disable-for-next-line Jump.CredoChecks.UnusedLiveViewAssign
      |> assign(:current_user, session["current_user"])
      |> assign(:on_toggle, session["on_toggle"] || %JS{})
      |> ActivityFeed.setup(session["opts"] || [])}

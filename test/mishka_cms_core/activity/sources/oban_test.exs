@@ -72,7 +72,7 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
       assert entry.badge_tone == :violet
       assert entry.message == "RuntimeCompilerWorker stop"
       assert entry.source_id == "42"
-      assert is_binary(entry.id)
+      assert "oban-42-stop-" <> _unix = entry.id
       assert %DateTime{} = entry.inserted_at
     end
 
@@ -306,7 +306,7 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
       assert entry.site_id == @site_id
     end
 
-    test "nested args[\"data\"][\"site_id\"] (RuntimeCompilerWorker shape)" do
+    test ~s{nested args["data"]["site_id"] (RuntimeCompilerWorker shape)} do
       job =
         stub_job(%{
           "resource" => "MishkaCmsCore.Runtime.Page",
@@ -365,11 +365,14 @@ defmodule MishkaCmsCore.Activity.Sources.ObanTest do
 
       ObanSource.handle_telemetry([:oban, :job, :stop], %{}, %{job: job}, nil)
 
+      site_topic = "oban_activity:site:#{@site_id}"
+      res_topic = "oban_activity:res:#{res}"
+      site_res_topic = "oban_activity:site:#{@site_id}:res:#{res}"
+
       assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity"}
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:site:" <> _}
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:res:" <> _}
-      assert_receive %Phoenix.Socket.Broadcast{topic: "oban_activity:site:" <> rest}
-      assert rest == "#{@site_id}:res:#{res}" or rest == @site_id
+      assert_receive %Phoenix.Socket.Broadcast{topic: ^site_topic}
+      assert_receive %Phoenix.Socket.Broadcast{topic: ^res_topic}
+      assert_receive %Phoenix.Socket.Broadcast{topic: ^site_res_topic}
     end
 
     test "a job without a resource is not broadcast on any resource topic" do

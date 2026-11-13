@@ -185,25 +185,18 @@ defmodule MishkaCmsCoreWeb.Api.Json.PermissionTest do
                "jsonapi" => %{"version" => "1.0"}
              } = result
 
-      assert is_list(data)
+      # The setup's admin permission is listed with the default fields
+      assert [first_permission | _] = data
 
-      # Check first permission has proper structure with default fields
-      if data != [] do
-        [first_permission | _] = data
+      assert %{
+               "type" => "permission",
+               "id" => id,
+               "attributes" => %{"name" => name}
+             } = first_permission
 
-        assert %{
-                 "type" => "permission",
-                 "id" => id,
-                 "attributes" => attributes
-               } = first_permission
-
-        # Verify id is at top level and is a UUID
-        assert {:ok, _uuid} = Ecto.UUID.cast(id)
-
-        # Verify expected attributes
-        assert Map.has_key?(attributes, "name")
-        assert is_binary(attributes["name"])
-      end
+      # Verify id is at top level and is a UUID
+      assert {:ok, _uuid} = Ecto.UUID.cast(id)
+      assert byte_size(name) > 0
     end
 
     test "supports pagination with limit and offset", %{master_user: master_user} do

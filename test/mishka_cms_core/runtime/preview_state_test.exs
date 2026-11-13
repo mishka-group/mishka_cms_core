@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# The modal's state helpers are tested on their own, and the socket each one returns is its answer.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
+
 defmodule MishkaCmsCoreWeb.Runtime.PreviewStateTest do
   @moduledoc """
   The inspector modal's state machine, without a browser or a database.

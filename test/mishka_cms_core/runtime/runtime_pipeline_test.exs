@@ -69,7 +69,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePipelineTest do
       args =
         "site_a" |> BootHandler.asset_job("site-a-id", "css") |> Ecto.Changeset.get_change(:args)
 
-      assert is_binary(BootHandler.boot_id())
+      assert {:ok, _uuid} = Ecto.UUID.cast(BootHandler.boot_id())
       assert args.boot_id == BootHandler.boot_id()
     end
 

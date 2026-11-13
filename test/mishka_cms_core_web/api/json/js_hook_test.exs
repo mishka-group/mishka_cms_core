@@ -14,6 +14,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
   import MishkaCmsCore.Test.VersionHelpers
   import MishkaCmsCoreWeb.Test.AuthTestHelpers
 
+  alias MishkaCmsCoreWeb.Test.AreaApi
+
   @moduletag :unit
   @moduletag :capture_log
 
@@ -1087,7 +1089,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
       body = Jason.decode!(response.resp_body)
       assert body["data"]["id"] == hook.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _], sorted_versions)
     end
 
@@ -1140,7 +1141,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
       body = Jason.decode!(response.resp_body)
       assert body["data"]["id"] == hook.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _], sorted_versions)
     end
   end
@@ -1172,7 +1172,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
+      assert [_ | _] = body["data"]
     end
 
     test "master can list versions for js_hook from any site", %{
@@ -1469,7 +1469,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert body["data"]["attributes"]["latest_version"] != nil
+      assert body["data"]["attributes"]["latest_version"]["changes"]["content"] == "//latest2"
     end
 
     test "can load recent_versions calculation", %{tenant_admin: tenant_admin, site: site} do
@@ -1497,7 +1497,9 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"]["attributes"]["recent_versions"])
+
+      assert [%{"changes" => %{"content" => "//recent3"}} | _] =
+               body["data"]["attributes"]["recent_versions"]
     end
   end
 
@@ -1671,8 +1673,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.JsHookTest do
   # THE API HAS ITS OWN NAMES. `admin:api:runtime:js_hook` or `admin:api:code` writes a hook, its
   # content included; the dashboard's names do not reach the API.
   describe "the js_hook section over the API" do
-    alias MishkaCmsCoreWeb.Test.AreaApi
-
     defp hook_attrs,
       do: %{"name" => AreaApi.unique("hook"), "content" => "console.log(1)", "format" => "js"}
 

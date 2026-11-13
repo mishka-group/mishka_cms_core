@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# PreviewHelpers' contract is the socket it returns, so its assigns are what these tests check.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCoreWeb.Runtime.ErrorPreviewSourceTest do
   @moduledoc """
   ErrorPage/Layout previews run as a full LiveView at `/_preview/:resource/:token` for BOTH the live

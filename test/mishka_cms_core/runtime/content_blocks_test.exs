@@ -123,9 +123,12 @@ defmodule MishkaCmsCore.Runtime.ContentBlocksTest do
     end
 
     test "carry none of the template's indentation as text", %{kit: kit} do
-      for block <- blocks(kit), text <- texts(block.tree) do
-        refute text =~ "\n", block.id
-        assert String.trim(text) != "" or text == " ", block.id
+      for block <- blocks(kit) do
+        texts = texts(block.tree)
+        refute Enum.any?(texts, &(&1 =~ "\n")), block.id
+
+        # The only blank text a block keeps is the one space between two inline elements.
+        assert texts |> Enum.filter(&(String.trim(&1) == "")) |> Enum.all?(&(&1 == " ")), block.id
       end
     end
   end

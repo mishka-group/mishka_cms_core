@@ -121,8 +121,8 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
 
     def render(assigns), do: assigns.page_module.render(assigns)
 
-    def handle_event(name, params, socket),
-      do: socket.assigns.page_module.handle_event(name, params, socket)
+    def handle_event(name, params, %{assigns: %{page_module: page_module}} = socket),
+      do: page_module.handle_event(name, params, socket)
   end
 
   defp mount!(module, site_id) do
@@ -412,7 +412,12 @@ defmodule MishkaCmsCore.Runtime.PageUploadTest do
     # down on mount. Nothing outside the allow-list reaches it now.
     test "options never hands LiveView a type it would raise on" do
       for accept <- [".nosuchtype", "made/up", "image/*, .svg", nil, ""] do
-        assert is_list(PageUpload.options(%{accept: accept})[:accept])
+        extensions = PageUpload.options(%{accept: accept})[:accept]
+
+        assert Enum.all?(
+                 extensions,
+                 &(String.trim_leading(&1, ".") in PageUpload.allowed_types())
+               )
       end
     end
   end

@@ -854,16 +854,17 @@ defmodule MishkaCmsCore.Runtime.Resources.PagePropertyTest do
 
   defp valid_name_generator do
     bind(string([?a..?z, ?A..?Z], length: 1), fn first_char ->
-      bind(string([?a..?z, ?A..?Z, ?0..?9, ?\s], max_length: 19), fn rest ->
-        name = String.trim(first_char <> rest)
-
-        if String.length(name) >= 3 do
-          constant(name)
-        else
-          constant(first_char <> "ab")
-        end
+      map(string([?a..?z, ?A..?Z, ?0..?9, ?\s], max_length: 19), fn rest ->
+        name_or_padded(String.trim(first_char <> rest), first_char)
       end)
     end)
+  end
+
+  defp name_or_padded(name, first_char) do
+    case String.length(name) >= 3 do
+      true -> name
+      false -> first_char <> "ab"
+    end
   end
 
   defp valid_path_generator do

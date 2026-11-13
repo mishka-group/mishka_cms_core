@@ -86,7 +86,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
   describe "compile/1" do
     test "successfully compiles JavaScript for a site with no hooks" do
       assert {:ok, %{js: js}} = JavaScriptCompiler.compile("test_site")
-      assert is_binary(js)
       assert byte_size(js) > 0
       # Should contain some basic JavaScript structure
       # IIFE wrapper
@@ -97,7 +96,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
     test "successfully compiles JavaScript for a site that doesn't exist" do
       # When site doesn't exist, it should still compile with empty hooks
       assert {:ok, %{js: js}} = JavaScriptCompiler.compile("nonexistent_site")
-      assert is_binary(js)
       assert byte_size(js) > 0
     end
 
@@ -159,12 +157,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
   describe "compile_and_store/1" do
     test "successfully compiles and stores JavaScript with compression" do
       assert {:ok, js} = JavaScriptCompiler.compile_and_store("test_site")
-      assert is_binary(js)
+      assert byte_size(js) > 0
 
       # Check that all versions are stored
       assert AssetsState.get_value("test_site", "js") == js
-      assert AssetsState.get_value("test_site", "brotli_js") != nil
-      assert AssetsState.get_value("test_site", "gzip_js") != nil
+      assert ExBrotli.decompress!(AssetsState.get_value("test_site", "brotli_js")) == js
+      assert :zlib.gunzip(AssetsState.get_value("test_site", "gzip_js")) == js
     end
 
     test "stores the bundle while runtime:compile:js cannot run" do
@@ -181,7 +179,6 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       # Get the stored value directly
       stored_js = AssetsState.get_value("test_site", "js")
       assert stored_js == js
-      assert is_binary(stored_js)
       assert byte_size(stored_js) > 0
     end
 
@@ -289,11 +286,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       Logger.configure(level: :info)
 
       # Refresh and capture info level log
-      log_output =
-        capture_log([level: :info], fn ->
-          assert {:ok, refreshed_js} = JavaScriptCompiler.refresh_js("test_site")
-          assert is_binary(refreshed_js)
-        end)
+      {{:ok, refreshed_js}, log_output} =
+        with_log([level: :info], fn -> JavaScriptCompiler.refresh_js("test_site") end)
 
       # Restore original logger level
       Logger.configure(level: original_level)
@@ -301,8 +295,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.JavaScriptCompilerTest do
       assert log_output =~ "Refreshing JS for site: test_site"
 
       # Check that it was recompiled
-      stored_js = AssetsState.get_value("test_site", "js")
-      assert stored_js != nil
+      assert byte_size(refreshed_js) > 0
+      assert AssetsState.get_value("test_site", "js") == refreshed_js
     end
   end
 

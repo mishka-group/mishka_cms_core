@@ -193,8 +193,8 @@ defmodule MishkaCmsCore.Activity.Sources.RuntimeDraftTest do
     for severity <- [nil, "info", "warn", "error"] do
       logged =
         capture_log(fn ->
-          assert is_list(Query.page(%{site_id: site.id, severity: severity, limit: 50}))
-          assert is_integer(Query.counts(%{site_id: site.id, severity: severity}).total)
+          rows = Query.page(%{site_id: site.id, severity: severity, limit: 50})
+          assert Query.counts(%{site_id: site.id, severity: severity}).total >= length(rows)
         end)
 
       refute logged =~ "[Activity.Query]",

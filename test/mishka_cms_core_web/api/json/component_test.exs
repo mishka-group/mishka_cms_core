@@ -8,6 +8,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
   import MishkaCmsCore.Test.VersionHelpers
   import MishkaCmsCoreWeb.Test.AuthTestHelpers
 
+  alias MishkaCmsCoreWeb.Test.AreaApi
+
   @moduletag :unit
   @moduletag :capture_log
 
@@ -209,8 +211,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
-
       ids = Enum.map(body["data"], & &1["id"])
       assert comp1.id in ids
       assert comp2.id in ids
@@ -1246,7 +1246,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert body["data"]["attributes"]["component_module"] != nil
+      assert body["data"]["attributes"]["component_module"] =~ ~r/Component$/
     end
   end
 
@@ -1295,7 +1295,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       assert body["data"]["id"] == component.id
 
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _, _], sorted_versions)
     end
 
@@ -1347,7 +1346,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _], sorted_versions)
     end
 
@@ -1387,12 +1385,10 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
 
-      assert is_list(body["data"])
-      assert length(body["data"]) == 1
+      assert [_] = body["data"]
 
       component_data = List.first(body["data"])
       sorted_versions = component_data["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _, _], sorted_versions)
     end
   end
@@ -1455,12 +1451,10 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
 
       # Check latest_version
       latest = body["data"]["attributes"]["latest_version"]
-      assert is_map(latest)
       assert latest["changes"]["description"] == "Desc 4"
 
       # Check recent_versions
       recent = body["data"]["attributes"]["recent_versions"]
-      assert is_list(recent)
       assert match?([_, _, _, _], recent)
 
       # Verify sorted descending
@@ -1507,12 +1501,10 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
 
-      assert is_list(body["data"])
-      assert length(body["data"]) == 1
+      assert [_] = body["data"]
 
       component_data = List.first(body["data"])
       sorted_versions = component_data["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _, _], sorted_versions)
     end
 
@@ -1881,8 +1873,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.ComponentTest do
   # THE API HAS ITS OWN NAMES. `admin:api:runtime:component` writes over it; `admin:dashboard:runtime:component` is the
   # screens' name and does not reach it; another API area reads the list and writes nothing.
   describe "the component area over the API" do
-    alias MishkaCmsCoreWeb.Test.AreaApi
-
     test "admin:api:runtime:component writes; admin:dashboard:runtime:component and another area do not",
          %{
            site: site

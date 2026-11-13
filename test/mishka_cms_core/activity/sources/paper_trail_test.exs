@@ -136,8 +136,10 @@ defmodule MishkaCmsCore.Activity.Sources.PaperTrailTest do
       assert entry.message =~ "Page"
       assert entry.message =~ "Home"
       assert entry.message =~ "updated"
-      assert is_binary(entry.id)
       assert %DateTime{} = entry.inserted_at
+
+      assert entry.id ==
+               "pt-rec-1-update-#{entry.inserted_at |> DateTime.truncate(:second) |> DateTime.to_unix()}"
     end
 
     test "destroy maps to severity :warn and ARCHIVE/:amber badge" do

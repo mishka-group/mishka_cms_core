@@ -1050,7 +1050,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _ | _], sorted_versions)
     end
 
@@ -1079,7 +1078,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
+      assert match?([_, _ | _], sorted_versions)
     end
   end
 
@@ -1105,7 +1104,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
+      assert [_ | _] = body["data"]
     end
 
     test "master can list versions for page from any site", %{
@@ -1328,7 +1327,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert body["data"]["attributes"]["latest_version"] != nil
+      assert body["data"]["attributes"]["latest_version"]["changes"]["active"] == true
     end
 
     test "can load recent_versions calculation", %{site: site, tenant_admin: tenant_admin} do
@@ -1352,7 +1351,9 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"]["attributes"]["recent_versions"])
+
+      assert [%{"changes" => %{"active" => true}} | _] =
+               body["data"]["attributes"]["recent_versions"]
     end
   end
 
@@ -1610,7 +1611,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       assert response.status == 201
       body = Jason.decode!(response.resp_body)
       seo_tags = body["data"]["attributes"]["seo_tags"]
-      assert is_list(seo_tags)
       assert match?([_], seo_tags)
     end
 
@@ -1648,7 +1648,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.PageTest do
       assert response.status == 201
       body = Jason.decode!(response.resp_body)
       events = body["data"]["attributes"]["events"]
-      assert is_list(events)
       assert match?([_], events)
     end
 

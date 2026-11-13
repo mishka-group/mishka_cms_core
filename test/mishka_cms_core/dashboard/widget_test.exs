@@ -49,8 +49,8 @@ defmodule MishkaCmsCore.Dashboard.WidgetTest do
     end
 
     test "rejects a missing required field" do
-      assert {:error, errors} = Widget.builder(%{title: "X", component: {Widget, :stats}})
-      assert is_list(errors)
+      assert {:error, [%{field: :id, action: :required_fields}]} =
+               Widget.builder(%{title: "X", component: {Widget, :stats}})
     end
   end
 

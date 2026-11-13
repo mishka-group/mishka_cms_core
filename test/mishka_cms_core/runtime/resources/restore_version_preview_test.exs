@@ -126,7 +126,7 @@ defmodule MishkaCmsCore.Runtime.Resources.RestoreVersionPreviewTest do
 
       assert shown.description == "Original"
       assert shown.type == media.type
-      assert is_atom(shown.type)
+      assert shown.type in [:images, :videos, :documents]
     end
   end
 end

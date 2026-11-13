@@ -19,6 +19,7 @@ defmodule MishkaCmsCore.Accounts.GrantScopeTest do
   use MishkaCmsCore.DataCase
 
   alias MishkaCmsCore.Accounts.{Permission, User, UserPermission}
+  alias MishkaCmsCore.Accounts.Checks.AccessPermissions
 
   require Ash.Query
 
@@ -606,8 +607,6 @@ defmodule MishkaCmsCore.Accounts.GrantScopeTest do
 
   describe "the catalogue" do
     test "grant checking uses the same wildcard rule as every other gate" do
-      alias MishkaCmsCore.Accounts.Checks.AccessPermissions
-
       assert AccessPermissions.covers?("admin:dashboard:blog:*", "admin:dashboard:blog:post")
       assert AccessPermissions.covers?("*", "anything:at:all")
       refute AccessPermissions.covers?("admin:dashboard:blog:post", "*")

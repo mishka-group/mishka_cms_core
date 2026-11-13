@@ -84,7 +84,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
       assert {:defmodule, _, [module_name, [do: block]]} = ast
       assert module_name == TestModule.SiteErrors
-      assert block != nil
+      assert {:__block__, _, [_ | _]} = block
     end
 
     test "handles params with string keys by atomizing them" do
@@ -128,8 +128,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
       assert {:__block__, _, functions} = info_ast
 
       # Check that it contains the expected function definitions
-      assert is_list(functions)
-      assert functions != []
+      assert [_ | _] = functions
     end
 
     test "handles missing optional fields with defaults" do
@@ -458,11 +457,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ErrorCompilerTest do
 
   describe "make_env/0" do
     test "creates environment with proper imports" do
+      Code.ensure_loaded!(Phoenix.Component)
       env = ErrorCompiler.make_env()
 
       assert %Macro.Env{} = env
-      # The function should create an environment with Phoenix imports
-      assert is_list(env.functions)
+      assert List.keymember?(env.functions, Phoenix.Component, 0)
     end
   end
 

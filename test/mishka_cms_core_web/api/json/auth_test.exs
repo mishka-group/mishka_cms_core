@@ -7,6 +7,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
   import MishkaCmsCore.Test.Factory
   import MishkaCmsCoreWeb.Test.AuthTestHelpers
   require Ash.Query
+  alias MishkaCmsCore.Runtime.States.SettingsState
   alias MishkaCmsCore.Test.EventCannotRun
   @moduletag :unit
   @moduletag :capture_log
@@ -404,7 +405,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
              } = result
 
       assert data["id"] == user_id
-      assert is_binary(meta["token"])
+      assert [_header, _claims, _signature] = String.split(meta["token"], ".")
     end
 
     test "master user cannot sign in with tenant context" do
@@ -495,7 +496,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       # Verify JSON:API error structure
       assert Map.has_key?(error, "status")
       assert Map.has_key?(error, "code")
-      assert Map.has_key?(error, "title") or Map.has_key?(error, "detail")
+      assert error["title"] == "Forbidden"
       assert error["status"] == "403"
     end
 
@@ -577,7 +578,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert %{status: 201} = response = two_step_sign_in(master_user, %{"totp_code" => code})
       assert %{"meta" => %{"token" => token}} = Jason.decode!(response.resp_body)
-      assert is_binary(token)
+      assert [_header, _claims, _signature] = String.split(token, ".")
 
       assert %{status: 401} = response = two_step_sign_in(master_user, %{"totp_code" => code})
       assert [%{"code" => "second_factor_invalid"}] = errors(response)
@@ -992,7 +993,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert site_id == site.id
       assert returned_site_id == site.id
-      assert is_binary(token)
+      assert [_header, _claims, _signature] = String.split(token, ".")
 
       # Keep it consistent with your other tests
       assert {:ok, claims, _resource} =
@@ -1844,7 +1845,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
           user["attributes"]["email"] == to_string(tenant_user.email)
         end)
 
-      assert tenant_user_data
+      assert %{"type" => "user"} = tenant_user_data
       assert tenant_user_data["attributes"]["site_id"] == site.id
       assert tenant_user_data["attributes"]["site"]["id"] == site.id
 
@@ -1854,7 +1855,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
           user["attributes"]["email"] == to_string(master_user.email)
         end)
 
-      assert master_user_data
+      assert %{"type" => "user"} = master_user_data
       assert master_user_data["attributes"]["site_id"] == nil
       assert master_user_data["attributes"]["site"] == nil
     end
@@ -1898,18 +1899,9 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                "jsonapi" => %{"version" => "1.0"}
              } = result
 
-      assert is_list(data)
-
       # Each user should have proper structure
-      if data != [] do
-        [first_user | _] = data
-
-        assert %{
-                 "type" => "user",
-                 "id" => _,
-                 "attributes" => _
-               } = first_user
-      end
+      assert [_ | _] = data
+      assert Enum.all?(data, &match?(%{"type" => "user", "id" => _, "attributes" => _}, &1))
     end
 
     test "returns empty list when no users exist for tenant", %{
@@ -2257,8 +2249,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       assert response.status == 404
       result = Jason.decode!(response.resp_body)
-      assert %{"errors" => errors} = result
-      assert is_list(errors)
+      assert %{"errors" => [%{"status" => "404"} | _]} = result
     end
 
     test "returns 400 for invalid UUID format", %{master_user: master_user} do
@@ -3096,7 +3087,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                "meta" => %{"token" => auth_token}
              } = result
 
-      assert is_binary(auth_token)
+      assert [_header, _claims, _signature] = String.split(auth_token, ".")
 
       # The token the reset hands back signs in: the device that reset the password stays signed in,
       # though every older session of the account is signed out.
@@ -3353,7 +3344,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
       # Should include authentication token in metadata
       assert %{"meta" => %{"token" => auth_token}} = result
-      assert is_binary(auth_token)
+      assert [_header, _claims, _signature] = String.split(auth_token, ".")
 
       # The token the reset hands back works
       assert {:ok, _claims, MishkaCmsCore.Accounts.User} =
@@ -3518,9 +3509,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
       assert response.status == 404
       result = Jason.decode!(response.resp_body)
 
-      assert %{"errors" => errors} = result
-      assert is_list(errors)
-      assert errors != []
+      assert %{"errors" => [%{"status" => "404"} | _]} = result
     end
 
     test "requires authentication to assign permissions", %{site: site} do
@@ -5203,7 +5192,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
                |> Map.fetch!(:status) == 201
       end
 
-      assert is_binary(sign_in_master(master))
+      assert [_header, _claims, _signature] = String.split(sign_in_master(master), ".")
     end
   end
 
@@ -5303,8 +5292,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.AuthTest do
 
   # The suite signs in from one address with no limit; this puts the per-account one back, low.
   defp lift_sign_in_limit!(per_account: limit) do
-    alias MishkaCmsCore.Runtime.States.SettingsState
-
     previous = Application.fetch_env(:mishka_cms_core, MishkaCmsCore.Accounts.AuthRateLimit)
     Application.delete_env(:mishka_cms_core, MishkaCmsCore.Accounts.AuthRateLimit)
     snapshot = SettingsState.snapshot()

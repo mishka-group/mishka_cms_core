@@ -43,7 +43,7 @@ defmodule MishkaCmsCore.Runtime.ErrorPageDraftTest do
   end
 
   defp statuses(error_pages),
-    do: error_pages |> Enum.map(&(Map.get(&1, "status") || Map.get(&1, :status))) |> Enum.sort()
+    do: error_pages |> Enum.map(& &1.status) |> Enum.sort()
 
   test "a brand-new error-page draft auto-generates a token and starts unpublished" do
     site = create_site!()

@@ -593,7 +593,6 @@ defmodule MishkaCmsCore.Runtime.ContentComponentsTest do
                })
 
       assert record == %{"__struct__" => "Elixir.Phoenix.LiveView.JS", "__meta__" => nil}
-      refute is_struct(record)
     end
 
     test "an any attribute takes an array or an object, and every other value as written" do

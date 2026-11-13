@@ -27,6 +27,8 @@ defmodule MishkaCmsCore.Dev.ShowcasePagesTest do
 
   for {module, id, hook, languages} <- @sites do
     describe "#{inspect(module)}" do
+      # The site module is called through `unquote/1`, which VacuousTest does not count as our code.
+      # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
       test "has no home of its own to write in place of the installer's" do
         refute function_exported?(unquote(module), :home, 0)
       end
@@ -62,13 +64,15 @@ defmodule MishkaCmsCore.Dev.ShowcasePagesTest do
       # A Persian name has no Latin letter for `Changes.InternalName` to keep, and the seed's update
       # of the translation was refused with "must have Latin letters (a-z) or digits".
       test "leaves every translation's name to the one its translation was given" do
-        for page <- unquote(module).pages(%{}),
+        for page <- pages(unquote(module)),
             {language, translation} <- Map.get(page, :translations, %{}) do
           refute Map.has_key?(translation, :name),
                  "#{page.path} in #{language} names itself #{inspect(translation[:name])}"
         end
       end
 
+      # The site module is called through `unquote/1`, which VacuousTest does not count as our code.
+      # credo:disable-for-next-line Jump.CredoChecks.VacuousTest
       test "links to it from the header, beside the demos it already linked to" do
         nav = unquote(module).nav()
 
@@ -77,7 +81,7 @@ defmodule MishkaCmsCore.Dev.ShowcasePagesTest do
       end
 
       test "has a page behind every link the header carries" do
-        paths = Enum.map(unquote(module).pages(%{}) ++ StarterPages.pages("site"), & &1.path)
+        paths = Enum.map(pages(unquote(module)) ++ StarterPages.pages("site"), & &1.path)
 
         for {label, path} <- StarterPages.nav() ++ unquote(module).nav() do
           assert ("/:lang" <> path) in paths, "#{label} links to #{path}, which no page answers"
@@ -85,7 +89,7 @@ defmodule MishkaCmsCore.Dev.ShowcasePagesTest do
       end
 
       test "answers /:lang/showcase once, and /:lang not at all" do
-        pages = unquote(module).pages(%{})
+        pages = pages(unquote(module))
 
         assert Enum.count(pages, &(&1.path == "/:lang/showcase")) == 1
         refute Enum.any?(pages, &(&1.path == "/:lang")), "the home is the installer's alone"
@@ -93,5 +97,7 @@ defmodule MishkaCmsCore.Dev.ShowcasePagesTest do
     end
   end
 
-  defp showcase(module), do: module.pages(%{}) |> Enum.filter(&(&1.path == "/:lang/showcase"))
+  defp pages(module), do: module.pages(%{})
+
+  defp showcase(module), do: module |> pages() |> Enum.filter(&(&1.path == "/:lang/showcase"))
 end

@@ -63,9 +63,11 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
 
       assert btn.format == :heex
       assert btn.active == true
-      assert is_list(btn.helpers)
-      assert length(btn.helpers) > 0
-      assert is_list(btn.attrs)
+      assert [_ | _] = btn.helpers
+
+      assert Enum.map(btn.attrs, & &1.name) ==
+               ["id", "variant", "color", "on_click", "class", "rest"]
+
       assert btn.extra["ui_kit"] == "kit"
       assert btn.extra["component"] == "sample_button"
       assert btn.extra["function"] == "sample_button"
@@ -387,9 +389,9 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
 
       assert [%{"name" => "aria-label"}] =
                card.slots
-               |> Enum.find(&(to_string(&1["name"] || &1[:name]) == "item"))
-               |> then(&(&1["attrs"] || &1[:attrs]))
-               |> Enum.map(&%{"name" => to_string(&1["name"] || &1[:name])})
+               |> Enum.find(&(&1.name == "item"))
+               |> Map.fetch!(:attrs)
+               |> Enum.map(&Map.take(&1, ["name"]))
     end
   end
 
@@ -579,8 +581,8 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       # Either the original opts map (no values key) or an unmodified
       # passthrough — both prove the narrow function didn't corrupt
       # the attr when there was nothing to narrow.
-      assert is_map(variant_attr.opts)
-      refute Map.has_key?(variant_attr.opts || %{}, "values")
+      assert variant_attr.opts["default"] == "default"
+      refute Map.has_key?(variant_attr.opts, "values")
     end
 
     test "non-literal helper args (e.g. `assigns`) are always retained" do
@@ -631,9 +633,9 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       cv = Enum.filter(button.helpers || [], &(&1.name == "color_variant"))
       args = Enum.map(cv, & &1.args)
 
-      assert "\"default\", \"danger\"" in args
-      refute "\"default\", \"primary\"" in args
-      refute "\"outline\", \"primary\"" in args
+      assert ~s("default", "danger") in args
+      refute ~s("default", "primary") in args
+      refute ~s("outline", "primary") in args
       assert "_, _" in args, "catch-all (empty discriminators) always retained"
     end
 
@@ -650,9 +652,9 @@ defmodule MishkaCmsCore.UiKit.InstallerTest do
       cv = Enum.filter(button.helpers || [], &(&1.name == "color_variant"))
       args = Enum.map(cv, & &1.args)
 
-      assert "\"default\", \"primary\"" in args
-      assert "\"default\", \"danger\"" in args
-      refute "\"outline\", \"primary\"" in args
+      assert ~s("default", "primary") in args
+      assert ~s("default", "danger") in args
+      refute ~s("outline", "primary") in args
     end
 
     test "empty discriminators ⇒ helper kept under any selection" do

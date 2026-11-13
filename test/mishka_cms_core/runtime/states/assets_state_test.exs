@@ -4,6 +4,7 @@
 
 defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
   use ExUnit.Case, async: false
+  alias MishkaCmsCore.Runtime.Compilers.Shared
   alias MishkaCmsCore.Runtime.States.AssetsState
   @moduletag :unit
 
@@ -244,8 +245,7 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
     test "optimized for read performance - only returns value field" do
       # This should be faster than get!/2 since it doesn't build the full map
       value = AssetsState.get_value("test_site", "config")
-      assert is_map(value)
-      assert value.site_name == "My Test Site"
+      assert value == %{site_name: "My Test Site", logo: "logo.png"}
     end
   end
 
@@ -299,8 +299,6 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
   end
 
   describe "the site bundle's address" do
-    alias MishkaCmsCore.Runtime.Compilers.Shared
-
     test "is nil before the site's first compile, so no page links an empty hash" do
       assert Shared.site_css_href("fresh_site") == nil
       assert Shared.site_js_href("fresh_site") == nil
@@ -704,7 +702,6 @@ defmodule MishkaCmsCore.Runtime.States.AssetsStateTest do
 
       assert stats.table_size == 5
       assert is_integer(stats.memory)
-      assert is_list(stats.table_info)
       assert stats.table_info[:type] == :set
     end
   end

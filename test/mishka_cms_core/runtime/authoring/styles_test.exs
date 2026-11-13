@@ -277,8 +277,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.StylesTest do
   end
 
   describe "Tree.set_style drops what it orphans" do
-    alias MishkaCmsCore.Runtime.Authoring.Tree
-
     defp flex_node do
       {:ok, tree} = Tree.parse(~s(<div id="a">x</div>))
       node = tree |> Tree.walk() |> Enum.find(&(&1.kind == :tag))
@@ -381,9 +379,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.StylesTest do
   end
 
   describe "Tree.set_attr lifts a typed class the same way parsing does" do
-    alias MishkaCmsCore.Runtime.Authoring.Tree
-    alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
-
     @klass "items-center gap-4 text-red-500 mine"
 
     defp typed(class) do
@@ -573,9 +568,6 @@ defmodule MishkaCmsCore.Runtime.Authoring.StylesTest do
     # page and not about a function: setting a colour on an element whose author centred it must
     # leave it centred.
     test "and the same holds through a real parse, edit and serialize" do
-      alias MishkaCmsCore.Runtime.Authoring.Tree
-      alias MishkaCmsCore.Runtime.Authoring.Tree.Serializer
-
       {:ok, tree} = Tree.parse(~s(<div><p class="text-lg text-white text-center">hi</p></div>))
       node = tree |> Tree.walk() |> Enum.find(&(&1.tag == "p"))
       {:ok, tree} = Tree.set_style(tree, node.id, :base, "color", "#ff0000")
@@ -1239,7 +1231,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.StylesTest do
                  Enum.sort(Styles.options(prop)),
                "#{prop} is not fully described"
 
-        assert Styles.pictures(prop) == [] or Styles.labels(prop) == [],
+        assert Enum.count([Styles.pictures(prop), Styles.labels(prop)], &(&1 != [])) == 1,
                "#{prop} is described twice"
       end
     end

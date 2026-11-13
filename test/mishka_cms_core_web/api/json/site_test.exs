@@ -313,7 +313,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.SiteTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
 
       ids = Enum.map(body["data"], & &1["id"])
       assert site.id in ids
@@ -372,7 +371,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.SiteTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
 
       ids = Enum.map(body["data"], & &1["id"])
       assert archived_site.id in ids
@@ -446,12 +444,10 @@ defmodule MishkaCmsCoreWeb.Api.Json.SiteTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
 
       # Should only see their own site
-      ids = Enum.map(body["data"], & &1["id"])
-      assert site.id in ids
-      assert length(body["data"]) == 1
+      assert [%{"id" => id}] = body["data"]
+      assert id == site.id
     end
 
     test "tenant admin can get their own site by id", %{

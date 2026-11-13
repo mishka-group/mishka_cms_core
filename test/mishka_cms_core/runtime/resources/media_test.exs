@@ -9,6 +9,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
   @repo Application.compile_env!(:mishka_cms_core, :repo)
   use ExUnit.Case, async: false
   import Ash.Test
+  import MishkaCmsCore.Test.VersionHelpers
   alias MishkaCmsCore.Runtime.Media
   require Ash.Query
   @moduletag :unit
@@ -630,7 +631,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
 
     test "get_any bypasses multitenancy" do
@@ -662,7 +663,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
       # master_get should be able to get archived media
       result = Ash.get!(Media, archived.id, action: :master_get, authorize?: false)
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
 
     test "by_type filters media by type", context do
@@ -701,7 +702,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
 
       {:ok, archived} = Ash.destroy(media, authorize?: false, return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
 
     test "unarchive restores a media" do
@@ -710,7 +711,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
 
       # Archive it
       {:ok, archived} = Ash.destroy(media, authorize?: false, return_destroyed?: true)
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       # Unarchive it
       {:ok, restored} =
@@ -801,8 +802,8 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
       assert media.featured == false
       assert media.dimensions == %{}
       assert media.archived_at == nil
-      assert media.inserted_at != nil
-      assert media.updated_at != nil
+      assert %DateTime{} = media.inserted_at
+      assert %DateTime{} = media.updated_at
     end
   end
 
@@ -1127,7 +1128,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
 
       result = Ash.get!(Media, archived.id, action: :master_get, authorize?: false)
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
   end
 
@@ -1169,7 +1170,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
   end
 
@@ -1253,7 +1254,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(return_destroyed?: true)
 
-      assert destroyed.archived_at != nil
+      assert %DateTime{} = destroyed.archived_at
     end
 
     test "fails with tenant context" do
@@ -1353,8 +1354,6 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
   end
 
   describe "version actions" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "get_with_versions loads sorted versions (tenant)" do
       site = create_site!()
       media = create_media!(name: "With Versions", site_id: site.id)
@@ -1377,7 +1376,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == media.id
-      assert length(result.sorted_versions) >= 1
+      assert [_ | _] = result.sorted_versions
     end
 
     test "master_get_with_versions loads versions bypassing tenant" do
@@ -1397,7 +1396,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == media.id
-      assert length(result.sorted_versions) >= 1
+      assert [_ | _] = result.sorted_versions
     end
 
     test "list_versions lists versions for a media (tenant)" do
@@ -1578,8 +1577,6 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
   end
 
   describe "calculations" do
-    import MishkaCmsCore.Test.VersionHelpers
-
     test "version_count returns number of versions" do
       site = create_site!()
       media = create_media!(name: "Count Test", site_id: site.id)
@@ -1621,7 +1618,6 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.Query.set_tenant(site.id)
         |> Ash.read_one!(authorize?: false)
 
-      assert loaded.latest_version != nil
       assert loaded.latest_version.changes["description"] == "Final"
     end
 
@@ -1642,8 +1638,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaTest do
         |> Ash.Query.set_tenant(site.id)
         |> Ash.read_one!(authorize?: false)
 
-      assert is_list(loaded.recent_versions)
-      assert length(loaded.recent_versions) >= 1
+      assert [_ | _] = loaded.recent_versions
     end
   end
 end

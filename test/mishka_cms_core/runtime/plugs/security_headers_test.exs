@@ -9,10 +9,13 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
   """
   use ExUnit.Case, async: false
 
+  # A plug's result is the conn it assigns to.
+  @moduletag :plug_test
+
   import Plug.Test
   import Plug.Conn
 
-  alias MishkaCmsCore.Runtime.States.SiteState
+  alias MishkaCmsCore.Runtime.States.{SettingsState, SiteState}
   alias MishkaCmsCore.Test.EventCannotRun
   alias MishkaCmsWeb.Runtime.Plugs.SecurityHeaders
 
@@ -329,8 +332,6 @@ defmodule MishkaCmsWeb.Runtime.Plugs.SecurityHeadersTest do
   end
 
   describe "the players a site lets its pages embed" do
-    alias MishkaCmsCore.Runtime.States.SettingsState
-
     @key "security.frame_origins"
 
     setup do

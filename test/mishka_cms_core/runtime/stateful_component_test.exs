@@ -32,6 +32,7 @@ defmodule MishkaCmsCore.Runtime.StatefulComponentTest do
   import Phoenix.Component, only: [sigil_H: 2, live_component: 1]
   import Phoenix.LiveViewTest
 
+  alias MishkaCmsCore.Runtime.Authoring.CodeSignature
   alias MishkaCmsCore.Runtime.Compilers.ComponentCompiler
   alias MishkaCmsCore.Runtime.Compilers.ModuleCompiler
 
@@ -553,8 +554,6 @@ defmodule MishkaCmsCore.Runtime.StatefulComponentTest do
   # `update/2` and `handle_event/3` live — the only code in this runtime that runs in response to a
   # network message rather than to a render, in whatever LiveView renders the component.
   describe "signed lifecycle code" do
-    alias MishkaCmsCore.Runtime.Authoring.CodeSignature
-
     @key "a-test-signing-key-that-is-long-enough"
 
     setup do
@@ -675,8 +674,6 @@ defmodule MishkaCmsCore.Runtime.StatefulComponentTest do
   # expression. None of those looks wrong, and the canvas cannot show it: `static_component/1` calls
   # `render/1` as a plain function, which never consults `root`.
   describe "the root a live component must have" do
-    alias MishkaCmsCore.Runtime.Compilers.ComponentCompiler
-
     defp rooted!(template, overrides \\ %{}) do
       module = compile!(Map.merge(%{template: template, helpers: []}, overrides))
       ComponentCompiler.check_root(module)

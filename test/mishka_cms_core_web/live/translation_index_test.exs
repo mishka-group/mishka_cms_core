@@ -23,6 +23,7 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
   alias MishkaCmsCore.Runtime.{Translation, Translations}
   alias MishkaCmsCore.Runtime.States.{SiteState, TranslationsState}
   alias MishkaCmsCoreWeb.Live.Admin.Components.TranslationGroup
+  alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index
   alias MishkaCmsCore.Settings
 
   require Ash.Query
@@ -146,7 +147,8 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
   defp chip(translation, code, state),
     do: ~s(#{chips(translation)} span[title="#{code} — #{state}"])
 
-  defp group(view), do: :sys.get_state(view.pid).socket.assigns.translation_group
+  defp picked?(view, language),
+    do: has_element?(view, ~s(#translation-group-language-#{language}[aria-pressed="true"]))
 
   # A message the page is sent is handled after the event that sent it; this waits for it, and for
   # the form's record read and the table's reload it started.
@@ -487,7 +489,7 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       {:ok, _} = Settings.put("site.languages", ["en", "fa"], site_id: site.id)
 
       assert {:noreply, _socket} =
-               MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index.handle_event(
+               Index.handle_event(
                  "translations_sync",
                  %{},
                  userless_socket()
@@ -500,12 +502,14 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       orphan!("Nobody lists", site.id)
 
       assert {:noreply, socket} =
-               MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index.handle_event(
+               Index.handle_event(
                  "translations_unused",
                  %{},
                  userless_socket()
                )
 
+      # handle_event/3 is called with a bare socket here, and the socket it returns is the contract.
+      # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
       assert socket.assigns.unused_ids == []
     end
   end
@@ -513,8 +517,6 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
   # The admin session here still asks for `admin:dashboard:*`, which holds the translation area, so
   # the page's own mount and buttons are asked for an admin of another area.
   describe "an admin of another area" do
-    alias MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Translation.Index
-
     defp mounted_for(permissions, site) do
       user = create_user_with_permissions!(permissions, site_id: site.id)
 
@@ -529,6 +531,8 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
     test "is not offered Scan templates, Remove unused or Add; the translation area is", %{
       site: site
     } do
+      # mount/3 is called with a bare socket here, and the socket it returns is the contract.
+      # credo:disable-for-lines:2 Jump.CredoChecks.AvoidSocketAssignsInTest
       refute mounted_for(["admin:dashboard:runtime:page"], site).assigns.writable?
       assert mounted_for(["admin:dashboard:runtime:translation"], site).assigns.writable?
     end
@@ -544,6 +548,8 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
                  mounted_for(["admin:dashboard:runtime:page"], site)
                )
 
+      # handle_event/3 is called with a bare socket here, and the socket it returns is the contract.
+      # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
       assert socket.assigns.flash["error"] == "You cannot scan the templates."
       assert languages(key, site.id) == ["en"]
     end
@@ -1125,15 +1131,11 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       %{view: settle(view), key: key, en: en, fa: fa}
     end
 
-    test "opens the word in every language, the first missing one picked", %{
-      view: view,
-      key: key,
-      en: en
-    } do
+    test "opens the word in every language, the first missing one picked", %{view: view, key: key} do
       assert has_element?(view, "#translation-group-key", key)
       assert has_element?(view, "#translation-group-language-en")
       assert has_element?(view, "#translation-group-language-fa")
-      assert group(view).picked == en.id
+      assert picked?(view, "en")
       assert has_element?(view, "#translation-group-form", "EN")
     end
 
@@ -1141,8 +1143,7 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       view: view,
       site: site,
       key: key,
-      en: en,
-      fa: fa
+      en: en
     } do
       view |> element("#translation-group-language-fa") |> render_click()
       settle(view)
@@ -1154,9 +1155,9 @@ defmodule MishkaCmsCoreWeb.Test.TranslationIndexTest do
       settle(view)
 
       assert [%{value: nil}, %{value: "سلام"}] = stored(key, site.id)
-      assert group(view).picked == en.id, "the next missing language is not up"
+      assert picked?(view, "en"), "the next missing language is not up"
       assert has_element?(view, "#translation-group-language-fa", "سلام")
-      assert fa.id != group(view).picked
+      refute picked?(view, "fa")
 
       assert has_element?(view, chip(en, "FA", "translated")),
              "the list's row did not hear of the save"

@@ -63,7 +63,11 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       ast = ComponentCompiler.build_module(params)
 
       assert {:defmodule, _, [_module_name, [do: block]]} = ast
-      assert block != nil
+
+      rendered = Macro.to_string(block)
+      assert rendered =~ "format_title"
+      assert rendered =~ "String.upcase(title)"
+      assert rendered =~ ":inner_block"
     end
 
     test "handles params with string keys by atomizing them" do
@@ -100,10 +104,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
       assert updated_params == params
       assert {:__block__, _, functions} = info_ast
 
-      # Check that it contains the expected function definitions
-      # The functions list contains multiple def statements for __component_information__
-      assert is_list(functions)
-      assert functions != []
+      # `__component_information__/0` and its three `/1` clauses (atom, list and dotted string key).
+      assert [{:def, _, _}, {:def, _, _}, {:def, _, _}, {:def, _, _}] = functions
     end
 
     test "handles missing optional fields with defaults" do
@@ -567,11 +569,12 @@ defmodule MishkaCmsCore.Runtime.Compilers.ComponentCompilerTest do
 
   describe "make_env/0" do
     test "creates environment with proper imports" do
+      Code.ensure_loaded!(Phoenix.Component)
       env = ComponentCompiler.make_env()
 
       assert %Macro.Env{} = env
-      # The function should create an environment with Phoenix imports
-      assert is_list(env.functions)
+      assert {Phoenix.Component, imported} = List.keyfind(env.functions, Phoenix.Component, 0)
+      assert {:link, 1} in imported
     end
   end
 

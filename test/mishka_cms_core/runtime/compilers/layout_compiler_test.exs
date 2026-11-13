@@ -56,7 +56,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       ast = LayoutCompiler.build_module(params)
 
       assert {:defmodule, _, [_module_name, [do: block]]} = ast
-      assert block != nil
+      assert Macro.to_string(block) =~ "def format_title(title)"
     end
 
     test "handles params with string keys by atomizing them" do
@@ -97,9 +97,7 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
       assert updated_params == params
       assert {:__block__, _, functions} = info_ast
 
-      # Check that it contains the expected function definitions
-      assert is_list(functions)
-      assert functions != []
+      assert [{:def, _, [{:__layout_information__, _, _} | _]} | _] = functions
     end
 
     test "handles missing optional fields with defaults" do
@@ -362,9 +360,8 @@ defmodule MishkaCmsCore.Runtime.Compilers.LayoutCompilerTest do
     test "creates environment with proper imports" do
       env = LayoutCompiler.make_env()
 
-      assert %Macro.Env{} = env
-      # The function should create an environment
-      assert is_list(env.functions)
+      assert %Macro.Env{module: LayoutCompiler} = env
+      assert {Kernel, _} = List.keyfind(env.functions, Kernel, 0)
     end
   end
 

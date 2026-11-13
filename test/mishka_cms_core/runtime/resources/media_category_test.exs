@@ -395,7 +395,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
 
     test "get_any bypasses multitenancy", context do
@@ -426,7 +426,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id)
         |> Ash.destroy(authorize?: false, return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
 
     test "unarchive restores a media category" do
@@ -439,7 +439,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.Changeset.for_destroy(:destroy, %{}, tenant: site.id)
         |> Ash.destroy(authorize?: false, return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       # Unarchive it
       {:ok, restored} =
@@ -510,8 +510,8 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
 
       assert category.description == nil
       assert category.archived_at == nil
-      assert category.inserted_at != nil
-      assert category.updated_at != nil
+      assert %DateTime{} = category.inserted_at
+      assert %DateTime{} = category.updated_at
     end
   end
 
@@ -747,7 +747,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == archived.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
   end
 
@@ -835,7 +835,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(return_destroyed?: true)
 
-      assert destroyed.archived_at != nil
+      assert %DateTime{} = destroyed.archived_at
     end
 
     test "master_destroy fails with tenant context" do
@@ -893,7 +893,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == category.id
-      assert is_list(result.sorted_versions)
+      assert [_ | _] = result.sorted_versions
     end
 
     test "master_get_with_versions returns category with versions for any site" do
@@ -912,7 +912,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == category.id
-      assert is_list(result.sorted_versions)
+      assert [_ | _] = result.sorted_versions
     end
 
     test "list_versions returns paginated versions for a category" do

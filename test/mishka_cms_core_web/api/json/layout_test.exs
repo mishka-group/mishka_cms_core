@@ -14,6 +14,8 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
   import MishkaCmsCore.Test.VersionHelpers
   import MishkaCmsCoreWeb.Test.AuthTestHelpers
 
+  alias MishkaCmsCoreWeb.Test.AreaApi
+
   @moduletag :unit
   @moduletag :capture_log
 
@@ -1277,7 +1279,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
       body = Jason.decode!(response.resp_body)
       assert body["data"]["id"] == layout.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _], sorted_versions)
     end
 
@@ -1337,7 +1338,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
       body = Jason.decode!(response.resp_body)
       assert body["data"]["id"] == layout.id
       sorted_versions = body["data"]["attributes"]["sorted_versions"]
-      assert is_list(sorted_versions)
       assert match?([_, _], sorted_versions)
     end
   end
@@ -1373,7 +1373,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"])
+      assert [_ | _] = body["data"]
     end
 
     test "master can list versions for layout from any site", %{
@@ -1712,7 +1712,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert body["data"]["attributes"]["latest_version"] != nil
+      assert %{"version_action_name" => "update"} = body["data"]["attributes"]["latest_version"]
     end
 
     test "can load recent_versions calculation", %{tenant_admin: tenant_admin, site: site} do
@@ -1744,7 +1744,7 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
 
       assert response.status == 200
       body = Jason.decode!(response.resp_body)
-      assert is_list(body["data"]["attributes"]["recent_versions"])
+      assert [_, _, _] = body["data"]["attributes"]["recent_versions"]
     end
   end
 
@@ -1945,8 +1945,6 @@ defmodule MishkaCmsCoreWeb.Api.Json.LayoutTest do
   # THE API HAS ITS OWN NAMES. `admin:api:runtime:layout` writes over it; `admin:dashboard:runtime:layout` is the
   # screens' name and does not reach it; another API area reads the list and writes nothing.
   describe "the layout area over the API" do
-    alias MishkaCmsCoreWeb.Test.AreaApi
-
     test "admin:api:runtime:layout writes; admin:dashboard:runtime:layout and another area do not",
          %{site: site} do
       api = area_token!(site, ["admin:api:runtime:layout"])

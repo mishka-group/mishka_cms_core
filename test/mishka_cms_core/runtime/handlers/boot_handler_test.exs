@@ -40,7 +40,9 @@ defmodule MishkaCmsCore.Runtime.Handlers.BootHandlerTest do
     test "is debounced (scheduled in the future) and replaces scheduled_at on conflict" do
       job = BootHandler.asset_job("site_a", "site-a-id", "css")
 
-      assert Ecto.Changeset.get_change(job, :scheduled_at) != nil
+      assert DateTime.compare(Ecto.Changeset.get_change(job, :scheduled_at), DateTime.utc_now()) ==
+               :gt
+
       assert Ecto.Changeset.get_change(job, :replace) == [scheduled: [:scheduled_at]]
     end
 

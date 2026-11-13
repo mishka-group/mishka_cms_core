@@ -96,8 +96,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageFormsTest do
                )
 
       assert spec.id == "quote-form"
-      assert spec.success != nil
-      assert spec.success != ""
+      assert spec.success == "Sent. Thank you."
     end
 
     test "a form keeping its state in a plain assign rather than in assigns[] declares nothing" do
@@ -385,7 +384,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.PageFormsTest do
     test "read/1 answers the parse error rather than raising" do
       assert {:error, error} = PageForms.read(~s(<.form :let={f} as={:c} for={assigns[:c_form]}>))
       assert error.line == 1
-      assert is_binary(error.message)
+      assert byte_size(error.message) > 0
     end
 
     test "declared/1 answers no forms, so one broken page never fails a compile" do

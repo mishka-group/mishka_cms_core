@@ -36,9 +36,9 @@ defmodule MishkaCmsCore.UiKit.BundleShapeTest do
     end
 
     test "top-level arrays exist", %{bundle: b} do
-      assert is_list(b["components"])
-      assert is_list(b["js_hooks"])
-      assert is_list(b["stylesheets"])
+      assert [_ | _] = b["components"]
+      assert [_ | _] = b["js_hooks"]
+      assert [_ | _] = b["stylesheets"]
     end
   end
 
@@ -177,13 +177,12 @@ defmodule MishkaCmsCore.UiKit.BundleShapeTest do
 
   describe "type / dependencies / examples (MishkaCMS Component columns)" do
     test "every component carries a string `type`", %{bundle: b} do
-      Enum.each(b["components"], fn c -> assert is_binary(c["type"]) end)
+      Enum.each(b["components"], fn c -> assert c["type"] =~ ~r/\A[a-z_]{1,50}\z/, c["name"] end)
     end
 
     test "`dependencies` is always a list of strings", %{bundle: b} do
       Enum.each(b["components"], fn c ->
-        assert is_list(c["dependencies"])
-        Enum.each(c["dependencies"], fn d -> assert is_binary(d) end)
+        assert Enum.all?(c["dependencies"], &(is_binary(&1) and &1 != "")), c["name"]
       end)
     end
 
@@ -202,7 +201,6 @@ defmodule MishkaCmsCore.UiKit.BundleShapeTest do
         assert length(c["examples"]) <= 12, "#{c["name"]} has more than 12 examples"
 
         Enum.each(c["examples"], fn ex ->
-          assert is_binary(ex)
           assert String.contains?(ex, "<.component")
           assert String.contains?(ex, ~s(site="Global"))
           # the dynamic site binding must have been normalized away

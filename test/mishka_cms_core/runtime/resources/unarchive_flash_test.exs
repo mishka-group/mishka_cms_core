@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# The table's success hook answers with the socket it flashed, so that socket's flash is the result under test.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Runtime.Resources.UnarchiveFlashTest do
   @moduledoc """
   The unarchive success hooks registered on each runtime resource's table tell the

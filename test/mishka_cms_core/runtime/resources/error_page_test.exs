@@ -98,7 +98,6 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
       assert error_page.path == ErrorAddress.for_site(site.id)
       assert length(error_page.error_pages) == 1
       assert error_page.site_id == site.id
-      assert error_page.error_module != nil
       assert to_string(error_page.error_module) =~ ~r/ErrorPage$/
       assert error_page.configured_statuses == [404]
     end
@@ -453,7 +452,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
       error_page = create_error_page!(site_id: site.id)
 
       assert {:ok, archived} = Ash.destroy(error_page, authorize?: false, return_destroyed?: true)
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       error_pages = ErrorPage |> Ash.Query.set_tenant(site.id) |> Ash.read!(authorize?: false)
       error_page_ids = Enum.map(error_pages, & &1.id)
@@ -565,8 +564,8 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
       assert error_page.priority == 0
       assert error_page.extra == %{}
       assert error_page.helpers == []
-      assert error_page.inserted_at != nil
-      assert error_page.updated_at != nil
+      assert %DateTime{} = error_page.inserted_at
+      assert %DateTime{} = error_page.updated_at
     end
   end
 
@@ -582,7 +581,6 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
           authorize?: false
         )
 
-      assert is_atom(loaded.error_module)
       assert to_string(loaded.error_module) =~ ~r/Error/
     end
 
@@ -700,7 +698,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
         )
 
       assert archived.id == context.error_page1.id
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
 
     test "read_any bypasses multitenancy with keyset pagination", context do
@@ -730,7 +728,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
         )
 
       assert archived.id == error_page.id
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
   end
 
@@ -773,7 +771,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy!(return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
 
     test "master_destroy fails for non-existent error page" do
@@ -873,7 +871,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
 
       assert error_page.id == context.error_page.id
       # Should have sorted_versions loaded
-      assert is_list(error_page.sorted_versions)
+      assert [_ | _] = error_page.sorted_versions
     end
 
     test "master_get_with_versions loads error page with versions bypassing multitenancy",
@@ -885,7 +883,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
         )
 
       assert error_page.id == context.error_page.id
-      assert is_list(error_page.sorted_versions)
+      assert [_ | _] = error_page.sorted_versions
     end
 
     test "list_versions returns error page with sorted versions", context do
@@ -1073,7 +1071,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ErrorPageTest do
         end)
       else
         # If no version exists, just verify the error page is archived
-        assert archived.archived_at != nil
+        assert %DateTime{} = archived.archived_at
       end
     end
   end

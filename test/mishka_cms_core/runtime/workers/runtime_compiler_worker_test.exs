@@ -250,7 +250,7 @@ defmodule MishkaCmsCore.Runtime.Workers.RuntimeCompilerWorkerTest do
     # `atomize_keys/1` converts every key that already exists as an atom, `extra`'s included. This
     # module names `:serves_all_languages`, so the atom exists here — the mark must be seen anyway.
     test "reads the mark whether or not its key exists as an atom", %{page: page} do
-      assert is_atom(:serves_all_languages)
+      assert String.to_existing_atom("serves_all_languages") == :serves_all_languages
       data = page.(%{"serves_all_languages" => true})
 
       :ok = Worker.apply_module_lifecycle("update", data, RCW.NoSuch, "page", "Page")

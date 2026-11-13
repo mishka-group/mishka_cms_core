@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# These tests call the page's handlers with a bare socket, and the socket they return is the contract.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Runtime.PageFormTest do
   @moduledoc """
   What a visitor experiences on a published page's form, driven through the same two entry points

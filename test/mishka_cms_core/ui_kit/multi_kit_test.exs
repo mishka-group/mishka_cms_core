@@ -98,7 +98,7 @@ defmodule MishkaCmsCore.UiKit.MultiKitTest do
 
       chelekom = Enum.find(kits, &(&1.name == "chelekom"))
       assert chelekom.components > 100
-      assert is_binary(chelekom.version)
+      assert chelekom.version =~ ~r/^\d+\.\d+\.\d+/
       assert String.ends_with?(chelekom.path, "chelekom.json")
     end
 

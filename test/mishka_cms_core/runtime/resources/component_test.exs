@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
 
   require Ash.Query
   alias MishkaCmsCore.Runtime.Component
+  alias MishkaGervaz.Resource.Info
 
   @moduletag :unit
 
@@ -43,7 +44,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
     test "uses UUID for primary keys" do
       site = create_site!()
       component = create_component!(site_id: site.id)
-      assert is_binary(component.id)
+      assert {:ok, _uuid} = Ecto.UUID.cast(component.id)
       assert String.length(component.id) == 36
     end
 
@@ -247,8 +248,8 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
       assert component.helpers == []
       assert component.permissions == []
       assert component.active == true
-      assert component.inserted_at != nil
-      assert component.updated_at != nil
+      assert %DateTime{} = component.inserted_at
+      assert %DateTime{} = component.updated_at
     end
 
     test "form_meta lifts the kit's own form declaration out of extra" do
@@ -595,7 +596,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         )
 
       assert result.id == component.id
-      assert result.archived_at != nil
+      assert %DateTime{} = result.archived_at
     end
 
     test "by_priority orders by priority desc then name asc" do
@@ -887,7 +888,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy!(return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
 
     test "archives global component" do
@@ -898,7 +899,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy!(return_destroyed?: true)
 
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
     end
 
     test "returns error for non-existent component" do
@@ -1124,8 +1125,6 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
     # through the API or a kit bundle, is a flag most readers will never know exists — and the two
     # kinds are indistinguishable in a list of 140 without a column that says which.
     test "the admin form offers it and the list shows it" do
-      alias MishkaGervaz.Resource.Info
-
       field =
         Component
         |> Info.Form.fields()
@@ -1150,8 +1149,6 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
     # Asserting on the output rather than on the declaration is what catches the cell being dropped
     # for hand-rolled chips again, or the chip losing the hook other tests select on.
     test "the merged column draws the kind and the dependencies" do
-      alias MishkaGervaz.Resource.Info
-
       column =
         Component
         |> Info.Table.columns()
@@ -1298,8 +1295,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == component.id
-      assert is_list(result.sorted_versions)
-      assert length(result.sorted_versions) > 0
+      assert [_ | _] = result.sorted_versions
     end
 
     test "respects versions_limit argument" do
@@ -1346,7 +1342,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.read_one!(authorize?: false)
 
       assert result.id == component.id
-      assert is_list(result.sorted_versions)
+      assert [_ | _] = result.sorted_versions
     end
   end
 
@@ -1374,7 +1370,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
       components = result.results
       assert match?([_], components)
       assert List.first(components).id == component.id
-      assert is_list(List.first(components).sorted_versions)
+      assert [_ | _] = List.first(components).sorted_versions
     end
 
     test "returns error for component from different tenant" do
@@ -1417,7 +1413,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
 
       components = result.results
       assert match?([_], components)
-      assert is_list(List.first(components).sorted_versions)
+      assert [_ | _] = List.first(components).sorted_versions
     end
   end
 
@@ -1451,8 +1447,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.Query.sort(version_inserted_at: :asc)
         |> Ash.read!(authorize?: false)
 
-      first_version = List.first(versions)
-      assert first_version != nil
+      assert [%Component.Version{} = first_version | _] = versions
 
       # Restore using API action
       {:ok, restored} =
@@ -1868,8 +1863,7 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.get!(component.id, tenant: site.id, authorize?: false)
         |> Ash.load!(:latest_version, authorize?: false)
 
-      assert loaded.latest_version != nil
-      assert is_struct(loaded.latest_version, Component.Version)
+      assert %Component.Version{} = loaded.latest_version
     end
 
     test "recent_versions returns up to 10 versions" do
@@ -1891,7 +1885,6 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
         |> Ash.get!(component.id, tenant: site.id, authorize?: false)
         |> Ash.load!(:recent_versions, authorize?: false)
 
-      assert is_list(loaded.recent_versions)
       assert length(loaded.recent_versions) <= 10
       assert length(loaded.recent_versions) >= 5
     end
@@ -1909,7 +1902,6 @@ defmodule MishkaCmsCore.Runtime.Resources.ComponentTest do
           authorize?: false
         )
 
-      assert loaded.component_module != nil
       assert to_string(loaded.component_module) =~ ~r/Component$/
     end
 

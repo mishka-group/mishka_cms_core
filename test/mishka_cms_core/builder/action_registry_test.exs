@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# These tests call a compiled page's handle_event/3 with a bare socket, and the socket it returns is the contract.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Builder.ActionRegistryTest do
   @moduledoc """
   A package can add a working On-click action, and core never learns its name.

@@ -2,6 +2,9 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# These tests call a compiled page's handle_event/3 directly, and the socket it returns is its answer.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
+
 defmodule MishkaCmsCore.Runtime.Compilers.PageMessageCompileTest do
   @moduledoc """
   What a page gains when something on it says something.

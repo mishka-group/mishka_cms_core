@@ -201,6 +201,8 @@ defmodule MishkaCmsCoreWeb.Test.MediaCategoriesTest do
       {:ok, socket} =
         MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.Media.Index.mount(%{}, %{}, socket)
 
+      # The page's mount is called with a bare socket, and what it assigns is its answer.
+      # credo:disable-for-next-line Jump.CredoChecks.AvoidSocketAssignsInTest
       socket.assigns.media_writer?
     end
 
@@ -219,7 +221,7 @@ defmodule MishkaCmsCoreWeb.Test.MediaCategoriesTest do
     render_click(button(view, "delete_category", category.id))
 
     assert {:ok, archived} = archived_category_row(category.id)
-    refute is_nil(archived.archived_at)
+    assert %DateTime{} = archived.archived_at
   end
 
   test "a master deletes an archived category permanently", %{conn: conn, site: site} do
@@ -491,7 +493,7 @@ defmodule MishkaCmsCoreWeb.Test.MediaCategoriesTest do
 
     render_click(button(view, "delete_category", category.id))
     assert {:ok, archived} = archived_category_row(category.id)
-    refute is_nil(archived.archived_at)
+    assert %DateTime{} = archived.archived_at
 
     render_click(view, "toggle_category_archive_view", %{})
     render_async(view)

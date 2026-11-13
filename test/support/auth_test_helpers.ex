@@ -119,7 +119,7 @@ defmodule MishkaCmsCoreWeb.Test.AuthTestHelpers do
   def capture_reset_token_from_email(timeout \\ 3000) do
     receive do
       {:email, email} ->
-        if is_reset_email?(email) do
+        if reset_email?(email) do
           extract_token_from_reset_email(email)
         else
           # Not a reset email, try again
@@ -208,7 +208,7 @@ defmodule MishkaCmsCoreWeb.Test.AuthTestHelpers do
 
   # Private functions
 
-  defp is_reset_email?(email) do
+  defp reset_email?(email) do
     email.subject =~ "Reset" or
       email.subject =~ "reset" or
       email.subject =~ "Password" or

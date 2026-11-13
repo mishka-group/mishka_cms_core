@@ -2,6 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+# PageMessage.say/2 answers with the socket it put the flash on, so that socket's flash is the result under test.
+# credo:disable-for-this-file Jump.CredoChecks.AvoidSocketAssignsInTest
 defmodule MishkaCmsCore.Runtime.PageMessageTest do
   @moduledoc """
   "Show a message" — a click, a real flash, and the region the page already renders.

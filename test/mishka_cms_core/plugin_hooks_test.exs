@@ -13,6 +13,7 @@ defmodule MishkaCmsCore.PluginHooksTest do
   use MishkaCmsCore.DataCase, async: false
 
   alias MishkaInstaller.Event.{Event, EventHandler}
+  alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
 
   alias MishkaCmsCore.Test.Plugins.{
     AccountsUserAfterRegister,
@@ -69,8 +70,6 @@ defmodule MishkaCmsCore.PluginHooksTest do
     end
 
     test "is named for any resource by save_event_name/1" do
-      alias MishkaCmsCore.Runtime.Resources.Notifiers.PluginHook
-
       assert PluginHook.save_event_name(MishkaCmsCore.Runtime.Page) == "cms_core:page:after_save"
     end
   end

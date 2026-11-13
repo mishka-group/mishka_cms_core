@@ -430,7 +430,7 @@ defmodule MishkaCmsCore.Runtime.ComponentBoundaryTest do
       assert data.site == site.name
       assert data.site_id == site.id
       assert %BadMapError{} = data.error
-      assert is_list(data.stacktrace)
+      assert [_ | _] = data.stacktrace
       assert data.error_id =~ ~r/\A[0-9a-f]{12}\z/
     end
 

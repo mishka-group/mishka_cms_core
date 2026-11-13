@@ -452,16 +452,17 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaCategoryPropertyTest do
 
   defp valid_name_generator do
     bind(string([?a..?z, ?A..?Z], length: 1), fn first_char ->
-      bind(string([?a..?z, ?A..?Z, ?0..?9, ?\s], max_length: 19), fn rest ->
-        name = String.trim(first_char <> rest)
-
-        if String.length(name) >= 2 do
-          constant(name)
-        else
-          constant(first_char <> "b")
-        end
-      end)
+      StreamData.map(
+        string([?a..?z, ?A..?Z, ?0..?9, ?\s], max_length: 19),
+        &valid_name(first_char, &1)
+      )
     end)
+  end
+
+  defp valid_name(first_char, rest) do
+    name = String.trim(first_char <> rest)
+
+    if String.length(name) >= 2, do: name, else: first_char <> "b"
   end
 
   defp valid_description_generator do

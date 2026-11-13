@@ -341,7 +341,7 @@ defmodule MishkaCmsCore.Runtime.Resources.MediaFolderTreeTest do
       :ok = archive(photos, admin)
 
       archived = Ash.get!(MediaCategory, photos.id, action: :master_get, authorize?: false)
-      refute is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
 
       assert :ok =
                archived

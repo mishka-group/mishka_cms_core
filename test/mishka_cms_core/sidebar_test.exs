@@ -409,7 +409,7 @@ defmodule MishkaCmsCore.SidebarTest do
 
     test "every declared nav link points at a real static path" do
       for item <- Sidebar.core_menu().items, item.nav do
-        assert String.starts_with?(item.path, "/admin/dashboard") or item.path == "/"
+        assert String.starts_with?(item.path, "/admin/dashboard")
 
         refute String.contains?(item.path, ":"),
                "#{item.path} is a link, so it cannot take params"

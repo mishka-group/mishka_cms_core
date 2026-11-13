@@ -26,8 +26,8 @@ defmodule MishkaCmsCore.Runtime.Handlers.ModuleCompilerHandlerTest do
     test "an unknown exception falls back to cacheable (fail-safe, never transient)" do
       syntax = struct(SyntaxError, description: "syntax error", file: "nofile", line: 1)
 
-      assert {:compilation_error, msg} = ModuleCompilerHandler.classify_compile_error(syntax)
-      assert is_binary(msg)
+      assert ModuleCompilerHandler.classify_compile_error(syntax) ==
+               {:compilation_error, Exception.message(syntax)}
     end
   end
 

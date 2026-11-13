@@ -111,7 +111,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.InteractionsTest do
       for {action, _label} <- Interactions.actions() do
         written = Interactions.source(action, "pb-11112222", everything())
 
-        assert is_binary(written)
+        assert byte_size(written) > 0
         assert Interactions.class?(action) == String.contains?(written, ~s|"c"|)
       end
     end

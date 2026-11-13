@@ -723,7 +723,7 @@ defmodule MishkaCmsCore.Runtime.States.WebRunTimeMetaDataStateTest do
 
       # Should complete in less than 10ms
       assert time < 10_000
-      assert length(result.data) > 0
+      assert result.data != []
     end
   end
 

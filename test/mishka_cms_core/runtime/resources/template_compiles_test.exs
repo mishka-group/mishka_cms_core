@@ -23,6 +23,8 @@ defmodule MishkaCmsCore.Runtime.Resources.TemplateCompilesTest do
 
   import MishkaCmsCore.Test.Factory
 
+  alias MishkaCmsCore.Runtime.{Component, ErrorPage, Layout}
+
   @moduletag :integration
 
   @good ~s(<section id="root"><h1>Title</h1></section>)
@@ -38,7 +40,9 @@ defmodule MishkaCmsCore.Runtime.Resources.TemplateCompilesTest do
 
   describe "a layout" do
     test "is stored when its markup compiles", %{site: site} do
-      assert %{} = create_layout!(site_id: site.id, template: @good_layout)
+      layout = create_layout!(site_id: site.id, template: @good_layout)
+      assert %Layout{} = layout
+      assert layout.site_id == site.id
     end
 
     for {name, markup} <- [
@@ -81,7 +85,9 @@ defmodule MishkaCmsCore.Runtime.Resources.TemplateCompilesTest do
 
   describe "a component" do
     test "is stored when its markup compiles", %{site: site} do
-      assert %{} = create_component!(site_id: site.id, name: "tc-ok", template: @good)
+      component = create_component!(site_id: site.id, name: "tc-ok", template: @good)
+      assert %Component{} = component
+      assert component.site_id == site.id
     end
 
     test "is refused when it does not", %{site: site} do
@@ -93,7 +99,7 @@ defmodule MishkaCmsCore.Runtime.Resources.TemplateCompilesTest do
 
   describe "an error page" do
     test "is stored when every status compiles", %{site: site} do
-      assert %{} =
+      assert %ErrorPage{error_pages: [_, _]} =
                create_error_page!(
                  site_id: site.id,
                  error_pages: [
@@ -129,12 +135,14 @@ defmodule MishkaCmsCore.Runtime.Resources.TemplateCompilesTest do
     @eex_root ~S|<html><head><meta name="csrf-token" content="<%= token() %>" /></head><body><%= @inner_content %></body></html>|
 
     test "is EEx, and is not judged as HEEx", %{site: site} do
-      assert %{} =
+      assert %ErrorPage{root_layout_template: root} =
                create_error_page!(
                  site_id: site.id,
                  root_layout_template: @eex_root,
                  error_pages: [%{"status" => 404, "template" => @good, "layout" => %{}}]
                )
+
+      assert root =~ ~S|content="<%= token() %>"|
     end
 
     test "while the per-status template beside it still is", %{site: site} do

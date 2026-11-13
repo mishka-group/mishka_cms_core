@@ -92,7 +92,7 @@ defmodule MishkaCmsCore.UiKit.ListMarkerTest do
     end
 
     test "and the sweep is looking at rules that exist", %{components: components} do
-      assert Enum.count(components, &(keyed_classes(&1["template"] || "") != [])) >= 1
+      assert Enum.any?(components, &(keyed_classes(&1["template"] || "") != []))
     end
   end
 

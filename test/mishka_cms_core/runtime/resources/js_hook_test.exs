@@ -511,7 +511,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       hook = create_js_hook!(site_id: site.id)
 
       assert {:ok, archived} = Ash.destroy(hook, authorize?: false, return_destroyed?: true)
-      assert archived.archived_at != nil
+      assert %DateTime{} = archived.archived_at
 
       hooks = JsHook |> Ash.Query.set_tenant(site.id) |> Ash.read!(authorize?: false)
       hook_ids = Enum.map(hooks, & &1.id)
@@ -600,8 +600,8 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       assert hook.priority == 0
       assert hook.active == true
       assert hook.permissions == []
-      assert hook.inserted_at != nil
-      assert hook.updated_at != nil
+      assert %DateTime{} = hook.inserted_at
+      assert %DateTime{} = hook.updated_at
     end
   end
 
@@ -781,12 +781,12 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       global_version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, global_js_hook.id)
 
-      assert global_version != nil
+      assert global_version.version_source_id == global_js_hook.id
 
       tenant_version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, tenant_js_hook.id, tenant: site.id)
 
-      assert tenant_version != nil
+      assert tenant_version.version_source_id == tenant_js_hook.id
 
       # Master user can restore global JS hook via master_restore_version
       {:ok, restored_global} =
@@ -839,7 +839,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, tenant_js_hook.id, tenant: site.id)
 
-      assert version != nil
+      assert version.version_source_id == tenant_js_hook.id
 
       # Tenant can restore their own JS hook
       tenant_user = create_user_with_permissions!(["*"], site_id: site.id)
@@ -879,7 +879,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, global_js_hook.id)
 
-      assert version != nil
+      assert version.version_source_id == global_js_hook.id
 
       # Tenant cannot restore global JS hook
       global_js_hook_fresh = Ash.get!(JsHook, global_js_hook.id, authorize?: false)
@@ -936,7 +936,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, js_hook.id, tenant: site.id)
 
-      assert version != nil
+      assert version.version_source_id == js_hook.id
 
       # Archive the JS hook
       Ash.destroy!(js_hook, authorize?: false, tenant: site.id)
@@ -1033,7 +1033,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, tenant_js_hook.id, tenant: site.id)
 
-      assert version != nil
+      assert version.version_source_id == tenant_js_hook.id
 
       # Tenant can preview their own JS hook version via generic action
       {:ok, preview} =
@@ -1082,7 +1082,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, tenant_js_hook.id, tenant: site.id)
 
-      assert version != nil
+      assert version.version_source_id == tenant_js_hook.id
 
       # Master can preview any version via master_preview_version action
       {:ok, preview} =
@@ -1207,7 +1207,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
 
       # Archive the hook first
       {:ok, archived_hook} = Ash.destroy(hook, authorize?: false, return_destroyed?: true)
-      assert not is_nil(archived_hook.archived_at)
+      assert %DateTime{} = archived_hook.archived_at
 
       # Get the archived hook for master_unarchive
       archived_for_update =
@@ -1235,7 +1235,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(return_destroyed?: true)
 
-      assert not is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
 
       # Get the archived hook for master_unarchive
       archived_for_update =
@@ -1294,7 +1294,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(return_destroyed?: true)
 
-      assert not is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
       assert archived.id == hook.id
     end
 
@@ -1306,7 +1306,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.Changeset.for_destroy(:master_destroy, %{}, authorize?: false)
         |> Ash.destroy(return_destroyed?: true)
 
-      assert not is_nil(archived.archived_at)
+      assert %DateTime{} = archived.archived_at
     end
 
     test "master_destroy fails with tenant context" do
@@ -1381,7 +1381,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, hook.id, tenant: site.id)
 
-      assert version != nil
+      assert version.version_source_id == hook.id
 
       # Restore via API action
       {:ok, restored} =
@@ -1420,7 +1420,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       version =
         first_version(MishkaCmsCore.Runtime.JsHook.Version, global_hook.id)
 
-      assert version != nil
+      assert version.version_source_id == global_hook.id
 
       # Tenant cannot restore global hook via API
       assert {:error, %Ash.Error.Invalid{}} =
@@ -1580,8 +1580,8 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.read_one(authorize?: false)
 
       assert found.id == hook.id
-      assert is_list(found.sorted_versions)
-      assert length(found.sorted_versions) >= 2
+      assert [_, _ | _] = found.sorted_versions
+      assert Enum.all?(found.sorted_versions, &(&1.version_source_id == hook.id))
     end
 
     test "master_get_with_versions retrieves any hook with versions", %{hook: hook} do
@@ -1596,7 +1596,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
         |> Ash.read_one(authorize?: false)
 
       assert found.id == hook.id
-      assert is_list(found.sorted_versions)
+      assert Enum.all?(found.sorted_versions, &(&1.version_source_id == hook.id))
     end
 
     test "master_get_with_versions fails with tenant context", %{site: site, hook: hook} do
@@ -1624,7 +1624,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       assert match?([_], result)
       found = List.first(result)
       assert found.id == hook.id
-      assert is_list(found.sorted_versions)
+      assert Enum.all?(found.sorted_versions, &(&1.version_source_id == hook.id))
     end
 
     test "list_versions returns empty for global hooks due to multitenancy filtering", %{
@@ -1676,7 +1676,7 @@ defmodule MishkaCmsCore.Runtime.Resources.JsHookTest do
       assert match?([_], result)
       found = List.first(result)
       assert found.id == hook.id
-      assert is_list(found.sorted_versions)
+      assert Enum.all?(found.sorted_versions, &(&1.version_source_id == hook.id))
     end
 
     test "master_list_versions fails with tenant context", %{site: site, hook: hook} do
