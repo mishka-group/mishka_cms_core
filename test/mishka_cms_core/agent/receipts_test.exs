@@ -15,10 +15,12 @@ defmodule MishkaCmsCore.Agent.ReceiptsTest do
 
   import Phoenix.LiveViewTest
 
-  alias MishkaCmsCore.Agent.{Operation, Receipts}
+  alias MishkaCmsCore.Agent.{Operation, Receipt, Receipts}
   alias MishkaCmsCore.Agent.Notifiers.ReceiptHook
   alias MishkaCmsCore.Agent.Stages.{JobDone, JobEnqueued}
   alias MishkaCmsCore.Runtime.MediaCategory
+  alias MishkaCmsCore.Test.Plugins.ReceiptFinishedProbe
+  alias MishkaInstaller.Event.{Event, EventHandler}
 
   @endpoint MishkaCmsCore.TestEndpoint
 
@@ -609,6 +611,177 @@ defmodule MishkaCmsCore.Agent.ReceiptsTest do
       stranger = create_user_with_permissions!(["*"], site_id: other.id)
 
       assert Receipts.get(receipt.id, stranger) == Receipts.get("rcpt_doesnotexist", stranger)
+    end
+  end
+
+  describe "announcing a finished receipt" do
+    setup do
+      Process.register(self(), :__receipt_finished_probe__)
+      start_plugin!(ReceiptFinishedProbe, Receipts.finished_event())
+      :ok
+    end
+
+    test "a stored receipt reaches the plugin as its public map, with no params or record", %{
+      site: site,
+      master: master
+    } do
+      assert {:ok, _category, receipt} =
+               Receipts.run(@create, create(site, master, "Secret name"), source: :agent)
+
+      id = receipt.id
+      assert_receive {:receipt_finished, %{receipt: %{"id" => ^id}} = payload}
+
+      assert payload.trigger == :finished
+      assert payload.node == node()
+      assert payload.site_id == site.id
+      assert payload.operation == "cms_core:media_category:create"
+      assert payload.receipt == Receipt.to_public(receipt)
+      assert payload.receipt["status"] == "verified"
+      assert {:ok, _json} = Jason.encode(payload.receipt)
+      refute inspect(payload) =~ "Secret name"
+    end
+
+    test "late evidence announces the receipt again with its new status" do
+      {{:ok, _job}, receipt} =
+        Receipts.track(@job, [], fn _id ->
+          %{} |> MishkaCmsCore.Test.ReceiptWorker.new(meta: Receipts.job_meta()) |> Oban.insert()
+        end)
+
+      id = receipt.id
+
+      assert_receive {:receipt_finished,
+                      %{trigger: :finished, receipt: %{"id" => ^id, "status" => "partial"}}}
+
+      :ok =
+        Oban.Testing.perform_job(MishkaCmsCore.Test.ReceiptWorker, %{},
+          meta: %{"receipt_id" => receipt.id}
+        )
+
+      assert_receive {:receipt_finished,
+                      %{
+                        trigger: :late,
+                        node: node,
+                        receipt: %{"id" => ^id, "status" => "verified"} = late
+                      }}
+
+      assert node == node()
+
+      assert %{"status" => "verified"} = Enum.find(late["stages"], &(&1["name"] == "job_done"))
+    end
+
+    test "with receipts off nothing is announced and no telemetry is sent", %{
+      site: site,
+      master: master
+    } do
+      attach_telemetry!([[:mishka_cms, :agent, :receipt, :stop]])
+      Receipts.switch(false)
+
+      assert {:ok, _category, nil} = Receipts.run(@create, create(site, master, "Off"))
+      refute_received {:telemetry, _event, _measurements, _meta}
+
+      Receipts.switch(true)
+      assert {:ok, _category, %{id: id}} = Receipts.run(@create, create(site, master, "On"))
+
+      assert_receive {:receipt_finished, %{receipt: %{"id" => ^id}}}
+      refute_received {:receipt_finished, _other}
+    end
+
+    @tag :capture_log
+    test "a plugin that raises leaves the operation and later announcements alone" do
+      raising =
+        Operation.new!(%{
+          name: "test:plugin_raises",
+          stages: [:action_committed],
+          required: [:action_committed]
+        })
+
+      assert {{:ok, :done}, %{status: :verified, id: id}} =
+               Receipts.track(raising, [], fn _id -> {:ok, :done} end)
+
+      assert_receive {:receipt_finished, %{receipt: %{"id" => ^id}}}
+
+      assert {:ok, %{id: id}} = Receipts.track("test:after_raise", [], fn _id -> :ok end)
+      assert_receive {:receipt_finished, %{receipt: %{"id" => ^id}}}
+    end
+
+    test "every stage and the receipt are sent as telemetry, ids and statuses only", %{
+      site: site,
+      master: master
+    } do
+      attach_telemetry!([
+        [:mishka_cms, :agent, :receipt, :stop],
+        [:mishka_cms, :agent, :receipt, :stage]
+      ])
+
+      assert {:ok, _category, receipt} = Receipts.run(@create, create(site, master, "Traced"))
+      id = receipt.id
+
+      assert_received {:telemetry, [:mishka_cms, :agent, :receipt, :stop], %{elapsed_us: _},
+                       %{id: ^id, status: :verified, site_id: _}}
+
+      for stage <- receipt.stages do
+        name = stage.name
+
+        assert_received {:telemetry, [:mishka_cms, :agent, :receipt, :stage], %{elapsed_us: _},
+                         %{id: ^id, name: ^name, status: status, layer: layer}}
+
+        assert {status, layer} == {stage.status, stage.layer}
+      end
+    end
+
+    test "announcing makes no query of its own", %{site: site, master: master} do
+      plain = count_all_queries(fn -> Ash.create!(create(site, master, "Plain")) end)
+
+      tracked =
+        count_all_queries(fn ->
+          {:ok, _category, %{id: id}} = Receipts.run(@create, create(site, master, "Announced"))
+          assert_receive {:receipt_finished, %{receipt: %{"id" => ^id}}}
+        end)
+
+      assert tracked - plain == 1
+    end
+  end
+
+  defp start_plugin!(plugin, event) do
+    {:ok, _} =
+      Event.write(%{name: plugin, event: event, extension: :mishka_installer, status: :started})
+
+    :ok = EventHandler.do_compile(event, :start, false)
+    on_exit(fn -> Event.unregister(:name, plugin, false) end)
+  end
+
+  defp attach_telemetry!(events) do
+    handler = "receipt-telemetry-#{System.unique_integer([:positive])}"
+    parent = self()
+
+    :telemetry.attach_many(
+      handler,
+      events,
+      fn event, measurements, meta, _config ->
+        if self() == parent, do: send(parent, {:telemetry, event, measurements, meta})
+      end,
+      nil
+    )
+
+    on_exit(fn -> :telemetry.detach(handler) end)
+  end
+
+  defp count_all_queries(fun) do
+    handler = "receipt-all-query-count-#{System.unique_integer([:positive])}"
+    counter = :counters.new(1, [])
+
+    :telemetry.attach(
+      handler,
+      [:mishka_cms_core, :repo, :query],
+      fn _event, _measurements, _meta, _config -> :counters.add(counter, 1, 1) end,
+      nil
+    )
+
+    try do
+      fun.()
+      :counters.get(counter, 1)
+    after
+      :telemetry.detach(handler)
     end
   end
 
