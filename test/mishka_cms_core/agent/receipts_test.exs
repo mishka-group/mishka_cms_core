@@ -551,6 +551,20 @@ defmodule MishkaCmsCore.Agent.ReceiptsTest do
       assert id == receipt.id
     end
 
+    test "an API site admin reads its own site's receipts over the API, not on the dashboard", %{
+      site: site,
+      receipt: receipt
+    } do
+      reader =
+        create_user_with_permissions!(
+          ["admin:api:runtime:media", "admin:api:agent:receipts"],
+          site_id: site.id
+        )
+
+      assert {:ok, _} = Receipts.get(receipt.id, reader, surface: :api)
+      assert {:error, :not_found} = Receipts.get(receipt.id, reader)
+    end
+
     test "another site, another area, no receipts permission, or nobody: not found", %{
       site: site,
       other: other,
