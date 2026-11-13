@@ -16,9 +16,14 @@ defmodule MishkaCmsCore.Activity.Discovery do
     * `areas/1`         — the permission areas a resource's own policies ask for, which decide
       whose Activity log shows its entries.
 
+  A source whose table is not in the database, such as an extension installed before its
+  migrations ran, is left out with one warning per scan, so the log's other sources still show
+  instead of the whole UNION failing.
+
   Results are memoised in `:persistent_term` (read O(1), hot on the live
   `handles?/1` path). Call `invalidate/0` when the installed extension set changes
-  (the same lifecycle that mutates `ash_domains`); a fresh scan recomputes the set.
+  (the same lifecycle that mutates `ash_domains`), or after migrations add a source's table; a
+  fresh scan recomputes the set.
 
   See `MishkaCmsCore.Activity.Sources.PaperTrail` and
   `MishkaCmsCore.Activity.Sources.EventLog`.
@@ -29,11 +34,14 @@ defmodule MishkaCmsCore.Activity.Discovery do
   # an extension when that extension is under test. Naming one here would make the log blind to every
   # other extension, so the host says which app it is.
   @otp_app Application.compile_env!(:mishka_cms_core, :host_app)
+  @repo Application.compile_env!(:mishka_cms_core, :repo)
   @paper_trailed_key {__MODULE__, :paper_trailed}
   @event_logs_key {__MODULE__, :event_logs}
   @areas_key {__MODULE__, :areas}
 
   alias MishkaCmsCore.Accounts.Checks.AccessPermissions
+
+  require Logger
 
   @doc "Paper-trailed resources across all domains (with a `:sorted_versions` guard)."
   def paper_trailed, do: memo(@paper_trailed_key, &compute_paper_trailed/0)
@@ -85,13 +93,41 @@ defmodule MishkaCmsCore.Activity.Discovery do
     for resource <- resources(),
         AshPaperTrail.Resource in Spark.extensions(resource),
         sorted_versions?(resource),
+        stored?(resource, version_resource(resource)),
         do: resource
   end
 
   defp compute_event_logs do
     for resource <- resources(),
         AshEvents.EventLog in Spark.extensions(resource),
+        stored?(resource, resource),
         do: resource
+  end
+
+  defp stored?(resource, table_resource) do
+    with AshPostgres.DataLayer <- Ash.DataLayer.data_layer(table_resource),
+         table when is_binary(table) <- AshPostgres.DataLayer.Info.table(table_resource),
+         false <- table?(table) do
+      Logger.warning(
+        "[Activity.Discovery] #{inspect(resource)} is left out of the activity log: " <>
+          "its table #{table} is not in the database"
+      )
+
+      false
+    else
+      _stored_or_unknown -> true
+    end
+  end
+
+  # `to_regclass` answers nil rather than raising for a table that is not there. A check that
+  # cannot run keeps the source, so a passing database fault does not hide it for good.
+  defp table?(table) do
+    case Ecto.Adapters.SQL.query(@repo, "SELECT to_regclass($1) IS NOT NULL", [table]) do
+      {:ok, %{rows: [[present?]]}} -> present?
+      _error -> true
+    end
+  rescue
+    _no_connection -> true
   end
 
   # `:sorted_versions` is a project convention on every paper-trail mixin, not an
