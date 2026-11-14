@@ -67,7 +67,10 @@ defmodule MishkaCmsCoreWeb.Live.CreateForEditorTest do
 
   # A relation is picked, not typed: focus the search box, then choose from what it offers.
   defp pick_site(view, site) do
-    view |> element("#{@form} input[name='_search_site_id']") |> render_focus()
+    view
+    |> element("#search-select-page_form-site_id")
+    |> render_hook("relation_focus", %{"filter" => "site_id"})
+
     view |> element("#search-select-page_form-site_id button", site.name) |> render_click()
     view
   end
