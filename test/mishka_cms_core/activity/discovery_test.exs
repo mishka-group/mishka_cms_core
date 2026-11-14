@@ -7,6 +7,7 @@ defmodule MishkaCmsCore.Activity.DiscoveryTest do
   Discovery scans every configured domain at runtime, so the activity log adapts
   to whatever extensions are installed — no hardcoded resource/extension names.
   """
+  use MishkaCmsCore.DataCase
   use ExUnit.Case, async: false
 
   alias MishkaCmsCore.Activity.Discovery

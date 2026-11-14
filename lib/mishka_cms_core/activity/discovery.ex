@@ -128,6 +128,8 @@ defmodule MishkaCmsCore.Activity.Discovery do
     end
   rescue
     _no_connection -> true
+  catch
+    :exit, _pool_gone -> true
   end
 
   # `:sorted_versions` is a project convention on every paper-trail mixin, not an

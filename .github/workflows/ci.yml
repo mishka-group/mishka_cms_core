@@ -4,247 +4,28 @@ on:
   push:
     branches: [master]
   pull_request:
+  workflow_dispatch:
 
-# A newer push to the same branch or pull request makes the run in progress pointless.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# No job writes to the repository, so the token can only read it.
 permissions:
   contents: read
 
-env:
-  # setup-beam installs Hex from builds.hex.pm, and one slow response there failed a whole run
-  # ("Could not mix hex from any hex.pm mirror"). It tries these in order.
-  HEXPM_MIRRORS: |
-    https://builds.hex.pm
-    https://cdn.jsdelivr.net/hex
-
 jobs:
-  # Compiled once; the jobs below start from this build.
-  #
-  # A cache entry can never be changed once saved, so the key carries the commit: each run saves the
-  # build it made, and the next one starts from the nearest one before it (`restore-keys`) and
-  # compiles only what changed. Keyed on mix.lock alone, the first build ever saved was restored
-  # forever and every run compiled the whole project again.
-  build:
-    runs-on: ubuntu-latest
-
-    steps:
-      # Only this repository. mishka_gervaz comes from Hex, and mix.exs would use a ../mishka_gervaz
-      # checkout over Hex if it found one, so no sibling is ever checked out here.
-      - uses: actions/checkout@v7
-
-      - uses: erlef/setup-beam@v1
-        with:
-          version-file: .tool-versions
-          version-type: strict
-          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
-
-      - uses: actions/cache@v6
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
-          restore-keys: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-
-
-      - run: mix deps.get
-
-      - run: MIX_ENV="test" mix compile --warnings-as-errors
-
-  # In front of the tests, like the audit and the lint job.
-  format:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: erlef/setup-beam@v1
-        with:
-          version-file: .tool-versions
-          version-type: strict
-          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
-
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      # The formatter takes the DSL's paren-free calls (`table "pages"`, `reference :site, ...`)
-      # from the dependencies in .formatter.exs's import_deps, so it runs once they are fetched.
-      - run: MIX_ENV="test" mix format --check-formatted
-
-  # mix_audit checks mix.lock against the elixir-security-advisories database. It runs a task from a
-  # dependency, so it starts from the build like the format check. Hex's own audit is hex-audit.yml.
-  audit:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: erlef/setup-beam@v1
-        with:
-          version-file: .tool-versions
-          version-type: strict
-          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
-
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - run: MIX_ENV="test" mix deps.audit
-
-  # The checks `mix ci` runs besides the format check, the audit and the tests: Credo (with the Jump
-  # and ExSlop checks .credo.exs adds), Credence, Sobelow, Dialyzer and ExDNA. Dialyzer's PLTs take
-  # minutes to build, so they are cached apart from the build, keyed on what they are made from.
-  lint:
-    needs: build
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: erlef/setup-beam@v1
-        with:
-          version-file: .tool-versions
-          version-type: strict
-          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
-
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      - id: plt
-        uses: actions/cache/restore@v6
-        with:
-          path: |
-            ~/.mix/dialyxir_*
-            _build/test/dialyxir_*
-          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', '.tool-versions') }}
-
-      - run: MIX_ENV="test" mix credo --strict
-
-      - run: MIX_ENV="test" mix mishka_cms_core.credence
-
-      - run: MIX_ENV="test" mix sobelow --config
-
-      # Built once per lock and saved even when dialyzer then reports a warning, so the next run does
-      # not build the PLTs again.
-      - run: MIX_ENV="test" mix dialyzer --plt
-
-      - if: steps.plt.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: |
-            ~/.mix/dialyxir_*
-            _build/test/dialyxir_*
-          key: ${{ runner.os }}-plt-${{ hashFiles('mix.lock', '.tool-versions') }}
-
-      - run: MIX_ENV="test" mix dialyzer
-
-      - run: MIX_ENV="test" mix ex_dna --max-clones 92
-
-  # FOUR MACHINES, A QUARTER OF THE TEST FILES EACH. Three quarters of the suite is `async: false` —
-  # it shares the runtime's global state — and runs one module at a time, so more cores do not make
-  # it faster and more machines do. Mix deals the test files out by `--partitions`, and each
-  # partition has its own Postgres and its own database (`config/test.exs` names it after
-  # MIX_TEST_PARTITION). They start only once the format check, the audit and the lint job pass, so
-  # a run that fails on those does not spend four machines on the suite.
-  test:
-    needs: [build, format, audit, lint]
-    runs-on: ubuntu-latest
-
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2, 3, 4]
-
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
-
-    env:
-      POSTGRES_HOST: localhost
-      MIX_TEST_PARTITION: ${{ matrix.partition }}
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: erlef/setup-beam@v1
-        with:
-          version-file: .tool-versions
-          version-type: strict
-          hexpm-mirrors: ${{ env.HEXPM_MIRRORS }}
-
-      - uses: actions/cache/restore@v6
-        with:
-          path: |
-            deps
-            _build
-          key: ${{ runner.os }}-mix-${{ hashFiles('mix.lock', '.tool-versions') }}-${{ github.sha }}
-          fail-on-cache-miss: true
-
-      # The Tailwind binary the runtime CSS compiler runs, kept apart from the build cache above: the
-      # build job never downloads it, so the `_build` restored here lacks it, and a GitHub
-      # release-download outage (504) used to fail every partition. The tailwind package saves it as
-      # `_build/tailwind-<target>-<version>`; the version comes from config/test.exs, the one place
-      # to change it, and the key carries it so a new version downloads once. This step runs after
-      # the `_build` restore, which only adds files and does not remove this one.
-      - id: tailwind
-        run: |
-          echo "version=$(sed -n '/config :tailwind,/,/version:/s/.*version: "\([^"]*\)".*/\1/p' config/test.exs)" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/cache@v6
-        with:
-          path: _build/tailwind-linux-x64-${{ steps.tailwind.outputs.version }}
-          key: tailwind-${{ runner.os }}-${{ runner.arch }}-${{ steps.tailwind.outputs.version }}
-
-      # The migrations are generated, not in git: generate them before the test alias's `ash.setup`
-      # migrates the test database.
-      - run: MIX_ENV="test" mix ash.codegen ci
-
-      # The CLDR data the tests read in a language other than English, downloaded once here rather
-      # than by four partitions at the same time.
-      - run: MIX_ENV="test" mix localize.download_locales fa
-
-      # `mix test`, not `MIX_ENV=test mix test`: mishka_installer decides at dep-compile time
-      # whether to start its plugin engine, and an exported MIX_ENV outranks the `project_env`
-      # override in config/test.exs. --warnings-as-errors also fails on warnings in the test files,
-      # each in the partition that compiles it.
-      - run: mix test --warnings-as-errors --partitions 4
-
-  # The admin hooks the package ships in assets/js (package.json's `main`), run in jsdom by vitest.
-  # They need neither Mix nor a build, so this job starts from nothing and waits for no other.
-  assets:
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v7
-
-      - uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "1.4.4"
-
-      - run: bun install --frozen-lockfile && bun run test
-        working-directory: assets
+  ci:
+    # Switch to @ci-v1 once mishka-group/mishka_cms#77 is merged and tagged.
+    uses: mishka-group/mishka_cms/.github/workflows/mishka-ci.yml@ci-v1
+    with:
+      postgres: true
+      partitions: 4
+      pre-test: |
+        mix ash.codegen ci
+        mix localize.download_locales fa
+      tailwind-cache: true
+      credence-task: mishka_cms_core.credence
+      sobelow: true
+      ex-dna-args: "--max-clones 92"
+      assets: true
+      bun-version: "1.4.4"
