@@ -152,7 +152,7 @@ defmodule MishkaCmsCore.MixProject do
       {:sitemapper, "~> 0.10"},
       {:picosat_elixir, "~> 0.2"},
       mishka_dep(:mishka_installer, "~> 0.1.16"),
-      {:guarded_struct, "~> 0.1.7"},
+      {:guarded_struct, "~> 0.1.8"},
       # `MishkaCmsCore.PlainText` takes markup out of plain-text fields with it.
       {:html_sanitize_ex, "~> 1.5"},
       # `MishkaCmsCore.Runtime.HeadCodes` parses a site's head code with `:mochiweb_html`, which
