@@ -207,6 +207,7 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
   @doc """
   `path` when it is a path of this app a row may open, else `nil`: never another site's address, a
   scheme-relative `//host`, nor one that decodes to either (`MishkaCmsCore.Runtime.Redirects.safe_target?/1`).
+  The top bar's search rows (`MishkaCmsCore.Layouts.TopbarSearch`) are held to it too.
   """
   @spec local_path(term()) :: String.t() | nil
   def local_path("/" <> _rest = path) do

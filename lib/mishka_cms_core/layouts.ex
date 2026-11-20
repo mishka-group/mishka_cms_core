@@ -30,7 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
-  alias MishkaCmsCore.Layouts.TopbarNeeds
+  alias MishkaCmsCore.Layouts.{TopbarNeeds, TopbarSearch}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -469,6 +469,9 @@ defmodule MishkaCmsCore.Layouts do
   The admin topbar — search, theme toggle, notifications, and the user's menu: Account settings, the
   language the dashboard is read in, and Sign out.
 
+  The search box is `MishkaCmsCore.Layouts.TopbarSearch.Combo`, which lists what extensions find on
+  the `"topbar:search"` event (`MishkaCmsCore.Layouts.TopbarSearch`).
+
   `language` is the admin's language and `languages` the ones the menu offers
   (`MishkaCmsCore.Layouts.Nav` assigns both); picking one sends `PUT /admin/language` with
   `current_path` to come back to. Two are listed, the admin's own among them, and the rest behind
@@ -477,7 +480,7 @@ defmodule MishkaCmsCore.Layouts do
   `items` is `@topbar_items`, what extensions add on the `"topbar:items"` event
   (`MishkaCmsCore.Layouts.TopbarItems`). They are drawn in order at the right, before the theme
   toggle, in `#admin-topbar-items`, each with `current_user`, `current_site`, `current_path` and `view`; with
-  none, the slot is not drawn. `current_site` and `view` are for these items only.
+  none, the slot is not drawn. `current_site` and `view` are for these items and the search box.
 
   `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
   listed above the notifications, each opening its link. The bell's badge adds their counts to
@@ -519,17 +522,14 @@ defmodule MishkaCmsCore.Layouts do
         <.icon name="hero-bars-3" class="size-[18px]" />
       </button>
 
-      <div class="relative min-w-0 flex-1 max-w-[440px]">
-        <.icon
-          name="hero-magnifying-glass"
-          class="absolute start-[13px] top-1/2 size-4 -translate-y-1/2 text-[#a8a5a0]"
-        />
-        <input
-          type="text"
-          placeholder={gettext("Search pages, posts, people…")}
-          class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none"
-        />
-      </div>
+      <.live_component
+        module={TopbarSearch.Combo}
+        id="admin-topbar-search"
+        current_user={@current_user}
+        current_site={@current_site}
+        current_path={@current_path}
+        view={@view}
+      />
 
       <div class="flex-1"></div>
 
