@@ -34,6 +34,9 @@ defmodule MishkaCmsCore.Layouts.Nav do
   site the request resolved to, handed to those items. `@topbar_section` is the page's heading on a
   phone (`MishkaCmsCore.Sidebar.section/1`), read with them.
 
+  It keeps `@topbar_bands`, what extensions draw full width under the top bar on the `"topbar:bands"`
+  event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items.
+
   It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
   (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
   extension calls `TopbarNeeds.changed/1` for the viewer's site. The changes that arrive together
@@ -47,7 +50,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
   import Phoenix.Component, only: [assign: 2, assign: 3]
 
-  alias MishkaCmsCore.Layouts.{TopbarItems, TopbarNeeds}
+  alias MishkaCmsCore.Layouts.{TopbarBands, TopbarItems, TopbarNeeds}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
@@ -123,6 +126,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
     assign(socket,
       current_path: path,
       topbar_items: TopbarItems.collect(context),
+      topbar_bands: TopbarBands.collect(context),
       topbar_needs: TopbarNeeds.collect(context),
       topbar_site: site,
       topbar_section: Sidebar.section(path),

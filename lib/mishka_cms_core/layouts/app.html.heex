@@ -37,6 +37,29 @@ SPDX-License-Identifier: Apache-2.0
       view={assigns[:socket] && assigns[:socket].view}
     />
 
+    <div :if={assigns[:topbar_bands] not in [nil, []]} id="admin-topbar-bands" class="flex-none">
+      <div :for={band <- assigns[:topbar_bands]} id={dom_id("topbar-band", band.id)}>
+        <.live_component
+          :if={band[:module]}
+          module={band.module}
+          id={band.id}
+          current_user={assigns[:current_user]}
+          current_site={assigns[:topbar_site]}
+          current_path={assigns[:current_path]}
+          view={assigns[:socket] && assigns[:socket].view}
+        />
+        {if render = band[:render],
+          do:
+            render.(%{
+              id: band.id,
+              current_user: assigns[:current_user],
+              current_site: assigns[:topbar_site],
+              current_path: assigns[:current_path],
+              view: assigns[:socket] && assigns[:socket].view
+            })}
+      </div>
+    </div>
+
     <main class="flex-1 scroll-smooth overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div class="px-8 pb-16 pt-7 max-[980px]:px-[15px]! max-[980px]:pb-[calc(48px+env(safe-area-inset-bottom))]! max-[980px]:pt-[18px]!">
         <div class="mx-auto max-w-[1340px]">
