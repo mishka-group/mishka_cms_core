@@ -952,9 +952,13 @@ defmodule MishkaCmsCore.Layouts do
 
   `credit` is `%{name: name, url: url}` — what `MishkaCmsCore.Layouts.Nav` assigns as
   `@footer_credit` from the extension that owns the page — or `nil` on the core's own pages, which
-  credit Mishka CMS. Only "Powered by" is translated; a product name is not.
+  credit Mishka CMS. Only "Powered by" is translated; a product name is not. With `shown` false (an
+  extension that draws no such line, `MishkaCmsCore.Sidebar.footer?/1`) nothing is drawn.
   """
   attr :credit, :map, default: nil
+  attr :shown, :boolean, default: true
+
+  def footer_credit(%{shown: false} = assigns), do: ~H""
 
   def footer_credit(assigns) do
     assigns = assign(assigns, :credit, assigns.credit || @default_credit)

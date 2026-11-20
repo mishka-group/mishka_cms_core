@@ -292,8 +292,12 @@ defmodule MishkaCmsCore.Sidebar do
       # WHO THE EXTENSION IS AND WHERE ITS OWN PAGE IS, for the "Powered by" line under every page it
       # owns — see `MishkaCmsCore.Sidebar.credit/1`. Both declared once, on one of the extension's
       # entries; an entry that names only one of them credits nobody.
+      #
+      # An extension whose own design has no such line sets `credit_footer: false` on one of its
+      # entries, and none of its pages draws it — see `MishkaCmsCore.Sidebar.footer?/1`.
       field(:credit_name, String.t())
       field(:credit_url, String.t())
+      field(:credit_footer, boolean(), default: true)
       field(:parent, String.t())
       field(:mark, String.t())
       field(:children, list(), default: [])
@@ -833,6 +837,26 @@ defmodule MishkaCmsCore.Sidebar do
       %{name: name, url: url}
     else
       _none -> nil
+    end
+  end
+
+  @doc """
+  Whether the page `module` mounts draws the "Powered by" line: `false` when an entry of the
+  extension that owns the page declares `credit_footer: false`, `true` for every other page,
+  a core page included.
+  """
+  @spec footer?(module() | nil) :: boolean()
+  def footer?(nil), do: true
+
+  def footer?(module) do
+    %{items: items} = collect()
+
+    case Enum.find(items, &(&1.module == module)) do
+      %Item{extension: extension} when not is_nil(extension) ->
+        not Enum.any?(items, &(&1.extension == extension and &1.credit_footer == false))
+
+      _core_or_undeclared ->
+        true
     end
   end
 

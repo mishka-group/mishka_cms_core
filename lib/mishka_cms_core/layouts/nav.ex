@@ -15,7 +15,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   out is the site's sign-out page in the language its admin reads the site in, `@sign_out_path`
   (`MishkaCmsCore.Runtime.Plugs.SiteLookupPlug.auth_address/3`). And it names the page's
   `@footer_credit`: the name and address of the extension that owns the page, or `nil` on the core's
-  own (`MishkaCmsCore.Sidebar.credit/1`).
+  own (`MishkaCmsCore.Sidebar.credit/1`); `@footer_shown` is `false` for an extension that draws no such line (`MishkaCmsCore.Sidebar.footer?/1`).
 
   The sidebar follows its settings live: the hook subscribes to `MishkaCmsCore.Sidebar.changed/1` for
   the menu its viewer is shown and raises `@sidebar_version`, which `MishkaCmsCore.Layouts.sidebar/1`
@@ -101,7 +101,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
         admin_languages: Languages.admin_choices(site_id(session)),
         sign_out_path:
           SiteLookupPlug.auth_address(session[Languages.session()], site_id(session), "/sign-out"),
-        footer_credit: Sidebar.credit(socket.view)
+        footer_credit: Sidebar.credit(socket.view),
+        footer_shown: Sidebar.footer?(socket.view)
       )
 
     site = session["current_site"]

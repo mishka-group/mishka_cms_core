@@ -66,7 +66,7 @@ SPDX-License-Identifier: Apache-2.0
         <div class="mx-auto max-w-[1340px]">
           {@inner_content}
         </div>
-        <.footer_credit credit={assigns[:footer_credit]} />
+        <.footer_credit credit={assigns[:footer_credit]} shown={assigns[:footer_shown] != false} />
       </div>
     </main>
   </div>
