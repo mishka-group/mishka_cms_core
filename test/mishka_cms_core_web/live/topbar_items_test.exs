@@ -91,6 +91,14 @@ defmodule MishkaCmsCoreWeb.Test.TopbarItemsTest do
 
       assert has_element?(view, "header #admin-topbar-items #probe-component-body", site.name)
 
+      # They sit with the buttons at the right, before the theme toggle, as the design draws them,
+      # and not beside the search box.
+      html = view |> element("header") |> render()
+      {items_at, _length} = :binary.match(html, ~s(id="admin-topbar-items"))
+      {theme_at, _length} = :binary.match(html, ~s(data-phx-theme="dark"))
+      {search_at, _length} = :binary.match(html, ~s(placeholder="Search))
+      assert search_at < items_at and items_at < theme_at
+
       assert has_element?(
                view,
                "#probe-component-body",
