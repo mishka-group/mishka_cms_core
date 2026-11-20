@@ -32,6 +32,7 @@ SPDX-License-Identifier: Apache-2.0
       sign_out={assigns[:sign_out_path] || "/auth/sign-out"}
       items={assigns[:topbar_items] || []}
       needs={assigns[:topbar_needs] || []}
+      section={assigns[:topbar_section]}
       current_site={assigns[:topbar_site]}
       view={assigns[:socket] && assigns[:socket].view}
     />

@@ -485,12 +485,19 @@ defmodule MishkaCmsCore.Layouts do
   `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
   listed above the notifications, each opening its link. The bell's badge adds their counts to
   `notification_count`, the unread notifications.
+
+  Below 640px the bar is the phone's, 60px tall: the menu button, the page's heading and the bell
+  (with the user's menu, so Sign out stays in reach). `section` is `@topbar_section`
+  (`MishkaCmsCore.Sidebar.section/1`): its `eyebrow` is drawn small above its `title`, "Admin
+  console" and "MishkaCMS" where the sidebar names neither. The search box, the extensions' items
+  and the theme toggle are not drawn there.
   """
   attr :current_user, :any, default: nil
   attr :current_site, :any, default: nil
   attr :view, :atom, default: nil
   attr :items, :list, default: []
   attr :needs, :list, default: []
+  attr :section, :map, default: nil
   attr :notification_count, :integer, default: 0
   attr :notification_recent, :list, default: []
   attr :current_path, :string, default: nil
@@ -505,22 +512,43 @@ defmodule MishkaCmsCore.Layouts do
       assign(assigns,
         shown_languages: shown,
         more_languages: more,
-        bell_count: assigns.notification_count + TopbarNeeds.total(assigns.needs)
+        bell_count: assigns.notification_count + TopbarNeeds.total(assigns.needs),
+        section: assigns.section || %{eyebrow: nil, title: nil}
       )
 
     ~H"""
-    <header class="relative z-40 flex h-[66px] flex-none items-center gap-4 border-b border-[#ecebe6] bg-white/80 px-7 backdrop-blur-[10px] max-[560px]:gap-2.5! max-[560px]:px-[14px]!">
+    <header class="relative z-40 flex h-[66px] flex-none items-center gap-4 border-b border-[#ecebe6] bg-white/80 px-7 backdrop-blur-[10px] max-[560px]:gap-2.5! max-[560px]:px-[14px]! max-[640px]:h-[60px]! max-[640px]:gap-2! max-[640px]:bg-white! max-[640px]:px-3!">
       <button
         type="button"
+        id="admin-menu-button"
+        aria-label={gettext("Open menu")}
         phx-click={
           JS.add_class("max-[980px]:translate-x-0!", to: "#admin-sidebar")
           |> JS.show(to: "#admin-nav-overlay")
         }
         title={gettext("Open menu")}
-        class="hidden size-[39px] shrink-0 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[980px]:flex!"
+        class={[
+          "hidden size-[39px] shrink-0 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[980px]:flex!",
+          phone_button()
+        ]}
       >
         <.icon name="hero-bars-3" class="size-[18px]" />
       </button>
+
+      <div id="admin-phone-section" class="hidden min-w-0 flex-1 max-[640px]:block!">
+        <div
+          data-role="eyebrow"
+          class="truncate text-[10.5px] font-bold uppercase tracking-[0.08em] text-[#4f4bcc]"
+        >
+          {(@section.eyebrow && label(@section.eyebrow)) || gettext("Admin console")}
+        </div>
+        <div
+          data-role="title"
+          class="truncate font-['Space_Grotesk'] text-[17px] font-semibold leading-[1.15] text-[#17161a]"
+        >
+          {(@section.title && label(@section.title)) || "MishkaCMS"}
+        </div>
+      </div>
 
       <.live_component
         module={TopbarSearch.Combo}
@@ -531,10 +559,14 @@ defmodule MishkaCmsCore.Layouts do
         view={@view}
       />
 
-      <div class="flex-1"></div>
+      <div class="flex-1 max-[640px]:hidden"></div>
 
-      <div class="relative flex shrink-0 items-center gap-[11px]">
-        <div :if={@items != []} id="admin-topbar-items" class="flex shrink-0 items-center gap-[11px]">
+      <div class="relative flex shrink-0 items-center gap-[11px] max-[640px]:gap-2">
+        <div
+          :if={@items != []}
+          id="admin-topbar-items"
+          class="flex shrink-0 items-center gap-[11px] max-[640px]:hidden!"
+        >
           <div :for={item <- @items} id={dom_id("topbar-item", item.id)} class="flex items-center">
             <.live_component
               :if={item[:module]}
@@ -562,7 +594,7 @@ defmodule MishkaCmsCore.Layouts do
           phx-click={JS.dispatch("phx:set-theme")}
           data-phx-theme="dark"
           title={gettext("Switch to dark")}
-          class="flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:hidden"
+          class="flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:hidden max-[640px]:hidden!"
         >
           <.icon name="hero-moon" class="size-[17px]" />
         </button>
@@ -571,7 +603,7 @@ defmodule MishkaCmsCore.Layouts do
           phx-click={JS.dispatch("phx:set-theme")}
           data-phx-theme="light"
           title={gettext("Switch to light")}
-          class="hidden size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:flex"
+          class="hidden size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3] [[data-theme=dark]_&]:flex max-[640px]:hidden!"
         >
           <.icon name="hero-sun" class="size-[17px] text-[#c8931f]" />
         </button>
@@ -582,13 +614,16 @@ defmodule MishkaCmsCore.Layouts do
             id="topbar-bell"
             aria-label={gettext("What needs you")}
             phx-click={JS.toggle(to: "#topbar-notifs")}
-            class="relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]"
+            class={[
+              "relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]",
+              phone_button()
+            ]}
           >
             <.icon name="hero-bell" class="size-[17px]" />
             <span
               :if={@bell_count > 0}
               data-bell-count={@bell_count}
-              class="absolute -end-[5px] -top-[5px] flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-white bg-[#5b57d6] px-1 text-[9.5px] font-bold text-white"
+              class="absolute -end-[5px] -top-[5px] flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-white bg-[#5b57d6] px-1 text-[9.5px] font-bold text-white max-[640px]:end-[3px]! max-[640px]:top-[3px]! max-[640px]:h-4! max-[640px]:min-w-4! max-[640px]:border-0!"
             >
               {if @bell_count > 9, do: "9+", else: @bell_count}
             </span>
@@ -844,6 +879,11 @@ defmodule MishkaCmsCore.Layouts do
 
   defp opens(link),
     do: %{"href" => link, "data-phx-link" => "redirect", "data-phx-link-state" => "push"}
+
+  # The menu button and the bell on a phone: 44px, borderless, on the page's own grey.
+  defp phone_button,
+    do:
+      "max-[640px]:size-11! max-[640px]:rounded-[12px]! max-[640px]:border-0! max-[640px]:bg-[#f6f5f2]! max-[640px]:text-[#3a382f]!"
 
   defp need_dot(:error), do: "bg-[#d5544b]"
   defp need_dot(:warn), do: "bg-[#e0a23a]"

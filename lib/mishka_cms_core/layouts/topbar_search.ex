@@ -253,7 +253,7 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
       <div
         id={@id}
         phx-click-away={@open && JS.push("close", target: @myself)}
-        class="relative min-w-0 flex-1 max-w-[440px]"
+        class="relative min-w-0 flex-1 max-w-[440px] max-[640px]:hidden!"
       >
         <.icon
           name="hero-magnifying-glass"

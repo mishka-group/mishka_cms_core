@@ -31,7 +31,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
   It keeps `@topbar_items`, what extensions add to the top bar on the `"topbar:items"` event
   (`MishkaCmsCore.Layouts.TopbarItems`): collected when the page opens and again only when its path
   changes, so a patch that keeps the path, and every render, calls no plugin. `@topbar_site` is the
-  site the request resolved to, handed to those items.
+  site the request resolved to, handed to those items. `@topbar_section` is the page's heading on a
+  phone (`MishkaCmsCore.Sidebar.section/1`), read with them.
 
   It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
   (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
@@ -124,6 +125,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
       topbar_items: TopbarItems.collect(context),
       topbar_needs: TopbarNeeds.collect(context),
       topbar_site: site,
+      topbar_section: Sidebar.section(path),
       sidebar_counts: viewer_counts(socket)
     )
   end
