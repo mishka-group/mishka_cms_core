@@ -49,6 +49,13 @@ defmodule MishkaCmsCoreWeb.Test.TopbarSearchTest do
       search(view, "aurora")
       assert has_element?(view, "#{@box}-empty", "Nothing matches")
     end
+
+    test "the box keeps the core's placeholder", %{conn: conn, admin: admin} do
+      assert TopbarSearch.placeholder(context(admin)) == nil
+
+      view = open(conn, admin)
+      assert has_element?(view, "#{@box} input[placeholder='Search pages, posts, people…']")
+    end
   end
 
   describe "with a plugin answering" do
@@ -56,6 +63,20 @@ defmodule MishkaCmsCoreWeb.Test.TopbarSearchTest do
       register(TopbarSearchProbe)
       _ref = :telemetry_test.attach_event_handlers(self(), [TopbarSearchProbe.called()])
       :ok
+    end
+
+    test "a page the plugin is at home on gets its placeholder, another page the core's", %{
+      conn: conn,
+      admin: admin
+    } do
+      assert TopbarSearch.placeholder(context(admin)) == "Search the probe shop…"
+      assert TopbarSearch.placeholder(%{context(admin) | current_path: "/admin/dashboard"}) == nil
+
+      view = open(conn, admin)
+      assert has_element?(view, "#{@box} input[placeholder='Search the probe shop…']")
+
+      {:ok, home, _html} = live(build_conn_for(conn, admin), "/admin/dashboard")
+      assert has_element?(home, "#{@box} input[placeholder='Search pages, posts, people…']")
     end
 
     test "an empty query asks no plugin", %{admin: admin} do
@@ -164,15 +185,17 @@ defmodule MishkaCmsCoreWeb.Test.TopbarSearchTest do
   defp context(user),
     do: %{current_user: user, current_site: nil, current_path: @settings, view: nil}
 
+  defp build_conn_for(conn, user) do
+    conn
+    |> Map.put(:host, "localhost")
+    |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
+    |> Plug.Test.init_test_session(%{})
+    |> Plug.Conn.put_session(:master_mode, is_nil(user.site_id))
+    |> AshAuthentication.Plug.Helpers.store_in_session(user)
+  end
+
   defp open(conn, user) do
-    {:ok, view, _html} =
-      conn
-      |> Map.put(:host, "localhost")
-      |> Map.update!(:req_headers, &[{"host", "localhost"} | List.keydelete(&1, "host", 0)])
-      |> Plug.Test.init_test_session(%{})
-      |> Plug.Conn.put_session(:master_mode, is_nil(user.site_id))
-      |> AshAuthentication.Plug.Helpers.store_in_session(user)
-      |> live(@settings)
+    {:ok, view, _html} = conn |> build_conn_for(user) |> live(@settings)
 
     render_async(view)
     view

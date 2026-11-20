@@ -35,6 +35,14 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
 
   A group with no row, no `id` or no `label`, or an `id` already taken, is dropped.
 
+  ## The box's placeholder
+
+  The box says what it searches. When a page opens, and when its path changes, the plugins are
+  handed the same map with an empty `query` and `placeholder: nil`, and a plugin that is at home on
+  the page answers `%{data | placeholder: "Search products, orders, customers…"}`; the first
+  placeholder given is shown, and the core's own is shown when none is. A plugin that searches
+  skips an empty query, and a plugin that has no placeholder answers `data` as it was.
+
       defmodule MyShop.Search do
         use MishkaInstaller.Event.Hook, event: "topbar:search"
 
@@ -120,6 +128,20 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
     end
   end
 
+  @doc """
+  What the search box says it searches on the page of `context`, as the first plugin that has a
+  placeholder answers it. `nil` when none does, and the box keeps the core's words.
+  """
+  @spec placeholder(context()) :: String.t() | nil
+  def placeholder(%{current_user: _user} = context) do
+    payload = Map.merge(context, %{query: "", groups: [], placeholder: nil})
+
+    case MishkaInstaller.Event.Hook.call(@event, payload) do
+      %{placeholder: text} when is_binary(text) and text != "" -> text
+      _nothing -> nil
+    end
+  end
+
   defp ask(payload, user) do
     case MishkaInstaller.Event.Hook.call(@event, payload) do
       %{groups: groups} when is_list(groups) ->
@@ -184,7 +206,16 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
 
     @impl true
     def mount(socket) do
-      new_socket = assign(socket, query: "", groups: [], rows: [], active: nil, open: false)
+      new_socket =
+        assign(socket,
+          query: "",
+          groups: [],
+          rows: [],
+          active: nil,
+          open: false,
+          placeholder: nil
+        )
+
       {:ok, new_socket}
     end
 
@@ -278,7 +309,7 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
             aria-expanded={to_string(@open)}
             aria-controls={@id <> "-results"}
             aria-activedescendant={@open && is_integer(@active) && row_id(@id, @active)}
-            placeholder={gettext("Search pages, posts, people…")}
+            placeholder={@placeholder || gettext("Search pages, posts, people…")}
             class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea] focus:shadow-[0_0_0_3px_rgba(109,105,230,.16)]"
           />
         </form>

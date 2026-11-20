@@ -470,7 +470,8 @@ defmodule MishkaCmsCore.Layouts do
   language the dashboard is read in, and Sign out.
 
   The search box is `MishkaCmsCore.Layouts.TopbarSearch.Combo`, which lists what extensions find on
-  the `"topbar:search"` event (`MishkaCmsCore.Layouts.TopbarSearch`).
+  the `"topbar:search"` event (`MishkaCmsCore.Layouts.TopbarSearch`); `placeholder` is what an
+  extension says it searches on that page, `nil` for the core's own.
 
   `language` is the admin's language and `languages` the ones the menu offers
   (`MishkaCmsCore.Layouts.Nav` assigns both); picking one sends `PUT /admin/language` with
@@ -498,6 +499,7 @@ defmodule MishkaCmsCore.Layouts do
   attr :items, :list, default: []
   attr :needs, :list, default: []
   attr :section, :map, default: nil
+  attr :placeholder, :string, default: nil
   attr :notification_count, :integer, default: 0
   attr :notification_recent, :list, default: []
   attr :current_path, :string, default: nil
@@ -556,6 +558,7 @@ defmodule MishkaCmsCore.Layouts do
         current_user={@current_user}
         current_site={@current_site}
         current_path={@current_path}
+        placeholder={@placeholder}
         view={@view}
       />
 
