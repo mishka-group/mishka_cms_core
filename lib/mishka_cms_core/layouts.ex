@@ -752,6 +752,8 @@ defmodule MishkaCmsCore.Layouts do
         <div class="relative">
           <button
             type="button"
+            id="topbar-user-button"
+            aria-haspopup="menu"
             phx-click={JS.toggle(to: "#topbar-user")}
             class="flex items-center gap-2.5 rounded-[30px] border border-[#ecebe6] bg-white py-1 ps-1 pe-3 hover:bg-[#f7f6f3]"
           >
@@ -764,7 +766,6 @@ defmodule MishkaCmsCore.Layouts do
             >
               {user_email(@current_user)}
             </span>
-            <.icon name="hero-chevron-down" class="size-[14px] text-[#a8a5a0]" />
           </button>
           <div
             id="topbar-user"
