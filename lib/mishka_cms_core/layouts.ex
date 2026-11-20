@@ -30,6 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
+  alias MishkaCmsCore.Layouts.TopbarNeeds
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -477,11 +478,16 @@ defmodule MishkaCmsCore.Layouts do
   (`MishkaCmsCore.Layouts.TopbarItems`). They are drawn in order at the right, before the theme
   toggle, in `#admin-topbar-items`, each with `current_user`, `current_site`, `current_path` and `view`; with
   none, the slot is not drawn. `current_site` and `view` are for these items only.
+
+  `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
+  listed above the notifications, each opening its link. The bell's badge adds their counts to
+  `notification_count`, the unread notifications.
   """
   attr :current_user, :any, default: nil
   attr :current_site, :any, default: nil
   attr :view, :atom, default: nil
   attr :items, :list, default: []
+  attr :needs, :list, default: []
   attr :notification_count, :integer, default: 0
   attr :notification_recent, :list, default: []
   attr :current_path, :string, default: nil
@@ -491,7 +497,13 @@ defmodule MishkaCmsCore.Layouts do
 
   def topbar(assigns) do
     {shown, more} = split_languages(assigns.languages, assigns.language)
-    assigns = assign(assigns, shown_languages: shown, more_languages: more)
+
+    assigns =
+      assign(assigns,
+        shown_languages: shown,
+        more_languages: more,
+        bell_count: assigns.notification_count + TopbarNeeds.total(assigns.needs)
+      )
 
     ~H"""
     <header class="relative z-40 flex h-[66px] flex-none items-center gap-4 border-b border-[#ecebe6] bg-white/80 px-7 backdrop-blur-[10px] max-[560px]:gap-2.5! max-[560px]:px-[14px]!">
@@ -567,22 +579,32 @@ defmodule MishkaCmsCore.Layouts do
         <div>
           <button
             type="button"
+            id="topbar-bell"
+            aria-label={gettext("What needs you")}
             phx-click={JS.toggle(to: "#topbar-notifs")}
             class="relative flex size-[39px] items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] hover:bg-[#f7f6f3]"
           >
             <.icon name="hero-bell" class="size-[17px]" />
             <span
-              :if={@notification_count > 0}
+              :if={@bell_count > 0}
+              data-bell-count={@bell_count}
               class="absolute -end-[5px] -top-[5px] flex h-[17px] min-w-[17px] items-center justify-center rounded-full border-2 border-white bg-[#5b57d6] px-1 text-[9.5px] font-bold text-white"
             >
-              {if @notification_count > 9, do: "9+", else: @notification_count}
+              {if @bell_count > 9, do: "9+", else: @bell_count}
             </span>
           </button>
           <div
             id="topbar-notifs"
             phx-click-away={JS.hide(to: "#topbar-notifs")}
-            class="absolute end-0 top-[52px] z-[60] hidden w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_18px_44px_rgba(30,28,24,0.16)]"
+            class="absolute end-0 top-[52px] z-[60] hidden w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_18px_44px_rgba(30,28,24,0.16)]"
           >
+            <div :if={@needs != []} id="topbar-needs" class="border-b border-[#f0efea] p-2">
+              <div class="px-2 pb-1.5 pt-1.5 font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
+                {gettext("What needs you")}
+              </div>
+              <.need_row :for={need <- @needs} need={need} />
+            </div>
+
             <div class="flex items-center justify-between gap-2 border-b border-[#f0efea] px-4 py-[15px]">
               <span class="font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
                 {gettext("Notifications")}
@@ -783,6 +805,50 @@ defmodule MishkaCmsCore.Layouts do
     </header>
     """
   end
+
+  attr :need, :map, required: true
+
+  # A row with a link navigates live, as `<.link navigate>` does; a row without one is not a link.
+  defp need_row(assigns) do
+    assigns = assign(assigns, :opens, opens(assigns.need.link))
+
+    ~H"""
+    <.dynamic_tag
+      tag_name={(@need.link && "a") || "div"}
+      id={dom_id("topbar-need", @need.id)}
+      data-tone={@need.tone}
+      {@opens}
+      class={[
+        "flex items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-start",
+        @need.link && "hover:bg-[#faf9f6]"
+      ]}
+    >
+      <span class={["mt-[5px] size-2 shrink-0 rounded-full", need_dot(@need.tone)]}></span>
+      <span class="min-w-0 flex-1">
+        <span class="block text-[12.5px] font-bold text-[#17161a]">{@need.title}</span>
+        <span :if={@need.detail} class="block text-[11px] font-medium text-[#6f6d68]">
+          {@need.detail}
+        </span>
+      </span>
+      <span class={[
+        "shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-bold leading-[16px]",
+        notif_chip_class(@need.tone)
+      ]}>
+        {@need.count}
+      </span>
+    </.dynamic_tag>
+    """
+  end
+
+  defp opens(nil), do: %{}
+
+  defp opens(link),
+    do: %{"href" => link, "data-phx-link" => "redirect", "data-phx-link-state" => "push"}
+
+  defp need_dot(:error), do: "bg-[#d5544b]"
+  defp need_dot(:warn), do: "bg-[#e0a23a]"
+  defp need_dot(:success), do: "bg-[#1f9d6b]"
+  defp need_dot(_info), do: "bg-[#5b57d6]"
 
   @first_year 2026
   @default_credit %{name: "Mishka CMS", url: "https://mishka.tools/cms"}

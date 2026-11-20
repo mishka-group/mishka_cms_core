@@ -152,6 +152,27 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
     end
   end
 
+  @doc """
+  How many jobs `viewer` may see that failed and wait to be tried again or were given up on
+  (`retryable` and `discarded`): every site's for a master, their own site's for a site user, and 0
+  for no viewer. One count query; the top bar's bell shows it as the core's own item
+  (`MishkaCmsCore.Layouts.TopbarNeeds`).
+  """
+  @spec failed_count(map() | nil) :: non_neg_integer()
+  def failed_count(viewer) do
+    case Helpers.reach(viewer) do
+      :nothing ->
+        0
+
+      reach ->
+        query =
+          from(j in Oban.Job, where: j.state in ["retryable", "discarded"], select: count())
+          |> filter_site(site_of(reach))
+
+        Oban.Repo.one(Oban.config(), query) || 0
+    end
+  end
+
   defp fetch(site_id, scope, limit) do
     base =
       from j in Oban.Job,

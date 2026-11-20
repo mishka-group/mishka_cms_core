@@ -6,8 +6,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   @moduledoc """
   `on_mount` hook that records, for the admin chrome in `MishkaCmsCore.Layouts`: the current request
   path as `@current_path` (so the sidebar highlights the active item — updates on live navigation
-  too), `@notification_count` (failed/retrying runtime jobs, shown as the topbar bell badge), and
-  `@current_user` with its `:permissions` loaded. Attached to every admin page via
+  too) and `@current_user` with its `:permissions` loaded. Attached to every admin page via
   `MishkaCmsCore.ExtensionLiveView`.
 
   It also puts the page in the language its admin reads the dashboard in —
@@ -34,22 +33,29 @@ defmodule MishkaCmsCore.Layouts.Nav do
   changes, so a patch that keeps the path, and every render, calls no plugin. `@topbar_site` is the
   site the request resolved to, handed to those items.
 
+  It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
+  (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
+  extension calls `TopbarNeeds.changed/1` for the viewer's site. The changes that arrive together
+  are collected once, and each collection emits `[:mishka_cms, :topbar_needs, :refreshed]` from the
+  page's own process. The bell's unread notifications are `MishkaCmsCore.Notify.LiveHooks`'s.
+
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
   which loads an unloaded actor — so without this the chrome would issue a query on every render.
   """
   import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
   import Phoenix.Component, only: [assign: 2, assign: 3]
-  import Ecto.Query
 
-  alias MishkaCmsCore.Layouts.TopbarItems
+  alias MishkaCmsCore.Layouts.{TopbarItems, TopbarNeeds}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
   alias MishkaCmsCore.Sidebar.Counts
 
   @sidebar_refresh_ms 50
+  @needs_refresh_ms 50
   @redrawn [:mishka_cms, :sidebar, :redrawn]
+  @needs_refreshed [:mishka_cms, :topbar_needs, :refreshed]
 
   def on_mount(:default, _params, session, socket) do
     language = Languages.admin(session)
@@ -70,7 +76,6 @@ defmodule MishkaCmsCore.Layouts.Nav do
       # field to a form silently gives you a plain textarea and no clue why. `content_editor` does
       # the same for the rich-text editor's bundle, which `assets/js/pb_content_editor.js` reads.
       |> assign(
-        notification_count: notification_count(),
         admin_css: true,
         admin_fonts: true,
         code_editor: true,
@@ -99,28 +104,73 @@ defmodule MishkaCmsCore.Layouts.Nav do
      |> attach_hook(:current_path, :handle_params, fn _params, uri, socket ->
        {:cont, at_path(socket, URI.parse(uri).path, site)}
      end)
-     |> follow_sidebar()}
+     |> follow_sidebar()
+     |> follow_needs()}
   end
 
   defp at_path(%{assigns: %{current_path: path, topbar_items: _items}} = socket, path, _site),
     do: socket
 
   defp at_path(socket, path, site) do
-    items =
-      TopbarItems.collect(%{
-        current_user: socket.assigns[:current_user],
-        current_site: site,
-        current_path: path,
-        view: socket.view
-      })
+    context = %{
+      current_user: socket.assigns[:current_user],
+      current_site: site,
+      current_path: path,
+      view: socket.view
+    }
 
     assign(socket,
       current_path: path,
-      topbar_items: items,
+      topbar_items: TopbarItems.collect(context),
+      topbar_needs: TopbarNeeds.collect(context),
       topbar_site: site,
       sidebar_counts: viewer_counts(socket)
     )
   end
+
+  defp follow_needs(socket) do
+    if connected?(socket) do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, TopbarNeeds.topic())
+      attach_hook(socket, :topbar_needs, :handle_info, &needs_message/2)
+    else
+      socket
+    end
+  end
+
+  defp needs_message({:topbar_needs_changed, site_id}, socket) do
+    cond do
+      not TopbarNeeds.concerns?(socket.assigns[:current_user], site_id) ->
+        {:halt, socket}
+
+      socket.private[:needs_refresh_pending] ->
+        {:halt, socket}
+
+      true ->
+        Process.send_after(self(), :topbar_needs_refresh, @needs_refresh_ms)
+        {:halt, put_private(socket, :needs_refresh_pending, true)}
+    end
+  end
+
+  defp needs_message(:topbar_needs_refresh, socket) do
+    needs =
+      TopbarNeeds.collect(%{
+        current_user: socket.assigns[:current_user],
+        current_site: socket.assigns[:topbar_site],
+        current_path: socket.assigns[:current_path],
+        view: socket.view
+      })
+
+    :telemetry.execute(@needs_refreshed, %{total: TopbarNeeds.total(needs)}, %{view: socket.view})
+
+    new_socket =
+      socket
+      |> put_private(:needs_refresh_pending, false)
+      |> assign(:topbar_needs, needs)
+
+    {:halt, new_socket}
+  end
+
+  defp needs_message(_message, socket), do: {:cont, socket}
 
   # The numbers of the viewer's own site. Read when the path changes, after every `on_mount` of the
   # page has run, so a page that scopes its user to a site (an extension's) is read as that site.
@@ -176,10 +226,5 @@ defmodule MishkaCmsCore.Layouts.Nav do
     if Ash.Resource.loaded?(user, :permissions),
       do: user,
       else: Ash.load!(user, [permissions: [:name]], actor: user)
-  end
-
-  defp notification_count do
-    query = from(j in Oban.Job, where: j.state in ["retryable", "discarded"], select: count())
-    Oban.Repo.one(Oban.config(), query) || 0
   end
 end
