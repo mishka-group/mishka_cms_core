@@ -144,6 +144,10 @@ defmodule MishkaCmsCore.Layouts do
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
   beside entries (`MishkaCmsCore.Sidebar.Counts`).
 
+  While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
+  arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
+  filled for the open page and the rows above it.
+
   A group and a branch fold with `Phoenix.LiveView.JS`; the `SidebarScroll` hook keeps what was
   folded by hand. The branch of the open page is open, and so is the group holding it. Under 980px
   the menu is drawn as one level at a time instead, each level a list `JS` shows or hides, starting
@@ -324,11 +328,15 @@ defmodule MishkaCmsCore.Layouts do
   attr :nested, :boolean, default: false
 
   defp nav_link(assigns) do
-    assigns = assign(assigns, :panel, dom_id("sbi", assigns.item.key))
+    assigns =
+      assign(assigns,
+        panel: dom_id("sbi", assigns.item.key),
+        lit: lit?(mark(assigns.item, assigns.trail), assigns.nested)
+      )
 
     ~H"""
     <div :if={@item.children != []}>
-      <div class="flex items-center gap-0.5">
+      <div class={["flex items-center gap-0.5 rounded-[10px]", @lit && "bg-[#f2f1fc]"]}>
         <.entry_link item={@item} trail={@trail} counts={@counts} nested={@nested} />
         <button
           type="button"
@@ -337,7 +345,10 @@ defmodule MishkaCmsCore.Layouts do
           aria-expanded={to_string(@item.key in @trail)}
           aria-label={gettext("Show or hide the entries under %{label}", label: label(@item.label))}
           phx-click={fold(@panel)}
-          class="group flex size-[30px] shrink-0 items-center justify-center rounded-[8px] text-[#a8a5a0] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
+          class={[
+            "group flex size-[30px] shrink-0 items-center justify-center rounded-[8px] hover:bg-[#f6f5f2] hover:text-[#1b1a18]",
+            (@lit && "text-[#4f4bcc]") || "text-[#a8a5a0]"
+          ]}
         >
           <.icon
             name="hero-chevron-down"
@@ -372,7 +383,8 @@ defmodule MishkaCmsCore.Layouts do
   attr :class, :string, default: "py-[9px] text-[13px] max-[980px]:min-h-12"
 
   defp entry_link(assigns) do
-    assigns = assign(assigns, mark: mark(assigns.item, assigns.trail))
+    mark = mark(assigns.item, assigns.trail)
+    assigns = assign(assigns, mark: mark, lit: lit?(mark, assigns.nested))
 
     ~H"""
     <.link
@@ -381,8 +393,8 @@ defmodule MishkaCmsCore.Layouts do
       class={[
         "flex min-w-0 flex-1 items-center gap-3 rounded-[10px] px-[10px] transition-colors",
         @class,
-        @mark == "page" && "bg-[#f2f1fc] font-bold text-[#4f4bcc]",
-        @mark == "true" && "font-bold text-[#1b1a18] hover:bg-[#f6f5f2]",
+        @lit && "bg-[#f2f1fc] font-bold text-[#4f4bcc]",
+        @mark == "true" && @nested && "font-bold text-[#1b1a18] hover:bg-[#f6f5f2]",
         !@mark && "font-semibold text-[#5c5a54] hover:bg-[#f6f5f2] hover:text-[#1b1a18]"
       ]}
     >
@@ -390,12 +402,19 @@ defmodule MishkaCmsCore.Layouts do
         :if={!@nested}
         class={[
           "flex size-[26px] shrink-0 items-center justify-center rounded-[8px]",
-          @mark == "page" && "bg-[#e4e2f7] text-[#5b57d6]",
-          @mark == "true" && "text-[#5b57d6]"
+          @lit && "bg-[#e4e2f7] text-[#5b57d6]"
         ]}
       >
         <.icon name={@item.icon} class="size-4" />
       </span>
+      <span
+        :if={@nested}
+        data-dot
+        class={[
+          "size-[5px] shrink-0 rounded-full",
+          (@mark && "bg-[#5b57d6]") || "bg-[#cfcdc6]"
+        ]}
+      ></span>
       <span class="min-w-0 flex-1 truncate">{label(@item.label)}</span>
       <.count_chip key={@item.key} count={@counts[@item.key]} />
     </.link>
@@ -888,6 +907,12 @@ defmodule MishkaCmsCore.Layouts do
       true -> nil
     end
   end
+
+  # The row drawn in the open page's colours: the entry of the page, and the top row holding it, as
+  # the design highlights the parent while one of its children is open.
+  defp lit?("page", _nested), do: true
+  defp lit?("true", false), do: true
+  defp lit?(_mark, _nested), do: false
 
   defp fold(id) do
     JS.toggle_class("hidden", to: "#" <> id)
