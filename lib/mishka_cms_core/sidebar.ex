@@ -94,7 +94,9 @@ defmodule MishkaCmsCore.Sidebar do
 
   An entry may show a number beside its label. The extension supplies it with
   `MishkaCmsCore.Sidebar.Counts.put/3`, from wherever its data changes, and open pages update the
-  chip without a reload. It is kept in memory, so drawing it costs no query; zero hides it.
+  chip without a reload. It is kept in memory, so drawing it costs no query; zero hides it. A number
+  that belongs to a site is put with that site (`Counts.put/4`) and each viewer reads their own
+  site's, a master the sum.
 
   ## A bar at the bottom of a narrow screen
 

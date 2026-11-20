@@ -367,6 +367,58 @@ defmodule MishkaCmsCoreWeb.Test.SidebarRealtimeTest do
     end
   end
 
+  describe "a count that belongs to a site" do
+    setup do
+      {:ok, _} =
+        Event.write(%{
+          name: NestedMenu,
+          event: "sidebar:menus",
+          extension: :mishka_installer,
+          status: :started
+        })
+
+      :ok = EventHandler.do_compile("sidebar:menus", :start, false)
+      on_exit(fn -> Event.unregister(:name, NestedMenu, false) end)
+      Settings.load_definitions()
+      :ok
+    end
+
+    @site_chip "#admin-sidebar-tree [data-count='nested.inbox']"
+
+    defp chip(view) do
+      :sys.get_state(Counts)
+
+      view
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.query(@site_chip)
+      |> LazyHTML.text()
+      |> String.trim()
+    end
+
+    test "an admin of a site is shown that site's number and a master the sum", %{
+      site: site,
+      other: other
+    } do
+      on_exit(fn ->
+        Counts.put("nested.inbox", 0, :plain, site.id)
+        Counts.put("nested.inbox", 0, :plain, other.id)
+      end)
+
+      Counts.put("nested.inbox", 3, :plain, site.id)
+      Counts.put("nested.inbox", 8, :plain, other.id)
+      :sys.get_state(Counts)
+
+      mine = open("localhost", "mine@example.com", site.id, @other_page)
+      theirs = open("other.test", "theirs@example.com", other.id, @other_page)
+      master = open("localhost", "master@example.com", nil, @other_page)
+
+      assert chip(mine) == "3"
+      assert chip(theirs) == "8"
+      assert chip(master) == "11"
+    end
+  end
+
   describe "queries of an admin page" do
     # Every query the request and the page it mounts run, counted by the repo's own telemetry.
     defp queries(fun) do

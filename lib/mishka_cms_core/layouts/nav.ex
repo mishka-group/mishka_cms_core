@@ -25,8 +25,9 @@ defmodule MishkaCmsCore.Layouts.Nav do
   with the new `version` as its measurement and the page's `view` as its metadata, so whatever asks
   the page after that event is answered with the redrawn sidebar.
 
-  It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`): read from
-  memory when the page mounts, then changed by each count the page hears.
+  It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`) for the
+  viewer's site (`Counts.for_viewer/1`, a master with no site reads the sum): read from memory when
+  the page opens, then read again on each count the page hears.
 
   It keeps `@topbar_items`, what extensions add to the top bar on the `"topbar:items"` event
   (`MishkaCmsCore.Layouts.TopbarItems`): collected when the page opens and again only when its path
@@ -113,11 +114,23 @@ defmodule MishkaCmsCore.Layouts.Nav do
         view: socket.view
       })
 
-    assign(socket, current_path: path, topbar_items: items, topbar_site: site)
+    assign(socket,
+      current_path: path,
+      topbar_items: items,
+      topbar_site: site,
+      sidebar_counts: viewer_counts(socket)
+    )
   end
 
+  # The numbers of the viewer's own site. Read when the path changes, after every `on_mount` of the
+  # page has run, so a page that scopes its user to a site (an extension's) is read as that site.
+  defp viewer_counts(socket), do: Counts.for_viewer(site_of(socket.assigns[:current_user]))
+
+  defp site_of(%{site_id: site_id}) when is_binary(site_id), do: site_id
+  defp site_of(_user), do: nil
+
   defp follow_sidebar(socket) do
-    socket = assign(socket, sidebar_version: 0, sidebar_counts: Counts.all())
+    socket = assign(socket, sidebar_version: 0, sidebar_counts: viewer_counts(socket))
 
     if connected?(socket) do
       Sidebar.subscribe(socket.assigns[:current_user])
@@ -147,9 +160,9 @@ defmodule MishkaCmsCore.Layouts.Nav do
      |> assign(:sidebar_version, version)}
   end
 
-  defp sidebar_message({:sidebar_count, key, number, tone}, socket) do
-    {:halt,
-     assign(socket, :sidebar_counts, Map.put(socket.assigns.sidebar_counts, key, {number, tone}))}
+  defp sidebar_message(message, socket)
+       when elem(message, 0) == :sidebar_count and tuple_size(message) in [4, 5] do
+    {:halt, assign(socket, :sidebar_counts, viewer_counts(socket))}
   end
 
   defp sidebar_message(_message, socket), do: {:cont, socket}
