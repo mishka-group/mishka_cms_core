@@ -453,8 +453,16 @@ defmodule MishkaCmsCore.Layouts do
   (`MishkaCmsCore.Layouts.Nav` assigns both); picking one sends `PUT /admin/language` with
   `current_path` to come back to. Two are listed, the admin's own among them, and the rest behind
   "Show more".
+
+  `items` is `@topbar_items`, what extensions add on the `"topbar:items"` event
+  (`MishkaCmsCore.Layouts.TopbarItems`). They are drawn in order after the search box, in
+  `#admin-topbar-items`, each with `current_user`, `current_site`, `current_path` and `view`; with
+  none, the slot is not drawn. `current_site` and `view` are for these items only.
   """
   attr :current_user, :any, default: nil
+  attr :current_site, :any, default: nil
+  attr :view, :atom, default: nil
+  attr :items, :list, default: []
   attr :notification_count, :integer, default: 0
   attr :notification_recent, :list, default: []
   attr :current_path, :string, default: nil
@@ -490,6 +498,29 @@ defmodule MishkaCmsCore.Layouts do
           placeholder={gettext("Search pages, posts, people…")}
           class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none"
         />
+      </div>
+
+      <div :if={@items != []} id="admin-topbar-items" class="flex shrink-0 items-center gap-[11px]">
+        <div :for={item <- @items} id={dom_id("topbar-item", item.id)} class="flex items-center">
+          <.live_component
+            :if={item[:module]}
+            module={item.module}
+            id={item.id}
+            current_user={@current_user}
+            current_site={@current_site}
+            current_path={@current_path}
+            view={@view}
+          />
+          {if render = item[:render],
+            do:
+              render.(%{
+                id: item.id,
+                current_user: @current_user,
+                current_site: @current_site,
+                current_path: @current_path,
+                view: @view
+              })}
+        </div>
       </div>
 
       <div class="flex-1"></div>

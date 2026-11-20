@@ -28,6 +28,11 @@ defmodule MishkaCmsCore.Layouts.Nav do
   It keeps `@sidebar_counts`, the numbers entries show (`MishkaCmsCore.Sidebar.Counts`): read from
   memory when the page mounts, then changed by each count the page hears.
 
+  It keeps `@topbar_items`, what extensions add to the top bar on the `"topbar:items"` event
+  (`MishkaCmsCore.Layouts.TopbarItems`): collected when the page opens and again only when its path
+  changes, so a patch that keeps the path, and every render, calls no plugin. `@topbar_site` is the
+  site the request resolved to, handed to those items.
+
   Loading the permissions here rather than where they are used matters: `MishkaCmsCore.Sidebar` asks
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
   which loads an unloaded actor — so without this the chrome would issue a query on every render.
@@ -36,6 +41,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   import Phoenix.Component, only: [assign: 2, assign: 3]
   import Ecto.Query
 
+  alias MishkaCmsCore.Layouts.TopbarItems
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
@@ -85,12 +91,29 @@ defmodule MishkaCmsCore.Layouts.Nav do
         footer_credit: Sidebar.credit(socket.view)
       )
 
+    site = session["current_site"]
+
     {:cont,
      socket
      |> attach_hook(:current_path, :handle_params, fn _params, uri, socket ->
-       {:cont, assign(socket, :current_path, URI.parse(uri).path)}
+       {:cont, at_path(socket, URI.parse(uri).path, site)}
      end)
      |> follow_sidebar()}
+  end
+
+  defp at_path(%{assigns: %{current_path: path, topbar_items: _items}} = socket, path, _site),
+    do: socket
+
+  defp at_path(socket, path, site) do
+    items =
+      TopbarItems.collect(%{
+        current_user: socket.assigns[:current_user],
+        current_site: site,
+        current_path: path,
+        view: socket.view
+      })
+
+    assign(socket, current_path: path, topbar_items: items, topbar_site: site)
   end
 
   defp follow_sidebar(socket) do

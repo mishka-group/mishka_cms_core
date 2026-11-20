@@ -30,6 +30,9 @@ SPDX-License-Identifier: Apache-2.0
       language={assigns[:admin_language] || "en"}
       languages={assigns[:admin_languages] || []}
       sign_out={assigns[:sign_out_path] || "/auth/sign-out"}
+      items={assigns[:topbar_items] || []}
+      current_site={assigns[:topbar_site]}
+      view={assigns[:socket] && assigns[:socket].view}
     />
 
     <main class="flex-1 scroll-smooth overflow-y-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
