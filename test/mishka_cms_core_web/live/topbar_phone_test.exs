@@ -76,11 +76,14 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
       assert text(html, "#admin-phone-section [data-role=title]") == "MishkaCMS"
     end
 
-    test "leaves out the search box, the extensions' items and the theme toggle" do
+    test "draws the search as a 44 px icon, and leaves out the box, the extensions' items and the theme toggle" do
       item = %{id: "probe", priority: 1, render: fn _assigns -> "probe" end}
       html = topbar(section: %{eyebrow: nil, title: "Home"}, items: [item])
 
-      assert classes(html, "#admin-topbar-search") =~ "#{@phone}:hidden!"
+      assert classes(html, "#admin-topbar-search-box") =~ "#{@phone}:hidden!"
+
+      assert classes(html, "#admin-topbar-search-phone") =~ "#{@phone}:flex!"
+      assert classes(html, "#admin-topbar-search-phone") =~ "size-11"
       assert classes(html, "#admin-topbar-items") =~ "#{@phone}:hidden!"
 
       for theme <- ~w(dark light) do

@@ -195,6 +195,10 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
     and a click outside close the list, and a click on a row opens it. Everything is
     `Phoenix.LiveView.JS` and LiveView bindings: the arrow keys are window key bindings drawn only
     while the list is open, so a key pressed while it is closed sends nothing.
+
+    Below 640 px the box is a 44 px search icon (`<id>-phone`) that opens a sheet over the whole
+    screen (`<id>-sheet`) with its own input focused and the same groups listed under it, each row at
+    least 44 px tall; its back arrow and Escape close it.
     """
     use Phoenix.LiveComponent
     use Gettext, backend: MishkaCmsCore.Gettext
@@ -284,81 +288,108 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
       <div
         id={@id}
         phx-click-away={@open && JS.push("close", target: @myself)}
-        class="relative min-w-0 flex-1 max-w-[440px] max-[640px]:hidden!"
+        class="relative min-w-0 flex-1 max-w-[440px] max-[640px]:max-w-none max-[640px]:flex-none"
       >
-        <.icon
-          name="hero-magnifying-glass"
-          class="absolute start-[13px] top-1/2 size-4 -translate-y-1/2 text-[#a8a5a0]"
-        />
-        <form
-          id={@id <> "-form"}
-          role="search"
-          autocomplete="off"
-          phx-change="search"
-          phx-submit="open"
-          phx-target={@myself}
-        >
-          <input
-            type="text"
-            name="q"
-            value={@query}
-            phx-debounce="250"
-            role="combobox"
-            aria-label={gettext("Search")}
-            aria-autocomplete="list"
-            aria-expanded={to_string(@open)}
-            aria-controls={@id <> "-results"}
-            aria-activedescendant={@open && is_integer(@active) && row_id(@id, @active)}
-            placeholder={@placeholder || gettext("Search pages, posts, people…")}
-            class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea] focus:shadow-[0_0_0_3px_rgba(109,105,230,.16)]"
+        <div id={@id <> "-box"} class="relative max-[640px]:hidden!">
+          <.icon
+            name="hero-magnifying-glass"
+            class="absolute start-[13px] top-1/2 size-4 -translate-y-1/2 text-[#a8a5a0]"
           />
-        </form>
+          <form
+            id={@id <> "-form"}
+            role="search"
+            autocomplete="off"
+            phx-change="search"
+            phx-submit="open"
+            phx-target={@myself}
+          >
+            <input
+              type="text"
+              name="q"
+              value={@query}
+              phx-debounce="250"
+              role="combobox"
+              aria-label={gettext("Search")}
+              aria-autocomplete="list"
+              aria-expanded={to_string(@open)}
+              aria-controls={@id <> "-results"}
+              aria-activedescendant={@open && is_integer(@active) && row_id(@id, @active)}
+              placeholder={@placeholder || gettext("Search pages, posts, people…")}
+              class="h-[39px] w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] ps-[38px] pe-[14px] text-[13px] font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea] focus:shadow-[0_0_0_3px_rgba(109,105,230,.16)]"
+            />
+          </form>
+
+          <div
+            :if={@open}
+            id={@id <> "-results"}
+            role="listbox"
+            class="absolute start-0 top-[46px] z-[60] max-h-[70vh] w-[420px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-[14px] border border-[#ecebe6] bg-white p-2 shadow-[0_14px_34px_rgba(30,28,24,0.14)]"
+          >
+            <.results id={@id} numbered={@numbered} groups={@groups} query={@query} active={@active} />
+          </div>
+        </div>
+
+        <button
+          type="button"
+          id={@id <> "-phone"}
+          aria-label={gettext("Search")}
+          aria-controls={@id <> "-sheet"}
+          phx-click={open_sheet(@id)}
+          class="hidden size-11 items-center justify-center rounded-[11px] border border-[#ecebe6] bg-white text-[#5c5a54] max-[640px]:flex!"
+        >
+          <.icon name="hero-magnifying-glass" class="size-[18px]" />
+        </button>
 
         <div
-          :if={@open}
-          id={@id <> "-results"}
-          role="listbox"
-          class="absolute start-0 top-[46px] z-[60] max-h-[70vh] w-[420px] max-w-[calc(100vw-2rem)] overflow-y-auto rounded-[14px] border border-[#ecebe6] bg-white p-2 shadow-[0_14px_34px_rgba(30,28,24,0.14)]"
+          id={@id <> "-sheet"}
+          role="dialog"
+          aria-modal="true"
+          aria-label={gettext("Search")}
+          phx-window-keydown={close_sheet(@id, @myself)}
+          phx-key="Escape"
+          class="fixed inset-0 z-[95] hidden flex-col bg-white"
         >
-          <div
-            :for={{group, rows} <- @numbered}
-            id={@id <> "-group-" <> group.id}
-            role="group"
-            aria-label={group.label}
-          >
-            <div class="px-2.5 pb-1 pt-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
-              {group.label}
-            </div>
-            <.link
-              :for={{row, index} <- rows}
-              id={row_id(@id, index)}
-              navigate={row.link}
-              role="option"
-              aria-selected={to_string(index == @active)}
-              class={[
-                "flex items-center gap-[11px] rounded-[10px] px-2.5 py-2 hover:bg-[#faf9f6]",
-                index == @active && "bg-[#f6f5f2]"
-              ]}
+          <div class="flex items-center gap-2 border-b border-[#ecebe6] px-3 py-2.5">
+            <button
+              type="button"
+              id={@id <> "-sheet-close"}
+              aria-label={gettext("Close the search")}
+              phx-click={close_sheet(@id, @myself)}
+              class="flex size-11 shrink-0 items-center justify-center rounded-[11px] text-[#5c5a54]"
             >
-              <span class="flex size-[30px] shrink-0 items-center justify-center rounded-[9px] bg-[#f2f1fc] text-[#4f4bcc]">
-                <.icon name={row.icon} class="size-[15px]" />
-              </span>
-              <span class="min-w-0 flex-1">
-                <span class="block truncate text-[12.5px] font-bold text-[#17161a]">{row.title}</span>
-                <span :if={row.detail} class="block truncate text-[11px] font-medium text-[#6f6d68]">
-                  {row.detail}
-                </span>
-              </span>
-            </.link>
+              <.icon name="hero-arrow-left" class="size-5" />
+            </button>
+            <form
+              id={@id <> "-sheet-form"}
+              role="search"
+              autocomplete="off"
+              phx-change="search"
+              phx-submit="open"
+              phx-target={@myself}
+              class="min-w-0 flex-1"
+            >
+              <input
+                type="search"
+                id={@id <> "-sheet-input"}
+                name="q"
+                value={@query}
+                phx-debounce="250"
+                aria-label={gettext("Search")}
+                placeholder={@placeholder || gettext("Search pages, posts, people…")}
+                class="h-11 w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] px-[14px] text-base font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea]"
+              />
+            </form>
           </div>
-
-          <div :if={@groups == []} id={@id <> "-empty"} class="px-3 py-4 text-center">
-            <div class="text-[12.5px] font-bold text-[#17161a]">
-              {gettext("Nothing matches “%{query}”", query: String.trim(@query))}
-            </div>
-            <div class="mt-[3px] text-[11.5px] font-medium text-[#6f6d68]">
-              {gettext("Try another word.")}
-            </div>
+          <div id={@id <> "-sheet-results"} role="listbox" class="flex-1 overflow-y-auto p-2">
+            <.results
+              :if={String.trim(@query) != ""}
+              id={@id <> "-sheet"}
+              numbered={@numbered}
+              groups={@groups}
+              query={@query}
+              active={nil}
+              tall
+            />
           </div>
         </div>
 
@@ -383,6 +414,73 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
           phx-window-keydown={JS.push("close", target: @myself)}
           phx-key="Escape"
         ></span>
+      </div>
+      """
+    end
+
+    # The phone's search: a sheet over the whole screen with its input focused, closed by its back
+    # arrow or Escape. `Phoenix.LiveView.JS` only.
+    defp open_sheet(id) do
+      JS.show(to: "#" <> id <> "-sheet", display: "flex")
+      |> JS.focus(to: "#" <> id <> "-sheet-input")
+    end
+
+    defp close_sheet(id, myself) do
+      JS.hide(to: "#" <> id <> "-sheet")
+      |> JS.push("close", target: myself)
+    end
+
+    attr :id, :string, required: true
+    attr :numbered, :list, required: true
+    attr :groups, :list, required: true
+    attr :query, :string, required: true
+    attr :active, :any, default: nil
+    attr :tall, :boolean, default: false
+
+    # The found groups and their rows (the box's list and the phone's sheet draw the same), or the
+    # sentence that nothing matched. `tall` makes each row at least 44 px, for a finger.
+    defp results(assigns) do
+      ~H"""
+      <div
+        :for={{group, rows} <- @numbered}
+        id={@id <> "-group-" <> group.id}
+        role="group"
+        aria-label={group.label}
+      >
+        <div class="px-2.5 pb-1 pt-2 text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
+          {group.label}
+        </div>
+        <.link
+          :for={{row, index} <- rows}
+          id={row_id(@id, index)}
+          navigate={row.link}
+          role="option"
+          aria-selected={to_string(index == @active)}
+          class={[
+            "flex items-center gap-[11px] rounded-[10px] px-2.5 py-2 hover:bg-[#faf9f6]",
+            @tall && "min-h-11",
+            index == @active && "bg-[#f6f5f2]"
+          ]}
+        >
+          <span class="flex size-[30px] shrink-0 items-center justify-center rounded-[9px] bg-[#f2f1fc] text-[#4f4bcc]">
+            <.icon name={row.icon} class="size-[15px]" />
+          </span>
+          <span class="min-w-0 flex-1">
+            <span class="block truncate text-[12.5px] font-bold text-[#17161a]">{row.title}</span>
+            <span :if={row.detail} class="block truncate text-[11px] font-medium text-[#6f6d68]">
+              {row.detail}
+            </span>
+          </span>
+        </.link>
+      </div>
+
+      <div :if={@groups == []} id={@id <> "-empty"} class="px-3 py-4 text-center">
+        <div class="text-[12.5px] font-bold text-[#17161a]">
+          {gettext("Nothing matches “%{query}”", query: String.trim(@query))}
+        </div>
+        <div class="mt-[3px] text-[11.5px] font-medium text-[#6f6d68]">
+          {gettext("Try another word.")}
+        </div>
       </div>
       """
     end

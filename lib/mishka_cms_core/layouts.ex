@@ -30,7 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
-  alias MishkaCmsCore.Layouts.{SystemStatus, TopbarNeeds, TopbarSearch}
+  alias MishkaCmsCore.Layouts.{SystemStatus, TopbarNeeds, TopbarSearch, TopbarStatus}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -515,6 +515,7 @@ defmodule MishkaCmsCore.Layouts do
   attr :current_site, :any, default: nil
   attr :view, :atom, default: nil
   attr :items, :list, default: []
+  attr :status, :list, default: [], doc: "`@topbar_status`, `MishkaCmsCore.Layouts.TopbarStatus`"
   attr :needs, :list, default: []
   attr :section, :map, default: nil
   attr :placeholder, :string, default: nil
@@ -533,6 +534,7 @@ defmodule MishkaCmsCore.Layouts do
         shown_languages: shown,
         more_languages: more,
         bell_count: assigns.notification_count + TopbarNeeds.total(assigns.needs),
+        status_level: TopbarStatus.level(assigns.status),
         section: assigns.section || %{eyebrow: nil, title: nil}
       )
 
@@ -607,6 +609,55 @@ defmodule MishkaCmsCore.Layouts do
                   current_path: @current_path,
                   view: @view
                 })}
+          </div>
+        </div>
+
+        <div :if={@status != []} class="relative">
+          <button
+            type="button"
+            id="topbar-status"
+            data-level={@status_level}
+            aria-label={gettext("Status of this site")}
+            aria-controls="topbar-status-panel"
+            phx-click={JS.toggle(to: "#topbar-status-panel")}
+            class={[
+              "flex h-[39px] items-center gap-2 rounded-[11px] border border-[#ecebe6] bg-white px-3 text-[12.5px] font-bold text-[#3a382f] hover:bg-[#f7f6f3]",
+              phone_button()
+            ]}
+          >
+            <span class={["size-2 shrink-0 rounded-full", status_dot(@status_level)]}></span>
+            <span class="max-[640px]:sr-only">{status_word(@status_level)}</span>
+          </button>
+          <div
+            id="topbar-status-panel"
+            role="dialog"
+            aria-label={gettext("Status of this site")}
+            phx-click-away={JS.hide(to: "#topbar-status-panel")}
+            phx-window-keydown={JS.hide(to: "#topbar-status-panel")}
+            phx-key="Escape"
+            class="absolute end-0 top-[46px] z-[60] hidden w-[320px] max-w-[calc(100vw-1.5rem)] rounded-[14px] border border-[#ecebe6] bg-white p-2 shadow-[0_14px_34px_rgba(30,28,24,0.14)]"
+          >
+            <div
+              :for={line <- @status}
+              id={dom_id("topbar-status-line", line.id)}
+              data-level={line.level}
+              class="flex items-start gap-2.5 rounded-[10px] px-2.5 py-2"
+            >
+              <span class={["mt-[5px] size-2 shrink-0 rounded-full", status_dot(line.level)]}></span>
+              <span class="min-w-0 flex-1">
+                <span class="block text-[12.5px] font-bold text-[#17161a]">{line.label}</span>
+                <span :if={line.detail} class="block text-[11.5px] font-medium text-[#6f6d68]">
+                  {line.detail}
+                </span>
+                <.link
+                  :if={line.link}
+                  navigate={line.link}
+                  class="mt-1 inline-flex min-h-11 items-center text-[12px] font-bold text-[#4f4bcc] min-[641px]:min-h-0"
+                >
+                  {gettext("Open")}
+                </.link>
+              </span>
+            </div>
           </div>
         </div>
 
@@ -1011,6 +1062,15 @@ defmodule MishkaCmsCore.Layouts do
 
   # A sidebar label is marked with `gettext_noop/1` where it is declared, at compile time.
   # The colours of the footer's system line, one set for each tone of `SystemStatus.line/1`.
+  # The dot and the word of the top bar's status chip, by the worst line's level.
+  defp status_dot(:error), do: "bg-[#c0392b]"
+  defp status_dot(:warn), do: "bg-[#c8931f]"
+  defp status_dot(_ok), do: "bg-[#1f9d6b]"
+
+  defp status_word(:error), do: gettext("Needs a look")
+  defp status_word(:warn), do: gettext("Heads up")
+  defp status_word(_ok), do: gettext("All good")
+
   defp status_tone(:ok),
     do: %{
       box: "border-[#e2ece5] bg-[#f3f8f4]",

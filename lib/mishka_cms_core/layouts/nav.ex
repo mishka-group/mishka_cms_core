@@ -42,7 +42,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
   event (`MishkaCmsCore.Layouts.TopbarSearch.placeholder/1`), read with them.
 
   It keeps `@topbar_bands`, what extensions draw full width under the top bar on the `"topbar:bands"`
-  event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items.
+  event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items, and `@topbar_status`, the
+  status lines of the top bar's chip on `"topbar:status"` (`MishkaCmsCore.Layouts.TopbarStatus`).
 
   It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
   (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
@@ -58,6 +59,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   import Phoenix.Component, only: [assign: 2, assign: 3]
 
   alias MishkaCmsCore.Layouts.{SystemStatus, TopbarBands, TopbarItems, TopbarNeeds, TopbarSearch}
+  alias MishkaCmsCore.Layouts.TopbarStatus
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
@@ -136,6 +138,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
       current_path: path,
       topbar_items: TopbarItems.collect(context),
       topbar_bands: TopbarBands.collect(context),
+      topbar_status: TopbarStatus.collect(context),
       topbar_placeholder: TopbarSearch.placeholder(context),
       topbar_needs: TopbarNeeds.collect(context),
       topbar_site: site,
