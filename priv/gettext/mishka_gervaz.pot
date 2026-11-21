@@ -1335,9 +1335,6 @@ msgid_plural "active"
 msgstr[0] ""
 msgstr[1] ""
 
-msgid "Confirm"
-msgstr ""
-
 ## Sort
 msgid "Sort ascending"
 msgstr ""
