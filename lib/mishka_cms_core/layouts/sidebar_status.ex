@@ -4,16 +4,15 @@
 
 defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @moduledoc """
-  The problems each part of the CMS tells the admin about at the bottom of the sidebar, on the
-  `"sidebar:status"` mishka_installer event: "8 failed jobs", "3 unhandled provider events". Every
-  part answers for itself, so the sidebar never says anything a part did not count:
+  The problems each part of the CMS tells the admin about on the right of the sidebar's Settings
+  row, on the `"sidebar:status"` mishka_installer event: "8 failed jobs", "3 unhandled provider
+  events". Every part answers for itself, so the sidebar never says anything a part did not count
+  (`MishkaCmsCore.Layouts.sidebar_status/1` draws it):
 
     * no problem line, and at least one plugin ran a check the viewer may see (it set `checked:
-      true`): a small neutral row "All clear" with a green dot, opening the activity log for a viewer
-      who may open it;
-    * one line: a small row (a dot in the line's colour, the line's words and an arrow) that opens the
-      line's page;
-    * several: "3 problems", which opens a small list of the lines, each opening its page;
+      true`): a small green dot and "OK";
+    * one or more lines: a small pill "3 issues" in the worst line's tone that opens a list of the
+      lines, each opening its page; "Settings" itself still opens Settings;
     * no plugin checked and no line: nothing at all.
 
   A line is a map:
@@ -36,7 +35,7 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   ## Checked
 
   A plugin that ran its check for this viewer sets `checked: true`, whether or not it found a
-  problem; that is what lets the sidebar say "All clear" rather than nothing. A plugin sets it only
+  problem; that is what lets the sidebar say "OK" rather than nothing. A plugin sets it only
   when the viewer may see what it checks (the permission of its lines), so a viewer with no check
   of their own sees no row at all.
 
@@ -162,7 +161,7 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @doc """
   The lines to show for `context`, the worst first (`:error`, then `:warn`), `id` breaking a tie;
   each one the context's `current_user` may see. With no problem line and a plugin that checked, the
-  one `:ok` line "All clear" (`all_clear/1`). `[]` when the row is off, no plugin checked or
+  one `:ok` line "OK" (`all_clear/1`). `[]` when the row is off, no plugin checked or
   answered, or one raised.
   """
   @spec collect(map()) :: [line()]
@@ -187,8 +186,9 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   defp clear(lines, _checked, _user), do: lines
 
   @doc """
-  The neutral line drawn when the plugins checked and found nothing: "All clear", level `:ok`,
-  opening the activity log for a viewer who may open it (no link for anyone else).
+  The neutral line returned when the plugins checked and found nothing: level `:ok`, which the
+  Settings row draws as "OK". It names the activity log as its link for a viewer who may open it (no
+  link for anyone else).
   """
   @spec all_clear(map() | nil) :: line()
   def all_clear(user) do
@@ -197,7 +197,7 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
     %{
       id: "all-clear",
       level: :ok,
-      label: gettext("All clear"),
+      label: gettext("OK"),
       count: nil,
       link: link,
       site_id: nil
@@ -322,8 +322,8 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   defp current_site_id(%{current_site: %{id: id}}), do: id
   defp current_site_id(_context), do: nil
 
-  @doc "The words of the row that opens the list of several lines: \"3 problems\"."
-  @spec problems_label([line()]) :: String.t()
-  def problems_label(lines),
-    do: ngettext("%{count} problem", "%{count} problems", length(lines))
+  @doc "The words of the pill that opens the list of the lines: \"3 issues\"."
+  @spec issues_label([line()]) :: String.t()
+  def issues_label(lines),
+    do: ngettext("%{count} issue", "%{count} issues", length(lines))
 end

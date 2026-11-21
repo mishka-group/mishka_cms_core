@@ -10,7 +10,7 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus.FailedJobs do
   a master every site's (`MishkaCmsCore.Activity.Sources.Oban.failed_count/2`); a job that names no
   site counts for a master only. It is for whoever may open the activity log
   (`admin:dashboard:runtime:activity`): for such a viewer it marks the data `checked: true` whether
-  or not a job failed, so the sidebar can say "All clear"; for anyone else it reads nothing and
+  or not a job failed, so the sidebar can say "OK"; for anyone else it reads nothing and
   marks nothing.
 
   One count on the jobs table, kept for the cache's short while (`SidebarStatus.cached/2`) and

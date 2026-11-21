@@ -144,8 +144,8 @@ defmodule MishkaCmsCore.Layouts do
   filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
   beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@sidebar_status`, the problems the
-  parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), drawn by `sidebar_status/1` above
-  the footer's entries: nothing without a line.
+  parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), drawn by `sidebar_status/1` on the
+  right of the Settings row: nothing without a line.
 
   While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
   arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
@@ -303,8 +303,13 @@ defmodule MishkaCmsCore.Layouts do
       </nav>
 
       <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
-        <.sidebar_status lines={@status} />
-        <.nav_link :for={item <- @footer_entries} item={item} trail={@trail} counts={@counts} />
+        <%= for item <- @footer_entries do %>
+          <div :if={item.key == "settings"} id="admin-sidebar-settings-row" class="relative">
+            <.nav_link item={item} trail={@trail} counts={@counts} />
+            <.sidebar_status lines={@status} />
+          </div>
+          <.nav_link :if={item.key != "settings"} item={item} trail={@trail} counts={@counts} />
+        <% end %>
       </div>
     </aside>
 
@@ -323,22 +328,30 @@ defmodule MishkaCmsCore.Layouts do
   attr :lines, :list, required: true
 
   @doc """
-  The problems row at the bottom of the sidebar (`MishkaCmsCore.Layouts.SidebarStatus`): nothing
-  without a line; the `:ok` line "All clear" (the plugins checked and found nothing) is a muted row
-  with a green dot; one line is a small link (a dot in its level's colour, its words and an arrow)
-  to its page; several are a small button "3 problems" that opens a list of the lines, to the right
-  of the sidebar on a wide screen and as a sheet at the bottom of the menu on a phone, each line a
-  link to its page. The list closes on a click outside it and on Escape.
+  The status on the right of the sidebar's Settings row (`MishkaCmsCore.Layouts.SidebarStatus`):
+
+    * nothing when no plugin answered;
+    * a small green dot and "OK" in muted text when the plugins checked and found nothing (the
+      `:ok` line); it takes no click, so the row still opens Settings;
+    * a small pill "3 issues" in the worst line's tone when there are problems. The pill is a
+      button laid over the row's right side, beside the Settings link and never inside it, so a
+      press on "Settings" still opens Settings and only the pill opens the list of the lines:
+      beside the sidebar on a wide screen, a sheet at the bottom of the menu on a phone, each line a
+      link to its page. Escape and a click outside close it; `aria-expanded` follows it. On a phone
+      the pill's tap target is 44 px.
   """
   def sidebar_status(%{lines: []} = assigns), do: ~H""
 
-  def sidebar_status(%{lines: [line]} = assigns) do
-    assigns = assign(assigns, :line, line)
-
+  def sidebar_status(%{lines: [%{level: :ok}]} = assigns) do
     ~H"""
-    <div id="admin-sidebar-status" data-lines="1" class="mb-1.5">
-      <.status_line line={@line} />
-    </div>
+    <span
+      id="admin-sidebar-status"
+      data-state="ok"
+      class="pointer-events-none absolute inset-y-0 end-[12px] flex items-center gap-1.5 text-[11px] font-medium text-[#8a877f]"
+    >
+      <span class="size-1.5 shrink-0 rounded-full bg-[#1f9d6b]"></span>
+      {gettext("OK")}
+    </span>
     """
   end
 
@@ -346,25 +359,33 @@ defmodule MishkaCmsCore.Layouts do
     assigns = assign(assigns, :level, SidebarStatus.level(assigns.lines))
 
     ~H"""
-    <div id="admin-sidebar-status" data-lines={length(@lines)} class="relative mb-1.5">
+    <div id="admin-sidebar-status" data-state="issues" class="contents">
       <button
         type="button"
         id="admin-sidebar-status-toggle"
         data-level={@level}
         aria-controls="admin-sidebar-status-list"
-        phx-click={JS.toggle(to: "#admin-sidebar-status-list")}
-        class="flex w-full items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-start text-[12px] font-bold text-[#3a382f] hover:bg-[#f6f5f2] max-[980px]:min-h-11"
+        aria-expanded="false"
+        aria-label={SidebarStatus.issues_label(@lines)}
+        phx-click={
+          JS.toggle(to: "#admin-sidebar-status-list")
+          |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+        }
+        class="absolute inset-y-0 end-[6px] my-auto flex h-[26px] items-center max-[980px]:h-11 max-[980px]:min-w-11 max-[980px]:justify-end"
       >
-        <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@level)]}></span>
-        <span class="min-w-0 flex-1 truncate">{SidebarStatus.problems_label(@lines)}</span>
-        <.icon name="hero-chevron-right" class="size-3.5 shrink-0 text-[#a8a5a0]" />
+        <span class={[
+          "rounded-full px-2 py-[2px] text-[11px] font-bold leading-[16px]",
+          sidebar_pill(@level)
+        ]}>
+          {SidebarStatus.issues_label(@lines)}
+        </span>
       </button>
       <div
         id="admin-sidebar-status-list"
         role="dialog"
-        aria-label={SidebarStatus.problems_label(@lines)}
-        phx-click-away={JS.hide(to: "#admin-sidebar-status-list")}
-        phx-window-keydown={JS.hide(to: "#admin-sidebar-status-list")}
+        aria-label={SidebarStatus.issues_label(@lines)}
+        phx-click-away={close_status()}
+        phx-window-keydown={close_status()}
         phx-key="Escape"
         class="absolute bottom-0 start-full z-[95] ms-3 hidden w-[260px] rounded-[14px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_14px_34px_rgba(30,28,24,0.14)] max-[980px]:fixed max-[980px]:inset-x-0 max-[980px]:bottom-0 max-[980px]:start-0 max-[980px]:ms-0 max-[980px]:w-auto max-[980px]:rounded-b-none max-[980px]:pb-[max(8px,env(safe-area-inset-bottom))]"
       >
@@ -372,6 +393,11 @@ defmodule MishkaCmsCore.Layouts do
       </div>
     </div>
     """
+  end
+
+  defp close_status do
+    JS.hide(to: "#admin-sidebar-status-list")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "#admin-sidebar-status-toggle")
   end
 
   attr :line, :map, required: true
@@ -382,10 +408,7 @@ defmodule MishkaCmsCore.Layouts do
       navigate={@line.link}
       id={dom_id("admin-sidebar-status-line", @line.id)}
       data-level={@line.level}
-      class={[
-        "flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11",
-        sidebar_ink(@line.level)
-      ]}
+      class="flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11"
     >
       <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
       <span class="min-w-0 flex-1 truncate">{@line.label}</span>
@@ -399,7 +422,7 @@ defmodule MishkaCmsCore.Layouts do
     <div
       id={dom_id("admin-sidebar-status-line", @line.id)}
       data-level={@line.level}
-      class={["flex items-center gap-2 px-[10px] py-[7px] text-[12px]", sidebar_ink(@line.level)]}
+      class="flex items-center gap-2 px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f]"
     >
       <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
       <span class="min-w-0 flex-1 truncate">{@line.label}</span>
@@ -407,12 +430,12 @@ defmodule MishkaCmsCore.Layouts do
     """
   end
 
+  defp sidebar_pill(:error), do: "bg-[#fbe9e7] text-[#b3382d]"
+  defp sidebar_pill(_warn), do: "bg-[#fdf3dc] text-[#9a6a07]"
+
   defp sidebar_dot(:error), do: "bg-[#c0392b]"
   defp sidebar_dot(:warn), do: "bg-[#c8931f]"
   defp sidebar_dot(_ok), do: "bg-[#1f9d6b]"
-
-  defp sidebar_ink(:ok), do: "font-semibold text-[#8a877f]"
-  defp sidebar_ink(_problem), do: "font-bold text-[#3a382f]"
 
   attr :item, :map, required: true
   attr :trail, :list, default: []

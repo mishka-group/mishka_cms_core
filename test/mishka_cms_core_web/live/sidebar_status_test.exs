@@ -139,6 +139,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
 
       assert SidebarStatus.collect(context(admin)) == []
       refute has_element?(open(conn, admin), "#admin-sidebar-status")
+      refute has_element?(open(conn, admin), "#admin-sidebar-status-toggle")
     end
   end
 
@@ -155,19 +156,18 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
       refute sidebar =~ "uptime"
     end
 
-    test "a plugin that checked and found nothing draws a muted All clear row to the activity log",
+    test "a plugin that checked and found nothing puts a green dot and OK on the Settings row",
          %{conn: conn, admin: admin} do
       Application.put_env(:mishka_cms_core, :sidebar_status_probe_checked, true)
 
-      assert [%{id: "all-clear", level: :ok, link: "/admin/dashboard/runtime/activity"}] =
-               SidebarStatus.collect(context(admin))
+      assert [%{id: "all-clear", level: :ok}] = SidebarStatus.collect(context(admin))
 
       view = open(conn, admin)
 
       assert has_element?(
                view,
-               "#admin-sidebar-status a#admin-sidebar-status-line-all-clear[href='/admin/dashboard/runtime/activity'][data-level=ok]",
-               "All clear"
+               "#admin-sidebar-settings-row #admin-sidebar-status[data-state=ok]",
+               "OK"
              )
 
       refute has_element?(view, "#admin-sidebar-status-toggle")
@@ -180,30 +180,15 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
       assert [%{id: "error"}] = SidebarStatus.collect(context(admin))
     end
 
-    test "All clear has no link for a viewer who may not open the activity log", %{site: site} do
+    test "OK names no link for a viewer who may not open the activity log", %{site: site} do
       Application.put_env(:mishka_cms_core, :sidebar_status_probe_checked, true)
       editor = create_user_with_permissions!(["admin:dashboard:page"], site_id: site.id)
 
       assert [%{id: "all-clear", link: nil}] = SidebarStatus.collect(context(editor))
     end
 
-    test "one line is a link row straight to its page", %{conn: conn, admin: admin} do
-      answer([%{id: "error", level: :error, label: "8 failed jobs", count: 8, link: @settings}])
-      view = open(conn, admin)
-
-      assert has_element?(
-               view,
-               "#admin-sidebar-status[data-lines='1'] a#admin-sidebar-status-line-error[href='#{@settings}'][data-level=error]",
-               "8 failed jobs"
-             )
-
-      refute has_element?(view, "#admin-sidebar-status-toggle")
-    end
-
-    test "several lines are one row of N problems that opens a list of links", %{
-      conn: conn,
-      admin: admin
-    } do
+    test "problems are a pill of N issues in the worst tone, beside the Settings link, opening a list of links",
+         %{conn: conn, admin: admin} do
       answer([
         %{id: "jobs", level: :error, label: "8 failed jobs", link: @settings},
         %{
@@ -217,7 +202,13 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
 
       view = open(conn, admin)
 
-      assert has_element?(view, "#admin-sidebar-status-toggle[data-level=error]", "3 problems")
+      assert has_element?(
+               view,
+               "#admin-sidebar-settings-row button#admin-sidebar-status-toggle[data-level=error][aria-controls=admin-sidebar-status-list][aria-expanded=false]",
+               "3 issues"
+             )
+
+      refute has_element?(view, "a #admin-sidebar-status-toggle")
 
       for {id, link} <- [
             {"jobs", @settings},
@@ -229,6 +220,27 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
                  "#admin-sidebar-status-list a#admin-sidebar-status-line-#{id}[href='#{link}']"
                )
       end
+    end
+
+    test "one warning line is a pill of 1 issue in the warning tone", %{conn: conn, admin: admin} do
+      answer([%{id: "warn", level: :warn, label: "2 drafts stuck", link: @settings}])
+      view = open(conn, admin)
+
+      assert has_element?(view, "#admin-sidebar-status-toggle[data-level=warn]", "1 issue")
+      assert has_element?(view, "#admin-sidebar-status-list a#admin-sidebar-status-line-warn")
+    end
+
+    test "pressing Settings still opens Settings", %{conn: conn, admin: admin} do
+      answer([
+        %{id: "error", level: :error, label: "8 failed jobs", link: "/admin/dashboard/pages"}
+      ])
+
+      {:ok, view, _html} = live(session(conn, admin), "/admin/dashboard/runtime/activity")
+
+      assert {:error, {:live_redirect, %{to: "/admin/dashboard/settings"}}} =
+               view
+               |> element("#admin-sidebar-settings-row > a[href='/admin/dashboard/settings']")
+               |> render_click()
     end
 
     test "follows a change of the viewer's site without a reload", %{conn: conn, site: site} do
