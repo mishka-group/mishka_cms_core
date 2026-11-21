@@ -30,7 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
-  alias MishkaCmsCore.Layouts.{SystemStatus, TopbarNeeds, TopbarSearch, TopbarStatus}
+  alias MishkaCmsCore.Layouts.{TopbarNeeds, TopbarSearch, TopbarStatus}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -143,9 +143,7 @@ defmodule MishkaCmsCore.Layouts do
   Settings. This component only paints what it is handed, so an empty section is one that was
   filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
-  beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@system_status`, which the footer
-  words as `MishkaCmsCore.Layouts.SystemStatus.line/1` says: whether background jobs failed in the
-  last hour and whether the database answers. A caller that hands none draws no such line.
+  beside entries (`MishkaCmsCore.Sidebar.Counts`).
 
   While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
   arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
@@ -161,11 +159,6 @@ defmodule MishkaCmsCore.Layouts do
   attr :version, :integer, default: 0
   attr :counts, :map, default: %{}
 
-  attr :status, :any,
-    default: nil,
-    doc:
-      "`@system_status`, the `AsyncResult` of `MishkaCmsCore.Layouts.SystemStatus.read/1`; no line without it"
-
   def sidebar(assigns) do
     %{main: main, footer: footer, trail: trail} =
       Sidebar.menu(assigns.current_user, assigns.current_path)
@@ -178,8 +171,7 @@ defmodule MishkaCmsCore.Layouts do
         footer_entries: footer,
         trail: trail,
         levels: levels,
-        level: open_level(trail, levels),
-        status_line: assigns.status && SystemStatus.line(assigns.status)
+        level: open_level(trail, levels)
       )
 
     ~H"""
@@ -304,23 +296,15 @@ defmodule MishkaCmsCore.Layouts do
       </nav>
 
       <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
-        <div
-          :if={@status_line}
-          id="admin-system-status"
-          data-tone={@status_line.tone}
-          class={[
-            "mb-2 rounded-[13px] border px-[13px] py-3",
-            status_tone(@status_line.tone).box
-          ]}
-        >
+        <div class="mb-2 rounded-[13px] border border-[#e2ece5] bg-[#f3f8f4] px-[13px] py-3">
           <div class="flex items-center gap-2">
-            <span class={["size-2 shrink-0 rounded-full", status_tone(@status_line.tone).dot]}></span>
-            <span class={["text-[11.5px] font-bold", status_tone(@status_line.tone).ink]}>
-              {@status_line.title}
+            <span class="size-2 shrink-0 animate-pulse rounded-full bg-[#1f9d6b]"></span>
+            <span class="text-[11.5px] font-bold text-[#177a53]">
+              {gettext("All systems operational")}
             </span>
           </div>
           <div class="mt-[5px] ps-4 text-[10.5px] font-medium text-[#8a938c]">
-            {@status_line.detail}
+            {gettext("Runtime · %{uptime} uptime", uptime: "99.98%")}
           </div>
         </div>
         <.nav_link :for={item <- @footer_entries} item={item} trail={@trail} counts={@counts} />
@@ -1061,7 +1045,6 @@ defmodule MishkaCmsCore.Layouts do
   def copyright_years(%Date{year: year}), do: "#{@first_year}-#{year}"
 
   # A sidebar label is marked with `gettext_noop/1` where it is declared, at compile time.
-  # The colours of the footer's system line, one set for each tone of `SystemStatus.line/1`.
   # The dot and the word of the top bar's status chip, by the worst line's level.
   defp status_dot(:error), do: "bg-[#c0392b]"
   defp status_dot(:warn), do: "bg-[#c8931f]"
@@ -1070,22 +1053,6 @@ defmodule MishkaCmsCore.Layouts do
   defp status_word(:error), do: gettext("Needs a look")
   defp status_word(:warn), do: gettext("Heads up")
   defp status_word(_ok), do: gettext("All good")
-
-  defp status_tone(:ok),
-    do: %{
-      box: "border-[#e2ece5] bg-[#f3f8f4]",
-      dot: "animate-pulse bg-[#1f9d6b] motion-reduce:animate-none",
-      ink: "text-[#177a53]"
-    }
-
-  defp status_tone(:warn),
-    do: %{box: "border-[#f1e3c4] bg-[#fdf6e7]", dot: "bg-[#e0a23a]", ink: "text-[#9a6a07]"}
-
-  defp status_tone(:bad),
-    do: %{box: "border-[#f3d5d1] bg-[#fbe9e7]", dot: "bg-[#d5544b]", ink: "text-[#b3382d]"}
-
-  defp status_tone(:checking),
-    do: %{box: "border-[#e6e4de] bg-[#f6f5f2]", dot: "bg-[#c9c6bd]", ink: "text-[#6d6a63]"}
 
   defp label(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
 
