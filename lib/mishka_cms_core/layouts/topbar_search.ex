@@ -480,7 +480,7 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
       </div>
 
       <div :if={@groups == []} id={@id <> "-empty"} class="px-3 py-4 text-center">
-        <div class="text-[12.5px] font-bold text-[#17161a]">
+        <div class="break-words text-[12.5px] font-bold text-[#17161a] [overflow-wrap:anywhere]">
           {gettext("Nothing matches “%{query}”", query: String.trim(@query))}
         </div>
         <div class="mt-[3px] text-[11.5px] font-medium text-[#6f6d68]">

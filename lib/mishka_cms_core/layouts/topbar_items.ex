@@ -65,6 +65,7 @@ defmodule MishkaCmsCore.Layouts.TopbarItems do
           required(:priority) => integer(),
           optional(:permission) => String.t() | [String.t()],
           optional(:module) => module(),
+          optional(:phone) => boolean(),
           optional(:render) => (map() -> term())
         }
 

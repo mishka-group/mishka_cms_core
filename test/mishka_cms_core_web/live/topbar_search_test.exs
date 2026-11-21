@@ -48,6 +48,11 @@ defmodule MishkaCmsCoreWeb.Test.TopbarSearchTest do
       view = open(conn, admin)
       search(view, "aurora")
       assert has_element?(view, "#{@box}-empty", "Nothing matches")
+
+      # A long unbroken text breaks inside the box instead of running out of it.
+      long = String.duplicate("x", 120)
+      search(view, long)
+      assert has_element?(view, "#{@box}-empty div.break-words", long)
     end
 
     test "the box keeps the core's placeholder", %{conn: conn, admin: admin} do
