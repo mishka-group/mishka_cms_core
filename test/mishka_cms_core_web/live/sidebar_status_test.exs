@@ -41,6 +41,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
     on_exit(fn ->
       :persistent_term.erase(:mishka_installed)
       Application.delete_env(:mishka_cms_core, :sidebar_status_probe)
+      Application.delete_env(:mishka_cms_core, :sidebar_status_probe_checked)
       Application.delete_env(:mishka_cms_core, :sidebar_status_probe_data)
       Application.delete_env(:mishka_cms_core, :sidebar_status)
     end)
@@ -142,13 +143,48 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
   end
 
   describe "the row" do
-    test "draws nothing at all when no line comes back", %{conn: conn, admin: admin} do
-      view = open(conn, admin)
+    test "draws nothing at all when no plugin checked and no line comes back", %{
+      conn: conn,
+      site: site
+    } do
+      view = open(conn, no_checks(site))
 
       refute has_element?(view, "#admin-sidebar-status")
       sidebar = view |> element("#admin-sidebar") |> render()
       refute sidebar =~ "All systems operational"
       refute sidebar =~ "uptime"
+    end
+
+    test "a plugin that checked and found nothing draws a muted All clear row to the activity log",
+         %{conn: conn, admin: admin} do
+      Application.put_env(:mishka_cms_core, :sidebar_status_probe_checked, true)
+
+      assert [%{id: "all-clear", level: :ok, link: "/admin/dashboard/runtime/activity"}] =
+               SidebarStatus.collect(context(admin))
+
+      view = open(conn, admin)
+
+      assert has_element?(
+               view,
+               "#admin-sidebar-status a#admin-sidebar-status-line-all-clear[href='/admin/dashboard/runtime/activity'][data-level=ok]",
+               "All clear"
+             )
+
+      refute has_element?(view, "#admin-sidebar-status-toggle")
+    end
+
+    test "a problem line wins over a check that found nothing", %{admin: admin} do
+      Application.put_env(:mishka_cms_core, :sidebar_status_probe_checked, true)
+      answer([%{id: "error", level: :error, label: "8 failed jobs", link: @settings}])
+
+      assert [%{id: "error"}] = SidebarStatus.collect(context(admin))
+    end
+
+    test "All clear has no link for a viewer who may not open the activity log", %{site: site} do
+      Application.put_env(:mishka_cms_core, :sidebar_status_probe_checked, true)
+      editor = create_user_with_permissions!(["admin:dashboard:page"], site_id: site.id)
+
+      assert [%{id: "all-clear", link: nil}] = SidebarStatus.collect(context(editor))
     end
 
     test "one line is a link row straight to its page", %{conn: conn, admin: admin} do
@@ -195,12 +231,8 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
       end
     end
 
-    test "follows a change of the viewer's site without a reload", %{
-      conn: conn,
-      admin: admin,
-      site: site
-    } do
-      view = open(conn, admin)
+    test "follows a change of the viewer's site without a reload", %{conn: conn, site: site} do
+      view = open(conn, no_checks(site))
       refute has_element?(view, "#admin-sidebar-status")
 
       ref = make_ref()
@@ -259,6 +291,10 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
              )
     end
 
+    test "checked with nothing failed, it says All clear", %{admin: admin} do
+      assert [%{id: "all-clear"}] = SidebarStatus.collect(context(admin))
+    end
+
     test "is not read for an admin who may not open the activity log", %{site: site} do
       discarded!(site.id, DateTime.add(DateTime.utc_now(), -60))
       SidebarStatus.changed(nil)
@@ -278,6 +314,10 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
       assert has_element?(view, "input[type=radio][name=severity][value=error][checked]")
     end
   end
+
+  # A viewer the core's own check (the activity log's) is not for, so no plugin checks for them.
+  defp no_checks(site),
+    do: create_user_with_permissions!(["admin:dashboard:setting"], site_id: site.id)
 
   defp discarded!(site_id, at) do
     job =

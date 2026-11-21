@@ -324,7 +324,8 @@ defmodule MishkaCmsCore.Layouts do
 
   @doc """
   The problems row at the bottom of the sidebar (`MishkaCmsCore.Layouts.SidebarStatus`): nothing
-  without a line; one line is a small link (a dot in its level's colour, its words and an arrow)
+  without a line; the `:ok` line "All clear" (the plugins checked and found nothing) is a muted row
+  with a green dot; one line is a small link (a dot in its level's colour, its words and an arrow)
   to its page; several are a small button "3 problems" that opens a list of the lines, to the right
   of the sidebar on a wide screen and as a sheet at the bottom of the menu on a phone, each line a
   link to its page. The list closes on a click outside it and on Escape.
@@ -381,7 +382,10 @@ defmodule MishkaCmsCore.Layouts do
       navigate={@line.link}
       id={dom_id("admin-sidebar-status-line", @line.id)}
       data-level={@line.level}
-      class="flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11"
+      class={[
+        "flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11",
+        sidebar_ink(@line.level)
+      ]}
     >
       <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
       <span class="min-w-0 flex-1 truncate">{@line.label}</span>
@@ -395,7 +399,7 @@ defmodule MishkaCmsCore.Layouts do
     <div
       id={dom_id("admin-sidebar-status-line", @line.id)}
       data-level={@line.level}
-      class="flex items-center gap-2 px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f]"
+      class={["flex items-center gap-2 px-[10px] py-[7px] text-[12px]", sidebar_ink(@line.level)]}
     >
       <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
       <span class="min-w-0 flex-1 truncate">{@line.label}</span>
@@ -404,7 +408,11 @@ defmodule MishkaCmsCore.Layouts do
   end
 
   defp sidebar_dot(:error), do: "bg-[#c0392b]"
-  defp sidebar_dot(_warn), do: "bg-[#c8931f]"
+  defp sidebar_dot(:warn), do: "bg-[#c8931f]"
+  defp sidebar_dot(_ok), do: "bg-[#1f9d6b]"
+
+  defp sidebar_ink(:ok), do: "font-semibold text-[#8a877f]"
+  defp sidebar_ink(_problem), do: "font-bold text-[#3a382f]"
 
   attr :item, :map, required: true
   attr :trail, :list, default: []

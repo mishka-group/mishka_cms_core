@@ -9,7 +9,9 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus.FailedJobs do
   the activity log filtered to failed background jobs. A site admin counts their own site's jobs,
   a master every site's (`MishkaCmsCore.Activity.Sources.Oban.failed_count/2`); a job that names no
   site counts for a master only. It is for whoever may open the activity log
-  (`admin:dashboard:runtime:activity`), and reads nothing for anyone else.
+  (`admin:dashboard:runtime:activity`): for such a viewer it marks the data `checked: true` whether
+  or not a job failed, so the sidebar can say "All clear"; for anyone else it reads nothing and
+  marks nothing.
 
   One count on the jobs table, kept for the cache's short while (`SidebarStatus.cached/2`) and
   dropped when a job is given up on (`MishkaCmsCore.Activity.Sources.Oban` calls
@@ -44,9 +46,10 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus.FailedJobs do
         site_id: user.site_id
       }
 
-      {:reply, %{data | lines: lines ++ [line]}}
+      {:reply, %{data | lines: lines ++ [line], checked: true}}
     else
-      _nothing -> {:reply, data}
+      0 -> {:reply, %{data | checked: true}}
+      false -> {:reply, data}
     end
   end
 
