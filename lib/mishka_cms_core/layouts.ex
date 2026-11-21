@@ -1308,7 +1308,6 @@ defmodule MishkaCmsCore.Layouts do
   # A top group of the sidebar starts open only when it holds the page that is open (its key is in
   # the trail), so the menu shows where the person is and folds the rest; a press opens any of them.
   defp group_open?(%{items: items}, trail), do: Enum.any?(items, &(&1.key in trail))
-  defp group_open?(_entry, _trail), do: false
 
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
