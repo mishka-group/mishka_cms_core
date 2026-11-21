@@ -63,7 +63,8 @@ defmodule MishkaCmsCore.Skip do
 
   ## Telling the rest of the CMS
 
-  `changed/1` is called after every skip and bring back. It:
+  `changed/1` is called after every skip and bring back, once for a whole batch (`ids:` in place of
+  `id:` when a list skips many rows at once: one notification query, one recount). It:
 
     * marks read the unread notifications about the item (on a skip): a producer that tells the
       bell about a failure puts `metadata: %{"failure" => MishkaCmsCore.Skip.key(source, id)}` on
@@ -71,7 +72,8 @@ defmodule MishkaCmsCore.Skip do
     * tells the sidebar's status row and the bell's What needs you to count the item's site again
       (`MishkaCmsCore.Layouts.SidebarStatus.changed/1`, `MishkaCmsCore.Layouts.TopbarNeeds.changed/1`);
     * fires the mishka_installer event `"failure:skip:changed"` (`event/0`) with
-      `%{source:, id:, site_id:, skipped?:, reason:, actor_id:}`, so a plugin can follow: clean what it
+      `%{source:, id:, ids:, site_id:, skipped?:, reason:, actor_id:}` (`ids` every row of the change,
+      `id` the first), so a plugin can follow: clean what it
       keeps about the item, recount its own menu badge;
     * broadcasts `{:skip_changed, change}` (the same map) on the `MishkaCmsCore.PubSub` topic
       `topic/0`, so an open list of such items reads its rows and counts again
@@ -107,7 +109,8 @@ defmodule MishkaCmsCore.Skip do
   @typedoc "What `changed/1` is told about one skip or bring back."
   @type change :: %{
           required(:source) => String.t(),
-          required(:id) => String.t(),
+          optional(:id) => String.t(),
+          optional(:ids) => [String.t()],
           required(:skipped?) => boolean(),
           optional(:site_id) => String.t() | nil,
           optional(:reason) => String.t() | nil,
@@ -171,17 +174,21 @@ defmodule MishkaCmsCore.Skip do
   def key(source, id), do: "#{source}:#{id}"
 
   @doc """
-  The Oban jobs of one row worked by AshOban `worker` (the trigger's `worker_module_name`), as an
-  `Oban.Job` query for `skip_jobs/2` and `bring_back_jobs/1`.
+  The Oban jobs of one row, or of a list of rows, worked by AshOban `worker` (the trigger's
+  `worker_module_name`), as an `Oban.Job` query for `skip_jobs/2` and `bring_back_jobs/1`.
   """
-  @spec record_jobs(module(), String.t()) :: Ecto.Query.t()
-  def record_jobs(worker, id) do
+  @spec record_jobs(module(), String.t() | [String.t()]) :: Ecto.Query.t()
+  def record_jobs(worker, ids) when is_list(ids) do
     worker = inspect(worker)
 
     from(j in Oban.Job,
-      where: j.worker == ^worker and fragment("?->'primary_key'->>'id' = ?", j.args, ^id)
+      where:
+        j.worker == ^worker and
+          fragment("(?->'primary_key'->>'id') = ANY(?::text[])", j.args, ^ids)
     )
   end
+
+  def record_jobs(worker, id), do: record_jobs(worker, [id])
 
   @doc """
   Skips the jobs of `query` (an `Oban.Job` query) in one statement: a job still waiting to run
@@ -294,10 +301,12 @@ defmodule MishkaCmsCore.Skip do
   answers `:ok`: a notification or a plugin that fails is logged, never the skip's failure.
   """
   @spec changed(change()) :: :ok
-  def changed(%{source: source, id: id, skipped?: skipped?} = change) do
+  def changed(%{source: source, skipped?: skipped?} = change) do
     site_id = change[:site_id]
+    ids = change[:ids] || [change.id]
+    id = change[:id] || List.first(ids)
 
-    if skipped?, do: clean_notifications(key(source, id))
+    if skipped?, do: clean_notifications(Enum.map(ids, &key(source, &1)))
 
     MishkaCmsCore.Layouts.SidebarStatus.changed(site_id)
     MishkaCmsCore.Layouts.TopbarNeeds.changed(site_id)
@@ -305,6 +314,7 @@ defmodule MishkaCmsCore.Skip do
     payload = %{
       source: source,
       id: id,
+      ids: ids,
       site_id: site_id,
       skipped?: skipped?,
       reason: change[:reason],
@@ -321,9 +331,11 @@ defmodule MishkaCmsCore.Skip do
 
   # The unread notifications about the item, every recipient's, marked read: each one's own
   # `notification:<user>:updated` broadcast counts its bell again.
-  defp clean_notifications(key) do
+  defp clean_notifications(keys) do
     MishkaCmsCore.Notify.Notification
-    |> Ash.Query.filter(is_nil(read_at) and fragment("(?->>'failure') = ?", metadata, ^key))
+    |> Ash.Query.filter(
+      is_nil(read_at) and fragment("(?->>'failure') = ANY(?::text[])", metadata, ^keys)
+    )
     |> Ash.bulk_update(:mark_read, %{},
       authorize?: false,
       strategy: [:stream],
@@ -332,7 +344,9 @@ defmodule MishkaCmsCore.Skip do
     )
     |> case do
       %Ash.BulkResult{status: :error, errors: errors} ->
-        Logger.warning("The notifications of #{key} were not cleaned: #{inspect(errors)}")
+        Logger.warning(
+          "The notifications of #{inspect(keys)} were not cleaned: #{inspect(errors)}"
+        )
 
       _done ->
         :ok
