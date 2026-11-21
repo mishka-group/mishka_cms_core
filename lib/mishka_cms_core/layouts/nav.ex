@@ -34,6 +34,10 @@ defmodule MishkaCmsCore.Layouts.Nav do
   site the request resolved to, handed to those items. `@topbar_section` is the page's heading on a
   phone (`MishkaCmsCore.Sidebar.section/1`), read with them.
 
+  It keeps `@system_status`, what the sidebar's footer says about the system
+  (`MishkaCmsCore.Layouts.SystemStatus`): read with `assign_async/3` when the page connects, one
+  count on the jobs table for each page opened and none for each render.
+
   `@topbar_placeholder` is the search box's placeholder an extension gave on the `"topbar:search"`
   event (`MishkaCmsCore.Layouts.TopbarSearch.placeholder/1`), read with them.
 
@@ -50,10 +54,10 @@ defmodule MishkaCmsCore.Layouts.Nav do
   whether the viewer may see each nav entry, once per entry, through `AccessPermissions.match?/3`,
   which loads an unloaded actor — so without this the chrome would issue a query on every render.
   """
-  import Phoenix.LiveView, only: [attach_hook: 4, connected?: 1, put_private: 3]
+  import Phoenix.LiveView, only: [assign_async: 3, attach_hook: 4, connected?: 1, put_private: 3]
   import Phoenix.Component, only: [assign: 2, assign: 3]
 
-  alias MishkaCmsCore.Layouts.{TopbarBands, TopbarItems, TopbarNeeds, TopbarSearch}
+  alias MishkaCmsCore.Layouts.{SystemStatus, TopbarBands, TopbarItems, TopbarNeeds, TopbarSearch}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
@@ -113,7 +117,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
        {:cont, at_path(socket, URI.parse(uri).path, site)}
      end)
      |> follow_sidebar()
-     |> follow_needs()}
+     |> follow_needs()
+     |> read_status()}
   end
 
   defp at_path(%{assigns: %{current_path: path, topbar_items: _items}} = socket, path, _site),
@@ -137,6 +142,15 @@ defmodule MishkaCmsCore.Layouts.Nav do
       topbar_section: Sidebar.section(path),
       sidebar_counts: viewer_counts(socket)
     )
+  end
+
+  # The sidebar footer's line, read in the background once the page connects.
+  defp read_status(socket) do
+    user = socket.assigns[:current_user]
+
+    assign_async(socket, :system_status, fn ->
+      {:ok, %{system_status: SystemStatus.read(user)}}
+    end)
   end
 
   defp follow_needs(socket) do

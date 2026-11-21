@@ -157,9 +157,13 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   (`retryable` and `discarded`): every site's for a master, their own site's for a site user, and 0
   for no viewer. One count query; the top bar's bell shows it as the core's own item
   (`MishkaCmsCore.Layouts.TopbarNeeds`).
+
+  With `since:` (a `DateTime`) only the jobs that failed from then on are counted: a discarded
+  job by when it was given up on, a retryable one by its last try. The sidebar's footer counts the
+  last hour so (`MishkaCmsCore.Layouts.SystemStatus`).
   """
-  @spec failed_count(map() | nil) :: non_neg_integer()
-  def failed_count(viewer) do
+  @spec failed_count(map() | nil, keyword()) :: non_neg_integer()
+  def failed_count(viewer, opts \\ []) do
     case Helpers.reach(viewer) do
       :nothing ->
         0
@@ -168,10 +172,16 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
         query =
           from(j in Oban.Job, where: j.state in ["retryable", "discarded"], select: count())
           |> filter_site(site_of(reach))
+          |> failed_since(opts[:since])
 
         Oban.Repo.one(Oban.config(), query) || 0
     end
   end
+
+  defp failed_since(query, nil), do: query
+
+  defp failed_since(query, %DateTime{} = since),
+    do: where(query, [j], coalesce(j.discarded_at, j.attempted_at) >= ^since)
 
   defp fetch(site_id, scope, limit) do
     base =
