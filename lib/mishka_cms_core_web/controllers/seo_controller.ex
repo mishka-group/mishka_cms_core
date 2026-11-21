@@ -37,9 +37,10 @@ defmodule MishkaCmsCoreWeb.SeoController do
   its first bytes say (`MishkaCmsCore.Runtime.SiteIcon.favicon/1`), never sniffed into another, and
   an SVG sandboxed; any cache may keep it a day. A favicon the site does not own — an `http://…`
   or `https://…` address, which is never fetched, or another site's file — is a redirect to it,
-  kept a minute. A browser asks for it on a page that names none, such as an admin page. A site
-  with no favicon, or one set to anything else, is a 404 no cache keeps. Answers whatever `Accept`
-  a browser sends.
+  kept a minute. A browser asks for it on a page that names none, such as an admin page, so a site
+  with no favicon, or one set to anything else, gets the Mishka mark bundled with the core
+  (`priv/admin_assets/favicon.png`, 64×64) as `image/png`, kept an hour, never a redirect to the
+  value it was set to. Answers whatever `Accept` a browser sends.
 
   ## Home-screen icons
 
@@ -112,6 +113,7 @@ defmodule MishkaCmsCoreWeb.SeoController do
   @retry_after "60"
 
   @minute "public, max-age=60"
+  @hour "public, max-age=3600"
   @day "public, max-age=86400"
   @year "public, max-age=31536000, immutable"
 
@@ -136,9 +138,11 @@ defmodule MishkaCmsCoreWeb.SeoController do
     case Seo.favicon(site.id) do
       "/" <> _ = path -> conn |> cache_control(site) |> redirect(to: path)
       url when is_binary(url) -> conn |> cache_control(site) |> redirect(external: url)
-      nil -> refused(conn, :no_favicon)
+      nil -> send_picture(conn, site, "image/png", default_favicon(), @hour)
     end
   end
+
+  defp default_favicon, do: Application.app_dir(:mishka_cms_core, "priv/admin_assets/favicon.png")
 
   def site_icon(
         %{assigns: %{current_site: %{} = site}, private: %{icon_size: size}} = conn,

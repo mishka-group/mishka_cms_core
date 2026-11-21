@@ -399,7 +399,18 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
       assert get_resp_header(conn, "location") == ["https://cdn.example.com/icon.png?v=2"]
     end
 
-    test "is a 404 no cache keeps for a site with no favicon, or one that is no address", %{
+    test "is the bundled Mishka mark for a site with no favicon, never a redirect", %{site: site} do
+      conn = fetch(site, "/favicon.ico", accept: @browser_accept)
+
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["image/png"]
+      assert get_resp_header(conn, "cache-control") == ["public, max-age=3600"]
+      assert get_resp_header(conn, "x-content-type-options") == ["nosniff"]
+      assert <<0x89, "PNG", _rest::binary>> = conn.resp_body
+      assert get_resp_header(conn, "location") == []
+    end
+
+    test "is the bundled mark, never a redirect, for a favicon that is no address", %{
       site: site
     } do
       for value <- [
@@ -417,9 +428,9 @@ defmodule MishkaCmsCoreWeb.SeoControllerTest do
         {:ok, _} = Settings.put("site.favicon", value, site_id: site.id)
         conn = fetch(site, "/favicon.ico")
 
-        assert conn.status == 404, inspect(value)
+        assert conn.status == 200, inspect(value)
+        assert get_resp_header(conn, "content-type") == ["image/png"]
         assert get_resp_header(conn, "location") == []
-        assert get_resp_header(conn, "cache-control") == ["no-store"]
       end
     end
 
