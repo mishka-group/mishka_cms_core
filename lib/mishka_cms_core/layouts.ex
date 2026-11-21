@@ -505,25 +505,28 @@ defmodule MishkaCmsCore.Layouts do
   end
 
   defp card_class(level),
-    do: ["mb-2 rounded-[13px] border px-[13px] py-3", card_tone(level).box]
+    do: [
+      "mb-2 rounded-[13px] border px-[13px] py-3 outline-none focus-visible:ring-2",
+      card_tone(level).box
+    ]
 
   defp card_tone(:ok),
     do: %{
-      box: "border-[#e2ece5] bg-[#f3f8f4]",
+      box: "border-[#e2ece5] bg-[#f3f8f4] focus-visible:ring-[#cfe3d6]",
       dot: "animate-pulse bg-[#1f9d6b] motion-reduce:animate-none",
       ink: "text-[#177a53]"
     }
 
   defp card_tone(:error),
     do: %{
-      box: "border-[#f3d5d1] bg-[#fbe9e7]",
+      box: "border-[#f5dfdc] bg-[#fdf4f3] focus-visible:ring-[#f1cfca]",
       dot: "bg-[#c0392b]",
       ink: "text-[#b3382d]"
     }
 
   defp card_tone(_warn),
     do: %{
-      box: "border-[#f1e3c4] bg-[#fdf6e7]",
+      box: "border-[#f3e7cd] bg-[#fefaf1] focus-visible:ring-[#ecdcb6]",
       dot: "bg-[#c8931f]",
       ink: "text-[#9a6a07]"
     }
