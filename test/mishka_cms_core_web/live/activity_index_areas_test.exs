@@ -22,7 +22,8 @@ defmodule MishkaCmsCoreWeb.Live.ActivityIndexAreasTest do
 
   defp mounted(user) do
     socket = %Phoenix.LiveView.Socket{
-      assigns: %{__changed__: %{}, flash: %{}, current_user: user}
+      assigns: %{__changed__: %{}, flash: %{}, current_user: user},
+      private: %{live_temp: %{}, lifecycle: %Phoenix.LiveView.Lifecycle{}}
     }
 
     {:ok, socket} = Index.mount(%{}, %{}, socket)

@@ -18,6 +18,15 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   plus global rows of the shared runtime resources (`Query.shares_globals?/1`),
   never another tenant. The `:activity_site` column is shown to everyone (a tenant's
   rows resolve to its own site or "Global").
+
+  A background job that failed carries a red **Failed** badge and a Skip action, and one an admin
+  skipped (`MishkaCmsCore.Skip`) a grey **Skipped** badge, its reason and a Bring back action
+  (`job_outcome/1`). Both actions are gervaz row actions of type `:event`, answered by the page
+  (`MishkaCmsCoreWeb.Live.Admin.Dashboard.Activity.Index`): Skip asks for an optional free-text
+  reason, which a gervaz `confirm` question cannot carry (its field only checks a word typed to
+  match), so the page asks it in `MishkaCmsCoreWeb.Live.Admin.Components.SkipQuestion`. The
+  Severity filter's Skipped choice lists the skipped jobs, which the Error choice and the error
+  count leave out.
   """
   use Ash.Resource,
     domain: MishkaCmsCore.Activity.Domain,
@@ -47,7 +56,8 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
     :badge_label,
     :badge_tone,
     :actor_label,
-    :site_label
+    :site_label,
+    :skip_reason
   ]
 
   @default_limit 20
@@ -69,19 +79,56 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
       columns do
         column :activity_info do
           static true
-          requires [:action, :severity, :badge_tone, :resource_label, :message]
+
+          requires [
+            :action,
+            :severity,
+            :badge_tone,
+            :resource_label,
+            :message,
+            :kind,
+            :skip_reason
+          ]
+
           label fn -> dgettext("mishka_gervaz", "Activity") end
           position :first
 
           # The timeline node is the template's (it owns the rail); this is the message + its badge.
           render fn record ->
-            assigns = %{message: record.message, resource_label: record.resource_label}
+            assigns = %{
+              message: record.message,
+              resource_label: record.resource_label,
+              outcome: MishkaCmsCore.Activity.ActivityEntry.job_outcome(record),
+              skip_reason: record.skip_reason
+            }
 
             ~H"""
             <div class="flex flex-wrap items-center gap-2">
               <span class="text-[13px] font-semibold text-[#1b1a18]">{@message}</span>
               <span class="rounded-md bg-[#eeedfb] px-[7px] py-0.5 text-[8.5px] font-bold tracking-[0.05em] text-[#5b57d6]">
                 {@resource_label}
+              </span>
+              <span
+                :if={@outcome == :failed}
+                data-role="job-failed"
+                class="rounded-md bg-[#fbe9e7] px-[7px] py-0.5 text-[8.5px] font-bold tracking-[0.05em] text-[#c0473d]"
+              >
+                {dgettext("mishka_gervaz", "Failed")}
+              </span>
+              <span
+                :if={@outcome == :skipped}
+                data-role="job-skipped"
+                class="rounded-md bg-[#f0efea] px-[7px] py-0.5 text-[8.5px] font-bold tracking-[0.05em] text-[#6d6a63]"
+              >
+                {dgettext("mishka_gervaz", "Skipped")}
+              </span>
+              <span
+                :if={@outcome == :skipped and @skip_reason}
+                data-role="skip-reason"
+                dir="auto"
+                class="text-[11.5px] font-medium text-[#8a877f]"
+              >
+                {@skip_reason}
               </span>
             </div>
             """
@@ -165,7 +212,8 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
             [
               {dgettext("mishka_gervaz", "Info"), "info"},
               {dgettext("mishka_gervaz", "Warning"), "warn"},
-              {dgettext("mishka_gervaz", "Error"), "error"}
+              {dgettext("mishka_gervaz", "Error"), "error"},
+              {dgettext("mishka_gervaz", "Skipped"), "skipped"}
             ]
           end
 
@@ -207,6 +255,40 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
           ui do
             prompt dgettext_noop("mishka_gervaz", "Search events…")
             label fn -> dgettext("mishka_gervaz", "Search") end
+          end
+        end
+      end
+
+      row_actions do
+        action :skip_job do
+          type :event
+          event "skip_job"
+
+          visible fn record, _state ->
+            MishkaCmsCore.Activity.ActivityEntry.job_outcome(record) == :failed
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Skip") end
+            icon "hero-forward"
+
+            class "inline-flex cursor-pointer items-center gap-1 text-[11.5px] font-semibold text-[#8a877f] hover:text-[#5c5a54]"
+          end
+        end
+
+        action :bring_back_job do
+          type :event
+          event "bring_back_job"
+
+          visible fn record, _state ->
+            MishkaCmsCore.Activity.ActivityEntry.job_outcome(record) == :skipped
+          end
+
+          ui do
+            label fn -> dgettext("mishka_gervaz", "Bring back") end
+            icon "hero-arrow-uturn-left"
+
+            class "inline-flex cursor-pointer items-center gap-1 text-[11.5px] font-semibold text-[#8a877f] hover:text-[#5b57d6]"
           end
         end
       end
@@ -335,6 +417,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
     # columns never hit the DB per row.
     attribute :actor_label, :string, public?: true
     attribute :site_label, :string, public?: true
+    attribute :skip_reason, :string, public?: true
   end
 
   @doc """
@@ -354,6 +437,19 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
 
   defp kind_of(%{id: "oban-" <> _}), do: :job
   defp kind_of(_), do: :content
+
+  @doc """
+  What a background job's row says about it: `:failed` for a job that failed (`:discarded`, or
+  `:retryable` while it waits for its next try), `:skipped` for one an admin skipped
+  (`MishkaCmsCore.Skip`), and `nil` for any other row. The badge and the Skip / Bring back actions
+  follow it.
+  """
+  @spec job_outcome(map()) :: :failed | :skipped | nil
+  def job_outcome(%{kind: :job, action: action}) when action in [:discarded, :retryable],
+    do: :failed
+
+  def job_outcome(%{kind: :job, action: :skipped}), do: :skipped
+  def job_outcome(_record), do: nil
 
   @doc """
   Whether a live record should appear in a given table view — tenant-visible AND
@@ -492,19 +588,21 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
   end
 
   @doc """
-  The log's KPI totals for `viewer` — `%{total:, info:, warn:, error:}` over the sites and the areas
-  it may see (`MishkaCmsCore.Activity.Query.counts/1`). All zero for no viewer.
+  The log's KPI totals for `viewer` — `%{total:, info:, warn:, error:, skipped:}` over the sites and
+  the areas it may see (`MishkaCmsCore.Activity.Query.counts/1`); a skipped job counts under
+  `skipped`, not `error`. All zero for no viewer.
   """
   @spec counts(map() | nil) :: %{
           total: non_neg_integer(),
           info: non_neg_integer(),
           warn: non_neg_integer(),
-          error: non_neg_integer()
+          error: non_neg_integer(),
+          skipped: non_neg_integer()
         }
   def counts(viewer) do
     case Helpers.reach(viewer) do
       :nothing ->
-        %{total: 0, info: 0, warn: 0, error: 0}
+        %{total: 0, info: 0, warn: 0, error: 0, skipped: 0}
 
       reach ->
         Query.counts(%{site_id: scope_site_id(reach), resources: Helpers.resources_for(viewer)})
@@ -535,7 +633,7 @@ defmodule MishkaCmsCore.Activity.ActivityEntry do
 
   defp normalize_filters(map) when is_map(map),
     do: %{
-      severity: allowed(filter_value(map, :severity), ~w(info warn error)),
+      severity: allowed(filter_value(map, :severity), ~w(info warn error skipped)),
       kind: allowed(filter_value(map, :kind), ~w(content job)),
       resource: filter_value(map, :resource),
       search: filter_value(map, :search)

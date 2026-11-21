@@ -66,7 +66,7 @@ defmodule MishkaCmsCore.Activity.ActivityAreasTest do
     assert ActivityEntry.total(%{current_user: reader, filter_values: %{}}) == length(results)
 
     assert ActivityEntry.counts(reader).total == length(results)
-    assert ActivityEntry.counts(nil) == %{total: 0, info: 0, warn: 0, error: 0}
+    assert ActivityEntry.counts(nil) == %{total: 0, info: 0, warn: 0, error: 0, skipped: 0}
   end
 
   test "the recent activity card shows the areas the viewer holds", %{site: site} do

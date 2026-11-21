@@ -72,7 +72,21 @@ defmodule MishkaCmsCore.Skip do
       (`MishkaCmsCore.Layouts.SidebarStatus.changed/1`, `MishkaCmsCore.Layouts.TopbarNeeds.changed/1`);
     * fires the mishka_installer event `"failure:skip:changed"` (`event/0`) with
       `%{source:, id:, site_id:, skipped?:, reason:, actor_id:}`, so a plugin can follow: clean what it
-      keeps about the item, recount its own menu badge.
+      keeps about the item, recount its own menu badge;
+    * broadcasts `{:skip_changed, change}` (the same map) on the `MishkaCmsCore.PubSub` topic
+      `topic/0`, so an open list of such items reads its rows and counts again
+      (`subscribe/0`; a page keeps only the changes of its viewer's site, e.g. with
+      `MishkaCmsCore.Layouts.TopbarNeeds.concerns?/2`). The activity log does so for the core's jobs.
+
+  ## The core's jobs
+
+  The activity log (`/admin/dashboard/runtime/activity`) shows a failed job with a red **Failed**
+  badge and a Skip button, and a skipped one with a grey **Skipped** badge, its reason and a Bring
+  back button; its Severity filter has a Skipped choice and its KPI row a Skipped count. Skip asks
+  for the optional reason in `MishkaCmsCoreWeb.Live.Admin.Components.SkipQuestion` and then shows an
+  Undo toast (`MishkaGervaz.Toast`) that brings the job back. The work is
+  `MishkaCmsCore.Activity.Sources.Oban.skip/3` and `bring_back/2`, with the source `"core:job"`, so
+  a notification about a failed job carries `metadata: %{"failure" => key("core:job", job_id)}`.
 
   ## Telemetry
 
@@ -87,6 +101,7 @@ defmodule MishkaCmsCore.Skip do
 
   @reason_max 200
   @event "failure:skip:changed"
+  @topic "failure:skip"
   @open_job_states ~w(available scheduled retryable)
 
   @typedoc "What `changed/1` is told about one skip or bring back."
@@ -106,6 +121,14 @@ defmodule MishkaCmsCore.Skip do
   @doc "The mishka_installer event `changed/1` fires."
   @spec event() :: String.t()
   def event, do: @event
+
+  @doc "The `MishkaCmsCore.PubSub` topic `changed/1` broadcasts `{:skip_changed, change}` on."
+  @spec topic() :: String.t()
+  def topic, do: @topic
+
+  @doc "Subscribes the calling process to `topic/0`."
+  @spec subscribe() :: :ok | {:error, term()}
+  def subscribe, do: Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, @topic)
 
   @doc """
   The reason as it is kept: trimmed, cut to `reason_max/0` characters, and `nil` when nothing is
@@ -289,8 +312,10 @@ defmodule MishkaCmsCore.Skip do
     }
 
     MishkaInstaller.Event.Hook.call(@event, payload)
+    Phoenix.PubSub.broadcast(MishkaCmsCore.PubSub, @topic, {:skip_changed, payload})
 
-    :telemetry.execute([:mishka_cms, :skip, :changed], %{count: 1}, Map.delete(payload, :reason))
+    metadata = Map.take(payload, [:source, :id, :site_id, :skipped?])
+    :telemetry.execute([:mishka_cms, :skip, :changed], %{count: 1}, metadata)
     :ok
   end
 

@@ -25,7 +25,7 @@ SPDX-License-Identifier: Apache-2.0
     <div
       :if={@counts}
       data-role="kpis"
-      class="mb-5 grid grid-cols-4 gap-3 max-[980px]:grid-cols-2!"
+      class="mb-5 grid grid-cols-5 gap-3 max-[980px]:grid-cols-2!"
     >
       <div
         :for={{label, key, label_color, dot} <- kpi_cards()}
@@ -55,4 +55,19 @@ SPDX-License-Identifier: Apache-2.0
       url_state={@url_state}
     />
   </div>
+
+  <SkipQuestion.window
+    :if={@skip_job}
+    id="activity-skip"
+    title={gettext("Skip this job?")}
+    body={
+      gettext(
+        "It will not be tried again and stops counting as failed. You can bring it back from its row."
+      )
+    }
+    on_confirm="skip_confirm"
+    on_cancel="skip_cancel"
+  />
+
+  <Toast.toasts toasts={@gervaz_toasts} ui={MishkaCmsCoreWeb.UIAdapters.Admin} />
 </div>

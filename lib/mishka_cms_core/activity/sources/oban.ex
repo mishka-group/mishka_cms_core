@@ -49,6 +49,15 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   by `MishkaCmsCore.Runtime.Resources.Changes.SendToOban`). Jobs without one
   never appear on a resource-scoped topic.
 
+  ## Skipping a failed job
+
+  An admin who does not want a failed job tried again skips it (`skip/3`), with an optional short
+  reason, and can bring it back (`bring_back/2`); both go through `MishkaCmsCore.Skip` with the
+  source `"core:job"`, so the job's notifications are cleaned and the sidebar's failed-jobs line,
+  the bell and the open activity logs follow at once. A skipped job is an entry with the action and
+  the severity `:skipped` and its `skip_reason`; it is not counted by `failed_count/2` nor listed
+  as an error.
+
   See `MishkaCmsCore.Activity.Behaviours.Source` for the behaviour contract.
   """
 
@@ -59,8 +68,12 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   import Ecto.Query
 
   alias MishkaCmsCore.Activity.Helpers
+  alias MishkaCmsCore.Skip
 
   @topic "oban_activity"
+  @skip_source "core:job"
+  @skip_permission "admin:dashboard:runtime:activity"
+  @skip_key "__skipped__"
   @handler_id "mishka-cms-core-activity-oban"
 
   @doc "Attach Oban telemetry → PubSub bridge. Idempotent."
@@ -187,6 +200,108 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
     end
   end
 
+  @doc """
+  Skips the failed job `job_id` for `viewer`: it is not tried again (a job waiting for its next try
+  is cancelled, one given up on stays so), it keeps `reason` (trimmed, at most
+  `MishkaCmsCore.Skip.reason_max/0` characters, optional), who skipped it and when in its
+  `meta["skipped"]`, and `MishkaCmsCore.Skip.changed/1` tells the rest of the CMS.
+
+  The viewer needs the activity log's permission (`admin:dashboard:runtime:activity`) and reaches
+  only the jobs it may see: a master every job, a site admin those of their own site. Only a
+  failed job (`retryable` or `discarded`) that is not skipped yet may be skipped. Answers
+  `{:ok, job}` with the job as it is now, or `{:error, :forbidden | :not_found | :not_failed}`.
+  """
+  @spec skip(map() | nil, integer() | String.t(), term()) ::
+          {:ok, Oban.Job.t()} | {:error, :forbidden | :not_found | :not_failed}
+  def skip(viewer, job_id, reason) do
+    with {:ok, job} <- reach_job(viewer, job_id),
+         true <- job.state in ["retryable", "discarded"] and not Skip.skipped_job?(job),
+         mark = Skip.mark(viewer, reason),
+         1 <- Skip.skip_jobs(one_job(job.id), mark) do
+      announce(job, true, mark)
+    else
+      {:error, reason} -> {:error, reason}
+      _not_failed -> {:error, :not_failed}
+    end
+  end
+
+  @doc """
+  Brings back the skipped job `job_id` for `viewer`, under the same rules as `skip/3`: the mark is
+  taken off and a job the skip cancelled is a job given up on again (`discarded`), so it counts as
+  failed again and waits for a person; it is not run by itself. Answers `{:ok, job}` or
+  `{:error, :forbidden | :not_found | :not_skipped}`.
+  """
+  @spec bring_back(map() | nil, integer() | String.t()) ::
+          {:ok, Oban.Job.t()} | {:error, :forbidden | :not_found | :not_skipped}
+  def bring_back(viewer, job_id) do
+    with {:ok, job} <- reach_job(viewer, job_id),
+         true <- Skip.skipped_job?(job),
+         1 <- Skip.bring_back_jobs(one_job(job.id)) do
+      announce(job, false, Skip.mark(viewer, nil))
+    else
+      {:error, reason} -> {:error, reason}
+      _not_skipped -> {:error, :not_skipped}
+    end
+  end
+
+  @doc """
+  The job id an activity entry of a job stands for (its id is `"oban-<job id>-…"`), or `nil` for
+  any other entry.
+  """
+  @spec job_id(String.t()) :: pos_integer() | nil
+  def job_id("oban-" <> rest) do
+    case Integer.parse(rest) do
+      {id, _rest} when id > 0 -> id
+      _not_a_job -> nil
+    end
+  end
+
+  def job_id(_entry_id), do: nil
+
+  defp reach_job(viewer, job_id) do
+    with true <- MishkaCmsCore.Settings.permitted?(%{permission: @skip_permission}, viewer),
+         {:ok, id} <- cast_job_id(job_id),
+         %Oban.Job{} = job <- read_job(id, Helpers.reach(viewer)) do
+      {:ok, job}
+    else
+      false -> {:error, :forbidden}
+      _none -> {:error, :not_found}
+    end
+  end
+
+  defp read_job(_id, :nothing), do: nil
+
+  defp read_job(id, reach) do
+    query = id |> one_job() |> filter_site(site_of(reach))
+    Oban.Repo.one(Oban.config(), query)
+  end
+
+  defp one_job(id), do: from(j in Oban.Job, where: j.id == ^id)
+
+  defp cast_job_id(id) when is_integer(id) and id > 0, do: {:ok, id}
+
+  defp cast_job_id(id) when is_binary(id) do
+    case Integer.parse(id) do
+      {id, ""} when id > 0 -> {:ok, id}
+      _not_an_id -> :error
+    end
+  end
+
+  defp cast_job_id(_id), do: :error
+
+  defp announce(job, skipped?, mark) do
+    Skip.changed(%{
+      source: @skip_source,
+      id: to_string(job.id),
+      site_id: job_site_id(job),
+      skipped?: skipped?,
+      reason: mark.skip_reason,
+      actor_id: mark.skipped_by_id
+    })
+
+    {:ok, Oban.Repo.one(Oban.config(), one_job(job.id))}
+  end
+
   defp failed_since(query, nil), do: query
 
   defp failed_since(query, %DateTime{} = since),
@@ -195,7 +310,9 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   defp fetch(site_id, scope, limit) do
     base =
       from j in Oban.Job,
-        where: j.state in ["completed", "discarded", "retryable"],
+        where:
+          j.state in ["completed", "discarded", "retryable"] or
+            (j.state == "cancelled" and fragment("coalesce(?, '{}'::jsonb) \\? 'skipped'", j.meta)),
         order_by: [desc: coalesce(j.completed_at, coalesce(j.discarded_at, j.inserted_at))],
         limit: ^limit
 
@@ -229,7 +346,8 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   """
   def entry_from_row(row) do
     event = state_event(row["action"])
-    job = %{worker: row["resource"], args: row["payload"] || %{}}
+    {mark, args} = Map.pop(row["payload"] || %{}, @skip_key)
+    job = %{worker: row["resource"], args: args}
 
     %{
       id: "oban-#{row["source_id"]}-#{event}",
@@ -246,9 +364,14 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
       source_id: row["source_id"],
       site_id: row["site_id"],
       user_id: row["user_id"],
-      message: message_for(job, event)
+      message: message_for(job, event),
+      skip_reason: skip_reason(mark)
     }
   end
+
+  @doc false
+  @spec skip_key() :: String.t()
+  def skip_key, do: @skip_key
 
   # WHO CAUSED THE JOB. `SendToOban.build_job_args/2` stamps the acting user into the args; a job
   # nobody triggered carries none and stays "System", which is what it is. Args come back from the
@@ -259,6 +382,7 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   defp state_event("completed"), do: :completed
   defp state_event("discarded"), do: :discarded
   defp state_event("retryable"), do: :retryable
+  defp state_event("skipped"), do: :skipped
   defp state_event(other), do: Helpers.action_atom(other)
 
   defp row_to_entry(job) do
@@ -279,10 +403,15 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
       source_id: to_string(job.id),
       site_id: job_site_id(job),
       user_id: actor_id(job.args),
-      message: message_for(job, event)
+      message: message_for(job, event),
+      skip_reason: skip_reason(job.meta["skipped"])
     }
   end
 
+  defp skip_reason(%{"reason" => reason}) when is_binary(reason), do: reason
+  defp skip_reason(_mark), do: nil
+
+  defp job_event(%{meta: %{"skipped" => %{}}}), do: :skipped
   defp job_event(%{state: "completed"}), do: :completed
   defp job_event(%{state: "discarded"}), do: :discarded
   defp job_event(%{state: "retryable"}), do: :retryable
@@ -292,6 +421,7 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   defp severity_for(:exception), do: :error
   defp severity_for(:discarded), do: :error
   defp severity_for(:retryable), do: :warn
+  defp severity_for(:skipped), do: :skipped
   defp severity_for(_), do: :info
 
   defp message_for(%{worker: worker} = job, event) when is_binary(worker) do
@@ -311,6 +441,7 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   defp job_message(worker, :completed), do: gettext("%{worker} completed", worker: worker)
   defp job_message(worker, :discarded), do: gettext("%{worker} discarded", worker: worker)
   defp job_message(worker, :retryable), do: gettext("%{worker} retryable", worker: worker)
+  defp job_message(worker, :skipped), do: gettext("%{worker} skipped", worker: worker)
 
   defp job_message(worker, event),
     do: gettext("%{worker} %{event}", worker: worker, event: event)
