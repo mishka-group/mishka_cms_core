@@ -160,7 +160,8 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   How many jobs `viewer` may see that failed and wait to be tried again or were given up on
   (`retryable` and `discarded`): every site's for a master, their own site's for a site user, and 0
   for no viewer. One count query; the top bar's bell shows it as the core's own item
-  (`MishkaCmsCore.Layouts.TopbarNeeds`).
+  (`MishkaCmsCore.Layouts.TopbarNeeds`). A job an admin skipped (`MishkaCmsCore.Skip`) is not
+  counted.
 
   Options: `states:` the job states counted (`["retryable", "discarded"]` by default) and `since:`
   (a `DateTime`), only the jobs that failed from then on: a discarded job by when it was given up
@@ -178,6 +179,7 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
       reach ->
         query =
           from(j in Oban.Job, where: j.state in ^states, select: count())
+          |> MishkaCmsCore.Skip.not_skipped()
           |> filter_site(site_of(reach))
           |> failed_since(opts[:since])
 
