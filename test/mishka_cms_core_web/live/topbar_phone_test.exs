@@ -59,6 +59,10 @@ defmodule MishkaCmsCoreWeb.Test.TopbarPhoneTest do
 
       assert text(html, "#admin-phone-section [data-role=eyebrow]") == "Orders"
       assert text(html, "#admin-phone-section [data-role=title]") == "Drafts"
+
+      # A long title wraps to a second line on a phone instead of being cut ("Refunds and di…").
+      assert classes(html, "#admin-phone-section [data-role=title]") =~ "line-clamp-2"
+      refute classes(html, "#admin-phone-section [data-role=title]") =~ "truncate"
       assert classes(html, "#admin-phone-section") =~ "#{@phone}:block!"
       assert classes(html, "#admin-phone-section") =~ "hidden"
 

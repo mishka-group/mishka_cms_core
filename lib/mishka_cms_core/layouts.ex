@@ -780,7 +780,7 @@ defmodule MishkaCmsCore.Layouts do
         </div>
         <div
           data-role="title"
-          class="truncate font-['Space_Grotesk'] text-[17px] font-semibold leading-[1.15] text-[#17161a]"
+          class="line-clamp-2 break-words font-['Space_Grotesk'] text-[17px] font-semibold leading-[1.15] text-[#17161a]"
         >
           {(@section.title && label(@section.title)) || "MishkaCMS"}
         </div>
