@@ -4,24 +4,28 @@
 
 defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @moduledoc """
-  The problems each part of the CMS tells the admin about in the sidebar, on the
-  `"sidebar:status"` mishka_installer event: "8 failed jobs", "3 unhandled provider events". Every
-  part answers for itself, so the sidebar never says anything a part did not count. The lines are
-  read once and drawn twice, on the right of the Settings row (`MishkaCmsCore.Layouts.sidebar_status/1`)
-  and as the card at the bottom of the sidebar (`MishkaCmsCore.Layouts.status_card/1`):
+  What each part of the CMS tells the admin about at the bottom of the sidebar, on the
+  `"sidebar:status"` mishka_installer event: "8 failed jobs", "3 unhandled provider events", "A
+  new version is out". Every part answers for itself, so the sidebar never says anything a part did
+  not count. The lines are drawn as one card above the sidebar's footer entries
+  (`MishkaCmsCore.Layouts.status_card/1`):
 
-    * no problem line, and at least one plugin ran a check the viewer may see (it set `checked:
-      true`): a small green dot and "OK" on the row, and a green card "All systems operational"
-      that says when the check ran ("Checked 1 min ago", `checked_label/2`);
-    * one or more lines: a small pill "3 issues" in the worst line's tone that opens a list of the
-      lines, each opening its page, and a card in that tone naming the count and the worst line
-      ("27 failed jobs"); "Settings" itself still opens Settings;
-    * no plugin checked and no line: nothing at all.
+    * no line, and at least one plugin ran a check the viewer may see (it set `checked: true`): a
+      green card "All systems operational" that says when the check ran ("Checked 1 min ago",
+      `checked_label/2`);
+    * only `:info` lines: a blue card "1 note" over the first line's words;
+    * any `:warn` or `:error` line: a card "2 issues" in the worst line's tone (amber or red) over
+      that line's words ("27 failed jobs");
+    * no plugin checked and no line: no card at all.
+
+  One line with a link opens its page; several open the list of the lines, each opening its page,
+  beside the sidebar on a wide screen and as a sheet on a phone. The title is `title/1` and can be
+  changed by a plugin on `"sidebar:status:card"` (below).
 
   A line is a map:
 
     * `id`: a string, unique and stable;
-    * `level`: `:warn` or `:error`;
+    * `level`: `:info`, `:warn` or `:error`;
     * `label`: the line's few words, already translated: "8 failed jobs";
     * `count`: optional, the number the label says, a whole number;
     * `link`: optional, a path of this app the line opens
@@ -33,14 +37,15 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   A line with no `id`, no `label`, an unknown `level` or an `id` already taken is dropped, and so
   is a line the viewer may not see: one behind a permission they do not hold, or, for an admin of
   one site, a line of another site. A master sees every site's lines; a line of a site other than
-  the one the page is on carries that site's name ("8 failed jobs · Shop").
+  the one the page is on carries that site's name ("8 failed jobs · Shop"). The lines are sorted
+  worst first: `:error`, `:warn`, then `:info`.
 
   ## Checked
 
   A plugin that ran its check for this viewer sets `checked: true`, whether or not it found a
-  problem; that is what lets the sidebar say "OK" rather than nothing. A plugin sets it only
-  when the viewer may see what it checks (the permission of its lines), so a viewer with no check
-  of their own sees no row at all.
+  problem; that is what lets the card say "All systems operational" rather than nothing. A plugin
+  sets it only when the viewer may see what it checks (the permission of its lines), so a viewer
+  with no check of their own sees no card at all.
 
   ## What a plugin is handed
 
@@ -87,21 +92,66 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
         def call(data), do: {:reply, data}
       end
 
+  A note that is not a problem is a line of level `:info`, such as `%{id: "shop-update", level:
+  :info, label: "Shop 2.1 is out", link: "/admin/dashboard/extensions"}`.
+
+  ## Changing the card
+
+  Once the lines are collected, the card drawn from them (`card/2`) goes through a second event,
+  `"sidebar:status:card"`, so a host or a plugin can change what it says or hide it. A plugin there
+  is handed
+
+      %{
+        card: %{level: :warn, title: "2 issues", detail: "27 failed jobs"},  # or nil: no card
+        lines: [line],           # the lines as collected, worst first
+        current_user: user,
+        current_site: site,
+        current_path: "/admin/dashboard/...",
+        view: module()
+      }
+
+  and answers the map with its own `card`: another `title` or `detail` (both already translated),
+  another `level` (`:ok`, `:info`, `:warn` or `:error`), or `nil` to draw no card for this viewer.
+  A card the plugin broke (no title, an unknown level) is drawn as it came. On an `:ok` card a
+  `detail` of `nil` keeps "Checked 1 min ago". What a press on the card does still follows the
+  lines: one line's page, or the list of several.
+
+      defmodule MyHost.StatusCard do
+        use MishkaInstaller.Event.Hook, event: "sidebar:status:card"
+
+        use Gettext, backend: MyHost.Gettext
+
+        @impl true
+        def call(%{current_user: %{site_id: nil}} = data), do: {:reply, %{data | card: nil}}
+
+        def call(%{card: %{level: :ok} = card} = data),
+          do: {:reply, %{data | card: %{card | title: gettext("Everything is running")}}}
+
+        def call(data), do: {:reply, data}
+      end
+
+  Here a master sees no card, and everyone else reads "Everything is running" when all is well.
+
   ## When it is called
 
-  `MishkaCmsCore.Layouts.Nav` asks when an admin page opens and when its path changes, never on a
-  render, so a plugin's count is read at most once a page and, through `cached/2`, at most once in
-  `@ttl_ms` for all the pages open on a site. A part whose count changed calls `changed/1` with the
-  site: the kept counts of that site are dropped and every open page of it asks again, once for a
-  burst of changes. A plugin that raises is logged by mishka_installer and the row is drawn without
-  its line.
+  `MishkaCmsCore.Layouts.Nav` asks both events when an admin page opens and when its path changes,
+  never on a render, so a plugin's count is read at most once a page and, through `cached/2`, at
+  most once in `@ttl_ms` for all the pages open on a site. A part whose count changed calls
+  `changed/1` with the site: the kept counts of that site are dropped and every open page of it asks
+  again, once for a burst of changes. A plugin that raises is logged by mishka_installer and the card
+  is drawn without its line.
 
   ## Options
 
-      config :mishka_cms_core, :sidebar_status, enabled: true, window: 3_600
+      config :mishka_cms_core, :sidebar_status,
+        enabled: true,
+        window: 3_600,
+        levels: [:info, :warn, :error]
 
-  `enabled: false` draws no row and asks no plugin. `window` is how many seconds back a plugin
-  counts (the last hour by default), handed to plugins as `window` and `since`.
+  `enabled: false` draws no card and asks no plugin. `window` is how many seconds back a plugin
+  counts (the last hour by default), handed to plugins as `window` and `since`. `levels` are the
+  levels of the lines shown, all three by default: `levels: [:warn, :error]` hides the notes, and
+  with no other line the card says "All systems operational" when a plugin checked.
   """
   use GenServer
   use Gettext, backend: MishkaCmsCore.Gettext
@@ -111,23 +161,33 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   alias MishkaCmsCore.Settings
 
   @event "sidebar:status"
+  @card_event "sidebar:status:card"
   @activity "/admin/dashboard/runtime/activity"
   @activity_permission "admin:dashboard:runtime:activity"
   @topic "sidebar:status"
   @table :mishka_cms_sidebar_status
-  @levels [:warn, :error]
+  @levels [:info, :warn, :error]
+  @card_levels [:ok | @levels]
   @ttl_ms 30_000
   @window 3_600
 
   @type line :: %{
           required(:id) => String.t(),
-          required(:level) => :ok | :warn | :error,
+          required(:level) => level(),
           required(:label) => String.t(),
           optional(:count) => non_neg_integer() | nil,
           optional(:link) => String.t() | nil,
           optional(:permission) => String.t() | [String.t()],
           optional(:site_id) => String.t() | nil,
           optional(:checked_at) => DateTime.t()
+        }
+
+  @type level :: :ok | :info | :warn | :error
+
+  @type card :: %{
+          required(:level) => level(),
+          required(:title) => String.t(),
+          required(:detail) => String.t() | nil
         }
 
   @doc false
@@ -142,6 +202,10 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @doc "The mishka_installer event parts add their lines on."
   @spec event() :: String.t()
   def event, do: @event
+
+  @doc "The mishka_installer event a plugin changes or hides the card on (`card/2`)."
+  @spec card_event() :: String.t()
+  def card_event, do: @card_event
 
   @doc "The PubSub topic `changed/1` is announced on."
   @spec topic() :: String.t()
@@ -160,13 +224,25 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
     end
   end
 
+  @doc """
+  The levels of the lines shown (`config :mishka_cms_core, :sidebar_status, levels:`), `:info`,
+  `:warn` and `:error` by default; a level not among them is left out.
+  """
+  @spec levels() :: [:info | :warn | :error]
+  def levels do
+    case Keyword.get(options(), :levels, @levels) do
+      levels when is_list(levels) -> Enum.filter(@levels, &(&1 in levels))
+      _other -> @levels
+    end
+  end
+
   defp options, do: Application.get_env(:mishka_cms_core, :sidebar_status, [])
 
   @doc """
-  The lines to show for `context`, the worst first (`:error`, then `:warn`), `id` breaking a tie;
-  each one the context's `current_user` may see. With no problem line and a plugin that checked, the
-  one `:ok` line "OK" (`all_clear/1`). `[]` when the row is off, no plugin checked or
-  answered, or one raised.
+  The lines to show for `context`, the worst first (`:error`, `:warn`, then `:info`), `id` breaking
+  a tie; each one the context's `current_user` may see, of a level `levels/0` shows. With no such
+  line and a plugin that checked, the one `:ok` line (`all_clear/1`). `[]` when the card is off, no
+  plugin checked or answered, or one raised.
   """
   @spec collect(map()) :: [line()]
   def collect(%{current_user: user} = context) do
@@ -174,9 +250,12 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
          %{lines: lines} = answer when is_list(lines) <-
            MishkaInstaller.Event.Hook.call(@event, data(context)) do
       current = if is_nil(user.site_id), do: current_site_id(context), else: user.site_id
+      shown = levels()
 
       lines
-      |> Enum.filter(&(line?(&1) and Settings.permitted?(&1, user) and in_reach?(&1, user)))
+      |> Enum.filter(
+        &(line?(&1, shown) and Settings.permitted?(&1, user) and in_reach?(&1, user))
+      )
       |> Enum.uniq_by(& &1.id)
       |> Enum.map(&clean(&1, current))
       |> Enum.sort_by(&{-rank(&1.level), &1.id})
@@ -190,8 +269,8 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   defp clear(lines, _checked, _user), do: lines
 
   @doc """
-  The neutral line returned when the plugins checked and found nothing: level `:ok`, which the
-  Settings row draws as "OK" and the card as "All systems operational". It names the activity log as
+  The neutral line returned when the plugins checked and found nothing: level `:ok`, which the card
+  draws as "All systems operational". It names the activity log as
   its link for a viewer who may open it (no link for anyone else), and `checked_at`, the moment the
   plugins were asked.
   """
@@ -277,20 +356,21 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @spec concerns?(map() | nil, String.t() | nil) :: boolean()
   def concerns?(user, site_id), do: TopbarNeeds.concerns?(user, site_id)
 
-  @doc "The worst level of `lines`: `:error`, `:warn` or `:ok`, or `nil` for none."
-  @spec level([line()]) :: :ok | :warn | :error | nil
+  @doc "The worst level of `lines`: `:error`, `:warn`, `:info` or `:ok`, or `nil` for none."
+  @spec level([line()]) :: level() | nil
   def level([]), do: nil
   def level(lines), do: lines |> Enum.max_by(&rank(&1.level)) |> Map.fetch!(:level)
 
-  defp rank(:error), do: 2
-  defp rank(:warn), do: 1
+  defp rank(:error), do: 3
+  defp rank(:warn), do: 2
+  defp rank(:info), do: 1
   defp rank(:ok), do: 0
 
-  defp line?(%{id: id, level: level, label: label} = line)
+  defp line?(%{id: id, level: level, label: label} = line, shown)
        when is_binary(id) and id != "" and level in @levels and is_binary(label) and label != "",
-       do: count?(line[:count]) and site?(line[:site_id])
+       do: level in shown and count?(line[:count]) and site?(line[:site_id])
 
-  defp line?(_other), do: false
+  defp line?(_other, _shown), do: false
 
   defp count?(nil), do: true
   defp count?(count), do: is_integer(count) and count >= 0
@@ -328,10 +408,63 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   defp current_site_id(%{current_site: %{id: id}}), do: id
   defp current_site_id(_context), do: nil
 
-  @doc "The words of the pill that opens the list of the lines: \"3 issues\"."
-  @spec issues_label([line()]) :: String.t()
-  def issues_label(lines),
-    do: ngettext("%{count} issue", "%{count} issues", length(lines))
+  @doc """
+  The card drawn from `lines` (`collect/1`), handed through the `"sidebar:status:card"` event so a
+  plugin may change or hide it: its `level` is the worst line's, its `title` is `title/1` and its
+  `detail` the worst line's label (`nil` on an `:ok` card, drawn as "Checked 1 min ago"). `nil`, no
+  card, with no line, when the card is off, or when a plugin hid it.
+  """
+  @spec card([line()], map()) :: card() | nil
+  def card(lines, context) do
+    default = default_card(lines)
+
+    with true <- enabled?(),
+         %{card: card} <-
+           MishkaInstaller.Event.Hook.call(
+             @card_event,
+             Map.merge(context, %{card: default, lines: lines})
+           ) do
+      checked_card(card, default)
+    else
+      _nothing -> nil
+    end
+  end
+
+  defp default_card([]), do: nil
+  defp default_card([%{level: :ok}]), do: %{level: :ok, title: title([]), detail: nil}
+
+  defp default_card([worst | _rest] = lines),
+    do: %{level: worst.level, title: title(lines), detail: worst.label}
+
+  defp checked_card(nil, _default), do: nil
+
+  defp checked_card(%{level: level, title: title} = card, _default)
+       when level in @card_levels and is_binary(title) and title != "" do
+    case card[:detail] do
+      detail when is_binary(detail) or is_nil(detail) ->
+        %{level: level, title: title, detail: detail}
+
+      _other ->
+        %{level: level, title: title, detail: nil}
+    end
+  end
+
+  defp checked_card(_broken, default), do: default
+
+  @doc """
+  The card's title for `lines`: "All systems operational" with no problem line, "1 note" or "2
+  notes" when every line is `:info`, and "2 issues" counting the `:warn` and `:error` lines when
+  there is one.
+  """
+  @spec title([line()]) :: String.t()
+  def title(lines) do
+    case {Enum.count(lines, &(&1.level in [:warn, :error])),
+          Enum.count(lines, &(&1.level == :info))} do
+      {0, 0} -> gettext("All systems operational")
+      {0, notes} -> ngettext("%{count} note", "%{count} notes", notes)
+      {issues, _notes} -> ngettext("%{count} issue", "%{count} issues", issues)
+    end
+  end
 
   @doc """
   When the check of an `:ok` line ran, against `now`: "Checked just now" within the first minute,

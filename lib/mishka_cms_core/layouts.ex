@@ -143,10 +143,11 @@ defmodule MishkaCmsCore.Layouts do
   Settings. This component only paints what it is handed, so an empty section is one that was
   filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
-  beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@sidebar_status`, the problems the
-  parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), drawn by `sidebar_status/1` on the
-  right of the Settings row and by `status_card/1` above the footer's entries: nothing without a
-  line. `status_now` is `@sidebar_status_now`, the time the card's "Checked 1 min ago" is counted to.
+  beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@sidebar_status`, the lines the
+  parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), and `status_card` is
+  `@sidebar_status_card`, the card drawn from them by `status_card/1` above the footer's entries:
+  nothing without one. `status_now` is `@sidebar_status_now`, the time the card's "Checked 1 min
+  ago" is counted to.
 
   While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
   arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
@@ -164,8 +165,12 @@ defmodule MishkaCmsCore.Layouts do
 
   attr :status, :list,
     default: [],
+    doc: "`@sidebar_status`, the lines of `MishkaCmsCore.Layouts.SidebarStatus`"
+
+  attr :status_card, :map,
+    default: nil,
     doc:
-      "`@sidebar_status`, the lines of `MishkaCmsCore.Layouts.SidebarStatus`; nothing is drawn without one"
+      "`@sidebar_status_card`, the card `SidebarStatus.card/2` made of them; no card when `nil`"
 
   attr :status_now, :any,
     default: nil,
@@ -183,8 +188,7 @@ defmodule MishkaCmsCore.Layouts do
         footer_entries: footer,
         trail: trail,
         levels: levels,
-        level: open_level(trail, levels),
-        settings_row: Enum.any?(footer, &(&1.key == "settings"))
+        level: open_level(trail, levels)
       )
 
     ~H"""
@@ -309,14 +313,8 @@ defmodule MishkaCmsCore.Layouts do
       </nav>
 
       <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
-        <.status_card lines={@status} now={@status_now} list={not @settings_row} />
-        <%= for item <- @footer_entries do %>
-          <div :if={item.key == "settings"} id="admin-sidebar-settings-row" class="relative">
-            <.nav_link item={item} trail={@trail} counts={@counts} />
-            <.sidebar_status lines={@status} />
-          </div>
-          <.nav_link :if={item.key != "settings"} item={item} trail={@trail} counts={@counts} />
-        <% end %>
+        <.status_card card={@status_card} lines={@status} now={@status_now} />
+        <.nav_link :for={item <- @footer_entries} item={item} trail={@trail} counts={@counts} />
       </div>
     </aside>
 
@@ -332,175 +330,129 @@ defmodule MishkaCmsCore.Layouts do
     """
   end
 
-  attr :lines, :list, required: true
-
-  @doc """
-  The status on the right of the sidebar's Settings row (`MishkaCmsCore.Layouts.SidebarStatus`):
-
-    * nothing when no plugin answered;
-    * a small green dot and "OK" in muted text when the plugins checked and found nothing (the
-      `:ok` line); it takes no click, so the row still opens Settings;
-    * a small pill "3 issues" in the worst line's tone when there are problems. The pill is a
-      button laid over the row's right side, beside the Settings link and never inside it, so a
-      press on "Settings" still opens Settings and only the pill opens the list of the lines:
-      beside the sidebar on a wide screen, a sheet at the bottom of the menu on a phone, each line a
-      link to its page. Escape and a click outside close it; `aria-expanded` follows it. On a phone
-      the pill's tap target is 44 px.
-  """
-  def sidebar_status(%{lines: []} = assigns), do: ~H""
-
-  def sidebar_status(%{lines: [%{level: :ok}]} = assigns) do
-    ~H"""
-    <span
-      id="admin-sidebar-status"
-      data-state="ok"
-      class="pointer-events-none absolute inset-y-0 end-[12px] flex items-center gap-1.5 text-[11px] font-medium text-[#8a877f]"
-    >
-      <span class="size-1.5 shrink-0 rounded-full bg-[#1f9d6b]"></span>
-      {gettext("OK")}
-    </span>
-    """
-  end
-
-  def sidebar_status(assigns) do
-    assigns = assign(assigns, :level, SidebarStatus.level(assigns.lines))
-
-    ~H"""
-    <div id="admin-sidebar-status" data-state="issues" class="contents">
-      <button
-        type="button"
-        id="admin-sidebar-status-toggle"
-        data-status-toggle
-        data-level={@level}
-        aria-controls="admin-sidebar-status-list"
-        aria-expanded="false"
-        aria-label={SidebarStatus.issues_label(@lines)}
-        phx-click={toggle_status()}
-        class="absolute inset-y-0 end-[6px] my-auto flex h-[26px] items-center max-[980px]:h-11 max-[980px]:min-w-11 max-[980px]:justify-end"
-      >
-        <span class={[
-          "rounded-full px-2 py-[2px] text-[11px] font-bold leading-[16px]",
-          sidebar_pill(@level)
-        ]}>
-          {SidebarStatus.issues_label(@lines)}
-        </span>
-      </button>
-      <.status_list lines={@lines} />
-    </div>
-    """
-  end
-
   @card_hover "transition-shadow hover:shadow-[0_2px_10px_rgba(30,28,24,0.08)]"
 
-  attr :lines, :list, required: true
-  attr :now, :any, default: nil
-  attr :list, :boolean, default: false
+  attr :card, :map, default: nil, doc: "the card of `MishkaCmsCore.Layouts.SidebarStatus.card/2`"
+  attr :lines, :list, default: [], doc: "the lines it was made of, which decide what a press does"
+
+  attr :now, :any,
+    default: nil,
+    doc: "the time an `:ok` card counts its check's age to; now when `nil`"
 
   @doc """
-  The status card at the bottom of the sidebar, above its entries, drawn from the same lines as
-  `sidebar_status/1` (`MishkaCmsCore.Layouts.SidebarStatus`), so nothing is read twice:
+  The status card at the bottom of the sidebar, above its entries (`MishkaCmsCore.Layouts.SidebarStatus`),
+  in the tone of its level: green for `:ok`, blue for `:info`, amber for `:warn`, red for
+  `:error`, each dot with a soft halo that grows and fades behind it (still for a viewer who asked
+  for reduced motion). It reads the card's title over its detail; an `:ok` card with no detail
+  says how long ago the check ran, counted to `now` (`SidebarStatus.checked_label/2`).
 
-    * nothing when no plugin answered;
-    * a green card "All systems operational" with "Checked 1 min ago" under it, the age of the
-      check counted to `now` (`SidebarStatus.checked_label/2`), when the plugins checked and found
-      nothing;
-    * a card in the worst line's tone, "2 issues" over the worst line's words ("27 failed jobs"),
-      when there are problems. One line opens its page; several open the list the Settings row's
-      pill opens. `list` draws that list inside the card, for a sidebar with no Settings row.
+    * no card: nothing;
+    * one problem or note line with a link: the card opens its page;
+    * several lines: the card is a button opening the list of the lines, beside the sidebar on a
+      wide screen and as a sheet at the bottom of the screen on a phone, each line a link to its
+      page; Escape and a click outside close it and `aria-expanded` follows it;
+    * otherwise the card is not pressable.
+
+  The keyboard focus ring is drawn in the card's own tone, and a click leaves no outline.
   """
-  def status_card(%{lines: []} = assigns), do: ~H""
+  def status_card(%{card: nil} = assigns), do: ~H""
 
-  def status_card(%{lines: [%{level: :ok} = line]} = assigns) do
-    assigns =
-      assign(
-        assigns,
-        :detail,
-        SidebarStatus.checked_label(line, assigns.now || DateTime.utc_now())
-      )
-
-    ~H"""
-    <div id="admin-sidebar-status-card" data-state="ok" class={card_class(:ok)}>
-      <.card_body level={:ok} title={gettext("All systems operational")} detail={@detail} />
-    </div>
-    """
-  end
-
-  def status_card(%{lines: [%{link: link} = line]} = assigns) when is_binary(link) do
-    assigns = assign(assigns, line: line, hover: @card_hover)
-
-    ~H"""
-    <.link
-      navigate={@line.link}
-      id="admin-sidebar-status-card"
-      data-state="issues"
-      data-level={@line.level}
-      class={[card_class(@line.level), "block no-underline", @hover]}
-    >
-      <.card_body level={@line.level} title={SidebarStatus.issues_label(@lines)} detail={@line.label} />
-    </.link>
-    """
-  end
-
-  def status_card(%{lines: [line]} = assigns) do
-    assigns = assign(assigns, :line, line)
-
-    ~H"""
-    <div
-      id="admin-sidebar-status-card"
-      data-state="issues"
-      data-level={@line.level}
-      class={card_class(@line.level)}
-    >
-      <.card_body level={@line.level} title={SidebarStatus.issues_label(@lines)} detail={@line.label} />
-    </div>
-    """
-  end
-
-  def status_card(%{lines: [first | _rest]} = assigns) do
-    assigns = assign(assigns, first: first, hover: @card_hover)
+  def status_card(%{lines: [_first, _second | _rest]} = assigns) do
+    assigns = assign(assigns, hover: @card_hover, detail: card_detail(assigns))
 
     ~H"""
     <div class="relative">
       <button
         type="button"
         id="admin-sidebar-status-card"
-        data-state="issues"
-        data-level={@first.level}
-        data-status-toggle
+        data-state={card_state(@card.level)}
+        data-level={@card.level}
         aria-controls="admin-sidebar-status-list"
         aria-expanded="false"
         phx-click={toggle_status()}
-        class={[card_class(@first.level), "block w-full text-start", @hover]}
+        class={[card_class(@card.level), "block w-full text-start", @hover]}
       >
-        <.card_body
-          level={@first.level}
-          title={SidebarStatus.issues_label(@lines)}
-          detail={@first.label}
-        />
+        <.card_body level={@card.level} title={@card.title} detail={@detail} />
       </button>
-      <.status_list :if={@list} lines={@lines} />
+      <.status_list title={@card.title} lines={@lines} />
     </div>
     """
   end
+
+  def status_card(%{lines: [%{level: level, link: link}]} = assigns)
+      when level != :ok and is_binary(link) do
+    assigns = assign(assigns, hover: @card_hover, detail: card_detail(assigns), link: link)
+
+    ~H"""
+    <.link
+      navigate={@link}
+      id="admin-sidebar-status-card"
+      data-state={card_state(@card.level)}
+      data-level={@card.level}
+      class={[card_class(@card.level), "block no-underline", @hover]}
+    >
+      <.card_body level={@card.level} title={@card.title} detail={@detail} />
+    </.link>
+    """
+  end
+
+  def status_card(assigns) do
+    assigns = assign(assigns, :detail, card_detail(assigns))
+
+    ~H"""
+    <div
+      id="admin-sidebar-status-card"
+      data-state={card_state(@card.level)}
+      data-level={@card.level}
+      class={card_class(@card.level)}
+    >
+      <.card_body level={@card.level} title={@card.title} detail={@detail} />
+    </div>
+    """
+  end
+
+  defp card_state(:ok), do: "ok"
+  defp card_state(_level), do: "issues"
+
+  defp card_detail(%{card: %{level: :ok, detail: nil}, lines: [line]} = assigns),
+    do: SidebarStatus.checked_label(line, assigns.now || DateTime.utc_now())
+
+  defp card_detail(%{card: card}), do: card.detail
 
   attr :level, :atom, required: true
   attr :title, :string, required: true
   attr :detail, :string, default: nil
 
   defp card_body(assigns) do
+    assigns = assign(assigns, :tone, card_tone(assigns.level))
+
     ~H"""
     <div class="flex items-center gap-2">
-      <span class={["size-2 shrink-0 rounded-full", card_tone(@level).dot]}></span>
-      <span class={["min-w-0 truncate text-[11.5px] font-bold", card_tone(@level).ink]}>
-        {@title}
-      </span>
+      <.card_dot level={@level} />
+      <span class={["min-w-0 truncate text-[11.5px] font-bold", @tone.title]}>{@title}</span>
     </div>
-    <div
-      :if={@detail}
-      class="mt-[5px] truncate ps-4 text-[10.5px] font-medium text-[#8a938c]"
-    >
+    <div :if={@detail} class={["mt-[5px] truncate ps-4 text-[10.5px] font-medium", @tone.line]}>
       {@detail}
     </div>
+    """
+  end
+
+  attr :level, :atom, required: true
+
+  defp card_dot(assigns) do
+    assigns = assign(assigns, :dot, card_tone(assigns.level).dot)
+
+    ~H"""
+    <span class="relative flex size-2 shrink-0">
+      <span
+        data-halo
+        class={[
+          "absolute inset-0 animate-ping rounded-full opacity-40 [animation-duration:2.4s] motion-reduce:hidden motion-reduce:animate-none",
+          @dot
+        ]}
+      ></span>
+      <span class={["relative size-2 rounded-full", @dot]}></span>
+    </span>
     """
   end
 
@@ -513,24 +465,36 @@ defmodule MishkaCmsCore.Layouts do
   defp card_tone(:ok),
     do: %{
       box: "border-[#e2ece5] bg-[#f3f8f4] focus-visible:ring-[#cfe3d6]",
-      dot: "animate-pulse bg-[#1f9d6b] motion-reduce:animate-none",
-      ink: "text-[#177a53]"
+      dot: "bg-[#1f9d6b]",
+      title: "text-[#177a53]",
+      line: "text-[#3f8a69]"
+    }
+
+  defp card_tone(:info),
+    do: %{
+      box: "border-[#dde6f6] bg-[#f2f6fd] focus-visible:ring-[#c9d8f1]",
+      dot: "bg-[#4a7fd4]",
+      title: "text-[#2f5fa8]",
+      line: "text-[#5378b5]"
+    }
+
+  defp card_tone(:warn),
+    do: %{
+      box: "border-[#f3e7cd] bg-[#fefaf1] focus-visible:ring-[#ecdcb6]",
+      dot: "bg-[#c8931f]",
+      title: "text-[#9a6a07]",
+      line: "text-[#a57a24]"
     }
 
   defp card_tone(:error),
     do: %{
       box: "border-[#f5dfdc] bg-[#fdf4f3] focus-visible:ring-[#f1cfca]",
       dot: "bg-[#c0392b]",
-      ink: "text-[#b3382d]"
+      title: "text-[#b3382d]",
+      line: "text-[#bd5a50]"
     }
 
-  defp card_tone(_warn),
-    do: %{
-      box: "border-[#f3e7cd] bg-[#fefaf1] focus-visible:ring-[#ecdcb6]",
-      dot: "bg-[#c8931f]",
-      ink: "text-[#9a6a07]"
-    }
-
+  attr :title, :string, required: true
   attr :lines, :list, required: true
 
   defp status_list(assigns) do
@@ -538,7 +502,7 @@ defmodule MishkaCmsCore.Layouts do
     <div
       id="admin-sidebar-status-list"
       role="dialog"
-      aria-label={SidebarStatus.issues_label(@lines)}
+      aria-label={@title}
       phx-click-away={close_status()}
       phx-window-keydown={close_status()}
       phx-key="Escape"
@@ -549,16 +513,14 @@ defmodule MishkaCmsCore.Layouts do
     """
   end
 
-  @status_toggles "[data-status-toggle]"
-
   defp toggle_status do
     JS.toggle(to: "#admin-sidebar-status-list")
-    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: @status_toggles)
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "#admin-sidebar-status-card")
   end
 
   defp close_status do
     JS.hide(to: "#admin-sidebar-status-list")
-    |> JS.set_attribute({"aria-expanded", "false"}, to: @status_toggles)
+    |> JS.set_attribute({"aria-expanded", "false"}, to: "#admin-sidebar-status-card")
   end
 
   attr :line, :map, required: true
@@ -571,7 +533,7 @@ defmodule MishkaCmsCore.Layouts do
       data-level={@line.level}
       class="flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11"
     >
-      <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
+      <span class={["size-2 shrink-0 rounded-full", card_tone(@line.level).dot]}></span>
       <span class="min-w-0 flex-1 truncate">{@line.label}</span>
       <.icon name="hero-arrow-right" class="size-3.5 shrink-0 text-[#a8a5a0]" />
     </.link>
@@ -585,18 +547,11 @@ defmodule MishkaCmsCore.Layouts do
       data-level={@line.level}
       class="flex items-center gap-2 px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f]"
     >
-      <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
+      <span class={["size-2 shrink-0 rounded-full", card_tone(@line.level).dot]}></span>
       <span class="min-w-0 flex-1 truncate">{@line.label}</span>
     </div>
     """
   end
-
-  defp sidebar_pill(:error), do: "bg-[#fbe9e7] text-[#b3382d]"
-  defp sidebar_pill(_warn), do: "bg-[#fdf3dc] text-[#9a6a07]"
-
-  defp sidebar_dot(:error), do: "bg-[#c0392b]"
-  defp sidebar_dot(:warn), do: "bg-[#c8931f]"
-  defp sidebar_dot(_ok), do: "bg-[#1f9d6b]"
 
   attr :item, :map, required: true
   attr :trail, :list, default: []

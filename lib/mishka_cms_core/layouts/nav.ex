@@ -41,9 +41,9 @@ defmodule MishkaCmsCore.Layouts.Nav do
   event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items, and `@topbar_status`, the
   status lines of the top bar's chip on `"topbar:status"` (`MishkaCmsCore.Layouts.TopbarStatus`).
 
-  It keeps `@sidebar_status`, the problems on the sidebar's Settings row and status card on the
-  `"sidebar:status"` event (`MishkaCmsCore.Layouts.SidebarStatus`), collected with the top bar's
-  items and again when a part calls `SidebarStatus.changed/1` for the viewer's site; the changes that
+  It keeps `@sidebar_status`, the lines of the sidebar's status card on the `"sidebar:status"` event
+  (`MishkaCmsCore.Layouts.SidebarStatus`), and `@sidebar_status_card`, the card made of them on the
+  `"sidebar:status:card"` event, both collected with the top bar's items and again when a part calls `SidebarStatus.changed/1` for the viewer's site; the changes that
   arrive together are collected once, and each collection emits
   `[:mishka_cms, :sidebar_status, :refreshed]` from the page's own process. `@sidebar_status_now` is
   the time the card counts "Checked 1 min ago" to: set with each collection and moved on once a
@@ -141,6 +141,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
       view: socket.view
     }
 
+    status = SidebarStatus.collect(context)
+
     assign(socket,
       current_path: path,
       topbar_items: TopbarItems.collect(context),
@@ -148,7 +150,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
       topbar_status: TopbarStatus.collect(context),
       topbar_placeholder: TopbarSearch.placeholder(context),
       topbar_needs: TopbarNeeds.collect(context),
-      sidebar_status: SidebarStatus.collect(context),
+      sidebar_status: status,
+      sidebar_status_card: SidebarStatus.card(status, context),
       sidebar_status_now: DateTime.utc_now(),
       topbar_site: site,
       topbar_section: Sidebar.section(path),
@@ -225,20 +228,25 @@ defmodule MishkaCmsCore.Layouts.Nav do
   end
 
   defp status_message(:sidebar_status_refresh, socket) do
-    lines =
-      SidebarStatus.collect(%{
-        current_user: socket.assigns[:current_user],
-        current_site: socket.assigns[:topbar_site],
-        current_path: socket.assigns[:current_path],
-        view: socket.view
-      })
+    context = %{
+      current_user: socket.assigns[:current_user],
+      current_site: socket.assigns[:topbar_site],
+      current_path: socket.assigns[:current_path],
+      view: socket.view
+    }
+
+    lines = SidebarStatus.collect(context)
 
     :telemetry.execute(@status_refreshed, %{lines: length(lines)}, %{view: socket.view})
 
     new_socket =
       socket
       |> put_private(:status_refresh_pending, false)
-      |> assign(sidebar_status: lines, sidebar_status_now: DateTime.utc_now())
+      |> assign(
+        sidebar_status: lines,
+        sidebar_status_card: SidebarStatus.card(lines, context),
+        sidebar_status_now: DateTime.utc_now()
+      )
 
     {:halt, new_socket}
   end
