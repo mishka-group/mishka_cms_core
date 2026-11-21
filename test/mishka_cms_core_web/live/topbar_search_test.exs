@@ -154,6 +154,46 @@ defmodule MishkaCmsCoreWeb.Test.TopbarSearchTest do
     end
   end
 
+  describe "the phone's sheet" do
+    setup do
+      register(TopbarSearchProbe)
+      :ok
+    end
+
+    test "is drawn through a portal outside the blurred top bar and lists what typing finds", %{
+      conn: conn,
+      admin: admin
+    } do
+      view = open(conn, admin)
+
+      assert has_element?(view, "#admin-portals")
+      refute has_element?(view, "header #admin-portals")
+      refute has_element?(view, "#admin-portals[class*=backdrop]")
+
+      assert has_element?(
+               view,
+               "header template#admin-topbar-search-sheet-portal[data-phx-portal='#admin-portals']"
+             )
+
+      sheet = view |> element("#{@box}-sheet-portal") |> render()
+      assert sheet =~ ~s(id="admin-topbar-search-sheet")
+      assert sheet =~ "fixed inset-0"
+      refute sheet =~ "Aurora UI kit"
+
+      view
+      |> with_target(@box)
+      |> render_change("search", %{"q" => "aurora"})
+
+      render_async(view)
+
+      sheet = view |> element("#{@box}-sheet-portal") |> render()
+      assert sheet =~ ~s(id="admin-topbar-search-sheet-results")
+      assert sheet =~ "Aurora UI kit"
+      assert sheet =~ "Amelia Brooks"
+      assert sheet =~ ~s(href="/admin/dashboard/settings?tab=general")
+    end
+  end
+
   defp search(view, query) do
     view |> element("#{@box}-form") |> render_change(%{"q" => query})
     render_async(view)

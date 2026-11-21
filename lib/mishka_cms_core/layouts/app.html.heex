@@ -74,4 +74,9 @@ SPDX-License-Identifier: Apache-2.0
       </div>
     </main>
   </div>
+
+  <%!-- Where portals draw what must cover the whole screen, such as the phone's search sheet:
+        inside the shell, so the dark theme's filter still turns it, and outside the top bar, whose
+        backdrop-filter would make it the box of a fixed element. --%>
+  <div id="admin-portals" class="contents"></div>
 </div>

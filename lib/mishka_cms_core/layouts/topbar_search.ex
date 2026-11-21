@@ -198,7 +198,10 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
 
     Below 640 px the box is a 44 px search icon (`<id>-phone`) that opens a sheet over the whole
     screen (`<id>-sheet`) with its own input focused and the same groups listed under it, each row at
-    least 44 px tall; its back arrow and Escape close it.
+    least 44 px tall; its back arrow and Escape close it. The sheet is drawn through a portal
+    (`<id>-sheet-portal`) into `#admin-portals`, the shell's slot outside the top bar: the bar's
+    `backdrop-filter` makes it the box of every `fixed` element inside it, which would cut the sheet
+    to the bar's 60 px and leave its results under the page.
     """
     use Phoenix.LiveComponent
     use Gettext, backend: MishkaCmsCore.Gettext
@@ -340,58 +343,60 @@ defmodule MishkaCmsCore.Layouts.TopbarSearch do
           <.icon name="hero-magnifying-glass" class="size-[18px]" />
         </button>
 
-        <div
-          id={@id <> "-sheet"}
-          role="dialog"
-          aria-modal="true"
-          aria-label={gettext("Search")}
-          phx-window-keydown={close_sheet(@id, @myself)}
-          phx-key="Escape"
-          class="fixed inset-0 z-[95] hidden flex-col bg-white"
-        >
-          <div class="flex items-center gap-2 border-b border-[#ecebe6] px-3 py-2.5">
-            <button
-              type="button"
-              id={@id <> "-sheet-close"}
-              aria-label={gettext("Close the search")}
-              phx-click={close_sheet(@id, @myself)}
-              class="flex size-11 shrink-0 items-center justify-center rounded-[11px] text-[#5c5a54]"
-            >
-              <.icon name="hero-arrow-left" class="size-5" />
-            </button>
-            <form
-              id={@id <> "-sheet-form"}
-              role="search"
-              autocomplete="off"
-              phx-change="search"
-              phx-submit="open"
-              phx-target={@myself}
-              class="min-w-0 flex-1"
-            >
-              <input
-                type="search"
-                id={@id <> "-sheet-input"}
-                name="q"
-                value={@query}
-                phx-debounce="250"
-                aria-label={gettext("Search")}
-                placeholder={@placeholder || gettext("Search pages, posts, people…")}
-                class="h-11 w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] px-[14px] text-base font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea]"
+        <.portal id={@id <> "-sheet-portal"} target="#admin-portals">
+          <div
+            id={@id <> "-sheet"}
+            role="dialog"
+            aria-modal="true"
+            aria-label={gettext("Search")}
+            phx-window-keydown={close_sheet(@id, @myself)}
+            phx-key="Escape"
+            class="fixed inset-0 z-[95] hidden flex-col bg-white"
+          >
+            <div class="flex items-center gap-2 border-b border-[#ecebe6] px-3 py-2.5">
+              <button
+                type="button"
+                id={@id <> "-sheet-close"}
+                aria-label={gettext("Close the search")}
+                phx-click={close_sheet(@id, @myself)}
+                class="flex size-11 shrink-0 items-center justify-center rounded-[11px] text-[#5c5a54]"
+              >
+                <.icon name="hero-arrow-left" class="size-5" />
+              </button>
+              <form
+                id={@id <> "-sheet-form"}
+                role="search"
+                autocomplete="off"
+                phx-change="search"
+                phx-submit="open"
+                phx-target={@myself}
+                class="min-w-0 flex-1"
+              >
+                <input
+                  type="search"
+                  id={@id <> "-sheet-input"}
+                  name="q"
+                  value={@query}
+                  phx-debounce="250"
+                  aria-label={gettext("Search")}
+                  placeholder={@placeholder || gettext("Search pages, posts, people…")}
+                  class="h-11 w-full rounded-[11px] border border-[#ecebe6] bg-[#f7f6f3] px-[14px] text-base font-medium text-[#1b1a18] outline-none focus:border-[#8b87ea]"
+                />
+              </form>
+            </div>
+            <div id={@id <> "-sheet-results"} role="listbox" class="flex-1 overflow-y-auto p-2">
+              <.results
+                :if={String.trim(@query) != ""}
+                id={@id <> "-sheet"}
+                numbered={@numbered}
+                groups={@groups}
+                query={@query}
+                active={nil}
+                tall
               />
-            </form>
+            </div>
           </div>
-          <div id={@id <> "-sheet-results"} role="listbox" class="flex-1 overflow-y-auto p-2">
-            <.results
-              :if={String.trim(@query) != ""}
-              id={@id <> "-sheet"}
-              numbered={@numbered}
-              groups={@groups}
-              query={@query}
-              active={nil}
-              tall
-            />
-          </div>
-        </div>
+        </.portal>
 
         <span
           :if={@open and @rows != []}
