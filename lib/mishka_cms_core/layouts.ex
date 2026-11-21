@@ -338,7 +338,7 @@ defmodule MishkaCmsCore.Layouts do
     ~H"""
     <div :if={@item.children != []}>
       <div class={["flex items-center gap-0.5 rounded-[10px]", @lit && "bg-[#f2f1fc]"]}>
-        <.entry_link item={@item} trail={@trail} counts={@counts} nested={@nested} />
+        <.entry_link item={@item} trail={@trail} counts={@counts} nested={@nested} fold={@panel} />
         <button
           type="button"
           data-fold
@@ -381,6 +381,7 @@ defmodule MishkaCmsCore.Layouts do
   attr :trail, :list, default: []
   attr :counts, :map, default: %{}
   attr :nested, :boolean, default: false
+  attr :fold, :string, default: nil
   attr :class, :string, default: "py-[9px] text-[13px] max-[980px]:min-h-12"
 
   defp entry_link(assigns) do
@@ -391,6 +392,7 @@ defmodule MishkaCmsCore.Layouts do
     <.link
       navigate={@item.path}
       aria-current={@mark}
+      phx-click={@fold && fold_parent(@fold)}
       class={[
         "flex min-w-0 flex-1 items-center gap-3 rounded-[10px] px-[10px] transition-colors",
         @class,
@@ -1031,6 +1033,13 @@ defmodule MishkaCmsCore.Layouts do
   defp fold(id) do
     JS.toggle_class("hidden", to: "#" <> id)
     |> JS.toggle_attribute({"aria-expanded", "true", "false"})
+  end
+
+  # The entry's own link folds its branch as the arrow does, then opens its page: where the page is
+  # the open one, a second click closes the branch again.
+  defp fold_parent(panel) do
+    JS.toggle_class("hidden", to: "#" <> panel)
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: "[aria-controls='#{panel}']")
   end
 
   defp swap(from, to) do

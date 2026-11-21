@@ -337,11 +337,31 @@ describe("SidebarScroll folds", () => {
     local.setItem(FOLDS, JSON.stringify({ "sb-plugins": false, "sbi-shop": false }));
     const el = nav();
 
+    // The server draws the branch of the open page open.
+    document.getElementById("sbi-shop").classList.remove("hidden");
+    button(el, "sbi-shop").setAttribute("aria-expanded", "true");
+
     mount(el);
 
     expect(folded("sb-plugins")).toBe(false);
     expect(folded("sbi-shop")).toBe(false);
     expect(button(el, "sbi-shop").getAttribute("aria-expanded")).toBe("true");
+  });
+
+  test("never remembers a branch under an entry, so it is closed on every load", () => {
+    const el = nav();
+    mount(el);
+
+    button(el, "sbi-shop").click();
+    expect(local.getItem(FOLDS)).toBe(null);
+
+    local.setItem(FOLDS, JSON.stringify({ "sbi-shop": true }));
+    const fresh = nav();
+    fresh.querySelector("[aria-current]").removeAttribute("aria-current");
+    mount(fresh);
+
+    expect(folded("sbi-shop")).toBe(true);
+    expect(button(fresh, "sbi-shop").getAttribute("aria-expanded")).toBe("false");
   });
 
   test("ignores a remembered value that is not a map of folds", () => {

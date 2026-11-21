@@ -230,11 +230,18 @@ const NumberBounds = {
 //
 // It also keeps what the reader folded. A group or a branch folds with `Phoenix.LiveView.JS`, but
 // `JS` cannot write storage, so the hook remembers each fold in `localStorage` (one map of panel id
-// to open, for every tab and the next visit) and puts it back on the fresh nav. A panel that holds
+// to open, for every tab and the next visit) and puts it back on the fresh nav. Only a menu section
+// (Runtime, Account, Plugins) is remembered: a branch under an entry (`sbi-...`) is closed on every
+// load unless it holds the open page, and opens only when the admin clicks it. A panel that holds
 // the open page stays open whatever was remembered. The fold is put back through `this.js()`, so a
 // later patch of the sidebar keeps it, as it keeps one made by a click.
 const SIDEBAR_SCROLL_KEY = "admin-sidebar:scrollTop";
 const SIDEBAR_FOLDS_KEY = "admin-sidebar:folds";
+
+// A branch under an entry is never remembered; only a section of the menu is.
+function remembered(id) {
+  return !id.startsWith("sbi-");
+}
 
 function readFolds() {
   try {
@@ -296,7 +303,7 @@ const SidebarScroll = {
       const button = event.target.closest?.("[data-fold]");
       const id = button?.getAttribute("aria-controls");
 
-      if (!id) return;
+      if (!id || !remembered(id)) return;
 
       const folds = readFolds();
       folds[id] = button.getAttribute("aria-expanded") !== "true";
@@ -319,7 +326,7 @@ const SidebarScroll = {
       const id = button.getAttribute("aria-controls");
       const panel = id && document.getElementById(id);
 
-      if (!panel || typeof folds[id] !== "boolean") return;
+      if (!panel || !remembered(id) || typeof folds[id] !== "boolean") return;
 
       const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
 
