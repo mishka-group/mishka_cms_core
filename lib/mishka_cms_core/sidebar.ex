@@ -300,6 +300,10 @@ defmodule MishkaCmsCore.Sidebar do
       field(:credit_footer, boolean(), default: true)
       field(:parent, String.t())
       field(:mark, String.t())
+      # WHAT THE ENTRY'S NUMBER COUNTS ("Orders today"), the chip's title and what a screen reader
+      # says with the number — see `MishkaCmsCore.Sidebar.Counts`. Left blank, the chip is the bare
+      # number.
+      field(:count_label, String.t())
       field(:children, list(), default: [])
     end
 

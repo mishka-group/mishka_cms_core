@@ -235,7 +235,7 @@ defmodule MishkaCmsCore.Layouts do
               <button
                 type="button"
                 data-fold
-                aria-expanded="true"
+                aria-expanded={to_string(group_open?(entry, @trail))}
                 aria-controls={dom_id("sb", entry.key)}
                 phx-click={fold(dom_id("sb", entry.key))}
                 class="group mb-1 mt-4 flex w-full items-center gap-2.5 px-[10px] py-1.5"
@@ -255,7 +255,10 @@ defmodule MishkaCmsCore.Layouts do
                   class="size-[13px] text-[#c2bfb6] transition-transform group-aria-expanded:rotate-180"
                 />
               </button>
-              <div id={dom_id("sb", entry.key)} class="flex flex-col gap-0.5">
+              <div
+                id={dom_id("sb", entry.key)}
+                class={["flex flex-col gap-0.5", !group_open?(entry, @trail) && "hidden"]}
+              >
                 <.nav_link :for={item <- entry.items} item={item} trail={@trail} counts={@counts} />
               </div>
             </div>
@@ -649,7 +652,11 @@ defmodule MishkaCmsCore.Layouts do
         ]}
       ></span>
       <span class="min-w-0 flex-1 truncate">{label(@item.label)}</span>
-      <.count_chip key={@item.key} count={@counts[@item.key]} />
+      <.count_chip
+        key={@item.key}
+        count={@counts[@item.key]}
+        label={@item.count_label && label(@item.count_label)}
+      />
     </.link>
     """
   end
@@ -678,6 +685,7 @@ defmodule MishkaCmsCore.Layouts do
 
   attr :key, :string, required: true
   attr :count, :any, default: nil
+  attr :label, :string, default: nil, doc: "what the number counts, the item's `count_label`"
 
   defp count_chip(%{count: {number, tone}} = assigns) when is_integer(number) and number > 0 do
     assigns = assign(assigns, number: number, tone: tone)
@@ -685,6 +693,8 @@ defmodule MishkaCmsCore.Layouts do
     ~H"""
     <span
       data-count={@key}
+      title={@label && "#{@number} #{@label}"}
+      aria-label={@label && "#{@number} #{@label}"}
       class={[
         "shrink-0 rounded-full px-1.5 py-px text-[10.5px] font-bold leading-[16px]",
         (@tone == :attention && "bg-[#fbf1df] text-[#cf8a24]") || "bg-[#eeedfb] text-[#5b57d6]"
@@ -713,7 +723,9 @@ defmodule MishkaCmsCore.Layouts do
   `items` is `@topbar_items`, what extensions add on the `"topbar:items"` event
   (`MishkaCmsCore.Layouts.TopbarItems`). They are drawn in order at the right, before the theme
   toggle, in `#admin-topbar-items`, each with `current_user`, `current_site`, `current_path` and `view`; with
-  none, the slot is not drawn. `current_site` and `view` are for these items and the search box.
+  none, the slot is not drawn. `current_site` and `view` are for these items and the search box. Below
+  640px only an item that sets `phone: true` stays (a site switcher a person needs everywhere), and it
+  draws itself small enough for the phone's bar.
 
   `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
   listed above the notifications, each opening its link. The bell's badge adds their counts to
@@ -802,9 +814,16 @@ defmodule MishkaCmsCore.Layouts do
         <div
           :if={@items != []}
           id="admin-topbar-items"
-          class="flex shrink-0 items-center gap-[11px] max-[640px]:hidden!"
+          class={[
+            "flex shrink-0 items-center gap-[11px]",
+            !Enum.any?(@items, & &1[:phone]) && "max-[640px]:hidden!"
+          ]}
         >
-          <div :for={item <- @items} id={dom_id("topbar-item", item.id)} class="flex items-center">
+          <div
+            :for={item <- @items}
+            id={dom_id("topbar-item", item.id)}
+            class={["flex items-center", !item[:phone] && "max-[640px]:hidden!"]}
+          >
             <.live_component
               :if={item[:module]}
               module={item.module}
@@ -1285,6 +1304,11 @@ defmodule MishkaCmsCore.Layouts do
   defp status_word(_ok), do: gettext("All good")
 
   defp label(text), do: Gettext.gettext(MishkaCmsCore.Gettext, text)
+
+  # A top group of the sidebar starts open only when it holds the page that is open (its key is in
+  # the trail), so the menu shows where the person is and folds the rest; a press opens any of them.
+  defp group_open?(%{items: items}, trail), do: Enum.any?(items, &(&1.key in trail))
+  defp group_open?(_entry, _trail), do: false
 
   defp group?(%Group{}), do: true
   defp group?(_entry), do: false
