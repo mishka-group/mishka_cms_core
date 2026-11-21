@@ -304,6 +304,10 @@ defmodule MishkaCmsCore.Sidebar do
       # says with the number — see `MishkaCmsCore.Sidebar.Counts`. Left blank, the chip is the bare
       # number.
       field(:count_label, String.t())
+
+      # WHERE THE NUMBER IS LISTED ("/events?state=not_handled"): while the entry shows a number its
+      # link opens this address, so the row and the bell lead to the same list. Left blank, `path`.
+      field(:count_path, String.t())
       field(:children, list(), default: [])
     end
 

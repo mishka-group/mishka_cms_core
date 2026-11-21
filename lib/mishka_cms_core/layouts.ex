@@ -623,7 +623,7 @@ defmodule MishkaCmsCore.Layouts do
 
     ~H"""
     <.link
-      navigate={@item.path}
+      navigate={entry_path(@item, @counts)}
       aria-current={@mark}
       phx-click={@fold && fold_parent(@fold)}
       class={[
@@ -660,6 +660,17 @@ defmodule MishkaCmsCore.Layouts do
     </.link>
     """
   end
+
+  # An entry showing a number opens where that number is listed (`count_path`), else its page.
+  defp entry_path(%{count_path: count_path, key: key} = item, counts)
+       when is_binary(count_path) do
+    case counts[key] do
+      {number, _tone} when is_integer(number) and number > 0 -> count_path
+      _none -> item.path
+    end
+  end
+
+  defp entry_path(item, _counts), do: item.path
 
   attr :item, :map, required: true
   attr :from, :string, required: true
