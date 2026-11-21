@@ -14,6 +14,9 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
       get exactly the slice they asked for (see "Topics").
     * Initial fetch reads recent rows from the `oban_jobs` table, filtered to
       the same scope.
+    * A job given up on (`state: :discard`) tells the sidebar's status row
+      (`MishkaCmsCore.Layouts.SidebarStatus.changed/1`), so its failed-jobs
+      line follows without a reload.
     * Job → entry mapping treats exceptions and discards as errors,
       retryables as warnings, everything else as info.
 
@@ -77,12 +80,13 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   end
 
   @doc false
-  def handle_telemetry([:oban, :job, event], _measurements, %{job: job}, _config) do
+  def handle_telemetry([:oban, :job, event], _measurements, %{job: job} = meta, _config) do
     payload = %{__oban__: true, job: job, event: event}
     site_id = job_site_id(job)
     resource = job_resource(job)
 
     broadcast(@topic, payload)
+    if meta[:state] == :discard, do: MishkaCmsCore.Layouts.SidebarStatus.changed(site_id)
     if site_id, do: broadcast(site_topic(site_id), payload)
     if resource, do: broadcast(res_topic(resource), payload)
     if site_id && resource, do: broadcast(site_res_topic(site_id, resource), payload)
@@ -157,21 +161,34 @@ defmodule MishkaCmsCore.Activity.Sources.Oban do
   (`retryable` and `discarded`): every site's for a master, their own site's for a site user, and 0
   for no viewer. One count query; the top bar's bell shows it as the core's own item
   (`MishkaCmsCore.Layouts.TopbarNeeds`).
+
+  Options: `states:` the job states counted (`["retryable", "discarded"]` by default) and `since:`
+  (a `DateTime`), only the jobs that failed from then on: a discarded job by when it was given up
+  on, a retryable one by its last try. The sidebar's status row counts the jobs given up on in its
+  window so (`MishkaCmsCore.Layouts.SidebarStatus.FailedJobs`).
   """
-  @spec failed_count(map() | nil) :: non_neg_integer()
-  def failed_count(viewer) do
+  @spec failed_count(map() | nil, keyword()) :: non_neg_integer()
+  def failed_count(viewer, opts \\ []) do
+    states = Keyword.get(opts, :states, ["retryable", "discarded"])
+
     case Helpers.reach(viewer) do
       :nothing ->
         0
 
       reach ->
         query =
-          from(j in Oban.Job, where: j.state in ["retryable", "discarded"], select: count())
+          from(j in Oban.Job, where: j.state in ^states, select: count())
           |> filter_site(site_of(reach))
+          |> failed_since(opts[:since])
 
         Oban.Repo.one(Oban.config(), query) || 0
     end
   end
+
+  defp failed_since(query, nil), do: query
+
+  defp failed_since(query, %DateTime{} = since),
+    do: where(query, [j], coalesce(j.discarded_at, j.attempted_at) >= ^since)
 
   defp fetch(site_id, scope, limit) do
     base =

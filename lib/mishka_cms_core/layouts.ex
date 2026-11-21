@@ -30,7 +30,7 @@ defmodule MishkaCmsCore.Layouts do
 
   import MishkaCmsCore.CoreComponents, only: [icon: 1]
 
-  alias MishkaCmsCore.Layouts.{TopbarNeeds, TopbarSearch, TopbarStatus}
+  alias MishkaCmsCore.Layouts.{SidebarStatus, TopbarNeeds, TopbarSearch, TopbarStatus}
   alias MishkaCmsCore.Localized
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Sidebar
@@ -143,7 +143,9 @@ defmodule MishkaCmsCore.Layouts do
   Settings. This component only paints what it is handed, so an empty section is one that was
   filtered away rather than one that has to be spelled out here. `version` is `@sidebar_version`: the
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
-  beside entries (`MishkaCmsCore.Sidebar.Counts`).
+  beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@sidebar_status`, the problems the
+  parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), drawn by `sidebar_status/1` above
+  the footer's entries: nothing without a line.
 
   While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
   arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
@@ -158,6 +160,11 @@ defmodule MishkaCmsCore.Layouts do
   attr :current_user, :any, default: nil
   attr :version, :integer, default: 0
   attr :counts, :map, default: %{}
+
+  attr :status, :list,
+    default: [],
+    doc:
+      "`@sidebar_status`, the lines of `MishkaCmsCore.Layouts.SidebarStatus`; nothing is drawn without one"
 
   def sidebar(assigns) do
     %{main: main, footer: footer, trail: trail} =
@@ -296,17 +303,7 @@ defmodule MishkaCmsCore.Layouts do
       </nav>
 
       <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
-        <div class="mb-2 rounded-[13px] border border-[#e2ece5] bg-[#f3f8f4] px-[13px] py-3">
-          <div class="flex items-center gap-2">
-            <span class="size-2 shrink-0 animate-pulse rounded-full bg-[#1f9d6b]"></span>
-            <span class="text-[11.5px] font-bold text-[#177a53]">
-              {gettext("All systems operational")}
-            </span>
-          </div>
-          <div class="mt-[5px] ps-4 text-[10.5px] font-medium text-[#8a938c]">
-            {gettext("Runtime · %{uptime} uptime", uptime: "99.98%")}
-          </div>
-        </div>
+        <.sidebar_status lines={@status} />
         <.nav_link :for={item <- @footer_entries} item={item} trail={@trail} counts={@counts} />
       </div>
     </aside>
@@ -322,6 +319,92 @@ defmodule MishkaCmsCore.Layouts do
     </div>
     """
   end
+
+  attr :lines, :list, required: true
+
+  @doc """
+  The problems row at the bottom of the sidebar (`MishkaCmsCore.Layouts.SidebarStatus`): nothing
+  without a line; one line is a small link (a dot in its level's colour, its words and an arrow)
+  to its page; several are a small button "3 problems" that opens a list of the lines, to the right
+  of the sidebar on a wide screen and as a sheet at the bottom of the menu on a phone, each line a
+  link to its page. The list closes on a click outside it and on Escape.
+  """
+  def sidebar_status(%{lines: []} = assigns), do: ~H""
+
+  def sidebar_status(%{lines: [line]} = assigns) do
+    assigns = assign(assigns, :line, line)
+
+    ~H"""
+    <div id="admin-sidebar-status" data-lines="1" class="mb-1.5">
+      <.status_line line={@line} />
+    </div>
+    """
+  end
+
+  def sidebar_status(assigns) do
+    assigns = assign(assigns, :level, SidebarStatus.level(assigns.lines))
+
+    ~H"""
+    <div id="admin-sidebar-status" data-lines={length(@lines)} class="relative mb-1.5">
+      <button
+        type="button"
+        id="admin-sidebar-status-toggle"
+        data-level={@level}
+        aria-controls="admin-sidebar-status-list"
+        phx-click={JS.toggle(to: "#admin-sidebar-status-list")}
+        class="flex w-full items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-start text-[12px] font-bold text-[#3a382f] hover:bg-[#f6f5f2] max-[980px]:min-h-11"
+      >
+        <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@level)]}></span>
+        <span class="min-w-0 flex-1 truncate">{SidebarStatus.problems_label(@lines)}</span>
+        <.icon name="hero-chevron-right" class="size-3.5 shrink-0 text-[#a8a5a0]" />
+      </button>
+      <div
+        id="admin-sidebar-status-list"
+        role="dialog"
+        aria-label={SidebarStatus.problems_label(@lines)}
+        phx-click-away={JS.hide(to: "#admin-sidebar-status-list")}
+        phx-window-keydown={JS.hide(to: "#admin-sidebar-status-list")}
+        phx-key="Escape"
+        class="absolute bottom-0 start-full z-[95] ms-3 hidden w-[260px] rounded-[14px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_14px_34px_rgba(30,28,24,0.14)] max-[980px]:fixed max-[980px]:inset-x-0 max-[980px]:bottom-0 max-[980px]:start-0 max-[980px]:ms-0 max-[980px]:w-auto max-[980px]:rounded-b-none max-[980px]:pb-[max(8px,env(safe-area-inset-bottom))]"
+      >
+        <.status_line :for={line <- @lines} line={line} />
+      </div>
+    </div>
+    """
+  end
+
+  attr :line, :map, required: true
+
+  defp status_line(%{line: %{link: link}} = assigns) when is_binary(link) do
+    ~H"""
+    <.link
+      navigate={@line.link}
+      id={dom_id("admin-sidebar-status-line", @line.id)}
+      data-level={@line.level}
+      class="flex items-center gap-2 rounded-[10px] px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f] no-underline hover:bg-[#f6f5f2] max-[980px]:min-h-11"
+    >
+      <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
+      <span class="min-w-0 flex-1 truncate">{@line.label}</span>
+      <.icon name="hero-arrow-right" class="size-3.5 shrink-0 text-[#a8a5a0]" />
+    </.link>
+    """
+  end
+
+  defp status_line(assigns) do
+    ~H"""
+    <div
+      id={dom_id("admin-sidebar-status-line", @line.id)}
+      data-level={@line.level}
+      class="flex items-center gap-2 px-[10px] py-[7px] text-[12px] font-bold text-[#3a382f]"
+    >
+      <span class={["size-2 shrink-0 rounded-full", sidebar_dot(@line.level)]}></span>
+      <span class="min-w-0 flex-1 truncate">{@line.label}</span>
+    </div>
+    """
+  end
+
+  defp sidebar_dot(:error), do: "bg-[#c0392b]"
+  defp sidebar_dot(_warn), do: "bg-[#c8931f]"
 
   attr :item, :map, required: true
   attr :trail, :list, default: []

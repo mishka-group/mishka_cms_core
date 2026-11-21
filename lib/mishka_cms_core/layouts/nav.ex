@@ -41,6 +41,12 @@ defmodule MishkaCmsCore.Layouts.Nav do
   event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items, and `@topbar_status`, the
   status lines of the top bar's chip on `"topbar:status"` (`MishkaCmsCore.Layouts.TopbarStatus`).
 
+  It keeps `@sidebar_status`, the problems at the bottom of the sidebar on the `"sidebar:status"`
+  event (`MishkaCmsCore.Layouts.SidebarStatus`), collected with the top bar's items and again when a
+  part calls `SidebarStatus.changed/1` for the viewer's site; the changes that arrive together are
+  collected once, and each collection emits `[:mishka_cms, :sidebar_status, :refreshed]` from the
+  page's own process.
+
   It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
   (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
   extension calls `TopbarNeeds.changed/1` for the viewer's site. The changes that arrive together
@@ -55,7 +61,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   import Phoenix.Component, only: [assign: 2, assign: 3]
 
   alias MishkaCmsCore.Layouts.{TopbarBands, TopbarItems, TopbarNeeds, TopbarSearch}
-  alias MishkaCmsCore.Layouts.TopbarStatus
+  alias MishkaCmsCore.Layouts.{SidebarStatus, TopbarStatus}
   alias MishkaCmsCore.Runtime.Languages
   alias MishkaCmsCore.Runtime.Plugs.SiteLookupPlug
   alias MishkaCmsCore.Sidebar
@@ -65,6 +71,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
   @needs_refresh_ms 50
   @redrawn [:mishka_cms, :sidebar, :redrawn]
   @needs_refreshed [:mishka_cms, :topbar_needs, :refreshed]
+  @status_refresh_ms 50
+  @status_refreshed [:mishka_cms, :sidebar_status, :refreshed]
 
   def on_mount(:default, _params, session, socket) do
     language = Languages.admin(session)
@@ -115,7 +123,8 @@ defmodule MishkaCmsCore.Layouts.Nav do
        {:cont, at_path(socket, URI.parse(uri).path, site)}
      end)
      |> follow_sidebar()
-     |> follow_needs()}
+     |> follow_needs()
+     |> follow_status()}
   end
 
   defp at_path(%{assigns: %{current_path: path, topbar_items: _items}} = socket, path, _site),
@@ -136,6 +145,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
       topbar_status: TopbarStatus.collect(context),
       topbar_placeholder: TopbarSearch.placeholder(context),
       topbar_needs: TopbarNeeds.collect(context),
+      sidebar_status: SidebarStatus.collect(context),
       topbar_site: site,
       topbar_section: Sidebar.section(path),
       sidebar_counts: viewer_counts(socket)
@@ -185,6 +195,50 @@ defmodule MishkaCmsCore.Layouts.Nav do
   end
 
   defp needs_message(_message, socket), do: {:cont, socket}
+
+  defp follow_status(socket) do
+    if connected?(socket) and SidebarStatus.enabled?() do
+      Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, SidebarStatus.topic())
+      attach_hook(socket, :sidebar_status, :handle_info, &status_message/2)
+    else
+      socket
+    end
+  end
+
+  defp status_message({:sidebar_status_changed, site_id}, socket) do
+    cond do
+      not SidebarStatus.concerns?(socket.assigns[:current_user], site_id) ->
+        {:halt, socket}
+
+      socket.private[:status_refresh_pending] ->
+        {:halt, socket}
+
+      true ->
+        Process.send_after(self(), :sidebar_status_refresh, @status_refresh_ms)
+        {:halt, put_private(socket, :status_refresh_pending, true)}
+    end
+  end
+
+  defp status_message(:sidebar_status_refresh, socket) do
+    lines =
+      SidebarStatus.collect(%{
+        current_user: socket.assigns[:current_user],
+        current_site: socket.assigns[:topbar_site],
+        current_path: socket.assigns[:current_path],
+        view: socket.view
+      })
+
+    :telemetry.execute(@status_refreshed, %{lines: length(lines)}, %{view: socket.view})
+
+    new_socket =
+      socket
+      |> put_private(:status_refresh_pending, false)
+      |> assign(:sidebar_status, lines)
+
+    {:halt, new_socket}
+  end
+
+  defp status_message(_message, socket), do: {:cont, socket}
 
   # The numbers of the viewer's own site. Read when the path changes, after every `on_mount` of the
   # page has run, so a page that scopes its user to a site (an extension's) is read as that site.
