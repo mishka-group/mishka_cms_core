@@ -41,11 +41,13 @@ defmodule MishkaCmsCore.Layouts.Nav do
   event (`MishkaCmsCore.Layouts.TopbarBands`), collected with the items, and `@topbar_status`, the
   status lines of the top bar's chip on `"topbar:status"` (`MishkaCmsCore.Layouts.TopbarStatus`).
 
-  It keeps `@sidebar_status`, the problems at the bottom of the sidebar on the `"sidebar:status"`
-  event (`MishkaCmsCore.Layouts.SidebarStatus`), collected with the top bar's items and again when a
-  part calls `SidebarStatus.changed/1` for the viewer's site; the changes that arrive together are
-  collected once, and each collection emits `[:mishka_cms, :sidebar_status, :refreshed]` from the
-  page's own process.
+  It keeps `@sidebar_status`, the problems on the sidebar's Settings row and status card on the
+  `"sidebar:status"` event (`MishkaCmsCore.Layouts.SidebarStatus`), collected with the top bar's
+  items and again when a part calls `SidebarStatus.changed/1` for the viewer's site; the changes that
+  arrive together are collected once, and each collection emits
+  `[:mishka_cms, :sidebar_status, :refreshed]` from the page's own process. `@sidebar_status_now` is
+  the time the card counts "Checked 1 min ago" to: set with each collection and moved on once a
+  minute while the card says all is well, which reads nothing.
 
   It keeps `@topbar_needs`, the bell's "What needs you" items on the `"topbar:needs"` event
   (`MishkaCmsCore.Layouts.TopbarNeeds`), collected with the top bar's items and again when an
@@ -73,6 +75,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   @needs_refreshed [:mishka_cms, :topbar_needs, :refreshed]
   @status_refresh_ms 50
   @status_refreshed [:mishka_cms, :sidebar_status, :refreshed]
+  @status_tick_ms 60_000
 
   def on_mount(:default, _params, session, socket) do
     language = Languages.admin(session)
@@ -146,6 +149,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
       topbar_placeholder: TopbarSearch.placeholder(context),
       topbar_needs: TopbarNeeds.collect(context),
       sidebar_status: SidebarStatus.collect(context),
+      sidebar_status_now: DateTime.utc_now(),
       topbar_site: site,
       topbar_section: Sidebar.section(path),
       sidebar_counts: viewer_counts(socket)
@@ -199,6 +203,7 @@ defmodule MishkaCmsCore.Layouts.Nav do
   defp follow_status(socket) do
     if connected?(socket) and SidebarStatus.enabled?() do
       Phoenix.PubSub.subscribe(MishkaCmsCore.PubSub, SidebarStatus.topic())
+      Process.send_after(self(), :sidebar_status_tick, @status_tick_ms)
       attach_hook(socket, :sidebar_status, :handle_info, &status_message/2)
     else
       socket
@@ -233,9 +238,18 @@ defmodule MishkaCmsCore.Layouts.Nav do
     new_socket =
       socket
       |> put_private(:status_refresh_pending, false)
-      |> assign(:sidebar_status, lines)
+      |> assign(sidebar_status: lines, sidebar_status_now: DateTime.utc_now())
 
     {:halt, new_socket}
+  end
+
+  defp status_message(:sidebar_status_tick, socket) do
+    Process.send_after(self(), :sidebar_status_tick, @status_tick_ms)
+
+    case socket.assigns[:sidebar_status] do
+      [%{level: :ok}] -> {:halt, assign(socket, :sidebar_status_now, DateTime.utc_now())}
+      _other -> {:halt, socket}
+    end
   end
 
   defp status_message(_message, socket), do: {:cont, socket}

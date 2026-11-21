@@ -4,15 +4,18 @@
 
 defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @moduledoc """
-  The problems each part of the CMS tells the admin about on the right of the sidebar's Settings
-  row, on the `"sidebar:status"` mishka_installer event: "8 failed jobs", "3 unhandled provider
-  events". Every part answers for itself, so the sidebar never says anything a part did not count
-  (`MishkaCmsCore.Layouts.sidebar_status/1` draws it):
+  The problems each part of the CMS tells the admin about in the sidebar, on the
+  `"sidebar:status"` mishka_installer event: "8 failed jobs", "3 unhandled provider events". Every
+  part answers for itself, so the sidebar never says anything a part did not count. The lines are
+  read once and drawn twice, on the right of the Settings row (`MishkaCmsCore.Layouts.sidebar_status/1`)
+  and as the card at the bottom of the sidebar (`MishkaCmsCore.Layouts.status_card/1`):
 
     * no problem line, and at least one plugin ran a check the viewer may see (it set `checked:
-      true`): a small green dot and "OK";
+      true`): a small green dot and "OK" on the row, and a green card "All systems operational"
+      that says when the check ran ("Checked 1 min ago", `checked_label/2`);
     * one or more lines: a small pill "3 issues" in the worst line's tone that opens a list of the
-      lines, each opening its page; "Settings" itself still opens Settings;
+      lines, each opening its page, and a card in that tone naming the count and the worst line
+      ("27 failed jobs"); "Settings" itself still opens Settings;
     * no plugin checked and no line: nothing at all.
 
   A line is a map:
@@ -123,7 +126,8 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
           optional(:count) => non_neg_integer() | nil,
           optional(:link) => String.t() | nil,
           optional(:permission) => String.t() | [String.t()],
-          optional(:site_id) => String.t() | nil
+          optional(:site_id) => String.t() | nil,
+          optional(:checked_at) => DateTime.t()
         }
 
   @doc false
@@ -187,8 +191,9 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
 
   @doc """
   The neutral line returned when the plugins checked and found nothing: level `:ok`, which the
-  Settings row draws as "OK". It names the activity log as its link for a viewer who may open it (no
-  link for anyone else).
+  Settings row draws as "OK" and the card as "All systems operational". It names the activity log as
+  its link for a viewer who may open it (no link for anyone else), and `checked_at`, the moment the
+  plugins were asked.
   """
   @spec all_clear(map() | nil) :: line()
   def all_clear(user) do
@@ -200,7 +205,8 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
       label: gettext("OK"),
       count: nil,
       link: link,
-      site_id: nil
+      site_id: nil,
+      checked_at: DateTime.utc_now()
     }
   end
 
@@ -326,4 +332,24 @@ defmodule MishkaCmsCore.Layouts.SidebarStatus do
   @spec issues_label([line()]) :: String.t()
   def issues_label(lines),
     do: ngettext("%{count} issue", "%{count} issues", length(lines))
+
+  @doc """
+  When the check of an `:ok` line ran, against `now`: "Checked just now" within the first minute,
+  then "Checked 4 min ago" and "Checked 2 h ago". `nil` for a line with no `checked_at`.
+  """
+  @spec checked_label(line(), DateTime.t()) :: String.t() | nil
+  def checked_label(%{checked_at: %DateTime{} = at}, now) do
+    case max(DateTime.diff(now, at, :minute), 0) do
+      0 ->
+        gettext("Checked just now")
+
+      minutes when minutes < 60 ->
+        ngettext("Checked %{count} min ago", "Checked %{count} min ago", minutes)
+
+      minutes ->
+        ngettext("Checked %{count} h ago", "Checked %{count} h ago", div(minutes, 60))
+    end
+  end
+
+  def checked_label(_line, _now), do: nil
 end

@@ -145,7 +145,8 @@ defmodule MishkaCmsCore.Layouts do
   sidebar is drawn again each time it changes. `counts` is `@sidebar_counts`, the numbers drawn
   beside entries (`MishkaCmsCore.Sidebar.Counts`). `status` is `@sidebar_status`, the problems the
   parts of the CMS count (`MishkaCmsCore.Layouts.SidebarStatus`), drawn by `sidebar_status/1` on the
-  right of the Settings row: nothing without a line.
+  right of the Settings row and by `status_card/1` above the footer's entries: nothing without a
+  line. `status_now` is `@sidebar_status_now`, the time the card's "Checked 1 min ago" is counted to.
 
   While a page under an entry is open, the entry's top row is drawn in the open page's colours, its
   arrow included, and the rows between it and the page are bold. Every nested row leads with a dot,
@@ -166,6 +167,10 @@ defmodule MishkaCmsCore.Layouts do
     doc:
       "`@sidebar_status`, the lines of `MishkaCmsCore.Layouts.SidebarStatus`; nothing is drawn without one"
 
+  attr :status_now, :any,
+    default: nil,
+    doc: "`@sidebar_status_now`, the time the card counts its check's age to; now when `nil`"
+
   def sidebar(assigns) do
     %{main: main, footer: footer, trail: trail} =
       Sidebar.menu(assigns.current_user, assigns.current_path)
@@ -178,7 +183,8 @@ defmodule MishkaCmsCore.Layouts do
         footer_entries: footer,
         trail: trail,
         levels: levels,
-        level: open_level(trail, levels)
+        level: open_level(trail, levels),
+        settings_row: Enum.any?(footer, &(&1.key == "settings"))
       )
 
     ~H"""
@@ -303,6 +309,7 @@ defmodule MishkaCmsCore.Layouts do
       </nav>
 
       <div id="admin-sidebar-footer" class="mt-2 shrink-0 border-t border-[#e6e4de] pt-3">
+        <.status_card lines={@status} now={@status_now} list={not @settings_row} />
         <%= for item <- @footer_entries do %>
           <div :if={item.key == "settings"} id="admin-sidebar-settings-row" class="relative">
             <.nav_link item={item} trail={@trail} counts={@counts} />
@@ -363,14 +370,12 @@ defmodule MishkaCmsCore.Layouts do
       <button
         type="button"
         id="admin-sidebar-status-toggle"
+        data-status-toggle
         data-level={@level}
         aria-controls="admin-sidebar-status-list"
         aria-expanded="false"
         aria-label={SidebarStatus.issues_label(@lines)}
-        phx-click={
-          JS.toggle(to: "#admin-sidebar-status-list")
-          |> JS.toggle_attribute({"aria-expanded", "true", "false"})
-        }
+        phx-click={toggle_status()}
         class="absolute inset-y-0 end-[6px] my-auto flex h-[26px] items-center max-[980px]:h-11 max-[980px]:min-w-11 max-[980px]:justify-end"
       >
         <span class={[
@@ -380,24 +385,177 @@ defmodule MishkaCmsCore.Layouts do
           {SidebarStatus.issues_label(@lines)}
         </span>
       </button>
-      <div
-        id="admin-sidebar-status-list"
-        role="dialog"
-        aria-label={SidebarStatus.issues_label(@lines)}
-        phx-click-away={close_status()}
-        phx-window-keydown={close_status()}
-        phx-key="Escape"
-        class="absolute bottom-0 start-full z-[95] ms-3 hidden w-[260px] rounded-[14px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_14px_34px_rgba(30,28,24,0.14)] max-[980px]:fixed max-[980px]:inset-x-0 max-[980px]:bottom-0 max-[980px]:start-0 max-[980px]:ms-0 max-[980px]:w-auto max-[980px]:rounded-b-none max-[980px]:pb-[max(8px,env(safe-area-inset-bottom))]"
-      >
-        <.status_line :for={line <- @lines} line={line} />
-      </div>
+      <.status_list lines={@lines} />
     </div>
     """
   end
 
+  @card_hover "transition-shadow hover:shadow-[0_2px_10px_rgba(30,28,24,0.08)]"
+
+  attr :lines, :list, required: true
+  attr :now, :any, default: nil
+  attr :list, :boolean, default: false
+
+  @doc """
+  The status card at the bottom of the sidebar, above its entries, drawn from the same lines as
+  `sidebar_status/1` (`MishkaCmsCore.Layouts.SidebarStatus`), so nothing is read twice:
+
+    * nothing when no plugin answered;
+    * a green card "All systems operational" with "Checked 1 min ago" under it, the age of the
+      check counted to `now` (`SidebarStatus.checked_label/2`), when the plugins checked and found
+      nothing;
+    * a card in the worst line's tone, "2 issues" over the worst line's words ("27 failed jobs"),
+      when there are problems. One line opens its page; several open the list the Settings row's
+      pill opens. `list` draws that list inside the card, for a sidebar with no Settings row.
+  """
+  def status_card(%{lines: []} = assigns), do: ~H""
+
+  def status_card(%{lines: [%{level: :ok} = line]} = assigns) do
+    assigns =
+      assign(
+        assigns,
+        :detail,
+        SidebarStatus.checked_label(line, assigns.now || DateTime.utc_now())
+      )
+
+    ~H"""
+    <div id="admin-sidebar-status-card" data-state="ok" class={card_class(:ok)}>
+      <.card_body level={:ok} title={gettext("All systems operational")} detail={@detail} />
+    </div>
+    """
+  end
+
+  def status_card(%{lines: [%{link: link} = line]} = assigns) when is_binary(link) do
+    assigns = assign(assigns, line: line, hover: @card_hover)
+
+    ~H"""
+    <.link
+      navigate={@line.link}
+      id="admin-sidebar-status-card"
+      data-state="issues"
+      data-level={@line.level}
+      class={[card_class(@line.level), "block no-underline", @hover]}
+    >
+      <.card_body level={@line.level} title={SidebarStatus.issues_label(@lines)} detail={@line.label} />
+    </.link>
+    """
+  end
+
+  def status_card(%{lines: [line]} = assigns) do
+    assigns = assign(assigns, :line, line)
+
+    ~H"""
+    <div
+      id="admin-sidebar-status-card"
+      data-state="issues"
+      data-level={@line.level}
+      class={card_class(@line.level)}
+    >
+      <.card_body level={@line.level} title={SidebarStatus.issues_label(@lines)} detail={@line.label} />
+    </div>
+    """
+  end
+
+  def status_card(%{lines: [first | _rest]} = assigns) do
+    assigns = assign(assigns, first: first, hover: @card_hover)
+
+    ~H"""
+    <div class="relative">
+      <button
+        type="button"
+        id="admin-sidebar-status-card"
+        data-state="issues"
+        data-level={@first.level}
+        data-status-toggle
+        aria-controls="admin-sidebar-status-list"
+        aria-expanded="false"
+        phx-click={toggle_status()}
+        class={[card_class(@first.level), "block w-full text-start", @hover]}
+      >
+        <.card_body
+          level={@first.level}
+          title={SidebarStatus.issues_label(@lines)}
+          detail={@first.label}
+        />
+      </button>
+      <.status_list :if={@list} lines={@lines} />
+    </div>
+    """
+  end
+
+  attr :level, :atom, required: true
+  attr :title, :string, required: true
+  attr :detail, :string, default: nil
+
+  defp card_body(assigns) do
+    ~H"""
+    <div class="flex items-center gap-2">
+      <span class={["size-2 shrink-0 rounded-full", card_tone(@level).dot]}></span>
+      <span class={["min-w-0 truncate text-[11.5px] font-bold", card_tone(@level).ink]}>
+        {@title}
+      </span>
+    </div>
+    <div
+      :if={@detail}
+      class="mt-[5px] truncate ps-4 text-[10.5px] font-medium text-[#8a938c]"
+    >
+      {@detail}
+    </div>
+    """
+  end
+
+  defp card_class(level),
+    do: ["mb-2 rounded-[13px] border px-[13px] py-3", card_tone(level).box]
+
+  defp card_tone(:ok),
+    do: %{
+      box: "border-[#e2ece5] bg-[#f3f8f4]",
+      dot: "animate-pulse bg-[#1f9d6b] motion-reduce:animate-none",
+      ink: "text-[#177a53]"
+    }
+
+  defp card_tone(:error),
+    do: %{
+      box: "border-[#f3d5d1] bg-[#fbe9e7]",
+      dot: "bg-[#c0392b]",
+      ink: "text-[#b3382d]"
+    }
+
+  defp card_tone(_warn),
+    do: %{
+      box: "border-[#f1e3c4] bg-[#fdf6e7]",
+      dot: "bg-[#c8931f]",
+      ink: "text-[#9a6a07]"
+    }
+
+  attr :lines, :list, required: true
+
+  defp status_list(assigns) do
+    ~H"""
+    <div
+      id="admin-sidebar-status-list"
+      role="dialog"
+      aria-label={SidebarStatus.issues_label(@lines)}
+      phx-click-away={close_status()}
+      phx-window-keydown={close_status()}
+      phx-key="Escape"
+      class="absolute bottom-0 start-full z-[95] ms-3 hidden w-[260px] rounded-[14px] border border-[#ecebe6] bg-white p-1.5 shadow-[0_14px_34px_rgba(30,28,24,0.14)] max-[980px]:fixed max-[980px]:inset-x-0 max-[980px]:bottom-0 max-[980px]:start-0 max-[980px]:ms-0 max-[980px]:w-auto max-[980px]:rounded-b-none max-[980px]:pb-[max(8px,env(safe-area-inset-bottom))]"
+    >
+      <.status_line :for={line <- @lines} line={line} />
+    </div>
+    """
+  end
+
+  @status_toggles "[data-status-toggle]"
+
+  defp toggle_status do
+    JS.toggle(to: "#admin-sidebar-status-list")
+    |> JS.toggle_attribute({"aria-expanded", "true", "false"}, to: @status_toggles)
+  end
+
   defp close_status do
     JS.hide(to: "#admin-sidebar-status-list")
-    |> JS.set_attribute({"aria-expanded", "false"}, to: "#admin-sidebar-status-toggle")
+    |> JS.set_attribute({"aria-expanded", "false"}, to: @status_toggles)
   end
 
   attr :line, :map, required: true

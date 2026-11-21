@@ -8,13 +8,20 @@ defmodule MishkaCmsCore.Test.Plugins.SidebarStatusProbe do
   `Application.put_env(:mishka_cms_core, :sidebar_status_probe, lines)` (none when it put none),
   marks the data `checked: true` when the test put `:sidebar_status_probe_checked`, and
   keeps the data it was handed under `:sidebar_status_probe_data`, so a test can read the window it
-  was given.
+  was given. Each call adds one to `:sidebar_status_probe_calls`, so a test can count the reads.
   """
   use MishkaInstaller.Event.Hook, event: "sidebar:status"
 
   @impl true
   def call(%{lines: lines} = data) do
     Application.put_env(:mishka_cms_core, :sidebar_status_probe_data, Map.delete(data, :lines))
+
+    Application.put_env(
+      :mishka_cms_core,
+      :sidebar_status_probe_calls,
+      Application.get_env(:mishka_cms_core, :sidebar_status_probe_calls, 0) + 1
+    )
+
     extra = Application.get_env(:mishka_cms_core, :sidebar_status_probe, [])
     checked = Application.get_env(:mishka_cms_core, :sidebar_status_probe_checked, false)
     {:reply, %{data | lines: lines ++ extra, checked: data.checked or checked}}

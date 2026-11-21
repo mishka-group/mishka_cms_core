@@ -4,12 +4,13 @@
 
 defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
   @moduledoc """
-  The problems row at the bottom of the admin sidebar on the `sidebar:status` event
-  (`MishkaCmsCore.Layouts.SidebarStatus`): nothing at all while no line comes back (no card, no
-  "All systems operational"), one line as a link row to its page, several as "N problems" with a
-  list of links, the lines the viewer may not see dropped (a permission, another site for a site
-  admin), a master's line of another site named with that site, the row switched off by config,
-  and the core's own line, the background jobs given up on in the window.
+  The problems on the admin sidebar on the `sidebar:status` event
+  (`MishkaCmsCore.Layouts.SidebarStatus`), drawn on the Settings row and as the status card from
+  one read: nothing at all while no line comes back (no card, no "All systems operational"), OK and
+  a green card that says when it checked, a pill and a card of "N issues" whose card opens the one
+  line's page or the pill's list, the lines the viewer may not see dropped (a permission, another
+  site for a site admin), a master's line of another site named with that site, the row switched
+  off by config, and the core's own line, the background jobs given up on in the window.
   """
   use MishkaCmsCore.ConnCase, async: false
 
@@ -43,6 +44,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
       Application.delete_env(:mishka_cms_core, :sidebar_status_probe)
       Application.delete_env(:mishka_cms_core, :sidebar_status_probe_checked)
       Application.delete_env(:mishka_cms_core, :sidebar_status_probe_data)
+      Application.delete_env(:mishka_cms_core, :sidebar_status_probe_calls)
       Application.delete_env(:mishka_cms_core, :sidebar_status)
     end)
 
@@ -151,6 +153,7 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
       view = open(conn, no_checks(site))
 
       refute has_element?(view, "#admin-sidebar-status")
+      refute has_element?(view, "#admin-sidebar-status-card")
       sidebar = view |> element("#admin-sidebar") |> render()
       refute sidebar =~ "All systems operational"
       refute sidebar =~ "uptime"
@@ -264,6 +267,124 @@ defmodule MishkaCmsCoreWeb.Test.SidebarStatusTest do
 
       assert_receive {^ref, %{lines: 1}}
       assert has_element?(view, "#admin-sidebar-status-line-error", "1 failed job")
+    end
+  end
+
+  describe "the card" do
+    test "a check that found nothing is a green card saying when it checked, beside the OK row",
+         %{conn: conn, admin: admin} do
+      Application.put_env(:mishka_cms_core, :sidebar_status_probe_checked, true)
+      view = open(conn, admin)
+
+      assert has_element?(
+               view,
+               "#admin-sidebar-footer div#admin-sidebar-status-card[data-state=ok]",
+               "All systems operational"
+             )
+
+      assert has_element?(view, "#admin-sidebar-status-card", "Checked just now")
+
+      assert has_element?(
+               view,
+               "#admin-sidebar-settings-row #admin-sidebar-status[data-state=ok]"
+             )
+
+      refute view |> element("#admin-sidebar-status-card") |> render() =~ "uptime"
+
+      send(view.pid, :sidebar_status_tick)
+      assert has_element?(view, "#admin-sidebar-status-card", "Checked just now")
+    end
+
+    test "says how long ago the check ran" do
+      at = ~U[2026-11-21 10:00:00Z]
+      line = %{level: :ok, checked_at: at}
+
+      assert SidebarStatus.checked_label(line, DateTime.add(at, 59)) == "Checked just now"
+      assert SidebarStatus.checked_label(line, DateTime.add(at, 60)) == "Checked 1 min ago"
+      assert SidebarStatus.checked_label(line, DateTime.add(at, 27 * 60)) == "Checked 27 min ago"
+      assert SidebarStatus.checked_label(line, DateTime.add(at, 2 * 3_600)) == "Checked 2 h ago"
+      assert SidebarStatus.checked_label(%{level: :ok}, at) == nil
+    end
+
+    test "one problem is a card in its tone naming it, opening its page", %{
+      conn: conn,
+      admin: admin
+    } do
+      answer([
+        %{
+          id: "jobs",
+          level: :warn,
+          label: "27 failed jobs",
+          count: 27,
+          link: "/admin/dashboard/pages"
+        }
+      ])
+
+      view = open(conn, admin)
+      card = "a#admin-sidebar-status-card[data-state=issues][data-level=warn]"
+
+      assert has_element?(view, card, "1 issue")
+      assert has_element?(view, card, "27 failed jobs")
+      assert has_element?(view, "#admin-sidebar-status-toggle[data-level=warn]", "1 issue")
+
+      assert {:error, {:live_redirect, %{to: "/admin/dashboard/pages"}}} =
+               view |> element("#admin-sidebar-status-card") |> render_click()
+    end
+
+    test "several problems are a card in the worst tone naming the worst, opening the pill's list",
+         %{conn: conn, admin: admin} do
+      answer([
+        %{id: "events", level: :warn, label: "3 unhandled events", link: @settings},
+        %{id: "jobs", level: :error, label: "27 failed jobs", link: "/admin/dashboard/pages"}
+      ])
+
+      view = open(conn, admin)
+
+      assert has_element?(
+               view,
+               "button#admin-sidebar-status-card[data-level=error][aria-controls=admin-sidebar-status-list][aria-expanded=false]",
+               "2 issues"
+             )
+
+      assert has_element?(view, "#admin-sidebar-status-card", "27 failed jobs")
+      refute has_element?(view, "#admin-sidebar-status-card", "3 unhandled events")
+
+      assert view |> element("#admin-sidebar-status-card") |> render() =~
+               "admin-sidebar-status-list"
+
+      assert has_element?(view, "#admin-sidebar-settings-row #admin-sidebar-status-list")
+
+      assert view |> render() |> :binary.matches(~s(id="admin-sidebar-status-list")) |> length() ==
+               1
+
+      assert has_element?(view, "#admin-sidebar-status-toggle[data-level=error]", "2 issues")
+    end
+
+    test "draws the list itself when the sidebar has no Settings row" do
+      lines = [
+        %{id: "jobs", level: :error, label: "27 failed jobs", link: @settings},
+        %{id: "events", level: :warn, label: "3 unhandled events", link: nil}
+      ]
+
+      html = render_component(&MishkaCmsCore.Layouts.status_card/1, lines: lines, list: true)
+
+      assert html =~ ~s(id="admin-sidebar-status-list")
+      assert html =~ "27 failed jobs"
+
+      refute render_component(&MishkaCmsCore.Layouts.status_card/1, lines: lines) =~
+               ~s(id="admin-sidebar-status-list")
+    end
+
+    test "the card and the Settings row share one read of the plugins per mount", %{
+      conn: conn,
+      admin: admin
+    } do
+      answer([%{id: "jobs", level: :error, label: "27 failed jobs", link: @settings}])
+      view = open(conn, admin)
+
+      assert has_element?(view, "#admin-sidebar-status-card")
+      assert has_element?(view, "#admin-sidebar-status-toggle")
+      assert Application.get_env(:mishka_cms_core, :sidebar_status_probe_calls) == 2
     end
   end
 
