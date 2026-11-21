@@ -60,7 +60,9 @@ defmodule MishkaCmsCore.Layouts.TopbarStatus do
   ## When it is called
 
   `MishkaCmsCore.Layouts.Nav` asks when an admin page opens and when its path changes, never on a
-  render. A plugin that raises is logged by mishka_installer and the bar is drawn with no chip.
+  render. A plugin that raises is logged by mishka_installer and the bar is drawn with no chip. An
+  extension whose state changed while a page is open (it heard the change on its own topic) asks
+  again with `refresh/1` from that page's process, so the chip follows without a reload.
   """
 
   alias MishkaCmsCore.Layouts.TopbarNeeds
@@ -101,6 +103,24 @@ defmodule MishkaCmsCore.Layouts.TopbarStatus do
         []
     end
   end
+
+  @doc """
+  Asks the plugins again for the open page of `socket` and puts the answer where the top bar reads
+  it (`@topbar_status`); a socket the admin layout did not set up is returned as it is.
+  """
+  @spec refresh(Phoenix.LiveView.Socket.t()) :: Phoenix.LiveView.Socket.t()
+  def refresh(%{assigns: %{current_path: path} = assigns} = socket) when is_binary(path) do
+    context = %{
+      current_user: assigns[:current_user],
+      current_site: assigns[:topbar_site],
+      current_path: path,
+      view: socket.view
+    }
+
+    Phoenix.Component.assign(socket, :topbar_status, collect(context))
+  end
+
+  def refresh(socket), do: socket
 
   @doc "The worst level of `lines`: `:error`, `:warn` or `:ok`, or `nil` for none."
   @spec level([line()]) :: :ok | :warn | :error | nil

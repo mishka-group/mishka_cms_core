@@ -80,6 +80,19 @@ defmodule MishkaCmsCoreWeb.Test.TopbarStatusTest do
       assert Enum.find(lines, &(&1.id == "probe-warn")).link == @settings
     end
 
+    test "refresh asks again from a page's socket, and leaves a socket of no admin page alone", %{
+      admin: admin
+    } do
+      socket = %Phoenix.LiveView.Socket{
+        assigns: %{__changed__: %{}, current_user: admin, current_path: @settings}
+      }
+
+      assert [%{id: "probe-warn"} | _rest] = TopbarStatus.refresh(socket).assigns.topbar_status
+
+      bare = %Phoenix.LiveView.Socket{assigns: %{__changed__: %{}}}
+      assert TopbarStatus.refresh(bare) == bare
+    end
+
     test "draws one chip with the worst dot and a panel of every line", %{
       conn: conn,
       admin: admin
