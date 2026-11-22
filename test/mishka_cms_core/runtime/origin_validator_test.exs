@@ -36,6 +36,10 @@ defmodule MishkaCmsCore.Runtime.OriginValidatorTest do
       assert OriginValidator.host_name("[2001:DB8::1]") == "2001:db8::1"
     end
 
+    test "lowers no other letter, so no other one makes it another site's host" do
+      assert OriginValidator.host_name("\u212Aompany.test") == "\u212Aompany.test"
+    end
+
     test "drops one dot alone, and none that is not at the end" do
       assert OriginValidator.host_name("site-a.example.com..") == "site-a.example.com."
       assert OriginValidator.host_name(".site-a.example.com") == ".site-a.example.com"
