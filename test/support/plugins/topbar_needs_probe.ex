@@ -7,7 +7,8 @@ defmodule MishkaCmsCore.Test.Plugins.TopbarNeedsProbe do
   Test plugin on `topbar:needs`: a refund item whose count a test sets with `put_count/1`, an item
   behind a permission the test admin does not hold, an item of 0, an item linking to another site
   and a second item reusing a taken id. The refund item and the one of another site are the only
-  ones the bell may list, the second with no link.
+  ones the bell may list, the second with no link. The refund item is in the group "Probe shop"; the
+  others name none, so they fall in the core's group.
   """
   use MishkaInstaller.Event.Hook, event: "topbar:needs"
 
@@ -29,7 +30,9 @@ defmodule MishkaCmsCore.Test.Plugins.TopbarNeedsProbe do
         count: :persistent_term.get(@count, 3),
         tone: :warn,
         link: "/admin/dashboard/settings",
-        priority: 10
+        priority: 10,
+        group: "Probe shop",
+        group_id: "probe"
       },
       %{id: "probe-gated", title: "Gated", count: 4, permission: "admin:api:probe"},
       %{id: "probe-zero", title: "Nothing", count: 0},

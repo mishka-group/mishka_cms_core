@@ -15,16 +15,27 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
 
   An item is a map:
 
-    * `id` — a string, unique and stable: part of the DOM id of its row, `topbar-need-<id>`;
-    * `title` — what needs the person, already translated: "A dispute needs your answer";
-    * `count` — how many, an integer; an item of 0 is not listed;
-    * `detail` — optional, the line under the title: "MS-4795 · 5 days left";
-    * `tone` — optional, `:info` (the default), `:warn`, `:error` or `:success`: the colour of its dot;
-    * `link` — optional, a path of this app the row opens (`"/admin/dashboard/shop/refunds"`); an
+    * `id`: a string, unique and stable: part of the DOM id of its row, `topbar-need-<id>`;
+    * `title`: what needs the person, already translated: "A dispute needs your answer";
+    * `count`: how many, an integer; an item of 0 is not listed;
+    * `detail`: optional, the line under the title: "MS-4795 · 5 days left";
+    * `tone`: optional, `:info` (the default), `:warn`, `:error` or `:success`: the colour of its dot;
+    * `link`: optional, a path of this app the row opens (`"/admin/dashboard/shop/refunds"`); an
       address of another site, or one starting `//`, is refused and the row opens nothing;
-    * `permission` — optional, one name or a list where holding ANY is enough, checked as a dashboard
+    * `permission`: optional, one name or a list where holding ANY is enough, checked as a dashboard
       widget's is (`MishkaCmsCore.Settings.permitted?/2`); without one, every signed-in admin sees it;
-    * `priority` — optional, an integer, 50 by default: low comes first, `id` breaks a tie.
+    * `priority`: optional, an integer, 50 by default: low comes first, `id` breaks a tie;
+    * `group`: optional, already translated, the header the item is listed under: "Shop".
+      Without one the item is listed under the core's own group, "CMS", with the failed jobs;
+    * `group_id`: optional, a stable string naming the group: part of the DOM id of its list,
+      `topbar-needs-<group_id>`, and the key the bell remembers its fold by, so it stays the same in
+      every language. Without one the `group` label is the id.
+
+  The bell lists the items under one header per group, with what the group's counts add up to, and
+  the header folds its list with `Phoenix.LiveView.JS`. A group starts open; the `RememberFolds`
+  hook keeps what the person folded, as the sidebar keeps its folded groups. The groups come in the
+  order of their first item, and with one group the header is still drawn, so the person sees whose
+  items they are.
 
   An item with no `id`, no `title`, a count that is not an integer, or an `id` already taken is
   dropped.
@@ -44,16 +55,19 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
 
       defmodule MyShop.Needs do
         use MishkaInstaller.Event.Hook, event: "topbar:needs"
+        use Gettext, backend: MyShop.Gettext
 
         @impl true
         def call(%{needs: needs, current_user: user} = data) do
           item = %{
             id: "shop-refunds",
-            title: "A buyer asks for a refund",
+            title: gettext("A buyer asks for a refund"),
             count: MyShop.Refunds.open_count(user),
             tone: :warn,
             link: "/admin/dashboard/shop/refunds",
-            permission: "admin:dashboard:shop"
+            permission: "admin:dashboard:shop",
+            group: gettext("Shop"),
+            group_id: "shop"
           }
 
           {:reply, %{data | needs: needs ++ [item]}}
@@ -73,7 +87,7 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
 
   ## Telemetry
 
-    * `[:mishka_cms, :topbar_needs, :refreshed]` — emitted from the page's process each time a
+    * `[:mishka_cms, :topbar_needs, :refreshed]`: emitted from the page's process each time a
       `changed/1` makes it ask again. Measurements: `%{total: integer}`, what the badge adds. Metadata:
       `%{view: module}`.
   """
@@ -94,7 +108,16 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
           required(:tone) => tone(),
           required(:link) => String.t() | nil,
           required(:priority) => integer(),
+          required(:group) => String.t(),
+          required(:group_id) => String.t(),
           optional(:permission) => String.t() | [String.t()]
+        }
+
+  @type group :: %{
+          id: String.t(),
+          label: String.t(),
+          count: pos_integer(),
+          needs: [item()]
         }
 
   @type context :: %{
@@ -109,6 +132,7 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
   @tones [:info, :warn, :error, :success]
   @priority 50
   @jobs_permission "admin:dashboard:runtime:activity"
+  @core_group "cms"
 
   @doc "The mishka_installer event extensions add their items to the bell on."
   @spec event() :: String.t()
@@ -143,6 +167,19 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
   def total(needs), do: Enum.sum_by(needs, & &1.count)
 
   @doc """
+  The items of `collect/1` under their groups, in the order of each group's first item, each group
+  with its `id`, `label`, the `count` its items add up to and its `needs`.
+  """
+  @spec groups([item()]) :: [group()]
+  def groups(needs) do
+    by_group = Enum.group_by(needs, & &1.group_id)
+
+    for id <- needs |> Enum.map(& &1.group_id) |> Enum.uniq(),
+        [first | _rest] = items = Map.fetch!(by_group, id),
+        do: %{id: id, label: first.group, count: total(items), needs: items}
+  end
+
+  @doc """
   Tells the open admin pages that the numbers of `site_id` moved, so they ask the plugins again:
   the pages of that site's admins and of every master. `nil` reaches every open page.
   """
@@ -172,7 +209,8 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
           tone: :error,
           link: "/admin/dashboard/runtime/activity",
           permission: @jobs_permission,
-          priority: 90
+          priority: 90,
+          group_id: @core_group
         }
       ]
     else
@@ -188,7 +226,9 @@ defmodule MishkaCmsCore.Layouts.TopbarNeeds do
         detail: text(item[:detail]),
         tone: tone(item[:tone]),
         link: local_path(item[:link]),
-        priority: priority(item[:priority])
+        priority: priority(item[:priority]),
+        group: text(item[:group]) || gettext("CMS"),
+        group_id: text(item[:group_id]) || text(item[:group]) || @core_group
       })
     ]
   end

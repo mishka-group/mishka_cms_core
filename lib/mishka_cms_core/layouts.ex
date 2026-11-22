@@ -739,7 +739,8 @@ defmodule MishkaCmsCore.Layouts do
   draws itself small enough for the phone's bar.
 
   `needs` is `@topbar_needs`, the bell's "What needs you" items (`MishkaCmsCore.Layouts.TopbarNeeds`),
-  listed above the notifications, each opening its link. The bell's badge adds their counts to
+  listed above the notifications under one folding header per group (`TopbarNeeds.groups/1`), each
+  opening its link. The bell's badge adds their counts to
   `notification_count`, the unread notifications.
 
   Below 640px the bar is the phone's, 60px tall: the menu button, the page's heading and the bell
@@ -949,11 +950,16 @@ defmodule MishkaCmsCore.Layouts do
             phx-click-away={JS.hide(to: "#topbar-notifs")}
             class="absolute end-0 top-[52px] z-[60] hidden w-[360px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-[16px] border border-[#ecebe6] bg-white shadow-[0_18px_44px_rgba(30,28,24,0.16)]"
           >
-            <div :if={@needs != []} id="topbar-needs" class="border-b border-[#f0efea] p-2">
+            <div
+              :if={@needs != []}
+              id="topbar-needs"
+              phx-hook="RememberFolds"
+              class="border-b border-[#f0efea] p-2"
+            >
               <div class="px-2 pb-1.5 pt-1.5 font-['Space_Grotesk'] text-[14px] font-bold text-[#17161a]">
                 {gettext("What needs you")}
               </div>
-              <.need_row :for={need <- @needs} need={need} />
+              <.need_group :for={group <- TopbarNeeds.groups(@needs)} group={group} />
             </div>
 
             <div class="flex items-center justify-between gap-2 border-b border-[#f0efea] px-4 py-[15px]">
@@ -1158,6 +1164,45 @@ defmodule MishkaCmsCore.Layouts do
     """
   end
 
+  attr :group, :map, required: true
+
+  # One extension's items under a header with their total; the header folds the list, which starts
+  # open, and `RememberFolds` keeps the fold across pages as the sidebar keeps its groups.
+  defp need_group(assigns) do
+    assigns = assign(assigns, :panel, dom_id("topbar-needs", assigns.group.id))
+
+    ~H"""
+    <div>
+      <button
+        type="button"
+        data-fold
+        aria-expanded="true"
+        aria-controls={@panel}
+        phx-click={fold(@panel)}
+        class="group flex min-h-11 w-full items-center gap-2 rounded-[10px] px-2.5 py-1 text-start hover:bg-[#faf9f6] min-[641px]:min-h-0"
+      >
+        <span class="text-[10.5px] font-bold uppercase tracking-[0.1em] text-[#a8a5a0]">
+          {@group.label}
+        </span>
+        <span class="h-px flex-1 bg-[#e6e4de]"></span>
+        <span
+          data-group-count={@group.count}
+          class="shrink-0 rounded-full bg-[#f0efea] px-1.5 py-px text-[10.5px] font-bold leading-[16px] text-[#5c5a54]"
+        >
+          {@group.count}
+        </span>
+        <.icon
+          name="hero-chevron-down"
+          class="size-[13px] text-[#c2bfb6] transition-transform group-aria-expanded:rotate-180"
+        />
+      </button>
+      <div id={@panel}>
+        <.need_row :for={need <- @group.needs} need={need} />
+      </div>
+    </div>
+    """
+  end
+
   attr :need, :map, required: true
 
   # A row with a link navigates live, as `<.link navigate>` does; a row without one is not a link.
@@ -1171,7 +1216,7 @@ defmodule MishkaCmsCore.Layouts do
       data-tone={@need.tone}
       {@opens}
       class={[
-        "flex items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-start",
+        "flex min-h-11 items-start gap-2.5 rounded-[10px] px-2.5 py-2 text-start min-[641px]:min-h-0",
         @need.link && "hover:bg-[#faf9f6]"
       ]}
     >

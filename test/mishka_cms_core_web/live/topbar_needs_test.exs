@@ -6,7 +6,8 @@ defmodule MishkaCmsCoreWeb.Test.TopbarNeedsTest do
   @moduledoc """
   The bell's "What needs you" (`MishkaCmsCore.Layouts.TopbarNeeds`): the core's failed jobs for
   whoever may open the activity log, what extensions add on `topbar:needs` for whoever may see it,
-  a badge that adds their counts to the unread notifications, a plugin that raises leaving the
+  listed under one folding header per group, a badge that adds their counts to the unread
+  notifications, a plugin that raises leaving the
   core's item and the page, and open pages that ask again when an extension says the numbers moved.
   """
   use MishkaCmsCore.ConnCase, async: false
@@ -91,6 +92,51 @@ defmodule MishkaCmsCoreWeb.Test.TopbarNeedsTest do
       assert %{id: "probe-refunds", count: 3, tone: :warn, link: @settings} = refunds
       assert refunds.detail =~ "MS-4806"
       assert %{id: "probe-away", count: 1, tone: :info, link: nil, priority: 50} = away
+    end
+
+    test "puts each item under its group, one with none under the core's, the core's item too", %{
+      admin: admin,
+      site: site
+    } do
+      failed_job!(site.id)
+      needs = TopbarNeeds.collect(context(admin))
+
+      assert %{group: "Probe shop", group_id: "probe"} =
+               Enum.find(needs, &(&1.id == "probe-refunds"))
+
+      assert %{group: "CMS", group_id: "cms"} = Enum.find(needs, &(&1.id == "probe-away"))
+      assert %{group: "CMS", group_id: "cms"} = Enum.find(needs, &(&1.id == "runtime-jobs"))
+
+      assert [
+               %{id: "probe", label: "Probe shop", count: 3, needs: [%{id: "probe-refunds"}]},
+               %{id: "cms", label: "CMS", count: 2, needs: cms}
+             ] = TopbarNeeds.groups(needs)
+
+      assert Enum.map(cms, & &1.id) == ["probe-away", "runtime-jobs"]
+    end
+
+    test "the bell lists each group under a header with its total, open, folding its own list", %{
+      conn: conn,
+      admin: admin,
+      site: site
+    } do
+      failed_job!(site.id)
+      view = open(conn, admin, @settings)
+
+      assert has_element?(view, "#topbar-needs[phx-hook='RememberFolds']")
+
+      assert has_element?(
+               view,
+               "#topbar-needs [aria-controls='topbar-needs-probe'][aria-expanded='true']",
+               "Probe shop"
+             )
+
+      assert has_element?(view, "[aria-controls='topbar-needs-probe'] [data-group-count='3']")
+      assert has_element?(view, "[aria-controls='topbar-needs-cms'] [data-group-count='2']")
+      assert has_element?(view, "#topbar-needs-probe #topbar-need-probe-refunds")
+      assert has_element?(view, "#topbar-needs-cms #topbar-need-probe-away")
+      assert has_element?(view, "#topbar-needs-cms #topbar-need-runtime-jobs")
+      refute has_element?(view, "#topbar-needs-probe.hidden")
     end
 
     test "the bell lists them and its badge adds their counts", %{
@@ -186,7 +232,9 @@ defmodule MishkaCmsCoreWeb.Test.TopbarNeedsTest do
         count: 3,
         tone: :info,
         link: nil,
-        priority: 1
+        priority: 1,
+        group: "CMS",
+        group_id: "cms"
       }
 
       html =
@@ -196,6 +244,10 @@ defmodule MishkaCmsCoreWeb.Test.TopbarNeedsTest do
 
       assert html |> LazyHTML.query("#topbar-bell [data-bell-count]") |> LazyHTML.text() =~ "5"
       assert html |> LazyHTML.query("#topbar-needs #topbar-need-n") |> Enum.count() == 1
+
+      # With one group its header is still drawn, so the reader sees whose items these are.
+      assert html |> LazyHTML.query("[aria-controls='topbar-needs-cms']") |> LazyHTML.text() =~
+               "CMS"
 
       empty = render_component(&Layouts.topbar/1, notification_count: 0, needs: [])
       refute empty =~ "data-bell-count"

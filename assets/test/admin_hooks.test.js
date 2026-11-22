@@ -380,6 +380,34 @@ describe("SidebarScroll folds", () => {
 
     expect(local.getItem(FOLDS)).toBe(null);
   });
+
+  // The bell's "What needs you" groups keep their fold through the same map.
+  test("RememberFolds keeps a bell group folded on the next page", () => {
+    const bell = () => {
+      document.body.innerHTML = `
+        <div id="topbar-needs">
+          <button data-fold aria-expanded="true" aria-controls="topbar-needs-shop">Shop</button>
+          <div id="topbar-needs-shop"><a href="/admin/dashboard/shop/refunds">Refunds</a></div>
+        </div>`;
+
+      const hook = Object.create(AdminHooks.RememberFolds);
+      hook.el = document.getElementById("topbar-needs");
+      hook.js = () => js;
+      hook.mounted();
+
+      return hook;
+    };
+
+    const first = bell();
+    button(first.el, "topbar-needs-shop").click();
+    expect(JSON.parse(local.getItem(FOLDS))).toEqual({ "topbar-needs-shop": false });
+
+    first.destroyed();
+    const next = bell();
+
+    expect(folded("topbar-needs-shop")).toBe(true);
+    expect(button(next.el, "topbar-needs-shop").getAttribute("aria-expanded")).toBe("false");
+  });
 });
 
 // A part dragged in the content editor's settings: the page is put back as it was, and the server

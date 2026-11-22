@@ -254,6 +254,47 @@ function readFolds() {
   }
 }
 
+// LiveView runs the fold from its own click listener on `window`, after this one, so the state the
+// click leads to is the opposite of the one read here.
+function rememberFold(event) {
+  const button = event.target.closest?.("[data-fold]");
+  const id = button?.getAttribute("aria-controls");
+
+  if (!id || !remembered(id)) return;
+
+  const folds = readFolds();
+  folds[id] = button.getAttribute("aria-expanded") !== "true";
+
+  try {
+    localStorage.setItem(SIDEBAR_FOLDS_KEY, JSON.stringify(folds));
+  } catch (_denied) {
+    // Without storage the fold lasts until the panel is drawn again.
+  }
+}
+
+// Puts each remembered fold under `el` back, through the hook's `js` so a later patch keeps it. A
+// panel holding the open page stays open.
+function restoreFolds(el, js) {
+  const folds = readFolds();
+
+  el.querySelectorAll("[data-fold]").forEach((button) => {
+    const id = button.getAttribute("aria-controls");
+    const panel = id && document.getElementById(id);
+
+    if (!panel || !remembered(id) || typeof folds[id] !== "boolean") return;
+
+    const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
+
+    js.setAttribute(button, "aria-expanded", String(open));
+
+    if (open) {
+      js.removeClass(panel, "hidden");
+    } else {
+      js.addClass(panel, "hidden");
+    }
+  });
+}
+
 // A link hidden by its own list (or by the wide or narrow half of the nav) has no box to scroll to.
 function shown(el) {
   return typeof el.checkVisibility !== "function" || el.checkVisibility();
@@ -269,7 +310,7 @@ const SidebarScroll = {
       // Private browsing may refuse sessionStorage; fall back to the active link below.
     }
 
-    this.restoreFolds();
+    restoreFolds(this.el, this.js());
 
     const top = saved === null ? NaN : parseInt(saved, 10);
 
@@ -297,53 +338,27 @@ const SidebarScroll = {
       });
     };
 
-    // LiveView runs the fold from its own click listener on `window`, after this one, so the state
-    // the click leads to is the opposite of the one read here.
-    this.onFold = (event) => {
-      const button = event.target.closest?.("[data-fold]");
-      const id = button?.getAttribute("aria-controls");
-
-      if (!id || !remembered(id)) return;
-
-      const folds = readFolds();
-      folds[id] = button.getAttribute("aria-expanded") !== "true";
-
-      try {
-        localStorage.setItem(SIDEBAR_FOLDS_KEY, JSON.stringify(folds));
-      } catch (_denied) {
-        // Without storage the fold lasts until the nav is drawn again.
-      }
-    };
-
     this.el.addEventListener("scroll", this.onScroll, { passive: true });
-    this.el.addEventListener("click", this.onFold);
-  },
-  restoreFolds() {
-    const folds = readFolds();
-    const js = this.js();
-
-    this.el.querySelectorAll("[data-fold]").forEach((button) => {
-      const id = button.getAttribute("aria-controls");
-      const panel = id && document.getElementById(id);
-
-      if (!panel || !remembered(id) || typeof folds[id] !== "boolean") return;
-
-      const open = folds[id] || panel.querySelector("[aria-current='page']") !== null;
-
-      js.setAttribute(button, "aria-expanded", String(open));
-
-      if (open) {
-        js.removeClass(panel, "hidden");
-      } else {
-        js.addClass(panel, "hidden");
-      }
-    });
+    this.el.addEventListener("click", rememberFold);
   },
   destroyed() {
     this.el.removeEventListener("scroll", this.onScroll);
-    this.el.removeEventListener("click", this.onFold);
+    this.el.removeEventListener("click", rememberFold);
 
     if (this.frame !== null) cancelAnimationFrame(this.frame);
+  },
+};
+
+// The bell's "What needs you" groups (`MishkaCmsCore.Layouts.TopbarNeeds`): a group folds with
+// `Phoenix.LiveView.JS`, and this keeps the fold as `SidebarScroll` keeps the sidebar's, in the same
+// `localStorage` map, so a group folded on one page stays folded on the next and on the next visit.
+const RememberFolds = {
+  mounted() {
+    restoreFolds(this.el, this.js());
+    this.el.addEventListener("click", rememberFold);
+  },
+  destroyed() {
+    this.el.removeEventListener("click", rememberFold);
   },
 };
 
@@ -385,6 +400,7 @@ export default {
   PreviewFrame,
   NumberBounds,
   SidebarScroll,
+  RememberFolds,
   MediaThumb,
   DashboardGrid,
   DashboardTray,
