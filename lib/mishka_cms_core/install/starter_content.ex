@@ -1233,7 +1233,7 @@ defmodule MishkaCmsCore.Install.StarterContent do
                   href="https://mishka.tools/cms"
                   target="_blank"
                   rel="noopener noreferrer"
-                  class="text-brand hover:text-brand-deep"
+                  class="text-brand hover:text-brand-deep dark:text-brand-dark dark:hover:text-fg-dark"
                 >Mishka CMS</.link>
                 · open source
               </span>
