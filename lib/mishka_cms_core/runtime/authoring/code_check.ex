@@ -239,6 +239,35 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   def ok?(page), do: check(page) == :ok
 
   @doc """
+  The fault of a template `LiveViewCompiler.draw_template/2` or `draw_html_template/2` did not draw:
+  what the compiler refuses in it, at the author's line. `nil` when it compiled and failed as it was
+  drawn, for want of an assign a live page is handed.
+  """
+  @spec drawing_fault(LiveViewCompiler.failure()) :: fault() | nil
+  def drawing_fault(%{stage: :compile, error: error}),
+    do: fault(:template, nil, nil, error_line(error), describe(error))
+
+  def drawing_fault(%{stage: :draw, error: %CompileError{} = error, diagnostics: diagnostics}),
+    do: %{compile_fault(error, diagnostics, LiveViewCompiler) | tab: :template}
+
+  def drawing_fault(%{stage: :draw}), do: nil
+
+  @doc """
+  The fault in what a compile of `module` answers when it is refused: the exception, and the
+  diagnostics that hold the sentence it does not.
+  """
+  @spec compile_fault(Exception.t(), [map()], module()) :: fault()
+  def compile_fault(error, diagnostics, module) do
+    case Enum.find(diagnostics, &(&1.severity == :error)) do
+      %{message: message} = diagnostic ->
+        fault(:page, nil, nil, diagnostic_line(diagnostic), unname(message, module))
+
+      nil ->
+        fault(:page, nil, nil, error_line(error), unname(Exception.message(error), module))
+    end
+  end
+
+  @doc """
   One line of prose for a fault, the way it should read above the box it belongs to.
   """
   @spec message(fault()) :: String.t()
@@ -514,6 +543,10 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
        when error in [SyntaxError, TokenMissingError, MismatchedDelimiterError],
        do: description
 
+  # A block with no end reaches the tag engine's parser with no clause for it.
+  defp describe(%FunctionClauseError{}),
+    do: gettext("It could not be read. Look for a tag or a block that is not closed.")
+
   defp describe(error), do: trim_file(Exception.message(error))
 
   # The HEEx engine names the fake file it was handed, which is a compiler implementation detail
@@ -522,7 +555,7 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
   defp trim_file(message) do
     message
     |> String.replace(~r/^mishka_cms_runtime_[a-z_]*[^:]*:\d+:\d+:\s*/, "")
-    |> String.replace(@template_file, gettext("the template"))
+    |> String.replace(~r/mishka_cms_runtime_[a-z_]*\d*/, gettext("the template"))
   end
 
   defp load({:error, _fault} = error, _module, _create_ast), do: error
@@ -554,16 +587,8 @@ defmodule MishkaCmsCore.Runtime.Authoring.CodeCheck do
 
   defp outcome(:ok, _diagnostics, _module), do: :ok
 
-  defp outcome({:raised, error}, diagnostics, module) do
-    case Enum.find(diagnostics, &(&1.severity == :error)) do
-      %{message: message} = diagnostic ->
-        {:error, fault(:page, nil, nil, diagnostic_line(diagnostic), unname(message, module))}
-
-      nil ->
-        {:error,
-         fault(:page, nil, nil, error_line(error), unname(Exception.message(error), module))}
-    end
-  end
+  defp outcome({:raised, error}, diagnostics, module),
+    do: {:error, compile_fault(error, diagnostics, module)}
 
   # The rehearsal module's name is `C2` and nothing else in the world calls the page that. It
   # turns up in the middle of otherwise readable sentences — "expected …CodeCheck.C2 to define

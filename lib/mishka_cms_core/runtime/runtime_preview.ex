@@ -40,7 +40,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
       `Phoenix.HTML.Engine` the runtime serves it with, so the preview matches production.
 
   Anything that needs live request data degrades to a styled note; the Code tab still
-  shows the real source.
+  shows the real source. So does a template that does not compile, with the reason and its line.
 
   ## The chrome styles itself with a `<style>`, never a `style` attribute
 
@@ -98,6 +98,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   alias MishkaCmsCore.Runtime.Compilers.LiveViewCompiler
   alias MishkaCmsCore.Runtime.ErrorStatus
   alias MishkaCmsCore.Runtime.LiveViewHelpers
+  alias MishkaCmsCore.Runtime.Authoring.CodeCheck
   alias MishkaCmsCore.Runtime.Authoring.Icons
   alias MishkaCmsCore.Runtime.PreviewHooks
   alias MishkaCmsCore.Runtime.Handlers.UiKitHandler
@@ -532,7 +533,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     # Inner + per-status layout render through the HEEx TagEngine (like the live server) so
     # `<.component site={@site} />` and `phx-*` hooks work; `site`/`page` mirror page_assigns/1.
     assigns = %{
-      conn: preview_conn(record, status),
+      conn: preview_conn(record, status, nonce),
       status: drawn_status(status),
       site: site_name(record),
       page: record,
@@ -564,7 +565,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
           render_html(
             root,
             %{
-              conn: preview_conn(record, status),
+              conn: preview_conn(record, status, nonce),
               status: drawn_status(status),
               site: site_name(record),
               page: record,
@@ -573,7 +574,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
             nonce
           )
 
-        {html, note || root_note}
+        {inline_site_css(html, record, nonce), note || root_note}
 
       _ ->
         {document(
@@ -586,18 +587,17 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   end
 
   # HEEx render for error inner/per-status-layout templates (components + hooks resolve).
-  defp render_heex(template, assigns, nonce) do
-    case LiveViewCompiler.render_template(template, assigns) do
-      html when is_binary(html) -> {html, nil}
-      {:error, message} -> {note_body(message, nonce), message}
-    end
-  end
+  defp render_heex(template, assigns, nonce),
+    do: template |> LiveViewCompiler.draw_template(assigns) |> drawn(nonce)
 
-  defp render_html(template, assigns, nonce) do
-    case LiveViewCompiler.render_html_template(template, assigns) do
-      html when is_binary(html) -> {html, nil}
-      {:error, message} -> {note_body(message, nonce), message}
-    end
+  defp render_html(template, assigns, nonce),
+    do: template |> LiveViewCompiler.draw_html_template(assigns) |> drawn(nonce)
+
+  defp drawn({:ok, html}, _nonce), do: {html, nil}
+
+  defp drawn({:error, %{error: error, message: message} = failure}, nonce) do
+    reason = CodeCheck.drawing_fault(failure) || Exception.message(error)
+    {note_body(reason, nonce), message}
   end
 
   defp entry_template(entry), do: string_keys(entry)["template"] || ""
@@ -627,9 +627,10 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   # copy. `status` is the one the author chose in the strip, so the page says the number it is for;
   # the offline page is answered as a 503, as `MishkaCms.Plugs.MaintenanceGate` answers it, and the
   # default page as the code it is drawn with.
-  defp preview_conn(record, status) do
+  # A `<style>` of the layout's own takes the document's nonce as it takes the request's.
+  defp preview_conn(record, status, nonce) do
     %{
-      assigns: %{current_site: preview_site(record)},
+      assigns: %{current_site: preview_site(record), csp_nonce: nonce},
       request_path: "/",
       query_string: "",
       method: "GET",
@@ -660,7 +661,28 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
     end
   end
 
-  defp css_bundle(record), do: AssetsState.get_value(site_name(record), "css") || ""
+  # A site's stylesheet travels with the document to the browser, so one past this is left out.
+  @inline_limit 2_097_152
+
+  defp css_bundle(record) do
+    case AssetsState.get_value(site_name(record), "css") do
+      css when is_binary(css) and byte_size(css) <= @inline_limit -> css
+      _none_or_too_large -> ""
+    end
+  end
+
+  # A ROOT LAYOUT LINKS THE SITE'S STYLESHEET (`Shared.site_css_href/1`), and the sandboxed frame
+  # holds no cookie: on the admin's host, which is another site's, the link is answered with a 404.
+  defp inline_site_css(html, record, nonce) do
+    site = Regex.escape(site_name(record))
+    style = "<style#{nonce_attr(nonce)}>#{css_bundle(record)}</style>"
+
+    Regex.replace(
+      ~r{<link\b[^>]*\shref=["']/assets/css/#{site}/[^"']*["'][^>]*>}i,
+      html,
+      fn _link -> style end
+    )
+  end
 
   @doc """
   Parse the Code-tab's serialized error pages (`<!-- 404 -->`-delimited blocks, `<!-- offline -->`
@@ -690,6 +712,27 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   end
 
   def parse_error_pages(_text, _entries), do: []
+
+  @doc """
+  The line of a Code tab's text that is above its first marker, so `parse_error_pages/2` puts it in no
+  entry: `nil` when there is nothing there but blank lines and comments.
+  """
+  @spec unmarked_line(String.t()) :: pos_integer() | nil
+  def unmarked_line(text) when is_binary(text) do
+    [unmarked | _marked] =
+      Regex.split(~r/<!--\s*(?:\d+|offline|default)\s*-->/i, text, parts: 2)
+
+    written =
+      Regex.replace(
+        ~r/<!--.*?-->|<%!--.*?--%>|<%#.*?%>/s,
+        unmarked,
+        &String.replace(&1, ~r/[^\n]/, "")
+      )
+
+    with index when is_integer(index) <-
+           written |> String.split("\n") |> Enum.find_index(&(String.trim(&1) != "")),
+         do: index + 1
+  end
 
   # A layout wraps a page via `@inner_content`. For a standalone preview we fill that slot with the
   # layout's own `:example` HTML (so it renders for real), falling back to a dashed placeholder.
@@ -751,16 +794,11 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   end
 
   defp wrap(record, {body_html, error_note}, nonce, info_note \\ nil) do
-    css = AssetsState.get_value(site_name(record), "css") || ""
-    {document(title(record), css, body_html, nonce), error_note || info_note}
+    {document(title(record), css_bundle(record), body_html, nonce), error_note || info_note}
   end
 
-  defp body(template, assigns, nonce) when is_binary(template) do
-    case LiveViewCompiler.render_template(template, assigns) do
-      html when is_binary(html) -> {html, nil}
-      {:error, message} -> {note_body(message, nonce), message}
-    end
-  end
+  defp body(template, assigns, nonce) when is_binary(template),
+    do: render_heex(template, assigns, nonce)
 
   defp body(_template, _assigns, nonce),
     do: {note_body(gettext("Nothing to render."), nonce), "empty"}
@@ -865,17 +903,37 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
   end
 
   @doc """
-  The "Preview unavailable" note for `message`, with its own `<style>` marked with `nonce`.
+  The "Preview unavailable" note for `reason`, with its own `<style>` marked with `nonce`.
+
+  `reason` is a `MishkaCmsCore.Runtime.Authoring.CodeCheck` fault for code that does not compile, and
+  a message for code that does and needs what only a live page has.
   """
+  @spec note_body(CodeCheck.fault() | term(), String.t() | nil) :: String.t()
+  def note_body(%{tab: tab, message: _message} = fault, nonce),
+    do: note(uncompiled(tab), CodeCheck.message(fault), nonce)
+
   def note_body(message, nonce) do
+    note(
+      gettext(
+        "This needs data that only exists when served live. The source is still on the Code tab."
+      ),
+      message,
+      nonce
+    )
+  end
+
+  defp uncompiled(:template), do: gettext("This template does not compile.")
+  defp uncompiled(_module), do: gettext("This code does not compile.")
+
+  defp note(text, reason, nonce) do
     """
     <style#{nonce_attr(nonce)}>#{@note_css}</style>
     <div class="mishka-preview-note">
       <p class="mishka-preview-note-title">#{escape(gettext("Preview unavailable"))}</p>
       <p class="mishka-preview-note-text">
-        #{escape(gettext("This needs data that only exists when served live. The source is still on the Code tab."))}
+        #{escape(text)}
       </p>
-      <pre class="mishka-preview-note-code">#{escape(redact(message))}</pre>
+      <pre class="mishka-preview-note-code">#{escape(redact(reason))}</pre>
     </div>
     """
   end
@@ -892,7 +950,7 @@ defmodule MishkaCmsCore.Runtime.RuntimePreview do
 
   defp redact(message) when is_binary(message) do
     message
-    |> String.split(" in: ", parts: 2)
+    |> String.split(" in:", parts: 2)
     |> hd()
     |> String.slice(0, @note_limit)
   end

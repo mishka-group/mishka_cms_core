@@ -1079,7 +1079,7 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
 
   @doc """
   Create or update a draft from the Code editor (+ label), then reload the picker — for a writer of
-  the record.
+  the record. An Error Page's text above its first marker is refused, with its line.
   """
   def save_draft(
         %{assigns: %{preview: %{writable?: false, resource: resource}}} = socket,
@@ -1089,6 +1089,27 @@ defmodule MishkaCmsCoreWeb.Live.Admin.Dashboard.Runtime.PreviewHelpers do
       do: put_flash(socket, :error, refusal(resource))
 
   def save_draft(socket, source, label) do
+    case unmarked(draft_spec(socket.assigns.preview.resource), source) do
+      nil ->
+        put_draft(socket, source, label)
+
+      line ->
+        socket
+        |> type_code(source, label)
+        |> put_flash(
+          :error,
+          gettext(
+            "Not saved. Line %{line} is above the first marker, so it is in no error page. Move it below a marker such as <!-- 404 -->, or remove it.",
+            line: line
+          )
+        )
+    end
+  end
+
+  defp unmarked(%{content_field: :error_pages}, source), do: RuntimePreview.unmarked_line(source)
+  defp unmarked(_one_template, _source), do: nil
+
+  defp put_draft(socket, source, label) do
     preview = socket.assigns.preview
     user = socket.assigns.current_user
     existing = preview.draft

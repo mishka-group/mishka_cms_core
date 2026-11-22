@@ -152,6 +152,28 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
            ]
   end
 
+  test "a second entry for a status is named as soon as its status is picked", %{
+    conn: conn,
+    row: row
+  } do
+    view = edit(conn, row)
+    form = form_id(view)
+
+    view
+    |> element("##{form} button[phx-click='add_nested'][phx-value-field='error_pages']")
+    |> render_click()
+
+    html =
+      view
+      |> element("##{form}")
+      |> render_change(%{
+        "_target" => ["form", "error_pages", "2", "status"],
+        "form" => %{"error_pages" => %{"2" => %{"status" => "404"}}}
+      })
+
+    assert html =~ "Entry 3 is a second 404 page"
+  end
+
   test "the list shows the default entry among the row's codes", %{conn: conn, row: row} do
     update!(row, [
       %{status: :default, template: "<p>Went wrong</p>"},
@@ -247,6 +269,24 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
     assert Enum.map(stored(row).error_pages, & &1.status) == [404, 500]
   end
 
+  test "typing in the Code tab draws nothing again", %{conn: conn, row: row} do
+    {:ok, view, _html} = live(conn, @path)
+    send(view.pid, {:row_action, "show_preview_modal", %{"id" => row.id}})
+    render_async(view, 5_000)
+    render_click(view, "preview_edit_code", %{})
+
+    render_submit(view, "preview_code_submit", %{
+      "op" => "rerender",
+      "source" => "<!-- 404 -->\n<p>Drawn</p>"
+    })
+
+    frame = view |> element("iframe[srcdoc]") |> render()
+
+    render_change(view, "preview_code_change", %{"source" => "<!-- 404 -->\n<p>Typed</p>"})
+
+    assert view |> element("iframe[srcdoc]") |> render() == frame
+  end
+
   # The Code tab's text holds the templates alone.
   test "a Code tab save keeps each entry's layout, of the page and then of the draft it edits", %{
     conn: conn,
@@ -297,5 +337,32 @@ defmodule MishkaCmsCoreWeb.Test.ErrorPageOfflineEntryTest do
       assert hd(draft.error_pages).template == "<p>#{word}</p>"
       assert new[:layout] == nil
     end
+  end
+
+  test "a Code tab save with text above the first marker is refused, and says where it is", %{
+    conn: conn,
+    site: site,
+    row: row
+  } do
+    {:ok, view, _html} = live(conn, @path)
+    send(view.pid, {:row_action, "show_preview_modal", %{"id" => row.id}})
+    render_async(view, 5_000)
+    render_click(view, "preview_edit_code", %{})
+
+    save = fn source ->
+      render_submit(view, "preview_code_submit", %{"op" => "save", "source" => source})
+    end
+
+    html = save.("<!-- note -->\n<p>Lost words</p>\n<!-- 404 -->\n<p>Kept</p>")
+
+    assert html =~ "Not saved."
+    assert html =~ "Line 2"
+    assert html =~ "Lost words", "the editor still holds what was typed"
+    assert Ash.read!(Ash.Query.set_tenant(ErrorPageDraft, site.id), authorize?: false) == []
+
+    save.("<!-- note -->\n\n<!-- 404 -->\n<p>Kept</p>")
+
+    assert [%{error_pages: [%{status: 404, template: "<p>Kept</p>"}]}] =
+             Ash.read!(Ash.Query.set_tenant(ErrorPageDraft, site.id), authorize?: false)
   end
 end

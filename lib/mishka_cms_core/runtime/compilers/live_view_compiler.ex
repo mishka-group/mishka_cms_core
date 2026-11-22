@@ -2013,10 +2013,27 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       #=> "<a href=\"/users\" data-phx-link=\"patch\" data-phx-link-state=\"push\">Users</a>"
   """
   @spec render_template(String.t(), map()) :: String.t() | {:error, term()}
-  # sobelow_skip ["RCE.CodeModule"]
+  def render_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns),
+    do: template |> draw_template(assigns) |> drawn_or_message()
+
+  @typedoc """
+  A template that was not drawn. `stage` is `:compile` when the compiler refused it and `:draw` when
+  it compiled and failed after, `diagnostics` are what the compiler reported meanwhile, and `message`
+  is the exception with its stacktrace, for a developer.
+  `MishkaCmsCore.Runtime.Authoring.CodeCheck.drawing_fault/1` reads the author's words out of it.
+  """
+  @type failure :: %{
+          stage: :compile | :draw,
+          error: Exception.t(),
+          diagnostics: [map()],
+          message: String.t()
+        }
+
+  @doc "Draws what `render_template/2` does, and answers what went wrong when it was not drawn."
+  @spec draw_template(String.t(), map()) :: {:ok, String.t()} | {:error, failure()}
   # Renders a template an admin stored (a page, layout, error page, component or a draft of one) for a
   # preview; templates are code by design, and only the runtime and code permissions can write them.
-  def render_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns) do
+  def draw_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns) do
     template = MishkaCmsCore.Runtime.Authoring.Visibility.strip(template)
 
     assigns =
@@ -2036,56 +2053,20 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       tag_handler: Phoenix.LiveView.HTMLEngine
     ]
 
-    try do
-      ast = Phoenix.LiveView.TagEngine.compile(template, opts)
-
-      env =
-        make_env([
-          Phoenix.Component,
-          Phoenix.HTML,
-          # STATIC, NOT LIVE, and the swap is the whole fix for four surfaces at once. Everything
-          # that reaches this function renders a template to a STRING and hands the string somewhere
-          # that is not a LiveView — the Preview tab, the palette's card thumbnails, the examples
-          # encoder, the public draft-preview URL. A stateful component called through the live
-          # dispatch builds a `%Phoenix.LiveView.Component{}`, and asking one for iodata raises
-          # "cannot convert component … to HTML", so every one of them showed that sentence instead
-          # of a picture.
-          #
-          # This environment is OUR code rather than a generated module, which is what makes one
-          # import the boundary: nothing a kit or an author writes can reach past it, and a compiled
-          # page module — which imports the live helpers and IS a LiveView — is untouched.
-          MishkaCmsCore.Runtime.StaticHelpers,
-          MishkaCmsCore.Runtime.PageForm,
-          @core_components
-        ])
-
-      {rendered, _} = Code.eval_quoted(ast, [assigns: assigns], env)
-
-      rendered
-      |> Phoenix.HTML.Safe.to_iodata()
-      |> IO.iodata_to_binary()
-    rescue
-      error ->
-        {:error, Exception.format(:error, error, __STACKTRACE__)}
-    end
+    draw(fn -> Phoenix.LiveView.TagEngine.compile(template, opts) end, assigns)
   end
 
   @doc """
-  Renders `template` with the classic `Phoenix.HTML.Engine` (not HEEx), matching how the runtime
-  serves error-page templates (`MishkaCmsCore.Runtime.Compilers.ErrorCompiler` compiles them with
-  the same engine). Unlike `render_template/2`, this engine does not tokenize HTML structurally, so
-  it allows EEx interpolation inside attribute values (`content="<%= ... %>"`) — which a
-  server-rendered root layout relies on and which HEEx rejects.
-
-  Returns the rendered HTML string, or `{:error, message}` on failure.
+  Draws `template` as `draw_template/2` does, with the classic `Phoenix.HTML.Engine` (not HEEx),
+  matching how the runtime serves error-page templates
+  (`MishkaCmsCore.Runtime.Compilers.ErrorCompiler` compiles them with the same engine). This engine
+  does not tokenize HTML structurally, so it allows EEx interpolation inside attribute values
+  (`content="<%= ... %>"`), which a server-rendered root layout relies on and which HEEx rejects.
   """
-  @spec render_html_template(String.t(), map()) :: String.t() | {:error, term()}
-  # sobelow_skip ["RCE.CodeModule"]
-  # Renders a stored error page's or layout's template for a preview, as `render_template/2` does;
+  @spec draw_html_template(String.t(), map()) :: {:ok, String.t()} | {:error, failure()}
+  # Renders a stored error page's or layout's template for a preview, as `draw_template/2` does;
   # only the runtime and code permissions can write one.
-  def render_html_template(template, assigns \\ %{})
-      when is_binary(template) and is_map(assigns) do
-    assigns = Map.new(assigns)
+  def draw_html_template(template, assigns \\ %{}) when is_binary(template) and is_map(assigns) do
     template_name = "runtime_html_#{:erlang.unique_integer([:positive])}"
 
     opts = [
@@ -2098,38 +2079,62 @@ defmodule MishkaCmsCore.Runtime.Compilers.LiveViewCompiler do
       trim: true
     ]
 
-    try do
-      ast = EEx.compile_string(template, opts)
+    draw(fn -> EEx.compile_string(template, opts) end, Map.new(assigns))
+  end
 
-      env =
-        make_env([
-          Phoenix.Component,
-          Phoenix.HTML,
-          # STATIC, NOT LIVE, and the swap is the whole fix for four surfaces at once. Everything
-          # that reaches this function renders a template to a STRING and hands the string somewhere
-          # that is not a LiveView — the Preview tab, the palette's card thumbnails, the examples
-          # encoder, the public draft-preview URL. A stateful component called through the live
-          # dispatch builds a `%Phoenix.LiveView.Component{}`, and asking one for iodata raises
-          # "cannot convert component … to HTML", so every one of them showed that sentence instead
-          # of a picture.
-          #
-          # This environment is OUR code rather than a generated module, which is what makes one
-          # import the boundary: nothing a kit or an author writes can reach past it, and a compiled
-          # page module — which imports the live helpers and IS a LiveView — is untouched.
-          MishkaCmsCore.Runtime.StaticHelpers,
-          MishkaCmsCore.Runtime.PageForm,
-          @core_components
-        ])
+  defp drawn_or_message({:ok, html}), do: html
+  defp drawn_or_message({:error, %{message: message}}), do: {:error, message}
 
-      {rendered, _} = Code.eval_quoted(ast, [assigns: assigns], env)
+  # The compiler raises "cannot compile file (errors have been logged)" for what it finds wrong after
+  # the syntax, and hands the sentence back as a diagnostic.
+  defp draw(compile, assigns) do
+    {result, diagnostics} = Code.with_diagnostics(fn -> compile_and_draw(compile, assigns) end)
 
-      rendered
-      |> Phoenix.HTML.Safe.to_iodata()
-      |> IO.iodata_to_binary()
-    rescue
-      error ->
-        {:error, Exception.format(:error, error, __STACKTRACE__)}
-    end
+    with {:error, failure} <- result, do: {:error, Map.put(failure, :diagnostics, diagnostics)}
+  end
+
+  defp compile_and_draw(compile, assigns) do
+    with {:ok, ast} <- attempt(:compile, compile),
+         do: attempt(:draw, fn -> evaluate(ast, assigns) end)
+  end
+
+  # An engine, and then the template itself, raises; there is no variant of either that does not.
+  defp attempt(stage, fun) do
+    {:ok, fun.()}
+  rescue
+    error ->
+      {:error,
+       %{stage: stage, error: error, message: Exception.format(:error, error, __STACKTRACE__)}}
+  end
+
+  # sobelow_skip ["RCE.CodeModule"]
+  # The template an admin stored, drawn for a preview: see `draw_template/2`.
+  defp evaluate(ast, assigns) do
+    env =
+      make_env([
+        Phoenix.Component,
+        Phoenix.HTML,
+        # STATIC, NOT LIVE, and the swap is the whole fix for four surfaces at once. Everything
+        # that reaches this function renders a template to a STRING and hands the string somewhere
+        # that is not a LiveView — the Preview tab, the palette's card thumbnails, the examples
+        # encoder, the public draft-preview URL. A stateful component called through the live
+        # dispatch builds a `%Phoenix.LiveView.Component{}`, and asking one for iodata raises
+        # "cannot convert component … to HTML", so every one of them showed that sentence instead
+        # of a picture.
+        #
+        # This environment is OUR code rather than a generated module, which is what makes one
+        # import the boundary: nothing a kit or an author writes can reach past it, and a compiled
+        # page module — which imports the live helpers and IS a LiveView — is untouched.
+        MishkaCmsCore.Runtime.StaticHelpers,
+        MishkaCmsCore.Runtime.PageForm,
+        @core_components
+      ])
+
+    {rendered, _binding} = Code.eval_quoted(ast, [assigns: assigns], env)
+
+    rendered
+    |> Phoenix.HTML.Safe.to_iodata()
+    |> IO.iodata_to_binary()
   end
 
   @doc """

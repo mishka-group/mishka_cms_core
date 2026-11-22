@@ -119,6 +119,43 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
       end
     end
 
+    # As the form sends an entry whose status has just been picked.
+    test "names a second entry for a status before its template is written", %{site: site} do
+      pages = %{
+        "0" => %{"status" => "404", "template" => "<p>Not here</p>"},
+        "1" => %{"status" => "404", "template" => ""}
+      }
+
+      error_page = create!(site, [entry(404)])
+
+      for changeset <- [
+            Ash.Changeset.for_create(ErrorPage, :create, attrs(site, pages),
+              tenant: site.id,
+              authorize?: false
+            ),
+            Ash.Changeset.for_update(error_page, :update, %{error_pages: pages},
+              tenant: site.id,
+              authorize?: false
+            )
+          ] do
+        assert Enum.any?(
+                 changeset.errors,
+                 &(&1.field == :error_pages and &1.message =~ "Entry 2 is a second 404 page")
+               )
+      end
+    end
+
+    test "says nothing of two entries whose status is not picked yet", %{site: site} do
+      changeset =
+        Ash.Changeset.for_create(ErrorPage, :create, attrs(site, [%{status: ""}, %{status: ""}]),
+          tenant: site.id,
+          authorize?: false
+        )
+
+      refute changeset.valid?
+      refute Enum.any?(changeset.errors, &(&1.message =~ "second"))
+    end
+
     test "refuses a draft that holds two entries for a status when it is published", %{site: site} do
       draft =
         ErrorPageDraft
@@ -254,6 +291,27 @@ defmodule MishkaCmsCore.Runtime.ErrorStatusTest do
       assert source =~ "<!-- offline -->"
       assert source =~ "<!-- default -->"
       assert RuntimePreview.parse_error_pages(source) == entries
+    end
+
+    test "says where text is that no marker holds, and takes blank lines and comments for none" do
+      for {text, line} <- [
+            {"<p>lost</p>\n<!-- 404 -->\n<p>kept</p>", 1},
+            {"\n<!-- two\nlines -->\n\n  <p>lost</p>\n<!-- offline -->\n<p>kept</p>", 5},
+            {"<%!-- note --%> lost\n<!-- DEFAULT -->\n<p>kept</p>", 1},
+            {"\n<p>no marker at all</p>", 2},
+            {"<!-- 404 and more -->\n<p>lost</p>", 2}
+          ] do
+        assert RuntimePreview.unmarked_line(text) == line, text
+      end
+
+      for text <- [
+            "",
+            " \n\n",
+            "<!-- 404 -->\n<p>kept</p>",
+            "\n  <!-- a note\nof two lines -->\n<%!-- another --%>\n<!-- 404 -->\n<p>kept</p>"
+          ] do
+        assert RuntimePreview.unmarked_line(text) == nil, text
+      end
     end
 
     test "reads a marker in any letters, and leaves every other comment in its template" do
